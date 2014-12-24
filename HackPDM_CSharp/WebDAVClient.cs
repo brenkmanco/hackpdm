@@ -211,7 +211,7 @@ namespace HackPDM
 
 
         /// <summary>
-        /// Upload a file to the server
+        /// Upload a byte array to a file on the server
         /// </summary>
         /// <param name="content">Content of the file to upload as a byte array</param>
         /// <param name="remoteFilePath">Destination path and filename of the file on the server</param>
@@ -221,6 +221,7 @@ namespace HackPDM
             string method = WebRequestMethods.Http.Put.ToString();
 
             HTTPRequest(uploadUri, method, null, content, null);
+            PushContentStream(content, null);
 
             // process response
             int statusCode = 0;
@@ -246,6 +247,7 @@ namespace HackPDM
             string method = WebRequestMethods.Http.Put.ToString();
 
             HTTPRequest(uploadUri, method, null, null, localFilePath);
+            PushContentStream(null, localFilePath);
 
             // process response
             int statusCode = 0;
@@ -258,7 +260,7 @@ namespace HackPDM
 
 
         /// <summary>
-        /// Download a file from the server
+        /// Download a file from the server as a byte array
         /// </summary>
         /// <param name="remoteFilePath">Source path and filename of the file on the server</param>
         /// <param name="localFilePath">Destination path and filename of the file to download on the local filesystem</param>
@@ -294,7 +296,7 @@ namespace HackPDM
         }
 
         /// <summary>
-        /// Download a file from the server
+        /// Download a file from the server and write to filesystem
         /// </summary>
         /// <param name="remoteFilePath">Source path and filename of the file on the server</param>
         /// <param name="localFilePath">Destination path and filename of the file to download on the local filesystem</param>
@@ -305,6 +307,26 @@ namespace HackPDM
             string method = WebRequestMethods.Http.Get.ToString();
 
             HTTPRequest(downloadUri, method, null, null, localFilePath);
+
+            int statusCode = 0;
+            using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse())
+            {
+                statusCode = (int)response.StatusCode;
+                int contentLength = int.Parse(response.GetResponseHeader("Content-Length"));
+                using (Stream s = response.GetResponseStream())
+                {
+                    using (FileStream fs = new FileStream(localFilePath, FileMode.Create, FileAccess.Write))
+                    {
+                        byte[] content = new byte[4096];
+                        int bytesRead = 0;
+                        do
+                        {
+                            bytesRead = s.Read(content, 0, content.Length);
+                            fs.Write(content, 0, bytesRead);
+                        } while (bytesRead > 0);
+                    }
+                }
+            }
         }
 
 
@@ -419,8 +441,31 @@ namespace HackPDM
 
             }
 
-            httpWebRequest.GetRequestStream();
+            //httpWebRequest.GetRequestStream();
 
+        }
+
+        /// <summary>
+        /// Stream content to the server
+        /// </summary>
+        /// <param name="result"></param>
+        private void PushContentStream(byte[] content, string uploadFilePath)
+        {
+            using (Stream streamResponse = httpWebRequest.GetRequestStream()) {
+                // Submit content
+                if (content != null) {
+                    streamResponse.Write(content, 0, content.Length);
+                } else {
+                    using (FileStream fs = new FileStream(uploadFilePath, FileMode.Open, FileAccess.Read)) {
+                        content = new byte[4096];
+                        int bytesRead = 0;
+                        do {
+                            bytesRead = fs.Read(content, 0, content.Length);
+                            streamResponse.Write(content, 0, bytesRead);
+                        } while (bytesRead > 0);
+                    }
+                }
+            }
         }
 
         #endregion

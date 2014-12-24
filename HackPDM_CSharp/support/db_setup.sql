@@ -51,8 +51,8 @@ CREATE TRIGGER trg_hp_user_1_modify_stamp
   EXECUTE PROCEDURE fcn_common_modify_stamp();
 
 
-insert into hp_user (user_id,login_name,last_name,first_name,modify_user) values (0,'admin','User','Admin',0);
-insert into hp_user (user_id,login_name,last_name,first_name,modify_user,passwd) values (1001,'matt','Taylor','Matt',0,'matt');
+insert into hp_user (user_id,login_name,last_name,first_name,modify_user,passwd) values (0,'admin','User','Admin',0,'admin');
+insert into hp_user (user_id,login_name,last_name,first_name,modify_user,passwd) values (1001,'demo','User','Demo',0,'demo');
 
 
 
