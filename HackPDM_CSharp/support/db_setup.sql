@@ -241,6 +241,7 @@ create table hp_entry_name_filter (
 	filter_id integer NOT NULL default nextval('seq_hp_entry_name_filter_id'::regclass),
 	name_proto varchar(255) NOT NULL,
 	name_regex varchar(255) NOT NULL,
+	description varchar(255) NOT NULL,
 	
 	primary key (filter_id)
 	
@@ -249,7 +250,15 @@ ALTER TABLE hp_entry_name_filter OWNER TO engadmin;
 
 CREATE UNIQUE INDEX ON hp_entry_name_filter (lower(name_proto::text));
 
-insert into hp_entry_name_filter (name_proto,name_regex) values ('.xml~','\..+~');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.aa~', '^.+\..+~$', 'Text Editor Backup File');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.msi', '^.+\.msi$', 'Microsoft Installer');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.dll', '^.+\.dll$', 'Microsoft Dynamic Linked Library');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.exe', '^.+\.exe$', 'Microsoft Executable');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.bak', '^.+\.bak$', 'AutoCAD Drawing Backup File');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.db', '^.+\.db$', 'Windows Display Settings File');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.dropbox', '^.+\.dropbox$', 'Dropbox File?');
+
+
 
 
 -- -----------------------------------------------------------------------------
