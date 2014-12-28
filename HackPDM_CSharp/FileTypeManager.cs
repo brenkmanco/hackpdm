@@ -377,8 +377,11 @@ namespace HackPDM
 
                 // add image
                 string strFileExt = row.Field<string>("file_ext");
-                Image imgCurrent = ByteArrayToImage(row.Field<byte[]>("icon"));
-                ilTypes.Images.Add(strFileExt, imgCurrent);
+				if (row.Field<byte[]>("icon") != null)
+				{
+					Image imgCurrent = ByteArrayToImage(row.Field<byte[]>("icon"));
+					ilTypes.Images.Add(strFileExt, imgCurrent);
+				}
 
                 // create actual list item
                 ListViewItem lvItem = new ListViewItem(lvData);
