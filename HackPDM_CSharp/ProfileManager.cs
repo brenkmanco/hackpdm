@@ -144,18 +144,18 @@ namespace HackPDM
 
             dtProfile.Rows.Add(strDefaultProfileId,
                 "New",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "");
 
             return dtProfile;
 
@@ -206,18 +206,18 @@ namespace HackPDM
             string strGuid = Guid.NewGuid().ToString();
             dtProfiles.Rows.Add(strGuid,
                 "New",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "");
 
             SelectRecord(strGuid);
 

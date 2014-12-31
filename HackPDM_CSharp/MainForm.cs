@@ -95,7 +95,7 @@ namespace HackPDM
 			this.listView1.ListViewItemSorter = lvwColumnSorter;
 
 			// get server connections and authenticate
-			LoadProfile();
+			LoadProfile(false);
 			DbConnect();
 			DavConnect();
 
@@ -124,11 +124,15 @@ namespace HackPDM
 			}
 			catch (System.Exception e)
 			{
-				MessageBox.Show("Failed to make WebDAV connection: " + e.Message + "\r\n WebRequest returned status: " + connDav.StatusString,
+				var result = MessageBox.Show("Failed to make WebDAV connection: " + e.Message + "\r\n WebRequest returned status: " + connDav.StatusString,
 				"Startup Error",
-					MessageBoxButtons.OK,
+					MessageBoxButtons.OKCancel,
 					MessageBoxIcon.Error);
-				Environment.Exit(1);
+				if (result == System.Windows.Forms.DialogResult.Cancel)
+				{
+					Environment.Exit(1);
+				}
+				LoadProfile(true);
 			}
 
 		}
@@ -151,11 +155,15 @@ namespace HackPDM
 				connDb.ConnectionString = strDbConn;
 				connDb.Open();
 			} catch (System.Exception e) {
-				MessageBox.Show("Failed to make database connection: " + e.Message,
+				var result = MessageBox.Show("Failed to make database connection: " + e.Message + "\\nTry Again?",
 				"Startup Error",
-					MessageBoxButtons.OK,
+					MessageBoxButtons.OKCancel,
 					MessageBoxIcon.Error);
-				Environment.Exit(1);
+				if (result == System.Windows.Forms.DialogResult.Cancel)
+				{
+					Environment.Exit(1);
+				}
+				LoadProfile(true);
 			}
 
 			// authenticate
@@ -166,19 +174,25 @@ namespace HackPDM
 			object oTemp = cmdGetId.ExecuteScalar();
 			if (oTemp == null) {
 				// no user_id returned
-				MessageBox.Show("Can't authenticate the user.  Try running the install tool again.",
+				var result = MessageBox.Show("Can't authenticate the user.  Try running the install tool again.",
 					"Authentication Error",
-					MessageBoxButtons.OK,
+					MessageBoxButtons.OKCancel,
 					MessageBoxIcon.Error);
-			   	Environment.Exit(1);
-			} else {
+				if (result == System.Windows.Forms.DialogResult.Cancel)
+				{
+					Environment.Exit(1);
+				}
+				LoadProfile(true);
+			}
+			else
+			{
 				// set the user_id
 				intMyUserId = (int)oTemp;
 			}
 
 		}
 
-		private void LoadProfile()
+		private void LoadProfile(bool blnForceNew)
 		{
 
 			// load profile info
@@ -186,7 +200,7 @@ namespace HackPDM
 			string strXmlProfiles = Properties.Settings.Default.usetProfiles;
 
 			// check existence
-			if (strXmlProfiles == "" || strCurrProfileId == "")
+			if (blnForceNew || strXmlProfiles == "" || strCurrProfileId == "")
 			{
 
 				// launch the profile manager
@@ -200,11 +214,15 @@ namespace HackPDM
 				// failed again
 				if (strXmlProfiles == "" || strCurrProfileId == "")
 				{
-					MessageBox.Show("Still can't get a profile.  Can't connect to the server.",
+					var result = MessageBox.Show("Still can't get a profile.  Can't connect to the server.",
 						"Startup Error",
-						MessageBoxButtons.OK,
+						MessageBoxButtons.OKCancel,
 						MessageBoxIcon.Error);
-					Environment.Exit(1);
+					if (result == System.Windows.Forms.DialogResult.Cancel)
+					{
+						Environment.Exit(1);
+					}
+					LoadProfile(true);
 				}
 
 			}
@@ -220,11 +238,15 @@ namespace HackPDM
 			drCurrProfile = dtProfiles.Select("PfGuid='" + strCurrProfileId + "'")[0];
 			if (drCurrProfile == null)
 			{
-				MessageBox.Show("Still can't get a profile.  Can't connect to the server.",
+				var result = MessageBox.Show("Still can't get a profile.  Can't connect to the server.",
 					"Startup Error",
-					MessageBoxButtons.OK,
+					MessageBoxButtons.OKCancel,
 					MessageBoxIcon.Error);
-				Environment.Exit(1);
+				if (result == System.Windows.Forms.DialogResult.Cancel)
+				{
+					Environment.Exit(1);
+				}
+				LoadProfile(true);
 			}
 
 			// hand off local file root directory
@@ -1007,20 +1029,20 @@ namespace HackPDM
 
 			Int64 lKBSize = 0;
 
-			if (lSize < 1024 ) 
+			if (lSize < 1024 )
 			{
-				if (lSize == 0) 
+				if (lSize == 0)
 				{
 					//zero byte
 					stringSize = "0";
 				}
-				else 
+				else
 				{
 					//less than 1K but not zero byte
 					stringSize = "1";
 				}
 			}
-			else 
+			else
 			{
 				//convert to KB
 				lKBSize = lSize / 1024;
@@ -1034,10 +1056,10 @@ namespace HackPDM
 
 		}
 
-		protected TreeNode FindNode(TreeNode tnParent, string strPath) { 
+		protected TreeNode FindNode(TreeNode tnParent, string strPath) {
 			foreach (TreeNode tnChild in tnParent.Nodes) {
 				if (tnChild.FullPath == strPath) {
-					return tnChild; 
+					return tnChild;
 				} else {
 					TreeNode tnMatch = FindNode(tnChild, strPath);
 					if (tnMatch != null) {
@@ -2740,7 +2762,7 @@ namespace HackPDM
 			} catch (NpgsqlException ex) {
 				// if unique key/index violation
 				dlgStatus.AddStatusLine("File already exists on the server.  Refresh your view.", strFileName);
-				dlgStatus.AddStatusLine("Error", ex.Detail);
+				dlgStatus.AddStatusLine("Error", ex.BaseMessage);
 				return(true);
 			}
 
@@ -2772,7 +2794,7 @@ namespace HackPDM
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("version_id", intVersionId));
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("entry_id", intEntryId));
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_size", lngFileSize));
-			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_modify_stamp", dtModifyDate.ToString()));
+			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_modify_stamp", dtModifyDate.ToString("yyyy-MM-dd HH:mm:ss")));
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("create_user", intMyUserId));
 			//cmdInsertVersion.Parameters.Add(new NpgsqlParameter("blob_ref", noid));
 
@@ -2782,7 +2804,7 @@ namespace HackPDM
 			} catch (NpgsqlException ex) {
 				// if unique key/index violation
 				dlgStatus.AddStatusLine("File version already exists on the server.  Refresh your view.", strFileName);
-				dlgStatus.AddStatusLine("Error", ex.Detail);
+				dlgStatus.AddStatusLine("Error", ex.BaseMessage);
 				return(true);
 			}
 
@@ -2969,7 +2991,7 @@ namespace HackPDM
 					cmdInsertVersion.ExecuteNonQuery();
 				} catch (NpgsqlException ex) {
 					// if unique key/index violation
-					throw new System.Exception("A version of file "+strFileName+" already exists on the server.  Refresh your view.  "+ex.Detail);
+					throw new System.Exception("A version of file "+strFileName+" already exists on the server.  Refresh your view.  "+ex.BaseMessage);
 					//return;
 				}
 

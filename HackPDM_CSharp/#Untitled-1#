@@ -1,0 +1,20 @@
+
+insert into hp_version (
+	version_id,
+	entry_id,
+	file_size,
+	file_modify_stamp,
+	create_user--,
+	--blob_ref
+) values (
+	:version_id,
+	:entry_id,
+	:file_size,
+	:file_modify_stamp,
+	:create_user--,
+	--:blob_ref
+);
+
+
+
+
