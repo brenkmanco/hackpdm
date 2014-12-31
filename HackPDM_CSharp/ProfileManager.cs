@@ -89,6 +89,11 @@ namespace HackPDM
             txtDbUser.DataBindings.Add("Text", bsProfiles, "DbUser");
             txtDbPass.DataBindings.Add("Text", bsProfiles, "DbPass");
             txtDbName.DataBindings.Add("Text", bsProfiles, "DbName");
+            txtDavServ.DataBindings.Add("Text", bsProfiles, "DavServ");
+            txtDavPort.DataBindings.Add("Text", bsProfiles, "DavPort");
+            txtDavUser.DataBindings.Add("Text", bsProfiles, "DavUser");
+            txtDavPass.DataBindings.Add("Text", bsProfiles, "DavPass");
+            txtDavPath.DataBindings.Add("Text", bsProfiles, "DavPath");
             txtFsRoot.DataBindings.Add("Text", bsProfiles, "FsRoot");
             txtUsername.DataBindings.Add("Text", bsProfiles, "Username");
             txtPassword.DataBindings.Add("Text", bsProfiles, "Password");
@@ -115,6 +120,11 @@ namespace HackPDM
             dtProfile.Columns.Add("DbUser", Type.GetType("System.String"));
             dtProfile.Columns.Add("DbPass", Type.GetType("System.String"));
             dtProfile.Columns.Add("DbName", Type.GetType("System.String"));
+            dtProfile.Columns.Add("DavServ", Type.GetType("System.String"));
+            dtProfile.Columns.Add("DavPort", Type.GetType("System.String"));
+            dtProfile.Columns.Add("DavUser", Type.GetType("System.String"));
+            dtProfile.Columns.Add("DavPass", Type.GetType("System.String"));
+            dtProfile.Columns.Add("DavPath", Type.GetType("System.String"));
             dtProfile.Columns.Add("FsRoot", Type.GetType("System.String"));
             dtProfile.Columns.Add("Username", Type.GetType("System.String"));
             dtProfile.Columns.Add("Password", Type.GetType("System.String"));
@@ -134,6 +144,10 @@ namespace HackPDM
 
             dtProfile.Rows.Add(strDefaultProfileId,
                 "New",
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -192,6 +206,10 @@ namespace HackPDM
             string strGuid = Guid.NewGuid().ToString();
             dtProfiles.Rows.Add(strGuid,
                 "New",
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,

@@ -52,6 +52,15 @@ namespace HackPDM
             get { return statusCode; }
         }
 
+        private int statusString;
+        /// <summary>
+        /// Return statusCode of lastest operation
+        /// </summary>
+        public string StatusString
+        {
+            get { return statusCode.ToString().Substring(0,1); }
+        }
+
 
         #region WebDAV connection parameters
 
@@ -177,7 +186,9 @@ namespace HackPDM
                 headers.Add("Depth", depth.ToString());
             }
 
-            HTTPRequest(listUri, "PROPFIND", headers, Encoding.UTF8.GetBytes(propfind.ToString()), remoteFilePath);
+            byte[] content = Encoding.UTF8.GetBytes(propfind.ToString());
+            HTTPRequest(listUri, "PROPFIND", headers, content, remoteFilePath);
+            PushContentStream(content, null);
 
             // return result
             List<String> files = new List<string>();
@@ -306,7 +317,7 @@ namespace HackPDM
             Uri downloadUri = getServerUrl(remoteFilePath, false);
             string method = WebRequestMethods.Http.Get.ToString();
 
-            HTTPRequest(downloadUri, method, null, null, localFilePath);
+            HTTPRequest(downloadUri, method, null, null, null);
 
             int statusCode = 0;
             using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse())

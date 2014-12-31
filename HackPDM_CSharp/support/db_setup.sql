@@ -312,6 +312,7 @@ create table hp_version (
 	create_stamp timestamp(6) without time zone NOT NULL DEFAULT now(),
 	create_user integer NOT NULL,
 	blob_ref oid NOT NULL,
+	md5sum bytea NOT NULL,
 	preview_image bytea,
 	release_user integer,
 	release_date timestamp(6) without time zone,

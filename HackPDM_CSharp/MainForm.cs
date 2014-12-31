@@ -56,12 +56,16 @@ namespace HackPDM
 		private string strDbConn;
 		private NpgsqlConnection connDb = new NpgsqlConnection();
 		private NpgsqlTransaction t;
+
+		private WebDAVClient connDav = new WebDAVClient();
+
 		private DataSet dsTree = new DataSet();
 		private DataSet dsList = new DataSet();
 		private DataSet dsHistory = new DataSet();
 		private DataSet dsWhereUsed = new DataSet();
 		private DataSet dsDependents = new DataSet();
 		private DataSet dsProperties = new DataSet();
+
 		private string strLocalFileRoot;
 		private int intMyUserId;
 		private int intMyNodeId;
@@ -90,29 +94,55 @@ namespace HackPDM
 			lvwColumnSorter = new ListViewColumnSorter();
 			this.listView1.ListViewItemSorter = lvwColumnSorter;
 
-			// get a database connection and authenticate
+			// get server connections and authenticate
+			LoadProfile();
 			DbConnect();
+			DavConnect();
+
+			// get (and set if necessary) my node_id
+			intMyNodeId = GetNodeId();
 
 			// Populate data
 			ResetView();
 
 		}
 
+		private void DavConnect()
+		{
+
+			// build WebDAV connection string from profile values
+			connDav.Server = (string)drCurrProfile["DavServ"];
+			connDav.Port = Convert.ToInt32(drCurrProfile["DavPort"]);
+			connDav.User = (string)drCurrProfile["DavUser"];
+			connDav.Pass = (string)drCurrProfile["DavPass"];
+			connDav.BasePath = (string)drCurrProfile["DavPath"];
+
+			// test the connection
+			try
+			{
+			   List<string> strTest = connDav.List("/",1);
+			}
+			catch (System.Exception e)
+			{
+				MessageBox.Show("Failed to make WebDAV connection: " + e.Message + "\r\n WebRequest returned status: " + connDav.StatusString,
+				"Startup Error",
+					MessageBoxButtons.OK,
+					MessageBoxIcon.Error);
+				Environment.Exit(1);
+			}
+
+		}
+
 		private void DbConnect()
 		{
 
-			LoadProfile();
-
-			// build database connection string from registry key values
+			// build database connection string from profile key values
 			strDbConn = String.Format("Server={0};Port={1};User Id={2};Password={3};Database={4};",
 				(string)drCurrProfile["DbServ"],
 				(string)drCurrProfile["DbPort"],
 				(string)drCurrProfile["DbUser"],
 				(string)drCurrProfile["DbPass"],
 				(string)drCurrProfile["DbName"]);
-
-			// hand off local file root directory
-			strLocalFileRoot = (string)drCurrProfile["FsRoot"];
 
 
 			// connect to the database
@@ -145,10 +175,6 @@ namespace HackPDM
 				// set the user_id
 				intMyUserId = (int)oTemp;
 			}
-
-			// get (and set if necessary) my node_id
-			intMyNodeId = GetNodeId();
-
 
 		}
 
@@ -200,6 +226,9 @@ namespace HackPDM
 					MessageBoxIcon.Error);
 				Environment.Exit(1);
 			}
+
+			// hand off local file root directory
+			strLocalFileRoot = (string)drCurrProfile["FsRoot"];
 
 		}
 
@@ -542,6 +571,7 @@ namespace HackPDM
 				string strSql = @"
 					select
 						e.entry_id,
+						v.version_id,
 						e.dir_id,
 						e.entry_name,
 						t.type_id,
@@ -648,6 +678,7 @@ namespace HackPDM
 
 							// insert new row for local-only file
 							dsList.Tables[0].Rows.Add(
+									null,
 									null,
 									intDirId,
 									strFileName,
@@ -890,6 +921,7 @@ namespace HackPDM
 
 				DataTable dtList = new DataTable();
 				dtList.Columns.Add("entry_id", Type.GetType("System.Int32"));
+				dtList.Columns.Add("version_id", Type.GetType("System.Int32"));
 				dtList.Columns.Add("dir_id", Type.GetType("System.Int32"));
 				dtList.Columns.Add("entry_name", Type.GetType("System.String"));
 				dtList.Columns.Add("type_id", Type.GetType("System.Int32"));
@@ -975,20 +1007,20 @@ namespace HackPDM
 
 			Int64 lKBSize = 0;
 
-			if (lSize < 1024 )
+			if (lSize < 1024 ) 
 			{
-				if (lSize == 0)
+				if (lSize == 0) 
 				{
 					//zero byte
 					stringSize = "0";
 				}
-				else
+				else 
 				{
 					//less than 1K but not zero byte
 					stringSize = "1";
 				}
 			}
-			else
+			else 
 			{
 				//convert to KB
 				lKBSize = lSize / 1024;
@@ -1002,10 +1034,10 @@ namespace HackPDM
 
 		}
 
-		protected TreeNode FindNode(TreeNode tnParent, string strPath) {
+		protected TreeNode FindNode(TreeNode tnParent, string strPath) { 
 			foreach (TreeNode tnChild in tnParent.Nodes) {
 				if (tnChild.FullPath == strPath) {
-					return tnChild;
+					return tnChild; 
 				} else {
 					TreeNode tnMatch = FindNode(tnChild, strPath);
 					if (tnMatch != null) {
@@ -1277,6 +1309,7 @@ namespace HackPDM
 				t.ToString();
 				if (t.Connection != null) {
 					t.Rollback();
+					// TODO: figure out how to rollback WebDav changes
 				}
 				dlgStatus.AddStatusLine("Cancel", "Operation canceled");
 			}
@@ -1285,12 +1318,14 @@ namespace HackPDM
 				dlgStatus.AddStatusLine("Error", e.Error.Message);
 				if (t.Connection != null) {
 					t.Rollback();
+					// TODO: figure out how to rollback WebDav changes
 				}
 			}
 			else
 			{
 				if (t.Connection != null) {
 					t.Rollback();
+					// TODO: figure out how to rollback WebDav changes
 				}
 				dlgStatus.AddStatusLine("Complete", "Operation completed");
 				dlgStatus.OperationCompleted();
@@ -1301,11 +1336,17 @@ namespace HackPDM
 
 			// could this work for AddNew and GetLatest?
 
-			// get local files
+			// get directory parameters
 			string strTreePath = tnParent.FullPath;
 			string strFilePath = GetFilePath(strTreePath);
 			int intDirId = (int)tnParent.Tag;
-			if(Directory.Exists(strFilePath) == true) {
+
+			// log status
+			dlgStatus.AddStatusLine("Get Directory Info", "Processing Directory: " + strFilePath);
+
+			// get local files
+			if (Directory.Exists(strFilePath) == true)
+			{
 
 				try {
 
@@ -1314,20 +1355,32 @@ namespace HackPDM
 					DateTime dtModifyDate;
 					Int64 lngFileSize = 0;
 
+					// log status
+					dlgStatus.AddStatusLine("Process Files", "Processing local files: " + strFiles.Length);
+
 					//loop through all files
-					foreach (string strFile in strFiles) {
+					foreach (string strFile in strFiles)
+					{
+
+						// ignore filtered file names
+						//Regex reg = new Regex(@"^.+\..(.+~)|(msi)|(dll)|(exe)|(bak)|(db)|(dropbox)$");
+						//if (reg.IsMatch(strFile)) continue;
 
 						// get file info
 						strFileName = GetDirName(strFile);
 						FileInfo fiCurrFile = new FileInfo(strFile);
-						string strFileExt = fiCurrFile.Extension.Substring(1,fiCurrFile.Extension.Length-1).ToLower();
+						string strFileExt = fiCurrFile.Extension.Substring(1, fiCurrFile.Extension.Length - 1).ToLower();
 						lngFileSize = fiCurrFile.Length;
 						dtModifyDate = fiCurrFile.LastWriteTime;
+
+						// log status
+						dlgStatus.AddStatusLine("Processing Files", "Processing local file: " + strFile);
 
 						// get matching remote file
 						DataRow[] drRemFile = dt.Select("entry_name='" + strFileName + "' and file_path='" + strFilePath + "'");
 
-						if (drRemFile.Length != 0) {
+						if (drRemFile.Length != 0)
+						{
 
 							// flag remote file as also being local
 							DataRow drTemp = drRemFile[0];
@@ -1341,9 +1394,12 @@ namespace HackPDM
 
 							// format the checkout date
 							object oDate = drTemp["checkout_date"];
-							if (oDate == System.DBNull.Value) {
+							if (oDate == System.DBNull.Value)
+							{
 								drTemp.SetField<string>("str_checkout_date", null);
-							} else {
+							}
+							else
+							{
 								drTemp.SetField<string>("str_checkout_date", FormatDate(Convert.ToDateTime(oDate)));
 							}
 
@@ -1352,29 +1408,32 @@ namespace HackPDM
 							//
 							//}
 
-						} else {
+						}
+						else
+						{
 
 							// insert new row for local-only file
 							dt.Rows.Add(null,
-														   intDirId,
-														   strFileName,
-														   null,
-														   strFileExt,
-														   null,
-														   lngFileSize,
-														   FormatSize(lngFileSize),
-														   dtModifyDate,
-														   FormatDate(dtModifyDate),
-														   null,
-														   null,
-														   null,
-														   null,
-														   null,
-														   true,
-														   false,
-														   strTreePath,
-														   strFilePath
-														  );
+								null,
+								intDirId,
+								strFileName,
+								null,
+								strFileExt,
+								null,
+								lngFileSize,
+								FormatSize(lngFileSize),
+								dtModifyDate,
+								FormatDate(dtModifyDate),
+								null,
+								null,
+								null,
+								null,
+								null,
+								true,
+								false,
+								strTreePath,
+								strFilePath
+								);
 
 						}
 
@@ -1483,6 +1542,7 @@ namespace HackPDM
 			string strSql = @"
 				select
 					e.entry_id,
+					v.version_id,
 					e.dir_id,
 					e.entry_name,
 					t.type_id,
@@ -1572,20 +1632,20 @@ namespace HackPDM
 			DataTable dtItems = (DataTable)genericlist[1];
 
 			// start the database transaction
-			LargeObjectManager lbm = new LargeObjectManager(connDb);
+			//LargeObjectManager lbm = new LargeObjectManager(connDb);
 
 			// prepare to get latest version file id
-			string strSql;
-			strSql = @"
-					select blob_ref
-					from hp_version
-					where entry_id=:entry_id
-					order by create_stamp
-					limit 1;
-				";
-			NpgsqlCommand cmdGetId = new NpgsqlCommand(strSql, connDb, t);
-			cmdGetId.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
-			cmdGetId.Prepare();
+//			string strSql;
+//			strSql = @"
+//					select blob_ref
+//					from hp_version
+//					where entry_id=:entry_id
+//					order by create_stamp
+//					limit 1;
+//				";
+//			NpgsqlCommand cmdGetId = new NpgsqlCommand(strSql, connDb, t);
+//			cmdGetId.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
+//			cmdGetId.Prepare();
 
 			int intRowCount = dtItems.Rows.Count;
 			for (int i = 0; i < intRowCount; i++) {
@@ -1643,41 +1703,48 @@ namespace HackPDM
 				}
 
 				// get the file oid
-				cmdGetId.Parameters["entry_id"].Value = (int)drCurrent["entry_id"];
-				object oTemp = cmdGetId.ExecuteScalar();
-				int intFileId;
-				if (oTemp != null) {
-					intFileId = (int)(long)oTemp;
-				} else {
-					throw new System.Exception("Failed to get file ID \""+fiCurrFile.Name+"\"");
-					//return;
-				}
+				//cmdGetId.Parameters["entry_id"].Value = (int)drCurrent["entry_id"];
+				//object oTemp = cmdGetId.ExecuteScalar();
+				//int intFileId;
+				//if (oTemp != null) {
+				//	intFileId = (int)(long)oTemp;
+				//} else {
+				//	throw new System.Exception("Failed to get file ID \""+fiCurrFile.Name+"\"");
+				//	//return;
+				//}
 
-				// report status
+				// name and download the file
+				int intEntryId = (int)drCurrent["entry_id"];
+				int intVersionId = (int)drCurrent["version_id"];
+				string strFileExt = drCurrent.Field<string>("file_ext");
+				string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt;
+
+				// report status and stream file
 				string strFileSize = drCurrent.Field<string>("str_latest_size");
-				dlgStatus.AddStatusLine("Retrieving Content (" + strFileSize + ")", strFileName);
+				dlgStatus.AddStatusLine("Retrieving Content (" + strFileSize + ")", strDavName);
+				connDav.Download(strDavName, strFullName);
 
 				// pull the file local
-				LargeObject lo =  lbm.Open(intFileId,LargeObjectManager.READ);
-				lo =  lbm.Open(intFileId,LargeObjectManager.READ);
+				//LargeObject lo =  lbm.Open(intFileId,LargeObjectManager.READ);
+				//lo =  lbm.Open(intFileId,LargeObjectManager.READ);
 
 				// open the file stream
-				FileStream fsout;
-				try {
-					fsout = File.OpenWrite(fiCurrFile.FullName);
-					fsout.Lock(0,fsout.Length);
-				} catch {
-					throw new System.Exception("The file \""+fiCurrFile.Name+"\" has been locked by another process.  Release it before adding it.");
-					//return;
-				}
-				byte[] buf = new byte[lo.Size()];
-				buf = lo.Read(lo.Size());
+				//FileStream fsout;
+				//try {
+				//	fsout = File.OpenWrite(fiCurrFile.FullName);
+				//	fsout.Lock(0,fsout.Length);
+				//} catch {
+				//	throw new System.Exception("The file \""+fiCurrFile.Name+"\" has been locked by another process.  Release it before adding it.");
+				//	//return;
+				//}
+				//byte[] buf = new byte[lo.Size()];
+				//buf = lo.Read(lo.Size());
 
 				// write the file
-				fsout.Write(buf, 0, (int)lo.Size());
-				fsout.Flush();
-				fsout.Close();
-				lo.Close();
+				//fsout.Write(buf, 0, (int)lo.Size());
+				//fsout.Flush();
+				//fsout.Close();
+				//lo.Close();
 
 				// set the file readonly
 				fiCurrFile.IsReadOnly = true;
@@ -1705,6 +1772,7 @@ namespace HackPDM
 			t = connDb.BeginTransaction();
 
 			// get directory info
+			// TODO: make this thread safe
 			TreeNode tnCurrent = treeView1.SelectedNode;
 			int intDirId;
 			if (tnCurrent.Tag != null) {
@@ -1728,6 +1796,7 @@ namespace HackPDM
 			string strSql = @"
 				select
 					e.entry_id,
+					v.version_id,
 					e.dir_id,
 					e.entry_name,
 					t.type_id,
@@ -1790,6 +1859,7 @@ namespace HackPDM
 
 			// merge remote data with local data
 			LoadFileDataRecursive(tnCurrent, ref dt);
+			dlgStatus.AddStatusLine("Tree Add New", "Selected items: " + dt.Rows.Count);
 
 			// package arguments for the background worker
 			List<object> arguments = new List<object>();
@@ -1801,14 +1871,17 @@ namespace HackPDM
 			worker.WorkerSupportsCancellation = true;
 			worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
 			worker.DoWork += new DoWorkEventHandler(worker_TreeAddNew);
-			dlgStatus.AddStatusLine("Tree Add New", "Selected items: "+dt.Rows.Count);
+			dlgStatus.AddStatusLine("Tree Add New", "Selected items: " + dt.Rows.Count);
 			worker.RunWorkerAsync(arguments);
 
+
+			// handle the cancel button
 			bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Add New");
 			if (blnWorkCanceled == true) {
 				worker.CancelAsync();
 			}
 
+			// refresh the main window
 			ResetView(treeView1.SelectedNode.FullPath);
 
 		}
@@ -1822,6 +1895,7 @@ namespace HackPDM
 			List<object> genericlist = e.Argument as List<object>;
 			NpgsqlTransaction t = (NpgsqlTransaction)genericlist[0];
 			DataTable dtItems = (DataTable)genericlist[1];
+
 
 			// run critical tests
 			int intRowCount = dtItems.Rows.Count;
@@ -1892,6 +1966,7 @@ namespace HackPDM
 			// commit to database and set files ReadOnly
 			if (blnFailed == true) {
 				t.Rollback();
+				// TODO: figure out how to rollback WebDav changes
 				throw new System.Exception("Operation failed. Rolling back the database");
 			} else {
 				t.Commit();
@@ -1931,9 +2006,9 @@ namespace HackPDM
 
 			// do something useful for all directories and files beneath this node:
 			//   load another window with a list of special items
-			//     local only items
-			//     checked-out items
-			//     remote changes
+			//   local only items
+			//   checked-out items
+			//   remote changes
 
 		}
 
@@ -1986,8 +2061,7 @@ namespace HackPDM
 				// we never actually get here because the handler only gets called when an item is selected
 				return;
 			}
-
-			// reset context menu items
+				// reset context menu items
 			//   get latest	 (remote)
 			//   checkout	   (remote)
 			//   add new		(local only)
@@ -2084,20 +2158,20 @@ namespace HackPDM
 
 			// start the database transaction
 			t = connDb.BeginTransaction();
-			LargeObjectManager lbm = new LargeObjectManager(connDb);
+			//LargeObjectManager lbm = new LargeObjectManager(connDb);
 
 			// prepare to get latest version file id
-			string strSql;
-			strSql = @"
-					select blob_ref
-					from hp_version
-					where entry_id=:entry_id
-					order by create_stamp
-					limit 1;
-				";
-			NpgsqlCommand cmdGetId = new NpgsqlCommand(strSql, connDb, t);
-			cmdGetId.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
-			cmdGetId.Prepare();
+//			string strSql;
+//			strSql = @"
+//					select blob_ref
+//					from hp_version
+//					where entry_id=:entry_id
+//					order by create_stamp
+//					limit 1;
+//				";
+//			NpgsqlCommand cmdGetId = new NpgsqlCommand(strSql, connDb, t);
+//			cmdGetId.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
+//			cmdGetId.Prepare();
 
 			for (int i = 0; i < intRowCount; i++) {
 
@@ -2147,41 +2221,48 @@ namespace HackPDM
 				}
 
 				// get the file oid
-				cmdGetId.Parameters["entry_id"].Value = (int)drCurrent["entry_id"];
-				object oTemp = cmdGetId.ExecuteScalar();
-				int intFileId;
-				if (oTemp != null) {
-					intFileId = (int)(long)oTemp;
-				} else {
-					throw new System.Exception("Failed to get file ID \""+fiCurrFile.Name+"\"");
-					//return;
-				}
+				//cmdGetId.Parameters["entry_id"].Value = (int)drCurrent["entry_id"];
+				//object oTemp = cmdGetId.ExecuteScalar();
+				//int intFileId;
+				//if (oTemp != null) {
+				//	intFileId = (int)(long)oTemp;
+				//} else {
+				//	throw new System.Exception("Failed to get file ID \""+fiCurrFile.Name+"\"");
+				//	//return;
+				//}
 
 				// report status
 				string strFileSize = drCurrent.Field<string>("str_latest_size");
 				dlgStatus.AddStatusLine("Retrieve Content (" + strFileSize + ")", strFileName);
 
+				// name and download the file
+				int intEntryId = (int)drCurrent["entry_id"];
+				int intVersionId = (int)drCurrent["version_id"];
+				string strFileExt = drCurrent.Field<string>("file_ext");
+				string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt;
+				connDav.Download(strDavName, strFullName);
+
 				// pull the file local
-				LargeObject lo =  lbm.Open(intFileId,LargeObjectManager.READ);
-				lo =  lbm.Open(intFileId,LargeObjectManager.READ);
+				//LargeObject lo =  lbm.Open(intFileId,LargeObjectManager.READ);
+				//lo =  lbm.Open(intFileId,LargeObjectManager.READ);
 
 				// open the file stream
-				FileStream fsout;
-				try {
-					fsout = File.OpenWrite(strFullName);
-					fsout.Lock(0,fsout.Length);
-				} catch {
-					throw new System.Exception("The file \""+fiCurrFile.Name+"\" has been locked by another process.  Release it before adding it.");
-					//return;
-				}
-				byte[] buf = new byte[lo.Size()];
-				buf = lo.Read(lo.Size());
+				//FileStream fsout;
+				//try {
+				//	fsout = File.OpenWrite(strFullName);
+				//	fsout.Lock(0,fsout.Length);
+				//} catch {
+				//	throw new System.Exception("The file \""+fiCurrFile.Name+"\" has been locked by another process.  Release it before adding it.");
+				//	//return;
+				//}
+				//byte[] buf = new byte[lo.Size()];
+				//buf = lo.Read(lo.Size());
 
 				// write the file
-				fsout.Write(buf, 0, (int)lo.Size());
-				fsout.Flush();
-				fsout.Close();
-				lo.Close();
+				//fsout.Write(buf, 0, (int)lo.Size());
+				//fsout.Flush();
+				//fsout.Close();
+				//lo.Close();
 
 				// report status
 				dlgStatus.AddStatusLine("File transfer complete", strFileName);
@@ -2238,23 +2319,23 @@ namespace HackPDM
 
 			// start the database transaction
 			t = connDb.BeginTransaction();
-			LargeObjectManager lbm = new LargeObjectManager(connDb);
+			//LargeObjectManager lbm = new LargeObjectManager(connDb);
 
 			// prepare to get latest version file id
-			string strSql;
-			strSql = @"
-					select blob_ref
-					from hp_version
-					where entry_id=:entry_id
-					order by create_stamp
-					limit 1;
-				";
-			NpgsqlCommand cmdGetId = new NpgsqlCommand(strSql, connDb, t);
-			cmdGetId.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
-			cmdGetId.Prepare();
+//			string strSql;
+//			strSql = @"
+//					select blob_ref
+//					from hp_version
+//					where entry_id=:entry_id
+//					order by create_stamp
+//					limit 1;
+//				";
+//			NpgsqlCommand cmdGetId = new NpgsqlCommand(strSql, connDb, t);
+//			cmdGetId.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
+//			cmdGetId.Prepare();
 
 			// prepare to checkout file
-			strSql = @"
+			string strSql = @"
 					update hp_entry
 					set
 						checkout_user=:user_id,
@@ -2325,31 +2406,38 @@ namespace HackPDM
 					}
 
 					// get the file oid
-					cmdGetId.Parameters["entry_id"].Value = (int)drCurrent["entry_id"];
-					object oTemp = cmdGetId.ExecuteScalar();
-					int intFileId;
-					if (oTemp != null) {
-						intFileId = (int)(long)oTemp;
-					} else {
-						throw new System.Exception("Failed to get file blob_id: \"" + strFileName + "\".");
-						//return;
-					}
+					//cmdGetId.Parameters["entry_id"].Value = (int)drCurrent["entry_id"];
+					//object oTemp = cmdGetId.ExecuteScalar();
+					//int intFileId;
+					//if (oTemp != null) {
+					//	intFileId = (int)(long)oTemp;
+					//} else {
+					//	throw new System.Exception("Failed to get file blob_id: \"" + strFileName + "\".");
+					//	//return;
+					//}
 
 					// report status
 					string strFileSize = drCurrent.Field<string>("str_latest_size");
 					dlgStatus.AddStatusLine("Begin streaming file to client (" + strFileSize + ")", strFileName);
 
+					// name and download the file
+					int intEntryId = (int)drCurrent["entry_id"];
+					int intVersionId = (int)drCurrent["version_id"];
+					string strFileExt = drCurrent.Field<string>("file_ext");
+					string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt;
+					connDav.Download(strDavName, strFullName);
+
 					// pull the file local
-					LargeObject lo =  lbm.Open(intFileId,LargeObjectManager.READ);
-					lo =  lbm.Open(intFileId,LargeObjectManager.READ);
-					Directory.CreateDirectory(strFilePath);
-					FileStream fsout = File.OpenWrite(strFullName);
-					byte[] buf = new byte[lo.Size()];
-					buf = lo.Read(lo.Size());
-					fsout.Write(buf, 0, (int)lo.Size());
-					fsout.Flush();
-					fsout.Close();
-					lo.Close();
+					//LargeObject lo =  lbm.Open(intFileId,LargeObjectManager.READ);
+					//lo =  lbm.Open(intFileId,LargeObjectManager.READ);
+					//Directory.CreateDirectory(strFilePath);
+					//FileStream fsout = File.OpenWrite(strFullName);
+					//byte[] buf = new byte[lo.Size()];
+					//buf = lo.Read(lo.Size());
+					//fsout.Write(buf, 0, (int)lo.Size());
+					//fsout.Flush();
+					//fsout.Close();
+					//lo.Close();
 
 					// report status
 					//worker.ReportProgress((int)(i/lviSelection.Count));
@@ -2526,6 +2614,7 @@ namespace HackPDM
 			// commit to database and set files ReadOnly
 			if (blnFailed == true) {
 				t.Rollback();
+				// TODO: figure out how to rollback WebDav changes
 				throw new System.Exception("Operation failed. Rolling back the database");
 			} else {
 				t.Commit();
@@ -2568,6 +2657,7 @@ namespace HackPDM
 			string strSql;
 			string strFileExt = drNewFile.Field<string>("file_ext");
 			string strFileName = fiNewFile.Name;
+			string strFullName = fiNewFile.FullName;
 			long lngFileSize = fiNewFile.Length;
 			DateTime dtModifyDate = fiNewFile.LastWriteTime;
 
@@ -2592,25 +2682,25 @@ namespace HackPDM
 			//
 
 			// setup the sql blob manager
-			LargeObjectManager lbm = new LargeObjectManager(connDb);
-			int noid = lbm.Create(LargeObjectManager.READWRITE);
-			LargeObject lo =  lbm.Open(noid,LargeObjectManager.READWRITE);
+			//LargeObjectManager lbm = new LargeObjectManager(connDb);
+			//int noid = lbm.Create(LargeObjectManager.READWRITE);
+			//LargeObject lo =  lbm.Open(noid,LargeObjectManager.READWRITE);
 
 			// acquire and lock the file stream
-			FileStream fs = fiNewFile.OpenRead();
-			try {
-				fs.Lock(0,fs.Length);
-			} catch {
-				dlgStatus.AddStatusLine("File Locked by another process", fiNewFile.Name);
-				return(true);
-			}
+			//FileStream fs = fiNewFile.OpenRead();
+			//try {
+			//	fs.Lock(0,fs.Length);
+			//} catch {
+			//	dlgStatus.AddStatusLine("File Locked by another process", fiNewFile.Name);
+			//	return(true);
+			//}
 
 			// stream the file into the blob
-			dlgStatus.AddStatusLine("Begin streaming file to server (" + FormatSize(fs.Length) + ")", strFileName);
-			byte[] buf = new byte[fs.Length];
-			fs.Read(buf,0,(int)fs.Length);
-			lo.Write(buf);
-			lo.Close();
+			dlgStatus.AddStatusLine("Begin streaming file to server (" + FormatSize(lngFileSize) + ")", strFileName);
+			//byte[] buf = new byte[fs.Length];
+			//fs.Read(buf,0,(int)fs.Length);
+			//lo.Write(buf);
+			//lo.Close();
 
 
 			// get a new entry id
@@ -2667,15 +2757,15 @@ namespace HackPDM
 					entry_id,
 					file_size,
 					file_modify_stamp,
-					create_user,
-					blob_ref
+					create_user--,
+					--blob_ref
 				) values (
 					:version_id,
 					:entry_id,
 					:file_size,
 					:file_modify_stamp,
-					:create_user,
-					:blob_ref
+					:create_user--,
+					--:blob_ref
 				);
 			";
 			NpgsqlCommand cmdInsertVersion = new NpgsqlCommand(strSql, connDb, t);
@@ -2684,7 +2774,7 @@ namespace HackPDM
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_size", lngFileSize));
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_modify_stamp", dtModifyDate.ToString()));
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("create_user", intMyUserId));
-			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("blob_ref", noid));
+			//cmdInsertVersion.Parameters.Add(new NpgsqlParameter("blob_ref", noid));
 
 			// insert version
 			try {
@@ -2696,6 +2786,14 @@ namespace HackPDM
 				return(true);
 			}
 
+			// name the file
+			string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt;
+
+			// create directory if necessary
+			connDav.CreateDir("/" + intEntryId.ToString());
+
+			// upload the file
+			connDav.Upload(strFullName, strDavName);
 
 			//
 			// insert file properties
@@ -2814,25 +2912,25 @@ namespace HackPDM
 				// get the file
 
 				// setup the sql blob manager
-				LargeObjectManager lbm = new LargeObjectManager(connDb);
-				int noid = lbm.Create(LargeObjectManager.READWRITE);
-				LargeObject lo =  lbm.Open(noid,LargeObjectManager.READWRITE);
+				//LargeObjectManager lbm = new LargeObjectManager(connDb);
+				//int noid = lbm.Create(LargeObjectManager.READWRITE);
+				//LargeObject lo =  lbm.Open(noid,LargeObjectManager.READWRITE);
 
 				// acquire and lock the file stream
-				FileStream fs = fiCurrFile.OpenRead();
-				try {
-					fs.Lock(0,fs.Length);
-				} catch {
-					throw new System.Exception("The file \"" + fiCurrFile.Name + "\" has been locked by another process.  Release it before committing it.");
-					//return;
-				}
+				//FileStream fs = fiCurrFile.OpenRead();
+				//try {
+				//	fs.Lock(0,fs.Length);
+				//} catch {
+				//	throw new System.Exception("The file \"" + fiCurrFile.Name + "\" has been locked by another process.  Release it before committing it.");
+				//	//return;
+				//}
 
 				// stream the file into the blob
-				dlgStatus.AddStatusLine("Begin streaming file to server (" + FormatSize(fs.Length) + ")", strFileName);
-				byte[] buf = new byte[fs.Length];
-				fs.Read(buf,0,(int)fs.Length);
-				lo.Write(buf);
-				lo.Close();
+				dlgStatus.AddStatusLine("Begin streaming file to server (" + FormatSize(lngFileSize) + ")", strFileName);
+				//byte[] buf = new byte[fs.Length];
+				//fs.Read(buf,0,(int)fs.Length);
+				//lo.Write(buf);
+				//lo.Close();
 
 
 				// get a new version id
@@ -2847,15 +2945,15 @@ namespace HackPDM
 						entry_id,
 						file_size,
 						file_modify_stamp,
-						create_user,
-						blob_ref
+						create_user --,
+						--blob_ref
 					) values (
 						:version_id,
 						:entry_id,
 						:file_size,
 						:file_modify_stamp,
-						:create_user,
-						:blob_ref
+						:create_user --,
+						--:blob_ref
 					);
 				";
 				NpgsqlCommand cmdInsertVersion = new NpgsqlCommand(strSql, connDb, t);
@@ -2864,7 +2962,7 @@ namespace HackPDM
 				cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_size", lngFileSize));
 				cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_modify_stamp", dtModifyDate.ToString()));
 				cmdInsertVersion.Parameters.Add(new NpgsqlParameter("create_user", intMyUserId));
-				cmdInsertVersion.Parameters.Add(new NpgsqlParameter("blob_ref", noid));
+				//cmdInsertVersion.Parameters.Add(new NpgsqlParameter("blob_ref", noid));
 
 				// insert version
 				try {
@@ -2888,11 +2986,22 @@ namespace HackPDM
 				cmdUpdateEntry.Parameters.Add(new NpgsqlParameter("entry_id", drCurrent.Field<int>("entry_id")));
 				cmdUpdateEntry.ExecuteNonQuery();
 
+				// name the file
+				int intEntryId = drCurrent.Field<int>("entry_id");
+				string strFileExt = drCurrent.Field<string>("file_ext");
+				string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt;
+
+				// creating the directory shouldn't be necessary
+				// upload the file
+				connDav.Upload(strFullName, strDavName);
+				if (connDav.StatusString != "2") blnFailed = true;
+
 			}
 
 			// commit to database and set files ReadOnly
 			if (blnFailed == true) {
 				t.Rollback();
+				// TODO: figure out how to rollback WebDav changes
 				throw new System.Exception("Operation failed. Rolling back the database");
 			} else {
 				t.Commit();
@@ -2964,7 +3073,7 @@ namespace HackPDM
 
 			// start the database transaction
 			t = connDb.BeginTransaction();
-			LargeObjectManager lbm = new LargeObjectManager(connDb);
+			//LargeObjectManager lbm = new LargeObjectManager(connDb);
 
 			// prepare to get latest version file id
 			string strSql;
@@ -3049,25 +3158,27 @@ namespace HackPDM
 				dlgStatus.AddStatusLine("Begin streaming file to client (" + strFileSize + ")", strFileName);
 
 				// open the blob
-				LargeObject lo =  lbm.Open(intFileId,LargeObjectManager.READ);
-				lo =  lbm.Open(intFileId,LargeObjectManager.READ);
+				//LargeObject lo =  lbm.Open(intFileId,LargeObjectManager.READ);
+				//lo =  lbm.Open(intFileId,LargeObjectManager.READ);
 
 				// acquire and lock the file stream
-				FileStream fs = fiCurrFile.OpenWrite();
-				try {
-					fs.Lock(0,fs.Length);
-				} catch {
-					throw new System.Exception("The file \"" + fiCurrFile.Name + "\" has been locked by another process.  Release it before committing it.");
-					//return;
-				}
+				//FileStream fs = fiCurrFile.OpenWrite();
+				//try {
+				//	fs.Lock(0,fs.Length);
+				//} catch {
+				//	throw new System.Exception("The file \"" + fiCurrFile.Name + "\" has been locked by another process.  Release it before committing it.");
+				//	//return;
+				//}
 
 				// stream the blob into the file
-				byte[] buf = new byte[lo.Size()];
-				buf = lo.Read(lo.Size());
-				fs.Write(buf, 0, (int)lo.Size());
-				fs.Flush();
-				fs.Close();
-				lo.Close();
+				//byte[] buf = new byte[lo.Size()];
+				//buf = lo.Read(lo.Size());
+				//fs.Write(buf, 0, (int)lo.Size());
+				//fs.Flush();
+				//fs.Close();
+				//lo.Close();
+
+
 
 				// set the file readonly
 				fiCurrFile.IsReadOnly = true;

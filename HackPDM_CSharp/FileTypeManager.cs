@@ -37,391 +37,391 @@ namespace HackPDM
 	/// Manipulate file types
 	/// </summary>
 	public partial class FileTypeManager : Form
-    {
+	{
 
 
-        #region declarations
+		#region declarations
 
-        private NpgsqlConnection connDb;
-        private NpgsqlDataAdapter daFilters;
-        private DataSet dsFilters;
-        private DataSet dsTypes = new DataSet();
-        private DataTable dtRemoteTypes;
-        private string strFilePath;
+		private NpgsqlConnection connDb;
+		private NpgsqlDataAdapter daFilters;
+		private DataSet dsFilters;
+		private DataSet dsTypes = new DataSet();
+		private DataTable dtRemoteTypes;
+		private string strFilePath;
 
-        private ListViewColumnSorter lvwColumnSorter;
+		private ListViewColumnSorter lvwColumnSorter;
 
-        BindingSource bsFilters = new BindingSource();
-        BindingSource bsTypes = new BindingSource();
+		BindingSource bsFilters = new BindingSource();
+		BindingSource bsTypes = new BindingSource();
 
-        #endregion
+		#endregion
 
 
-        public FileTypeManager(NpgsqlConnection dbConn, string FilePath, string TreePath)
+		public FileTypeManager(NpgsqlConnection dbConn, string FilePath, string TreePath)
 		{
 			//
 			// The InitializeComponent() call is required for Windows Forms designer support.
 			//
 			InitializeComponent();
 
-            // setup listview column sorting
-            lvwColumnSorter = new ListViewColumnSorter();
-            this.lvTypes.ListViewItemSorter = lvwColumnSorter;
+			// setup listview column sorting
+			lvwColumnSorter = new ListViewColumnSorter();
+			this.lvTypes.ListViewItemSorter = lvwColumnSorter;
 
-            connDb = dbConn;
-            strFilePath = FilePath;
+			connDb = dbConn;
+			strFilePath = FilePath;
 
-            LoadFilters();
-            
+			LoadFilters();
+			
 		}
 
-        void lvTypesColumnClick(object sender, ColumnClickEventArgs e)
-        {
+		void lvTypesColumnClick(object sender, ColumnClickEventArgs e)
+		{
 
-            // Determine if clicked column is already the column that is being sorted.
-            if (e.Column == lvwColumnSorter.SortColumn)
-            {
-                // Reverse the current sort direction for this column.
-                if (lvwColumnSorter.Order == SortOrder.Ascending)
-                {
-                    lvwColumnSorter.Order = SortOrder.Descending;
-                }
-                else
-                {
-                    lvwColumnSorter.Order = SortOrder.Ascending;
-                }
-            }
-            else
-            {
-                // Set the column number that is to be sorted; default to ascending.
-                lvwColumnSorter.SortColumn = e.Column;
-                lvwColumnSorter.Order = SortOrder.Ascending;
-            }
+			// Determine if clicked column is already the column that is being sorted.
+			if (e.Column == lvwColumnSorter.SortColumn)
+			{
+				// Reverse the current sort direction for this column.
+				if (lvwColumnSorter.Order == SortOrder.Ascending)
+				{
+					lvwColumnSorter.Order = SortOrder.Descending;
+				}
+				else
+				{
+					lvwColumnSorter.Order = SortOrder.Ascending;
+				}
+			}
+			else
+			{
+				// Set the column number that is to be sorted; default to ascending.
+				lvwColumnSorter.SortColumn = e.Column;
+				lvwColumnSorter.Order = SortOrder.Ascending;
+			}
 
-            // Perform the sort with these new sort options.
-            this.lvTypes.Sort();
+			// Perform the sort with these new sort options.
+			this.lvTypes.Sort();
 
-        }
+		}
 
 
-        #region Utility Methods
+		#region Utility Methods
 
-        private void LoadFilters() {
+		private void LoadFilters() {
 
-            // clear datagridview
-            dgFilters.DataSource = null;
-            dgFilters.Refresh();
+			// clear datagridview
+			dgFilters.DataSource = null;
+			dgFilters.Refresh();
 
-            // clear dataset
-            dsFilters = new DataSet();
+			// clear dataset
+			dsFilters = new DataSet();
 
-            //
-            // get remote filters
-            //
-            // initialize sql command for remote filter list
-            string strSql = @"
+			//
+			// get remote filters
+			//
+			// initialize sql command for remote filter list
+			string strSql = @"
 				select
 					filter_id,
-                    name_proto,
-                    name_regex
+					name_proto,
+					name_regex
 				from hp_entry_name_filter
 				order by name_proto;
 			";
 
-            // build data adapter
-            daFilters = new NpgsqlDataAdapter(strSql, connDb);
+			// build data adapter
+			daFilters = new NpgsqlDataAdapter(strSql, connDb);
 
-            // build insert command
-            daFilters.InsertCommand = new NpgsqlCommand("insert into hp_entry_name_filter (name_proto, name_regex) values (:nameproto, :nameregex)", connDb);
-            daFilters.InsertCommand.Parameters.Add(new NpgsqlParameter("nameproto", NpgsqlDbType.Varchar));
-            daFilters.InsertCommand.Parameters.Add(new NpgsqlParameter("nameregex", NpgsqlDbType.Varchar));
-            daFilters.InsertCommand.Parameters[0].Direction = ParameterDirection.Input;
-            daFilters.InsertCommand.Parameters[1].Direction = ParameterDirection.Input;
-            daFilters.InsertCommand.Parameters[0].SourceColumn = "name_proto";
-            daFilters.InsertCommand.Parameters[1].SourceColumn = "name_regex";
+			// build insert command
+			daFilters.InsertCommand = new NpgsqlCommand("insert into hp_entry_name_filter (name_proto, name_regex) values (:nameproto, :nameregex)", connDb);
+			daFilters.InsertCommand.Parameters.Add(new NpgsqlParameter("nameproto", NpgsqlDbType.Varchar));
+			daFilters.InsertCommand.Parameters.Add(new NpgsqlParameter("nameregex", NpgsqlDbType.Varchar));
+			daFilters.InsertCommand.Parameters[0].Direction = ParameterDirection.Input;
+			daFilters.InsertCommand.Parameters[1].Direction = ParameterDirection.Input;
+			daFilters.InsertCommand.Parameters[0].SourceColumn = "name_proto";
+			daFilters.InsertCommand.Parameters[1].SourceColumn = "name_regex";
 
-            // build update command
-            daFilters.UpdateCommand = new NpgsqlCommand("update hp_entry_name_filter set name_proto=:nameproto, name_regex=:nameregex where filter_id=:filterid", connDb);
-            daFilters.UpdateCommand.Parameters.Add(new NpgsqlParameter("nameproto", NpgsqlDbType.Varchar));
-            daFilters.UpdateCommand.Parameters.Add(new NpgsqlParameter("nameregex", NpgsqlDbType.Varchar));
-            daFilters.UpdateCommand.Parameters.Add(new NpgsqlParameter("filterid", NpgsqlDbType.Integer));
-            daFilters.UpdateCommand.Parameters[0].Direction = ParameterDirection.Input;
-            daFilters.UpdateCommand.Parameters[1].Direction = ParameterDirection.Input;
-            daFilters.UpdateCommand.Parameters[2].Direction = ParameterDirection.Input;
-            daFilters.UpdateCommand.Parameters[0].SourceColumn = "name_proto";
-            daFilters.UpdateCommand.Parameters[1].SourceColumn = "name_regex";
-            daFilters.UpdateCommand.Parameters[2].SourceColumn = "filter_id";
+			// build update command
+			daFilters.UpdateCommand = new NpgsqlCommand("update hp_entry_name_filter set name_proto=:nameproto, name_regex=:nameregex where filter_id=:filterid", connDb);
+			daFilters.UpdateCommand.Parameters.Add(new NpgsqlParameter("nameproto", NpgsqlDbType.Varchar));
+			daFilters.UpdateCommand.Parameters.Add(new NpgsqlParameter("nameregex", NpgsqlDbType.Varchar));
+			daFilters.UpdateCommand.Parameters.Add(new NpgsqlParameter("filterid", NpgsqlDbType.Integer));
+			daFilters.UpdateCommand.Parameters[0].Direction = ParameterDirection.Input;
+			daFilters.UpdateCommand.Parameters[1].Direction = ParameterDirection.Input;
+			daFilters.UpdateCommand.Parameters[2].Direction = ParameterDirection.Input;
+			daFilters.UpdateCommand.Parameters[0].SourceColumn = "name_proto";
+			daFilters.UpdateCommand.Parameters[1].SourceColumn = "name_regex";
+			daFilters.UpdateCommand.Parameters[2].SourceColumn = "filter_id";
 
-            // build delete command
-            daFilters.DeleteCommand = new NpgsqlCommand("delete from hp_entry_name_filter where filter_id=:filterid", connDb);
-            daFilters.DeleteCommand.Parameters.Add(new NpgsqlParameter("filterid", NpgsqlDbType.Integer));
-            daFilters.DeleteCommand.Parameters[0].Direction = ParameterDirection.Input;
-            daFilters.DeleteCommand.Parameters[0].SourceColumn = "filter_id";
+			// build delete command
+			daFilters.DeleteCommand = new NpgsqlCommand("delete from hp_entry_name_filter where filter_id=:filterid", connDb);
+			daFilters.DeleteCommand.Parameters.Add(new NpgsqlParameter("filterid", NpgsqlDbType.Integer));
+			daFilters.DeleteCommand.Parameters[0].Direction = ParameterDirection.Input;
+			daFilters.DeleteCommand.Parameters[0].SourceColumn = "filter_id";
 
-            // put the remote list in the DataSet
-            daFilters.Fill(dsFilters);
+			// put the remote list in the DataSet
+			daFilters.Fill(dsFilters);
 
-            // bind datatable to datagridview
-            dgFilters.DataSource = dsFilters.Tables[0];
+			// bind datatable to datagridview
+			dgFilters.DataSource = dsFilters.Tables[0];
 
-            // set filter_id column readonly
-            dgFilters.Columns["filter_id"].ReadOnly = true;
-            dgFilters.Columns[0].DefaultCellStyle.BackColor = Color.LightGray;
+			// set filter_id column readonly
+			dgFilters.Columns["filter_id"].ReadOnly = true;
+			dgFilters.Columns[0].DefaultCellStyle.BackColor = Color.LightGray;
 
-        }
+		}
 
-        private DataTable CreateTypeTable()
-        {
+		private DataTable CreateTypeTable()
+		{
 
-            DataTable dtTypes = new DataTable();
-            dtTypes.Columns.Add("type_id", Type.GetType("System.Int32"));
-            dtTypes.Columns.Add("file_ext", Type.GetType("System.String"));
-            dtTypes.Columns.Add("default_cat", Type.GetType("System.Int32"));
-            dtTypes.Columns.Add("cat_name", Type.GetType("System.String"));
-            dtTypes.Columns.Add("icon", typeof(Byte[]));
-            dtTypes.Columns.Add("type_regex", Type.GetType("System.String"));
-            dtTypes.Columns.Add("is_local", Type.GetType("System.Boolean"));
-            dtTypes.Columns.Add("is_remote", Type.GetType("System.Boolean"));
-            return dtTypes;
+			DataTable dtTypes = new DataTable();
+			dtTypes.Columns.Add("type_id", Type.GetType("System.Int32"));
+			dtTypes.Columns.Add("file_ext", Type.GetType("System.String"));
+			dtTypes.Columns.Add("default_cat", Type.GetType("System.Int32"));
+			dtTypes.Columns.Add("cat_name", Type.GetType("System.String"));
+			dtTypes.Columns.Add("icon", typeof(Byte[]));
+			dtTypes.Columns.Add("type_regex", Type.GetType("System.String"));
+			dtTypes.Columns.Add("is_local", Type.GetType("System.Boolean"));
+			dtTypes.Columns.Add("is_remote", Type.GetType("System.Boolean"));
+			return dtTypes;
 
-        }
+		}
 
-        protected void GetTypesRecursive(string ParentDir)
-        {
+		protected void GetTypesRecursive(string ParentDir)
+		{
 
-            // get the DataTable
-            DataTable dt = dsTypes.Tables[0];
+			// get the DataTable
+			DataTable dt = dsTypes.Tables[0];
 
-            // get local types
-            foreach (string d in Directory.GetDirectories(ParentDir))
-            {
-                foreach (string f in Directory.GetFiles(d))
-                {
+			// get local types
+			foreach (string d in Directory.GetDirectories(ParentDir))
+			{
+				foreach (string f in Directory.GetFiles(d))
+				{
 
-                    // get the file extension and attempt a simple match
-                    string strFileExt = GetFileExt(f);
-                    int intMatch = dt.Select("file_ext='" + strFileExt + "'").Length;
+					// get the file extension and attempt a simple match
+					string strFileExt = GetFileExt(f);
+					int intMatch = dt.Select("file_ext='" + strFileExt + "'").Length;
 
-                    // if this extension (as windows recognizes it) is not in the current list
-                    if (intMatch == 0)
-                    {
+					// if this extension (as windows recognizes it) is not in the current list
+					if (intMatch == 0)
+					{
 
-                        // if this file name is not blocked
-                        if (!FileBlocked(f))
-                        {
+						// if this file name is not blocked
+						if (!FileBlocked(f))
+						{
 
-                            // if this file does not match a more complex remote file type
-                            int intTypeId = GetRemoteType(f);
-                            if (intTypeId == 0)
-                            {
-                                // insert a now type row, including icon
-                                    // type_id
-                                    // file_ext
-                                    // default_cat
-                                    // cat_name
-                                    // icon
-                                    // type_regex
-                                    // is_local
-                                    // is_remote
-                                dt.Rows.Add(null,
-                                    GetFileExt(f),
-                                    null,
-                                    null,
-                                    ImageToByteArray(ExtractIcon(f)),
-                                    null,
-                                    true,
-                                    false);
-                            }
-                            else
-                            {
-                                // otherwise, mark this remote type as existing local
-                                DataRow dr = dt.Select("type_id='" + intTypeId + "'")[0];
-                                dr.SetField<bool>("is_local", true);
-                            }
+							// if this file does not match a more complex remote file type
+							int intTypeId = GetRemoteType(f);
+							if (intTypeId == 0)
+							{
+								// insert a now type row, including icon
+									// type_id
+									// file_ext
+									// default_cat
+									// cat_name
+									// icon
+									// type_regex
+									// is_local
+									// is_remote
+								dt.Rows.Add(null,
+									GetFileExt(f),
+									null,
+									null,
+									ImageToByteArray(ExtractIcon(f)),
+									null,
+									true,
+									false);
+							}
+							else
+							{
+								// otherwise, mark this remote type as existing local
+								DataRow dr = dt.Select("type_id='" + intTypeId + "'")[0];
+								dr.SetField<bool>("is_local", true);
+							}
 
 
-                        }
+						}
 
-                    }
+					}
 
-                }
+				}
 
-                GetTypesRecursive(d);
+				GetTypesRecursive(d);
 
-            }
+			}
 
-        }
+		}
 
-        protected string GetFileExt(string strFileName)
-        {
+		protected string GetFileExt(string strFileName)
+		{
 
-            // parse file path for file extension
-            //string[] strSplit = strFileName.Split('.');
-            //int _maxIndex = strSplit.Length - 1;
-            //return strSplit[_maxIndex];
+			// parse file path for file extension
+			//string[] strSplit = strFileName.Split('.');
+			//int _maxIndex = strSplit.Length - 1;
+			//return strSplit[_maxIndex];
 
-            // use FileInfo to get file extension
-            FileInfo fiCurrFile = new FileInfo(strFileName);
-            return fiCurrFile.Extension.Substring(1, fiCurrFile.Extension.Length - 1).ToLower();
+			// use FileInfo to get file extension
+			FileInfo fiCurrFile = new FileInfo(strFileName);
+			return fiCurrFile.Extension.Substring(1, fiCurrFile.Extension.Length - 1).ToLower();
 
-        }
+		}
 
-        protected int GetRemoteType(string strFileName)
-        {
+		protected int GetRemoteType(string strFileName)
+		{
 
-            // get short file name
-            FileInfo fiCurrFile = new FileInfo(strFileName);
-            string strShortName = fiCurrFile.Name;
+			// get short file name
+			FileInfo fiCurrFile = new FileInfo(strFileName);
+			string strShortName = fiCurrFile.Name;
 
-            // use a regular expression to match file names with remote extensions
-            foreach (DataRow dr in dtRemoteTypes.Rows)
-            {
-                Regex rxExt = new Regex(dr["type_regex"].ToString(), RegexOptions.IgnoreCase);
-                if (rxExt.IsMatch(strShortName))
-                {
-                    return dr.Field<int>("type_id");
-                }
-            }
+			// use a regular expression to match file names with remote extensions
+			foreach (DataRow dr in dtRemoteTypes.Rows)
+			{
+				Regex rxExt = new Regex(dr["type_regex"].ToString(), RegexOptions.IgnoreCase);
+				if (rxExt.IsMatch(strShortName))
+				{
+					return dr.Field<int>("type_id");
+				}
+			}
 
-            return 0;
+			return 0;
 
-        }
+		}
 
-        protected bool FileBlocked(string strFileName)
-        {
+		protected bool FileBlocked(string strFileName)
+		{
 
-            // get short file name
-            FileInfo fiCurrFile = new FileInfo(strFileName);
-            string strShortName = fiCurrFile.Name;
+			// get short file name
+			FileInfo fiCurrFile = new FileInfo(strFileName);
+			string strShortName = fiCurrFile.Name;
 
-            // check filters to see if the file is blocked
-            foreach (DataRow dr in dsFilters.Tables[0].Rows)
-            {
-                Regex rxExt = new Regex(dr["name_regex"].ToString(), RegexOptions.IgnoreCase);
-                if (rxExt.IsMatch(strShortName))
-                {
-                    return true;
-                }
-            }
+			// check filters to see if the file is blocked
+			foreach (DataRow dr in dsFilters.Tables[0].Rows)
+			{
+				Regex rxExt = new Regex(dr["name_regex"].ToString(), RegexOptions.IgnoreCase);
+				if (rxExt.IsMatch(strShortName))
+				{
+					return true;
+				}
+			}
 
-            return false;
+			return false;
 
-        }
+		}
 
-        protected Image ExtractIcon(string fileName)
-        {
-            Icon ico = Icon.ExtractAssociatedIcon(fileName);
-            Image img = Image.FromHbitmap(ico.ToBitmap().GetHbitmap());
-            return img;
-            //return Image.FromHbitmap(ico.ToBitmap().GetHbitmap());
-        }
+		protected Image ExtractIcon(string fileName)
+		{
+			Icon ico = Icon.ExtractAssociatedIcon(fileName);
+			Image img = Image.FromHbitmap(ico.ToBitmap().GetHbitmap());
+			return img;
+			//return Image.FromHbitmap(ico.ToBitmap().GetHbitmap());
+		}
 
-        private byte[] ImageToByteArray(System.Drawing.Image imageIn)
-        {
-            MemoryStream ms = new MemoryStream();
-            imageIn.Save(ms,System.Drawing.Imaging.ImageFormat.Png);
-            return ms.ToArray();
-        }
+		private byte[] ImageToByteArray(System.Drawing.Image imageIn)
+		{
+			MemoryStream ms = new MemoryStream();
+			imageIn.Save(ms,System.Drawing.Imaging.ImageFormat.Png);
+			return ms.ToArray();
+		}
 
-        private Image ByteArrayToImage(byte[] byteArrayIn)
-        {
-            MemoryStream ms = new MemoryStream(byteArrayIn);
-            Image returnImage = Image.FromStream(ms);
-            return returnImage;
-        }
+		private Image ByteArrayToImage(byte[] byteArrayIn)
+		{
+			MemoryStream ms = new MemoryStream(byteArrayIn);
+			Image returnImage = Image.FromStream(ms);
+			return returnImage;
+		}
 
-        protected void InitTypesList()
-        {
+		protected void InitTypesList()
+		{
 
-            //init ListView control
-            lvTypes.Clear();
+			//init ListView control
+			lvTypes.Clear();
 
-            // configure sorting
-            //listView1.Sorting = SortOrder.None;
-            //listView1.ColumnClick += new ColumnClickEventHandler(lv1ColumnClick);
+			// configure sorting
+			//listView1.Sorting = SortOrder.None;
+			//listView1.ColumnClick += new ColumnClickEventHandler(lv1ColumnClick);
 
-            //create columns for ListView
-            lvTypes.Columns.Add("Extension", 100, System.Windows.Forms.HorizontalAlignment.Left);
-            lvTypes.Columns.Add("Category", 250, System.Windows.Forms.HorizontalAlignment.Left);
-            lvTypes.Columns.Add("Status", 75, System.Windows.Forms.HorizontalAlignment.Left);
-            lvTypes.Columns.Add("Action", 75, System.Windows.Forms.HorizontalAlignment.Left);
+			//create columns for ListView
+			lvTypes.Columns.Add("Extension", 100, System.Windows.Forms.HorizontalAlignment.Left);
+			lvTypes.Columns.Add("Category", 250, System.Windows.Forms.HorizontalAlignment.Left);
+			lvTypes.Columns.Add("Status", 75, System.Windows.Forms.HorizontalAlignment.Left);
+			lvTypes.Columns.Add("Action", 75, System.Windows.Forms.HorizontalAlignment.Left);
 
-        }
+		}
 
-        private void PopulateList()
-        {
+		private void PopulateList()
+		{
 
-            foreach (DataRow row in dsTypes.Tables[0].Rows)
-            {
+			foreach (DataRow row in dsTypes.Tables[0].Rows)
+			{
 
-                // insert data
-                string[] lvData = new string[3];
-                lvData[0] = row.Field<string>("file_ext");
-                lvData[1] = row.Field<string>("cat_name");
+				// insert data
+				string[] lvData = new string[3];
+				lvData[0] = row.Field<string>("file_ext");
+				lvData[1] = row.Field<string>("cat_name");
 
-                if ((bool)row["is_local"] == true)
-                {
-                    if ((bool)row["is_remote"] == false)
-                    {
-                        lvData[2] = "Local";
-                    }
-                    else
-                    {
-                        lvData[2] = "Both";
-                    }
-                }
-                else
-                {
-                    lvData[2] = "Remote";
-                }
+				if ((bool)row["is_local"] == true)
+				{
+					if ((bool)row["is_remote"] == false)
+					{
+						lvData[2] = "Local";
+					}
+					else
+					{
+						lvData[2] = "Both";
+					}
+				}
+				else
+				{
+					lvData[2] = "Remote";
+				}
 
-                // add image
-                string strFileExt = row.Field<string>("file_ext");
+				// add image
+				string strFileExt = row.Field<string>("file_ext");
 				if (row.Field<byte[]>("icon") != null)
 				{
 					Image imgCurrent = ByteArrayToImage(row.Field<byte[]>("icon"));
 					ilTypes.Images.Add(strFileExt, imgCurrent);
 				}
 
-                // create actual list item
-                ListViewItem lvItem = new ListViewItem(lvData);
-                lvItem.ImageKey = strFileExt;
-                lvTypes.Items.Add(lvItem);
+				// create actual list item
+				ListViewItem lvItem = new ListViewItem(lvData);
+				lvItem.ImageKey = strFileExt;
+				lvTypes.Items.Add(lvItem);
 
-            }
+			}
 
-        }
+		}
 
-        #endregion
-
-
-        private void btnLoadTypes_Click(object sender, EventArgs e)
-        {
-
-            // Set cursor as hourglass
-            Cursor.Current = Cursors.WaitCursor;
+		#endregion
 
 
-            //
-            // clear objects
-            // 
-            dsTypes = new DataSet();
-            InitTypesList();
-            LoadFilters();
+		private void btnLoadTypes_Click(object sender, EventArgs e)
+		{
+
+			// Set cursor as hourglass
+			Cursor.Current = Cursors.WaitCursor;
 
 
-            //
-            // get remote file types
-            //
-            // initialize sql command for remote type list
-            string strSql = @"
+			//
+			// clear objects
+			// 
+			dsTypes = new DataSet();
+			InitTypesList();
+			LoadFilters();
+
+
+			//
+			// get remote file types
+			//
+			// initialize sql command for remote type list
+			string strSql = @"
 				select
 					t.type_id,
 					t.file_ext,
-                    t.default_cat,
+					t.default_cat,
 					c.cat_name,
 					t.icon,
-                    t.type_regex,
+					t.type_regex,
 					false as is_local,
 					true as is_remote
 				from hp_type as t
@@ -429,88 +429,88 @@ namespace HackPDM
 				order by t.file_ext;
 			";
 
-            // put the remote list in the DataSet
-            NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-            daTemp.Fill(dsTypes);
+			// put the remote list in the DataSet
+			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+			daTemp.Fill(dsTypes);
 
-            // if there are no remote types
-            if (dsTypes.Tables.Count == 0)
-            {
-                // make an empty DataTable
-                dsTypes.Tables.Add(CreateTypeTable());
-            }
-            
-            // copy to remote only datatable
-            dtRemoteTypes = dsTypes.Tables[0].Copy();
-            dtRemoteTypes.Columns.Add("regex", Type.GetType("System.Object"));
-            foreach (DataRow dr in dtRemoteTypes.Rows)
-            {
-                dr["regex"] = new Regex(dr["type_regex"].ToString(), RegexOptions.Compiled);
-            }
+			// if there are no remote types
+			if (dsTypes.Tables.Count == 0)
+			{
+				// make an empty DataTable
+				dsTypes.Tables.Add(CreateTypeTable());
+			}
+			
+			// copy to remote only datatable
+			dtRemoteTypes = dsTypes.Tables[0].Copy();
+			dtRemoteTypes.Columns.Add("regex", Type.GetType("System.Object"));
+			foreach (DataRow dr in dtRemoteTypes.Rows)
+			{
+				dr["regex"] = new Regex(dr["type_regex"].ToString(), RegexOptions.Compiled);
+			}
 
-            // bind table to databinding
-            bsTypes.DataSource = dsTypes.Tables[0];
+			// bind table to databinding
+			bsTypes.DataSource = dsTypes.Tables[0];
 
-            //
-            // get local file types
-            //
-            GetTypesRecursive(strFilePath);
+			//
+			// get local file types
+			//
+			GetTypesRecursive(strFilePath);
 
-            PopulateList();
+			PopulateList();
 
-            // Set cursor as default arrow
-            Cursor.Current = Cursors.Default;
+			// Set cursor as default arrow
+			Cursor.Current = Cursors.Default;
 
-        }
+		}
 
-        private void lvTypes_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            string strFileExt = lvTypes.Text;
-            SelectRecord(strFileExt);
-        }
+		private void lvTypes_SelectedIndexChanged(object sender, EventArgs e)
+		{
+			string strFileExt = lvTypes.Text;
+			SelectRecord(strFileExt);
+		}
 
 
-        void SelectRecord(string strFileExt)
-        {
-            int foundIndex = bsTypes.Find("file_ext", strFileExt);
-            bsTypes.Position = foundIndex;
-        }
+		void SelectRecord(string strFileExt)
+		{
+			int foundIndex = bsTypes.Find("file_ext", strFileExt);
+			bsTypes.Position = foundIndex;
+		}
 
-        private void btnTypesNew_Click(object sender, EventArgs e)
-        {
-            dsTypes.Tables[0].Rows.Add(
-                null,
-                "",
-                null,
-                null,
-                null,
-                null,
-                false,
-                false);
+		private void btnTypesNew_Click(object sender, EventArgs e)
+		{
+			dsTypes.Tables[0].Rows.Add(
+				null,
+				"",
+				null,
+				null,
+				null,
+				null,
+				false,
+				false);
 
-            bsTypes.MoveLast();
+			bsTypes.MoveLast();
 
-        }
+		}
 
-        private void btnFiltersCommit_Click(object sender, EventArgs e)
-        {
+		private void btnFiltersCommit_Click(object sender, EventArgs e)
+		{
 
-            //// get changes
-            //DataSet dsTemp = dsFilters.GetChanges();
+			//// get changes
+			//DataSet dsTemp = dsFilters.GetChanges();
 
-            //// update the database
-            //daFilters.Update(dsTemp);
+			//// update the database
+			//daFilters.Update(dsTemp);
 
-            //// merge changes back into dsFilters data set
-            //dsFilters.Merge(dsTemp);
-            //dsFilters.AcceptChanges();
+			//// merge changes back into dsFilters data set
+			//dsFilters.Merge(dsTemp);
+			//dsFilters.AcceptChanges();
 
-            // try to do it all at once
-            daFilters.Update(dsFilters.GetChanges());
+			// try to do it all at once
+			daFilters.Update(dsFilters.GetChanges());
 
-            LoadFilters();
+			LoadFilters();
 
-        }
+		}
 
 
 
