@@ -204,6 +204,7 @@ create table hp_type (
 	default_cat integer NOT NULL,
 	icon bytea,
 	type_regex varchar(25) NOT NULL,
+	description varchar(255) NOT NULL,
 	
 	primary key (type_id),
 	foreign key (default_cat) references hp_category (cat_id)
@@ -213,19 +214,19 @@ ALTER TABLE hp_type OWNER TO engadmin;
 
 CREATE UNIQUE INDEX ON hp_type (lower(file_ext::text));
 
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (1,'SLDPRT',1,'^.+\.SLDPRT$');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (2,'SLDASM',1,'^.+\.SLDASM$');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (3,'SLDDRW',1,'^.+\.SLDDRW$');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (4,'sldmat',2,'^.+\.sldmat$');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (5,'SLDLFP',2,'^.+\.SLDLFP$');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (6,'png',4,'^.+\.png$');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (7,'jpg',4,'^.+\.jpg$');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (8,'mdb',4,'^.+\.mdb$');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (9,'doc',4,'^.+\.doc$');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (10,'docx',4,'^.+\.docx$');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (11,'xls',4,'^.+\.xls$');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (12,'xlsx',4,'^.+\.xlsx$');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex) values (13,'pdf',4,'^.+\.pdf$');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (1,'SLDPRT',1,'^.+\.SLDPRT$','SolidWorks Part File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (2,'SLDASM',1,'^.+\.SLDASM$','SolidWorks Assembly File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (3,'SLDDRW',1,'^.+\.SLDDRW$','SolidWorks Drawing File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (4,'sldmat',2,'^.+\.sldmat$','SolidWorks Material Definition File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (5,'SLDLFP',2,'^.+\.SLDLFP$','SolidWorks File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (6,'png',4,'^.+\.png$','PNG Image File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (7,'jpg',4,'^.+\.jpg$','JPG Image File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (8,'mdb',4,'^.+\.mdb$','MS Access Database File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (9,'doc',4,'^.+\.doc$','MS Word 97/2003');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (10,'docx',4,'^.+\.docx$','MS Word 2007+');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (11,'xls',4,'^.+\.xls$','MS Excel 97/2003');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (12,'xlsx',4,'^.+\.xlsx$','MS Excel 2007+');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (13,'pdf',4,'^.+\.pdf$','Adobe PDF Document');
 
 
 
