@@ -54,6 +54,24 @@ namespace HackPDM
 		BindingSource bsFilters = new BindingSource();
 		BindingSource bsTypes = new BindingSource();
 
+		/// <summary>
+		/// Return File Ignore Filter DataTable
+		/// </summary>
+		public DataTable IgnoreFilters
+		{
+			get { return dsFilters.Tables[0]; }
+		}
+
+		/// <summary>
+		/// Return File Types DataTable
+		/// </summary>
+		public DataTable FileTypes
+		{
+			get { return dtRemoteTypes; }
+		}
+
+
+
 		#endregion
 
 
@@ -72,6 +90,7 @@ namespace HackPDM
 			strFilePath = FilePath;
 
 			LoadFilters();
+			LoadRemoteTypes();
 			
 		}
 
@@ -123,7 +142,8 @@ namespace HackPDM
 				select
 					filter_id,
 					name_proto,
-					name_regex
+					name_regex,
+					description
 				from hp_entry_name_filter
 				order by name_proto;
 			";
@@ -132,25 +152,31 @@ namespace HackPDM
 			daFilters = new NpgsqlDataAdapter(strSql, connDb);
 
 			// build insert command
-			daFilters.InsertCommand = new NpgsqlCommand("insert into hp_entry_name_filter (name_proto, name_regex) values (:nameproto, :nameregex)", connDb);
+			daFilters.InsertCommand = new NpgsqlCommand("insert into hp_entry_name_filter (name_proto, name_regex, description) values (:nameproto, :nameregex, :description)", connDb);
 			daFilters.InsertCommand.Parameters.Add(new NpgsqlParameter("nameproto", NpgsqlDbType.Varchar));
 			daFilters.InsertCommand.Parameters.Add(new NpgsqlParameter("nameregex", NpgsqlDbType.Varchar));
+			daFilters.InsertCommand.Parameters.Add(new NpgsqlParameter("description", NpgsqlDbType.Varchar));
 			daFilters.InsertCommand.Parameters[0].Direction = ParameterDirection.Input;
 			daFilters.InsertCommand.Parameters[1].Direction = ParameterDirection.Input;
+			daFilters.InsertCommand.Parameters[2].Direction = ParameterDirection.Input;
 			daFilters.InsertCommand.Parameters[0].SourceColumn = "name_proto";
 			daFilters.InsertCommand.Parameters[1].SourceColumn = "name_regex";
+			daFilters.InsertCommand.Parameters[2].SourceColumn = "description";
 
 			// build update command
-			daFilters.UpdateCommand = new NpgsqlCommand("update hp_entry_name_filter set name_proto=:nameproto, name_regex=:nameregex where filter_id=:filterid", connDb);
+			daFilters.UpdateCommand = new NpgsqlCommand("update hp_entry_name_filter set name_proto=:nameproto, name_regex=:nameregex, description=:description where filter_id=:filterid", connDb);
 			daFilters.UpdateCommand.Parameters.Add(new NpgsqlParameter("nameproto", NpgsqlDbType.Varchar));
 			daFilters.UpdateCommand.Parameters.Add(new NpgsqlParameter("nameregex", NpgsqlDbType.Varchar));
+			daFilters.UpdateCommand.Parameters.Add(new NpgsqlParameter("description", NpgsqlDbType.Integer));
 			daFilters.UpdateCommand.Parameters.Add(new NpgsqlParameter("filterid", NpgsqlDbType.Integer));
 			daFilters.UpdateCommand.Parameters[0].Direction = ParameterDirection.Input;
 			daFilters.UpdateCommand.Parameters[1].Direction = ParameterDirection.Input;
 			daFilters.UpdateCommand.Parameters[2].Direction = ParameterDirection.Input;
+			daFilters.UpdateCommand.Parameters[3].Direction = ParameterDirection.Input;
 			daFilters.UpdateCommand.Parameters[0].SourceColumn = "name_proto";
 			daFilters.UpdateCommand.Parameters[1].SourceColumn = "name_regex";
-			daFilters.UpdateCommand.Parameters[2].SourceColumn = "filter_id";
+			daFilters.UpdateCommand.Parameters[2].SourceColumn = "description";
+			daFilters.UpdateCommand.Parameters[3].SourceColumn = "filter_id";
 
 			// build delete command
 			daFilters.DeleteCommand = new NpgsqlCommand("delete from hp_entry_name_filter where filter_id=:filterid", connDb);
@@ -161,12 +187,64 @@ namespace HackPDM
 			// put the remote list in the DataSet
 			daFilters.Fill(dsFilters);
 
-			// bind datatable to datagridview
-			dgFilters.DataSource = dsFilters.Tables[0];
+		}
 
-			// set filter_id column readonly
-			dgFilters.Columns["filter_id"].ReadOnly = true;
-			dgFilters.Columns[0].DefaultCellStyle.BackColor = Color.LightGray;
+
+		private void LoadRemoteTypes()
+		{
+
+
+			//
+			// get remote file types
+			//
+			// initialize sql command for remote type list
+			string strSql = @"
+				select
+					t.type_id,
+					t.file_ext,
+					t.default_cat,
+					c.cat_name,
+					t.icon,
+					t.type_regex,
+					t.description,
+					false as is_local,
+					true as is_remote
+				from hp_type as t
+				left join hp_category as c on c.cat_id=t.default_cat
+				order by t.file_ext;
+			";
+
+			// put the remote list in the DataSet
+			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+			daTemp.Fill(dsTypes);
+
+			// if there are no remote types
+			if (dsTypes.Tables.Count == 0)
+			{
+				// make an empty DataTable
+				dsTypes.Tables.Add(CreateTypeTable());
+			}
+
+			// copy to remote only datatable
+			// are we doing this because we can't bind a Regex object to a field in the datagrid?
+			dtRemoteTypes = dsTypes.Tables[0].Copy();
+			dtRemoteTypes.Columns.Add("regex", Type.GetType("System.Object"));
+			foreach (DataRow dr in dtRemoteTypes.Rows)
+			{
+				dr["regex"] = new Regex(dr["type_regex"].ToString(), RegexOptions.Compiled);
+			}
+
+		}
+
+		private void LoadLocalTypes()
+		{
+
+			//
+			// get local file types
+			//
+			GetTypesRecursive(strFilePath);
+
+			PopulateList();
 
 		}
 
@@ -395,68 +473,22 @@ namespace HackPDM
 		#endregion
 
 
-		private void btnLoadTypes_Click(object sender, EventArgs e)
+		private void btnRefreshTypes_Click(object sender, EventArgs e)
 		{
 
 			// Set cursor as hourglass
 			Cursor.Current = Cursors.WaitCursor;
 
-
-			//
 			// clear objects
-			// 
 			dsTypes = new DataSet();
 			InitTypesList();
-			LoadFilters();
 
+			// process file types
+			LoadRemoteTypes();
+			LoadLocalTypes();
 
-			//
-			// get remote file types
-			//
-			// initialize sql command for remote type list
-			string strSql = @"
-				select
-					t.type_id,
-					t.file_ext,
-					t.default_cat,
-					c.cat_name,
-					t.icon,
-					t.type_regex,
-					false as is_local,
-					true as is_remote
-				from hp_type as t
-				left join hp_category as c on c.cat_id=t.default_cat
-				order by t.file_ext;
-			";
-
-			// put the remote list in the DataSet
-			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-			daTemp.Fill(dsTypes);
-
-			// if there are no remote types
-			if (dsTypes.Tables.Count == 0)
-			{
-				// make an empty DataTable
-				dsTypes.Tables.Add(CreateTypeTable());
-			}
-			
-			// copy to remote only datatable
-			dtRemoteTypes = dsTypes.Tables[0].Copy();
-			dtRemoteTypes.Columns.Add("regex", Type.GetType("System.Object"));
-			foreach (DataRow dr in dtRemoteTypes.Rows)
-			{
-				dr["regex"] = new Regex(dr["type_regex"].ToString(), RegexOptions.Compiled);
-			}
-
-			// bind table to databinding
+			// bind types table to databinding
 			bsTypes.DataSource = dsTypes.Tables[0];
-
-			//
-			// get local file types
-			//
-			GetTypesRecursive(strFilePath);
-
-			PopulateList();
 
 			// Set cursor as default arrow
 			Cursor.Current = Cursors.Default;
@@ -485,10 +517,32 @@ namespace HackPDM
 				null,
 				null,
 				null,
+				null,
 				false,
 				false);
 
 			bsTypes.MoveLast();
+
+		}
+
+		private void btnRefreshFilters_Click(object sender, EventArgs e)
+		{
+
+			// Set cursor as hourglass
+			Cursor.Current = Cursors.WaitCursor;
+
+			// load the file ignore filters from the database
+			LoadFilters();
+
+			// bind datatable to datagridview
+			dgFilters.DataSource = dsFilters.Tables[0];
+
+			// set filter_id column readonly
+			dgFilters.Columns["filter_id"].ReadOnly = true;
+			dgFilters.Columns[0].DefaultCellStyle.BackColor = Color.LightGray;
+
+			// Set cursor as default arrow
+			Cursor.Current = Cursors.Default;
 
 		}
 
@@ -512,6 +566,10 @@ namespace HackPDM
 
 		}
 
+		private void btnTypesCommit_Click(object sender, EventArgs e)
+		{
+
+		}
 
 
 	}

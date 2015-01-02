@@ -29,6 +29,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 //using System.Threading;
 using System.IO;
@@ -56,6 +57,8 @@ namespace HackPDM
 		private string strDbConn;
 		private NpgsqlConnection connDb = new NpgsqlConnection();
 		private NpgsqlTransaction t;
+
+		private Regex regIgnore;
 
 		private WebDAVClient connDav = new WebDAVClient();
 
@@ -101,6 +104,9 @@ namespace HackPDM
 
 			// get (and set if necessary) my node_id
 			intMyNodeId = GetNodeId();
+
+			// git file ignore patterns
+			LoadIgnoreRegex();
 
 			// Populate data
 			ResetView();
@@ -333,7 +339,49 @@ namespace HackPDM
 		}
 
 
-		private void ResetView(string strTreePath = "") {
+		private void LoadIgnoreRegex()
+		{
+
+			// clear the dataset
+			dsTree = new DataSet();
+
+			// load remote directories to a DataTable
+			string strSql = @"
+				select
+					dir_id,
+					parent_id,
+					dir_name,
+					create_stamp,
+					create_user,
+					modify_stamp,
+					modify_user,
+					true as is_remote
+				from hp_directory
+				order by parent_id,dir_id;
+			";
+			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+			daTemp.Fill(dsTree);
+			DataTable dtTree = dsTree.Tables[0];
+
+			// add a column for flagging directories that exist locally
+			DataColumn dcLocal = new DataColumn("is_local");
+			dcLocal.DataType = Type.GetType("System.Boolean");
+			dcLocal.DefaultValue = false;
+			dtTree.Columns.Add(dcLocal);
+
+			// add a column for the path definition
+			DataColumn dcPath = new DataColumn("path");
+			dcPath.DataType = Type.GetType("System.String");
+			dtTree.Columns.Add(dcPath);
+
+			// create parent-child relationship
+			dsTree.Relations.Add("rsParentChild", dtTree.Columns["dir_id"], dtTree.Columns["parent_id"]);
+
+		}
+
+
+		private void ResetView(string strTreePath = "")
+		{
 
 			// clear the tree
 			InitTreeView();
@@ -1384,9 +1432,11 @@ namespace HackPDM
 					foreach (string strFile in strFiles)
 					{
 
-						// ignore filtered file names
-						//Regex reg = new Regex(@"^.+\..(.+~)|(msi)|(dll)|(exe)|(bak)|(db)|(dropbox)$");
+						// TODO: ignore filtered file names
+						Regex reg = new Regex(@"^.+\..(.+~)|(msi)|(dll)|(exe)|(bak)|(db)|(dropbox)$", RegexOptions.IgnoreCase);
+						
 						//if (reg.IsMatch(strFile)) continue;
+						
 
 						// get file info
 						strFileName = GetDirName(strFile);
