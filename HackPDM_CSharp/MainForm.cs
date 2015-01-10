@@ -29,6 +29,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 //using System.Threading;
@@ -37,6 +38,7 @@ using System.Data;
 using Npgsql;
 using NpgsqlTypes;
 using LibRSync.Core;
+using System.Security.Cryptography;
 
 //using net.kvdb.webdav;
 
@@ -58,8 +60,6 @@ namespace HackPDM
 		private NpgsqlConnection connDb = new NpgsqlConnection();
 		private NpgsqlTransaction t;
 
-		private Regex regIgnore;
-
 		private WebDAVClient connDav = new WebDAVClient();
 
 		private DataSet dsTree = new DataSet();
@@ -75,6 +75,8 @@ namespace HackPDM
 
 		private StatusDialog dlgStatus;
 		string[] strStatusParams = new String[2];
+
+		FileTypeManager ftmStart;
 
 		string strCurrProfileId;
 		DataRow drCurrProfile;
@@ -106,7 +108,7 @@ namespace HackPDM
 			intMyNodeId = GetNodeId();
 
 			// git file ignore patterns
-			LoadIgnoreRegex();
+			InitFTM();
 
 			// Populate data
 			ResetView();
@@ -198,7 +200,7 @@ namespace HackPDM
 
 		}
 
-		private void LoadProfile(bool blnForceNew)
+		private void LoadProfile(bool blnForceDlg)
 		{
 
 			// load profile info
@@ -206,7 +208,7 @@ namespace HackPDM
 			string strXmlProfiles = Properties.Settings.Default.usetProfiles;
 
 			// check existence
-			if (blnForceNew || strXmlProfiles == "" || strCurrProfileId == "")
+			if (blnForceDlg || strXmlProfiles == "" || strCurrProfileId == "")
 			{
 
 				// launch the profile manager
@@ -255,8 +257,23 @@ namespace HackPDM
 				LoadProfile(true);
 			}
 
-			// hand off local file root directory
-			strLocalFileRoot = (string)drCurrProfile["FsRoot"];
+			// check and hand off local file root directory
+			if (Directory.Exists((string)drCurrProfile["FsRoot"]))
+			{
+				strLocalFileRoot = (string)drCurrProfile["FsRoot"];
+			}
+			else
+			{
+				var result = MessageBox.Show("Still can't get a profile.  Can't find the local pwa directory.",
+					"Startup Error",
+					MessageBoxButtons.OKCancel,
+					MessageBoxIcon.Error);
+				if (result == System.Windows.Forms.DialogResult.Cancel)
+				{
+					Environment.Exit(1);
+				}
+				LoadProfile(true);
+			}
 
 		}
 
@@ -339,44 +356,10 @@ namespace HackPDM
 		}
 
 
-		private void LoadIgnoreRegex()
+		private void InitFTM()
 		{
-
-			// clear the dataset
-			dsTree = new DataSet();
-
-			// load remote directories to a DataTable
-			string strSql = @"
-				select
-					dir_id,
-					parent_id,
-					dir_name,
-					create_stamp,
-					create_user,
-					modify_stamp,
-					modify_user,
-					true as is_remote
-				from hp_directory
-				order by parent_id,dir_id;
-			";
-			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-			daTemp.Fill(dsTree);
-			DataTable dtTree = dsTree.Tables[0];
-
-			// add a column for flagging directories that exist locally
-			DataColumn dcLocal = new DataColumn("is_local");
-			dcLocal.DataType = Type.GetType("System.Boolean");
-			dcLocal.DefaultValue = false;
-			dtTree.Columns.Add(dcLocal);
-
-			// add a column for the path definition
-			DataColumn dcPath = new DataColumn("path");
-			dcPath.DataType = Type.GetType("System.String");
-			dtTree.Columns.Add(dcPath);
-
-			// create parent-child relationship
-			dsTree.Relations.Add("rsParentChild", dtTree.Columns["dir_id"], dtTree.Columns["parent_id"]);
-
+			// create the file type manager dialog
+			ftmStart = new FileTypeManager(connDb, strLocalFileRoot, GetTreePath(strLocalFileRoot));
 		}
 
 
@@ -427,10 +410,12 @@ namespace HackPDM
 
 
 			// combine file lists
-			// identify local files not existing remotely (overlay the icon)
-			// identify remote files not existing locally (fade the icon)
-			// identify remote files with newer versions (some kind of overlay)
-			// no need to identify local files that have been changed.  If they have been checked out, identify those, and then just assume they have been changed.
+			// identify local files not existing remotely (lo overlay)
+			// identify local files ignored by remote filter (if overlay)
+			// identify local files not existing remotely with no remote file type (ft overlay)
+			// identify remote files not existing locally (ro overlay)
+			// identify remote files with newer versions (nv overlay)
+			// no need to identify local files that have been changed.  If they have been checked out, identify those, and then just assume they have been changed. (cm overlay)
 
 
 
@@ -625,6 +610,17 @@ namespace HackPDM
 
 		protected void LoadListData(TreeNode nodeCurrent) {
 
+			// nv and co could co-exist --> add new icon for nvco
+			// ro and co could co-exist --> add new icon for roco
+			// for now, let the take affect in the following order
+			// ro: remote only
+			// lo: local only
+			// nv: new remote version
+			// cm: checked out to me
+			// co: checked out to other
+			// ft: no remote file type
+			// if: ignore filter
+
 			// clear dataset
 			dsList = new DataSet();
 
@@ -649,8 +645,13 @@ namespace HackPDM
 						c.cat_name,
 						v.file_size as latest_size,
 						pg_size_pretty(v.file_size) as str_latest_size,
+						null as local_size,
+						'' as str_local_size,
 						v.file_modify_stamp as latest_stamp,
 						to_char(v.file_modify_stamp, 'yyyy-MM-dd HH24:mm:ss') as str_latest_stamp,
+						null as local_stamp,
+						'' as str_local_stamp,
+						v.md5sum as latest_md5,
 						e.checkout_user,
 						u.last_name || ', ' || u.first_name as ck_user_name,
 						e.checkout_date,
@@ -658,6 +659,7 @@ namespace HackPDM
 						e.checkout_node,
 						false as is_local,
 						true as is_remote,
+						'ro' as client_status_code,
 						:strTreePath as tree_path,
 						:strFilePath as file_path,
 						t.icon
@@ -671,7 +673,8 @@ namespace HackPDM
 							version_id,
 							file_size,
 							create_stamp,
-							file_modify_stamp
+							file_modify_stamp,
+							md5sum
 						from hp_version
 						order by entry_id, create_stamp desc
 					) as v on v.entry_id=e.entry_id
@@ -719,11 +722,35 @@ namespace HackPDM
 						// get matching remote file
 						DataRow[] drRemFile = dsList.Tables[0].Select("entry_name='"+strFileName+"'");
 
-						if (drRemFile.Length != 0) {
+						// set status code to "ro" again, just to be safe
+						string strStatusCode = "ro";
+
+						if (drRemFile.Length != 0)
+						{
 
 							// flag remote file as also being local
 							DataRow drTemp = drRemFile[0];
 							drTemp.SetField<bool>("is_local", true);
+
+							// set status code
+							strStatusCode = "";
+							if (dtModifyDate < drTemp.Field<DateTime>("latest_stamp")) strStatusCode = "nv";
+
+							// set status code if checked-out
+							object oTest = drTemp["checkout_user"];
+							if (oTest != System.DBNull.Value)
+							{
+								if (drTemp.Field<int>("checkout_user") == intMyUserId)
+								{
+									// checked out to me (current user)
+									strStatusCode = "cm";
+								}
+								else
+								{
+									// checked out to someone else
+									strStatusCode = "co";
+								}
+							}
 
 							// format the file size
 							drTemp.SetField<string>("str_latest_size", FormatSize(drTemp.Field<long>("latest_size")));
@@ -739,14 +766,24 @@ namespace HackPDM
 								drTemp.SetField<string>("str_checkout_date", FormatDate(Convert.ToDateTime(oDate)));
 							}
 
-							// if checked out here, then use local file size and modified date
-							//if () {
-							//
-							//}
+							// get local checksum
+							drTemp.SetField<string>("local_md5", StringMD5(strFileName));
 
 						} else {
 
 							// insert new row for local-only file
+
+							// set status code
+							strStatusCode = "lo";
+							if (ftmStart.ReFilters.IsMatch(strFileName))
+							{
+								strStatusCode = "if";
+							}
+							else if (!ftmStart.ReTypes.IsMatch(strFileName))
+							{
+								strStatusCode = "ft";
+							}
+
 							dsList.Tables[0].Rows.Add(
 									null,
 									null,
@@ -755,17 +792,24 @@ namespace HackPDM
 									null,
 									strFileExt,
 									null,
-									lngFileSize,
-									FormatSize(lngFileSize),
-									dtModifyDate,
-									FormatDate(dtModifyDate),
+									null, // latest_size
+									"", // str_latest_size
+									lngFileSize, // local_size
+									FormatSize(lngFileSize), // str_local_size
+									null, // latest_stamp
+									"", // str_latest_stamp
+									dtModifyDate, // local stamp
+									FormatDate(dtModifyDate), // local formatted stamp
+									null, // latest_md5
+									null, // local_md5 (set null because if we AddNew, we will calculate MD5 then)
 									null,
 									null,
 									null,
 									null,
 									null,
-									true,
-									false,
+									true, // is_local
+									false, // is_remote
+									strStatusCode,
 									strTreePath,
 									strFilePath
 								);
@@ -814,19 +858,10 @@ namespace HackPDM
 					// test for remote only
 					if (row.Field<bool>("is_local") == false) strOverlay = ".ro";
 
-					// test for checked-out
-					object oTest = row["checkout_user"];
-					if ( oTest != System.DBNull.Value) {
-						if (row.Field<int>("checkout_user") == intMyUserId) {
-							// checked out to me (current user)
-							strOverlay = ".cm";
-						} else {
-							// checked out to someone else
-							strOverlay = ".co";
-						}
-					}
 
-					// get images
+					// 
+
+					// get icon images for new file types (new to this session)
 					if (ilListIcons.Images[strFileExt] == null) {
 
 						Image imgCurrent;
@@ -841,11 +876,18 @@ namespace HackPDM
 							imgCurrent = Image.FromStream(ms);
 						}
 
+						// add bare icon to icon list
 						ilListIcons.Images.Add(strFileExt,imgCurrent);
-						ilListIcons.Images.Add(strFileExt+".ro",ImageOverlay(imgCurrent,ilListIcons.Images["ro"]));
-						ilListIcons.Images.Add(strFileExt+".lo",ImageOverlay(imgCurrent,ilListIcons.Images["lo"]));
-						ilListIcons.Images.Add(strFileExt+".cm",ImageOverlay(imgCurrent,ilListIcons.Images["cm"]));
-						ilListIcons.Images.Add(strFileExt+".co",ImageOverlay(imgCurrent,ilListIcons.Images["co"]));
+
+						// add overlayed icons to icon list
+						// these are added at design time on the MainForm.cs designer ("Choose images" context menu item)
+						ilListIcons.Images.Add(strFileExt + ".ro", ImageOverlay(imgCurrent, ilListIcons.Images["ro"])); // remote only
+						ilListIcons.Images.Add(strFileExt + ".lo", ImageOverlay(imgCurrent, ilListIcons.Images["lo"])); // local only
+						ilListIcons.Images.Add(strFileExt + ".lo", ImageOverlay(imgCurrent, ilListIcons.Images["nv"])); // new remote version
+						ilListIcons.Images.Add(strFileExt + ".cm", ImageOverlay(imgCurrent, ilListIcons.Images["cm"])); // checked out to me
+						ilListIcons.Images.Add(strFileExt + ".co", ImageOverlay(imgCurrent, ilListIcons.Images["co"])); // checked out to other
+						ilListIcons.Images.Add(strFileExt + ".if", ImageOverlay(imgCurrent, ilListIcons.Images["if"])); // ignore filter
+						ilListIcons.Images.Add(strFileExt + ".ft", ImageOverlay(imgCurrent, ilListIcons.Images["ft"])); // no remote file type
 
 					}
 
@@ -999,8 +1041,14 @@ namespace HackPDM
 				dtList.Columns.Add("cat_name", Type.GetType("System.String"));
 				dtList.Columns.Add("latest_size", Type.GetType("System.Int64"));
 				dtList.Columns.Add("str_latest_size", Type.GetType("System.String"));
+				dtList.Columns.Add("local_size", Type.GetType("System.Int64"));
+				dtList.Columns.Add("str_local_size", Type.GetType("System.String"));
 				dtList.Columns.Add("latest_stamp", Type.GetType("System.DateTime"));
 				dtList.Columns.Add("str_latest_stamp", Type.GetType("System.String"));
+				dtList.Columns.Add("local_stamp", Type.GetType("System.DateTime"));
+				dtList.Columns.Add("str_local_stamp", Type.GetType("System.String"));
+				dtList.Columns.Add("latest_md5", Type.GetType("System.String"));
+				dtList.Columns.Add("local_md5", Type.GetType("System.String"));
 				dtList.Columns.Add("checkout_user", Type.GetType("System.Int32"));
 				dtList.Columns.Add("ck_user_name", Type.GetType("System.String"));
 				dtList.Columns.Add("checkout_date", Type.GetType("System.DateTime"));
@@ -1008,6 +1056,7 @@ namespace HackPDM
 				dtList.Columns.Add("checkout_node", Type.GetType("System.String"));
 				dtList.Columns.Add("is_local", Type.GetType("System.Boolean"));
 				dtList.Columns.Add("is_remote", Type.GetType("System.Boolean"));
+				dtList.Columns.Add("client_status_code", Type.GetType("System.String"));
 				dtList.Columns.Add("tree_path", Type.GetType("System.String"));
 				dtList.Columns.Add("file_path", Type.GetType("System.String"));
 				dtList.Columns.Add("icon", typeof(Byte[]));
@@ -3308,9 +3357,8 @@ namespace HackPDM
 
 		void CmdManageFileTypesClick(object sender, EventArgs e)
 		{
-			// create the file type manager dialog
-			FileTypeManager dlgFTMan = new FileTypeManager(connDb, strLocalFileRoot, GetTreePath(strLocalFileRoot));
-			dlgFTMan.ShowDialog();
+			// load file type manager dialog
+			ftmStart.ShowDialog();
 		}
 
 
@@ -3318,6 +3366,19 @@ namespace HackPDM
 
 		void MainFormFormClosed(object sender, FormClosedEventArgs e) {
 				Properties.Settings.Default.usetWindowState = this.WindowState; ;
+		}
+
+
+		static string StringMD5(string FileName)
+		{
+			// get local file checksum
+			using (var md5 = MD5.Create())
+			{
+				using (var stream = File.OpenRead(FileName))
+				{
+					return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
+				}
+			}
 		}
 
 

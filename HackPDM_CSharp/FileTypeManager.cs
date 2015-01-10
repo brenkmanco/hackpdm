@@ -48,6 +48,8 @@ namespace HackPDM
 		private DataSet dsTypes = new DataSet();
 		private DataTable dtRemoteTypes;
 		private string strFilePath;
+		private Regex reAllFilters;
+		private Regex reAllTypes;
 
 		private ListViewColumnSorter lvwColumnSorter;
 
@@ -63,11 +65,27 @@ namespace HackPDM
 		}
 
 		/// <summary>
+		/// Return Regex matching all ignore filters
+		/// </summary>
+		public Regex ReFilters
+		{
+			get { return reAllFilters; }
+		}
+
+		/// <summary>
 		/// Return File Types DataTable
 		/// </summary>
-		public DataTable FileTypes
+		public DataTable RemoteFileTypes
 		{
 			get { return dtRemoteTypes; }
+		}
+
+		/// <summary>
+		/// Return Regex Matching all remote file types
+		/// </summary>
+		public Regex ReTypes
+		{
+			get { return reAllTypes; }
 		}
 
 
@@ -125,18 +143,17 @@ namespace HackPDM
 
 		#region Utility Methods
 
-		private void LoadFilters() {
+		public void RefreshRemote()
+		{
+			LoadFilters();
+			LoadRemoteTypes();
+		}
 
-			// clear datagridview
-			dgFilters.DataSource = null;
-			dgFilters.Refresh();
+		private void LoadFilters() {
 
 			// clear dataset
 			dsFilters = new DataSet();
 
-			//
-			// get remote filters
-			//
 			// initialize sql command for remote filter list
 			string strSql = @"
 				select
@@ -187,8 +204,14 @@ namespace HackPDM
 			// put the remote list in the DataSet
 			daFilters.Fill(dsFilters);
 
-		}
+			string strAllFilters = "";
+			foreach (DataRow dr in dsFilters.Tables[0].Rows)
+			{
+				strAllFilters += "|" + dr["name_regex"].ToString();
+			}
+			reAllFilters = new Regex(strAllFilters, RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+		}
 
 		private void LoadRemoteTypes()
 		{
@@ -229,10 +252,15 @@ namespace HackPDM
 			// are we doing this because we can't bind a Regex object to a field in the datagrid?
 			dtRemoteTypes = dsTypes.Tables[0].Copy();
 			dtRemoteTypes.Columns.Add("regex", Type.GetType("System.Object"));
+
+			string strAllTypes = "";
 			foreach (DataRow dr in dtRemoteTypes.Rows)
 			{
-				dr["regex"] = new Regex(dr["type_regex"].ToString(), RegexOptions.Compiled);
+				string strThis = dr["type_regex"].ToString();
+				dr["regex"] = new Regex(strThis, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+				strAllTypes += "|" + strThis;
 			}
+			reAllTypes = new Regex(strAllTypes, RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
 		}
 
@@ -354,7 +382,7 @@ namespace HackPDM
 			// use a regular expression to match file names with remote extensions
 			foreach (DataRow dr in dtRemoteTypes.Rows)
 			{
-				Regex rxExt = new Regex(dr["type_regex"].ToString(), RegexOptions.IgnoreCase);
+				Regex rxExt = new Regex(dr["type_regex"].ToString(), RegexOptions.IgnoreCase | RegexOptions.Compiled);
 				if (rxExt.IsMatch(strShortName))
 				{
 					return dr.Field<int>("type_id");
@@ -531,6 +559,9 @@ namespace HackPDM
 			// Set cursor as hourglass
 			Cursor.Current = Cursors.WaitCursor;
 
+			// clear datagridview
+			dgFilters.DataSource = null;
+
 			// load the file ignore filters from the database
 			LoadFilters();
 
@@ -540,6 +571,9 @@ namespace HackPDM
 			// set filter_id column readonly
 			dgFilters.Columns["filter_id"].ReadOnly = true;
 			dgFilters.Columns[0].DefaultCellStyle.BackColor = Color.LightGray;
+
+			// refresh the datagridview
+			dgFilters.Refresh();
 
 			// Set cursor as default arrow
 			Cursor.Current = Cursors.Default;

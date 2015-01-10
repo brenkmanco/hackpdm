@@ -222,6 +222,9 @@ namespace HackPDM
 			this.ilListIcons.Images.SetKeyName(1, "co");
 			this.ilListIcons.Images.SetKeyName(2, "lo");
 			this.ilListIcons.Images.SetKeyName(3, "ro");
+			this.ilListIcons.Images.SetKeyName(4, "if");
+			this.ilListIcons.Images.SetKeyName(5, "ft");
+			this.ilListIcons.Images.SetKeyName(6, "nv");
 			// 
 			// statusStrip1
 			// 
@@ -380,7 +383,7 @@ namespace HackPDM
 			this.tabPage2.Location = new System.Drawing.Point(4, 22);
 			this.tabPage2.Name = "tabPage2";
 			this.tabPage2.Padding = new System.Windows.Forms.Padding(3);
-			this.tabPage2.Size = new System.Drawing.Size(763, 88);
+			this.tabPage2.Size = new System.Drawing.Size(734, 88);
 			this.tabPage2.TabIndex = 1;
 			this.tabPage2.Text = "WhereUsed";
 			this.tabPage2.UseVisualStyleBackColor = true;
@@ -390,7 +393,7 @@ namespace HackPDM
 			this.lvWhereUsed.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.lvWhereUsed.Location = new System.Drawing.Point(3, 3);
 			this.lvWhereUsed.Name = "lvWhereUsed";
-			this.lvWhereUsed.Size = new System.Drawing.Size(757, 82);
+			this.lvWhereUsed.Size = new System.Drawing.Size(728, 82);
 			this.lvWhereUsed.TabIndex = 0;
 			this.lvWhereUsed.UseCompatibleStateImageBehavior = false;
 			this.lvWhereUsed.View = System.Windows.Forms.View.Details;
@@ -401,7 +404,7 @@ namespace HackPDM
 			this.tabPage3.Location = new System.Drawing.Point(4, 22);
 			this.tabPage3.Name = "tabPage3";
 			this.tabPage3.Padding = new System.Windows.Forms.Padding(3);
-			this.tabPage3.Size = new System.Drawing.Size(763, 88);
+			this.tabPage3.Size = new System.Drawing.Size(734, 88);
 			this.tabPage3.TabIndex = 2;
 			this.tabPage3.Text = "Dependents";
 			this.tabPage3.UseVisualStyleBackColor = true;
@@ -411,7 +414,7 @@ namespace HackPDM
 			this.lvDepends.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.lvDepends.Location = new System.Drawing.Point(3, 3);
 			this.lvDepends.Name = "lvDepends";
-			this.lvDepends.Size = new System.Drawing.Size(757, 82);
+			this.lvDepends.Size = new System.Drawing.Size(728, 82);
 			this.lvDepends.TabIndex = 0;
 			this.lvDepends.UseCompatibleStateImageBehavior = false;
 			this.lvDepends.View = System.Windows.Forms.View.Details;
@@ -422,7 +425,7 @@ namespace HackPDM
 			this.tabPage4.Location = new System.Drawing.Point(4, 22);
 			this.tabPage4.Name = "tabPage4";
 			this.tabPage4.Padding = new System.Windows.Forms.Padding(3);
-			this.tabPage4.Size = new System.Drawing.Size(763, 88);
+			this.tabPage4.Size = new System.Drawing.Size(734, 88);
 			this.tabPage4.TabIndex = 3;
 			this.tabPage4.Text = "Properties";
 			this.tabPage4.UseVisualStyleBackColor = true;
@@ -432,7 +435,7 @@ namespace HackPDM
 			this.lvProperties.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.lvProperties.Location = new System.Drawing.Point(3, 3);
 			this.lvProperties.Name = "lvProperties";
-			this.lvProperties.Size = new System.Drawing.Size(757, 82);
+			this.lvProperties.Size = new System.Drawing.Size(728, 82);
 			this.lvProperties.TabIndex = 0;
 			this.lvProperties.UseCompatibleStateImageBehavior = false;
 			this.lvProperties.View = System.Windows.Forms.View.Details;
