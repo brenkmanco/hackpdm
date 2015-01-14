@@ -214,19 +214,21 @@ ALTER TABLE hp_type OWNER TO engadmin;
 
 CREATE UNIQUE INDEX ON hp_type (lower(file_ext::text));
 
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (1,'SLDPRT',1,'^.+\.SLDPRT$','SolidWorks Part File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (2,'SLDASM',1,'^.+\.SLDASM$','SolidWorks Assembly File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (3,'SLDDRW',1,'^.+\.SLDDRW$','SolidWorks Drawing File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (4,'sldmat',2,'^.+\.sldmat$','SolidWorks Material Definition File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (5,'SLDLFP',2,'^.+\.SLDLFP$','SolidWorks File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (6,'png',4,'^.+\.png$','PNG Image File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (7,'jpg',4,'^.+\.jpg$','JPG Image File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (8,'mdb',4,'^.+\.mdb$','MS Access Database File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (9,'doc',4,'^.+\.doc$','MS Word 97/2003');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (10,'docx',4,'^.+\.docx$','MS Word 2007+');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (11,'xls',4,'^.+\.xls$','MS Excel 97/2003');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (12,'xlsx',4,'^.+\.xlsx$','MS Excel 2007+');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (13,'pdf',4,'^.+\.pdf$','Adobe PDF Document');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (1,'SLDPRT',1,'\.(SLDPRT)$','SolidWorks Part File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (2,'SLDASM',1,'\.(SLDASM)$','SolidWorks Assembly File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (3,'SLDDRW',1,'\.(SLDDRW)$','SolidWorks Drawing File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (4,'sldmat',2,'\.(sldmat)$','SolidWorks Material Definition File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (5,'SLDLFP',2,'\.(SLDLFP)$','SolidWorks File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (6,'png',4,'\.(png)$','PNG Image File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (7,'jpg',4,'\.(jpg)$','JPG Image File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (8,'mdb',4,'\.(mdb)$','MS Access Database File');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (9,'doc',4,'\.(doc)$','MS Word 97/2003');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (10,'docx',4,'\.(docx)$','MS Word 2007+');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (11,'xls',4,'\.(xls)$','MS Excel 97/2003');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (12,'xlsx',4,'\.(xls)x$','MS Excel 2007+');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (13,'pdf',4,'\.(pdf)$','Adobe PDF Document');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (14,'prt.1',4,'\.(prt\.[0-9]+)$','Pro/Engineer Part');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (15,'asm.1',4,'\.(asm\.[0-9]+)$','Pro/Engineer Assembly');
 
 
 
@@ -251,13 +253,15 @@ ALTER TABLE hp_entry_name_filter OWNER TO engadmin;
 
 CREATE UNIQUE INDEX ON hp_entry_name_filter (lower(name_proto::text));
 
-insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.aa~', '^.+\..+~$', 'Text Editor Backup File');
-insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.msi', '^.+\.msi$', 'Microsoft Installer');
-insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.dll', '^.+\.dll$', 'Microsoft Dynamic Linked Library');
-insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.exe', '^.+\.exe$', 'Microsoft Executable');
-insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.bak', '^.+\.bak$', 'AutoCAD Drawing Backup File');
-insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.db', '^.+\.db$', 'Windows Display Settings File');
-insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.dropbox', '^.+\.dropbox$', 'Dropbox File?');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.aa~', '\.(.+~)$', 'Text Editor Backup File');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.msi', '\.(msi)$', 'Microsoft Installer');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.dll', '\.(dll)$', 'Microsoft Dynamic Linked Library');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.exe', '\.(exe)$', 'Microsoft Executable');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.bak', '\.(bak)$', 'AutoCAD Drawing Backup File');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.db', '^.+\.(db)$', 'Windows Display Settings File');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.dropbox', '^.+\.(dropbox)$', 'Dropbox Settings');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.hold', '^.+\.(hold)$', 'Held File');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.old', '^.+\.(old)$', 'Old Copy of Any File');
 
 
 

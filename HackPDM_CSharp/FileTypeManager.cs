@@ -27,6 +27,7 @@ using System.Windows.Forms;
 
 using System.IO;
 using System.Data;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Npgsql;
 using NpgsqlTypes;
@@ -43,18 +44,23 @@ namespace HackPDM
 		#region declarations
 
 		private NpgsqlConnection connDb;
+
 		private NpgsqlDataAdapter daFilters;
 		private DataSet dsFilters;
-		private DataSet dsTypes = new DataSet();
-		private DataTable dtRemoteTypes;
-		private string strFilePath;
+		private DataTable dtFiles;
 		private Regex reAllFilters;
+		BindingSource bsFilters = new BindingSource();
+
+		private DataTable dtLocTypes;
+		private DataSet dsRemTypes = new DataSet();
+		private DataTable dtRemTypes;
 		private Regex reAllTypes;
+		BindingSource bsTypes = new BindingSource();
+
+		private string strFilePath;
 
 		private ListViewColumnSorter lvwColumnSorter;
 
-		BindingSource bsFilters = new BindingSource();
-		BindingSource bsTypes = new BindingSource();
 
 		/// <summary>
 		/// Return File Ignore Filter DataTable
@@ -77,7 +83,7 @@ namespace HackPDM
 		/// </summary>
 		public DataTable RemoteFileTypes
 		{
-			get { return dtRemoteTypes; }
+			get { return dtRemTypes; }
 		}
 
 		/// <summary>
@@ -102,7 +108,7 @@ namespace HackPDM
 
 			// setup listview column sorting
 			lvwColumnSorter = new ListViewColumnSorter();
-			this.lvTypes.ListViewItemSorter = lvwColumnSorter;
+			this.lvRemTypes.ListViewItemSorter = lvwColumnSorter;
 
 			connDb = dbConn;
 			strFilePath = FilePath;
@@ -112,7 +118,7 @@ namespace HackPDM
 			
 		}
 
-		void lvTypesColumnClick(object sender, ColumnClickEventArgs e)
+		void lvRemTypesColumnClick(object sender, ColumnClickEventArgs e)
 		{
 
 			// Determine if clicked column is already the column that is being sorted.
@@ -136,7 +142,35 @@ namespace HackPDM
 			}
 
 			// Perform the sort with these new sort options.
-			this.lvTypes.Sort();
+			this.lvRemTypes.Sort();
+
+		}
+
+		void lvLocTypesColumnClick(object sender, ColumnClickEventArgs e)
+		{
+			
+			// Determine if clicked column is already the column that is being sorted.
+			if (e.Column == lvwColumnSorter.SortColumn)
+			{
+				// Reverse the current sort direction for this column.
+				if (lvwColumnSorter.Order == SortOrder.Ascending)
+				{
+					lvwColumnSorter.Order = SortOrder.Descending;
+				}
+				else
+				{
+					lvwColumnSorter.Order = SortOrder.Ascending;
+				}
+			}
+			else
+			{
+				// Set the column number that is to be sorted; default to ascending.
+				lvwColumnSorter.SortColumn = e.Column;
+				lvwColumnSorter.Order = SortOrder.Ascending;
+			}
+
+			// Perform the sort with these new sort options.
+			this.lvLocTypes.Sort();
 
 		}
 
@@ -204,11 +238,22 @@ namespace HackPDM
 			// put the remote list in the DataSet
 			daFilters.Fill(dsFilters);
 
+			dsFilters.Tables[0].Columns.Add("regex", Type.GetType("System.Object"));
 			string strAllFilters = "";
 			foreach (DataRow dr in dsFilters.Tables[0].Rows)
 			{
-				strAllFilters += "|" + dr["name_regex"].ToString();
+				string strThis = dr["name_regex"].ToString();
+				if (strAllFilters != "")
+				{
+					strAllFilters += "|" + strThis;
+				}
+				else
+				{
+					strAllFilters = strThis;
+				}
+				dr["regex"] = new Regex(strThis, RegexOptions.IgnoreCase | RegexOptions.Compiled);
 			}
+			strAllFilters = "(" + strAllFilters + ")";
 			reAllFilters = new Regex(strAllFilters, RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
 		}
@@ -216,10 +261,8 @@ namespace HackPDM
 		private void LoadRemoteTypes()
 		{
 
-
-			//
 			// get remote file types
-			//
+
 			// initialize sql command for remote type list
 			string strSql = @"
 				select
@@ -229,9 +272,7 @@ namespace HackPDM
 					c.cat_name,
 					t.icon,
 					t.type_regex,
-					t.description,
-					false as is_local,
-					true as is_remote
+					t.description
 				from hp_type as t
 				left join hp_category as c on c.cat_id=t.default_cat
 				order by t.file_ext;
@@ -239,44 +280,41 @@ namespace HackPDM
 
 			// put the remote list in the DataSet
 			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-			daTemp.Fill(dsTypes);
+			daTemp.Fill(dsRemTypes);
 
 			// if there are no remote types
-			if (dsTypes.Tables.Count == 0)
+			if (dsRemTypes.Tables.Count == 0)
 			{
 				// make an empty DataTable
-				dsTypes.Tables.Add(CreateTypeTable());
+				dsRemTypes.Tables.Add(CreateRemTypeTable());
 			}
 
 			// copy to remote only datatable
 			// are we doing this because we can't bind a Regex object to a field in the datagrid?
-			dtRemoteTypes = dsTypes.Tables[0].Copy();
-			dtRemoteTypes.Columns.Add("regex", Type.GetType("System.Object"));
+			dtRemTypes = dsRemTypes.Tables[0].Copy();
+			dtRemTypes.Columns.Add("regex", Type.GetType("System.Object"));
 
+			// convert all regexs to one big regex
 			string strAllTypes = "";
-			foreach (DataRow dr in dtRemoteTypes.Rows)
+			foreach (DataRow dr in dtRemTypes.Rows)
 			{
 				string strThis = dr["type_regex"].ToString();
 				dr["regex"] = new Regex(strThis, RegexOptions.IgnoreCase | RegexOptions.Compiled);
-				strAllTypes += "|" + strThis;
+				if (strAllTypes != "")
+				{
+					strAllTypes += "|" + strThis;
+				}
+				else
+				{
+					strAllTypes = strThis;
+				}
 			}
+			strAllTypes = "(" + strAllTypes + ")";
 			reAllTypes = new Regex(strAllTypes, RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
 		}
 
-		private void LoadLocalTypes()
-		{
-
-			//
-			// get local file types
-			//
-			GetTypesRecursive(strFilePath);
-
-			PopulateList();
-
-		}
-
-		private DataTable CreateTypeTable()
+		private DataTable CreateRemTypeTable()
 		{
 
 			DataTable dtTypes = new DataTable();
@@ -286,17 +324,37 @@ namespace HackPDM
 			dtTypes.Columns.Add("cat_name", Type.GetType("System.String"));
 			dtTypes.Columns.Add("icon", typeof(Byte[]));
 			dtTypes.Columns.Add("type_regex", Type.GetType("System.String"));
-			dtTypes.Columns.Add("is_local", Type.GetType("System.Boolean"));
-			dtTypes.Columns.Add("is_remote", Type.GetType("System.Boolean"));
+			dtTypes.Columns.Add("description", Type.GetType("System.String"));
 			return dtTypes;
 
 		}
 
-		protected void GetTypesRecursive(string ParentDir)
+		private DataTable CreateLocTypeTable()
 		{
 
-			// get the DataTable
-			DataTable dt = dsTypes.Tables[0];
+			DataTable dtTypes = new DataTable();
+			dtTypes.Columns.Add("file_ext", Type.GetType("System.String"));
+			dtTypes.Columns.Add("icon", typeof(Byte[]));
+			dtTypes.Columns.Add("can_add", Type.GetType("System.Boolean"));
+			dtTypes.Columns.Add("status", Type.GetType("System.String"));
+			return dtTypes;
+
+		}
+
+		private void LoadLocalTypes()
+		{
+
+			// get all local file types
+			dtLocTypes = CreateLocTypeTable();
+			GetFilesRecursive(strFilePath);
+
+			// push to display
+			PopulateLocList();
+
+		}
+
+		protected void GetFilesRecursive(string ParentDir)
+		{
 
 			// get local types
 			foreach (string d in Directory.GetDirectories(ParentDir))
@@ -305,57 +363,86 @@ namespace HackPDM
 				{
 
 					// get the file extension and attempt a simple match
-					string strFileExt = GetFileExt(f);
-					int intMatch = dt.Select("file_ext='" + strFileExt + "'").Length;
+					string strRemFileExt = "";
+					if (reAllTypes.IsMatch(f)) strRemFileExt = reAllTypes.Match(f).Value.Substring(1);
+					string strRemBlockExt = "";
+					if (reAllFilters.IsMatch(f)) strRemBlockExt = reAllFilters.Match(f).Value.Substring(1);
+					string strWinFileExt = GetFileExt(f);
+					string strFileExt = strWinFileExt;
+					Boolean blnCanAdd = true;
+					string strStatus = "New Type";
 
-					// if this extension (as windows recognizes it) is not in the current list
-					if (intMatch == 0)
+					// get an exact match
+					if (strRemFileExt != "")
 					{
+						blnCanAdd = false;
+						strStatus = "Exists Remotely";
 
-						// if this file name is not blocked
-						if (!FileBlocked(f))
+						// if the regex returns the same characters as the prototype
+						if (dtRemTypes.Select("file_ext='" + strRemFileExt + "'").Length != 0)
 						{
-
-							// if this file does not match a more complex remote file type
-							int intTypeId = GetRemoteType(f);
-							if (intTypeId == 0)
-							{
-								// insert a now type row, including icon
-									// type_id
-									// file_ext
-									// default_cat
-									// cat_name
-									// icon
-									// type_regex
-									// is_local
-									// is_remote
-								dt.Rows.Add(null,
-									GetFileExt(f),
-									null,
-									null,
-									ImageToByteArray(ExtractIcon(f)),
-									null,
-									true,
-									false);
-							}
-							else
-							{
-								// otherwise, mark this remote type as existing local
-								DataRow dr = dt.Select("type_id='" + intTypeId + "'")[0];
-								dr.SetField<bool>("is_local", true);
-							}
-
-
+							// set the string
+							strFileExt = strRemFileExt;
 						}
+						else
+						{
+							// otherwise, loop through the remotes types and find the matching prototype
+							// example: filename="somepart.prt.25" match="prt.25" prototype="prt.1"
+							foreach (DataRow drType in dtRemTypes.Rows)
+							{
+								// add matching prototype and continue
+								if (drType.Field<Regex>("regex").IsMatch(f))
+								{
+									strFileExt = drType.Field<string>("file_ext");
+									break;
+								}
+							}
+						}
+					}
+					else if (strRemBlockExt != "") {
+						blnCanAdd = false;
+						strStatus = "Blocked";
 
+						// if the regex returns the same characters as the prototype
+						if (dsFilters.Tables[0].Select("name_proto='" + strRemBlockExt + "'").Length != 0)
+						{
+							// set the string
+							strFileExt = strRemBlockExt;
+						}
+						else
+						{
+							// otherwise, loop through the remotes types and find the matching prototype
+							// example: filename="somepart.prt.25" match="prt.25" prototype="prt.1"
+							foreach (DataRow drFilter in dsFilters.Tables[0].Rows)
+							{
+								// add matching prototype and continue
+								if (drFilter.Field<Regex>("regex").IsMatch(f))
+								{
+									strFileExt = drFilter.Field<string>("name_proto");
+									break;
+								}
+							}
+						}
+					}
+
+					// check if it has already been added
+					if (dtLocTypes.Select("file_ext='" + strFileExt + "'").Length == 0)
+					{
+						// insert a new type row, including icon
+						//   file_ext
+						//   icon
+						//   can_add
+						//   status
+						dtLocTypes.Rows.Add(
+							strFileExt,
+							ImageToByteArray(ExtractIcon(f)),
+							blnCanAdd,
+							strStatus);
 					}
 
 				}
-
-				GetTypesRecursive(d);
-
+				GetFilesRecursive(d);
 			}
-
 		}
 
 		protected string GetFileExt(string strFileName)
@@ -380,7 +467,7 @@ namespace HackPDM
 			string strShortName = fiCurrFile.Name;
 
 			// use a regular expression to match file names with remote extensions
-			foreach (DataRow dr in dtRemoteTypes.Rows)
+			foreach (DataRow dr in dtRemTypes.Rows)
 			{
 				Regex rxExt = new Regex(dr["type_regex"].ToString(), RegexOptions.IgnoreCase | RegexOptions.Compiled);
 				if (rxExt.IsMatch(strShortName))
@@ -436,50 +523,52 @@ namespace HackPDM
 			return returnImage;
 		}
 
-		protected void InitTypesList()
+		protected void InitRemTypesList()
 		{
 
 			//init ListView control
-			lvTypes.Clear();
+			lvRemTypes.Clear();
 
 			// configure sorting
-			//listView1.Sorting = SortOrder.None;
-			//listView1.ColumnClick += new ColumnClickEventHandler(lv1ColumnClick);
+			lvRemTypes.Sorting = SortOrder.None;
+			lvRemTypes.ColumnClick += new ColumnClickEventHandler(lvRemTypesColumnClick);
 
 			//create columns for ListView
-			lvTypes.Columns.Add("Extension", 100, System.Windows.Forms.HorizontalAlignment.Left);
-			lvTypes.Columns.Add("Category", 250, System.Windows.Forms.HorizontalAlignment.Left);
-			lvTypes.Columns.Add("Status", 75, System.Windows.Forms.HorizontalAlignment.Left);
-			lvTypes.Columns.Add("Action", 75, System.Windows.Forms.HorizontalAlignment.Left);
+			lvRemTypes.Columns.Add("Extension", 100, System.Windows.Forms.HorizontalAlignment.Left);
+			lvRemTypes.Columns.Add("RegEx", 100, System.Windows.Forms.HorizontalAlignment.Left);
+			lvRemTypes.Columns.Add("Category", 250, System.Windows.Forms.HorizontalAlignment.Left);
+			lvRemTypes.Columns.Add("Description", 250, System.Windows.Forms.HorizontalAlignment.Left);
+			lvRemTypes.Columns.Add("Status", 75, System.Windows.Forms.HorizontalAlignment.Left);
+			lvRemTypes.Columns.Add("Action", 75, System.Windows.Forms.HorizontalAlignment.Left);
 
 		}
 
-		private void PopulateList()
+		protected void InitLocTypesList()
 		{
 
-			foreach (DataRow row in dsTypes.Tables[0].Rows)
+			//init ListView control
+			lvLocTypes.Clear();
+
+			// configure sorting
+			lvLocTypes.Sorting = SortOrder.None;
+			lvLocTypes.ColumnClick += new ColumnClickEventHandler(lvRemTypesColumnClick);
+
+			//create columns for ListView
+			lvLocTypes.Columns.Add("Extension", 100, System.Windows.Forms.HorizontalAlignment.Left);
+			lvLocTypes.Columns.Add("Status", 250, System.Windows.Forms.HorizontalAlignment.Left);
+
+		}
+
+		private void PopulateLocList()
+		{
+
+			foreach (DataRow row in dtLocTypes.Rows)
 			{
 
 				// insert data
-				string[] lvData = new string[3];
+				string[] lvData = new string[2];
 				lvData[0] = row.Field<string>("file_ext");
-				lvData[1] = row.Field<string>("cat_name");
-
-				if ((bool)row["is_local"] == true)
-				{
-					if ((bool)row["is_remote"] == false)
-					{
-						lvData[2] = "Local";
-					}
-					else
-					{
-						lvData[2] = "Both";
-					}
-				}
-				else
-				{
-					lvData[2] = "Remote";
-				}
+				lvData[1] = row.Field<string>("status");
 
 				// add image
 				string strFileExt = row.Field<string>("file_ext");
@@ -492,7 +581,7 @@ namespace HackPDM
 				// create actual list item
 				ListViewItem lvItem = new ListViewItem(lvData);
 				lvItem.ImageKey = strFileExt;
-				lvTypes.Items.Add(lvItem);
+				lvLocTypes.Items.Add(lvItem);
 
 			}
 
@@ -501,44 +590,9 @@ namespace HackPDM
 		#endregion
 
 
-		private void btnRefreshTypes_Click(object sender, EventArgs e)
-		{
-
-			// Set cursor as hourglass
-			Cursor.Current = Cursors.WaitCursor;
-
-			// clear objects
-			dsTypes = new DataSet();
-			InitTypesList();
-
-			// process file types
-			LoadRemoteTypes();
-			LoadLocalTypes();
-
-			// bind types table to databinding
-			bsTypes.DataSource = dsTypes.Tables[0];
-
-			// Set cursor as default arrow
-			Cursor.Current = Cursors.Default;
-
-		}
-
-		private void lvTypes_SelectedIndexChanged(object sender, EventArgs e)
-		{
-			string strFileExt = lvTypes.Text;
-			SelectRecord(strFileExt);
-		}
-
-
-		void SelectRecord(string strFileExt)
-		{
-			int foundIndex = bsTypes.Find("file_ext", strFileExt);
-			bsTypes.Position = foundIndex;
-		}
-
 		private void btnTypesNew_Click(object sender, EventArgs e)
 		{
-			dsTypes.Tables[0].Rows.Add(
+			dsRemTypes.Tables[0].Rows.Add(
 				null,
 				"",
 				null,
@@ -603,6 +657,73 @@ namespace HackPDM
 		private void btnTypesCommit_Click(object sender, EventArgs e)
 		{
 
+		}
+
+		private void btnRefreshRemote_Click(object sender, EventArgs e)
+		{
+
+			// Set cursor as hourglass
+			Cursor.Current = Cursors.WaitCursor;
+
+			// clear objects
+			dsRemTypes = new DataSet();
+			InitRemTypesList();
+
+			// process file types
+			LoadRemoteTypes();
+
+			// bind types table to databinding
+			bsTypes.DataSource = dsRemTypes.Tables[0];
+
+			// Set cursor as default arrow
+			Cursor.Current = Cursors.Default;
+
+		}
+
+		private void btnRefreshLocal_Click(object sender, EventArgs e)
+		{
+
+			// Set cursor as hourglass
+			Cursor.Current = Cursors.WaitCursor;
+
+			// clear objects
+			dtLocTypes = new DataTable();
+			InitLocTypesList();
+
+			// load remote file type data first
+			if (dsRemTypes.Tables.Count == 0) LoadRemoteTypes();
+			LoadLocalTypes();
+
+			// Set cursor as default arrow
+			Cursor.Current = Cursors.Default;
+
+		}
+
+		private void btnAddSel_Click(object sender, EventArgs e)
+		{
+			if (lvRemTypes.SelectedItems.Count != 0)
+			{
+				string strFileExt = lvRemTypes.SelectedItems[0].Text;
+				int foundIndex = bsTypes.Find("file_ext", strFileExt);
+				bsTypes.Position = foundIndex;
+			}
+		}
+
+		private void btnTypesCommit_Click_1(object sender, EventArgs e)
+		{
+
+			dsRemTypes.Tables[0].Rows.Add(
+				null,
+				"",
+				null,
+				null,
+				null,
+				null,
+				null,
+				false,
+				false);
+
+			bsTypes.MoveLast();
 		}
 
 
