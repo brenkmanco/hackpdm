@@ -84,9 +84,9 @@ namespace HackPDM
 			// 
 			// splitContainer1
 			// 
-			this.splitContainer1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+			this.splitContainer1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+						| System.Windows.Forms.AnchorStyles.Left)
+						| System.Windows.Forms.AnchorStyles.Right)));
 			this.splitContainer1.Location = new System.Drawing.Point(5, 5);
 			this.splitContainer1.Name = "splitContainer1";
 			this.splitContainer1.Orientation = System.Windows.Forms.Orientation.Horizontal;
@@ -104,9 +104,9 @@ namespace HackPDM
 			// 
 			// groupBox1
 			// 
-			this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+			this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+						| System.Windows.Forms.AnchorStyles.Left)
+						| System.Windows.Forms.AnchorStyles.Right)));
 			this.groupBox1.Controls.Add(this.btnRefreshFilters);
 			this.groupBox1.Controls.Add(this.btnFiltersCommit);
 			this.groupBox1.Controls.Add(this.dgFilters);
@@ -140,9 +140,9 @@ namespace HackPDM
 			// 
 			// dgFilters
 			// 
-			this.dgFilters.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+			this.dgFilters.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+						| System.Windows.Forms.AnchorStyles.Left)
+						| System.Windows.Forms.AnchorStyles.Right)));
 			this.dgFilters.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
 			this.dgFilters.Location = new System.Drawing.Point(6, 19);
 			this.dgFilters.Name = "dgFilters";
@@ -151,6 +151,9 @@ namespace HackPDM
 			// 
 			// splitContainer2
 			// 
+			this.splitContainer2.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+						| System.Windows.Forms.AnchorStyles.Left)
+						| System.Windows.Forms.AnchorStyles.Right)));
 			this.splitContainer2.Location = new System.Drawing.Point(3, 3);
 			this.splitContainer2.Name = "splitContainer2";
 			// 
@@ -167,9 +170,9 @@ namespace HackPDM
 			// 
 			// groupBox2
 			// 
-			this.groupBox2.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+			this.groupBox2.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+						| System.Windows.Forms.AnchorStyles.Left)
+						| System.Windows.Forms.AnchorStyles.Right)));
 			this.groupBox2.Controls.Add(this.label1);
 			this.groupBox2.Controls.Add(this.txtDesc);
 			this.groupBox2.Controls.Add(this.pbIcon);
@@ -295,9 +298,9 @@ namespace HackPDM
 			// 
 			// lvRemTypes
 			// 
-			this.lvRemTypes.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+			this.lvRemTypes.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+						| System.Windows.Forms.AnchorStyles.Left)
+						| System.Windows.Forms.AnchorStyles.Right)));
 			this.lvRemTypes.FullRowSelect = true;
 			this.lvRemTypes.HideSelection = false;
 			this.lvRemTypes.Location = new System.Drawing.Point(6, 19);
@@ -309,12 +312,13 @@ namespace HackPDM
 			this.lvRemTypes.TabIndex = 0;
 			this.lvRemTypes.UseCompatibleStateImageBehavior = false;
 			this.lvRemTypes.View = System.Windows.Forms.View.Details;
+			this.lvRemTypes.ColumnClick += new System.Windows.Forms.ColumnClickEventHandler(this.lvRemTypesColumnClick);
 			// 
 			// groupBox3
 			// 
-			this.groupBox3.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+			this.groupBox3.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+						| System.Windows.Forms.AnchorStyles.Left)
+						| System.Windows.Forms.AnchorStyles.Right)));
 			this.groupBox3.Controls.Add(this.btnAddSel);
 			this.groupBox3.Controls.Add(this.btnRefreshLocal);
 			this.groupBox3.Controls.Add(this.lvLocTypes);
@@ -349,9 +353,9 @@ namespace HackPDM
 			// 
 			// lvLocTypes
 			// 
-			this.lvLocTypes.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+			this.lvLocTypes.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+						| System.Windows.Forms.AnchorStyles.Left)
+						| System.Windows.Forms.AnchorStyles.Right)));
 			this.lvLocTypes.FullRowSelect = true;
 			this.lvLocTypes.HideSelection = false;
 			this.lvLocTypes.Location = new System.Drawing.Point(6, 19);
@@ -363,6 +367,7 @@ namespace HackPDM
 			this.lvLocTypes.TabIndex = 0;
 			this.lvLocTypes.UseCompatibleStateImageBehavior = false;
 			this.lvLocTypes.View = System.Windows.Forms.View.Details;
+			this.lvLocTypes.ColumnClick += new System.Windows.Forms.ColumnClickEventHandler(this.lvLocTypesColumnClick);
 			// 
 			// FileTypeManager
 			// 

@@ -64,10 +64,6 @@ namespace HackPDM
 
 		private DataSet dsTree = new DataSet();
 		private DataSet dsList = new DataSet();
-		private DataSet dsHistory = new DataSet();
-		private DataSet dsWhereUsed = new DataSet();
-		private DataSet dsDependents = new DataSet();
-		private DataSet dsProperties = new DataSet();
 
 		private string strLocalFileRoot;
 		private int intMyUserId;
@@ -76,7 +72,7 @@ namespace HackPDM
 		private StatusDialog dlgStatus;
 		string[] strStatusParams = new String[2];
 
-		FileTypeManager ftmStart;
+		private FileTypeManager ftmStart;
 
 		string strCurrProfileId;
 		DataRow drCurrProfile;
@@ -715,15 +711,20 @@ namespace HackPDM
 						// get file info
 						strFileName = GetDirName(strFile);
 						FileInfo fiCurrFile = new FileInfo(strFile);
-						string strFileExt = fiCurrFile.Extension.Substring(1,fiCurrFile.Extension.Length-1).ToLower();
 						lngFileSize = fiCurrFile.Length;
 						dtModifyDate = fiCurrFile.LastWriteTime;
+
+						Tuple<string, string, string, string> tplExtensions = ftmStart.GetFileExt(strFile);
+						string strFileExt = tplExtensions.Item1;
+						string strRemFileExt = tplExtensions.Item2;
+						string strRemBlockExt = tplExtensions.Item3;
+						string strWinFileExt = tplExtensions.Item4;
 
 						// get matching remote file
 						DataRow[] drRemFile = dsList.Tables[0].Select("entry_name='"+strFileName+"'");
 
 						// set status code to "ro" again, just to be safe
-						string strStatusCode = "ro";
+						string strStatusCode = ".ro";
 
 						if (drRemFile.Length != 0)
 						{
@@ -743,14 +744,17 @@ namespace HackPDM
 								if (drTemp.Field<int>("checkout_user") == intMyUserId)
 								{
 									// checked out to me (current user)
-									strStatusCode = "cm";
+									strStatusCode = ".cm";
 								}
 								else
 								{
 									// checked out to someone else
-									strStatusCode = "co";
+									strStatusCode = ".co";
 								}
 							}
+
+							// set the status code
+							drTemp.SetField<string>("client_status_code", strStatusCode);
 
 							// format the file size
 							drTemp.SetField<string>("str_latest_size", FormatSize(drTemp.Field<long>("latest_size")));
@@ -774,14 +778,14 @@ namespace HackPDM
 							// insert new row for local-only file
 
 							// set status code
-							strStatusCode = "lo";
-							if (ftmStart.ReFilters.IsMatch(strFileName))
+							strStatusCode = ".lo";
+							if (strRemBlockExt == strFileExt)
 							{
-								strStatusCode = "if";
+								strStatusCode = ".if";
 							}
-							else if (!ftmStart.ReTypes.IsMatch(strFileName))
+							else if (strRemFileExt == "")
 							{
-								strStatusCode = "ft";
+								strStatusCode = ".ft";
 							}
 
 							dsList.Tables[0].Rows.Add(
@@ -851,15 +855,7 @@ namespace HackPDM
 
 					// get file type
 					string strFileExt = row.Field<string>("file_ext");
-					string strOverlay = "";
-
-					// test for local only
-					if (row.Field<bool>("is_remote") == false) strOverlay = ".lo";
-					// test for remote only
-					if (row.Field<bool>("is_local") == false) strOverlay = ".ro";
-
-
-					// 
+					string strOverlay = row.Field<string>("client_status_code");
 
 					// get icon images for new file types (new to this session)
 					if (ilListIcons.Images[strFileExt] == null) {
@@ -904,63 +900,95 @@ namespace HackPDM
 
 		protected void InitTabPages() {
 
+			// clear the preview image
+			pbPreview.Image = null;
+
 			// reset the history page
 			lvHistory.Clear();
-			lvHistory.Columns.Add("Action",140,System.Windows.Forms.HorizontalAlignment.Left);
-			lvHistory.Columns.Add("ModUser", 140, System.Windows.Forms.HorizontalAlignment.Left);
-			lvHistory.Columns.Add("ModDate", 140, System.Windows.Forms.HorizontalAlignment.Left);
-			lvHistory.Columns.Add("Size",75, System.Windows.Forms.HorizontalAlignment.Right);
-			lvHistory.Columns.Add("Release",75, System.Windows.Forms.HorizontalAlignment.Right);
-			lvHistory.Columns.Add("RelDate",75, System.Windows.Forms.HorizontalAlignment.Right);
-			lvHistory.Columns.Add("RelUser",75, System.Windows.Forms.HorizontalAlignment.Right);
 
-			// reset the where-used page
-			lvWhereUsed.Clear();
-			lvWhereUsed.Columns.Add("Name",300,System.Windows.Forms.HorizontalAlignment.Left);
-			lvWhereUsed.Columns.Add("Version", 140, System.Windows.Forms.HorizontalAlignment.Left);
+			// reset the parents page
+			lvParents.Clear();
 
-			// reset the where-used page
-			lvDepends.Clear();
-			lvDepends.Columns.Add("Name",300,System.Windows.Forms.HorizontalAlignment.Left);
-			lvDepends.Columns.Add("Version", 140, System.Windows.Forms.HorizontalAlignment.Left);
+			// reset the children page
+			lvChildren.Clear();
 
 			// reset the properties page
 			lvProperties.Clear();
-			lvProperties.Columns.Add("Property",140,System.Windows.Forms.HorizontalAlignment.Left);
-			lvProperties.Columns.Add("Value", 300, System.Windows.Forms.HorizontalAlignment.Left);
-			lvProperties.Columns.Add("Type", 140, System.Windows.Forms.HorizontalAlignment.Left);
 
 		}
 
-		protected void InitPreviewImage() {
+		protected void LoadPreviewImage(string FileName) {
+
+			// if local only or checked out to me, load image from solidworks
 
 			pbPreview.Image = null;
 
+			// otherwise, load the image from the server
+			int intEntryId = GetSelectedEntry(FileName);
+			NpgsqlCommand command = new NpgsqlCommand("select preview_image from hp_version where entry_id=:entryid order by version_id limit 1;", connDb);
+			command.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
+			command.Parameters["entry_id"].Value = intEntryId;
+
+			byte[] bImage;
+			try
+			{
+				bImage = (byte[])command.ExecuteScalar();
+			}
+			catch
+			{
+				// do nothing?
+				return;
+			}
+			MemoryStream ms = new MemoryStream(bImage);
+			pbPreview.Image = Image.FromStream(ms);
+
 		}
 
-		protected void LoadHistoryData(ListViewItem lviSelected) {
-
-			// clear dataset
-			dsHistory = new DataSet();
+		protected int GetSelectedEntry(string FileName)
+		{
 
 			// get dir_id
 			object oTemp = treeView1.SelectedNode.Tag;
 			int intDirId;
-			if (oTemp == null) {
-				return;
-			} else {
+			if (oTemp == null)
+			{
+				return 0;
+			}
+			else
+			{
 				intDirId = (int)oTemp;
 			}
 
 			// get entry_id
-			string strFileName = (string)lviSelected.SubItems[0].Text;
-			DataRow drSelected = dsList.Tables[0].Select("dir_id="+intDirId+" and entry_name='"+strFileName+"'")[0];
-			int intEntryId;
-			if (DBNull.Value.Equals(drSelected["entry_id"])) {
-				return;
-			} else {
-				intEntryId = drSelected.Field<int>("entry_id");
+			DataRow drSelected = dsList.Tables[0].Select("dir_id=" + intDirId + " and entry_name='" + FileName + "'")[0];
+			if (DBNull.Value.Equals(drSelected["entry_id"]))
+			{
+				return 0;
 			}
+			else
+			{
+				return drSelected.Field<int>("entry_id");
+			}
+
+		}
+
+		protected void PopulateHistoryPage(string strFileName)
+		{
+
+			// clear list
+			lvHistory.Clear();
+			lvHistory.Columns.Add("ModUser", 140, System.Windows.Forms.HorizontalAlignment.Left);
+			lvHistory.Columns.Add("ModDate", 140, System.Windows.Forms.HorizontalAlignment.Left);
+			lvHistory.Columns.Add("Size", 75, System.Windows.Forms.HorizontalAlignment.Right);
+			lvHistory.Columns.Add("Release", 75, System.Windows.Forms.HorizontalAlignment.Right);
+			lvHistory.Columns.Add("RelDate", 75, System.Windows.Forms.HorizontalAlignment.Right);
+			lvHistory.Columns.Add("RelUser", 75, System.Windows.Forms.HorizontalAlignment.Right);
+
+			// new dataset
+			DataSet dsTemp = new DataSet();
+
+			// get entry_id
+			int intEntryId = GetSelectedEntry(strFileName);
 
 			// initialize sql command for history data
 			string strSql = @"
@@ -984,38 +1012,25 @@ namespace HackPDM
 			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
 			daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
 			daTemp.SelectCommand.Parameters["entry_id"].Value = intEntryId;
-			daTemp.Fill(dsHistory);
+			daTemp.Fill(dsTemp);
 
-		}
-
-		protected void PopulateHistoryPage(ListViewItem lviSelected) {
-
-			// clear list
-			InitTabPages();
-			LoadHistoryData(lviSelected);
-
-			// if we have no history data to show, then quit
-			if (dsHistory.Tables.Count == 0) {
+			// if we have no data to show, then quit
+			if (dsTemp.Tables.Count == 0)
+			{
 				return;
 			}
 
-			int intRowCount = dsHistory.Tables[0].Rows.Count;
-			for (int i = 0; i < intRowCount; i++) {
-				DataRow row = dsHistory.Tables[0].Rows[i];
+			foreach (DataRow row in dsTemp.Tables[0].Rows)
+			{
 
 				// build array
-				string[] lvData =  new string[7];
-				if (i == intRowCount-1) {
-					lvData[0] = "Create";
-				} else {
-					lvData[0] = "Modify";
-				}
-				lvData[1] = row.Field<string>("action_user");
-				lvData[2] = row.Field<string>("action_date");
-				lvData[3] = row.Field<string>("version_size");
-				lvData[4] = row.Field<string>("release_tag");
-				lvData[5] = row.Field<string>("release_date");
-				lvData[6] = row.Field<string>("release_user");
+				string[] lvData =  new string[6];
+				lvData[0] = row.Field<string>("action_user");
+				lvData[1] = row.Field<string>("action_date");
+				lvData[2] = row.Field<string>("version_size");
+				lvData[3] = row.Field<string>("release_tag");
+				lvData[4] = row.Field<string>("release_date");
+				lvData[5] = row.Field<string>("release_user");
 
 				// create actual list item
 				ListViewItem lvItem = new ListViewItem(lvData);
@@ -1025,6 +1040,189 @@ namespace HackPDM
 
 		}
 
+		protected void PopulateParentsPage(string strFileName)
+		{
+
+			// clear list
+			lvParents.Clear();
+			lvParents.Columns.Add("Version", 140, System.Windows.Forms.HorizontalAlignment.Left);
+			lvParents.Columns.Add("Name", 300, System.Windows.Forms.HorizontalAlignment.Left);
+
+			// new dataset
+			DataSet dsTemp = new DataSet();
+
+			// get entry_id
+			int intEntryId = GetSelectedEntry(strFileName);
+
+			// initialize sql command for history data
+			string strSql = @"
+				select
+					r.rel_parent_id,
+					r.rel_child_id,
+					e.entry_name
+				from hp_versionrelationship as r
+				left join hp_version as vp on vp.version_id=r.rel_parent_id
+				left join hp_version as vc on vc.version_id=r.rel_child_id
+				left join hp_entry as e on e.entry_id=vp.entry_id
+				where vc.entry_id=:entry_id
+				order by r.rel_child_id desc, e.entry_name;
+			";
+
+			// put the remote list in the DataSet
+			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+			daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
+			daTemp.SelectCommand.Parameters["entry_id"].Value = intEntryId;
+			daTemp.Fill(dsTemp);
+
+			// if we have no data to show, then quit
+			if (dsTemp.Tables.Count == 0)
+			{
+				return;
+			}
+
+			foreach (DataRow row in dsTemp.Tables[0].Rows)
+			{
+
+				// build array
+				string[] lvData = new string[2];
+				lvData[0] = row.Field<string>("rel_child_id");
+				lvData[1] = row.Field<string>("entry_name") + " (v" + row.Field<int>("rel_parent_id").ToString() + ")";
+
+				// create actual list item
+				ListViewItem lvItem = new ListViewItem(lvData);
+				lvParents.Items.Add(lvItem);
+
+			}
+
+		}
+
+		protected void PopulateChildrenPage(string strFileName)
+		{
+
+			// clear list
+			lvChildren.Clear();
+			lvChildren.Columns.Add("Version", 140, System.Windows.Forms.HorizontalAlignment.Left);
+			lvChildren.Columns.Add("Name", 300, System.Windows.Forms.HorizontalAlignment.Left);
+
+			// new dataset
+			DataSet dsTemp = new DataSet();
+
+			// get entry_id
+			int intEntryId = GetSelectedEntry(strFileName);
+
+			// initialize sql command for history data
+			string strSql = @"
+				select
+					r.rel_parent_id,
+					r.rel_child_id,
+					e.entry_name
+				from hp_versionrelationship as r
+				left join hp_version as vp on vp.version_id=r.rel_parent_id
+				left join hp_version as vc on vc.version_id=r.rel_child_id
+				left join hp_entry as e on e.entry_id=vc.entry_id
+				where vp.entry_id=:entry_id
+				order by r.rel_parent_id desc, e.entry_name;
+			";
+
+			// put the remote list in the DataSet
+			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+			daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
+			daTemp.SelectCommand.Parameters["entry_id"].Value = intEntryId;
+			daTemp.Fill(dsTemp);
+
+			// if we have no history data to show, then quit
+			if (dsTemp.Tables.Count == 0)
+			{
+				return;
+			}
+
+			foreach (DataRow row in dsTemp.Tables[0].Rows)
+			{
+
+				// build array
+				string[] lvData = new string[2];
+				lvData[0] = row.Field<int>("rel_parent_id").ToString();
+				lvData[1] = row.Field<string>("entry_name") + " (v" + row.Field<int>("rel_child_id").ToString() + ")";
+
+				// create actual list item
+				ListViewItem lvItem = new ListViewItem(lvData);
+				lvChildren.Items.Add(lvItem);
+
+			}
+
+		}
+
+		protected void PopulatePropertiesPage(string strFileName)
+		{
+
+			// clear list
+			lvProperties.Clear();
+			lvProperties.Columns.Add("Version", 140, System.Windows.Forms.HorizontalAlignment.Left);
+			lvProperties.Columns.Add("Configuration", 140, System.Windows.Forms.HorizontalAlignment.Left);
+			lvProperties.Columns.Add("Property", 140, System.Windows.Forms.HorizontalAlignment.Left);
+			lvProperties.Columns.Add("Value", 400, System.Windows.Forms.HorizontalAlignment.Left);
+			lvProperties.Columns.Add("Type", 140, System.Windows.Forms.HorizontalAlignment.Left);
+
+			// new dataset
+			DataSet dsTemp = new DataSet();
+
+			// get entry_id
+			int intEntryId = GetSelectedEntry(strFileName);
+
+			// initialize sql command for history data
+			string strSql = @"
+				select
+					vp.version_id,
+					vp.config_name,
+					p.prop_name,
+					p.prop_type,
+					vp.text_value,
+					vp.date_value,
+					vp.number_value,
+					vp.yesno_value
+				from hp_version_property as vp
+				left join hp_property as p on p.prop_id=vp.prop_id
+				left join hp_version as v on v.version_id=vp.version_id
+				where v.entry_id=:entry_id
+				order by vp.version_id desc, p.prop_name;
+			";
+
+			// put the remote list in the DataSet
+			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+			daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
+			daTemp.SelectCommand.Parameters["entry_id"].Value = intEntryId;
+			daTemp.Fill(dsTemp);
+
+			// if we have no data to show, then quit
+			if (dsTemp.Tables.Count == 0)
+			{
+				return;
+			}
+
+			foreach (DataRow row in dsTemp.Tables[0].Rows)
+			{
+
+				string strValue = "";
+				if (row.Field<string>("text_value") != null) strValue = row.Field<string>("text_value");
+				if (row.Field<string>("date_value") != null) strValue = FormatDate(row.Field<DateTime>("date_value"));
+				if (row.Field<string>("number_value") != null) strValue = row.Field<Decimal>("number_value").ToString();
+				if (row.Field<string>("yesno_value") != null) strValue = row.Field<Boolean>("yesno_value").ToString();
+
+				// build array
+				string[] lvData = new string[5];
+				lvData[0] = row.Field<string>("version_id");
+				lvData[1] = row.Field<string>("config_name");
+				lvData[2] = row.Field<string>("prop_name");
+				lvData[3] = strValue;
+				lvData[4] = row.Field<string>("prop_type");
+
+				// create actual list item
+				ListViewItem lvItem = new ListViewItem(lvData);
+				lvProperties.Items.Add(lvItem);
+
+			}
+
+		}
 
 		#region utility functions
 
@@ -3329,31 +3527,41 @@ namespace HackPDM
 				InitTabPages();
 				return;
 			}
-
-			if (tabControl1.SelectedIndex == 0) {
-				// Entry History
-				PopulateHistoryPage(listView1.SelectedItems[0]);
-			}
-
-			if (tabControl1.SelectedIndex == 1) {
-				// Where-used
-
-			}
-
-			if (tabControl1.SelectedIndex == 2) {
-				// Dependents
-
-			}
-
-			if (tabControl1.SelectedIndex == 3) {
-				// Properties
-
-			}
+			string strFileName = listView1.SelectedItems[0].SubItems[0].Text;
+			LoadPreviewImage(strFileName);
 
 		}
 
+		void TabControl1SelectedIndexChanged(object sender, EventArgs e)
+		{
 
+			string strFileName = listView1.SelectedItems[0].SubItems[0].Text;
 
+			if (tabControl1.SelectedIndex == 0)
+			{
+				// Entry History
+				PopulateHistoryPage(strFileName);
+			}
+
+			if (tabControl1.SelectedIndex == 1)
+			{
+				// Parents
+				PopulateParentsPage(strFileName);
+			}
+
+			if (tabControl1.SelectedIndex == 2)
+			{
+				// Children
+				PopulateChildrenPage(strFileName);
+			}
+
+			if (tabControl1.SelectedIndex == 3)
+			{
+				// Properties
+				PopulatePropertiesPage(strFileName);
+			}
+
+		}
 
 		void CmdManageFileTypesClick(object sender, EventArgs e)
 		{

@@ -181,9 +181,51 @@ namespace HackPDM
 		{
 			LoadFilters();
 			LoadRemoteTypes();
+			LoadCategories();
 		}
 
-		private void LoadFilters() {
+		private void LoadCategories()
+		{
+
+			// initialize sql command for remote type list
+			string strSql = @"
+				select
+					cat_id,
+					cat_name
+				from hp_category
+				order by cat_name;
+			";
+
+			// put the remote list in the DataSet
+			NpgsqlCommand command = new NpgsqlCommand(strSql, connDb);
+
+			Dictionary<Int32,string> items = new Dictionary<Int32,string>();
+			items.Add(0,"");
+			try
+			{
+				NpgsqlDataReader dr = command.ExecuteReader();
+				while (dr.Read())
+				{
+					items.Add( (Int32)dr["cat_id"], (string)dr["cat_name"] );
+				}
+
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show("Failed to get categories." + System.Environment.NewLine + ex.Message,
+					"Data Error",
+					MessageBoxButtons.OK,
+					MessageBoxIcon.Error);
+			}
+
+			cboCat.DataSource = new BindingSource(items, null);
+			cboCat.DisplayMember = "Key";
+			cboCat.ValueMember = "Value";
+
+		}
+
+		private void LoadFilters()
+		{
 
 			// clear dataset
 			dsFilters = new DataSet();
@@ -253,7 +295,6 @@ namespace HackPDM
 				}
 				dr["regex"] = new Regex(strThis, RegexOptions.IgnoreCase | RegexOptions.Compiled);
 			}
-			strAllFilters = "(" + strAllFilters + ")";
 			reAllFilters = new Regex(strAllFilters, RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
 		}
@@ -309,7 +350,6 @@ namespace HackPDM
 					strAllTypes = strThis;
 				}
 			}
-			strAllTypes = "(" + strAllTypes + ")";
 			reAllTypes = new Regex(strAllTypes, RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
 		}
@@ -362,67 +402,24 @@ namespace HackPDM
 				foreach (string f in Directory.GetFiles(d))
 				{
 
-					// get the file extension and attempt a simple match
-					string strRemFileExt = "";
-					if (reAllTypes.IsMatch(f)) strRemFileExt = reAllTypes.Match(f).Value.Substring(1);
-					string strRemBlockExt = "";
-					if (reAllFilters.IsMatch(f)) strRemBlockExt = reAllFilters.Match(f).Value.Substring(1);
-					string strWinFileExt = GetFileExt(f);
-					string strFileExt = strWinFileExt;
+					// get file extensions
+					Tuple<string, string, string, string> tplExtensions = GetFileExt(f);
+					string strFileExt = tplExtensions.Item1;
+					string strRemFileExt = tplExtensions.Item2;
+					string strRemBlockExt = tplExtensions.Item3;
+					string strWinFileExt = tplExtensions.Item4;
+
 					Boolean blnCanAdd = true;
 					string strStatus = "New Type";
 
-					// get an exact match
 					if (strRemFileExt != "")
 					{
 						blnCanAdd = false;
 						strStatus = "Exists Remotely";
-
-						// if the regex returns the same characters as the prototype
-						if (dtRemTypes.Select("file_ext='" + strRemFileExt + "'").Length != 0)
-						{
-							// set the string
-							strFileExt = strRemFileExt;
-						}
-						else
-						{
-							// otherwise, loop through the remotes types and find the matching prototype
-							// example: filename="somepart.prt.25" match="prt.25" prototype="prt.1"
-							foreach (DataRow drType in dtRemTypes.Rows)
-							{
-								// add matching prototype and continue
-								if (drType.Field<Regex>("regex").IsMatch(f))
-								{
-									strFileExt = drType.Field<string>("file_ext");
-									break;
-								}
-							}
-						}
 					}
 					else if (strRemBlockExt != "") {
 						blnCanAdd = false;
 						strStatus = "Blocked";
-
-						// if the regex returns the same characters as the prototype
-						if (dsFilters.Tables[0].Select("name_proto='" + strRemBlockExt + "'").Length != 0)
-						{
-							// set the string
-							strFileExt = strRemBlockExt;
-						}
-						else
-						{
-							// otherwise, loop through the remotes types and find the matching prototype
-							// example: filename="somepart.prt.25" match="prt.25" prototype="prt.1"
-							foreach (DataRow drFilter in dsFilters.Tables[0].Rows)
-							{
-								// add matching prototype and continue
-								if (drFilter.Field<Regex>("regex").IsMatch(f))
-								{
-									strFileExt = drFilter.Field<string>("name_proto");
-									break;
-								}
-							}
-						}
 					}
 
 					// check if it has already been added
@@ -445,17 +442,72 @@ namespace HackPDM
 			}
 		}
 
-		protected string GetFileExt(string strFileName)
+		public Tuple<string,string,string,string> GetFileExt(string strFileName)
 		{
+			
+			string strFileExt = "";
+			string strRemFileExt = "";
+			string strRemBlockExt = "";
+			string strWinFileExt = "";
 
-			// parse file path for file extension
-			//string[] strSplit = strFileName.Split('.');
-			//int _maxIndex = strSplit.Length - 1;
-			//return strSplit[_maxIndex];
-
-			// use FileInfo to get file extension
+			// use FileInfo to get file extension as recognized by windows
 			FileInfo fiCurrFile = new FileInfo(strFileName);
-			return fiCurrFile.Extension.Substring(1, fiCurrFile.Extension.Length - 1).ToLower();
+			strWinFileExt = fiCurrFile.Extension.Substring(1).ToLower();
+
+			// get an exact match
+			if (reAllTypes.IsMatch(strFileName))
+			{
+
+				strRemFileExt = reAllTypes.Match(strFileName).Value.Substring(1);
+
+				// if the regex returns the same characters as the prototype
+				if (dtRemTypes.Select("file_ext='" + strRemFileExt + "'").Length != 0)
+				{
+					// set the string
+					strFileExt = strRemFileExt;
+				}
+				else
+				{
+					// otherwise, loop through the remotes types and find the matching prototype
+					// example: filename="somepart.prt.25" match="prt.25" prototype="prt.1"
+					foreach (DataRow drType in dtRemTypes.Rows)
+					{
+						// add matching prototype and continue
+						if (drType.Field<Regex>("regex").IsMatch(strFileName))
+						{
+							strFileExt = drType.Field<string>("file_ext");
+							break;
+						}
+					}
+				}
+			}
+			else if (reAllFilters.IsMatch(strFileName))
+			{
+				strRemBlockExt = reAllFilters.Match(strFileName).Value.Substring(1);
+
+				// if the regex returns the same characters as the prototype
+				// example: filename="somepart.prt.25" match="prt.25" prototype="prt.1"
+				if (dsFilters.Tables[0].Select("name_proto='" + strRemBlockExt + "'").Length == 0)
+				{
+					// loop through the remotes types and find the matching prototype
+					foreach (DataRow drFilter in dsFilters.Tables[0].Rows)
+					{
+						// add matching prototype and continue
+						if (drFilter.Field<Regex>("regex").IsMatch(strFileName))
+						{
+							strRemBlockExt = drFilter.Field<string>("name_proto");
+							strFileExt = strRemBlockExt;
+							break;
+						}
+					}
+				}
+			}
+			else
+			{
+				strFileExt = strWinFileExt;
+			}
+
+			return Tuple.Create<string, string, string, string>(strFileExt, strRemFileExt, strRemBlockExt, strWinFileExt);
 
 		}
 
@@ -538,8 +590,6 @@ namespace HackPDM
 			lvRemTypes.Columns.Add("RegEx", 100, System.Windows.Forms.HorizontalAlignment.Left);
 			lvRemTypes.Columns.Add("Category", 250, System.Windows.Forms.HorizontalAlignment.Left);
 			lvRemTypes.Columns.Add("Description", 250, System.Windows.Forms.HorizontalAlignment.Left);
-			lvRemTypes.Columns.Add("Status", 75, System.Windows.Forms.HorizontalAlignment.Left);
-			lvRemTypes.Columns.Add("Action", 75, System.Windows.Forms.HorizontalAlignment.Left);
 
 		}
 
@@ -556,6 +606,36 @@ namespace HackPDM
 			//create columns for ListView
 			lvLocTypes.Columns.Add("Extension", 100, System.Windows.Forms.HorizontalAlignment.Left);
 			lvLocTypes.Columns.Add("Status", 250, System.Windows.Forms.HorizontalAlignment.Left);
+
+		}
+
+		private void PopulateRemList()
+		{
+
+			foreach (DataRow row in dtRemTypes.Rows)
+			{
+
+				// insert data
+				string[] lvData = new string[4];
+				lvData[0] = row.Field<string>("file_ext");
+				lvData[1] = row.Field<string>("cat_name");
+				lvData[2] = row.Field<string>("type_regex");
+				lvData[3] = row.Field<string>("description");
+
+				// add image
+				string strFileExt = row.Field<string>("file_ext");
+				if (row.Field<byte[]>("icon") != null)
+				{
+					Image imgCurrent = ByteArrayToImage(row.Field<byte[]>("icon"));
+					ilTypes.Images.Add(strFileExt, imgCurrent);
+				}
+
+				// create actual list item
+				ListViewItem lvItem = new ListViewItem(lvData);
+				lvItem.ImageKey = strFileExt;
+				lvRemTypes.Items.Add(lvItem);
+
+			}
 
 		}
 
@@ -589,23 +669,6 @@ namespace HackPDM
 
 		#endregion
 
-
-		private void btnTypesNew_Click(object sender, EventArgs e)
-		{
-			dsRemTypes.Tables[0].Rows.Add(
-				null,
-				"",
-				null,
-				null,
-				null,
-				null,
-				null,
-				false,
-				false);
-
-			bsTypes.MoveLast();
-
-		}
 
 		private void btnRefreshFilters_Click(object sender, EventArgs e)
 		{
@@ -656,7 +719,44 @@ namespace HackPDM
 
 		private void btnTypesCommit_Click(object sender, EventArgs e)
 		{
+			// validate
+			string strExt = txtExt.Text;
+			Int32 intCat = (Int32)cboCat.SelectedValue;
+			Image imgIcon = pbIcon.Image;
+			string strRegex = txtRegex.Text;
+			string strDesc = txtDesc.Text;
 
+			if ((strExt == "") || (strRegex == "") || (intCat == 0) || (strDesc == "") || (imgIcon == null))
+			{
+				MessageBox.Show("Missing or invalid data.",
+					"Data Error",
+					MessageBoxButtons.OK,
+					MessageBoxIcon.Error);
+			}
+
+			NpgsqlCommand command = new NpgsqlCommand("insert into hp_type (file_ext, default_cat, icon, type_regex, description) values (:filext, :defaultcat, :icon, :typeregex, :description)", connDb);
+			command.Parameters.Add(new NpgsqlParameter("fileext", NpgsqlDbType.Varchar));
+			command.Parameters.Add(new NpgsqlParameter("defaultcat", NpgsqlDbType.Integer));
+			command.Parameters.Add(new NpgsqlParameter("icon", NpgsqlDbType.Bytea));
+			command.Parameters.Add(new NpgsqlParameter("type_regex", NpgsqlDbType.Varchar));
+			command.Parameters.Add(new NpgsqlParameter("description", NpgsqlDbType.Varchar));
+			command.Parameters["fileext"].Value = strExt;
+			command.Parameters["defaultcat"].Value = intCat;
+			command.Parameters["icon"].Value = ImageToByteArray(imgIcon);
+			command.Parameters["fileext"].Value = strExt;
+			command.Parameters["fileext"].Value = strExt;
+
+			try
+			{
+				command.ExecuteNonQuery();
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show("Failed to insert new type:" + System.Environment.NewLine + ex.Message,
+					"Data Error",
+					MessageBoxButtons.OK,
+					MessageBoxIcon.Error);
+			}
 		}
 
 		private void btnRefreshRemote_Click(object sender, EventArgs e)
@@ -671,9 +771,8 @@ namespace HackPDM
 
 			// process file types
 			LoadRemoteTypes();
-
-			// bind types table to databinding
-			bsTypes.DataSource = dsRemTypes.Tables[0];
+			LoadCategories();
+			PopulateRemList();
 
 			// Set cursor as default arrow
 			Cursor.Current = Cursors.Default;
@@ -692,6 +791,7 @@ namespace HackPDM
 
 			// load remote file type data first
 			if (dsRemTypes.Tables.Count == 0) LoadRemoteTypes();
+			LoadCategories();
 			LoadLocalTypes();
 
 			// Set cursor as default arrow
@@ -704,26 +804,20 @@ namespace HackPDM
 			if (lvRemTypes.SelectedItems.Count != 0)
 			{
 				string strFileExt = lvRemTypes.SelectedItems[0].Text;
-				int foundIndex = bsTypes.Find("file_ext", strFileExt);
-				bsTypes.Position = foundIndex;
+
+				txtExt.Text = strFileExt;
+				txtRegex.Text = "";
+				txtDesc.Text = "";
+				cboCat.SelectedIndex = 0;
+				pbIcon.Image = ilTypes.Images["strFileExt"];
+
 			}
 		}
 
 		private void btnTypesCommit_Click_1(object sender, EventArgs e)
 		{
 
-			dsRemTypes.Tables[0].Rows.Add(
-				null,
-				"",
-				null,
-				null,
-				null,
-				null,
-				null,
-				false,
-				false);
 
-			bsTypes.MoveLast();
 		}
 
 

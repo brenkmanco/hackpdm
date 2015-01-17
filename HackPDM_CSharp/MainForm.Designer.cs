@@ -66,9 +66,9 @@ namespace HackPDM
 			this.tabPage1 = new System.Windows.Forms.TabPage();
 			this.lvHistory = new System.Windows.Forms.ListView();
 			this.tabPage2 = new System.Windows.Forms.TabPage();
-			this.lvWhereUsed = new System.Windows.Forms.ListView();
+			this.lvParents = new System.Windows.Forms.ListView();
 			this.tabPage3 = new System.Windows.Forms.TabPage();
-			this.lvDepends = new System.Windows.Forms.ListView();
+			this.lvChildren = new System.Windows.Forms.ListView();
 			this.tabPage4 = new System.Windows.Forms.TabPage();
 			this.lvProperties = new System.Windows.Forms.ListView();
 			this.cmsTree.SuspendLayout();
@@ -379,7 +379,7 @@ namespace HackPDM
 			// 
 			// tabPage2
 			// 
-			this.tabPage2.Controls.Add(this.lvWhereUsed);
+			this.tabPage2.Controls.Add(this.lvParents);
 			this.tabPage2.Location = new System.Drawing.Point(4, 22);
 			this.tabPage2.Name = "tabPage2";
 			this.tabPage2.Padding = new System.Windows.Forms.Padding(3);
@@ -388,19 +388,19 @@ namespace HackPDM
 			this.tabPage2.Text = "WhereUsed";
 			this.tabPage2.UseVisualStyleBackColor = true;
 			// 
-			// lvWhereUsed
+			// lvParents
 			// 
-			this.lvWhereUsed.Dock = System.Windows.Forms.DockStyle.Fill;
-			this.lvWhereUsed.Location = new System.Drawing.Point(3, 3);
-			this.lvWhereUsed.Name = "lvWhereUsed";
-			this.lvWhereUsed.Size = new System.Drawing.Size(728, 82);
-			this.lvWhereUsed.TabIndex = 0;
-			this.lvWhereUsed.UseCompatibleStateImageBehavior = false;
-			this.lvWhereUsed.View = System.Windows.Forms.View.Details;
+			this.lvParents.Dock = System.Windows.Forms.DockStyle.Fill;
+			this.lvParents.Location = new System.Drawing.Point(3, 3);
+			this.lvParents.Name = "lvParents";
+			this.lvParents.Size = new System.Drawing.Size(728, 82);
+			this.lvParents.TabIndex = 0;
+			this.lvParents.UseCompatibleStateImageBehavior = false;
+			this.lvParents.View = System.Windows.Forms.View.Details;
 			// 
 			// tabPage3
 			// 
-			this.tabPage3.Controls.Add(this.lvDepends);
+			this.tabPage3.Controls.Add(this.lvChildren);
 			this.tabPage3.Location = new System.Drawing.Point(4, 22);
 			this.tabPage3.Name = "tabPage3";
 			this.tabPage3.Padding = new System.Windows.Forms.Padding(3);
@@ -409,15 +409,15 @@ namespace HackPDM
 			this.tabPage3.Text = "Dependents";
 			this.tabPage3.UseVisualStyleBackColor = true;
 			// 
-			// lvDepends
+			// lvChildren
 			// 
-			this.lvDepends.Dock = System.Windows.Forms.DockStyle.Fill;
-			this.lvDepends.Location = new System.Drawing.Point(3, 3);
-			this.lvDepends.Name = "lvDepends";
-			this.lvDepends.Size = new System.Drawing.Size(728, 82);
-			this.lvDepends.TabIndex = 0;
-			this.lvDepends.UseCompatibleStateImageBehavior = false;
-			this.lvDepends.View = System.Windows.Forms.View.Details;
+			this.lvChildren.Dock = System.Windows.Forms.DockStyle.Fill;
+			this.lvChildren.Location = new System.Drawing.Point(3, 3);
+			this.lvChildren.Name = "lvChildren";
+			this.lvChildren.Size = new System.Drawing.Size(728, 82);
+			this.lvChildren.TabIndex = 0;
+			this.lvChildren.UseCompatibleStateImageBehavior = false;
+			this.lvChildren.View = System.Windows.Forms.View.Details;
 			// 
 			// tabPage4
 			// 
@@ -478,9 +478,9 @@ namespace HackPDM
 		private System.Windows.Forms.ListView lvProperties;
 		private System.Windows.Forms.PictureBox pbPreview;
 		private System.Windows.Forms.TabPage tabPage4;
-		private System.Windows.Forms.ListView lvDepends;
+		private System.Windows.Forms.ListView lvChildren;
 		private System.Windows.Forms.TabPage tabPage3;
-		private System.Windows.Forms.ListView lvWhereUsed;
+		private System.Windows.Forms.ListView lvParents;
 		private System.Windows.Forms.TabPage tabPage2;
 		private System.Windows.Forms.TabPage tabPage1;
 		private System.Windows.Forms.TabControl tabControl1;
