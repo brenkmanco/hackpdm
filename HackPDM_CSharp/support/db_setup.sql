@@ -229,6 +229,8 @@ CREATE UNIQUE INDEX ON hp_type (lower(file_ext::text));
 -- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (13,'pdf',4,'\.(pdf)$','Adobe PDF Document');
 -- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (14,'prt.1',4,'\.(prt\.[0-9]+)$','Pro/Engineer Part');
 -- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (15,'asm.1',4,'\.(asm\.[0-9]+)$','Pro/Engineer Assembly');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (15,'drw.1',4,'\.(drw\.[0-9]+)$','Pro/Engineer Drawing');
+-- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (15,'txt.1',4,'\.(txt\.[0-9]+)$','Pro/Engineer Trail/Log File');
 
 
 

@@ -59,7 +59,8 @@ namespace HackPDM
 
 		private string strFilePath;
 
-		private ListViewColumnSorter lvwColumnSorter;
+		private ListViewColumnSorter lvwRemColumnSorter;
+		private ListViewColumnSorter lvwLocColumnSorter;
 
 
 		/// <summary>
@@ -107,8 +108,10 @@ namespace HackPDM
 			InitializeComponent();
 
 			// setup listview column sorting
-			lvwColumnSorter = new ListViewColumnSorter();
-			this.lvRemTypes.ListViewItemSorter = lvwColumnSorter;
+			lvwRemColumnSorter = new ListViewColumnSorter();
+			this.lvRemTypes.ListViewItemSorter = lvwRemColumnSorter;
+			lvwLocColumnSorter = new ListViewColumnSorter();
+			this.lvLocTypes.ListViewItemSorter = lvwLocColumnSorter;
 
 			connDb = dbConn;
 			strFilePath = FilePath;
@@ -122,23 +125,23 @@ namespace HackPDM
 		{
 
 			// Determine if clicked column is already the column that is being sorted.
-			if (e.Column == lvwColumnSorter.SortColumn)
+			if (e.Column == lvwRemColumnSorter.SortColumn)
 			{
 				// Reverse the current sort direction for this column.
-				if (lvwColumnSorter.Order == SortOrder.Ascending)
+				if (lvwRemColumnSorter.Order == SortOrder.Ascending)
 				{
-					lvwColumnSorter.Order = SortOrder.Descending;
+					lvwRemColumnSorter.Order = SortOrder.Descending;
 				}
 				else
 				{
-					lvwColumnSorter.Order = SortOrder.Ascending;
+					lvwRemColumnSorter.Order = SortOrder.Ascending;
 				}
 			}
 			else
 			{
 				// Set the column number that is to be sorted; default to ascending.
-				lvwColumnSorter.SortColumn = e.Column;
-				lvwColumnSorter.Order = SortOrder.Ascending;
+				lvwRemColumnSorter.SortColumn = e.Column;
+				lvwRemColumnSorter.Order = SortOrder.Ascending;
 			}
 
 			// Perform the sort with these new sort options.
@@ -150,23 +153,23 @@ namespace HackPDM
 		{
 			
 			// Determine if clicked column is already the column that is being sorted.
-			if (e.Column == lvwColumnSorter.SortColumn)
+			if (e.Column == lvwLocColumnSorter.SortColumn)
 			{
 				// Reverse the current sort direction for this column.
-				if (lvwColumnSorter.Order == SortOrder.Ascending)
+				if (lvwLocColumnSorter.Order == SortOrder.Ascending)
 				{
-					lvwColumnSorter.Order = SortOrder.Descending;
+					lvwLocColumnSorter.Order = SortOrder.Descending;
 				}
 				else
 				{
-					lvwColumnSorter.Order = SortOrder.Ascending;
+					lvwLocColumnSorter.Order = SortOrder.Ascending;
 				}
 			}
 			else
 			{
 				// Set the column number that is to be sorted; default to ascending.
-				lvwColumnSorter.SortColumn = e.Column;
-				lvwColumnSorter.Order = SortOrder.Ascending;
+				lvwLocColumnSorter.SortColumn = e.Column;
+				lvwLocColumnSorter.Order = SortOrder.Ascending;
 			}
 
 			// Perform the sort with these new sort options.
@@ -219,8 +222,8 @@ namespace HackPDM
 			}
 
 			cboCat.DataSource = new BindingSource(items, null);
-			cboCat.DisplayMember = "Key";
-			cboCat.ValueMember = "Value";
+			cboCat.DisplayMember = "Value";
+			cboCat.ValueMember = "Key";
 
 		}
 
@@ -377,6 +380,7 @@ namespace HackPDM
 			dtTypes.Columns.Add("icon", typeof(Byte[]));
 			dtTypes.Columns.Add("can_add", Type.GetType("System.Boolean"));
 			dtTypes.Columns.Add("status", Type.GetType("System.String"));
+			dtTypes.Columns.Add("example", Type.GetType("System.String"));
 			return dtTypes;
 
 		}
@@ -434,7 +438,8 @@ namespace HackPDM
 							strFileExt,
 							ImageToByteArray(ExtractIcon(f)),
 							blnCanAdd,
-							strStatus);
+							strStatus,
+							f);
 					}
 
 				}
@@ -581,14 +586,10 @@ namespace HackPDM
 			//init ListView control
 			lvRemTypes.Clear();
 
-			// configure sorting
-			lvRemTypes.Sorting = SortOrder.None;
-			lvRemTypes.ColumnClick += new ColumnClickEventHandler(lvRemTypesColumnClick);
-
 			//create columns for ListView
 			lvRemTypes.Columns.Add("Extension", 100, System.Windows.Forms.HorizontalAlignment.Left);
-			lvRemTypes.Columns.Add("RegEx", 100, System.Windows.Forms.HorizontalAlignment.Left);
 			lvRemTypes.Columns.Add("Category", 250, System.Windows.Forms.HorizontalAlignment.Left);
+			lvRemTypes.Columns.Add("RegEx", 100, System.Windows.Forms.HorizontalAlignment.Left);
 			lvRemTypes.Columns.Add("Description", 250, System.Windows.Forms.HorizontalAlignment.Left);
 
 		}
@@ -599,13 +600,10 @@ namespace HackPDM
 			//init ListView control
 			lvLocTypes.Clear();
 
-			// configure sorting
-			lvLocTypes.Sorting = SortOrder.None;
-			lvLocTypes.ColumnClick += new ColumnClickEventHandler(lvRemTypesColumnClick);
-
 			//create columns for ListView
 			lvLocTypes.Columns.Add("Extension", 100, System.Windows.Forms.HorizontalAlignment.Left);
-			lvLocTypes.Columns.Add("Status", 250, System.Windows.Forms.HorizontalAlignment.Left);
+			lvLocTypes.Columns.Add("Status", 100, System.Windows.Forms.HorizontalAlignment.Left);
+			lvLocTypes.Columns.Add("Example", 400, System.Windows.Forms.HorizontalAlignment.Left);
 
 		}
 
@@ -646,9 +644,10 @@ namespace HackPDM
 			{
 
 				// insert data
-				string[] lvData = new string[2];
+				string[] lvData = new string[3];
 				lvData[0] = row.Field<string>("file_ext");
 				lvData[1] = row.Field<string>("status");
+				lvData[2] = row.Field<string>("example");
 
 				// add image
 				string strFileExt = row.Field<string>("file_ext");
@@ -732,19 +731,20 @@ namespace HackPDM
 					"Data Error",
 					MessageBoxButtons.OK,
 					MessageBoxIcon.Error);
+				return;
 			}
 
-			NpgsqlCommand command = new NpgsqlCommand("insert into hp_type (file_ext, default_cat, icon, type_regex, description) values (:filext, :defaultcat, :icon, :typeregex, :description)", connDb);
+			NpgsqlCommand command = new NpgsqlCommand("insert into hp_type (file_ext, default_cat, icon, type_regex, description) values (:fileext, :defaultcat, :icon, :typeregex, :description)", connDb);
 			command.Parameters.Add(new NpgsqlParameter("fileext", NpgsqlDbType.Varchar));
 			command.Parameters.Add(new NpgsqlParameter("defaultcat", NpgsqlDbType.Integer));
 			command.Parameters.Add(new NpgsqlParameter("icon", NpgsqlDbType.Bytea));
-			command.Parameters.Add(new NpgsqlParameter("type_regex", NpgsqlDbType.Varchar));
+			command.Parameters.Add(new NpgsqlParameter("typeregex", NpgsqlDbType.Varchar));
 			command.Parameters.Add(new NpgsqlParameter("description", NpgsqlDbType.Varchar));
 			command.Parameters["fileext"].Value = strExt;
 			command.Parameters["defaultcat"].Value = intCat;
 			command.Parameters["icon"].Value = ImageToByteArray(imgIcon);
-			command.Parameters["fileext"].Value = strExt;
-			command.Parameters["fileext"].Value = strExt;
+			command.Parameters["typeregex"].Value = strRegex;
+			command.Parameters["description"].Value = strDesc;
 
 			try
 			{
@@ -756,7 +756,10 @@ namespace HackPDM
 					"Data Error",
 					MessageBoxButtons.OK,
 					MessageBoxIcon.Error);
+				return;
 			}
+			btnRefreshRemote_Click(sender, e);
+
 		}
 
 		private void btnRefreshRemote_Click(object sender, EventArgs e)
@@ -801,25 +804,18 @@ namespace HackPDM
 
 		private void btnAddSel_Click(object sender, EventArgs e)
 		{
-			if (lvRemTypes.SelectedItems.Count != 0)
+			if (lvLocTypes.SelectedItems.Count != 0)
 			{
-				string strFileExt = lvRemTypes.SelectedItems[0].Text;
+				string strFileExt = lvLocTypes.SelectedItems[0].Text;
 
 				txtExt.Text = strFileExt;
 				txtRegex.Text = "";
 				txtDesc.Text = "";
 				cboCat.SelectedIndex = 0;
-				pbIcon.Image = ilTypes.Images["strFileExt"];
+				pbIcon.Image = ilTypes.Images[strFileExt];
 
 			}
 		}
-
-		private void btnTypesCommit_Click_1(object sender, EventArgs e)
-		{
-
-
-		}
-
 
 	}
 }

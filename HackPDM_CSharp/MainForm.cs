@@ -648,6 +648,7 @@ namespace HackPDM
 						null as local_stamp,
 						'' as str_local_stamp,
 						v.md5sum as latest_md5,
+						null as local_md5,
 						e.checkout_user,
 						u.last_name || ', ' || u.first_name as ck_user_name,
 						e.checkout_date,
@@ -756,11 +757,19 @@ namespace HackPDM
 							// set the status code
 							drTemp.SetField<string>("client_status_code", strStatusCode);
 
-							// format the file size
+							// format the remote file size
 							drTemp.SetField<string>("str_latest_size", FormatSize(drTemp.Field<long>("latest_size")));
 
-							// format the modify date
+							// format the remote modify date
 							drTemp.SetField<string>("str_latest_stamp", FormatDate(drTemp.Field<DateTime>("latest_stamp")));
+
+							// format the local file size
+							drTemp.SetField<Int64>("local_size", lngFileSize);
+							drTemp.SetField<string>("str_local_size", FormatSize(lngFileSize));
+
+							// format the local modify date
+							drTemp.SetField<DateTime>("local_stamp", dtModifyDate);
+							drTemp.SetField<string>("str_local_stamp", FormatDate(dtModifyDate));
 
 							// format the checkout date
 							object oDate = drTemp["checkout_date"];
@@ -771,7 +780,7 @@ namespace HackPDM
 							}
 
 							// get local checksum
-							drTemp.SetField<string>("local_md5", StringMD5(strFileName));
+							drTemp.SetField<string>("local_md5", StringMD5(strFile));
 
 						} else {
 
@@ -796,8 +805,8 @@ namespace HackPDM
 									null,
 									strFileExt,
 									null,
-									null, // latest_size
-									"", // str_latest_size
+									lngFileSize, // latest_size
+									FormatSize(lngFileSize), // str_latest_size
 									lngFileSize, // local_size
 									FormatSize(lngFileSize), // str_local_size
 									null, // latest_stamp
@@ -1774,6 +1783,18 @@ namespace HackPDM
 
 		}
 
+		static string StringMD5(string FileName)
+		{
+			// get local file checksum
+			using (var md5 = MD5.Create())
+			{
+				using (var stream = File.OpenRead(FileName))
+				{
+					return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
+				}
+			}
+		}
+
 		#endregion
 
 
@@ -1782,8 +1803,14 @@ namespace HackPDM
 		void TreeView1AfterSelect(object sender, TreeViewEventArgs e)
 		{
 
+			// Set cursor as hourglass
+			Cursor.Current = Cursors.WaitCursor;
+
 			TreeNode tnCurrent = treeView1.SelectedNode;
 			PopulateList(tnCurrent);
+
+			// Set cursor as default arrow
+			Cursor.Current = Cursors.Default;
 
 		}
 
@@ -2979,6 +3006,8 @@ namespace HackPDM
 			string strFullName = fiNewFile.FullName;
 			long lngFileSize = fiNewFile.Length;
 			DateTime dtModifyDate = fiNewFile.LastWriteTime;
+			string strMd5sum = StringMD5(strFileName);
+			//byte[] btaImage = GetPreviewByteArray(strFullName);
 
 
 			// get entry type
@@ -3076,15 +3105,16 @@ namespace HackPDM
 					entry_id,
 					file_size,
 					file_modify_stamp,
-					create_user--,
-					--blob_ref
+					create_user,
+					preview_image,
+					md5sum
 				) values (
 					:version_id,
 					:entry_id,
 					:file_size,
 					:file_modify_stamp,
-					:create_user--,
-					--:blob_ref
+					:preview_image,
+					:md5sum
 				);
 			";
 			NpgsqlCommand cmdInsertVersion = new NpgsqlCommand(strSql, connDb, t);
@@ -3093,7 +3123,8 @@ namespace HackPDM
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_size", lngFileSize));
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_modify_stamp", dtModifyDate.ToString("yyyy-MM-dd HH:mm:ss")));
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("create_user", intMyUserId));
-			//cmdInsertVersion.Parameters.Add(new NpgsqlParameter("blob_ref", noid));
+			//cmdInsertVersion.Parameters.Add(new NpgsqlParameter("preview_image", btaImage));
+			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("md5sum", strMd5sum));
 
 			// insert version
 			try {
@@ -3519,7 +3550,8 @@ namespace HackPDM
 		#endregion
 
 
-		// tab page actions
+		#region tab page actions
+
 		void ListView1SelectedIndexChanged(object sender, EventArgs e) {
 
 			if (listView1.SelectedItems.Count != 1 ) {
@@ -3527,15 +3559,18 @@ namespace HackPDM
 				InitTabPages();
 				return;
 			}
-			string strFileName = listView1.SelectedItems[0].SubItems[0].Text;
-			LoadPreviewImage(strFileName);
+			TabControl1SelectedIndexChanged(sender, e);
 
 		}
 
 		void TabControl1SelectedIndexChanged(object sender, EventArgs e)
 		{
 
+			// Set cursor as hourglass
+			Cursor.Current = Cursors.WaitCursor;
+
 			string strFileName = listView1.SelectedItems[0].SubItems[0].Text;
+			LoadPreviewImage(strFileName);
 
 			if (tabControl1.SelectedIndex == 0)
 			{
@@ -3561,7 +3596,13 @@ namespace HackPDM
 				PopulatePropertiesPage(strFileName);
 			}
 
+			// Set cursor as default arrow
+			Cursor.Current = Cursors.Default;
+
 		}
+
+		#endregion
+
 
 		void CmdManageFileTypesClick(object sender, EventArgs e)
 		{
@@ -3573,21 +3614,9 @@ namespace HackPDM
 
 
 		void MainFormFormClosed(object sender, FormClosedEventArgs e) {
-				Properties.Settings.Default.usetWindowState = this.WindowState; ;
+				Properties.Settings.Default.usetWindowState = this.WindowState;
 		}
 
-
-		static string StringMD5(string FileName)
-		{
-			// get local file checksum
-			using (var md5 = MD5.Create())
-			{
-				using (var stream = File.OpenRead(FileName))
-				{
-					return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
-				}
-			}
-		}
 
 
 	}
