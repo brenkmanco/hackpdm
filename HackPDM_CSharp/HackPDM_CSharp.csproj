@@ -80,15 +80,26 @@
     <Reference Include="LibRSync.Core">
       <HintPath>lib\LibRSync.Core.dll</HintPath>
     </Reference>
+    <Reference Include="Microsoft.VisualBasic.Compatibility" />
     <Reference Include="Npgsql">
       <HintPath>lib\Npgsql.dll</HintPath>
     </Reference>
+    <Reference Include="OpenMcdf">
+      <HintPath>lib\OpenMcdf.dll</HintPath>
+    </Reference>
     <Reference Include="SolidWorks.Interop.sldworks">
-      <HintPath>..\..\..\..\Program Files\SolidWorks Corp\SolidWorks (2)\api\redist\SolidWorks.Interop.sldworks.dll</HintPath>
+      <HintPath>lib\SolidWorks.Interop.sldworks.dll</HintPath>
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
     <Reference Include="SolidWorks.Interop.swconst">
-      <HintPath>..\..\..\..\Program Files\SolidWorks Corp\SolidWorks (2)\api\redist\SolidWorks.Interop.swconst.dll</HintPath>
+      <HintPath>lib\SolidWorks.Interop.swconst.dll</HintPath>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
+    </Reference>
+    <Reference Include="SolidWorks.Interop.swdocumentmgr">
+      <HintPath>lib\SolidWorks.Interop.swdocumentmgr.dll</HintPath>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
+    </Reference>
+    <Reference Include="stdole, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
     <Reference Include="System" />
@@ -135,7 +146,7 @@
     </Compile>
     <Compile Include="SecureCredentialsLibrary.cs" />
     <Compile Include="Settings.cs" />
-    <Compile Include="SolidWorks.cs" />
+    <Compile Include="SWHelper.cs" />
     <Compile Include="StatusDialog.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -195,16 +206,16 @@
   <ItemGroup>
     <COMReference Include="SldWorks">
       <Guid>{83A33D31-27C5-11CE-BFD4-00400513BB57}</Guid>
-      <VersionMajor>23</VersionMajor>
+      <VersionMajor>19</VersionMajor>
       <VersionMinor>0</VersionMinor>
       <Lcid>0</Lcid>
       <WrapperTool>tlbimp</WrapperTool>
       <Isolated>False</Isolated>
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </COMReference>
-    <COMReference Include="SwCommands">
-      <Guid>{0AC1DE9F-3FBC-4C25-868D-7D4E9139CCE0}</Guid>
-      <VersionMajor>23</VersionMajor>
+    <COMReference Include="SwConst">
+      <Guid>{4687F359-55D0-4CD3-B6CF-2EB42C11F989}</Guid>
+      <VersionMajor>19</VersionMajor>
       <VersionMinor>0</VersionMinor>
       <Lcid>0</Lcid>
       <WrapperTool>tlbimp</WrapperTool>

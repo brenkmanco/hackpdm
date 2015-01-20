@@ -40,6 +40,8 @@ using NpgsqlTypes;
 using LibRSync.Core;
 using System.Security.Cryptography;
 
+using OpenMcdf;
+
 //using net.kvdb.webdav;
 
 
@@ -926,19 +928,25 @@ namespace HackPDM
 
 		}
 
-		protected void LoadPreviewImage(string FileName) {
+		protected void LoadPreviewImage(string FileName)
+		{
 
-			// if local only or checked out to me, load image from solidworks
+			int intEntryId = GetSelectedEntry(FileName);
+			DataRow dr = dsList.Tables[0].Select("entry_id="+intEntryId.ToString())[0];
+			byte[] bImage;
+			MemoryStream ms;
 
-			pbPreview.Image = null;
+			// if local only or checked out to me, load image from local file
+			if (dr.Field<bool>("is_remote") == false || dr.Field<string>("client_status_code") == ".cm")
+			{
+				bImage = GetLocalPreview(dr);
+			}
 
 			// otherwise, load the image from the server
-			int intEntryId = GetSelectedEntry(FileName);
 			NpgsqlCommand command = new NpgsqlCommand("select preview_image from hp_version where entry_id=:entryid order by version_id limit 1;", connDb);
 			command.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
 			command.Parameters["entry_id"].Value = intEntryId;
 
-			byte[] bImage;
 			try
 			{
 				bImage = (byte[])command.ExecuteScalar();
@@ -948,8 +956,12 @@ namespace HackPDM
 				// do nothing?
 				return;
 			}
-			MemoryStream ms = new MemoryStream(bImage);
+
+			ms = new MemoryStream(bImage);
 			pbPreview.Image = Image.FromStream(ms);
+
+
+
 
 		}
 
@@ -1235,6 +1247,42 @@ namespace HackPDM
 
 		#region utility functions
 
+		private byte[] ImageToByteArray(System.Drawing.Image imageIn)
+		{
+			MemoryStream ms = new MemoryStream();
+			imageIn.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+			return ms.ToArray();
+		}
+
+		protected byte[] GetLocalPreview(DataRow dr)
+		{
+
+			byte[] bImage;
+			string strFullName = dr.Field<string>("file_path");
+			string strFileExt = dr.Field<string>("file_ext").ToLower();
+
+			try
+			{
+				CompoundFile cf = new CompoundFile(strFullName);
+				CFStream st;
+				if (strFileExt == "sldprt" || strFileExt == "sldasm" || strFileExt == "slddrw")
+				{
+					st = cf.RootStorage.GetStream("PreviewPNG");
+				}
+				else
+				{
+					st = cf.RootStorage.GetStream("Preview");
+				}
+				bImage = st.GetData();
+			}
+			catch
+			{
+				bImage = ImageToByteArray(ilListIcons.Images[dr.Field<string>("file_ext")]);
+			}
+
+			return bImage;
+
+		}
 
 		private DataTable CreateFileTable() {
 
