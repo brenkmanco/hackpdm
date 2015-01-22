@@ -37,10 +37,9 @@ using System.IO;
 using System.Data;
 using Npgsql;
 using NpgsqlTypes;
-using LibRSync.Core;
+//using LibRSync.Core;
 using System.Security.Cryptography;
 
-using OpenMcdf;
 
 //using net.kvdb.webdav;
 
@@ -105,8 +104,8 @@ namespace HackPDM
 			// get (and set if necessary) my node_id
 			intMyNodeId = GetNodeId();
 
-			// git file ignore patterns
-			InitFTM();
+			// get remote file type manager
+			ftmStart = new FileTypeManager(connDb, strLocalFileRoot, GetTreePath(strLocalFileRoot));
 
 			// Populate data
 			ResetView();
@@ -354,13 +353,6 @@ namespace HackPDM
 		}
 
 
-		private void InitFTM()
-		{
-			// create the file type manager dialog
-			ftmStart = new FileTypeManager(connDb, strLocalFileRoot, GetTreePath(strLocalFileRoot));
-		}
-
-
 		private void ResetView(string strTreePath = "")
 		{
 
@@ -393,7 +385,8 @@ namespace HackPDM
 				}
 			}
 
-
+			// reset file type manager
+			ftmStart.RefreshRemote();
 
 
 
@@ -414,8 +407,6 @@ namespace HackPDM
 			// identify remote files not existing locally (ro overlay)
 			// identify remote files with newer versions (nv overlay)
 			// no need to identify local files that have been changed.  If they have been checked out, identify those, and then just assume they have been changed. (cm overlay)
-
-
 
 
 		}
@@ -593,11 +584,12 @@ namespace HackPDM
 
 			//create columns for ListView
 			listView1.Columns.Add("Name",300,System.Windows.Forms.HorizontalAlignment.Left);
-			listView1.Columns.Add("Size",75, System.Windows.Forms.HorizontalAlignment.Right);
+			listView1.Columns.Add("Size", 75, System.Windows.Forms.HorizontalAlignment.Right);
 			listView1.Columns.Add("Type", 140, System.Windows.Forms.HorizontalAlignment.Left);
 			listView1.Columns.Add("Modified", 140, System.Windows.Forms.HorizontalAlignment.Left);
 			listView1.Columns.Add("CheckOut", 140, System.Windows.Forms.HorizontalAlignment.Left);
 			listView1.Columns.Add("Category", 140, System.Windows.Forms.HorizontalAlignment.Left);
+			listView1.Columns.Add("FullName", 0, System.Windows.Forms.HorizontalAlignment.Left);
 
 			// reset context menu
 			foreach (ToolStripMenuItem tsmiItem in cmsList.Items) {
@@ -875,7 +867,8 @@ namespace HackPDM
 						byte[] img = row.Field<byte[]>("icon");
 						if (img == null) {
 							// extract an image locally
-							imgCurrent = GetLocalIcon(strFileExt);
+							string strFullName = row.Field<string>("file_path") + "//" + row.Field<string>("entry_name");
+							imgCurrent = GetLocalIcon(strFullName);
 						} else {
 							// get remote image
 							MemoryStream ms = new MemoryStream();
@@ -928,11 +921,10 @@ namespace HackPDM
 
 		}
 
-		protected void LoadPreviewImage(string FileName)
+		protected void PopulatePreviewImage(string FileName)
 		{
 
-			int intEntryId = GetSelectedEntry(FileName);
-			DataRow dr = dsList.Tables[0].Select("entry_id="+intEntryId.ToString())[0];
+			DataRow dr = dsList.Tables[0].Select("entry_name='" + FileName + "'")[0];
 			byte[] bImage;
 			MemoryStream ms;
 
@@ -941,59 +933,32 @@ namespace HackPDM
 			{
 				bImage = GetLocalPreview(dr);
 			}
-
-			// otherwise, load the image from the server
-			NpgsqlCommand command = new NpgsqlCommand("select preview_image from hp_version where entry_id=:entryid order by version_id limit 1;", connDb);
-			command.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
-			command.Parameters["entry_id"].Value = intEntryId;
-
-			try
+			else
 			{
-				bImage = (byte[])command.ExecuteScalar();
-			}
-			catch
-			{
-				// do nothing?
-				return;
+				// otherwise, load the image from the server
+				NpgsqlCommand command = new NpgsqlCommand("select preview_image from hp_version where entry_id=:entry_id order by version_id limit 1;", connDb);
+				command.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
+				command.Parameters["entry_id"].Value = dr.Field<int>("entry_id");
+
+				try
+				{
+					bImage = (byte[])command.ExecuteScalar();
+				}
+				catch
+				{
+					// use the icon
+					bImage = ImageToByteArray(ilListIcons.Images[dr.Field<string>("file_ext")]);
+				}
+
 			}
 
+			if (bImage == null) return;
 			ms = new MemoryStream(bImage);
 			pbPreview.Image = Image.FromStream(ms);
 
-
-
-
 		}
 
-		protected int GetSelectedEntry(string FileName)
-		{
-
-			// get dir_id
-			object oTemp = treeView1.SelectedNode.Tag;
-			int intDirId;
-			if (oTemp == null)
-			{
-				return 0;
-			}
-			else
-			{
-				intDirId = (int)oTemp;
-			}
-
-			// get entry_id
-			DataRow drSelected = dsList.Tables[0].Select("dir_id=" + intDirId + " and entry_name='" + FileName + "'")[0];
-			if (DBNull.Value.Equals(drSelected["entry_id"]))
-			{
-				return 0;
-			}
-			else
-			{
-				return drSelected.Field<int>("entry_id");
-			}
-
-		}
-
-		protected void PopulateHistoryPage(string strFileName)
+		protected void PopulateHistoryPage(string FileName)
 		{
 
 			// clear list
@@ -1009,7 +974,9 @@ namespace HackPDM
 			DataSet dsTemp = new DataSet();
 
 			// get entry_id
-			int intEntryId = GetSelectedEntry(strFileName);
+			DataRow dr = dsList.Tables[0].Select("entry_name='" + FileName + "'")[0];
+			if (dr.Field<bool>("is_remote") == false) return;
+			int intEntryId = dr.Field<int>("entry_id");
 
 			// initialize sql command for history data
 			string strSql = @"
@@ -1061,7 +1028,7 @@ namespace HackPDM
 
 		}
 
-		protected void PopulateParentsPage(string strFileName)
+		protected void PopulateParentsPage(string FileName)
 		{
 
 			// clear list
@@ -1073,7 +1040,9 @@ namespace HackPDM
 			DataSet dsTemp = new DataSet();
 
 			// get entry_id
-			int intEntryId = GetSelectedEntry(strFileName);
+			DataRow dr = dsList.Tables[0].Select("entry_name='" + FileName + "'")[0];
+			if (dr.Field<bool>("is_remote") == false) return;
+			int intEntryId = dr.Field<int>("entry_id");
 
 			// initialize sql command for history data
 			string strSql = @"
@@ -1117,7 +1086,7 @@ namespace HackPDM
 
 		}
 
-		protected void PopulateChildrenPage(string strFileName)
+		protected void PopulateChildrenPage(string FileName)
 		{
 
 			// clear list
@@ -1129,7 +1098,9 @@ namespace HackPDM
 			DataSet dsTemp = new DataSet();
 
 			// get entry_id
-			int intEntryId = GetSelectedEntry(strFileName);
+			DataRow dr = dsList.Tables[0].Select("entry_name='" + FileName + "'")[0];
+			if (dr.Field<bool>("is_remote") == false) return;
+			int intEntryId = dr.Field<int>("entry_id");
 
 			// initialize sql command for history data
 			string strSql = @"
@@ -1173,7 +1144,7 @@ namespace HackPDM
 
 		}
 
-		protected void PopulatePropertiesPage(string strFileName)
+		protected void PopulatePropertiesPage(string FileName)
 		{
 
 			// clear list
@@ -1188,7 +1159,9 @@ namespace HackPDM
 			DataSet dsTemp = new DataSet();
 
 			// get entry_id
-			int intEntryId = GetSelectedEntry(strFileName);
+			DataRow dr = dsList.Tables[0].Select("entry_name='" + FileName + "'")[0];
+			if (dr.Field<bool>("is_remote") == false) return;
+			int intEntryId = dr.Field<int>("entry_id");
 
 			// initialize sql command for history data
 			string strSql = @"
@@ -1245,41 +1218,19 @@ namespace HackPDM
 
 		}
 
-		#region utility functions
 
-		private byte[] ImageToByteArray(System.Drawing.Image imageIn)
-		{
-			MemoryStream ms = new MemoryStream();
-			imageIn.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-			return ms.ToArray();
-		}
+		#region utility functions
 
 		protected byte[] GetLocalPreview(DataRow dr)
 		{
 
 			byte[] bImage;
-			string strFullName = dr.Field<string>("file_path");
+			string strFullName = dr.Field<string>("file_path") + "\\" + dr.Field<string>("entry_name");
 			string strFileExt = dr.Field<string>("file_ext").ToLower();
+			IconFromFile ico = new IconFromFile();
 
-			try
-			{
-				CompoundFile cf = new CompoundFile(strFullName);
-				CFStream st;
-				if (strFileExt == "sldprt" || strFileExt == "sldasm" || strFileExt == "slddrw")
-				{
-					st = cf.RootStorage.GetStream("PreviewPNG");
-				}
-				else
-				{
-					st = cf.RootStorage.GetStream("Preview");
-				}
-				bImage = st.GetData();
-			}
-			catch
-			{
-				bImage = ImageToByteArray(ilListIcons.Images[dr.Field<string>("file_ext")]);
-			}
-
+			Image img = ico.GetThumbnail(strFullName);
+			bImage = ImageToByteArray(img);
 			return bImage;
 
 		}
@@ -1326,6 +1277,22 @@ namespace HackPDM
 			canvas.DrawImage(imgOverlay, new Point(0, 0));
 			canvas.Save();
 			return Image.FromHbitmap(bitmap.GetHbitmap());
+		}
+
+		private byte[] ImageToByteArray(System.Drawing.Image imageIn)
+		{
+			if (imageIn == null) return null;
+			MemoryStream ms = new MemoryStream();
+			imageIn.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+			return ms.ToArray();
+		}
+
+		private Image ByteArrayToImage(byte[] byteArrayIn)
+		{
+			if (byteArrayIn == null) return null;
+			MemoryStream ms = new MemoryStream(byteArrayIn);
+			Image returnImage = Image.FromStream(ms);
+			return returnImage;
 		}
 
 		protected string GetFilePath(string stringPath) {
@@ -1447,23 +1414,18 @@ namespace HackPDM
 
 		}
 
-		private Image GetLocalIcon(string strFileExt) {
+		private Image GetLocalIcon(string FileName) {
 
-			// create a temporary file
-			string fileName = System.IO.Path.GetTempPath() + Guid.NewGuid().ToString() + "." + strFileExt;
-			FileInfo fileInfo = new FileInfo(fileName);
-			try {
-				using (new FileStream(fileName, FileMode.CreateNew)) {
-					fileInfo.Attributes = FileAttributes.Temporary;
-					Icon ico = Icon.ExtractAssociatedIcon(fileName);
-					Image img = Image.FromHbitmap(ico.ToBitmap().GetHbitmap());
-					string strTest = img.PixelFormat.ToString();
-					//img.Save("c:\temp\test.png",
-					return Image.FromHbitmap(ico.ToBitmap().GetHbitmap());
-				}
-			} catch {
-				// don't know what to do here
+			IconFromFile icoHelper = new IconFromFile();
+			Icon ico = icoHelper.GetLargeFileIcon(FileName);
+
+			if (ico == null)
+			{
 				return ilListIcons.Images["unknown"];
+			}
+			else
+			{
+				return (Image)ico.ToBitmap();
 			}
 
 		}
@@ -3171,7 +3133,7 @@ namespace HackPDM
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_size", lngFileSize));
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_modify_stamp", dtModifyDate.ToString("yyyy-MM-dd HH:mm:ss")));
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("create_user", intMyUserId));
-			//cmdInsertVersion.Parameters.Add(new NpgsqlParameter("preview_image", btaImage));
+			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("preview_image", GetLocalPreview(drNewFile)));
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("md5sum", strMd5sum));
 
 			// insert version
@@ -3184,6 +3146,13 @@ namespace HackPDM
 				return(true);
 			}
 
+			//
+			// insert file properties
+			// for CAD files:
+			//   get and insert dependencies
+			//   get and insert custom properties
+			//
+
 			// name the file
 			string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt;
 
@@ -3192,14 +3161,6 @@ namespace HackPDM
 
 			// upload the file
 			connDav.Upload(strFullName, strDavName);
-
-			//
-			// insert file properties
-			// for CAD files:
-			//   get and insert dependencies
-			//   get and insert file preview
-			//
-
 
 			return(false);
 
@@ -3307,29 +3268,8 @@ namespace HackPDM
 				DateTime dtModifyDate = fiCurrFile.LastWriteTime;
 
 
-				// get the file
-
-				// setup the sql blob manager
-				//LargeObjectManager lbm = new LargeObjectManager(connDb);
-				//int noid = lbm.Create(LargeObjectManager.READWRITE);
-				//LargeObject lo =  lbm.Open(noid,LargeObjectManager.READWRITE);
-
-				// acquire and lock the file stream
-				//FileStream fs = fiCurrFile.OpenRead();
-				//try {
-				//	fs.Lock(0,fs.Length);
-				//} catch {
-				//	throw new System.Exception("The file \"" + fiCurrFile.Name + "\" has been locked by another process.  Release it before committing it.");
-				//	//return;
-				//}
-
-				// stream the file into the blob
+				// write status
 				dlgStatus.AddStatusLine("Begin streaming file to server (" + FormatSize(lngFileSize) + ")", strFileName);
-				//byte[] buf = new byte[fs.Length];
-				//fs.Read(buf,0,(int)fs.Length);
-				//lo.Write(buf);
-				//lo.Close();
-
 
 				// get a new version id
 				string strSql = "select nextval('seq_hp_version_version_id'::regclass);";
@@ -3343,15 +3283,15 @@ namespace HackPDM
 						entry_id,
 						file_size,
 						file_modify_stamp,
-						create_user --,
-						--blob_ref
+						create_user,
+						preview_image
 					) values (
 						:version_id,
 						:entry_id,
 						:file_size,
 						:file_modify_stamp,
-						:create_user --,
-						--:blob_ref
+						:create_user,
+						:preview_image
 					);
 				";
 				NpgsqlCommand cmdInsertVersion = new NpgsqlCommand(strSql, connDb, t);
@@ -3360,7 +3300,7 @@ namespace HackPDM
 				cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_size", lngFileSize));
 				cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_modify_stamp", dtModifyDate.ToString()));
 				cmdInsertVersion.Parameters.Add(new NpgsqlParameter("create_user", intMyUserId));
-				//cmdInsertVersion.Parameters.Add(new NpgsqlParameter("blob_ref", noid));
+				cmdInsertVersion.Parameters.Add(new NpgsqlParameter("preview_image", GetLocalPreview(drCurrent)));
 
 				// insert version
 				try {
@@ -3617,31 +3557,31 @@ namespace HackPDM
 			// Set cursor as hourglass
 			Cursor.Current = Cursors.WaitCursor;
 
-			string strFileName = listView1.SelectedItems[0].SubItems[0].Text;
-			LoadPreviewImage(strFileName);
+			string strFullName = listView1.SelectedItems[0].SubItems[0].Text;
+			PopulatePreviewImage(strFullName);
 
 			if (tabControl1.SelectedIndex == 0)
 			{
 				// Entry History
-				PopulateHistoryPage(strFileName);
+				PopulateHistoryPage(strFullName);
 			}
 
 			if (tabControl1.SelectedIndex == 1)
 			{
 				// Parents
-				PopulateParentsPage(strFileName);
+				PopulateParentsPage(strFullName);
 			}
 
 			if (tabControl1.SelectedIndex == 2)
 			{
 				// Children
-				PopulateChildrenPage(strFileName);
+				PopulateChildrenPage(strFullName);
 			}
 
 			if (tabControl1.SelectedIndex == 3)
 			{
 				// Properties
-				PopulatePropertiesPage(strFileName);
+				PopulatePropertiesPage(strFullName);
 			}
 
 			// Set cursor as default arrow

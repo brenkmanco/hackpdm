@@ -99,9 +99,6 @@
       <HintPath>lib\SolidWorks.Interop.swdocumentmgr.dll</HintPath>
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
-    <Reference Include="stdole, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <EmbedInteropTypes>True</EmbedInteropTypes>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
@@ -124,6 +121,7 @@
     <Compile Include="FileTypeManager.Designer.cs">
       <DependentUpon>FileTypeManager.cs</DependentUpon>
     </Compile>
+    <Compile Include="IconFromFile.cs" />
     <Compile Include="ListViewColumnSorter.cs" />
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>

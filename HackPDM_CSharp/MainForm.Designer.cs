@@ -230,7 +230,7 @@ namespace HackPDM
 			// 
 			this.statusStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.toolStripDropDownButton1});
-			this.statusStrip1.Location = new System.Drawing.Point(0, 440);
+			this.statusStrip1.Location = new System.Drawing.Point(0, 596);
 			this.statusStrip1.Name = "statusStrip1";
 			this.statusStrip1.Size = new System.Drawing.Size(884, 22);
 			this.statusStrip1.TabIndex = 2;
@@ -277,8 +277,9 @@ namespace HackPDM
 			// 
 			this.splitContainer1.Panel2.Controls.Add(this.pbPreview);
 			this.splitContainer1.Panel2.Controls.Add(this.tabControl1);
-			this.splitContainer1.Size = new System.Drawing.Size(884, 440);
-			this.splitContainer1.SplitterDistance = 322;
+			this.splitContainer1.Panel2MinSize = 271;
+			this.splitContainer1.Size = new System.Drawing.Size(884, 596);
+			this.splitContainer1.SplitterDistance = 325;
 			this.splitContainer1.TabIndex = 3;
 			// 
 			// splitContainer2
@@ -294,8 +295,8 @@ namespace HackPDM
 			// splitContainer2.Panel2
 			// 
 			this.splitContainer2.Panel2.Controls.Add(this.listView1);
-			this.splitContainer2.Size = new System.Drawing.Size(884, 322);
-			this.splitContainer2.SplitterDistance = 285;
+			this.splitContainer2.Size = new System.Drawing.Size(884, 325);
+			this.splitContainer2.SplitterDistance = 267;
 			this.splitContainer2.TabIndex = 0;
 			// 
 			// treeView1
@@ -309,7 +310,7 @@ namespace HackPDM
 			this.treeView1.Location = new System.Drawing.Point(0, 0);
 			this.treeView1.Name = "treeView1";
 			this.treeView1.SelectedImageIndex = 0;
-			this.treeView1.Size = new System.Drawing.Size(285, 322);
+			this.treeView1.Size = new System.Drawing.Size(267, 325);
 			this.treeView1.TabIndex = 0;
 			this.treeView1.AfterSelect += new System.Windows.Forms.TreeViewEventHandler(this.TreeView1AfterSelect);
 			this.treeView1.MouseClick += new System.Windows.Forms.MouseEventHandler(this.TreeRightMouseClick);
@@ -321,7 +322,7 @@ namespace HackPDM
 			this.listView1.HideSelection = false;
 			this.listView1.Location = new System.Drawing.Point(0, 0);
 			this.listView1.Name = "listView1";
-			this.listView1.Size = new System.Drawing.Size(595, 322);
+			this.listView1.Size = new System.Drawing.Size(613, 325);
 			this.listView1.SmallImageList = this.ilListIcons;
 			this.listView1.TabIndex = 0;
 			this.listView1.UseCompatibleStateImageBehavior = false;
@@ -332,20 +333,22 @@ namespace HackPDM
 			// 
 			// pbPreview
 			// 
-			this.pbPreview.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+			this.pbPreview.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+						| System.Windows.Forms.AnchorStyles.Right)));
 			this.pbPreview.InitialImage = ((System.Drawing.Image)(resources.GetObject("pbPreview.InitialImage")));
-			this.pbPreview.Location = new System.Drawing.Point(743, 3);
+			this.pbPreview.Location = new System.Drawing.Point(622, 5);
+			this.pbPreview.MinimumSize = new System.Drawing.Size(256, 256);
 			this.pbPreview.Name = "pbPreview";
-			this.pbPreview.Size = new System.Drawing.Size(109, 109);
+			this.pbPreview.Size = new System.Drawing.Size(256, 256);
+			this.pbPreview.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
 			this.pbPreview.TabIndex = 1;
 			this.pbPreview.TabStop = false;
 			// 
 			// tabControl1
 			// 
-			this.tabControl1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+			this.tabControl1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+						| System.Windows.Forms.AnchorStyles.Left)
+						| System.Windows.Forms.AnchorStyles.Right)));
 			this.tabControl1.Controls.Add(this.tabPage1);
 			this.tabControl1.Controls.Add(this.tabPage2);
 			this.tabControl1.Controls.Add(this.tabPage3);
@@ -353,7 +356,7 @@ namespace HackPDM
 			this.tabControl1.Location = new System.Drawing.Point(0, 0);
 			this.tabControl1.Name = "tabControl1";
 			this.tabControl1.SelectedIndex = 0;
-			this.tabControl1.Size = new System.Drawing.Size(742, 114);
+			this.tabControl1.Size = new System.Drawing.Size(616, 264);
 			this.tabControl1.TabIndex = 0;
 			this.tabControl1.SelectedIndexChanged += new System.EventHandler(this.TabControl1SelectedIndexChanged);
 			// 
@@ -363,7 +366,7 @@ namespace HackPDM
 			this.tabPage1.Location = new System.Drawing.Point(4, 22);
 			this.tabPage1.Name = "tabPage1";
 			this.tabPage1.Padding = new System.Windows.Forms.Padding(3);
-			this.tabPage1.Size = new System.Drawing.Size(734, 88);
+			this.tabPage1.Size = new System.Drawing.Size(608, 238);
 			this.tabPage1.TabIndex = 0;
 			this.tabPage1.Text = "History";
 			this.tabPage1.UseVisualStyleBackColor = true;
@@ -373,7 +376,7 @@ namespace HackPDM
 			this.lvHistory.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.lvHistory.Location = new System.Drawing.Point(3, 3);
 			this.lvHistory.Name = "lvHistory";
-			this.lvHistory.Size = new System.Drawing.Size(728, 82);
+			this.lvHistory.Size = new System.Drawing.Size(602, 232);
 			this.lvHistory.TabIndex = 0;
 			this.lvHistory.UseCompatibleStateImageBehavior = false;
 			this.lvHistory.View = System.Windows.Forms.View.Details;
@@ -445,7 +448,7 @@ namespace HackPDM
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-			this.ClientSize = new System.Drawing.Size(884, 462);
+			this.ClientSize = new System.Drawing.Size(884, 618);
 			this.Controls.Add(this.splitContainer1);
 			this.Controls.Add(this.statusStrip1);
 			this.Name = "MainForm";

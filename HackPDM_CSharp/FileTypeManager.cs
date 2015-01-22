@@ -563,6 +563,7 @@ namespace HackPDM
 			Icon ico = Icon.ExtractAssociatedIcon(fileName);
 			Image img = Image.FromHbitmap(ico.ToBitmap().GetHbitmap());
 			return img;
+			//DeleteObject(img);
 			//return Image.FromHbitmap(ico.ToBitmap().GetHbitmap());
 		}
 
