@@ -63,6 +63,8 @@ namespace HackPDM
 
 		private WebDAVClient connDav = new WebDAVClient();
 
+		private SWHelper connSw = new SWHelper();
+
 		private DataSet dsTree = new DataSet();
 		private DataSet dsList = new DataSet();
 
@@ -1114,32 +1116,61 @@ namespace HackPDM
 			// new dataset
 			DataSet dsTemp = new DataSet();
 
-			// get entry_id
+			// get data row
 			DataRow dr = dsList.Tables[0].Select("entry_name='" + FileName + "'")[0];
-			if (dr.Field<bool>("is_remote") == false) return;
-			int intEntryId = dr.Field<int>("entry_id");
+			string strFullName = dr.Field<string>("file_path") + "\\" + FileName;
 
-			// initialize sql command for history data
-			string strSql = @"
-				select
-					r.rel_parent_id,
-					r.rel_child_id,
-					e.entry_name
-				from hp_versionrelationship as r
-				left join hp_version as vp on vp.version_id=r.rel_parent_id
-				left join hp_version as vc on vc.version_id=r.rel_child_id
-				left join hp_entry as e on e.entry_id=vc.entry_id
-				where vp.entry_id=:entry_id
-				order by r.rel_parent_id desc, e.entry_name;
-			";
+			if (dr.Field<bool>("is_remote") == false || dr.Field<string>("client_status_code") == ".cm")
+			{
+				// get from SolidWorks
+				List<string[]> lstDepends = connSw.GetDependenciesShallow(strFullName);
 
-			// put the remote list in the DataSet
-			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-			daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
-			daTemp.SelectCommand.Parameters["entry_id"].Value = intEntryId;
-			daTemp.Fill(dsTemp);
+				if (lstDepends != null)
+				{
+					dsTemp.Tables.Add();
+					dsTemp.Tables[0].Columns.Add("rel_parent_id", Type.GetType("System.Int32"));
+					dsTemp.Tables[0].Columns.Add("rel_child_id", Type.GetType("System.Int32"));
+					dsTemp.Tables[0].Columns.Add("entry_name", Type.GetType("System.String"));
 
-			// if we have no history data to show, then quit
+					foreach (string[] strDepends in lstDepends)
+					{
+						dsTemp.Tables[0].Rows.Add(
+								0,
+								0,
+								strDepends[0]
+							);
+					}
+				}
+
+			}
+			else
+			{
+				// get from db
+				int intEntryId = dr.Field<int>("entry_id");
+
+				// initialize sql command for history data
+				string strSql = @"
+					select
+						r.rel_parent_id,
+						r.rel_child_id,
+						e.entry_name
+					from hp_versionrelationship as r
+					left join hp_version as vp on vp.version_id=r.rel_parent_id
+					left join hp_version as vc on vc.version_id=r.rel_child_id
+					left join hp_entry as e on e.entry_id=vc.entry_id
+					where vp.entry_id=:entry_id
+					order by r.rel_parent_id desc, e.entry_name;
+				";
+
+				// put the remote list in the DataSet
+				NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
+				daTemp.SelectCommand.Parameters["entry_id"].Value = intEntryId;
+				daTemp.Fill(dsTemp);
+
+			}
+
+			// if we have no child data to show, then quit
 			if (dsTemp.Tables.Count == 0)
 			{
 				return;
@@ -3578,31 +3609,31 @@ namespace HackPDM
 			// Set cursor as hourglass
 			Cursor.Current = Cursors.WaitCursor;
 
-			string strFullName = listView1.SelectedItems[0].SubItems[0].Text;
-			PopulatePreviewImage(strFullName);
+			string strFileName = listView1.SelectedItems[0].SubItems[0].Text;
+			PopulatePreviewImage(strFileName);
 
 			if (tabControl1.SelectedIndex == 0)
 			{
 				// Entry History
-				PopulateHistoryPage(strFullName);
+				PopulateHistoryPage(strFileName);
 			}
 
 			if (tabControl1.SelectedIndex == 1)
 			{
 				// Parents
-				PopulateParentsPage(strFullName);
+				PopulateParentsPage(strFileName);
 			}
 
 			if (tabControl1.SelectedIndex == 2)
 			{
 				// Children
-				PopulateChildrenPage(strFullName);
+				PopulateChildrenPage(strFileName);
 			}
 
 			if (tabControl1.SelectedIndex == 3)
 			{
 				// Properties
-				PopulatePropertiesPage(strFullName);
+				PopulatePropertiesPage(strFileName);
 			}
 
 			// Set cursor as default arrow

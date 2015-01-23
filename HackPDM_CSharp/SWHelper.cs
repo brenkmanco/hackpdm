@@ -43,6 +43,20 @@ namespace HackPDM
 
 		}
 
+		public List<string[]> GetDependenciesShallow(string FileName)
+		{
+			List<string[]> listDepends = new List<string[]>();
+			int size = swApp.IGetDocumentDependenciesCount2(FileName, false, false, true);
+			if (size == 0) return null;
+			string[] varDepends = (string[])swApp.GetDocumentDependencies2(FileName, false, false, true);
+			for (int i = 0; i < varDepends.Length/3; i++)
+			{
+				string[] strDepend = new string[3] {varDepends[3 * i], varDepends[3 * i + 1], varDepends[3 * i + 2]};
+				listDepends.Add(strDepend);
+			}
+			return listDepends;
+		}
+
 		//private swDocumentTypes_e GetDocType(string FileName)
 		//{
 		//    ModelDoc2 swDoc = (ModelDoc2)swApp.GetDocuments();

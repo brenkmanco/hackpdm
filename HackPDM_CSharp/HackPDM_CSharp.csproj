@@ -80,6 +80,7 @@
     <Reference Include="LibRSync.Core">
       <HintPath>lib\LibRSync.Core.dll</HintPath>
     </Reference>
+    <Reference Include="Microsoft.CSharp" />
     <Reference Include="Microsoft.VisualBasic.Compatibility" />
     <Reference Include="Npgsql">
       <HintPath>lib\Npgsql.dll</HintPath>
