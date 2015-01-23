@@ -464,14 +464,10 @@ namespace HackPDM
 			{
 
 				strRemFileExt = reAllTypes.Match(strFileName).Value.Substring(1);
+				strFileExt = strRemFileExt;
 
 				// if the regex returns the same characters as the prototype
-				if (dtRemTypes.Select("file_ext='" + strRemFileExt + "'").Length != 0)
-				{
-					// set the string
-					strFileExt = strRemFileExt;
-				}
-				else
+				if (dtRemTypes.Select("file_ext='" + strRemFileExt + "'").Length == 0)
 				{
 					// otherwise, loop through the remotes types and find the matching prototype
 					// example: filename="somepart.prt.25" match="prt.25" prototype="prt.1"
@@ -480,7 +476,8 @@ namespace HackPDM
 						// add matching prototype and continue
 						if (drType.Field<Regex>("regex").IsMatch(strFileName))
 						{
-							strFileExt = drType.Field<string>("file_ext");
+							strRemFileExt = drType.Field<string>("file_ext");
+							strFileExt = strRemFileExt;
 							break;
 						}
 					}
@@ -489,6 +486,7 @@ namespace HackPDM
 			else if (reAllFilters.IsMatch(strFileName))
 			{
 				strRemBlockExt = reAllFilters.Match(strFileName).Value.Substring(1);
+				strFileExt = strRemBlockExt;
 
 				// if the regex returns the same characters as the prototype
 				// example: filename="somepart.prt.25" match="prt.25" prototype="prt.1"

@@ -15,7 +15,7 @@ namespace HackPDM
 	class SWHelper
 	{
 
-		private SldWorks.ISldWorks swApp;
+		private SldWorks.SldWorks swApp;
 
 		// constructor
 		public SWHelper()

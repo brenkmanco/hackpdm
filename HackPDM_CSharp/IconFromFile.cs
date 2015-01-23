@@ -23,16 +23,22 @@ namespace HackPDM
 		private const uint SHGFI_DISPLAYNAME = 0x00000200;
 		private const uint SHGFI_TYPENAME = 0x400;
 
+
+		[DllImport("user32")]
+		public static extern int DestroyIcon(IntPtr hIcon);
+
 		private static Icon GetSmallFileIcon(FileInfo file)
 		{
 			if (file.Exists)
 			{
 				SHFILEINFO shFileInfo = new SHFILEINFO();
 				SHGetFileInfo(file.FullName, 0, ref shFileInfo, (uint)Marshal.SizeOf(shFileInfo), SHGFI_ICON | SHGFI_SMALLICON);
-
-				return Icon.FromHandle(shFileInfo.hIcon);
+				Icon ico = Icon.FromHandle(shFileInfo.hIcon);
+				//DestroyIcon(shFileInfo.hIcon);
+				return ico;
 			}
 			else return SystemIcons.WinLogo;
+
 		}
 
 		public Icon GetSmallFileIcon(string fileName)
@@ -61,8 +67,9 @@ namespace HackPDM
 			{
 				SHFILEINFO shFileInfo = new SHFILEINFO();
 				SHGetFileInfo(file.FullName, 0, ref shFileInfo, (uint)Marshal.SizeOf(shFileInfo), SHGFI_ICON | SHGFI_LARGEICON);
-
-				return Icon.FromHandle(shFileInfo.hIcon);
+				Icon ico = Icon.FromHandle(shFileInfo.hIcon);
+				//DestroyIcon(shFileInfo.hIcon);
+				return ico;
 			}
 			else return SystemIcons.WinLogo;
 		}
@@ -78,10 +85,11 @@ namespace HackPDM
 				string strFileExt = Path.GetExtension(fileName).ToLower();
 				string strTempName = System.IO.Path.GetTempPath() + Guid.NewGuid().ToString() + "." + strFileExt;
 				FileInfo fileInfo = new FileInfo(fileName);
-				fileInfo.Attributes = FileAttributes.Temporary;
 
+				//using (new FileStream(fileName, FileMode.CreateNew))
 				using (new FileStream(fileName, FileMode.CreateNew))
 				{
+					fileInfo.Attributes = FileAttributes.Temporary;
 					return GetLargeFileIcon(fileInfo);
 				}
 			}
@@ -92,7 +100,11 @@ namespace HackPDM
 		{
 			public SHFILEINFO(bool b)
 			{
-				hIcon = IntPtr.Zero; iIcon = IntPtr.Zero; dwAttributes = 0; szDisplayName = ""; szTypeName = "";
+				hIcon = IntPtr.Zero;
+				iIcon = IntPtr.Zero;
+				dwAttributes = 0;
+				szDisplayName = "";
+				szTypeName = "";
 			}
 
 			public IntPtr hIcon;
@@ -127,13 +139,14 @@ namespace HackPDM
 			{
 				// try to get preview image from other compound document
 				Bitmap origBitmap = GetCompoundPreview(FileName, "Preview");
-				if (origBitmap == null)
+				if (origBitmap != null)
 				{
-					Icon ico = GetLargeFileIcon(FileName);
-					if (ico == null) return null;
-					origBitmap = resizeImage(ico.ToBitmap());
+					return (Image)origBitmap;
 				}
-				return (Image)origBitmap;
+
+				Icon ico = GetLargeFileIcon(FileName);
+				if (ico == null) return null;
+				return resizeImage(ico.ToBitmap());
 			}
 
 		}
@@ -143,8 +156,10 @@ namespace HackPDM
 
 			try
 			{
-				Bitmap origBitmap = new Bitmap(FileName);
-				return resizeImage(origBitmap);
+				using (Bitmap origBitmap = new Bitmap(FileName))
+				{
+					return resizeImage(origBitmap);
+				}
 			}
 			catch {
 				return null;
@@ -164,9 +179,11 @@ namespace HackPDM
 				bImage = st.GetData();
 				MemoryStream ms = new MemoryStream(bImage);
 				Image returnImage = Image.FromStream(ms);
+				ms.Dispose();
+				cf.Close();
 				return (Bitmap)returnImage;
 			}
-			catch (CFFileFormatException)
+			catch
 			{
 				return null;
 			}

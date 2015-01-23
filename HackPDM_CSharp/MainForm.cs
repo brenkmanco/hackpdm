@@ -176,10 +176,32 @@ namespace HackPDM
 				(string)drCurrProfile["Username"],
 				(string)drCurrProfile["Password"] );
 			NpgsqlCommand cmdGetId = new NpgsqlCommand(strSql, connDb);
-			object oTemp = cmdGetId.ExecuteScalar();
-			if (oTemp == null) {
-				// no user_id returned
-				var result = MessageBox.Show("Can't authenticate the user.  Try running the install tool again.",
+			try
+			{
+				object oTemp = cmdGetId.ExecuteScalar();
+				if (oTemp == null)
+				{
+					// no user_id returned
+					var result = MessageBox.Show("Can't authenticate the user.  Try running the install tool again.",
+						"Authentication Error",
+						MessageBoxButtons.OKCancel,
+						MessageBoxIcon.Error);
+					if (result == System.Windows.Forms.DialogResult.Cancel)
+					{
+						Environment.Exit(1);
+					}
+					LoadProfile(true);
+				}
+				else
+				{
+					// set the user_id
+					intMyUserId = (int)oTemp;
+				}
+			}
+			catch (Exception ex)
+			{
+				// no database connection
+				var result = MessageBox.Show("Can't access the database.  Try running the install tool again." + System.Environment.NewLine + ex.Message,
 					"Authentication Error",
 					MessageBoxButtons.OKCancel,
 					MessageBoxIcon.Error);
@@ -188,11 +210,6 @@ namespace HackPDM
 					Environment.Exit(1);
 				}
 				LoadProfile(true);
-			}
-			else
-			{
-				// set the user_id
-				intMyUserId = (int)oTemp;
 			}
 
 		}
@@ -454,7 +471,7 @@ namespace HackPDM
 
 				string strFilePath = strDir;
 				string strTreePath = GetTreePath(strFilePath);
-				string strDirName = GetDirName(strFilePath);
+				string strDirName = GetShortName(strFilePath);
 				TreeNode tnChild = new TreeNode(strDirName);
 
 				// get matching remote directory
@@ -526,7 +543,7 @@ namespace HackPDM
 
 				string strFilePath = strDir;
 				string strTreePath = GetTreePath(strFilePath);
-				string strDirName = GetDirName(strFilePath);
+				string strDirName = GetShortName(strFilePath);
 				TreeNode tnChild = new TreeNode(strDirName);
 
 				// local only icon
@@ -650,7 +667,7 @@ namespace HackPDM
 						e.checkout_node,
 						false as is_local,
 						true as is_remote,
-						'ro' as client_status_code,
+						'.ro' as client_status_code,
 						:strTreePath as tree_path,
 						:strFilePath as file_path,
 						t.icon
@@ -704,7 +721,7 @@ namespace HackPDM
 					foreach (string strFile in strFiles) {
 
 						// get file info
-						strFileName = GetDirName(strFile);
+						strFileName = GetShortName(strFile);
 						FileInfo fiCurrFile = new FileInfo(strFile);
 						lngFileSize = fiCurrFile.Length;
 						dtModifyDate = fiCurrFile.LastWriteTime;
@@ -867,7 +884,7 @@ namespace HackPDM
 						byte[] img = row.Field<byte[]>("icon");
 						if (img == null) {
 							// extract an image locally
-							string strFullName = row.Field<string>("file_path") + "//" + row.Field<string>("entry_name");
+							string strFullName = row.Field<string>("file_path") + "\\" + row.Field<string>("entry_name");
 							imgCurrent = GetLocalIcon(strFullName);
 						} else {
 							// get remote image
@@ -1282,17 +1299,21 @@ namespace HackPDM
 		private byte[] ImageToByteArray(System.Drawing.Image imageIn)
 		{
 			if (imageIn == null) return null;
-			MemoryStream ms = new MemoryStream();
-			imageIn.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-			return ms.ToArray();
+			using (MemoryStream ms = new MemoryStream())
+			{
+				imageIn.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+				return ms.ToArray();
+			}
 		}
 
 		private Image ByteArrayToImage(byte[] byteArrayIn)
 		{
 			if (byteArrayIn == null) return null;
-			MemoryStream ms = new MemoryStream(byteArrayIn);
-			Image returnImage = Image.FromStream(ms);
-			return returnImage;
+			using (MemoryStream ms = new MemoryStream(byteArrayIn))
+			{
+				Image returnImage = Image.FromStream(ms);
+				return returnImage;
+			}
 		}
 
 		protected string GetFilePath(string stringPath) {
@@ -1311,7 +1332,7 @@ namespace HackPDM
 			return stringParse;
 		}
 
-		protected string GetDirName(string stringPath) {
+		protected string GetShortName(string stringPath) {
 			//Get Name of folder
 			string[] stringSplit = stringPath.Split('\\');
 			int _maxIndex = stringSplit.Length;
@@ -1419,7 +1440,7 @@ namespace HackPDM
 			IconFromFile icoHelper = new IconFromFile();
 			Icon ico = icoHelper.GetLargeFileIcon(FileName);
 
-			if (ico == null)
+			if (ico == null || ico.Size.IsEmpty == true)
 			{
 				return ilListIcons.Images["unknown"];
 			}
@@ -1603,7 +1624,7 @@ namespace HackPDM
 					}
 
 					// set parameters
-					string strDirName = GetDirName(tnChild.FullPath);
+					string strDirName = GetShortName(tnChild.FullPath);
 					cmdInsert.Parameters["dir_id"].Value = intChildId;
 					cmdInsert.Parameters["parent_id"].Value = intParentId;
 					cmdInsert.Parameters["dir_name"].Value = strDirName;
@@ -1705,7 +1726,7 @@ namespace HackPDM
 						
 
 						// get file info
-						strFileName = GetDirName(strFile);
+						strFileName = GetShortName(strFile);
 						FileInfo fiCurrFile = new FileInfo(strFile);
 						string strFileExt = fiCurrFile.Extension.Substring(1, fiCurrFile.Extension.Length - 1).ToLower();
 						lngFileSize = fiCurrFile.Length;
@@ -3016,8 +3037,7 @@ namespace HackPDM
 			string strFullName = fiNewFile.FullName;
 			long lngFileSize = fiNewFile.Length;
 			DateTime dtModifyDate = fiNewFile.LastWriteTime;
-			string strMd5sum = StringMD5(strFileName);
-			//byte[] btaImage = GetPreviewByteArray(strFullName);
+			string strMd5sum = StringMD5(strFullName);
 
 
 			// get entry type
@@ -3123,6 +3143,7 @@ namespace HackPDM
 					:entry_id,
 					:file_size,
 					:file_modify_stamp,
+					:create_user,
 					:preview_image,
 					:md5sum
 				);
