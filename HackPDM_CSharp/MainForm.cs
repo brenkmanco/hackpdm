@@ -1131,13 +1131,17 @@ namespace HackPDM
 					dsTemp.Tables[0].Columns.Add("rel_parent_id", Type.GetType("System.Int32"));
 					dsTemp.Tables[0].Columns.Add("rel_child_id", Type.GetType("System.Int32"));
 					dsTemp.Tables[0].Columns.Add("entry_name", Type.GetType("System.String"));
+					dsTemp.Tables[0].Columns.Add("full_name", Type.GetType("System.String"));
+					dsTemp.Tables[0].Columns.Add("outside_pwa", Type.GetType("System.Boolean"));
 
 					foreach (string[] strDepends in lstDepends)
 					{
 						dsTemp.Tables[0].Rows.Add(
 								0,
 								0,
-								strDepends[0]
+								strDepends[0],
+								strDepends[1],
+								true
 							);
 					}
 				}
@@ -1154,7 +1158,8 @@ namespace HackPDM
 						r.rel_parent_id,
 						r.rel_child_id,
 						e.entry_name,
-						:file_path || '\\' || e.entry_name as full_name
+						:file_path || '\\' || e.entry_name as full_name,
+						false as outside_pwa
 					from hp_versionrelationship as r
 					left join hp_version as vp on vp.version_id=r.rel_parent_id
 					left join hp_version as vc on vc.version_id=r.rel_child_id
@@ -1165,6 +1170,8 @@ namespace HackPDM
 
 				// put the remote list in the DataSet
 				NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("file_path", NpgsqlTypes.NpgsqlDbType.Varchar));
+				daTemp.SelectCommand.Parameters["entry_id"].Value = dr.Field<string>("file_path");
 				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
 				daTemp.SelectCommand.Parameters["entry_id"].Value = intEntryId;
 				daTemp.Fill(dsTemp);
