@@ -1153,7 +1153,8 @@ namespace HackPDM
 					select
 						r.rel_parent_id,
 						r.rel_child_id,
-						e.entry_name
+						e.entry_name,
+						:file_path || '\\' || e.entry_name as full_name
 					from hp_versionrelationship as r
 					left join hp_version as vp on vp.version_id=r.rel_parent_id
 					left join hp_version as vc on vc.version_id=r.rel_child_id
