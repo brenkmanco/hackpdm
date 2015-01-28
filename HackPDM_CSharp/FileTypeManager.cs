@@ -460,7 +460,7 @@ namespace HackPDM
 			strWinFileExt = fiCurrFile.Extension.Substring(1).ToLower();
 
 			// get an exact match
-			if (reAllTypes.IsMatch(strFileName))
+			if (reAllTypes.IsMatch(strFileName) && reAllTypes.ToString() != "")
 			{
 
 				strRemFileExt = reAllTypes.Match(strFileName).Value.Substring(1);
@@ -483,7 +483,7 @@ namespace HackPDM
 					}
 				}
 			}
-			else if (reAllFilters.IsMatch(strFileName))
+			else if (reAllFilters.IsMatch(strFileName) && reAllFilters.ToString() != "")
 			{
 				strRemBlockExt = reAllFilters.Match(strFileName).Value.Substring(1);
 				strFileExt = strRemBlockExt;

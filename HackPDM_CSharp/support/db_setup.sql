@@ -202,7 +202,7 @@ create table hp_type (
 	type_id integer NOT NULL default nextval('seq_hp_type_type_id'::regclass),
 	file_ext varchar(25) NOT NULL,
 	default_cat integer NOT NULL,
-	icon bytea,
+	icon bytea NOT NULL,
 	type_regex varchar(25) NOT NULL,
 	description varchar(255) NOT NULL,
 	
@@ -255,7 +255,7 @@ ALTER TABLE hp_entry_name_filter OWNER TO engadmin;
 
 CREATE UNIQUE INDEX ON hp_entry_name_filter (lower(name_proto::text));
 
-insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.aa~', '\.(.+~)$', 'Text Editor Backup File');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.aaa~', '\.(.+~)$', 'Temporary Backup File');
 insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.msi', '\.(msi)$', 'Microsoft Installer');
 insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.dll', '\.(dll)$', 'Microsoft Dynamic Linked Library');
 insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.exe', '\.(exe)$', 'Microsoft Executable');
@@ -320,7 +320,7 @@ create table hp_version (
 	create_user integer NOT NULL,
 	blob_ref oid NOT NULL,
 	md5sum bytea NOT NULL,
-	preview_image bytea,
+	preview_image bytea NOT NULL,
 	release_user integer,
 	release_date timestamp(6) without time zone,
 	release_tag varchar(255),
@@ -368,18 +368,21 @@ ALTER TABLE hp_property OWNER TO engadmin;
 create table hp_version_property (
 	
 	version_id integer NOT NULL,
+	config_name varchar NOT NULL,
 	prop_id integer NOT NULL,
 	text_value text,
 	date_value timestamp(6) without time zone,
 	number_value decimal,
 	yesno_value boolean,
 	
-	primary key (version_id,prop_id),
+	primary key (version_id,config_name,prop_id),
 	foreign key (version_id) references hp_version (version_id),
 	foreign key (prop_id) references hp_property (prop_id)
 	
 );
 ALTER TABLE hp_version_property OWNER TO engadmin;
+
+CREATE UNIQUE INDEX ON hp_version_property (lower(config_name::text));
 
 
 

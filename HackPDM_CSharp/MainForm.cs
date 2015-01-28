@@ -1112,6 +1112,7 @@ namespace HackPDM
 			lvChildren.Clear();
 			lvChildren.Columns.Add("Version", 140, System.Windows.Forms.HorizontalAlignment.Left);
 			lvChildren.Columns.Add("Name", 300, System.Windows.Forms.HorizontalAlignment.Left);
+			lvChildren.Columns.Add("OutsidePWA", 140, System.Windows.Forms.HorizontalAlignment.Left);
 
 			// new dataset
 			DataSet dsTemp = new DataSet();
@@ -1141,7 +1142,7 @@ namespace HackPDM
 								0,
 								strDepends[0],
 								strDepends[1],
-								true
+								IsInPwa(strDepends[1])
 							);
 					}
 				}
@@ -1188,9 +1189,13 @@ namespace HackPDM
 			{
 
 				// build array
-				string[] lvData = new string[2];
+				string[] lvData = new string[3];
 				lvData[0] = row.Field<int>("rel_parent_id").ToString();
 				lvData[1] = row.Field<string>("entry_name") + " (v" + row.Field<int>("rel_child_id").ToString() + ")";
+				if (row.Field<Boolean>("outside_pwa"))
+				{
+					lvData[2] = "OUTSIDE";
+				}
 
 				// create actual list item
 				ListViewItem lvItem = new ListViewItem(lvData);
@@ -1276,6 +1281,16 @@ namespace HackPDM
 
 
 		#region utility functions
+
+		private Boolean IsInPwa(string FullName)
+		{
+			if (strLocalFileRoot == FullName.Substring(0,strLocalFileRoot.Length)
+			{
+				return false;
+			} else {
+				return true;
+			}
+		}
 
 		protected byte[] GetLocalPreview(DataRow dr)
 		{
@@ -3210,6 +3225,38 @@ namespace HackPDM
 			// insert file properties
 			// for CAD files:
 			//   get and insert dependencies
+			List<string[]> lstDepends = connSw.GetDependenciesShallow(strFullName);
+
+			if (lstDepends != null)
+			{
+				// prepare a database command to insert the version
+				strSql = @"
+					insert into hp_versionrelationship (
+						rel_parent_id,
+						rel_child_id
+					) values (
+						:rel_parent_id,
+						:rel_child_id
+					);
+				";
+				NpgsqlCommand cmdInsertChildren = new NpgsqlCommand(strSql, connDb, t);
+
+				cmdInsertVersion.Parameters.Add(new NpgsqlParameter("rel_parent_id", intVersionId));
+
+				foreach (string[] strDepends in lstDepends)
+				{
+
+					cmdInsertVersion.Parameters.Add(new NpgsqlParameter("rel_child_id", intEntryId));
+					dsTemp.Tables[0].Rows.Add(
+							0,
+							0,
+							strDepends[0],
+							strDepends[1],
+							true
+						);
+				}
+			}
+
 			//   get and insert custom properties
 			//
 
@@ -3662,7 +3709,8 @@ namespace HackPDM
 
 
 		void MainFormFormClosed(object sender, FormClosedEventArgs e) {
-				Properties.Settings.Default.usetWindowState = this.WindowState;
+			//connSw.Close;
+			Properties.Settings.Default.usetWindowState = this.WindowState;
 		}
 
 

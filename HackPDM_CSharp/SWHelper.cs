@@ -16,35 +16,53 @@ namespace HackPDM
 	{
 
 		private SldWorks.SldWorks swApp;
+		private SldWorks.SldWorks swRunApp;
 
 		// constructor
 		public SWHelper()
 		{
+			//if (System.Diagnostics.Process.GetProcessesByName("sldworks").Length > 1)
+			//{
+			//    DialogResult dr = MessageBox.Show("Multiple SolidWorks Instances Detected",
+			//        "Loading SW",
+			//        MessageBoxButtons.OK,
+			//        MessageBoxIcon.Exclamation,
+			//        MessageBoxDefaultButton.Button1);
+			//    return;
+			//}
 
-			// attach to running instance
-			if (System.Diagnostics.Process.GetProcessesByName("sldworks").Length != 0)
+			try
 			{
-				swApp = (SldWorks.SldWorks)System.Runtime.InteropServices.Marshal.GetActiveObject("SldWorks.Application");
+				// start background instance
+				swRunApp = (SldWorks.SldWorks)System.Runtime.InteropServices.Marshal.GetActiveObject("SldWorks.Application");
 			}
-			else
+			catch { }
+
+			if (swRunApp == null)
 			{
-				swApp = new SldWorks.SldWorks();
-				//swApp = Activator.CreateInstance(Type.GetTypeFromProgID("SldWorks.Application"));
+				try
+				{
+					swApp = new SldWorks.SldWorks();
+				}
+				catch
+				{
+					DialogResult dr = MessageBox.Show("Failed to get a SolidWorks instance",
+						"Loading SW",
+						MessageBoxButtons.OK,
+						MessageBoxIcon.Exclamation,
+						MessageBoxDefaultButton.Button1);
+				}
 			}
-
-			// start background instance
-			DialogResult dr = MessageBox.Show("Failed to get a SolidWorks instance",
-				"Loading SW",
-				MessageBoxButtons.OK,
-				MessageBoxIcon.Exclamation,
-				MessageBoxDefaultButton.Button1);
-
 			return;
 
 		}
 
 		public List<string[]> GetDependenciesShallow(string FileName)
 		{
+			// returns list of string arrays
+			// 0: short file name
+			// 1: long file name
+			// 2: loaded read only
 			List<string[]> listDepends = new List<string[]>();
 			int size = swApp.IGetDocumentDependenciesCount2(FileName, false, false, true);
 			if (size == 0) return null;
@@ -68,6 +86,14 @@ namespace HackPDM
 		//    ModelDoc2 swDoc = (ModelDoc2)swApp.ActiveDoc;
 		//    return strModelFile = swDoc.GetPathName();
 		//}
+
+
+		// class destructor
+		~SWHelper()
+		{
+			// cleanup statements
+			swApp.ExitApp();
+		}
 
 	}
 }
