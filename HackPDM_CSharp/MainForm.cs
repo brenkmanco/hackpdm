@@ -68,6 +68,9 @@ namespace HackPDM
 		private DataSet dsTree = new DataSet();
 		private DataSet dsList = new DataSet();
 
+		private DataSet dsCommitsDirs = new DataSet();
+		private DataSet dsCommitsRels = new DataSet();
+
 		private string strLocalFileRoot;
 		private int intMyUserId;
 		private int intMyNodeId;
@@ -672,7 +675,8 @@ namespace HackPDM
 						'.ro' as client_status_code,
 						:strTreePath as tree_path,
 						:strFilePath as file_path,
-						t.icon
+						t.icon,
+						false as is_depend_searched
 					from hp_entry as e
 					left join hp_user as u on u.user_id=e.checkout_user
 					left join hp_category as c on c.cat_id=e.cat_id
@@ -1284,7 +1288,7 @@ namespace HackPDM
 
 		private Boolean IsInPwa(string FullName)
 		{
-			if (strLocalFileRoot == FullName.Substring(0,strLocalFileRoot.Length)
+			if (strLocalFileRoot == FullName.Substring(0,strLocalFileRoot.Length))
 			{
 				return false;
 			} else {
@@ -1308,7 +1312,37 @@ namespace HackPDM
 
 		private DataTable CreateFileTable() {
 
-				DataTable dtList = new DataTable();
+			// entry_id
+			// version_id
+			// dir_id
+			// entry_name
+			// type_id
+			// file_ext
+			// cat_name
+			// latest_size
+			// str_latest_size
+			// local_size
+			// str_local_size
+			// latest_stamp
+			// str_latest_stamp
+			// local_stamp
+			// str_local_stamp
+			// latest_md5
+			// local_md5
+			// checkout_user
+			// ck_user_name
+			// checkout_date
+			// str_checkout_date
+			// checkout_node
+			// is_local
+			// is_remote
+			// client_status_code
+			// tree_path
+			// file_path
+			// icon
+			// is_depend_searched
+
+			DataTable dtList = new DataTable();
 				dtList.Columns.Add("entry_id", Type.GetType("System.Int32"));
 				dtList.Columns.Add("version_id", Type.GetType("System.Int32"));
 				dtList.Columns.Add("dir_id", Type.GetType("System.Int32"));
@@ -1337,6 +1371,7 @@ namespace HackPDM
 				dtList.Columns.Add("tree_path", Type.GetType("System.String"));
 				dtList.Columns.Add("file_path", Type.GetType("System.String"));
 				dtList.Columns.Add("icon", typeof(Byte[]));
+				dtList.Columns.Add("is_depend_searched", Type.GetType("System.Boolean"));
 				return dtList;
 
 		}
@@ -1448,6 +1483,18 @@ namespace HackPDM
 
 			return stringSize + " KB";
 
+		}
+
+		static string StringMD5(string FileName)
+		{
+			// get local file checksum
+			using (var md5 = MD5.Create())
+			{
+				using (var stream = File.OpenRead(FileName))
+				{
+					return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
+				}
+			}
 		}
 
 		protected TreeNode FindNode(TreeNode tnParent, string strPath) {
@@ -1609,12 +1656,6 @@ namespace HackPDM
 
 		private bool AddDirStructForward(NpgsqlTransaction t, TreeNode tnParent) {
 
-			// make sure we are working inside of a transaction
-			if (t.Connection == null) {
-				MessageBox.Show("The database transaction is not functional");
-				return(true);
-			}
-
 			// prepare to get directory ids
 			string strSql;
 			strSql = "select nextval('seq_hp_directory_dir_id'::regclass);";
@@ -1743,7 +1784,139 @@ namespace HackPDM
 			}
 		}
 
+		private bool LoadCommitsDataRecurse(ref DataSet dsCommits, TreeNode tnStart)
+		{
+
+			// get directory parameters
+			string strTreePath = tnStart.FullPath;
+			string strFilePath = GetFilePath(strTreePath);
+			int intDirId = (int)tnStart.Tag;
+
+			// log status
+			dlgStatus.AddStatusLine("Get Directory Info", "Processing Directory: " + strFilePath);
+
+			// get local files
+			string[] strFiles = Directory.GetFiles(strFilePath);
+			string strFileName = "";
+			DateTime dtModifyDate;
+			Int64 lngFileSize = 0;
+
+			// log status
+			dlgStatus.AddStatusLine("Process Files", "Processing local files: " + strFiles.Length);
+
+			//loop through all files in this directory
+			foreach (string strFile in strFiles)
+			{
+
+				// get file info
+				strFileName = GetShortName(strFile);
+				FileInfo fiCurrFile = new FileInfo(strFile);
+				string strFileExt = fiCurrFile.Extension.Substring(1, fiCurrFile.Extension.Length - 1).ToLower();
+				lngFileSize = fiCurrFile.Length;
+				dtModifyDate = fiCurrFile.LastWriteTime;
+
+				// log status
+				dlgStatus.AddStatusLine("Processing Files", "Processing local file: " + strFile);
+
+				// insert new row for presumed local-only file
+				dsCommits.Tables["files"].Rows.Add(null,
+					null,
+					intDirId,
+					strFileName,
+					null,
+					strFileExt,
+					null,
+					lngFileSize,
+					FormatSize(lngFileSize),
+					dtModifyDate,
+					FormatDate(dtModifyDate),
+					null,
+					null,
+					null,
+					null,
+					null,
+					true,
+					false,
+					strTreePath,
+					strFilePath,
+					false // is_depend_searched
+					);
+
+			}
+
+			// loop through all subdirectories
+			bool blnFailed = false;
+			foreach (TreeNode tnChild in tnStart.Nodes)
+			{
+				dsCommits.Tables["dirs"].Rows.Add(tnChild.Tag, tnChild.Parent.Tag, tnChild.Name, tnChild.FullPath);
+				blnFailed = LoadCommitsDataRecurse(ref dsCommits, tnChild);
+			}
+
+			return (blnFailed);
+
+		}
+
+		private bool LoadCommitsData(NpgsqlTransaction t, TreeNode tnStart)
+		{
+
+			bool blnFailed = false;
+
+			// make sure we are working inside of a transaction
+			if (t.Connection == null)
+			{
+				MessageBox.Show("The database transaction is not functional");
+				return (true);
+			}
+
+			// init DataSet
+			DataSet dsCommits = new DataSet();
+
+			// init directories data table
+			dsCommits.Tables.Add("dirs");
+			dsCommits.Tables["dirs"].Columns.Add("dir_id", Type.GetType("System.Int32"));
+			dsCommits.Tables["dirs"].Columns.Add("parent_id", Type.GetType("System.Int32"));
+			dsCommits.Tables["dirs"].Columns.Add("dir_name", Type.GetType("System.String"));
+			dsCommits.Tables["dirs"].Columns.Add("full_path", Type.GetType("System.String"));
+
+			// add this directory to the dirs table
+			dsCommits.Tables["dirs"].Rows.Add(tnStart.Tag, tnStart.Parent.Tag, tnStart.Name, tnStart.FullPath);
+
+			// climb the tree until we find a parent directory that exists remotely
+			TreeNode tnParent = tnStart;
+			while (tnParent.Tag == null)
+			{
+				tnParent = tnParent.Parent;
+				dsCommits.Tables["dirs"].Rows.Add(tnParent.Tag, tnParent.Parent.Tag, tnParent.Name, tnParent.FullPath);
+			}
+
+			// init files data table
+			dsCommits.Tables.Add(CreateFileTable());
+
+			// get files and directories recursively
+			blnFailed = LoadCommitsDataRecurse(ref dsCommits, tnStart);
+
+			// init relationships (dependencies) data table
+			dsCommits.Tables.Add("rels");
+			dsCommits.Tables["rels"].Columns.Add("parent_id", Type.GetType("System.Int32"));
+			dsCommits.Tables["rels"].Columns.Add("child_id", Type.GetType("System.Int32"));
+			dsCommits.Tables["rels"].Columns.Add("parent_name", Type.GetType("System.String"));
+			dsCommits.Tables["rels"].Columns.Add("child_name", Type.GetType("System.String"));
+
+			// - get dependencies of local files, while appending to list of directories
+
+
+			// - get and match remote files
+			MatchRemoteData(dsCommits);
+
+		}
+
 		protected void LoadFileDataRecursive(TreeNode tnParent, ref DataTable dt) {
+
+			// TODO: separate this and related methods into independent activities
+			// - get a list of subdirectories
+			// - get all local files
+			// - get dependencies of local files, while appending to list of directories
+			// - get and match remote files
 
 			// could this work for AddNew and GetLatest?
 
@@ -1772,12 +1945,6 @@ namespace HackPDM
 					//loop through all files
 					foreach (string strFile in strFiles)
 					{
-
-						// TODO: ignore filtered file names
-						Regex reg = new Regex(@"^.+\..(.+~)|(msi)|(dll)|(exe)|(bak)|(db)|(dropbox)$", RegexOptions.IgnoreCase);
-						
-						//if (reg.IsMatch(strFile)) continue;
-						
 
 						// get file info
 						strFileName = GetShortName(strFile);
@@ -1845,7 +2012,8 @@ namespace HackPDM
 								true,
 								false,
 								strTreePath,
-								strFilePath
+								strFilePath,
+								false // is_depend_searched
 								);
 
 						}
@@ -1868,16 +2036,95 @@ namespace HackPDM
 
 		}
 
-		static string StringMD5(string FileName)
+
+
+		void AddSWDepends(ref DataSet dsCommits)
 		{
-			// get local file checksum
-			using (var md5 = MD5.Create())
+			// trying to do this without recursion
+
+			// TODO: given data table of files, find and append dependent files
+			// while getting dependencies, append parent/child relationships to data table
+			// parent/child relationships are many2many with the files table, so this requires a second table
+			// use long file name as foreign key
+
+			// get initial set of files on which to search dependencies
+			// TODO: set case insensitive, or just include both cases in the list?
+			DataRow[] drNeedsDepends = dsCommits.Tables["files"].Select("is_depend_searched is null and file_ext in ('SLDASM','SLDPRT','SLDDRW','sldasm','sldprt','slddrw')");
+
+			while (drNeedsDepends.Length != 0)
 			{
-				using (var stream = File.OpenRead(FileName))
+
+				foreach (DataRow row in drNeedsDepends)
 				{
-					return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
+					string strFullName = row.Field<string>("name");
+					List<string[]> lstDepends = connSw.GetDependencies(strFullName, false);
+
+					if (lstDepends != null)
+					{
+
+						foreach (string[] strDepends in lstDepends)
+						{
+
+							string strShortName = strDepends[0];
+							string strLongName = strDepends[1];
+							bool blnInPwa = IsInPwa(strDepends[1]);
+
+							// log status
+							dlgStatus.AddStatusLine("Processing Files", "Processing local file: " + strLongName);
+
+							FileInfo fiCurrFile = new FileInfo(strLongName);
+							string strFileExt = fiCurrFile.Extension.Substring(1).ToLower();
+							long lngFileSize = fiCurrFile.Length;
+							DateTime dtModifyDate = fiCurrFile.LastWriteTime;
+							string strFilePath = fiCurrFile.DirectoryName;
+							string strTreePath = GetTreePath(strFilePath);
+
+							dsCommits.Tables["files"].Rows.Add(
+								null, // entry_id
+								null, // version_id
+								null, // dir_id
+								strDepends[0], // entry_name
+								null, // type_id
+								strFileExt, // file_ext
+								null, // cat_name
+								lngFileSize, // latest_size
+								FormatSize(lngFileSize), // str_latest_size
+								null, // local_size
+								null, // str_local_size
+								null, // latest_stamp
+								null, // str_latest_stamp
+								dtModifyDate, // local_stamp
+								FormatDate(dtModifyDate), // str_local_stamp
+								null, // latest_md5
+								null, // local_md5
+								null, // checkout_user
+								null, // ck_user_name
+								null, // checkout_date
+								null, // str_checkout_date
+								null, // checkout_node
+								null, // is_local
+								null, // is_remote
+								null, // client_status_code
+								strTreePath, // tree_path
+								strFilePath, // file_path
+								null, // icon
+								null // is_depend_searched
+							);
+
+							dsCommits.Tables["dirs"].Rows.Add(tnChild.Tag, tnChild.Parent.Tag, tnChild.Name, strTreePath);
+
+						}
+					}
+
+					// set is_depend_search = true
+					row.SetField<bool>("is_depend_searched", true);
+
 				}
+
+				// check for new files on which to search dependencies
+				drNeedsDepends = dsCommits.Tables["files"].Select("is_depend_searched=false and file_ext in ('SLDASM','SLDPRT','SLDDRW','sldasm','sldprt','slddrw')");
 			}
+
 		}
 
 		#endregion
@@ -1992,7 +2239,8 @@ namespace HackPDM
 					true as is_remote,
 					'pwa' || replace(path, '/', '\') as tree_path,
 					:strLocalFileRoot || replace(path, '/', '\') as file_path,
-					t.icon
+					t.icon,
+					false as is_depend_searched
 				from hp_entry as e
 				left join hp_user as u on u.user_id=e.checkout_user
 				left join hp_category as c on c.cat_id=e.cat_id
@@ -2246,7 +2494,8 @@ namespace HackPDM
 					true as is_remote,
 					'pwa' || replace(path, '/', '\') as tree_path,
 					:strLocalFileRoot || replace(path, '/', '\') as file_path,
-					t.icon
+					t.icon,
+					false as is_depend_searched
 				from hp_entry as e
 				left join hp_user as u on u.user_id=e.checkout_user
 				left join hp_category as c on c.cat_id=e.cat_id
@@ -3113,26 +3362,8 @@ namespace HackPDM
 			// no... it's better to make the user wait
 			//
 
-			// setup the sql blob manager
-			//LargeObjectManager lbm = new LargeObjectManager(connDb);
-			//int noid = lbm.Create(LargeObjectManager.READWRITE);
-			//LargeObject lo =  lbm.Open(noid,LargeObjectManager.READWRITE);
-
-			// acquire and lock the file stream
-			//FileStream fs = fiNewFile.OpenRead();
-			//try {
-			//	fs.Lock(0,fs.Length);
-			//} catch {
-			//	dlgStatus.AddStatusLine("File Locked by another process", fiNewFile.Name);
-			//	return(true);
-			//}
-
-			// stream the file into the blob
+			// set status
 			dlgStatus.AddStatusLine("Begin streaming file to server (" + FormatSize(lngFileSize) + ")", strFileName);
-			//byte[] buf = new byte[fs.Length];
-			//fs.Read(buf,0,(int)fs.Length);
-			//lo.Write(buf);
-			//lo.Close();
 
 
 			// get a new entry id
@@ -3225,38 +3456,6 @@ namespace HackPDM
 			// insert file properties
 			// for CAD files:
 			//   get and insert dependencies
-			List<string[]> lstDepends = connSw.GetDependenciesShallow(strFullName);
-
-			if (lstDepends != null)
-			{
-				// prepare a database command to insert the version
-				strSql = @"
-					insert into hp_versionrelationship (
-						rel_parent_id,
-						rel_child_id
-					) values (
-						:rel_parent_id,
-						:rel_child_id
-					);
-				";
-				NpgsqlCommand cmdInsertChildren = new NpgsqlCommand(strSql, connDb, t);
-
-				cmdInsertVersion.Parameters.Add(new NpgsqlParameter("rel_parent_id", intVersionId));
-
-				foreach (string[] strDepends in lstDepends)
-				{
-
-					cmdInsertVersion.Parameters.Add(new NpgsqlParameter("rel_child_id", intEntryId));
-					dsTemp.Tables[0].Rows.Add(
-							0,
-							0,
-							strDepends[0],
-							strDepends[1],
-							true
-						);
-				}
-			}
-
 			//   get and insert custom properties
 			//
 

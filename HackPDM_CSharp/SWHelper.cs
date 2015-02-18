@@ -57,14 +57,14 @@ namespace HackPDM
 
 		}
 
-		public List<string[]> GetDependenciesShallow(string FileName)
+		public List<string[]> GetDependencies(string FileName, bool Deep=false)
 		{
 			// returns list of string arrays
 			// 0: short file name
 			// 1: long file name
 			// 2: loaded read only
 			List<string[]> listDepends = new List<string[]>();
-			int size = swApp.IGetDocumentDependenciesCount2(FileName, false, false, true);
+			int size = swApp.IGetDocumentDependenciesCount2(FileName, Deep, false, true);
 			if (size == 0) return null;
 			string[] varDepends = (string[])swApp.GetDocumentDependencies2(FileName, false, false, true);
 			for (int i = 0; i < varDepends.Length/3; i++)
