@@ -1856,7 +1856,7 @@ namespace HackPDM
 
 		}
 
-		private bool LoadCommitsData(NpgsqlTransaction t, TreeNode tnStart)
+		private DataSet LoadCommitsData(NpgsqlTransaction t, TreeNode tnStart)
 		{
 
 			bool blnFailed = false;
@@ -1865,7 +1865,7 @@ namespace HackPDM
 			if (t.Connection == null)
 			{
 				MessageBox.Show("The database transaction is not functional");
-				return (true);
+				return null;
 			}
 
 			// init DataSet
@@ -1903,20 +1903,16 @@ namespace HackPDM
 			dsCommits.Tables["rels"].Columns.Add("child_name", Type.GetType("System.String"));
 
 			// - get dependencies of local files, while appending to list of directories
-
+			AddSWDepends(ref dsCommits);
 
 			// - get and match remote files
-			MatchRemoteData(dsCommits);
+			MatchRemoteData(ref dsCommits);
+
+			return dsCommits;
 
 		}
 
 		protected void LoadFileDataRecursive(TreeNode tnParent, ref DataTable dt) {
-
-			// TODO: separate this and related methods into independent activities
-			// - get a list of subdirectories
-			// - get all local files
-			// - get dependencies of local files, while appending to list of directories
-			// - get and match remote files
 
 			// could this work for AddNew and GetLatest?
 
@@ -2036,8 +2032,6 @@ namespace HackPDM
 
 		}
 
-
-
 		void AddSWDepends(ref DataSet dsCommits)
 		{
 			// trying to do this without recursion
@@ -2123,6 +2117,148 @@ namespace HackPDM
 
 				// check for new files on which to search dependencies
 				drNeedsDepends = dsCommits.Tables["files"].Select("is_depend_searched=false and file_ext in ('SLDASM','SLDPRT','SLDDRW','sldasm','sldprt','slddrw')");
+			}
+
+		}
+
+		void MatchRemoteData(ref DataSet dsCommits)
+		{
+			// trying to do this without recursion
+
+			// get list of remote directories
+			DataRow[] drRemoteDirs = dsCommits.Tables["dirs"].Select("dir_id is not null");
+			if (drRemoteDirs.Length == 0)
+			{
+				// no remote data for the included directories
+				return;
+			}
+
+			// build list of remote directories to query
+			string[] strDirList = new string [drRemoteDirs.Length];
+			string strDirs = "";
+			foreach (DataRow row in drRemoteDirs)
+			{
+				strDirs += row.Field<string>("dir_id") + ",";
+			}
+
+			// drop trailing comma
+			strDirs = strDirs.Substring(0, strDirs.Length - 2);
+
+			// initialize sql command for remote entry list
+			DataSet dsTemp = new DataSet();
+			string strSql = @"
+				select
+					e.entry_id,
+					v.version_id,
+					e.dir_id,
+					e.entry_name,
+					t.type_id,
+					t.file_ext,
+					c.cat_name,
+					v.file_size as latest_size,
+					pg_size_pretty(v.file_size) as str_latest_size,
+					v.file_modify_stamp as latest_stamp,
+					to_char(v.file_modify_stamp, 'yyyy-MM-dd HH24:mm:ss') as str_latest_stamp,
+					e.checkout_user,
+					u.last_name || ', ' || u.first_name as ck_user_name,
+					e.checkout_date,
+					to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
+					e.checkout_node,
+					false as is_local,
+					true as is_remote,
+					'pwa' || replace(path, '/', '\') as tree_path,
+					:strLocalFileRoot || replace(path, '/', '\') as file_path,
+					t.icon,
+					false as is_depend_searched
+				from hp_entry as e
+				left join hp_user as u on u.user_id=e.checkout_user
+				left join hp_category as c on c.cat_id=e.cat_id
+				left join hp_type as t on t.type_id=e.type_id
+				left join view_dir_tree as d on d.dir_id = e.dir_id
+				left join (
+					select distinct on (entry_id)
+						entry_id,
+						version_id,
+						file_size,
+						create_stamp,
+						file_modify_stamp
+					from hp_version
+					order by entry_id, create_stamp desc
+				) as v on v.entry_id=e.entry_id
+				where e.dir_id in (:dir_ids)
+				order by dir_id,entry_id;
+			";
+
+			// put the remote list in the DataSet
+			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+			daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_ids", strDirs));
+			daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strLocalFileRoot", strLocalFileRoot));
+			daTemp.Fill(dsTemp);
+
+			DataRow[] drCheckFiles = dsCommits.Tables["files"].Select("dir_id is not null");
+			foreach (DataRow row in drCheckFiles)
+			{
+				string strName = row.Field<string>("entry_name");
+				Int32 intDirId = row.Field<Int32>("dir_id");
+				DataRow[] drRemoteFile = dsCommits.Tables[0].Select(String.Format("entry_name='{0}' and dir_id={1}",strName,intDirId));
+
+				if (drRemoteFile.Length != 0)
+				{
+					// TODO: replace all of the following with some code that updates the local data with the remote data
+					foreach (string[] strDepends in lstDepends)
+					{
+
+						string strShortName = strDepends[0];
+						string strLongName = strDepends[1];
+						bool blnInPwa = IsInPwa(strDepends[1]);
+
+						// log status
+						dlgStatus.AddStatusLine("Processing Files", "Processing local file: " + strLongName);
+
+						FileInfo fiCurrFile = new FileInfo(strLongName);
+						string strFileExt = fiCurrFile.Extension.Substring(1).ToLower();
+						long lngFileSize = fiCurrFile.Length;
+						DateTime dtModifyDate = fiCurrFile.LastWriteTime;
+						string strFilePath = fiCurrFile.DirectoryName;
+						string strTreePath = GetTreePath(strFilePath);
+
+						dsCommits.Tables["files"].Rows.Add(
+							null, // entry_id
+							null, // version_id
+							null, // dir_id
+							strDepends[0], // entry_name
+							null, // type_id
+							strFileExt, // file_ext
+							null, // cat_name
+							lngFileSize, // latest_size
+							FormatSize(lngFileSize), // str_latest_size
+							null, // local_size
+							null, // str_local_size
+							null, // latest_stamp
+							null, // str_latest_stamp
+							dtModifyDate, // local_stamp
+							FormatDate(dtModifyDate), // str_local_stamp
+							null, // latest_md5
+							null, // local_md5
+							null, // checkout_user
+							null, // ck_user_name
+							null, // checkout_date
+							null, // str_checkout_date
+							null, // checkout_node
+							null, // is_local
+							null, // is_remote
+							null, // client_status_code
+							strTreePath, // tree_path
+							strFilePath, // file_path
+							null, // icon
+							null // is_depend_searched
+						);
+
+						dsCommits.Tables["dirs"].Rows.Add(tnChild.Tag, tnChild.Parent.Tag, tnChild.Name, strTreePath);
+
+					}
+				}
+
 			}
 
 		}
