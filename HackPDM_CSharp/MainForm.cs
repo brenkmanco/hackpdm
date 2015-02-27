@@ -1970,22 +1970,21 @@ namespace HackPDM
 
 		}
 
-		private bool LoadCommitsDataRecurse(ref DataSet dsCommits, string strStartPath)
+		private bool LoadCommitsDataRecurse(ref DataSet dsCommits, string strRelativePath)
 		{
 
-			// get directory forms
-			string strTreePath = strStartPath;
-			string strFilePath = GetFilePath(strTreePath);
+			// get absolute directory path 
+			string strAbsolutePath = GetFilePath(strRelativePath);
 
 			// get remote directory id (-1 if doesn't exist remotely)
 			int intDirId = -1;
-			dictTree.TryGetValue(strTreePath, out intDirId);
+			dictTree.TryGetValue(strRelativePath, out intDirId);
 
 			// log status
-			dlgStatus.AddStatusLine("Get Directory Info", "Processing Directory: " + strFilePath);
+			dlgStatus.AddStatusLine("Get Directory Info", "Processing Directory: " + strAbsolutePath);
 
 			// get local files
-			string[] strFiles = Directory.GetFiles(strFilePath);
+			string[] strFiles = Directory.GetFiles(strAbsolutePath);
 			string strFileName = "";
 			DateTime dtModifyDate;
 			Int64 lngFileSize = 0;
@@ -2026,8 +2025,8 @@ namespace HackPDM
 					null,
 					true,
 					false,
-					strTreePath,
-					strFilePath,
+					strRelativePath,
+					strAbsolutePath,
 					false // is_depend_searched
 					);
 
@@ -2038,10 +2037,15 @@ namespace HackPDM
 			// recurse elswere, and pass along a list of directories, rather than recursing here?
 			// use the filesystem to recurse, i.e. Directory.GetDirectories(string)
 			bool blnFailed = false;
-			foreach (TreeNode tnChild in tnStart.Nodes)
+			string[] ChildDirectories = Directory.GetDirectories(strAbsolutePath);
+			foreach (string strChildAbsPath in ChildDirectories)
 			{
-				dsCommits.Tables["dirs"].Rows.Add(tnChild.Tag, tnChild.Parent.Tag, tnChild.Name, tnChild.FullPath);
-				blnFailed = LoadCommitsDataRecurse(ref dsCommits, tnChild);
+				string strChildName = strChildAbsPath.Substring(strChildAbsPath.LastIndexOf("\\") + 1);
+				string strChildRelPath = GetFilePath(strChildAbsPath);
+				int intChildId = -1;
+				dictTree.TryGetValue(strRelativePath, out intChildId);
+				dsCommits.Tables["dirs"].Rows.Add(intChildId, intDirId, strChildName, strChildRelPath);
+				blnFailed = LoadCommitsDataRecurse(ref dsCommits, strChildRelPath);
 			}
 
 			return (blnFailed);
