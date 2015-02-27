@@ -65,11 +65,9 @@ namespace HackPDM
 
 		private SWHelper connSw = new SWHelper();
 
+		private Dictionary<string, Int32> dictTree;
 		private DataSet dsTree = new DataSet();
 		private DataSet dsList = new DataSet();
-
-		private DataSet dsCommitsDirs = new DataSet();
-		private DataSet dsCommitsRels = new DataSet();
 
 		private string strLocalFileRoot;
 		private int intMyUserId;
@@ -335,6 +333,7 @@ namespace HackPDM
 
 		}
 
+
 		private void LoadRemoteDirs() {
 
 			// clear the dataset
@@ -379,15 +378,18 @@ namespace HackPDM
 		{
 
 			// clear the tree
+			dictTree = new Dictionary<string, Int32>();
 			InitTreeView();
 
 			// get root tree node
 			TreeNode tnRoot = treeView1.Nodes[0];
 			TreeNode tnSelect = new TreeNode();
 
+			// add to dictionary
+			dictTree.Add(tnRoot.FullPath, (int)0);
+
 			// build the tree recursively
 			PopulateTree(tnRoot, (int)0);
-
 
 			// clear the list window
 			InitListView();
@@ -493,6 +495,9 @@ namespace HackPDM
 					tnChild.ImageIndex = 0;
 					tnChild.SelectedImageIndex = 0;
 					tnParentNode.Nodes.Add(tnChild);
+
+					// add to dictionary
+					dictTree.Add(tnChild.FullPath, intChildId);
 
 					//Recursively build the tree
 					PopulateTree(tnChild, intChildId);
@@ -1784,134 +1789,6 @@ namespace HackPDM
 			}
 		}
 
-		private bool LoadCommitsDataRecurse(ref DataSet dsCommits, TreeNode tnStart)
-		{
-
-			// get directory parameters
-			string strTreePath = tnStart.FullPath;
-			string strFilePath = GetFilePath(strTreePath);
-			int intDirId = (int)tnStart.Tag;
-
-			// log status
-			dlgStatus.AddStatusLine("Get Directory Info", "Processing Directory: " + strFilePath);
-
-			// get local files
-			string[] strFiles = Directory.GetFiles(strFilePath);
-			string strFileName = "";
-			DateTime dtModifyDate;
-			Int64 lngFileSize = 0;
-
-			// log status
-			dlgStatus.AddStatusLine("Process Files", "Processing local files: " + strFiles.Length);
-
-			//loop through all files in this directory
-			foreach (string strFile in strFiles)
-			{
-
-				// get file info
-				strFileName = GetShortName(strFile);
-				FileInfo fiCurrFile = new FileInfo(strFile);
-				string strFileExt = fiCurrFile.Extension.Substring(1, fiCurrFile.Extension.Length - 1).ToLower();
-				lngFileSize = fiCurrFile.Length;
-				dtModifyDate = fiCurrFile.LastWriteTime;
-
-				// log status
-				dlgStatus.AddStatusLine("Processing Files", "Processing local file: " + strFile);
-
-				// insert new row for presumed local-only file
-				dsCommits.Tables["files"].Rows.Add(null,
-					null,
-					intDirId,
-					strFileName,
-					null,
-					strFileExt,
-					null,
-					lngFileSize,
-					FormatSize(lngFileSize),
-					dtModifyDate,
-					FormatDate(dtModifyDate),
-					null,
-					null,
-					null,
-					null,
-					null,
-					true,
-					false,
-					strTreePath,
-					strFilePath,
-					false // is_depend_searched
-					);
-
-			}
-
-			// loop through all subdirectories
-			bool blnFailed = false;
-			foreach (TreeNode tnChild in tnStart.Nodes)
-			{
-				dsCommits.Tables["dirs"].Rows.Add(tnChild.Tag, tnChild.Parent.Tag, tnChild.Name, tnChild.FullPath);
-				blnFailed = LoadCommitsDataRecurse(ref dsCommits, tnChild);
-			}
-
-			return (blnFailed);
-
-		}
-
-		private DataSet LoadCommitsData(NpgsqlTransaction t, TreeNode tnStart)
-		{
-
-			bool blnFailed = false;
-
-			// make sure we are working inside of a transaction
-			if (t.Connection == null)
-			{
-				MessageBox.Show("The database transaction is not functional");
-				return null;
-			}
-
-			// init DataSet
-			DataSet dsCommits = new DataSet();
-
-			// init directories data table
-			dsCommits.Tables.Add("dirs");
-			dsCommits.Tables["dirs"].Columns.Add("dir_id", Type.GetType("System.Int32"));
-			dsCommits.Tables["dirs"].Columns.Add("parent_id", Type.GetType("System.Int32"));
-			dsCommits.Tables["dirs"].Columns.Add("dir_name", Type.GetType("System.String"));
-			dsCommits.Tables["dirs"].Columns.Add("full_path", Type.GetType("System.String"));
-
-			// add this directory to the dirs table
-			dsCommits.Tables["dirs"].Rows.Add(tnStart.Tag, tnStart.Parent.Tag, tnStart.Name, tnStart.FullPath);
-
-			// climb the tree until we find a parent directory that exists remotely
-			TreeNode tnParent = tnStart;
-			while (tnParent.Tag == null)
-			{
-				tnParent = tnParent.Parent;
-				dsCommits.Tables["dirs"].Rows.Add(tnParent.Tag, tnParent.Parent.Tag, tnParent.Name, tnParent.FullPath);
-			}
-
-			// init files data table
-			dsCommits.Tables.Add(CreateFileTable());
-
-			// get files and directories recursively
-			blnFailed = LoadCommitsDataRecurse(ref dsCommits, tnStart);
-
-			// init relationships (dependencies) data table
-			dsCommits.Tables.Add("rels");
-			dsCommits.Tables["rels"].Columns.Add("parent_id", Type.GetType("System.Int32"));
-			dsCommits.Tables["rels"].Columns.Add("child_id", Type.GetType("System.Int32"));
-			dsCommits.Tables["rels"].Columns.Add("parent_name", Type.GetType("System.String"));
-			dsCommits.Tables["rels"].Columns.Add("child_name", Type.GetType("System.String"));
-
-			// - get dependencies of local files, while appending to list of directories
-			AddSWDepends(ref dsCommits);
-
-			// - get and match remote files
-			MatchRemoteData(ref dsCommits);
-
-			return dsCommits;
-
-		}
-
 		protected void LoadFileDataRecursive(TreeNode tnParent, ref DataTable dt) {
 
 			// could this work for AddNew and GetLatest?
@@ -2032,6 +1909,145 @@ namespace HackPDM
 
 		}
 
+		
+		// commits data (assuming TreeView actions like AddNew or Commit):
+		// files in the selected path
+		// files that are depended upon by files in the selected path
+		// file dependency relationships
+		// directories in which the above files reside
+		// additional parent directories, if they need to be created remotely
+		private DataSet LoadCommitsData(NpgsqlTransaction t, string strBasePath)
+		{
+
+			// TODO: try to do this without using a TreeNode
+
+			bool blnFailed = false;
+
+			// make sure we are working inside of a transaction
+			if (t.Connection == null)
+			{
+				MessageBox.Show("The database transaction is not functional");
+				return null;
+			}
+
+			// init DataSet
+			DataSet dsCommits = new DataSet();
+
+			// init directories data table
+			dsCommits.Tables.Add("dirs");
+			dsCommits.Tables["dirs"].Columns.Add("dir_id", Type.GetType("System.Int32"));
+			dsCommits.Tables["dirs"].Columns.Add("parent_id", Type.GetType("System.Int32"));
+			dsCommits.Tables["dirs"].Columns.Add("dir_name", Type.GetType("System.String"));
+			dsCommits.Tables["dirs"].Columns.Add("full_path", Type.GetType("System.String"));
+
+			// add this directory to the dirs table
+			// TODO: get directory id and parent id without TreeNode
+			dsCommits.Tables["dirs"].Rows.Add(tnStart.Tag, tnStart.Parent.Tag, tnStart.Name, tnStart.FullPath);
+
+			// init files data table
+			dsCommits.Tables.Add(CreateFileTable());
+
+			// get files and directories recursively
+			blnFailed = LoadCommitsDataRecurse(ref dsCommits, strBasePath);
+
+			// init relationships (dependencies) data table
+			dsCommits.Tables.Add("rels");
+			dsCommits.Tables["rels"].Columns.Add("parent_id", Type.GetType("System.Int32"));
+			dsCommits.Tables["rels"].Columns.Add("child_id", Type.GetType("System.Int32"));
+			dsCommits.Tables["rels"].Columns.Add("parent_name", Type.GetType("System.String"));
+			dsCommits.Tables["rels"].Columns.Add("child_name", Type.GetType("System.String"));
+
+			// - get dependencies of local files, while appending to list of directories
+			AddSWDepends(ref dsCommits);
+
+			// - get and match remote files
+			MatchRemoteFiles(ref dsCommits);
+
+			// climb the tree until we find a parent directory that exists remotely
+			ClimbToRemoteParents(ref dsCommits, strBasePath);
+
+			return dsCommits;
+
+		}
+
+		private bool LoadCommitsDataRecurse(ref DataSet dsCommits, string strStartPath)
+		{
+
+			// get directory forms
+			string strTreePath = strStartPath;
+			string strFilePath = GetFilePath(strTreePath);
+
+			// get remote directory id (-1 if doesn't exist remotely)
+			int intDirId = -1;
+			dictTree.TryGetValue(strTreePath, out intDirId);
+
+			// log status
+			dlgStatus.AddStatusLine("Get Directory Info", "Processing Directory: " + strFilePath);
+
+			// get local files
+			string[] strFiles = Directory.GetFiles(strFilePath);
+			string strFileName = "";
+			DateTime dtModifyDate;
+			Int64 lngFileSize = 0;
+
+			// log status
+			dlgStatus.AddStatusLine("Process Files", "Processing local files: " + strFiles.Length);
+
+			//loop through all files in this directory
+			foreach (string strFile in strFiles)
+			{
+
+				// get file info
+				strFileName = GetShortName(strFile);
+				FileInfo fiCurrFile = new FileInfo(strFile);
+				string strFileExt = fiCurrFile.Extension.Substring(1, fiCurrFile.Extension.Length - 1).ToLower();
+				lngFileSize = fiCurrFile.Length;
+				dtModifyDate = fiCurrFile.LastWriteTime;
+
+				// log status
+				dlgStatus.AddStatusLine("Processing Files", "Processing local file: " + strFile);
+
+				// insert new row for presumed local-only file
+				dsCommits.Tables["files"].Rows.Add(null,
+					null,
+					intDirId,
+					strFileName,
+					null,
+					strFileExt,
+					null,
+					lngFileSize,
+					FormatSize(lngFileSize),
+					dtModifyDate,
+					FormatDate(dtModifyDate),
+					null,
+					null,
+					null,
+					null,
+					null,
+					true,
+					false,
+					strTreePath,
+					strFilePath,
+					false // is_depend_searched
+					);
+
+			}
+
+			// loop through all subdirectories
+			// TODO: figure out a way to get children without a TreeNode
+			// recurse elswere, and pass along a list of directories, rather than recursing here?
+			// use the filesystem to recurse, i.e. Directory.GetDirectories(string)
+			bool blnFailed = false;
+			foreach (TreeNode tnChild in tnStart.Nodes)
+			{
+				dsCommits.Tables["dirs"].Rows.Add(tnChild.Tag, tnChild.Parent.Tag, tnChild.Name, tnChild.FullPath);
+				blnFailed = LoadCommitsDataRecurse(ref dsCommits, tnChild);
+			}
+
+			return (blnFailed);
+
+		}
+
 		void AddSWDepends(ref DataSet dsCommits)
 		{
 			// trying to do this without recursion
@@ -2042,7 +2058,6 @@ namespace HackPDM
 			// use long file name as foreign key
 
 			// get initial set of files on which to search dependencies
-			// TODO: set case insensitive, or just include both cases in the list?
 			DataRow[] drNeedsDepends = dsCommits.Tables["files"].Select("is_depend_searched is null and file_ext in ('SLDASM','SLDPRT','SLDDRW','sldasm','sldprt','slddrw')");
 
 			while (drNeedsDepends.Length != 0)
@@ -2105,7 +2120,24 @@ namespace HackPDM
 								null // is_depend_searched
 							);
 
-							dsCommits.Tables["dirs"].Rows.Add(tnChild.Tag, tnChild.Parent.Tag, tnChild.Name, strTreePath);
+							// add this file's directory, if necessary
+							DataRow[] drCheck = dsCommits.Tables["dirs"].Select("full_path = '" + strTreePath + "'");
+							if (drCheck.Length == 0)
+							{
+								// get directory name
+								string strDirName = strTreePath.Substring(strTreePath.LastIndexOf("\\") + 1);
+
+								// get directory id
+								Int32 intDirId = -1;
+								dictTree.TryGetValue(strTreePath, out intDirId);
+
+								// get parent directory id
+								Int32 intParentId = -1;
+								string strParentPath = strTreePath.Substring(0, strTreePath.LastIndexOf("\\") - 1);
+								dictTree.TryGetValue(strParentPath, out intParentId);
+
+								dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strDirName, strTreePath);
+							}
 
 						}
 					}
@@ -2121,7 +2153,7 @@ namespace HackPDM
 
 		}
 
-		void MatchRemoteData(ref DataSet dsCommits)
+		void MatchRemoteFiles(ref DataSet dsCommits)
 		{
 			// trying to do this without recursion
 
@@ -2195,16 +2227,18 @@ namespace HackPDM
 			daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strLocalFileRoot", strLocalFileRoot));
 			daTemp.Fill(dsTemp);
 
-			DataRow[] drCheckFiles = dsCommits.Tables["files"].Select("dir_id is not null");
-			foreach (DataRow row in drCheckFiles)
+			// loop through the local files and match remote files
+			DataRow[] drLocalFiles = dsCommits.Tables["files"].Select("dir_id is not null");
+			foreach (DataRow drLocalFile in drLocalFiles)
 			{
-				string strName = row.Field<string>("entry_name");
-				Int32 intDirId = row.Field<Int32>("dir_id");
-				DataRow[] drRemoteFile = dsCommits.Tables[0].Select(String.Format("entry_name='{0}' and dir_id={1}",strName,intDirId));
+				string strName = drLocalFile.Field<string>("entry_name");
+				Int32 intDirId = drLocalFile.Field<Int32>("dir_id");
+				DataRow[] drRemoteFile = dsTemp.Tables[0].Select(String.Format("entry_name='{0}' and dir_id={1}",strName,intDirId));
 
 				if (drRemoteFile.Length != 0)
 				{
 					// TODO: replace all of the following with some code that updates the local data with the remote data
+
 					foreach (string[] strDepends in lstDepends)
 					{
 
@@ -2260,6 +2294,108 @@ namespace HackPDM
 				}
 
 			}
+
+		}
+
+		private bool ClimbToRemoteParents(ref DataSet dsCommits, string strBasePath)
+		{
+			// assuming we will need to create directories, and we don't have a remote parent directory id to start creating from,
+			// then we need to add parent directories to our list of directories to create
+			// we will continue climbing up the tree, adding parent directories to our list, until we find a parent directory that exists remotely
+
+			// climb for remote parents on the base path (if needed)
+			DataRow[] BaseDir = dsCommits.Tables["dirs"].Select("full_path = '" + strBasePath + "' and parent_id = -1");
+			if (BaseDir.Length != 0)
+			{
+				// climb the tree until we find a parent directory that exists remotely
+				List<TreeNode> tnlParents = new List<TreeNode>();
+				tnlParents.Add(tnChild);
+				TreeNode tnCurrent = tnChild;
+				while (tnCurrent.Parent.Tag == null)
+				{
+					tnlParents.Add(tnCurrent.Parent);
+					tnCurrent = tnCurrent.Parent;
+				}
+				int intParentDirId = (int)tnCurrent.Parent.Tag;
+			}
+
+
+			// if any directories exist outside the base path:
+			// climb upward from the set of shortest unique paths for those directories
+			//
+			// for example, given the following list of directories:
+			// C:\pwa\Designed\AZ212
+			// C:\pwa\Designed\AZ212\Cutter Head
+			// C:\pwa\Designed\AZ212\Cutter Head\Bell Shaft
+			// C:\pwa\Designed\AZ400
+			// C:\pwa\Designed\AZ400\Frame
+			// C:\pwa\Designed\Mining\ZM1800\Top Assemblies
+			//
+			// return the following list of directories:
+			// C:\pwa\Designed\AZ212
+			// C:\pwa\Designed\AZ400
+			// C:\pwa\Designed\Mining\ZM1800\Top Assemblies
+
+			DataRow[] OtherDirs = dsCommits.Tables["dirs"].Select("full_path not like '" + strBasePath + "%'", "full_path asc");
+
+			if (OtherDirs.Length != 0)
+			{
+
+			}
+
+
+			// select local-only directories, and sort ascending
+			DataRow[] dirs = dsCommits.Tables["dirs"].Select("dir_id = -1 and full_path not like '" + strBasePath + "%'", "full_path asc");
+
+			//loop through all files in this directory
+			foreach (DataRow dir in dirs)
+			{
+
+				// get file info
+				strFileName = GetShortName(strFile);
+				FileInfo fiCurrFile = new FileInfo(strFile);
+				string strFileExt = fiCurrFile.Extension.Substring(1, fiCurrFile.Extension.Length - 1).ToLower();
+				lngFileSize = fiCurrFile.Length;
+				dtModifyDate = fiCurrFile.LastWriteTime;
+
+				// log status
+				dlgStatus.AddStatusLine("Processing Files", "Processing local file: " + strFile);
+
+				// insert new row for presumed local-only file
+				dsCommits.Tables["files"].Rows.Add(null,
+					null,
+					intDirId,
+					strFileName,
+					null,
+					strFileExt,
+					null,
+					lngFileSize,
+					FormatSize(lngFileSize),
+					dtModifyDate,
+					FormatDate(dtModifyDate),
+					null,
+					null,
+					null,
+					null,
+					null,
+					true,
+					false,
+					strTreePath,
+					strFilePath,
+					false // is_depend_searched
+					);
+
+			}
+
+			// loop through all subdirectories
+			bool blnFailed = false;
+			foreach (TreeNode tnChild in tnStart.Nodes)
+			{
+				dsCommits.Tables["dirs"].Rows.Add(tnChild.Tag, tnChild.Parent.Tag, tnChild.Name, tnChild.FullPath);
+				blnFailed = LoadCommitsDataRecurse(ref dsCommits, tnChild);
+			}
+
+			return (blnFailed);
 
 		}
 
