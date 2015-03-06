@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Drawing;
 using System.Windows.Forms;
+using System.IO;
 
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
@@ -63,14 +64,20 @@ namespace HackPDM
 			// 0: short file name
 			// 1: long file name
 			// 2: loaded read only
+			string strTempPath = Path.GetTempPath();
 			List<string[]> listDepends = new List<string[]>();
 			int size = swApp.IGetDocumentDependenciesCount2(FileName, Deep, false, true);
 			if (size == 0) return null;
 			string[] varDepends = (string[])swApp.GetDocumentDependencies2(FileName, false, false, true);
 			for (int i = 0; i < varDepends.Length/3; i++)
 			{
-				string[] strDepend = new string[3] {varDepends[3 * i], varDepends[3 * i + 1], varDepends[3 * i + 2]};
-				listDepends.Add(strDepend);
+				// only return non-virtual components
+				string strFullName = varDepends[3 * i + 1];
+				if (strTempPath != strFullName.Substring(0,strTempPath.Length))
+				{
+					string[] strDepend = new string[3] {varDepends[3 * i], varDepends[3 * i + 1], varDepends[3 * i + 2]};
+					listDepends.Add(strDepend);
+				}
 			}
 			return listDepends;
 		}
