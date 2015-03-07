@@ -1891,34 +1891,10 @@ namespace HackPDM
 
 		}
 
-		void worker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e) {
-			if (e.Cancelled == true)
-			{
-				t.ToString();
-				if (t.Connection != null) {
-					t.Rollback();
-					// TODO: figure out how to rollback WebDav changes
-				}
-				dlgStatus.AddStatusLine("Cancel", "Operation canceled");
-			}
-			else if (e.Error != null)
-			{
-				dlgStatus.AddStatusLine("Error", e.Error.Message);
-				if (t.Connection != null) {
-					t.Rollback();
-					// TODO: figure out how to rollback WebDav changes
-				}
-			}
-			else
-			{
-				if (t.Connection != null) {
-					t.Rollback();
-					// TODO: figure out how to rollback WebDav changes
-				}
-				dlgStatus.AddStatusLine("Complete", "Operation completed");
-				dlgStatus.OperationCompleted();
-			}
-		}
+		#endregion
+
+
+		#region thread workers
 
 		// commits data (assuming TreeView actions like AddNew or Commit):
 		// files in the selected path
@@ -1985,7 +1961,7 @@ namespace HackPDM
 			dsCommits.Tables["rels"].Columns.Add("child_absolute_path", Type.GetType("System.String"));
 
 			// get dependencies of local files, while appending to list of directories
-			AddSWDepends(sender, e, ref dsCommits);
+			GetSWDepends(sender, e, ref dsCommits);
 
 			// get and match remote files
 			MatchRemoteFiles(sender, e, ref dsCommits);
@@ -2098,7 +2074,7 @@ namespace HackPDM
 
 		}
 
-		void AddSWDepends(object sender, DoWorkEventArgs e, ref DataSet dsCommits)
+		void GetSWDepends(object sender, DoWorkEventArgs e, ref DataSet dsCommits)
 		{
 			// trying to do this without recursion
 
@@ -2548,6 +2524,36 @@ namespace HackPDM
 
 		}
 
+		void worker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+		{
+			if (e.Cancelled == true)
+			{
+				t.ToString();
+				if (t.Connection != null) {
+					t.Rollback();
+					// TODO: figure out how to rollback WebDav changes
+				}
+				dlgStatus.AddStatusLine("Cancel", "Operation canceled");
+			}
+			else if (e.Error != null)
+			{
+				dlgStatus.AddStatusLine("Error", e.Error.Message);
+				if (t.Connection != null) {
+					t.Rollback();
+					// TODO: figure out how to rollback WebDav changes
+				}
+			}
+			else
+			{
+				if (t.Connection != null) {
+					t.Rollback();
+					// TODO: figure out how to rollback WebDav changes
+				}
+				dlgStatus.AddStatusLine("Complete", "Operation completed");
+				dlgStatus.OperationCompleted();
+			}
+		}
+
 		#endregion
 
 
@@ -2871,7 +2877,6 @@ namespace HackPDM
 			t = connDb.BeginTransaction();
 
 			// get directory info
-			// TODO: make this thread safe
 			TreeNode tnCurrent = treeView1.SelectedNode;
 			string strBasePath = tnCurrent.FullPath;
 
@@ -3011,6 +3016,9 @@ namespace HackPDM
 
 			// add the files remotely
 			blnFailed = AddNewEntries(sender, e, t, ref dsCommits);
+
+			// add relationships (file dependencies)
+			blnFailed = AddDependencies(sender, e, t, ref dsCommits);
 
 			//
 			// TODO: insert file properties
