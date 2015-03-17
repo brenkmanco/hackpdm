@@ -430,6 +430,39 @@ ALTER TABLE hp_versionrelationship OWNER TO engadmin;
 
 -- -----------------------------------------------------------------------------
 
+-- DROP FUNCTION fcn_dependency_recursive(integer[]);
+
+CREATE OR REPLACE FUNCTION fcn_dependency_recursive(IN parent_id_array integer[], OUT rel_parent_id integer, OUT rel_child_id integer)
+  RETURNS SETOF record AS
+$BODY$
+	WITH RECURSIVE child_versions (rel_parent_id, rel_child_id) AS (
+			SELECT
+				rel_parent_id,
+				rel_child_id
+			FROM hp_version_relationship
+			WHERE rel_parent_id in ( select unnest($1) )
+		UNION ALL
+			SELECT
+				c.rel_parent_id,
+				c.rel_child_id
+			FROM child_versions AS p, hp_version_relationship AS c
+			WHERE c.rel_parent_id=p.rel_child_id
+	)
+	SELECT DISTINCT
+		rel_parent_id,
+		rel_child_id
+	FROM child_versions;
+$BODY$
+  LANGUAGE sql VOLATILE
+  COST 100
+  ROWS 1000;
+ALTER FUNCTION fcn_dependency_recursive(integer[]) OWNER TO engadmin;
+
+
+
+
+-- -----------------------------------------------------------------------------
+
 -- DROP FUNCTION fcn_directory_recursive(integer);
 
 CREATE OR REPLACE FUNCTION fcn_directory_recursive(IN v_dir_id integer, OUT parent_id integer, OUT dir_id integer)
@@ -441,14 +474,14 @@ $BODY$
 					dir_id
 				FROM hp_directory
 				WHERE dir_id=$1
-			UNION ALL
+			UNION
 				SELECT
 					c.parent_id,
 					c.dir_id
 				FROM included_dirs AS p, hp_directory AS c
 				WHERE c.parent_id=p.dir_id
 		)
-		SELECT DISTINCT
+		SELECT
 			parent_id,
 			dir_id
 		FROM included_dirs;
@@ -515,6 +548,132 @@ CREATE OR REPLACE VIEW view_dir_tree AS
    FROM dir_tree;
 
 ALTER TABLE view_dir_tree OWNER TO engadmin;
+
+
+
+
+-- -----------------------------------------------------------------------------
+
+-- DROP VIEW fcn_latest_entries_by_dir;
+
+CREATE OR REPLACE FUNCTION fcn_latest_entries_by_dir(
+	IN v_dir_id integer,
+	OUT parent_id integer,
+	OUT dir_id integer
+	OUT entry_id integer,
+	OUT version_id integer,
+	OUT dir_id integer,
+	OUT entry_name varchar,
+	OUT type_id integer,
+	OUT file_ext varchar,
+	OUT cat_id integer,
+	OUT cat_name varchar,
+	OUT file_size bigint,
+	OUT str_latest_size varchar,
+	OUT local_size bigint,
+	OUT str_local_size varchar,
+	OUT file_modify_stamp timestamp(6) without time zone,
+	OUT str_latest_stamp varchar,
+	OUT local_stamp timestamp(6) without time zone,
+	OUT str_local_stamp varchar,
+	OUT latest_md5 bytea,
+	OUT local_md5 bytea,
+	OUT checkout_user integer,
+	OUT ck_user_name varchar,
+	OUT checkout_date timestamp(6) without time zone,
+	OUT str_checkout_date varchar,
+	OUT checkout_node integer,
+	OUT is_local boolean,
+	OUT is_remote boolean,
+	OUT client_status_code varchar,
+	OUT relative_path varchar,
+	OUT absolute_path varchar,
+	OUT icon bytea,
+	OUT is_depend_searched boolean,
+	OUT is_readonly boolean
+)
+  RETURNS SETOF record AS
+$BODY$
+	-- several of the values are returned null because they are things only the client would know
+	with dirs as (
+		-- this and all child directories
+		select dir_id from fcn_directory_recursive ($1)
+	),
+	lvs as (
+		-- latest versions
+		select distinct on (entry_id)
+			entry_id,
+			version_id,
+			file_size,
+			create_stamp,
+			file_modify_stamp,
+			md5sum
+		from hp_version
+		order by entry_id, create_stamp desc
+	)
+	select
+		e.entry_id,
+		v.version_id,
+		e.dir_id,
+		e.entry_name,
+		t.type_id,
+		t.file_ext,
+		e.cat_id,
+		c.cat_name,
+		v.file_size as latest_size,
+		pg_size_pretty(v.file_size) as str_latest_size,
+		0 as local_size,
+		'0' as str_local_size,
+		v.file_modify_stamp as latest_stamp,
+		to_char(v.file_modify_stamp, 'yyyy-MM-dd HH24:mm:ss') as str_latest_stamp,
+		null as local_stamp,
+		'' as str_local_stamp,
+		v.md5sum as latest_md5,
+		null as local_md5,
+		e.checkout_user,
+		u.last_name || ', ' || u.first_name as ck_user_name,
+		e.checkout_date,
+		to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
+		e.checkout_node,
+		false as is_local,
+		true as is_remote,
+		case
+				when e.checkout_user is not null and e.checkout_user=:my_user_id then '.cm'
+				when e.checkout_user is not null and e.checkout_user<>:my_user_id then '.co'
+				else '.ro'
+			end as client_status_code,
+		'pwa' || replace(path, '/', '\') as relative_path,
+		:strLocalFileRoot || replace(path, '/', '\') as absolute_path,
+		t.icon,
+		false as is_depend_searched,
+		null as is_readonly
+	from hp_entry as e
+	left join hp_user as u on u.user_id=e.checkout_user
+	left join hp_category as c on c.cat_id=e.cat_id
+	left join hp_type as t on t.type_id=e.type_id
+	left join view_dir_tree as d on d.dir_id = e.dir_id
+	left join lvs as v on v.entry_id=e.entry_id
+	where e.dir_id in (select dir_id from dirs)
+	or e.entry_id in (
+		-- get dependency entries
+		select distinct v.entry_id
+		from fcn_dependency_recursive(
+			select ARRAY(
+				-- using latest versions for entries under the specified directory
+				select v.version_id
+				from lvs as v
+				left join hp_entry as e on e.entry_id=v.entry_id
+				where e.dir_id in (select dir_id from dirs)
+			)
+		) as r
+		left join hp_version as v on v.version_id=r.rel_child_id
+	)
+	order by dir_id,entry_id;
+$BODY$
+  LANGUAGE sql VOLATILE
+  COST 100
+  ROWS 1000;
+ALTER FUNCTION fcn_latest_entries_by_dir(integer) OWNER TO engadmin;
 
 
 
