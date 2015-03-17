@@ -2306,17 +2306,19 @@ namespace HackPDM
 				}
 
 				DataRow drLocalFile = drLocalFiles[i];
-				string strName = drLocalFile.Field<string>("entry_name");
+				string strFileName = drLocalFile.Field<string>("entry_name");
+				string strAbsPath = drLocalFile.Field<string>("absolute_path");
 				Int32 intDirId = drLocalFile.Field<Int32>("dir_id");
-				DataRow[] drRemoteFile = dsTemp.Tables[0].Select(String.Format("entry_name='{0}' and dir_id={1}",strName,intDirId));
+				DataRow[] drRemoteFile = dsTemp.Tables[0].Select(String.Format("entry_name='{0}' and dir_id={1}",strFileName,intDirId));
 
 				if (drRemoteFile.Length != 0)
 				{
 
 					DataRow drTemp = drRemoteFile[0];
+					int intVersionId = drTemp.Field<Int32>("version_id");
 
 					drLocalFile.SetField<Int32>("entry_id", drTemp.Field<Int32>("entry_id"));
-					drLocalFile.SetField<Int32>("version_id", drTemp.Field<Int32>("version_id"));
+					drLocalFile.SetField<Int32>("version_id", intVersionId);
 					drLocalFile.SetField<Int32>("dir_id", drTemp.Field<Int32>("dir_id"));
 					drLocalFile.SetField<string>("entry_name", drTemp.Field<string>("entry_name"));
 					drLocalFile.SetField<Int32>("type_id", drTemp.Field<Int32>("type_id"));
@@ -2365,6 +2367,18 @@ namespace HackPDM
 					}
 					drLocalFile.SetField<string>("client_status_code", strStatusCode);
 
+					// update version ids in relationships
+					DataRow[] drRels = dsCommits.Tables["rels"].Select(String.Format("(child_name='{0} and child_absolute_path='{1}) or (parent_name='{0}' and parent_absolute_path='{1}')",strFileName,strAbsPath));
+					foreach (DataRow drRel in drRels)
+					{
+
+						// either set the id on the parent side
+						if (drRel.Field<string>("parent_name") == strFileName) drRel.SetField<int>("parent_id", intVersionId);
+
+						// or set the id on the child side
+						if (drRel.Field<string>("child_name") == strFileName) drRel.SetField<int>("child_id", intVersionId);
+
+					}
 				}
 				else
 				{
@@ -2561,6 +2575,85 @@ namespace HackPDM
 
 		}
 
+		private bool AddVersionDepends(object sender, DoWorkEventArgs e, NpgsqlTransaction t, ref DataSet dsCommits)
+		{
+			// return true if failed
+			bool blnFailed = false;
+
+			// running in separate thread
+			BackgroundWorker myWorker = sender as BackgroundWorker;
+
+			// get files to be committed and build list of version ids
+			List<int> lstVersions = new List<int>();
+			DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'.if' and is_remote=false and absolute_path like '{0}%'", strLocalFileRoot));
+			foreach (DataRow drFile in drNewFiles)
+			{
+				lstVersions.Add(drFile.Field<int>("version_id"));
+			}
+			string strVersions = String.Join(",", lstVersions);
+
+			// check for children with no version id
+			// this will happen when a child is outside the pwa, but we are looking for children inside the pwa
+			DataRow[] drBads = dsCommits.Tables["rels"].Select(String.Format("child_id=-1 and parent_id in ({0})", strVersions));
+			foreach (DataRow dr in drBads)
+			{
+				string strDepend = String.Format("{0}\\{1} <-- {2}\\{3}", dr.Field<string>("parent_name"), dr.Field<string>("parent_absolute_path"), dr.Field<string>("child_name"), dr.Field<string>("child_absolute_path"));
+				dlgStatus.AddStatusLine("Ignoring Failed Dependency: ", "Could not get remote id for dependency: " + strDepend);
+				blnFailed = true;
+			}
+
+			// get relationships to be committed
+			DataRow[] drNewRels = dsCommits.Tables["rels"].Select(String.Format("parent_id in ({0}) and child_id<>-1", strVersions));
+
+			// prepare the database command
+			string strSql = @"
+				insert into hp_versionrelationship (
+					rel_parent_id,
+					rel_child_id
+				) values (
+					:rel_parent_id,
+					:rel_child_id
+				);
+			";
+			NpgsqlCommand cmdInsert = new NpgsqlCommand(strSql, connDb, t);
+			cmdInsert.Parameters.Add(new NpgsqlParameter("rel_parent_id", NpgsqlTypes.NpgsqlDbType.Integer));
+			cmdInsert.Parameters.Add(new NpgsqlParameter("rel_child_id", NpgsqlTypes.NpgsqlDbType.Integer));
+
+			// insert new relationships
+			// we never update relationships because changes to dependencies require a new version of the entry
+			// since these are new files, we should not need to check existence
+			foreach (DataRow drNewRel in drNewRels)
+			{
+
+				// check for cancellation
+				if ((myWorker.CancellationPending == true))
+				{
+					e.Cancel = true;
+					return true;
+				}
+
+				// set parameters
+				cmdInsert.Parameters["parent_id"].Value = drNewRel.Field<string>("parent_id");
+				cmdInsert.Parameters["child_id"].Value = drNewRel.Field<string>("child_id");
+
+				// insert row
+				try
+				{
+					cmdInsert.ExecuteNonQuery();
+				}
+				catch (NpgsqlException ex)
+				{
+					string strDepend = String.Format("{0}\\{1} <-- {2}\\{3}", drNewRel.Field<string>("parent_name"), drNewRel.Field<string>("parent_absolute_path"), drNewRel.Field<string>("child_name"), drNewRel.Field<string>("child_absolute_path"));
+					dlgStatus.AddStatusLine("Failed", "inserting relationship (" + ex.Detail + ") " + strDepend);
+					blnFailed = true;
+				}
+
+			}
+
+			return blnFailed;
+
+		}
+
 		void worker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
 		{
 			if (e.Cancelled == true)
@@ -2595,7 +2688,7 @@ namespace HackPDM
 		// fetch data (assuming tree methods like get latest)
 		// very similar to getting commits data, only in reverse
 		// get data from remote and match to local stuff
-		private DataSet LoadFetchData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, int intBaseDirId, string strBasePath)
+		private DataSet LoadFetchData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, int intBaseDirId, string strBasePath, List<string> lstSelected)
 		{
 			// running in separate thread
 			BackgroundWorker myWorker = sender as BackgroundWorker;
@@ -2612,89 +2705,28 @@ namespace HackPDM
 			// init DataSet
 			DataSet dsFetches = new DataSet();
 
-			// sql command for remote entry list
-			// select entries in or below the specified direcory
-			// also select dependencies of those entries, wherever they are
-			string strSql = @"
-				with dirs as (select dir_id from fcn_directory_recursive (:dir_id))
-				select
-					e.entry_id,
-					v.version_id,
-					e.dir_id,
-					e.entry_name,
-					t.type_id,
-					t.file_ext,
-					e.cat_id,
-					c.cat_name,
-					v.file_size as latest_size,
-					pg_size_pretty(v.file_size) as str_latest_size,
-					0 as local_size,
-					'0' as str_local_size,
-					v.file_modify_stamp as latest_stamp,
-					to_char(v.file_modify_stamp, 'yyyy-MM-dd HH24:mm:ss') as str_latest_stamp,
-					null as local_stamp,
-					'' as str_local_stamp,
-					v.md5sum as latest_md5,
-					null as local_md5,
-					e.checkout_user,
-					u.last_name || ', ' || u.first_name as ck_user_name,
-					e.checkout_date,
-					to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
-					e.checkout_node,
-					false as is_local,
-					true as is_remote,
-					case
-							when e.checkout_user is not null and e.checkout_user=:my_user_id then '.cm'
-							when e.checkout_user is not null and e.checkout_user<>:my_user_id then '.co'
-							else '.ro'
-						end as client_status_code,
-					'pwa' || replace(path, '/', '\') as relative_path,
-					:strLocalFileRoot || replace(path, '/', '\') as absolute_path,
-					t.icon,
-					false as is_depend_searched,
-					null as is_readonly
-				from hp_entry as e
-				left join hp_user as u on u.user_id=e.checkout_user
-				left join hp_category as c on c.cat_id=e.cat_id
-				left join hp_type as t on t.type_id=e.type_id
-				left join view_dir_tree as d on d.dir_id = e.dir_id
-				left join (
-					select distinct on (entry_id)
-						entry_id,
-						version_id,
-						file_size,
-						create_stamp,
-						file_modify_stamp,
-						md5sum
-					from hp_version
-					order by entry_id, create_stamp desc
-				) as v on v.entry_id=e.entry_id
-				where e.dir_id in (select dir_id from dirs)
-				or e.entry_id in (
-					select ce.entry_id
-					from hp_version_relationship as r
-					left join (
-						select distinct on (entry_id)
-							entry_id,
-							version_id
-						from hp_version
-						order by entry_id, create_stamp desc
-					) as pv on pv.version_id=r.rel_parent_id
-					left join hp_entry as pe on pe.entry_id=pv.entry_id
-					left join hp_version as cv on cv.version_id=r.rel_child_id
-					left join hp_entry as ce on ce.entry_id=cv.entry_id
-					where pe.dir_id in (select dir_id from dirs)
-					and ce.dir_id not in (select dir_id from dirs)
-				)
-				order by dir_id,entry_id;
-			";
+			// branch for list or tree selection
+			if (lstSelected != null)
+			{
+				// select * from fcn_latest_entries_by_list( \{ {0} \} );
+			}
+			else
+			{
 
-			// put the remote list in the DataSet
-			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-			daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("my_user_id", intMyUserId));
-			daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", intBaseDirId));
-			daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strLocalFileRoot", strLocalFileRoot));
-			daTemp.Fill(dsFetches);
+				// sql command for remote entry list
+				// select entries in or below the specified direcory
+				// also select dependencies of those entries, wherever they are, based on remote dependency data
+				// TODO: get latest versions of dependencies that have been added locally, but don't yet exist remotely
+				string strSql = "select * from fcn_latest_entries_by_dir(:dir_id);";
+
+				// put the remote list in the DataSet
+				NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("my_user_id", intMyUserId));
+				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", intBaseDirId));
+				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strLocalFileRoot", strLocalFileRoot));
+				daTemp.Fill(dsFetches);
+
+			}
 
 			if (dsList.Tables.Count == 0)
 			{
@@ -2862,12 +2894,13 @@ namespace HackPDM
 			arguments.Add(t);
 			arguments.Add(intDirId);
 			arguments.Add(strBasePath);
+			arguments.Add(null);
 
 			// launch the background thread
 			BackgroundWorker worker = new BackgroundWorker();
 			worker.WorkerSupportsCancellation = true;
 			worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
-			worker.DoWork += new DoWorkEventHandler(worker_TreeGetLatest);
+			worker.DoWork += new DoWorkEventHandler(worker_GetLatest);
 			worker.RunWorkerAsync(arguments);
 
 
@@ -2883,7 +2916,7 @@ namespace HackPDM
 
 		}
 
-		void worker_TreeGetLatest(object sender, DoWorkEventArgs e) {
+		void worker_GetLatest(object sender, DoWorkEventArgs e) {
 
 			bool blnFailed = false;
 
@@ -2895,9 +2928,10 @@ namespace HackPDM
 			NpgsqlTransaction t = (NpgsqlTransaction)genericlist[0];
 			int intBaseDirId = (int)genericlist[1];
 			string strBasePath = (string)genericlist[2];
+			List<string> lstSelected = (List<string>)genericlist[3];
 
 			// load fetch data
-			DataSet dsFetches = LoadFetchData(sender, e, t, intBaseDirId, strBasePath);
+			DataSet dsFetches = LoadFetchData(sender, e, t, intBaseDirId, strBasePath, lstSelected);
 			DataRow[] drBads;
 
 			// check for cancellation
@@ -3381,61 +3415,72 @@ namespace HackPDM
 
 		void CmsListGetLatestClick(object sender, EventArgs e) {
 
-			// get directory info
-			int intDirId = (int)treeView1.SelectedNode.Tag;
-
-			// get a data table of selected items
-			DataTable dtSelected = dsList.Tables[0].Clone();
-			ListView.SelectedListViewItemCollection lviSelection = listView1.SelectedItems;
-			foreach (ListViewItem lviSelected in lviSelection) {
-				string strFileName = (string)lviSelected.SubItems[0].Text;
-				DataRow drSelected = dsList.Tables[0].Select("dir_id="+intDirId+" and entry_name='"+strFileName+"'")[0];
-				dtSelected.ImportRow(drSelected);
-			}
 
 			// create the status dialog
 			dlgStatus = new StatusDialog();
 
+			// start the database transaction
+			t = connDb.BeginTransaction();
+
+			// get directory info
+			TreeNode tnCurrent = treeView1.SelectedNode;
+			int intDirId = (int)tnCurrent.Tag;
+			string strRelBasePath = tnCurrent.FullPath;
+
+			// get a list of selected items
+			List<string> lstSelected = new List<string>();
+			ListView.SelectedListViewItemCollection lviSelection = listView1.SelectedItems;
+			foreach (ListViewItem lviSelected in lviSelection)
+			{
+				lstSelected.Add(lviSelected.SubItems[0].Text);
+			}
+
+			// package arguments for the background worker
+			List<object> arguments = new List<object>();
+
+			arguments.Add(t);
+			arguments.Add(intDirId);
+			arguments.Add(strRelBasePath);
+			arguments.Add(lstSelected);
+
 			// launch the background thread
 			BackgroundWorker worker = new BackgroundWorker();
 			worker.WorkerSupportsCancellation = true;
-			worker.DoWork += new DoWorkEventHandler(worker_ListGetLatest);
 			worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
-			dlgStatus.AddStatusLine("Get Latest", "Selected items: "+lviSelection.Count);
-			worker.RunWorkerAsync(dtSelected);
+			worker.DoWork += new DoWorkEventHandler(worker_GetLatest);
+			worker.RunWorkerAsync(arguments);
 
+
+			// handle the cancel button
 			bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Get Latest");
-			if (blnWorkCanceled == true) {
+			if (blnWorkCanceled == true)
+			{
 				worker.CancelAsync();
 			}
 
-			ResetView(treeView1.SelectedNode.FullPath);
+			// refresh the main window
+			ResetView(tnCurrent.FullPath);
 
 		}
 
 		void worker_ListGetLatest(object sender, DoWorkEventArgs e) {
 
+			bool blnFailed = false;
+
 			BackgroundWorker myWorker = sender as BackgroundWorker;
-			DataTable dtItems = (DataTable)e.Argument;
-			int intRowCount = dtItems.Rows.Count;
 			dlgStatus.AddStatusLine("Info", "Starting worker");
+
+			// get arguments
+			List<object> genericlist = e.Argument as List<object>;
+			NpgsqlTransaction t = (NpgsqlTransaction)genericlist[0];
+			int intBaseDirId = (int)genericlist[1];
+			string strRelBasePath = (string)genericlist[2];
+			List<string> lstSelected = (List<string>)genericlist[3];
 
 			// start the database transaction
 			t = connDb.BeginTransaction();
-			//LargeObjectManager lbm = new LargeObjectManager(connDb);
 
-			// prepare to get latest version file id
-//			string strSql;
-//			strSql = @"
-//					select blob_ref
-//					from hp_version
-//					where entry_id=:entry_id
-//					order by create_stamp
-//					limit 1;
-//				";
-//			NpgsqlCommand cmdGetId = new NpgsqlCommand(strSql, connDb, t);
-//			cmdGetId.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
-//			cmdGetId.Prepare();
+
 
 			for (int i = 0; i < intRowCount; i++) {
 
