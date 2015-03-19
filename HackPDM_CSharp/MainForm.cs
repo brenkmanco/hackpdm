@@ -2709,6 +2709,18 @@ namespace HackPDM
 			if (lstSelected != null)
 			{
 				// select * from fcn_latest_entries_by_list( \{ {0} \} );
+				// sql command for remote entry list
+				// select entries in or below the specified direcory
+				// also select dependencies of those entries, wherever they are, based on remote dependency data
+				// TODO: get latest versions of dependencies that have been added locally, but don't yet exist remotely
+				string strSql = "select * from fcn_latest_entries_by_list( { {0} } );";
+
+				// put the remote list in the DataSet
+				NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("my_user_id", intMyUserId));
+				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", intBaseDirId));
+				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strLocalFileRoot", strLocalFileRoot));
+				daTemp.Fill(dsFetches);
 			}
 			else
 			{
