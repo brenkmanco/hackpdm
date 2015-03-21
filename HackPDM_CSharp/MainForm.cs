@@ -2688,7 +2688,7 @@ namespace HackPDM
 		// fetch data (assuming tree methods like get latest)
 		// very similar to getting commits data, only in reverse
 		// get data from remote and match to local stuff
-		private DataSet LoadFetchData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, int intBaseDirId, string strBasePath, List<string> lstSelected)
+		private DataSet LoadFetchData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, int intBaseDirId=-1, string strBasePath=null, List<string> lstSelected=null)
 		{
 			// running in separate thread
 			BackgroundWorker myWorker = sender as BackgroundWorker;
@@ -2731,8 +2731,6 @@ namespace HackPDM
 				// put the remote list in the DataSet
 				NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
 				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", intBaseDirId));
-				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("my_user_id", intMyUserId));
-				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strLocalFileRoot", strLocalFileRoot));
 				daTemp.Fill(dsFetches);
 
 			}
@@ -2770,25 +2768,13 @@ namespace HackPDM
 				string strFullName = strFilePath + "\\" + strFileName;
 
 				drRemote.SetField<string>("absolute_path", GetAbsolutePath(drRemote.Field<string>("relative_path")));
-				if (drRemote.Field<int>("checkout_user") != null)
-				{
-					if (drRemote.Field<int>("checkout_user") == intMyUserId)
-					{
-						drRemote.SetField<string>("client_status_code", ".cm");
-					}
-					else
-					{
-						drRemote.SetField<string>("client_status_code", ".co");
-					}
-
-				}
 
 				// log status
 				dlgStatus.AddStatusLine("Matching Local Files", "Checking file: " + strFullName);
 
 				if (File.Exists(strFullName))
 				{
-					// get file info
+					// file is also local -- get file info
 					FileInfo fiCurrFile = new FileInfo(strFullName);
 					string strFileExt = drRemote.Field<string>("file_ext");
 					Int64 lngFileSize = fiCurrFile.Length;
@@ -2806,17 +2792,33 @@ namespace HackPDM
 					drRemote.SetField<string>("str_local_stamp", FormatDate(dtModifyDate));
 
 					// update client_status_code
-					if (drRemote.Field<DateTime>("latest_stamp") > dtModifyDate)
+					string strClientStatusCode = drRemote.Field<string>("client_status_code");
+					if (drRemote.Field<int>("checkout_user") != null)
 					{
-						// nv: new remote version
-						drRemote.SetField<string>("client_status_code", ".nv");
-					}
-					else
-					{
-						// ""(empty string): identical files
-						drRemote.SetField<string>("client_status_code", "");
-					}
+						if (drRemote.Field<int>("checkout_user") == intMyUserId)
+						{
+							strClientStatusCode = ".cm";
+						}
+						else
+						{
+							strClientStatusCode = ".co";
+						}
 
+					}
+					if (strClientStatusCode != ".cm")
+					{
+						if (drRemote.Field<DateTime>("latest_stamp") > dtModifyDate)
+						{
+							// nv: new remote version
+							strClientStatusCode = ".nv";
+						}
+						else
+						{
+							// ""(empty string): identical files
+							strClientStatusCode = "";
+						}
+					}
+					drRemote.SetField<string>("client_status_code", strClientStatusCode);
 				}
 
 			}
