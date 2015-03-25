@@ -456,7 +456,7 @@ namespace HackPDM
 			LoadRemoteDirs();
 
 			// get the root directory row and set values
-			DataRow drRoot = dsTree.Tables[0].Select("dir_id=0")[0];
+			DataRow drRoot = dsTree.Tables[0].Select("dir_id=1")[0];
 			drRoot.SetField<bool>("is_local", true);
 			drRoot.SetField<string>("path", "pwa");
 
@@ -1784,7 +1784,7 @@ namespace HackPDM
 			DataSet dsCommits = LoadCommitsData(sender, e, t, strRelBasePath, lstSelectedNames);
 
 			// log files outside PWA
-			DataRow[] drNonPwaFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'.if' and absolute_path not like '{1}%'", strLocalFileRoot));
+			DataRow[] drNonPwaFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'.if' and absolute_path not like '{0}%'", strLocalFileRoot));
 			foreach (DataRow drCurrent in drNonPwaFiles)
 			{
 				// check for cancellation
@@ -1798,7 +1798,7 @@ namespace HackPDM
 			}
 
 			// log blocked files
-			DataRow[] drBlockedFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code='.if' and absolute_path like '{1}%'", strLocalFileRoot));
+			DataRow[] drBlockedFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code='.if' and absolute_path like '{0}%'", strLocalFileRoot));
 			foreach (DataRow drCurrent in drBlockedFiles)
 			{
 				// check for cancellation
@@ -2209,8 +2209,8 @@ namespace HackPDM
 			dsCommits.Tables["dirs"].Columns.Add("relative_path", Type.GetType("System.String"));
 
 			// add this directory to the dirs table
-			Int32 intDirId = -1;
-			Int32 intParentId = -1;
+			Int32 intDirId = 0;
+			Int32 intParentId = 0;
 			string strBaseName = strRelBasePath.Substring(strRelBasePath.LastIndexOf("\\") + 1);
 			string strRelParentPath = strRelBasePath.Substring(0, strRelBasePath.LastIndexOf("\\") - 1);
 			string strParentName = strRelParentPath.Substring(strRelParentPath.LastIndexOf("\\") + 1);
@@ -2229,7 +2229,7 @@ namespace HackPDM
 			{
 				// init files data table
 				dsCommits.Tables.Add(CreateFileTable());
-				dsCommits.Tables[0].TableName = "files";
+				dsCommits.Tables[1].TableName = "files";
 
 				// get files and directories recursively
 				blnFailed = LoadCommitsDataRecurse(sender, e, ref dsCommits, strRelBasePath);
@@ -2275,7 +2275,7 @@ namespace HackPDM
 			string strAbsolutePath = GetAbsolutePath(strRelativePath);
 
 			// get remote directory id (-1 if doesn't exist remotely)
-			int intDirId = -1;
+			int intDirId = 0;
 			dictTree.TryGetValue(strRelativePath, out intDirId);
 
 			// log status
@@ -2312,7 +2312,7 @@ namespace HackPDM
 				dlgStatus.AddStatusLine("Processing Files", "Processing local file: " + strFile);
 
 				// insert new row for presumed local-only file
-				dsCommits.Tables["files"].Rows.Add(null,
+				dsCommits.Tables["files"].Rows.Add(
 					null, // entry_id
 					null, // version_id
 					intDirId, // dir_id
@@ -2357,7 +2357,7 @@ namespace HackPDM
 			{
 				string strChildName = strChildAbsPath.Substring(strChildAbsPath.LastIndexOf("\\") + 1);
 				string strChildRelPath = GetAbsolutePath(strChildAbsPath);
-				int intChildId = -1;
+				int intChildId = 0;
 				dictTree.TryGetValue(strRelativePath, out intChildId);
 				dsCommits.Tables["dirs"].Rows.Add(intChildId, intDirId, strChildName, strChildRelPath);
 				blnFailed = LoadCommitsDataRecurse(sender, e, ref dsCommits, strChildRelPath);
@@ -2506,33 +2506,39 @@ namespace HackPDM
 			BackgroundWorker myWorker = sender as BackgroundWorker;
 
 			// get list of remote directories
-			DataRow[] drRemoteDirs = dsCommits.Tables["dirs"].Select("dir_id is not null");
+			DataSet dsTemp = new DataSet();
+			DataRow[] drRemoteDirs = dsCommits.Tables["dirs"].Select("dir_id<>0");
 			if (drRemoteDirs.Length == 0)
 			{
 				// no remote data for the included directories
-				return false;
+				// make an empty DataTable
+				dsTemp.Tables.Add(CreateFileTable());
 			}
-
-			// build comma separated list of remote directories to query
-			string[] strDirList = new string [drRemoteDirs.Length];
-			string strDirs = "";
-			foreach (DataRow row in drRemoteDirs)
+			else
 			{
-				strDirs += row.Field<string>("dir_id") + ",";
+
+				// build comma separated list of remote directories to query
+				string[] strDirList = new string[drRemoteDirs.Length];
+				string strDirs = "";
+				foreach (DataRow row in drRemoteDirs)
+				{
+					strDirs += row.Field<int>("dir_id").ToString() + ",";
+				}
+
+				// drop trailing comma
+				strDirs = strDirs.Substring(0, strDirs.Length - 2);
+
+				// get remote entries in a DataSet
+				string strSql = "select * from fcn_latest_w_depends_by_dir_list( {'" + strDirs + "'} );";
+				NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strLocalFileRoot", strLocalFileRoot));
+				daTemp.Fill(dsTemp);
+
 			}
 
-			// drop trailing comma
-			strDirs = strDirs.Substring(0, strDirs.Length - 2);
-
-			// get remote entries in a DataSet
-			DataSet dsTemp = new DataSet();
-			string strSql = "select * from fcn_latest_w_depends_by_dir_list( {'" + strDirs + "'} );";
-			NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-			daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strLocalFileRoot", strLocalFileRoot));
-			daTemp.Fill(dsTemp);
 
 			// loop through the local files and match remote files
-			DataRow[] drLocalFiles = dsCommits.Tables["files"].Select("dir_id is not null");
+			DataRow[] drLocalFiles = dsCommits.Tables["files"].Select("is_remote is null");
 			for (int i = 0; i < drLocalFiles.Length; i++)
 			{
 
@@ -2655,13 +2661,16 @@ namespace HackPDM
 					else
 					{
 						// get default type_id for this file extension
-						DataRow[] drType = ftmStart.RemoteFileTypes.Select("file_ext = " + strFileExt);
+						DataRow[] drType = ftmStart.RemoteFileTypes.Select("file_ext = '" + strFileExt + "'");
 						if (drType.Length != 0)
 						{
 							drLocalFile.SetField<Int32>("type_id", drType[0].Field<int>("type_id"));
 						}
 					}
 					drLocalFile.SetField<string>("client_status_code", strStatusCode);
+
+					// change is_remote from null to false
+					drLocalFile.SetField<bool>("is_remote", false);
 
 				}
 

@@ -124,7 +124,7 @@ CREATE SEQUENCE seq_hp_directory_dir_id START 1001;
 CREATE TABLE hp_directory (
 	
 	dir_id integer NOT NULL default nextval('seq_hp_directory_dir_id'::regclass),
-	parent_id integer CHECK (parent_id IS NOT NULL or dir_id=0::integer),
+	parent_id integer CHECK (parent_id IS NOT NULL or dir_id=1::integer),
 	dir_name character varying(255),
 	default_cat integer NOT NULL,
 	create_stamp timestamp(6) without time zone NOT NULL DEFAULT now(),
@@ -150,11 +150,19 @@ CREATE TRIGGER trg_hp_directory_1_modify_stamp
 
 CREATE UNIQUE INDEX ON hp_directory (parent_id, lower(dir_name::text));
 
-insert into hp_directory (dir_id,parent_id,dir_name,default_cat,create_user,modify_user) values (0,NULL,'top',1,0,0);
+insert into hp_directory (dir_id,parent_id,dir_name,default_cat,create_user,modify_user) values (1,NULL,'root',1,0,0);
 -- insert into hp_directory (parent_id,dir_name,default_cat,create_user,modify_user) values (0,'1',1,0,0);
 -- insert into hp_directory (parent_id,dir_name,default_cat,create_user,modify_user) values (1001,'1.1',1,0,0);
 -- insert into hp_directory (parent_id,dir_name,default_cat,create_user,modify_user) values (1001,'1.2',1,0,0);
 -- insert into hp_directory (parent_id,dir_name,default_cat,create_user,modify_user) values (1002,'2.1',1,0,0);
+
+/* upgrade
+ALTER TABLE hp_directory drop CONSTRAINT hp_directory_check;
+insert into hp_directory (dir_id,parent_id,dir_name,default_cat,create_user,modify_user) values (1,NULL,'root',1,0,0);
+update hp_directory set parent_id=1 where parent_id=0;
+delete from hp_directory where dir_id=0;
+ALTER TABLE hp_directory add CONSTRAINT hp_directory_check CHECK (parent_id IS NOT NULL OR dir_id = 1);
+*/
 
 /*
 	
