@@ -124,7 +124,7 @@ CREATE SEQUENCE seq_hp_directory_dir_id START 1001;
 CREATE TABLE hp_directory (
 	
 	dir_id integer NOT NULL default nextval('seq_hp_directory_dir_id'::regclass),
-	parent_id integer CHECK (parent_id IS NOT NULL or dir_id=0::integer),
+	parent_id integer CHECK (parent_id IS NOT NULL or dir_id=1::integer),
 	dir_name character varying(255),
 	default_cat integer NOT NULL,
 	create_stamp timestamp(6) without time zone NOT NULL DEFAULT now(),
@@ -150,11 +150,19 @@ CREATE TRIGGER trg_hp_directory_1_modify_stamp
 
 CREATE UNIQUE INDEX ON hp_directory (parent_id, lower(dir_name::text));
 
-insert into hp_directory (dir_id,parent_id,dir_name,default_cat,create_user,modify_user) values (0,NULL,'top',1,0,0);
+insert into hp_directory (dir_id,parent_id,dir_name,default_cat,create_user,modify_user) values (1,NULL,'root',1,0,0);
 -- insert into hp_directory (parent_id,dir_name,default_cat,create_user,modify_user) values (0,'1',1,0,0);
 -- insert into hp_directory (parent_id,dir_name,default_cat,create_user,modify_user) values (1001,'1.1',1,0,0);
 -- insert into hp_directory (parent_id,dir_name,default_cat,create_user,modify_user) values (1001,'1.2',1,0,0);
 -- insert into hp_directory (parent_id,dir_name,default_cat,create_user,modify_user) values (1002,'2.1',1,0,0);
+
+/* upgrade
+ALTER TABLE hp_directory drop CONSTRAINT hp_directory_check;
+insert into hp_directory (dir_id,parent_id,dir_name,default_cat,create_user,modify_user) values (1,NULL,'root',1,0,0);
+update hp_directory set parent_id=1 where parent_id=0;
+delete from hp_directory where dir_id=0;
+ALTER TABLE hp_directory add CONSTRAINT hp_directory_check CHECK (parent_id IS NOT NULL OR dir_id = 1);
+*/
 
 /*
 	
@@ -554,9 +562,9 @@ ALTER TABLE view_dir_tree OWNER TO engadmin;
 
 -- -----------------------------------------------------------------------------
 
--- DROP FUNCTION fcn_latest_entries_by_dir(integer);
+-- DROP FUNCTION fcn_latest_w_depends_by_dir(integer);
 
-CREATE OR REPLACE FUNCTION fcn_latest_entries_by_dir(
+CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_dir(
 	IN v_dir_id integer,
 	OUT entry_id integer,
 	OUT version_id integer,
@@ -667,16 +675,16 @@ $BODY$
   LANGUAGE sql VOLATILE
   COST 100
   ROWS 1000;
-ALTER FUNCTION fcn_latest_entries_by_dir(integer) OWNER TO engadmin;
+ALTER FUNCTION fcn_latest_w_depends_by_dir(integer) OWNER TO engadmin;
 
 
 
 
 -- -----------------------------------------------------------------------------
 
--- DROP FUNCTION fcn_latest_entries_by_list(integer[]);
+-- DROP FUNCTION fcn_latest_w_depends_by_entry_list(integer[]);
 
-CREATE OR REPLACE FUNCTION fcn_latest_entries_by_list(
+CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_entry_list(
 	IN v_version_ids integer[],
 	OUT entry_id integer,
 	OUT version_id integer,
@@ -783,7 +791,123 @@ $BODY$
   LANGUAGE sql VOLATILE
   COST 100
   ROWS 1000;
-ALTER FUNCTION fcn_latest_entries_by_list(integer[]) OWNER TO engadmin;
+ALTER FUNCTION fcn_latest_w_depends_by_entry_list(integer[]) OWNER TO engadmin;
+
+
+
+
+-- -----------------------------------------------------------------------------
+
+-- DROP FUNCTION fcn_latest_w_depends_by_dir_list(integer);
+
+CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_dir_list(
+	IN v_dir_ids integer[],
+	OUT entry_id integer,
+	OUT version_id integer,
+	OUT dir_id integer,
+	OUT entry_name varchar,
+	OUT type_id integer,
+	OUT file_ext varchar,
+	OUT cat_id integer,
+	OUT cat_name varchar,
+	OUT file_size bigint,
+	OUT str_latest_size varchar,
+	OUT local_size bigint,
+	OUT str_local_size varchar,
+	OUT file_modify_stamp timestamp(6) without time zone,
+	OUT str_latest_stamp varchar,
+	OUT local_stamp timestamp(6) without time zone,
+	OUT str_local_stamp varchar,
+	OUT latest_md5 bytea,
+	OUT local_md5 bytea,
+	OUT checkout_user integer,
+	OUT ck_user_name varchar,
+	OUT checkout_date timestamp(6) without time zone,
+	OUT str_checkout_date varchar,
+	OUT checkout_node integer,
+	OUT is_local boolean,
+	OUT is_remote boolean,
+	OUT client_status_code varchar,
+	OUT relative_path varchar,
+	OUT absolute_path varchar,
+	OUT icon bytea,
+	OUT is_depend_searched boolean,
+	OUT is_readonly boolean
+)
+  RETURNS SETOF record AS
+$BODY$
+	-- several of the values are returned null because they are things only the client would know
+	with lvs as (
+		-- latest versions
+		select distinct on (entry_id)
+			entry_id,
+			version_id,
+			file_size,
+			create_stamp,
+			file_modify_stamp,
+			md5sum
+		from hp_version
+		order by entry_id, create_stamp desc
+	)
+	select
+		e.entry_id,
+		v.version_id,
+		e.dir_id,
+		e.entry_name,
+		t.type_id,
+		t.file_ext,
+		e.cat_id,
+		c.cat_name,
+		v.file_size::bigint as latest_size,
+		pg_size_pretty(v.file_size) as str_latest_size,
+		0::bigint as local_size,
+		'0'::varchar as str_local_size,
+		v.file_modify_stamp as latest_stamp,
+		to_char(v.file_modify_stamp, 'yyyy-MM-dd HH24:mm:ss') as str_latest_stamp,
+		null::timestamp as local_stamp,
+		''::varchar as str_local_stamp,
+		v.md5sum as latest_md5,
+		null::bytea as local_md5,
+		e.checkout_user,
+		u.last_name || ', ' || u.first_name as ck_user_name,
+		e.checkout_date,
+		to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
+		e.checkout_node,
+		false as is_local,
+		true as is_remote,
+		'.ro'::varchar as client_status_code,
+		'pwa' || replace(d.rel_path, '/', '\') as relative_path,
+		null::varchar as absolute_path,
+		t.icon,
+		false as is_depend_searched,
+		null::boolean as is_readonly
+	from hp_entry as e
+	left join hp_user as u on u.user_id=e.checkout_user
+	left join hp_category as c on c.cat_id=e.cat_id
+	left join hp_type as t on t.type_id=e.type_id
+	left join view_dir_tree as d on d.dir_id = e.dir_id
+	left join lvs as v on v.entry_id=e.entry_id
+	where e.dir_id in (select unnest($1))
+	or e.entry_id in (
+		-- get dependency entries
+		select distinct v.entry_id
+		from fcn_dependency_recursive(
+			(select ARRAY(
+				-- using latest versions for entries under the specified directory
+				select v.version_id
+				from lvs as v
+				left join hp_entry as e on e.entry_id=v.entry_id
+				where e.dir_id in (select unnest($1))
+			))
+		) as r
+		left join hp_version as v on v.version_id=r.rel_child_id
+	)
+	order by dir_id,entry_id;
+$BODY$
+  LANGUAGE sql VOLATILE
+  COST 100
+  ROWS 1000;
+ALTER FUNCTION fcn_latest_w_depends_by_dir_list(integer) OWNER TO engadmin;
 
 
 
