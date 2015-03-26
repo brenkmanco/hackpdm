@@ -31,6 +31,7 @@ using Microsoft.Win32;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Configuration;
 
 //using System.Threading;
 using System.IO;
@@ -227,6 +228,18 @@ namespace HackPDM
 			// load profile info
 			strCurrProfileId = Properties.Settings.Default.usetDefaultProfile;
 			string strXmlProfiles = Properties.Settings.Default.usetProfiles;
+
+			// TEMP: try to get a saved profile
+			// running in the debugger causes the config file to be in a different place everytime
+			// that means you have to create a new one everytime
+			// TODO: erase this stuff when building for release
+			var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds.config");
+			var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
+			var sectionGroup = configuration.GetSectionGroup("userSettings"); // This is the section group name, change to your needs
+			var section = (ClientSettingsSection)sectionGroup.Sections.Get("HackPDM.Properties.Settings"); // This is the section name, change to your needs
+			//var setting = section.Settings.Get("SettingName"); // This is the setting name, change to your needs
+			strCurrProfileId = section.Settings.Get("usetDefaultProfile").Value.ValueXml.InnerText;
+			strXmlProfiles = section.Settings.Get("usetProfiles").Value.ValueXml.InnerText;
 
 			// check existence
 			if (blnForceDlg || strXmlProfiles == "" || strCurrProfileId == "")
