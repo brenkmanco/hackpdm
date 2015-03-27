@@ -43,7 +43,7 @@ namespace HackPDM
 
         HttpWebRequest httpWebRequest;
 
-        private int statusCode;
+        private int statusCode = 0;
         /// <summary>
         /// Return statusCode of lastest operation
         /// </summary>
@@ -52,13 +52,13 @@ namespace HackPDM
             get { return statusCode; }
         }
 
-        private int statusString;
+        private string statusString;
         /// <summary>
         /// Return statusCode of lastest operation
         /// </summary>
         public string StatusString
         {
-            get { return statusCode.ToString().Substring(0,1); }
+            get { return statusString; }
         }
 
 
@@ -235,7 +235,6 @@ namespace HackPDM
             PushContentStream(content, null);
 
             // process response
-            int statusCode = 0;
             using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse())
             {
                 statusCode = (int)response.StatusCode;
@@ -261,7 +260,6 @@ namespace HackPDM
             PushContentStream(null, localFilePath);
 
             // process response
-            int statusCode = 0;
             using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse())
             {
                 statusCode = (int)response.StatusCode;
@@ -281,9 +279,10 @@ namespace HackPDM
             Uri downloadUri = getServerUrl(remoteFilePath, false);
             string method = WebRequestMethods.Http.Get.ToString();
 
+			// send the request
             HTTPRequest(downloadUri, method, null, null, null);
 
-            int statusCode = 0;
+			// get the response
             byte[] content = new byte[4096];
             using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse())
             {
@@ -319,7 +318,6 @@ namespace HackPDM
 
             HTTPRequest(downloadUri, method, null, null, null);
 
-            int statusCode = 0;
             using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse())
             {
                 statusCode = (int)response.StatusCode;
@@ -354,7 +352,6 @@ namespace HackPDM
 
             HTTPRequest(dirUri, method, null, null, null);
 
-            int statusCode = 0;
             using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse())
             {
                 statusCode = (int)response.StatusCode;
@@ -373,10 +370,10 @@ namespace HackPDM
 
             HTTPRequest(delUri, "DELETE", null, null, null);
 
-            int statusCode = 0;
             using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse())
             {
                 statusCode = (int)response.StatusCode;
+				statusString = response.StatusDescription;
             }
 
         }
@@ -467,7 +464,8 @@ namespace HackPDM
                 if (content != null) {
                     streamResponse.Write(content, 0, content.Length);
                 } else {
-                    using (FileStream fs = new FileStream(uploadFilePath, FileMode.Open, FileAccess.Read)) {
+					using (FileStream fs = new FileStream(uploadFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+					{
                         content = new byte[4096];
                         int bytesRead = 0;
                         do {

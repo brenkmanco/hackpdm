@@ -15,7 +15,6 @@ $BODY$
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
-ALTER FUNCTION fcn_common_modify_stamp() OWNER TO engadmin;
 
 
 
@@ -42,7 +41,6 @@ create table hp_user (
 	foreign key (modify_user) references hp_user (user_id)
 	
 );
-ALTER TABLE hp_user OWNER TO engadmin;
 
 CREATE TRIGGER trg_hp_user_1_modify_stamp
   BEFORE UPDATE
@@ -75,7 +73,6 @@ CREATE TABLE hp_node (
 	foreign key (create_user) references hp_user (user_id)
 	
 );
-ALTER TABLE hp_node OWNER TO engadmin;
 
 
 insert into hp_node (node_name,create_user) values ('Jerry-HP',0);
@@ -104,7 +101,6 @@ create table hp_category (
 	foreign key (create_user) references hp_user (user_id)
 	
 );
-ALTER TABLE hp_category OWNER TO engadmin;
 
 insert into hp_category (cat_id,cat_name,cat_description,track_version,track_depends,create_user) values (1,'CAD','CAD files are versioned and have dependencies.',true,true,0);
 insert into hp_category (cat_id,cat_name,cat_description,track_version,track_depends,create_user) values (2,'Library','Typically CAD files, however no versions are kept.  The files may have dependencies.',false,true,0);
@@ -140,7 +136,6 @@ CREATE TABLE hp_directory (
 	unique(dir_id,parent_id)
 	
 );
-ALTER TABLE hp_directory OWNER TO engadmin;
 
 CREATE TRIGGER trg_hp_directory_1_modify_stamp
   BEFORE UPDATE
@@ -218,7 +213,6 @@ create table hp_type (
 	foreign key (default_cat) references hp_category (cat_id)
 	
 );
-ALTER TABLE hp_type OWNER TO engadmin;
 
 CREATE UNIQUE INDEX ON hp_type (lower(file_ext::text));
 
@@ -259,7 +253,6 @@ create table hp_entry_name_filter (
 	primary key (filter_id)
 	
 );
-ALTER TABLE hp_entry_name_filter OWNER TO engadmin;
 
 CREATE UNIQUE INDEX ON hp_entry_name_filter (lower(name_proto::text));
 
@@ -304,7 +297,6 @@ create table hp_entry (
 	foreign key (checkout_node) references hp_node (node_id)
 	
 );
-ALTER TABLE hp_entry OWNER TO engadmin;
 
 CREATE UNIQUE INDEX ON hp_entry (dir_id, lower(entry_name::text));
 
@@ -327,7 +319,7 @@ create table hp_version (
 	create_stamp timestamp(6) without time zone NOT NULL DEFAULT now(),
 	create_user integer NOT NULL,
 	blob_ref oid NOT NULL,
-	md5sum bytea NOT NULL,
+	md5sum text NOT NULL,
 	preview_image bytea NOT NULL,
 	release_user integer,
 	release_date timestamp(6) without time zone,
@@ -339,7 +331,6 @@ create table hp_version (
 	foreign key (release_user) references hp_user (user_id)
 	
 );
-ALTER TABLE hp_version OWNER TO engadmin;
 
 
 
@@ -363,7 +354,6 @@ create table hp_property (
 	foreign key(create_user) references hp_user(user_id)
 	
 );
-ALTER TABLE hp_property OWNER TO engadmin;
 
 
 
@@ -388,7 +378,6 @@ create table hp_version_property (
 	foreign key (prop_id) references hp_property (prop_id)
 	
 );
-ALTER TABLE hp_version_property OWNER TO engadmin;
 
 CREATE UNIQUE INDEX ON hp_version_property (lower(config_name::text));
 
@@ -411,7 +400,6 @@ create table hp_category_property (
 	foreign key (prop_id) references hp_property (prop_id)
 	
 );
-ALTER TABLE hp_category_property OWNER TO engadmin;
 
 
 
@@ -419,9 +407,9 @@ ALTER TABLE hp_category_property OWNER TO engadmin;
 -- -----------------------------------------------------------------------------
 
 
---drop table hp_versionrelationship;
+--drop table hp_version_relationship;
 
-create table hp_versionrelationship (
+create table hp_version_relationship (
 	
 	rel_parent_id integer,
 	rel_child_id integer,
@@ -431,7 +419,6 @@ create table hp_versionrelationship (
 	foreign key(rel_child_id) references hp_version(version_id)
 	
 );
-ALTER TABLE hp_versionrelationship OWNER TO engadmin;
 
 
 
@@ -464,7 +451,6 @@ $BODY$
   LANGUAGE sql VOLATILE
   COST 100
   ROWS 1000;
-ALTER FUNCTION fcn_dependency_recursive(integer[]) OWNER TO engadmin;
 
 
 
@@ -497,7 +483,6 @@ $BODY$
   LANGUAGE sql VOLATILE
   COST 100
   ROWS 1000;
-ALTER FUNCTION fcn_directory_recursive(integer) OWNER TO engadmin;
 
 
 
@@ -533,7 +518,6 @@ $BODY$
   LANGUAGE sql VOLATILE
   COST 100
   ROWS 1000;
-ALTER FUNCTION fcn_reverse_path(integer) OWNER TO engadmin;
 
 
 
@@ -543,19 +527,18 @@ ALTER FUNCTION fcn_reverse_path(integer) OWNER TO engadmin;
 -- DROP VIEW view_dir_tree;
 
 CREATE OR REPLACE VIEW view_dir_tree AS 
- WITH RECURSIVE dir_tree(parent_id, dir_id, dir_name, path) AS (
+ WITH RECURSIVE dir_tree(parent_id, dir_id, dir_name, rel_path) AS (
                  SELECT hp_directory.parent_id, hp_directory.dir_id, hp_directory.dir_name, ''::text AS rel_path
                    FROM hp_directory
                   WHERE hp_directory.parent_id IS NULL
         UNION ALL 
-                 SELECT c.parent_id, c.dir_id, c.dir_name, (p.path || '/'::text) || c.dir_name::text
+                 SELECT c.parent_id, c.dir_id, c.dir_name, (p.rel_path || '/'::text) || c.dir_name::text
                    FROM hp_directory c, dir_tree p
                   WHERE c.parent_id = p.dir_id
         )
- SELECT dir_tree.parent_id, dir_tree.dir_id, dir_tree.dir_name, dir_tree.path
+ SELECT dir_tree.parent_id, dir_tree.dir_id, dir_tree.dir_name, dir_tree.rel_path
    FROM dir_tree;
 
-ALTER TABLE view_dir_tree OWNER TO engadmin;
 
 
 
@@ -582,8 +565,8 @@ CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_dir(
 	OUT str_latest_stamp varchar,
 	OUT local_stamp timestamp(6) without time zone,
 	OUT str_local_stamp varchar,
-	OUT latest_md5 bytea,
-	OUT local_md5 bytea,
+	OUT latest_md5 text,
+	OUT local_md5 text,
 	OUT checkout_user integer,
 	OUT ck_user_name varchar,
 	OUT checkout_date timestamp(6) without time zone,
@@ -635,7 +618,7 @@ $BODY$
 		null::timestamp as local_stamp,
 		''::varchar as str_local_stamp,
 		v.md5sum as latest_md5,
-		null::bytea as local_md5,
+		null::text as local_md5,
 		e.checkout_user,
 		u.last_name || ', ' || u.first_name as ck_user_name,
 		e.checkout_date,
@@ -675,7 +658,6 @@ $BODY$
   LANGUAGE sql VOLATILE
   COST 100
   ROWS 1000;
-ALTER FUNCTION fcn_latest_w_depends_by_dir(integer) OWNER TO engadmin;
 
 
 
@@ -702,8 +684,8 @@ CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_entry_list(
 	OUT str_latest_stamp varchar,
 	OUT local_stamp timestamp(6) without time zone,
 	OUT str_local_stamp varchar,
-	OUT latest_md5 bytea,
-	OUT local_md5 bytea,
+	OUT latest_md5 text,
+	OUT local_md5 text,
 	OUT checkout_user integer,
 	OUT ck_user_name varchar,
 	OUT checkout_date timestamp(6) without time zone,
@@ -751,7 +733,7 @@ $BODY$
 		null::timestamp as local_stamp,
 		''::varchar as str_local_stamp,
 		v.md5sum as latest_md5,
-		null::bytea as local_md5,
+		null::text as local_md5,
 		e.checkout_user,
 		u.last_name || ', ' || u.first_name as ck_user_name,
 		e.checkout_date,
@@ -791,7 +773,6 @@ $BODY$
   LANGUAGE sql VOLATILE
   COST 100
   ROWS 1000;
-ALTER FUNCTION fcn_latest_w_depends_by_entry_list(integer[]) OWNER TO engadmin;
 
 
 
@@ -818,8 +799,8 @@ CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_dir_list(
 	OUT str_latest_stamp varchar,
 	OUT local_stamp timestamp(6) without time zone,
 	OUT str_local_stamp varchar,
-	OUT latest_md5 bytea,
-	OUT local_md5 bytea,
+	OUT latest_md5 text,
+	OUT local_md5 text,
 	OUT checkout_user integer,
 	OUT ck_user_name varchar,
 	OUT checkout_date timestamp(6) without time zone,
@@ -867,7 +848,7 @@ $BODY$
 		null::timestamp as local_stamp,
 		''::varchar as str_local_stamp,
 		v.md5sum as latest_md5,
-		null::bytea as local_md5,
+		null::text as local_md5,
 		e.checkout_user,
 		u.last_name || ', ' || u.first_name as ck_user_name,
 		e.checkout_date,
@@ -907,7 +888,6 @@ $BODY$
   LANGUAGE sql VOLATILE
   COST 100
   ROWS 1000;
-ALTER FUNCTION fcn_latest_w_depends_by_dir_list(integer) OWNER TO engadmin;
 
 
 

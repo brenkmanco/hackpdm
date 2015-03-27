@@ -81,6 +81,13 @@ namespace HackPDM
 
 		/// <summary>
 		/// Return File Types DataTable
+		/// - type_id
+		/// - file_ext
+		/// - default_cat
+		/// - cat_name
+		/// - icon
+		/// - type_regex
+		/// - description
 		/// </summary>
 		public DataTable RemoteFileTypes
 		{

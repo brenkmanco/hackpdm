@@ -235,9 +235,9 @@ namespace HackPDM
 			// TODO: erase this stuff when building for release
 			var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds.config");
 			var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
-			var sectionGroup = configuration.GetSectionGroup("userSettings"); // This is the section group name, change to your needs
-			var section = (ClientSettingsSection)sectionGroup.Sections.Get("HackPDM.Properties.Settings"); // This is the section name, change to your needs
-			//var setting = section.Settings.Get("SettingName"); // This is the setting name, change to your needs
+			var sectionGroup = configuration.GetSectionGroup("tempSettingsGroup"); // This is the section group name, change to your needs
+			var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
+			//var setting = section.Settings.Get("usetDefaultProfile"); // This is the setting name, change to your needs
 			strCurrProfileId = section.Settings.Get("usetDefaultProfile").Value.ValueXml.InnerText;
 			strXmlProfiles = section.Settings.Get("usetProfiles").Value.ValueXml.InnerText;
 
@@ -403,10 +403,10 @@ namespace HackPDM
 			TreeNode tnSelect = new TreeNode();
 
 			// add to dictionary
-			dictTree.Add(tnRoot.FullPath, (int)0);
+			dictTree.Add(tnRoot.FullPath, (int)1);
 
 			// build the tree recursively
-			PopulateTree(tnRoot, (int)0);
+			PopulateTree(tnRoot, (int)1);
 
 			// clear the list window
 			InitListView();
@@ -526,7 +526,8 @@ namespace HackPDM
 					tnChild.SelectedImageIndex = 1;
 					tnParentNode.Nodes.Add(tnChild);
 
-					//Recursively build the tree
+					// Recursively build the tree
+					// from here, any subdirectories will be local only
 					PopulateTreeLocal(tnChild);
 
 				}
@@ -609,6 +610,9 @@ namespace HackPDM
 				tnChild.SelectedImageIndex = 2;
 				tnParentNode.Nodes.Add(tnChild);
 
+				// add to dictionary
+				dictTree.Add(tnChild.FullPath, intDirId);
+
 				//Recursively build the tree
 				PopulateTreeRemote(tnChild, intDirId);
 
@@ -664,7 +668,7 @@ namespace HackPDM
 			string strRelPath = nodeCurrent.FullPath;
 
 			// get remote entries
-			int intDirId = -1;
+			int intDirId = 0;
 			if (nodeCurrent.Tag != null) {
 
 				intDirId = (int)nodeCurrent.Tag;
@@ -1455,7 +1459,10 @@ namespace HackPDM
 			// get tree path
 			string stringParse = "";
 			// replace actual root path with pwa
-			stringParse = "pwa" + stringPath.Substring(strLocalFileRoot.Length);
+			if (stringPath.Contains(strLocalFileRoot))
+			{
+				stringParse = "pwa" + stringPath.Substring(strLocalFileRoot.Length);
+			}
 			return stringParse;
 		}
 
@@ -1528,7 +1535,8 @@ namespace HackPDM
 			// get local file checksum
 			using (var md5 = MD5.Create())
 			{
-				using (var stream = File.OpenRead(FileName))
+				//using (var stream = File.OpenRead(FileName))
+				using (var stream = File.Open(FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
 				{
 					return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
 				}
@@ -1886,7 +1894,7 @@ namespace HackPDM
 				if (IsFileLocked(fiCurrFile) == true)
 				{
 					// file is in use: don't continue
-					throw new System.Exception("File \"" + fiCurrFile.Name + "\" is locked.  Release it first.");
+					//throw new System.Exception("File \"" + fiCurrFile.Name + "\" is locked.  Release it first.");
 					//return;
 				}
 
@@ -1896,13 +1904,13 @@ namespace HackPDM
 			bool blnFailed = false;
 
 			// add remote directories
-			blnFailed = AddRemoteDirs(sender, e, t, ref dsCommits);
+			blnFailed = blnFailed || AddRemoteDirs(sender, e, t, ref dsCommits);
 
 			// add remote files
-			blnFailed = AddNewVersions(sender, e, t, ref dsCommits);
+			blnFailed = blnFailed || AddNewVersions(sender, e, t, ref dsCommits);
 
 			// add remote relationships (file dependencies)
-			blnFailed = AddVersionDepends(sender, e, t, ref dsCommits);
+			blnFailed = blnFailed || AddVersionDepends(sender, e, t, ref dsCommits);
 
 			// TODO: insert file properties
 			//blnFailed = AddFileProps(sender, e, t, ref dsCommits);
@@ -2220,16 +2228,17 @@ namespace HackPDM
 			dsCommits.Tables["dirs"].Columns.Add("parent_id", Type.GetType("System.Int32"));
 			dsCommits.Tables["dirs"].Columns.Add("dir_name", Type.GetType("System.String"));
 			dsCommits.Tables["dirs"].Columns.Add("relative_path", Type.GetType("System.String"));
+			dsCommits.Tables["dirs"].Columns.Add("absolute_path", Type.GetType("System.String"));
 
 			// add this directory to the dirs table
 			Int32 intDirId = 0;
 			Int32 intParentId = 0;
 			string strBaseName = strRelBasePath.Substring(strRelBasePath.LastIndexOf("\\") + 1);
-			string strRelParentPath = strRelBasePath.Substring(0, strRelBasePath.LastIndexOf("\\") - 1);
+			string strRelParentPath = strRelBasePath.Substring(0, strRelBasePath.LastIndexOf("\\"));
 			string strParentName = strRelParentPath.Substring(strRelParentPath.LastIndexOf("\\") + 1);
 			dictTree.TryGetValue(strRelBasePath, out intDirId);
 			dictTree.TryGetValue(strRelParentPath, out intParentId);
-			dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strBaseName, strRelBasePath);
+			dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strBaseName, strRelBasePath, GetAbsolutePath(strRelBasePath));
 
 			// check for cancellation
 			if ((myWorker.CancellationPending == true))
@@ -2351,7 +2360,7 @@ namespace HackPDM
 					null, // checkout_node
 					true, // is_local
 					null, // is_remote
-					null, // client_status_code
+					".lo", // client_status_code
 					strRelativePath, // relative_path
 					strAbsolutePath, // absolute_path
 					null, // icon
@@ -2372,7 +2381,7 @@ namespace HackPDM
 				string strChildRelPath = GetAbsolutePath(strChildAbsPath);
 				int intChildId = 0;
 				dictTree.TryGetValue(strRelativePath, out intChildId);
-				dsCommits.Tables["dirs"].Rows.Add(intChildId, intDirId, strChildName, strChildRelPath);
+				dsCommits.Tables["dirs"].Rows.Add(intChildId, intDirId, strChildName, strChildRelPath, strChildAbsPath);
 				blnFailed = LoadCommitsDataRecurse(sender, e, ref dsCommits, strChildRelPath);
 			}
 
@@ -2457,7 +2466,7 @@ namespace HackPDM
 								null, // checkout_node
 								true, // is_local
 								null, // is_remote
-								null, // client_status_code
+								".lo", // client_status_code
 								strRelativePath, // relative_path
 								strAbsolutePath, // absolute_path
 								null, // icon
@@ -2473,22 +2482,22 @@ namespace HackPDM
 								string strDirName = strRelativePath.Substring(strRelativePath.LastIndexOf("\\") + 1);
 
 								// get directory id
-								Int32 intDirId = -1;
+								Int32 intDirId = 0;
 								dictTree.TryGetValue(strRelativePath, out intDirId);
 
 								// get parent directory id
-								Int32 intParentId = -1;
+								Int32 intParentId = 0;
 								string strParentPath = strRelativePath.Substring(0, strRelativePath.LastIndexOf("\\") - 1);
 								dictTree.TryGetValue(strParentPath, out intParentId);
 
-								dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strDirName, strRelativePath);
+								dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strDirName, strRelativePath, strAbsolutePath);
 							}
 
 							// add relationships
 							// the calling method will associate entry ids for only the files to be committed
 							dsCommits.Tables["rels"].Rows.Add(
-								-1,                 // parent_id
-								-1,                 // child_id
+								0,                 // parent_id
+								0,                 // child_id
 								strParentShortName, // parent_name
 								strDepends[0],      // child_name
 								strParentAbsPath,   // parent_absolute_path
@@ -2542,7 +2551,7 @@ namespace HackPDM
 				strDirs = strDirs.Substring(0, strDirs.Length - 2);
 
 				// get remote entries in a DataSet
-				string strSql = "select * from fcn_latest_w_depends_by_dir_list( {'" + strDirs + "'} );";
+				string strSql = "select * from fcn_latest_w_depends_by_dir_list( array [" + strDirs + "] );";
 				NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
 				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strLocalFileRoot", strLocalFileRoot));
 				daTemp.Fill(dsTemp);
@@ -2551,7 +2560,7 @@ namespace HackPDM
 
 
 			// loop through the local files and match remote files
-			DataRow[] drLocalFiles = dsCommits.Tables["files"].Select("is_remote is null");
+			DataRow[] drLocalFiles = dsCommits.Tables["files"].Select("is_remote=false");
 			for (int i = 0; i < drLocalFiles.Length; i++)
 			{
 
@@ -2632,7 +2641,7 @@ namespace HackPDM
 					// update version ids in relationships
 					if (strClientStatusCode != ".cm")
 					{
-						DataRow[] drRels = dsCommits.Tables["rels"].Select(String.Format("(child_name='{0} and child_absolute_path='{1}) or (parent_name='{0}' and parent_absolute_path='{1}')", strFileName, strAbsPath));
+						DataRow[] drRels = dsCommits.Tables["rels"].Select(String.Format("(child_name='{0}' and child_absolute_path='{1}') or (parent_name='{0}' and parent_absolute_path='{1}')", strFileName, strAbsPath));
 						foreach (DataRow drRel in drRels)
 						{
 
@@ -2678,6 +2687,8 @@ namespace HackPDM
 						if (drType.Length != 0)
 						{
 							drLocalFile.SetField<Int32>("type_id", drType[0].Field<int>("type_id"));
+							drLocalFile.SetField<Int32>("cat_id", drType[0].Field<int>("default_cat"));
+							drLocalFile.SetField<string>("cat_name", drType[0].Field<string>("cat_name"));
 						}
 					}
 					drLocalFile.SetField<string>("client_status_code", strStatusCode);
@@ -2715,34 +2726,34 @@ namespace HackPDM
 			// C:\pwa\Designed\Mining\ZM1800\Top Assemblies
 
 			// get directories that are inside the pwa
-			DataRow[] OtherDirs = dsCommits.Tables["dirs"].Select(String.Format("relative_path like '{0}'", strLocalFileRoot), "relative_path asc");
+			DataRow[] OtherDirs = dsCommits.Tables["dirs"].Select("dir_id=0 and relative_path like 'pwa%'", "relative_path asc");
 
 			string strPrevDir = "";
 			foreach (DataRow dir in OtherDirs)
 			{
-				// check for unique (shallowest path)
-				string strCurrPath = dir.Field<string>("dir_name");
-				if (strCurrPath.StartsWith(strPrevDir))
+				// only process the shallowest path on this set of unique paths
+				string strCurrPath = dir.Field<string>("relative_path");
+				if (strCurrPath.StartsWith(strPrevDir) && strPrevDir != "")
 				{
 					continue;
 				}
 
 				// get parents
-				Int32 intParentId = -1;
-				while (intParentId < 0)
+				Int32 intParentId = 0;
+				while (intParentId < 1)
 				{
-					// get parent directory
-					string strParentRelPath = strCurrPath.Substring(0, strCurrPath.LastIndexOf("\\") - 1);
+					// get parent directory name and path
+					string strParentRelPath = strCurrPath.Substring(0, strCurrPath.LastIndexOf("\\"));
 					string strParentName = strParentRelPath.Substring(strParentRelPath.LastIndexOf("\\") + 1);
-					dictTree.TryGetValue(strParentRelPath, out intParentId);
 
-					// check if it has already been added
-					DataRow[] drTest = dsCommits.Tables["dirs"].Select("relative_path = '" + strParentRelPath + "'");
-					if (drTest.Length != 0)
-					{
-						break;
-					}
-					dsCommits.Tables["dirs"].Rows.Add(-1, intParentId, strParentName, strParentRelPath);
+					// get parent directory's parent id
+					string strParentsParentRelPath = strParentRelPath.Substring(0, strParentRelPath.LastIndexOf("\\"));
+					dictTree.TryGetValue(strParentsParentRelPath, out intParentId);
+
+					// add the parent directory to table
+					// dir_id=0 and parent_id=0 because no remote directory exists for the current path
+					dsCommits.Tables["dirs"].Rows.Add(0, intParentId, strParentName, strParentRelPath);
+					strCurrPath = strParentRelPath;
 				}
 			}
 
@@ -2787,55 +2798,70 @@ namespace HackPDM
 			cmdInsert.Parameters.Add(new NpgsqlParameter("modify_user", intMyUserId));
 
 			Boolean blnFailed = false;
-			DataRow[] drNewDirs = dsCommits.Tables["dirs"].Select("dir_id=-1 and parent_id<>-1");
-			while (drNewDirs.Length>0)
+			int intParentId = 0;
+			// create only directories that need to be created for files being commited
+			// sorting by path ensures that parents will be created before children
+			// having called ClimbToRemoteParents, the highest directory in each unique path will have a remote parent id
+			DataRow[] drNewDirs = dsCommits.Tables["dirs"].Select("relative_path<>'' and dir_id=0", "relative_path asc");
+			foreach (DataRow drCurrent in drNewDirs)
 			{
-				foreach (DataRow drCurrent in drNewDirs)
+				// check for cancellation
+				if ((myWorker.CancellationPending == true))
 				{
-
-					// check for cancellation
-					if ((myWorker.CancellationPending == true))
-					{
-						e.Cancel = true;
-						return true;
-					}
-
-					// get the next directory id
-					object oTemp = cmdGetId.ExecuteScalar();
-					int intChildId;
-					if (oTemp != null)
-					{
-						intChildId = (int)(long)oTemp;
-					}
-					else
-					{
-						throw new System.Exception("Failed to get the next directory ID");
-					}
-
-					// set parameters
-					string strDirName = drCurrent.Field<string>("dir_name");
-					cmdInsert.Parameters["dir_id"].Value = intChildId;
-					cmdInsert.Parameters["parent_id"].Value = drCurrent.Field<string>("parent_id"); ;
-					cmdInsert.Parameters["dir_name"].Value = strDirName;
-
-					// insert row
-					try
-					{
-						cmdInsert.ExecuteNonQuery();
-					}
-					catch (NpgsqlException ex)
-					{
-						// if unique key/index violation
-						throw new System.Exception("Directory \"" + strDirName + "\" already exists on the server.  Refresh your view.  " + System.Environment.NewLine + ex.Detail);
-					}
-
-					// update row with the new remote directory id
-					drCurrent.SetField<Int32>("dir_id", intChildId);
-					dictTree.Add(drCurrent.Field<string>("relative_path"), intChildId);
-
+					e.Cancel = true;
+					return true;
 				}
 
-				drNewDirs = dsCommits.Tables["dirs"].Select("dir_id=-1 and parent_id<>-1");
+				// check if we need to create this directory
+				// by comparing relative path, we avoid directories outside pwa
+				DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("relative_path like '{0}%' and client_status_code in ('.lo','.cm')", drCurrent.Field<string>("relative_path")));
+				if (drNewFiles.Length < 1) continue;
+
+				// when starting a new unique path, get this path's pre-existing remote parentid
+				if (drCurrent.Field<int?>("parent_id") != 0)
+				{
+					intParentId = drCurrent.Field<int>("parent_id");
+				}
+				if (intParentId == 0)
+				{
+					throw new System.Exception("Failed to get parent directory ID");
+				}
+
+				// get the next directory id
+				object oTemp = cmdGetId.ExecuteScalar();
+				int intChildId;
+				if (oTemp != null)
+				{
+					intChildId = (int)(long)oTemp;
+				}
+				else
+				{
+					throw new System.Exception("Failed to get the next directory ID");
+				}
+
+				// set parameters
+				string strDirName = drCurrent.Field<string>("dir_name");
+				cmdInsert.Parameters["dir_id"].Value = intChildId;
+				cmdInsert.Parameters["parent_id"].Value = intParentId;
+				cmdInsert.Parameters["dir_name"].Value = strDirName;
+
+				// insert row
+				try
+				{
+					cmdInsert.ExecuteNonQuery();
+				}
+				catch (NpgsqlException ex)
+				{
+					// if unique key/index violation
+					throw new System.Exception("Directory \"" + strDirName + "\" already exists on the server.  Refresh your view.  " + System.Environment.NewLine + ex.Detail);
+				}
+
+				// update row with the new remote directory id
+				drCurrent.SetField<Int32>("dir_id", intChildId);
+				dictTree.Add(drCurrent.Field<string>("relative_path"), intChildId);
+
+				// pass this directory id as the next parent id
+				intParentId = intChildId;
 
 			}
 
@@ -2847,6 +2873,7 @@ namespace HackPDM
 		{
 
 			BackgroundWorker myWorker = sender as BackgroundWorker;
+			bool blnFailed = false;
 
 			// make sure we are working inside of a transaction
 			if (t.Connection == null)
@@ -2936,6 +2963,7 @@ namespace HackPDM
 
 				string strFileName = drNewFile.Field<string>("entry_name");
 				string strFileExt = drNewFile.Field<string>("file_ext");
+				string strRelPath = drNewFile.Field<string>("relative_path");
 				string strAbsPath = drNewFile.Field<string>("absolute_path");
 				string strFullName = strAbsPath + "\\" + strFileName;
 				int intTypeId = drNewFile.Field<int>("type_id");
@@ -2950,6 +2978,11 @@ namespace HackPDM
 
 				// get the parent directory id
 				int intParentDir = drNewFile.Field<int>("dir_id");
+				if (intParentDir == 0)
+				{
+					dictTree.TryGetValue(strRelPath, out intParentDir);
+					drNewFile.SetField<int>("dir_id", intParentDir);
+				}
 
 				// get an entry_id
 				int intEntryId = -1;
@@ -2963,7 +2996,7 @@ namespace HackPDM
 					cmdInsertEntry.Parameters["dir_id"].Value = intParentDir;
 					cmdInsertEntry.Parameters["entry_name"].Value = strFileName;
 					cmdInsertEntry.Parameters["type_id"].Value = intTypeId;
-					cmdInsertEntry.Parameters["cat_id"].Value = drNewFile.Field<int>("type_id");
+					cmdInsertEntry.Parameters["cat_id"].Value = drNewFile.Field<int>("cat_id");
 					cmdInsertEntry.Parameters["create_user"].Value = intMyUserId;
 					try
 					{
@@ -2971,10 +3004,9 @@ namespace HackPDM
 					}
 					catch (NpgsqlException ex)
 					{
-						// if unique key/index violation
-						dlgStatus.AddStatusLine("File already exists on the server.  Refresh your view.", strFileName);
-						dlgStatus.AddStatusLine("Error", ex.BaseMessage);
-						return true;
+						// integrity constraint violation?
+						dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+						blnFailed = true;
 					}
 				}
 				else
@@ -2990,7 +3022,7 @@ namespace HackPDM
 				cmdInsertVersion.Parameters["version_id"].Value = intVersionId;
 				cmdInsertVersion.Parameters["entry_id"].Value = intEntryId;
 				cmdInsertVersion.Parameters["file_size"].Value = lngFileSize;
-				cmdInsertVersion.Parameters["file_modify_stamp"].Value = dtModifyDate.ToString("yyyy-MM-dd HH:mm:ss");
+				cmdInsertVersion.Parameters["file_modify_stamp"].Value = dtModifyDate;
 				cmdInsertVersion.Parameters["create_user"].Value = intMyUserId;
 				cmdInsertVersion.Parameters["preview_image"].Value = GetLocalPreview(drNewFile);
 				cmdInsertVersion.Parameters["md5sum"].Value = strMd5sum;
@@ -3000,10 +3032,9 @@ namespace HackPDM
 				}
 				catch (NpgsqlException ex)
 				{
-					// if unique key/index violation
-					dlgStatus.AddStatusLine("File version already exists on the server.  Refresh your view.", strFileName);
-					dlgStatus.AddStatusLine("Error", ex.BaseMessage);
-					return true;
+						// integrity constraint violation?
+						dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+						blnFailed = true;
 				}
 
 				// update row with new version_id and/or entry_id
@@ -3011,7 +3042,7 @@ namespace HackPDM
 				drNewFile.SetField<int>("version_id", intVersionId);
 
 				// update relationships parent_id or child_id with new version_id
-				DataRow[] drRels = dsCommits.Tables["rels"].Select(String.Format("(child_name='{0} and child_absolute_path='{1}) or (parent_name='{0}' and parent_absolute_path='{1}')", strFileName, strAbsPath));
+				DataRow[] drRels = dsCommits.Tables["rels"].Select(String.Format("(child_name='{0}' and child_absolute_path='{1}') or (parent_name='{0}' and parent_absolute_path='{1}')", strFileName, strAbsPath));
 				foreach (DataRow drRel in drRels)
 				{
 					// either set the id on the parent side
@@ -3021,25 +3052,39 @@ namespace HackPDM
 					if (drRel.Field<string>("child_name") == strFileName) drRel.SetField<int>("child_id", intVersionId);
 				}
 
+
 				// name the file for webdav storage
 				string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt;
 
-				// create webdav directory if necessary
-				connDav.CreateDir("/" + intEntryId.ToString());
+				// check database success
+				if (blnFailed)
+				{
+					dlgStatus.AddStatusLine("ERROR", "Not uploading file " + strFileName);
+				}
+				else
+				{
+					// create webdav directory (don't need to check existence)
+					connDav.CreateDir("/" + intEntryId.ToString());
 
-				//
-				// queue the file upload on the ThreadPool?
-				// no... it's better to make the user wait
-				//
+					//
+					// queue the file upload on the ThreadPool?
+					// no... it's better to make the user wait
+					//
 
-				// upload the file to webdav server
-				// TODO: check status code from Upload method, and react accordingly
-				dlgStatus.AddStatusLine("Begin streaming file to server (" + FormatSize(lngFileSize) + ")", strFileName);
-				connDav.Upload(strFullName, strDavName);
-
+					// upload the file to webdav server
+					// TODO: check status code from Upload method, and react accordingly
+					dlgStatus.AddStatusLine("INFO", "Uploading " + FormatSize(lngFileSize) + " (file " + strFileName + ")");
+					connDav.Upload(strFullName, strDavName);
+					if (connDav.StatusCode-200 >= 100)
+					{
+						dlgStatus.AddStatusLine("ERROR", connDav.StatusCode + "(file " + strFileName + ")");
+						blnFailed = true;
+					}
+					
+				}
 			}
 
-			return false;
+			return blnFailed;
 
 		}
 
@@ -3426,12 +3471,12 @@ namespace HackPDM
 
 			// get directory info
 			TreeNode tnCurrent = treeView1.SelectedNode;
-			string strBasePath = tnCurrent.FullPath;
+			string strRelBasePath = tnCurrent.FullPath;
 
 			// package arguments for the background worker
 			List<object> arguments = new List<object>();
 			arguments.Add(t); // transaction
-			arguments.Add(strBasePath); // selected path
+			arguments.Add(strRelBasePath); // selected path
 			arguments.Add(null); // selected list
 			arguments.Add(null); // DataSet dsCommits
 
@@ -3539,28 +3584,29 @@ namespace HackPDM
 						// list that do exist remotely
 						cmsList.Items["cmsListGetLatest"].Enabled = false;
 						cmsList.Items["cmsListCheckout"].Enabled = false;
-					} else {
-						// exists remotely: don't let the user add it again
-						cmsList.Items["cmsListAddNew"].Enabled = false;
 					}
 
 					// test for checked-out-by-me
-					object oTest = drCurrent["checkout_user"];
-					if ( (oTest != System.DBNull.Value) && (drCurrent.Field<int>("checkout_user") == intMyUserId) ) {
-						// it is checked out to me
-					} else {
-						// it is not checked out to me
-						cmsList.Items["cmsListCommit"].Enabled = false;
-						cmsList.Items["cmsListUndoCheckout"].Enabled = false;
+					int? intCoUserId = drCurrent.Field<int?>("checkout_user");
+					if (intCoUserId != null)
+					{
+						if (intCoUserId == intMyUserId)
+						{
+							// it is checked out to me
+						}
+						else
+						{
+							// it is not checked out to me
+							cmsList.Items["cmsListCommit"].Enabled = false;
+							cmsList.Items["cmsListUndoCheckout"].Enabled = false;
+						}
 					}
-
 				}
 
 			} else {
 				// all items are local only
 				cmsList.Items["cmsListGetLatest"].Enabled = false;
 				cmsList.Items["cmsListCheckout"].Enabled = false;
-				cmsList.Items["cmsListCommit"].Enabled = false;
 				cmsList.Items["cmsListUndoCheckout"].Enabled = false;
 			}
 
@@ -3711,12 +3757,6 @@ namespace HackPDM
 
 			// get directory info
 			TreeNode tnCurrent = treeView1.SelectedNode;
-			if (tnCurrent.Tag == null)
-			{
-				MessageBox.Show("The current directory doesn't exist remotely, therefore any files in this directory must use AddNew.");
-				return;
-			}
-			int intDirId = (int)tnCurrent.Tag;
 			string strRelBasePath = tnCurrent.FullPath;
 
 			// get a list of selected items
@@ -3734,7 +3774,6 @@ namespace HackPDM
 			List<object> arguments = new List<object>();
 
 			arguments.Add(t);
-			arguments.Add(intDirId);
 			arguments.Add(strRelBasePath);
 			arguments.Add(lstSelectedNames);
 
