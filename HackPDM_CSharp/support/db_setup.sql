@@ -561,7 +561,7 @@ CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_dir(
 	OUT str_latest_size varchar,
 	OUT local_size bigint,
 	OUT str_local_size varchar,
-	OUT file_modify_stamp timestamp(6) without time zone,
+	OUT latest_stamp timestamp(6) without time zone,
 	OUT str_latest_stamp varchar,
 	OUT local_stamp timestamp(6) without time zone,
 	OUT str_local_stamp varchar,
@@ -626,7 +626,7 @@ $BODY$
 		e.checkout_node,
 		false as is_local,
 		true as is_remote,
-		'.ro'::varchar as client_status_code,
+		'ro'::varchar as client_status_code,
 		'pwa' || replace(d.rel_path, '/', '\') as relative_path,
 		null::varchar as absolute_path,
 		t.icon,
@@ -680,7 +680,7 @@ CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_entry_list(
 	OUT str_latest_size varchar,
 	OUT local_size bigint,
 	OUT str_local_size varchar,
-	OUT file_modify_stamp timestamp(6) without time zone,
+	OUT latest_stamp timestamp(6) without time zone,
 	OUT str_latest_stamp varchar,
 	OUT local_stamp timestamp(6) without time zone,
 	OUT str_local_stamp varchar,
@@ -741,7 +741,7 @@ $BODY$
 		e.checkout_node,
 		false as is_local,
 		true as is_remote,
-		'.ro'::varchar as client_status_code,
+		'ro'::varchar as client_status_code,
 		'pwa' || replace(d.rel_path, '/', '\') as relative_path,
 		null::varchar as absolute_path,
 		t.icon,
@@ -779,7 +779,7 @@ $BODY$
 
 -- -----------------------------------------------------------------------------
 
--- DROP FUNCTION fcn_latest_w_depends_by_dir_list(integer);
+-- DROP FUNCTION fcn_latest_w_depends_by_dir_list(integer[]);
 
 CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_dir_list(
 	IN v_dir_ids integer[],
@@ -795,7 +795,7 @@ CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_dir_list(
 	OUT str_latest_size varchar,
 	OUT local_size bigint,
 	OUT str_local_size varchar,
-	OUT file_modify_stamp timestamp(6) without time zone,
+	OUT latest_stamp timestamp(6) without time zone,
 	OUT str_latest_stamp varchar,
 	OUT local_stamp timestamp(6) without time zone,
 	OUT str_local_stamp varchar,
@@ -856,7 +856,7 @@ $BODY$
 		e.checkout_node,
 		false as is_local,
 		true as is_remote,
-		'.ro'::varchar as client_status_code,
+		'ro'::varchar as client_status_code,
 		'pwa' || replace(d.rel_path, '/', '\') as relative_path,
 		null::varchar as absolute_path,
 		t.icon,

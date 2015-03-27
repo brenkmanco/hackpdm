@@ -633,9 +633,10 @@ namespace HackPDM
 			//create columns for ListView
 			listView1.Columns.Add("Name",300,System.Windows.Forms.HorizontalAlignment.Left);
 			listView1.Columns.Add("Size", 75, System.Windows.Forms.HorizontalAlignment.Right);
-			listView1.Columns.Add("Type", 140, System.Windows.Forms.HorizontalAlignment.Left);
-			listView1.Columns.Add("Modified", 140, System.Windows.Forms.HorizontalAlignment.Left);
-			listView1.Columns.Add("CheckOut", 140, System.Windows.Forms.HorizontalAlignment.Left);
+			listView1.Columns.Add("Type", 120, System.Windows.Forms.HorizontalAlignment.Left);
+			listView1.Columns.Add("Stat", 60, System.Windows.Forms.HorizontalAlignment.Left);
+			listView1.Columns.Add("Modified", 120, System.Windows.Forms.HorizontalAlignment.Left);
+			listView1.Columns.Add("CheckOut", 120, System.Windows.Forms.HorizontalAlignment.Left);
 			listView1.Columns.Add("Category", 140, System.Windows.Forms.HorizontalAlignment.Left);
 			listView1.Columns.Add("FullName", 0, System.Windows.Forms.HorizontalAlignment.Left);
 
@@ -651,14 +652,20 @@ namespace HackPDM
 			// TODO: add additional icons
 			// nv and co could co-exist --> add new icon for nvco
 			// ro and co could co-exist --> add new icon for roco
-			// for now, let these take affect in the following order
+			//
+			// until I get around to it, let these take affect in the following order
+			// for example, nv comes before co and ro comes before co
+			// that means if a file is both nv and co, it should get assigned co
+			//
 			// ro: remote only
 			// lo: local only
+			// lm: modified locally without checking out
 			// nv: new remote version
 			// cm: checked out to me
 			// co: checked out to other
 			// ft: no remote file type
 			// if: ignore filter
+			// ok: nothing to report (none of the above)
 
 			// clear dataset
 			dsList = new DataSet();
@@ -789,7 +796,7 @@ namespace HackPDM
 					DataRow[] drRemFile = dsList.Tables[0].Select("entry_name='"+strFileName.Replace("'","\\'")+"'");
 
 					// set status code to "ro" again, just to be safe
-					string strStatusCode = ".ro";
+					string strClientStatusCode = "ro";
 
 					if (drRemFile.Length != 0)
 					{
@@ -799,22 +806,41 @@ namespace HackPDM
 						drTemp.SetField<bool>("is_local", true);
 
 						// set status code
-						strStatusCode = "";
+						// if local stamp is greater than remote stamp
+						if (dtModifyDate.Subtract(drTemp.Field<DateTime>("latest_stamp")).TotalSeconds > 1)
+						{
+							// lm: modified locally without checking out (apparently)
+							strClientStatusCode = "lm";
+						}
+						// if remote stamp is greater than local stamp
+						else if (dtModifyDate.Subtract(drTemp.Field<DateTime>("latest_stamp")).TotalSeconds < -1)
+						{
+							// nv: new remote version
+							strClientStatusCode = "nv";
+						}
+						else
+						{
+							// ok: identical files
+							strClientStatusCode = "ok";
+						}
+
 						if (drTemp.Field<int?>("checkout_user") != null)
 						{
 							if (drTemp.Field<int?>("checkout_user") == intMyUserId)
 							{
 								// checked out to me (current user)
-								strStatusCode = ".cm";
+								strClientStatusCode = "cm";
 							}
 							else
 							{
 								// checked out to someone else
-								strStatusCode = ".co";
+								strClientStatusCode = "co";
 							}
 						}
-						if (dtModifyDate < drTemp.Field<DateTime>("latest_stamp")) strStatusCode = ".nv";
-						drTemp.SetField<string>("client_status_code", strStatusCode);
+
+
+						if (dtModifyDate < drTemp.Field<DateTime>("latest_stamp")) strClientStatusCode = "nv";
+						drTemp.SetField<string>("client_status_code", strClientStatusCode);
 
 						// format the remote file size
 						drTemp.SetField<string>("str_latest_size", FormatSize(drTemp.Field<long>("latest_size")));
@@ -846,14 +872,14 @@ namespace HackPDM
 						// insert new row for local-only file
 
 						// set status code
-						strStatusCode = ".lo";
+						strClientStatusCode = "lo";
 						if (strRemBlockExt == strFileExt)
 						{
-							strStatusCode = ".if";
+							strClientStatusCode = "if";
 						}
 						else if (strRemFileExt == "")
 						{
-							strStatusCode = ".ft";
+							strClientStatusCode = "ft";
 						}
 
 						dsList.Tables[0].Rows.Add(
@@ -882,7 +908,7 @@ namespace HackPDM
 								null, // checkout_node
 								true, // is_local
 								false, // is_remote
-								strStatusCode, // client_status_code
+								strClientStatusCode, // client_status_code
 								strRelPath, // relative_path
 								strAbsPath, // absolute_path
 								null, // icon
@@ -909,17 +935,29 @@ namespace HackPDM
 			if (dsList.Tables[0] != null) {
 				foreach (DataRow row in dsList.Tables[0].Rows) {
 
-					string[] lvData =  new string[6];
+					string[] lvData =  new string[8];
 					lvData[0] = row.Field<string>("entry_name"); // Name
 					lvData[1] = row.Field<string>("str_latest_size"); // Size
-					lvData[2] = row.Field<string>("file_ext"); // Name
-					lvData[3] = row.Field<string>("str_latest_stamp"); // Modified
-					lvData[4] = row.Field<string>("ck_user_name"); // CheckOut
-					lvData[5] = row.Field<string>("cat_name"); // Category
+					lvData[2] = row.Field<string>("file_ext"); // Type
+					lvData[3] = row.Field<string>("client_status_code"); // Stat
+					lvData[4] = row.Field<string>("str_latest_stamp"); // Modified
+					lvData[5] = row.Field<string>("ck_user_name"); // CheckOut
+					lvData[6] = row.Field<string>("cat_name"); // Category
+					lvData[7] = row.Field<string>("absolute_path") + "\\" + row.Field<string>("entry_name"); // FullName
 
 					// get file type
 					string strFileExt = row.Field<string>("file_ext");
+
+					// convert status code to overlay image name
 					string strOverlay = row.Field<string>("client_status_code");
+					if (strOverlay == "ok")
+					{
+						strOverlay = "";
+					}
+					else
+					{
+						strOverlay = "." + strOverlay;
+					}
 
 					// get icon images for new file types (new to this session)
 					if (ilListIcons.Images[strFileExt] == null) {
@@ -944,11 +982,12 @@ namespace HackPDM
 						// these are added at design time on the MainForm.cs designer ("Choose images" context menu item)
 						ilListIcons.Images.Add(strFileExt + ".ro", ImageOverlay(imgCurrent, ilListIcons.Images["ro"])); // remote only
 						ilListIcons.Images.Add(strFileExt + ".lo", ImageOverlay(imgCurrent, ilListIcons.Images["lo"])); // local only
-						ilListIcons.Images.Add(strFileExt + ".lo", ImageOverlay(imgCurrent, ilListIcons.Images["nv"])); // new remote version
+						ilListIcons.Images.Add(strFileExt + ".nv", ImageOverlay(imgCurrent, ilListIcons.Images["nv"])); // new remote version
 						ilListIcons.Images.Add(strFileExt + ".cm", ImageOverlay(imgCurrent, ilListIcons.Images["cm"])); // checked out to me
 						ilListIcons.Images.Add(strFileExt + ".co", ImageOverlay(imgCurrent, ilListIcons.Images["co"])); // checked out to other
 						ilListIcons.Images.Add(strFileExt + ".if", ImageOverlay(imgCurrent, ilListIcons.Images["if"])); // ignore filter
 						ilListIcons.Images.Add(strFileExt + ".ft", ImageOverlay(imgCurrent, ilListIcons.Images["ft"])); // no remote file type
+						ilListIcons.Images.Add(strFileExt + ".lm", ImageOverlay(imgCurrent, ilListIcons.Images["lm"])); // local modification
 
 					}
 
@@ -990,7 +1029,7 @@ namespace HackPDM
 			MemoryStream ms;
 
 			// if local only or checked out to me, load image from local file
-			if (dr.Field<bool>("is_remote") == false || dr.Field<string>("client_status_code") == ".cm")
+			if (dr.Field<bool>("is_remote") == false || dr.Field<string>("client_status_code") == "cm")
 			{
 				bImage = GetLocalPreview(dr);
 			}
@@ -1136,7 +1175,7 @@ namespace HackPDM
 
 				// build array
 				string[] lvData = new string[2];
-				lvData[0] = row.Field<string>("rel_child_id");
+				lvData[0] = row.Field<int>("rel_child_id").ToString();
 				lvData[1] = row.Field<string>("entry_name") + " (v" + row.Field<int>("rel_parent_id").ToString() + ")";
 
 				// create actual list item
@@ -1163,7 +1202,7 @@ namespace HackPDM
 			DataRow dr = dsList.Tables[0].Select("entry_name='" + FileName + "'")[0];
 			string strFullName = dr.Field<string>("absolute_path") + "\\" + FileName;
 
-			if (dr.Field<bool>("is_remote") == false || dr.Field<string>("client_status_code") == ".cm")
+			if (dr.Field<bool>("is_remote") == false || dr.Field<string>("client_status_code") == "cm")
 			{
 				// get from SolidWorks
 				List<string[]> lstDepends = connSw.GetDependencies(strFullName);
@@ -1459,26 +1498,23 @@ namespace HackPDM
 			// get tree path
 			string stringParse = "";
 			// replace actual root path with pwa
-			if (stringPath.Contains(strLocalFileRoot))
+			if (stringPath.IndexOf(strLocalFileRoot, 0, StringComparison.CurrentCultureIgnoreCase) != -1)
 			{
 				stringParse = "pwa" + stringPath.Substring(strLocalFileRoot.Length);
 			}
 			return stringParse;
 		}
 
-		protected string GetShortName(string stringPath) {
-			//Get Name of folder
-			string[] stringSplit = stringPath.Split('\\');
-			int _maxIndex = stringSplit.Length;
-			return stringSplit[_maxIndex-1];
+		protected string GetShortName(string FullName) {
+			return FullName.Substring(FullName.LastIndexOf("\\") + 1);
 		}
 
-		protected string GetFileExt(string strFileName) {
-			//Get Name of folder
-			string[] strSplit = strFileName.Split('.');
-			int _maxIndex = strSplit.Length-1;
-			return strSplit[_maxIndex];
-		}
+		//protected string GetFileExt(string strFileName) {
+		//    //Get Name of folder
+		//    string[] strSplit = strFileName.Split('.');
+		//    int _maxIndex = strSplit.Length-1;
+		//    return strSplit[_maxIndex];
+		//}
 
 		protected string FormatDate(DateTime dtDate) {
 
@@ -1694,7 +1730,7 @@ namespace HackPDM
 				if (IsFileLocked(fiCurrFile) == true)
 				{
 					// file is in use: don't continue
-					dlgStatus.AddStatusLine("Info", "File is locked. Can't update: " + strFullName);
+					dlgStatus.AddStatusLine("ERROR", "File is locked. Can't update: " + strFullName);
 					blnFailed = true;
 				}
 
@@ -1731,6 +1767,9 @@ namespace HackPDM
 				string strFileExt = drCurrent.Field<string>("file_ext");
 				string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt;
 
+				// set the file not readonly
+				fiCurrFile.IsReadOnly = false;
+
 				// report status and stream file
 				string strFileSize = drCurrent.Field<string>("str_latest_size");
 				dlgStatus.AddStatusLine("Retrieving Content (" + strFileSize + ")", strDavName);
@@ -1749,7 +1788,7 @@ namespace HackPDM
 			int intNewCount = drNewFiles.Length;
 			for (int i = 0; i < intNewCount; i++)
 			{
-				DataRow drCurrent = drUpdateFiles[i];
+				DataRow drCurrent = drNewFiles[i];
 
 				// check for cancellation
 				if ((myWorker.CancellationPending == true))
@@ -1785,7 +1824,10 @@ namespace HackPDM
 
 			}
 
-			t.Commit();
+			// don't commit the transaction, because getting latest doesn't change the database
+			// why are we even using a transaction here?
+			// TODO: don't use a transaction for GetLatest
+			//t.Commit();
 
 		}
 
@@ -1913,7 +1955,7 @@ namespace HackPDM
 			blnFailed = blnFailed || AddVersionDepends(sender, e, t, ref dsCommits);
 
 			// TODO: insert file properties
-			//blnFailed = AddFileProps(sender, e, t, ref dsCommits);
+			//blnFailed = blnFailed || AddFileProps(sender, e, t, ref dsCommits);
 
 			// commit to database and set files ReadOnly
 			if (blnFailed == true)
@@ -2296,7 +2338,7 @@ namespace HackPDM
 			// get absolute directory path 
 			string strAbsolutePath = GetAbsolutePath(strRelativePath);
 
-			// get remote directory id (-1 if doesn't exist remotely)
+			// get remote directory id (0 if doesn't exist remotely)
 			int intDirId = 0;
 			dictTree.TryGetValue(strRelativePath, out intDirId);
 
@@ -2359,8 +2401,8 @@ namespace HackPDM
 					null, // str_checkout_date
 					null, // checkout_node
 					true, // is_local
-					null, // is_remote
-					".lo", // client_status_code
+					false, // is_remote
+					"lo", // client_status_code
 					strRelativePath, // relative_path
 					strAbsolutePath, // absolute_path
 					null, // icon
@@ -2402,7 +2444,7 @@ namespace HackPDM
 			// use long file name as foreign key
 
 			// get initial set of files on which to search dependencies
-			DataRow[] drNeedsDepends = dsCommits.Tables["files"].Select("is_depend_searched is null and file_ext in ('SLDASM','SLDPRT','SLDDRW','sldasm','sldprt','slddrw')");
+			DataRow[] drNeedsDepends = dsCommits.Tables["files"].Select("is_depend_searched=false and file_ext in ('SLDASM','SLDPRT','SLDDRW','sldasm','sldprt','slddrw')");
 
 			while (drNeedsDepends.Length != 0)
 			{
@@ -2443,7 +2485,7 @@ namespace HackPDM
 							dsCommits.Tables["files"].Rows.Add(
 								null, // entry_id
 								null, // version_id
-								null, // dir_id
+								0, // dir_id
 								strDepends[0], // entry_name
 								null, // type_id
 								strFileExt, // file_ext
@@ -2465,8 +2507,8 @@ namespace HackPDM
 								null, // str_checkout_date
 								null, // checkout_node
 								true, // is_local
-								null, // is_remote
-								".lo", // client_status_code
+								false, // is_remote
+								"lo", // client_status_code
 								strRelativePath, // relative_path
 								strAbsolutePath, // absolute_path
 								null, // icon
@@ -2475,7 +2517,7 @@ namespace HackPDM
 							);
 
 							// add this file's directory, if necessary
-							DataRow[] drCheck = dsCommits.Tables["dirs"].Select("relative_path = '" + strRelativePath + "'");
+							DataRow[] drCheck = dsCommits.Tables["dirs"].Select("absolute_path = '" + strAbsolutePath + "'");
 							if (drCheck.Length == 0)
 							{
 								// get directory name
@@ -2487,9 +2529,12 @@ namespace HackPDM
 
 								// get parent directory id
 								Int32 intParentId = 0;
-								string strParentPath = strRelativePath.Substring(0, strRelativePath.LastIndexOf("\\") - 1);
-								dictTree.TryGetValue(strParentPath, out intParentId);
-
+								if (strRelativePath != "")
+								{
+									// if the path is in pwa
+									string strParentPath = strRelativePath.Substring(0, strRelativePath.LastIndexOf("\\"));
+									dictTree.TryGetValue(strParentPath, out intParentId);
+								}
 								dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strDirName, strRelativePath, strAbsolutePath);
 							}
 
@@ -2622,24 +2667,24 @@ namespace HackPDM
 						{
 							// checked out to me (current user)
 							// cm: checked out to me
-							strClientStatusCode = ".cm";
+							strClientStatusCode = "cm";
 						}
 						else
 						{
 							// checked out to someone else
 							// co: checked out to other
-							strClientStatusCode = ".co";
+							strClientStatusCode = "co";
 						}
 					}
-					if (strClientStatusCode != ".cm" && drTemp.Field<DateTime>("latest_stamp") > drLocalFile.Field<DateTime>("latest_stamp"))
+					if (strClientStatusCode != "cm" && drTemp.Field<DateTime>("latest_stamp") > drLocalFile.Field<DateTime>("latest_stamp"))
 					{
 						// nv: new remote version
-						strClientStatusCode = ".nv";
+						strClientStatusCode = "nv";
 					}
 					drLocalFile.SetField<string>("client_status_code", strClientStatusCode);
 
 					// update version ids in relationships
-					if (strClientStatusCode != ".cm")
+					if (strClientStatusCode != "cm")
 					{
 						DataRow[] drRels = dsCommits.Tables["rels"].Select(String.Format("(child_name='{0}' and child_absolute_path='{1}') or (parent_name='{0}' and parent_absolute_path='{1}')", strFileName, strAbsPath));
 						foreach (DataRow drRel in drRels)
@@ -2653,12 +2698,13 @@ namespace HackPDM
 
 						}
 					}
+
 				}
 				else
 				{
 
 					// get exact file extension for status check
-					Tuple<string, string, string, string> tplExtensions = ftmStart.GetFileExt(drLocalFile.Field<string>("entry_name"));
+					Tuple<string, string, string, string> tplExtensions = ftmStart.GetFileExt(strFileName);
 					string strFileExt = tplExtensions.Item1;
 					string strRemFileExt = tplExtensions.Item2;
 					string strRemBlockExt = tplExtensions.Item3;
@@ -2667,18 +2713,18 @@ namespace HackPDM
 
 					// set status code for local file
 					// lo: local only
-					string strStatusCode = ".lo";
+					string strStatusCode = "lo";
 					if (strRemBlockExt == strFileExt)
 					{
 						// file type filtered/blocked
 						// if: ignore filter
-						strStatusCode = ".if";
+						strStatusCode = "if";
 					}
 					else if (strRemFileExt == "")
 					{
 						// file type doesn't exist remotely
 						// ft: no remote file type
-						strStatusCode = ".ft";
+						strStatusCode = "ft";
 					}
 					else
 					{
@@ -2692,9 +2738,6 @@ namespace HackPDM
 						}
 					}
 					drLocalFile.SetField<string>("client_status_code", strStatusCode);
-
-					// change is_remote from null to false
-					drLocalFile.SetField<bool>("is_remote", false);
 
 				}
 
@@ -2985,7 +3028,7 @@ namespace HackPDM
 				}
 
 				// get an entry_id
-				int intEntryId = -1;
+				int intEntryId = 0;
 				if (drNewFile.Field<int?>("entry_id") == null)
 				{
 					// get a new entry id
@@ -3107,7 +3150,7 @@ namespace HackPDM
 
 			// check for children with no version id inside the pwa
 			// this can happen when a child is outside the pwa, but we will ignore those
-			DataRow[] drBads = dsCommits.Tables["rels"].Select(String.Format("child_id=-1 and parent_id in ({0})", strVersions));
+			DataRow[] drBads = dsCommits.Tables["rels"].Select(String.Format("child_id=0 and child_absolute_path like '{0}%'", strLocalFileRoot));
 			foreach (DataRow dr in drBads)
 			{
 				string strDepend = String.Format("{0}\\{1} <-- {2}\\{3}", dr.Field<string>("parent_name"), dr.Field<string>("parent_absolute_path"), dr.Field<string>("child_name"), dr.Field<string>("child_absolute_path"));
@@ -3116,7 +3159,7 @@ namespace HackPDM
 			}
 
 			// get relationships to be created remotely
-			DataRow[] drNewRels = dsCommits.Tables["rels"].Select(String.Format("parent_id in ({0}) and child_id<>-1", strVersions));
+			DataRow[] drNewRels = dsCommits.Tables["rels"].Select(String.Format("parent_id in ({0}) and child_id<>0", strVersions));
 
 			// prepare the database command
 			string strSql = @"
@@ -3146,8 +3189,8 @@ namespace HackPDM
 				}
 
 				// set parameters
-				cmdInsert.Parameters["parent_id"].Value = drNewRel.Field<string>("parent_id");
-				cmdInsert.Parameters["child_id"].Value = drNewRel.Field<string>("child_id");
+				cmdInsert.Parameters["rel_parent_id"].Value = drNewRel.Field<int>("parent_id");
+				cmdInsert.Parameters["rel_child_id"].Value = drNewRel.Field<int>("child_id");
 
 				// insert row
 				try
@@ -3200,7 +3243,7 @@ namespace HackPDM
 		// fetch data (called from get latest method)
 		// very similar to getting commits data, only in reverse
 		// get data from remote and match to local stuff
-		private DataSet LoadFetchData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, int intBaseDirId=-1, string strBasePath=null, List<int> lstSelected=null)
+		private DataSet LoadFetchData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, int intBaseDirId=0, string strBasePath=null, List<int> lstSelected=null)
 		{
 			// running in separate thread
 			BackgroundWorker myWorker = sender as BackgroundWorker;
@@ -3225,7 +3268,7 @@ namespace HackPDM
 				// also select dependencies of those entries, wherever they are, based on remote dependency data
 				// TODO: get latest versions of dependencies that have been added locally, but don't yet exist remotely
 				string strEntries = String.Join(",", lstSelected.ToArray());
-				string strSql = "select * from fcn_latest_w_depends_by_entry_list( { '" + strEntries + "' } );";
+				string strSql = "select * from fcn_latest_w_depends_by_entry_list( array [" + strEntries + "] );";
 
 				// put the remote list in the DataSet
 				NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
@@ -3247,7 +3290,7 @@ namespace HackPDM
 
 			}
 
-			if (dsList.Tables.Count == 0)
+			if (dsFetches.Tables.Count == 0)
 			{
 				// make an empty DataTable
 				dsFetches.Tables.Add(CreateFileTable());
@@ -3276,8 +3319,9 @@ namespace HackPDM
 			{
 
 				string strFileName = drRemote.Field<string>("entry_name");
-				string strFilePath = drRemote.Field<string>("absolute_path");
-				string strFullName = strFilePath + "\\" + strFileName;
+				string strAbsPath = GetAbsolutePath(drRemote.Field<string>("relative_path"));
+				drRemote.SetField<string>("absolute_path", strAbsPath);
+				string strFullName = strAbsPath + "\\" + strFileName;
 
 				drRemote.SetField<string>("absolute_path", GetAbsolutePath(drRemote.Field<string>("relative_path")));
 
@@ -3309,25 +3353,32 @@ namespace HackPDM
 					{
 						if (drRemote.Field<int>("checkout_user") == intMyUserId)
 						{
-							strClientStatusCode = ".cm";
+							strClientStatusCode = "cm";
 						}
 						else
 						{
-							strClientStatusCode = ".co";
+							strClientStatusCode = "co";
 						}
 
 					}
-					if (strClientStatusCode != ".cm")
+					if (strClientStatusCode != "cm")
 					{
-						if (drRemote.Field<DateTime>("latest_stamp") > dtModifyDate)
+						// if local stamp is greater than remote stamp
+						if (dtModifyDate.Subtract(drRemote.Field<DateTime>("latest_stamp")).TotalSeconds > 1 )
+						{
+							// lm: modified locally without checking out (apparently)
+							strClientStatusCode = "lm";
+						}
+						// if remote stamp is greater than local stamp
+						else if (dtModifyDate.Subtract(drRemote.Field<DateTime>("latest_stamp")).TotalSeconds < -1)
 						{
 							// nv: new remote version
-							strClientStatusCode = ".nv";
+							strClientStatusCode = "nv";
 						}
 						else
 						{
 							// ""(empty string): identical files
-							strClientStatusCode = "";
+							strClientStatusCode = "ok";
 						}
 					}
 					drRemote.SetField<string>("client_status_code", strClientStatusCode);
@@ -3451,6 +3502,7 @@ namespace HackPDM
 			{
 				worker.CancelAsync();
 			}
+			t.Commit();
 
 			// refresh the main window
 			ResetView(tnCurrent.FullPath);
@@ -3675,6 +3727,7 @@ namespace HackPDM
 			{
 				worker.CancelAsync();
 			}
+			t.Commit();
 
 			// refresh the main window
 			ResetView(tnCurrent.FullPath);

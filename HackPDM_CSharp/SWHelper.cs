@@ -64,22 +64,39 @@ namespace HackPDM
 			// 0: short file name
 			// 1: long file name
 			// 2: loaded read only
-			string strTempPath = Path.GetTempPath();
 			List<string[]> listDepends = new List<string[]>();
+
+			// test for dependencies
 			int size = swApp.IGetDocumentDependenciesCount2(FileName, Deep, false, true);
 			if (size == 0) return null;
+
+			// get array of dependency info (one-dimensional)
 			string[] varDepends = (string[])swApp.GetDocumentDependencies2(FileName, false, false, true);
+
+			string strTempPath = Path.GetTempPath();
 			for (int i = 0; i < varDepends.Length/3; i++)
 			{
-				// only return non-virtual components
+
+				// file name with absolute path
 				string strFullName = varDepends[3 * i + 1];
+
+				// short file name with extension
+				string strName = strFullName.Substring(strFullName.LastIndexOf("\\") + 1);
+
+				// read only status
+				string strReadOnly = varDepends[3 * i + 2];
+
+				// only return non-virtual components
 				if (strTempPath != strFullName.Substring(0,strTempPath.Length))
 				{
-					string[] strDepend = new string[3] {varDepends[3 * i], varDepends[3 * i + 1], varDepends[3 * i + 2]};
+					string[] strDepend = new string[3] {strName, strFullName, strReadOnly};
 					listDepends.Add(strDepend);
 				}
+
 			}
+
 			return listDepends;
+
 		}
 
 		//private swDocumentTypes_e GetDocType(string FileName)
@@ -99,7 +116,18 @@ namespace HackPDM
 		~SWHelper()
 		{
 			// cleanup statements
-			swApp.ExitApp();
+			try
+			{
+				swApp.ExitApp();
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show(
+					"Failed to close SolidWorks instance: " + ex.Message,
+					"Failed Closing SolidWork",
+					MessageBoxButtons.OK
+				);
+			}
 		}
 
 	}

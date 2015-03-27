@@ -160,7 +160,7 @@ namespace HackPDM
             this.cmsListUndoCheckout});
 			this.cmsList.Name = "cmsTreeMenu";
 			this.cmsList.ShowImageMargin = false;
-			this.cmsList.Size = new System.Drawing.Size(133, 114);
+			this.cmsList.Size = new System.Drawing.Size(133, 92);
 			// 
 			// cmsListGetLatest
 			// 
@@ -205,6 +205,7 @@ namespace HackPDM
 			this.ilListIcons.Images.SetKeyName(4, "if");
 			this.ilListIcons.Images.SetKeyName(5, "ft");
 			this.ilListIcons.Images.SetKeyName(6, "nv");
+			this.ilListIcons.Images.SetKeyName(7, "lm");
 			// 
 			// statusStrip1
 			// 
@@ -313,22 +314,22 @@ namespace HackPDM
 			// 
 			// pbPreview
 			// 
-			this.pbPreview.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+			this.pbPreview.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+						| System.Windows.Forms.AnchorStyles.Right)));
 			this.pbPreview.InitialImage = ((System.Drawing.Image)(resources.GetObject("pbPreview.InitialImage")));
 			this.pbPreview.Location = new System.Drawing.Point(622, 5);
 			this.pbPreview.MinimumSize = new System.Drawing.Size(256, 256);
 			this.pbPreview.Name = "pbPreview";
-			this.pbPreview.Size = new System.Drawing.Size(256, 260);
+			this.pbPreview.Size = new System.Drawing.Size(256, 264);
 			this.pbPreview.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
 			this.pbPreview.TabIndex = 1;
 			this.pbPreview.TabStop = false;
 			// 
 			// tabControl1
 			// 
-			this.tabControl1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+			this.tabControl1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+						| System.Windows.Forms.AnchorStyles.Left)
+						| System.Windows.Forms.AnchorStyles.Right)));
 			this.tabControl1.Controls.Add(this.tabPage1);
 			this.tabControl1.Controls.Add(this.tabPage2);
 			this.tabControl1.Controls.Add(this.tabPage3);
@@ -336,7 +337,7 @@ namespace HackPDM
 			this.tabControl1.Location = new System.Drawing.Point(0, 0);
 			this.tabControl1.Name = "tabControl1";
 			this.tabControl1.SelectedIndex = 0;
-			this.tabControl1.Size = new System.Drawing.Size(616, 268);
+			this.tabControl1.Size = new System.Drawing.Size(616, 272);
 			this.tabControl1.TabIndex = 0;
 			this.tabControl1.SelectedIndexChanged += new System.EventHandler(this.TabControl1SelectedIndexChanged);
 			// 
@@ -346,7 +347,7 @@ namespace HackPDM
 			this.tabPage1.Location = new System.Drawing.Point(4, 22);
 			this.tabPage1.Name = "tabPage1";
 			this.tabPage1.Padding = new System.Windows.Forms.Padding(3);
-			this.tabPage1.Size = new System.Drawing.Size(608, 242);
+			this.tabPage1.Size = new System.Drawing.Size(608, 246);
 			this.tabPage1.TabIndex = 0;
 			this.tabPage1.Text = "History";
 			this.tabPage1.UseVisualStyleBackColor = true;
@@ -356,7 +357,7 @@ namespace HackPDM
 			this.lvHistory.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.lvHistory.Location = new System.Drawing.Point(3, 3);
 			this.lvHistory.Name = "lvHistory";
-			this.lvHistory.Size = new System.Drawing.Size(602, 236);
+			this.lvHistory.Size = new System.Drawing.Size(602, 240);
 			this.lvHistory.TabIndex = 0;
 			this.lvHistory.UseCompatibleStateImageBehavior = false;
 			this.lvHistory.View = System.Windows.Forms.View.Details;
@@ -367,7 +368,7 @@ namespace HackPDM
 			this.tabPage2.Location = new System.Drawing.Point(4, 22);
 			this.tabPage2.Name = "tabPage2";
 			this.tabPage2.Padding = new System.Windows.Forms.Padding(3);
-			this.tabPage2.Size = new System.Drawing.Size(608, 238);
+			this.tabPage2.Size = new System.Drawing.Size(608, 242);
 			this.tabPage2.TabIndex = 1;
 			this.tabPage2.Text = "WhereUsed";
 			this.tabPage2.UseVisualStyleBackColor = true;
@@ -377,7 +378,7 @@ namespace HackPDM
 			this.lvParents.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.lvParents.Location = new System.Drawing.Point(3, 3);
 			this.lvParents.Name = "lvParents";
-			this.lvParents.Size = new System.Drawing.Size(602, 232);
+			this.lvParents.Size = new System.Drawing.Size(602, 236);
 			this.lvParents.TabIndex = 0;
 			this.lvParents.UseCompatibleStateImageBehavior = false;
 			this.lvParents.View = System.Windows.Forms.View.Details;
@@ -388,7 +389,7 @@ namespace HackPDM
 			this.tabPage3.Location = new System.Drawing.Point(4, 22);
 			this.tabPage3.Name = "tabPage3";
 			this.tabPage3.Padding = new System.Windows.Forms.Padding(3);
-			this.tabPage3.Size = new System.Drawing.Size(608, 238);
+			this.tabPage3.Size = new System.Drawing.Size(608, 242);
 			this.tabPage3.TabIndex = 2;
 			this.tabPage3.Text = "Dependents";
 			this.tabPage3.UseVisualStyleBackColor = true;
@@ -398,7 +399,7 @@ namespace HackPDM
 			this.lvChildren.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.lvChildren.Location = new System.Drawing.Point(3, 3);
 			this.lvChildren.Name = "lvChildren";
-			this.lvChildren.Size = new System.Drawing.Size(602, 232);
+			this.lvChildren.Size = new System.Drawing.Size(602, 236);
 			this.lvChildren.TabIndex = 0;
 			this.lvChildren.UseCompatibleStateImageBehavior = false;
 			this.lvChildren.View = System.Windows.Forms.View.Details;
@@ -409,7 +410,7 @@ namespace HackPDM
 			this.tabPage4.Location = new System.Drawing.Point(4, 22);
 			this.tabPage4.Name = "tabPage4";
 			this.tabPage4.Padding = new System.Windows.Forms.Padding(3);
-			this.tabPage4.Size = new System.Drawing.Size(608, 238);
+			this.tabPage4.Size = new System.Drawing.Size(608, 242);
 			this.tabPage4.TabIndex = 3;
 			this.tabPage4.Text = "Properties";
 			this.tabPage4.UseVisualStyleBackColor = true;
@@ -419,7 +420,7 @@ namespace HackPDM
 			this.lvProperties.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.lvProperties.Location = new System.Drawing.Point(3, 3);
 			this.lvProperties.Name = "lvProperties";
-			this.lvProperties.Size = new System.Drawing.Size(602, 232);
+			this.lvProperties.Size = new System.Drawing.Size(602, 236);
 			this.lvProperties.TabIndex = 0;
 			this.lvProperties.UseCompatibleStateImageBehavior = false;
 			this.lvProperties.View = System.Windows.Forms.View.Details;
