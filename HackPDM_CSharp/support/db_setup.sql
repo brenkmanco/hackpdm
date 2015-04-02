@@ -893,6 +893,212 @@ $BODY$
 
 
 -- -----------------------------------------------------------------------------
+
+-- DROP FUNCTION fcn_latest_by_dir(integer);
+
+CREATE OR REPLACE FUNCTION fcn_latest_by_dir(
+	IN v_dir_id integer,
+	OUT entry_id integer,
+	OUT version_id integer,
+	OUT dir_id integer,
+	OUT entry_name varchar,
+	OUT type_id integer,
+	OUT file_ext varchar,
+	OUT cat_id integer,
+	OUT cat_name varchar,
+	OUT file_size bigint,
+	OUT str_latest_size varchar,
+	OUT local_size bigint,
+	OUT str_local_size varchar,
+	OUT latest_stamp timestamp(6) without time zone,
+	OUT str_latest_stamp varchar,
+	OUT local_stamp timestamp(6) without time zone,
+	OUT str_local_stamp varchar,
+	OUT latest_md5 text,
+	OUT local_md5 text,
+	OUT checkout_user integer,
+	OUT ck_user_name varchar,
+	OUT checkout_date timestamp(6) without time zone,
+	OUT str_checkout_date varchar,
+	OUT checkout_node integer,
+	OUT is_local boolean,
+	OUT is_remote boolean,
+	OUT client_status_code varchar,
+	OUT relative_path varchar,
+	OUT absolute_path varchar,
+	OUT icon bytea,
+	OUT is_depend_searched boolean,
+	OUT is_readonly boolean
+)
+  RETURNS SETOF record AS
+$BODY$
+	-- several of the values are returned null because they are things only the client would know
+	with dirs as (
+		-- this and all child directories
+		select dir_id from fcn_directory_recursive ($1)
+	),
+	lvs as (
+		-- latest versions
+		select distinct on (entry_id)
+			entry_id,
+			version_id,
+			file_size,
+			create_stamp,
+			file_modify_stamp,
+			md5sum
+		from hp_version
+		order by entry_id, create_stamp desc
+	)
+	select
+		e.entry_id,
+		v.version_id,
+		e.dir_id,
+		e.entry_name,
+		t.type_id,
+		t.file_ext,
+		e.cat_id,
+		c.cat_name,
+		v.file_size::bigint as latest_size,
+		pg_size_pretty(v.file_size) as str_latest_size,
+		0::bigint as local_size,
+		'0'::varchar as str_local_size,
+		v.file_modify_stamp as latest_stamp,
+		to_char(v.file_modify_stamp, 'yyyy-MM-dd HH24:mm:ss') as str_latest_stamp,
+		null::timestamp as local_stamp,
+		''::varchar as str_local_stamp,
+		v.md5sum as latest_md5,
+		null::text as local_md5,
+		e.checkout_user,
+		u.last_name || ', ' || u.first_name as ck_user_name,
+		e.checkout_date,
+		to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
+		e.checkout_node,
+		false as is_local,
+		true as is_remote,
+		'ro'::varchar as client_status_code,
+		'pwa' || replace(d.rel_path, '/', '\') as relative_path,
+		null::varchar as absolute_path,
+		t.icon,
+		false as is_depend_searched,
+		null::boolean as is_readonly
+	from hp_entry as e
+	left join hp_user as u on u.user_id=e.checkout_user
+	left join hp_category as c on c.cat_id=e.cat_id
+	left join hp_type as t on t.type_id=e.type_id
+	left join view_dir_tree as d on d.dir_id = e.dir_id
+	left join lvs as v on v.entry_id=e.entry_id
+	where e.dir_id in (select dir_id from dirs)
+	order by dir_id,entry_id;
+$BODY$
+  LANGUAGE sql VOLATILE
+  COST 100
+  ROWS 1000;
+
+
+
+
+-- -----------------------------------------------------------------------------
+
+-- DROP FUNCTION fcn_latest_by_entry_list(integer[]);
+
+CREATE OR REPLACE FUNCTION fcn_latest_by_entry_list(
+	IN v_version_ids integer[],
+	OUT entry_id integer,
+	OUT version_id integer,
+	OUT dir_id integer,
+	OUT entry_name varchar,
+	OUT type_id integer,
+	OUT file_ext varchar,
+	OUT cat_id integer,
+	OUT cat_name varchar,
+	OUT file_size bigint,
+	OUT str_latest_size varchar,
+	OUT local_size bigint,
+	OUT str_local_size varchar,
+	OUT latest_stamp timestamp(6) without time zone,
+	OUT str_latest_stamp varchar,
+	OUT local_stamp timestamp(6) without time zone,
+	OUT str_local_stamp varchar,
+	OUT latest_md5 text,
+	OUT local_md5 text,
+	OUT checkout_user integer,
+	OUT ck_user_name varchar,
+	OUT checkout_date timestamp(6) without time zone,
+	OUT str_checkout_date varchar,
+	OUT checkout_node integer,
+	OUT is_local boolean,
+	OUT is_remote boolean,
+	OUT client_status_code varchar,
+	OUT relative_path varchar,
+	OUT absolute_path varchar,
+	OUT icon bytea,
+	OUT is_depend_searched boolean,
+	OUT is_readonly boolean
+)
+  RETURNS SETOF record AS
+$BODY$
+	-- several of the values are returned null because they are things only the client would know
+	with lvs as (
+		-- latest versions
+		select distinct on (entry_id)
+			entry_id,
+			version_id,
+			file_size,
+			create_stamp,
+			file_modify_stamp,
+			md5sum
+		from hp_version
+		order by entry_id, create_stamp desc
+	)
+	select
+		e.entry_id,
+		v.version_id,
+		e.dir_id,
+		e.entry_name,
+		t.type_id,
+		t.file_ext,
+		e.cat_id,
+		c.cat_name,
+		v.file_size::bigint as latest_size,
+		pg_size_pretty(v.file_size) as str_latest_size,
+		0::bigint as local_size,
+		'0'::varchar as str_local_size,
+		v.file_modify_stamp as latest_stamp,
+		to_char(v.file_modify_stamp, 'yyyy-MM-dd HH24:mm:ss') as str_latest_stamp,
+		null::timestamp as local_stamp,
+		''::varchar as str_local_stamp,
+		v.md5sum as latest_md5,
+		null::text as local_md5,
+		e.checkout_user,
+		u.last_name || ', ' || u.first_name as ck_user_name,
+		e.checkout_date,
+		to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
+		e.checkout_node,
+		false as is_local,
+		true as is_remote,
+		'ro'::varchar as client_status_code,
+		'pwa' || replace(d.rel_path, '/', '\') as relative_path,
+		null::varchar as absolute_path,
+		t.icon,
+		false as is_depend_searched,
+		null::boolean as is_readonly
+	from hp_entry as e
+	left join hp_user as u on u.user_id=e.checkout_user
+	left join hp_category as c on c.cat_id=e.cat_id
+	left join hp_type as t on t.type_id=e.type_id
+	left join view_dir_tree as d on d.dir_id = e.dir_id
+	left join lvs as v on v.entry_id=e.entry_id
+	where e.entry_id in ( select unnest($1) )
+	order by dir_id,entry_id;
+$BODY$
+  LANGUAGE sql VOLATILE
+  COST 100
+  ROWS 1000;
+
+
+
+
+-- -----------------------------------------------------------------------------
 -- set owner on all sequences
 alter sequence seq_hp_category_cat_id      owner to engadmin;
 alter sequence seq_hp_directory_dir_id     owner to engadmin;
