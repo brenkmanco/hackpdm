@@ -3609,7 +3609,7 @@ namespace HackPDM
 		// - ok
 		// - nv
 		// - lm
-		private DataSet LoadDeletesData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, string strRelBasePath = null, int intBaseDirId = 0, , List<string> lstSelectedNames = null)
+		private DataSet LoadDeletesData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, string strRelBasePath = null, int intBaseDirId = 0, List<string> lstSelectedNames = null)
 		{
 			// running in separate thread
 			BackgroundWorker myWorker = sender as BackgroundWorker;
