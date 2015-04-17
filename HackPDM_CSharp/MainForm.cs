@@ -667,6 +667,12 @@ namespace HackPDM
 			// if: ignore filter
 			// ok: nothing to report (none of the above)
 
+			// TODO: consider changing this method so that it could be called by the worker_Delete methods
+			// we would have to make this method callable by thread workers
+			// that requires the calling method to pass an absolute path, rather than passing a tree node
+			// the main problem with doing that, is that we don't need to load all the file data for deletes
+			// for example, we don't need the checksum or the icon
+
 			// clear dataset
 			dsList = new DataSet();
 
@@ -1836,7 +1842,7 @@ namespace HackPDM
 		{
 
 			BackgroundWorker myWorker = sender as BackgroundWorker;
-			dlgStatus.AddStatusLine("INFO", "Starting AddNew worker");
+			dlgStatus.AddStatusLine("INFO", "Starting Commit worker");
 
 			// get arguments
 			List<object> genericlist = e.Argument as List<object>;
@@ -2242,218 +2248,93 @@ namespace HackPDM
 
 		}
 
-		void worker_DeletePermanent(object sender, DoWorkEventArgs e)
+		void worker_Delete(object sender, DoWorkEventArgs e)
 		{
+			// TODO: make permanent and logical delete methods use the same worker
+			// that requires us to pass a permanent flag argument to the worker
 
 			BackgroundWorker myWorker = sender as BackgroundWorker;
-			dlgStatus.AddStatusLine("INFO", "Beginning permanent delete worker");
+			dlgStatus.AddStatusLine("INFO", "Starting Permanent Delete worker");
 
 			// get arguments
 			List<object> genericlist = e.Argument as List<object>;
 			NpgsqlTransaction t = (NpgsqlTransaction)genericlist[0];
-			int intBaseDirId = (int)genericlist[1];
-			string strRelBasePath = (string)genericlist[2];
-			List<int> lstSelected = (List<int>)genericlist[3];
+			string strRelBasePath = (string)genericlist[1];
+			List<string> lstSelectedNames = (List<string>)genericlist[2];
+			bool blnPermanent = (bool)genericlist[3];
 
-			string strEntries = String.Join(",", lstSelected.ToArray());
+			// get deletes data
+			DataSet dsDeletes = LoadDeletesData(sender, e, t, strRelBasePath, lstSelectedNames);
 
-			DataRow[] drBads;
+			// log files checked-out to me
 
-			// warn checked-out-by-other
-			drBads = dsList.Tables[0].Select("client_status_code='.co' and entry_id in (" + strEntries + ")");
-			foreach (DataRow drBad in drBads)
+			// log files checked-out to other
+
+			// check for write access
+			DataRow[] drLocalFiles = dsDeletes.Tables["files"].Select("client_status_code not in ('co','me')");
+			Int32 intNewCount = drLocalFiles.Length;
+			for (int i = 0; i < drLocalFiles.Length; i++)
 			{
-				string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
-				dlgStatus.AddStatusLine("Info", "File is checked out by another user: " + strFullName);
-			}
+				DataRow drCurrent = drLocalFiles[i];
 
-			// warn checked-out-by-me
-			drBads = dsList.Tables[0].Select("client_status_code='.cm'  and entry_id in (" + strEntries + ")");
-			foreach (DataRow drBad in drBads)
-			{
-				string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
-				dlgStatus.AddStatusLine("Info", "File is already checked out to you: " + strFullName);
-			}
-
-			// get rows of selected files
-			DataRow[] drSelected = dsList.Tables[0].Select("client_status_code in ('','.ro') and entry_id in (" + strEntries + ")");
-			int intRowCount = drSelected.Length;
-
-			// prepare to checkout file
-			string strSql = @"
-					update hp_entry
-					set
-						checkout_user=:user_id,
-						checkout_date=now(),
-						checkout_node=:node_id
-					where entry_id in ({0});
-				";
-			strSql = String.Format(strSql, strEntries);
-			NpgsqlCommand cmdCheckOut = new NpgsqlCommand(strSql, connDb, t);
-			cmdCheckOut.Parameters.Add(new NpgsqlParameter("user_id", NpgsqlTypes.NpgsqlDbType.Integer));
-			cmdCheckOut.Parameters.Add(new NpgsqlParameter("node_id", NpgsqlTypes.NpgsqlDbType.Integer));
-
-			// checkout
-			cmdCheckOut.Parameters["user_id"].Value = intMyUserId;
-			cmdCheckOut.Parameters["node_id"].Value = intMyNodeId;
-			int intRows = cmdCheckOut.ExecuteNonQuery();
-			if (intRows == drSelected.Length)
-			{
-				foreach (DataRow drRow in drSelected)
+				// check for cancellation
+				if ((myWorker.CancellationPending == true))
 				{
-					string strFullName = drRow.Field<string>("absolute_path") + "\\" + drRow.Field<string>("entry_name");
-					dlgStatus.AddStatusLine("File checkout info set", strFullName);
+					e.Cancel = true;
+					return;
 				}
-			}
-			t.Commit();
-
-			// set the local files writeable
-			for (int i = 0; i < intRowCount; i++)
-			{
-
-				DataRow drCurrent = drSelected[i];
 
 				string strFileName = drCurrent.Field<string>("entry_name");
-				string strFilePath = drCurrent.Field<string>("absolute_path");
-				string strFullName = strFilePath + "\\" + strFileName;
+				string strAbsolutePath = drCurrent.Field<string>("absolute_path");
+				string strFullName = strAbsolutePath + "\\" + strFileName;
 				FileInfo fiCurrFile = new FileInfo(strFullName);
-				dlgStatus.AddStatusLine("Setting file Writeable (" + (i + 1).ToString() + " of " + intRowCount.ToString() + ")", strFileName);
-				try
+
+				// report status
+				dlgStatus.AddStatusLine("INFO", "Checking for write access (" + (i + 1).ToString() + " of " + drLocalFiles.Length.ToString() + "): " + strFileName);
+
+				// check if file is writeable
+				if (IsFileLocked(fiCurrFile) == true)
 				{
-					fiCurrFile.IsReadOnly = false;
-				}
-				catch (Exception ex)
-				{
-					dlgStatus.AddStatusLine("Error", "Failed to set file \"" + fiCurrFile.Name + "\" to writeable." + System.Environment.NewLine + ex.ToString());
+					// file is in use: don't continue
+					throw new System.Exception("File \"" + fiCurrFile.Name + "\" is locked.  Release it first.");
 				}
 
-			} // end for
+			}
 
-		}
+			// start commiting data
+			bool blnFailed = false;
 
-		void worker_DeleteLogical(object sender, DoWorkEventArgs e)
-		{
+			// remove remote versions, entries, directories (set the permanently deleted flag)
+			blnFailed = blnFailed || DeleteRemoteEntries(sender, e, t, blnPermanent, ref dsDeletes);
 
-			BackgroundWorker myWorker = sender as BackgroundWorker;
-			dlgStatus.AddStatusLine("Info", "Beginning logical delete worker");
-
-			// get arguments
-			List<object> genericlist = e.Argument as List<object>;
-			NpgsqlTransaction t = (NpgsqlTransaction)genericlist[0];
-			int intBaseDirId = (int)genericlist[1];
-			string strRelBasePath = (string)genericlist[2];
-			List<int> lstSelected = (List<int>)genericlist[3];
-
-
-
-
-			// list or tree selection
-			if (lstSelected != null)
+			// remove remote files from webdav server
+			if (blnPermanent)
 			{
-				// sql command for remote entry list
-				// select listed entries
-				// also select dependencies of those entries, wherever they are, based on remote dependency data
-				string strEntries = String.Join(",", lstSelected.ToArray());
-				string strSql = "select * from fcn_latest_by_entry_list( array [" + strEntries + "] );";
+				blnFailed = blnFailed || DeleteRemoteFiles(sender, e, t, ref dsDeletes);
+			}
 
-				// put the remote list in the DataSet
-				NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-				daTemp.Fill(dsDeletes);
+			// remove local files and directories
+			blnFailed = blnFailed || DeleteLocalFiles(sender, e, t, ref dsDeletes);
+
+			// commit to database
+			if (blnFailed == true)
+			{
+				t.Rollback();
+
+				// TODO: figure out how to rollback WebDav changes
+				// we could move files on the webdav server to a lost-and-found directory, and then call methods to restore those files upon failure
+
+				dlgStatus.AddStatusLine("ERROR", "Operation failed. Rolling back the database transaction.");
+				throw new System.Exception("Operation failed. Rolling back the database transaction.");
 			}
 			else
 			{
-
-				// sql command for remote entry list
-				// select entries in or below the specified direcory
-				// also select dependencies of those entries, wherever they are, based on remote dependency data
-				string strSql = "select * from fcn_latest_by_dir(:dir_id);";
-
-				// put the remote list in the DataSet
-				NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", intBaseDirId));
-				daTemp.Fill(dsDeletes);
-
+				t.Commit();
 			}
-
-
-
-			string strEntries = String.Join(",", lstSelected.ToArray());
-
-			DataRow[] drBads;
-
-			// warn checked-out-by-other
-			drBads = dsList.Tables[0].Select("client_status_code='.co' and entry_id in (" + strEntries + ")");
-			foreach (DataRow drBad in drBads)
-			{
-				string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
-				dlgStatus.AddStatusLine("Info", "File is checked out by another user: " + strFullName);
-			}
-
-			// warn checked-out-by-me
-			drBads = dsList.Tables[0].Select("client_status_code='.cm'  and entry_id in (" + strEntries + ")");
-			foreach (DataRow drBad in drBads)
-			{
-				string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
-				dlgStatus.AddStatusLine("Info", "File is already checked out to you: " + strFullName);
-			}
-
-			// get rows of selected files
-			DataRow[] drSelected = dsList.Tables[0].Select("client_status_code in ('','.ro') and entry_id in (" + strEntries + ")");
-			int intRowCount = drSelected.Length;
-
-			// prepare to checkout file
-			string strSql = @"
-					update hp_entry
-					set
-						checkout_user=:user_id,
-						checkout_date=now(),
-						checkout_node=:node_id
-					where entry_id in ({0});
-				";
-			strSql = String.Format(strSql, strEntries);
-			NpgsqlCommand cmdCheckOut = new NpgsqlCommand(strSql, connDb, t);
-			cmdCheckOut.Parameters.Add(new NpgsqlParameter("user_id", NpgsqlTypes.NpgsqlDbType.Integer));
-			cmdCheckOut.Parameters.Add(new NpgsqlParameter("node_id", NpgsqlTypes.NpgsqlDbType.Integer));
-
-			// checkout
-			cmdCheckOut.Parameters["user_id"].Value = intMyUserId;
-			cmdCheckOut.Parameters["node_id"].Value = intMyNodeId;
-			int intRows = cmdCheckOut.ExecuteNonQuery();
-			if (intRows == drSelected.Length)
-			{
-				foreach (DataRow drRow in drSelected)
-				{
-					string strFullName = drRow.Field<string>("absolute_path") + "\\" + drRow.Field<string>("entry_name");
-					dlgStatus.AddStatusLine("File checkout info set", strFullName);
-				}
-			}
-			t.Commit();
-
-			// set the local files writeable
-			for (int i = 0; i < intRowCount; i++)
-			{
-
-				DataRow drCurrent = drSelected[i];
-
-				string strFileName = drCurrent.Field<string>("entry_name");
-				string strFilePath = drCurrent.Field<string>("absolute_path");
-				string strFullName = strFilePath + "\\" + strFileName;
-				FileInfo fiCurrFile = new FileInfo(strFullName);
-				dlgStatus.AddStatusLine("Setting file Writeable (" + (i + 1).ToString() + " of " + intRowCount.ToString() + ")", strFileName);
-				try
-				{
-					fiCurrFile.IsReadOnly = false;
-				}
-				catch (Exception ex)
-				{
-					dlgStatus.AddStatusLine("Error", "Failed to set file \"" + fiCurrFile.Name + "\" to writeable." + System.Environment.NewLine + ex.ToString());
-				}
-
-			} // end for
 
 		}
 
-		// commits data (assuming TreeView actions like AddNew or CheckIn):
+		// commits data (assuming actions like Commit or CheckIn):
 		// files in the selected path
 		// files that are depended upon by files in the selected path
 		// file dependency relationships
@@ -2543,6 +2424,7 @@ namespace HackPDM
 
 		private bool LoadCommitsDataRecurse(object sender, DoWorkEventArgs e, ref DataSet dsCommits, string strRelativePath)
 		{
+			// this method is only called when the user executes an action on a direcory in the tree view
 
 			// running in separate thread
 			BackgroundWorker myWorker = sender as BackgroundWorker;
@@ -2625,8 +2507,6 @@ namespace HackPDM
 			}
 
 			// loop through all subdirectories
-			// TODO: recurse elswere, and pass along a list of directories, rather than recursing here?
-			// for now, use the filesystem to recurse, i.e. Directory.GetDirectories(string)
 			bool blnFailed = false;
 			string[] ChildDirectories = Directory.GetDirectories(strAbsolutePath);
 			foreach (string strChildAbsPath in ChildDirectories)
@@ -3599,17 +3479,23 @@ namespace HackPDM
 
 		}
 
-		// deletes data (called from permanent and logical delete methods)
+		// load deletes data (called from permanent and logical delete methods)
 		// fetching looks at remote files and matches local files (like left joining local on remote)
 		// committing looks at local files and matches remote files (like left joining remote on local)
 		// deleting needs both local and remote (like full outer join of local and remote)
+		// deletes data is like the data loaded for the list view
 		// we will delete files with the following client_status_code:
-		// - lo
-		// - ro
-		// - ok
-		// - nv
-		// - lm
-		private DataSet LoadDeletesData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, string strRelBasePath = null, int intBaseDirId = 0, List<string> lstSelectedNames = null)
+		// - ro: remote only
+		// - lo: local only
+		// - lm: modified locally without checking out
+		// - nv: new remote version
+		// - ft: no remote file type
+		// - if: ignore filter
+		// - ok: nothing to report (none of the above)
+		// we will not delete files with the following client_status_code:
+		// - cm: checked out to me
+		// - co: checked out to other
+		private DataSet LoadDeletesData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, string strRelBasePath, List<string> lstSelectedNames)
 		{
 			// running in separate thread
 			BackgroundWorker myWorker = sender as BackgroundWorker;
@@ -3620,8 +3506,11 @@ namespace HackPDM
 			DataSet dsDeletes = new DataSet();
 
 			// get remote directory data
+			int intBaseDirId = 0;
+			dictTree.TryGetValue(strRelBasePath, out intBaseDirId);
 			if (intBaseDirId != 0)
 			{
+				// if we get here, the user selected a remote directory in the tree view
 
 				// get remote directories
 				string strSql = @"
@@ -3665,10 +3554,11 @@ namespace HackPDM
 					dsDeletes.Tables[1].TableName = "files";
 				}
 
-				// get and match local files
+				// get and match local files and directories
 				// only necessary if both remote and local data exist, and the user selected a directory
 				// (as opposed to selecting individual entries from the list view)
-				blnFailed = MergeLocalFiles(sender, e, ref dsDeletes);
+				// the recursive method is necessary because there may be local only directories inside the selected base directory 
+				blnFailed = LoadDeletesDataRecurse(sender, e, ref dsDeletes, strRelBasePath);
 
 				// return results
 				return dsDeletes;
@@ -3687,8 +3577,9 @@ namespace HackPDM
 			// get data for selected entries
 			if (lstSelectedNames != null)
 			{
+				// if we get here, the user selected individual entries (files) from the list view
 
-				// get files
+				// get selected entries (files) into a new datatable
 				string strSelectedNames = String.Join("','", lstSelectedNames.ToArray());
 				DataTable dtTemp = dsList.Tables["files"].Select("entry_name in ('" + strSelectedNames + "')").CopyToDataTable();
 				dsDeletes.Tables.Add(dtTemp);
@@ -3701,7 +3592,8 @@ namespace HackPDM
 
 			if (strRelBasePath != null)
 			{
-				// we are operating on a local only directory
+				// if we get here, we are operating on a local only directory
+				string strAbsBasePath = GetAbsolutePath(strRelBasePath);
 
 				// add this directory to the dirs table
 				Int32 intDirId = 0;
@@ -3711,13 +3603,17 @@ namespace HackPDM
 				string strParentName = strRelParentPath.Substring(strRelParentPath.LastIndexOf("\\") + 1);
 				dictTree.TryGetValue(strRelBasePath, out intDirId);
 				dictTree.TryGetValue(strRelParentPath, out intParentId);
-				dsDeletes.Tables["dirs"].Rows.Add(intDirId, intParentId, strBaseName, strRelBasePath, GetAbsolutePath(strRelBasePath));
+				dsDeletes.Tables["dirs"].Rows.Add(intDirId, intParentId, strBaseName, strRelBasePath, strAbsBasePath);
 
 				// make an empty DataTable
 				dsDeletes.Tables.Add(CreateFileTable());
 
-				// TODO: recursively build list of local directories and files to be deleted
+				// recursively build list of local directories and files to be deleted
+				// we would like to use the same method used for a remotely existing selected base directory (i.e. the one selected in the tree view by the user)
+				// I'm not sure how well this will work out
+				blnFailed = LoadDeletesDataRecurse(sender, e, ref dsDeletes, strRelBasePath);
 
+				return dsDeletes;
 
 			}
 
@@ -3726,104 +3622,24 @@ namespace HackPDM
 
 		}
 
-		private bool MergeLocalFiles(object sender, DoWorkEventArgs e, ref DataSet dsDeletes)
+		private bool LoadDeletesDataRecurse(object sender, DoWorkEventArgs e, ref DataSet dsDeletes, string strRelBasePath)
 		{
+			throw new NotImplementedException();
+		}
 
-			// running in separate thread
-			BackgroundWorker myWorker = sender as BackgroundWorker;
+		private bool DeleteLocalFiles(object sender, DoWorkEventArgs e, NpgsqlTransaction t, ref DataSet dsDeletes)
+		{
+			throw new NotImplementedException();
+		}
 
-			// TODO: delete most of the stuff below, and do something useful
+		private bool DeleteRemoteFiles(object sender, DoWorkEventArgs e, NpgsqlTransaction t, ref DataSet dsDeletes)
+		{
+			throw new NotImplementedException();
+		}
 
-			// get absolute directory path 
-			string strAbsolutePath = GetAbsolutePath(strRelativePath);
-
-			// log status
-			dlgStatus.AddStatusLine("INFO", "Get Directory Info: " + strAbsolutePath);
-
-			// get local files
-			string[] strFiles = Directory.GetFiles(strAbsolutePath);
-			string strFileName = "";
-			DateTime dtModifyDate;
-			Int64 lngFileSize = 0;
-
-			// log status
-			dlgStatus.AddStatusLine("Process Files", "Processing local files: " + strFiles.Length);
-
-			//loop through all files in this directory
-			foreach (string strFile in strFiles)
-			{
-
-				// check for cancellation
-				if ((myWorker.CancellationPending == true))
-				{
-					e.Cancel = true;
-					return true;
-				}
-
-				// get file info
-				strFileName = GetShortName(strFile);
-				FileInfo fiCurrFile = new FileInfo(strFile);
-				string strFileExt = fiCurrFile.Extension.Substring(1, fiCurrFile.Extension.Length - 1).ToLower();
-				lngFileSize = fiCurrFile.Length;
-				dtModifyDate = fiCurrFile.LastWriteTime;
-
-				// log status
-				dlgStatus.AddStatusLine("Processing Files", "Processing local file: " + strFile);
-
-				// insert new row for presumed local-only file
-				dsDeletes.Tables["files"].Rows.Add(
-					null, // entry_id
-					null, // version_id
-					intDirId, // dir_id
-					strFileName, // entry_name
-					null, // type_id
-					strFileExt, // file_ext
-					null, // cat_id
-					null, // cat_name
-					null, // latest_size
-					null, // str_latest_size
-					lngFileSize, // local_size
-					FormatSize(lngFileSize), // str_local_size
-					null, // latest_stamp
-					null, // str_latest_stamp
-					dtModifyDate, // local_stamp
-					FormatDate(dtModifyDate), // str_local_stamp
-					null, // latest_md5
-					null, // local_md5
-					null, // checkout_user
-					null, // ck_user_name
-					null, // checkout_date
-					null, // str_checkout_date
-					null, // checkout_node
-					true, // is_local
-					false, // is_remote
-					"lo", // client_status_code
-					strRelativePath, // relative_path
-					strAbsolutePath, // absolute_path
-					null, // icon
-					false, // is_depend_searched
-					fiCurrFile.IsReadOnly // is_readonly
-				);
-
-			}
-
-			// loop through all subdirectories
-			// TODO: recurse elswere, and pass along a list of directories, rather than recursing here?
-			// for now, use the filesystem to recurse, i.e. Directory.GetDirectories(string)
-			bool blnFailed = false;
-			string[] ChildDirectories = Directory.GetDirectories(strAbsolutePath);
-			foreach (string strChildAbsPath in ChildDirectories)
-			{
-				string strChildName = strChildAbsPath.Substring(strChildAbsPath.LastIndexOf("\\") + 1);
-				string strChildRelPath = GetAbsolutePath(strChildAbsPath);
-				int intChildId = 0;
-				dictTree.TryGetValue(strRelativePath, out intChildId);
-				dsDeletes.Tables["dirs"].Rows.Add(intChildId, intDirId, strChildName, strChildRelPath, strChildAbsPath);
-				blnFailed = LoadCommitsDataRecurse(sender, e, ref dsDeletes, strChildRelPath);
-			}
-
-			return (blnFailed);
-
+		private bool DeleteRemoteEntries(object sender, DoWorkEventArgs e, NpgsqlTransaction t, bool blnPermanent, ref DataSet dsDeletes)
+		{
+			throw new NotImplementedException();
 		}
 
 		#endregion
@@ -4348,11 +4164,12 @@ namespace HackPDM
 			arguments.Add(t);
 			arguments.Add(strRelBasePath);
 			arguments.Add(lstSelectedNames);
+			arguments.Add(true); // permanent flag
 
 			// launch the background thread
 			BackgroundWorker worker = new BackgroundWorker();
 			worker.WorkerSupportsCancellation = true;
-			worker.DoWork += new DoWorkEventHandler(worker_DeletePermanent);
+			worker.DoWork += new DoWorkEventHandler(worker_Delete);
 			worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
 			worker.RunWorkerAsync(arguments);
 
@@ -4397,11 +4214,12 @@ namespace HackPDM
 			arguments.Add(t);
 			arguments.Add(strRelBasePath);
 			arguments.Add(lstSelectedNames);
+			arguments.Add(false); // permanent flag
 
 			// launch the background thread
 			BackgroundWorker worker = new BackgroundWorker();
 			worker.WorkerSupportsCancellation = true;
-			worker.DoWork += new DoWorkEventHandler(worker_DeleteLogical);
+			worker.DoWork += new DoWorkEventHandler(worker_Delete);
 			worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
 			worker.RunWorkerAsync(arguments);
 
