@@ -229,6 +229,7 @@ namespace HackPDM
 			strCurrProfileId = Properties.Settings.Default.usetDefaultProfile;
 			string strXmlProfiles = Properties.Settings.Default.usetProfiles;
 
+#if DEBUG
 			// TEMP: try to get a saved profile
 			// running in the debugger causes the config file to be in a different place everytime
 			// that means you have to create a new one everytime
@@ -239,7 +240,8 @@ namespace HackPDM
 			var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
 			//var setting = section.Settings.Get("usetDefaultProfile"); // This is the setting name, change to your needs
 			strCurrProfileId = section.Settings.Get("usetDefaultProfile").Value.ValueXml.InnerText;
-			strXmlProfiles = section.Settings.Get("usetProfiles").Value.ValueXml.InnerText;
+            strXmlProfiles = section.Settings.Get("usetProfiles").Value.ValueXml.InnerText;
+#endif
 
 			// check existence
 			if (blnForceDlg || strXmlProfiles == "" || strCurrProfileId == "")
@@ -256,7 +258,7 @@ namespace HackPDM
 				// failed again
 				if (strXmlProfiles == "" || strCurrProfileId == "")
 				{
-					var result = MessageBox.Show("Still can't get a profile.  Can't connect to the server.",
+					var result = MessageBox.Show("Still can't get a profile.  Can't connect to the server.\nRetry?",
 						"Startup Error",
 						MessageBoxButtons.OKCancel,
 						MessageBoxIcon.Error);
