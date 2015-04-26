@@ -1098,19 +1098,4 @@ $BODY$
 
 
 
--- -----------------------------------------------------------------------------
--- set owner on all sequences
-alter sequence seq_hp_category_cat_id      owner to engadmin;
-alter sequence seq_hp_directory_dir_id     owner to engadmin;
-alter sequence seq_hp_entry_entry_id       owner to engadmin;
-alter sequence seq_hp_node_node_id         owner to engadmin;
-alter sequence seq_hp_property_prop_id     owner to engadmin;
-alter sequence seq_hp_type_type_id         owner to engadmin;
-alter sequence seq_hp_user_user_id         owner to engadmin;
-alter sequence seq_hp_version_version_id   owner to engadmin;
-alter sequence seq_hp_entry_name_filter_id owner to engadmin;
-
-
-
-
 
