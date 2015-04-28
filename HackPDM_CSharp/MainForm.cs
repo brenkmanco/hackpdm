@@ -715,7 +715,7 @@ namespace HackPDM
 						e.checkout_node,
 						false as is_local,
 						true as is_remote,
-						'.ro' as client_status_code,
+						'ro' as client_status_code,
 						:strTreePath as relative_path,
 						:strFilePath as absolute_path,
 						t.icon,
@@ -846,8 +846,7 @@ namespace HackPDM
 							}
 						}
 
-
-						if (dtModifyDate < drTemp.Field<DateTime>("latest_stamp")) strClientStatusCode = "nv";
+                        // we have identified the correct client_status_code, now set it
 						drTemp.SetField<string>("client_status_code", strClientStatusCode);
 
 						// format the remote file size
@@ -1680,7 +1679,7 @@ namespace HackPDM
 			}
 
 			// check for files modified, but not checked out
-			drBads = dsFetches.Tables["files"].Select("local_stamp>latest_stamp and client_status_code<>'.cm'");
+			drBads = dsFetches.Tables["files"].Select("local_stamp>latest_stamp and client_status_code<>'cm'");
 			foreach (DataRow drBad in drBads)
 			{
 				string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
@@ -1696,7 +1695,7 @@ namespace HackPDM
 			}
 
 			// check for files writeable, but not checked out
-			drBads = dsFetches.Tables["files"].Select("is_readonly=false and client_status_code<>'.cm'");
+			drBads = dsFetches.Tables["files"].Select("is_readonly=false and client_status_code<>'cm'");
 			foreach (DataRow drBad in drBads)
 			{
 				string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
@@ -1712,7 +1711,7 @@ namespace HackPDM
 			}
 
 			// get files to be updated
-			DataRow[] drUpdateFiles = dsFetches.Tables["files"].Select("client_status_code='.nv'");
+			DataRow[] drUpdateFiles = dsFetches.Tables["files"].Select("client_status_code='nv'");
 
 			// check for files locked, but needing update
 			int intUpdateCount = drUpdateFiles.Length;
@@ -1793,7 +1792,7 @@ namespace HackPDM
 			}
 
 			// get and create files new to this node
-			DataRow[] drNewFiles = dsFetches.Tables["files"].Select("client_status_code='.ro'", "absolute_path asc");
+			DataRow[] drNewFiles = dsFetches.Tables["files"].Select("client_status_code='ro'", "absolute_path asc");
 			int intNewCount = drNewFiles.Length;
 			for (int i = 0; i < intNewCount; i++)
 			{
@@ -1856,7 +1855,7 @@ namespace HackPDM
 			DataSet dsCommits = LoadCommitsData(sender, e, t, strRelBasePath, lstSelectedNames);
 
 			// log files outside PWA
-			DataRow[] drNonPwaFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'.if' and absolute_path not like '{0}%'", strLocalFileRoot));
+			DataRow[] drNonPwaFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'if' and absolute_path not like '{0}%'", strLocalFileRoot));
 			foreach (DataRow drCurrent in drNonPwaFiles)
 			{
 				// check for cancellation
@@ -1870,7 +1869,7 @@ namespace HackPDM
 			}
 
 			// log blocked files
-			DataRow[] drBlockedFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code='.if' and absolute_path like '{0}%'", strLocalFileRoot));
+			DataRow[] drBlockedFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code='if' and absolute_path like '{0}%'", strLocalFileRoot));
 			foreach (DataRow drCurrent in drBlockedFiles)
 			{
 				// check for cancellation
@@ -1884,7 +1883,7 @@ namespace HackPDM
 			}
 
 			// check for files with no remote file type
-			DataRow[] drNoRemFiles = dsCommits.Tables["files"].Select("client_status_code<>'.if' and client_status_code='.ft'");
+			DataRow[] drNoRemFiles = dsCommits.Tables["files"].Select("client_status_code<>'if' and client_status_code='ft'");
 			foreach (DataRow drCurrent in drNoRemFiles)
 			{
 				// check for cancellation
@@ -1902,7 +1901,7 @@ namespace HackPDM
 			}
 
 			// check for files over 2GB
-			DataRow[] drBigFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'.if' and local_size>{0} and absolute_path like '{1}%'", lngMaxFileSize, strLocalFileRoot));
+			DataRow[] drBigFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'if' and local_size>{0} and absolute_path like '{1}%'", lngMaxFileSize, strLocalFileRoot));
 			foreach (DataRow drCurrent in drBigFiles)
 			{
 				// check for cancellation
@@ -1920,7 +1919,7 @@ namespace HackPDM
 			}
 
 			// check for write access
-			DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'.if' and absolute_path like '{0}%'", strLocalFileRoot));
+			DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'if' and absolute_path like '{0}%'", strLocalFileRoot));
 			Int32 intNewCount = drNewFiles.Length;
 			for (int i = 0; i < drNewFiles.Length; i++)
 			{
@@ -2037,7 +2036,7 @@ namespace HackPDM
 			DataRow[] drBads;
 
 			// warn checked-out-by-other
-			drBads = dsList.Tables[0].Select("client_status_code='.co' and entry_id in (" + strEntries + ")");
+			drBads = dsList.Tables[0].Select("client_status_code='co' and entry_id in (" + strEntries + ")");
 			foreach (DataRow drBad in drBads)
 			{
 				string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
@@ -2045,7 +2044,7 @@ namespace HackPDM
 			}
 
 			// warn checked-out-by-me
-			drBads = dsList.Tables[0].Select("client_status_code='.cm'  and entry_id in (" + strEntries + ")");
+			drBads = dsList.Tables[0].Select("client_status_code='cm'  and entry_id in (" + strEntries + ")");
 			foreach (DataRow drBad in drBads)
 			{
 				string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
@@ -2053,7 +2052,7 @@ namespace HackPDM
 			}
 
 			// get rows of selected files
-			DataRow[] drSelected = dsList.Tables[0].Select("client_status_code in ('','.ro') and entry_id in (" + strEntries + ")");
+			DataRow[] drSelected = dsList.Tables[0].Select("client_status_code in ('','ro') and entry_id in (" + strEntries + ")");
 			int intRowCount = drSelected.Length;
 
 			// prepare to checkout file
@@ -2951,7 +2950,7 @@ namespace HackPDM
 
 				// check if we need to create this directory
 				// by comparing relative path, we avoid directories outside pwa
-				DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("relative_path like '{0}%' and client_status_code in ('.lo','.cm')", drCurrent.Field<string>("relative_path")));
+				DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("relative_path like '{0}%' and client_status_code in ('lo','cm')", drCurrent.Field<string>("relative_path")));
 				if (drNewFiles.Length < 1) continue;
 
 				// when starting a new unique path, get this path's pre-existing remote parentid
@@ -3085,7 +3084,7 @@ namespace HackPDM
 			cmdInsertVersion.Parameters.Add(new NpgsqlParameter("md5sum", NpgsqlTypes.NpgsqlDbType.Text));
 
 			// get new files, write to db, upload to webdav
-			DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code in ('.lo','.cm') and absolute_path like '{0}%'", strLocalFileRoot));
+			DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code in ('lo','cm') and absolute_path like '{0}%'", strLocalFileRoot));
 			Int32 intNewCount = drNewFiles.Length;
 			for (int i = 0; i < intNewCount; i++)
 			{
@@ -3234,11 +3233,18 @@ namespace HackPDM
 
 			// get files to be committed and build list of version ids
 			List<int> lstVersions = new List<int>();
-			DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code in ('.lo','.cm') and absolute_path like '{0}%'", strLocalFileRoot));
+			DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code in ('lo','cm') and absolute_path like '{0}%'", strLocalFileRoot));
 			foreach (DataRow drFile in drNewFiles)
 			{
 				lstVersions.Add(drFile.Field<int>("version_id"));
-			}
+            }
+
+            if (lstVersions.Count<1)
+            {
+                // nothing to do here.  exit the method.
+                return blnFailed;
+            }
+
 			string strVersions = String.Join(",", lstVersions);
 
 			// check for children with no version id inside the pwa
