@@ -483,9 +483,9 @@ namespace HackPDM
 			// clear the tree
 			treeView1.Nodes.Clear();
 
-			// insert the root node where tag = dir_id = 0
+			// insert the root node where tag = dir_id = 1
 			TreeNode tnRoot = new TreeNode("pwa");
-			tnRoot.Tag = (object)(int)0;
+			tnRoot.Tag = (object)(int)1;
 			tnRoot.ImageIndex = 0;
 			tnRoot.SelectedImageIndex = 0;
 			treeView1.Nodes.Add(tnRoot);
@@ -3005,7 +3005,7 @@ namespace HackPDM
 				}
 
 				// drop trailing comma
-				strDirs = strDirs.Substring(0, strDirs.Length - 2);
+				strDirs = strDirs.Substring(0, strDirs.Length - 1);
 
 				// get remote entries in a DataSet
 				string strSql = "select * from fcn_latest_w_depends_by_dir_list( array [" + strDirs + "] );";
