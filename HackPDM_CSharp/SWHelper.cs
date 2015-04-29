@@ -39,7 +39,7 @@ namespace HackPDM
 			}
 			catch { }
 
-			if (swRunApp == null)
+	//		if (swRunApp == null)
 			{
 				try
 				{

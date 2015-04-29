@@ -234,13 +234,18 @@ namespace HackPDM
 			// running in the debugger causes the config file to be in a different place everytime
 			// that means you have to create a new one everytime
 			// TODO: erase this stuff when building for release
-			var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds.config");
-			var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
-			var sectionGroup = configuration.GetSectionGroup("tempSettingsGroup"); // This is the section group name, change to your needs
-			var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
+		//	var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds.config");
+		//	var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
+		//	var sectionGroup = configuration.GetSectionGroup("tempSettingsGroup"); // This is the section group name, change to your needs
+		//	var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
 			//var setting = section.Settings.Get("usetDefaultProfile"); // This is the setting name, change to your needs
-			strCurrProfileId = section.Settings.Get("usetDefaultProfile").Value.ValueXml.InnerText;
-            strXmlProfiles = section.Settings.Get("usetProfiles").Value.ValueXml.InnerText;
+		//	strCurrProfileId = section.Settings.Get("usetDefaultProfile").Value.ValueXml.InnerText;
+        //    strXmlProfiles = section.Settings.Get("usetProfiles").Value.ValueXml.InnerText;
+
+
+            // These are for jared's testing (couldn't get the config file thing working...):
+            strCurrProfileId = "96ab093f-f106-49bd-8626-6d3bb2877965";
+            strXmlProfiles = "<DocumentElement>\r\n  <profiles>\r\n    <PfGuid>96ab093f-f106-49bd-8626-6d3bb2877965</PfGuid>\r\n    <PfName>jared</PfName>\r\n    <DbServ>192.168.52.134</DbServ>\r\n    <DbPort>5432</DbPort>\r\n    <DbUser>demouser</DbUser>\r\n    <DbPass>demo</DbPass>\r\n    <DbName>hackpdm</DbName>\r\n    <DavServ>http://192.168.52.134</DavServ>\r\n    <DavPort>80</DavPort>\r\n    <DavUser/>\r\n    <DavPass/>\r\n    <DavPath>webdav</DavPath>\r\n    <FsRoot>D:\\Desktop Stuff\\Work\\Asphalt Zipper</FsRoot>\r\n    <Username>demo</Username>\r\n    <Password>demo</Password>\r\n  </profiles>\r\n</DocumentElement>";
 #endif
 
 			// check existence
@@ -282,7 +287,7 @@ namespace HackPDM
 			drCurrProfile = dtProfiles.Select("PfGuid='" + strCurrProfileId + "'")[0];
 			if (drCurrProfile == null)
 			{
-				var result = MessageBox.Show("Still can't get a profile.  Can't connect to the server.",
+				var result = MessageBox.Show("Still can't get a profile.  Can't connect to the server.\nRetry?",
 					"Startup Error",
 					MessageBoxButtons.OKCancel,
 					MessageBoxIcon.Error);
@@ -930,6 +935,300 @@ namespace HackPDM
 			} // end if
 
 		}
+
+
+//        protected void LoadListData(Path currentPath, bool lightpull = false)
+//        {
+
+//            // TODO: add additional icons
+//            // nv and co could co-exist --> add new icon for nvco
+//            // ro and co could co-exist --> add new icon for roco
+//            //
+//            // until I get around to it, let these take affect in the following order
+//            // for example, nv comes before co and ro comes before co
+//            // that means if a file is both nv and co, it should get assigned co
+//            //
+//            // ro: remote only
+//            // lo: local only
+//            // lm: modified locally without checking out
+//            // nv: new remote version
+//            // cm: checked out to me
+//            // co: checked out to other
+//            // ft: no remote file type
+//            // if: ignore filter
+//            // ok: nothing to report (none of the above)
+
+//            // TODO: consider changing this method so that it could be called by the worker_Delete methods
+//            // we would have to make this method callable by thread workers
+//            // that requires the calling method to pass an absolute path, rather than passing a tree node
+//            // the main problem with doing that, is that we don't need to load all the file data for deletes
+//            // for example, we don't need the checksum or the icon
+
+//            // clear dataset
+//            dsList = new DataSet();
+
+//            // get directory path
+//            string strAbsPath = GetAbsolutePath(currentPath.ToString());
+//            string strRelPath = currentPath.ToString();
+
+//            // get remote entries
+//            int intDirId = 0;
+//            if (nodeCurrent.Tag != null)
+//            {
+//                intDirId = (int)nodeCurrent.Tag;
+//                // initialize sql command for remote entry list
+//                string strSql = @"
+//					select
+//						e.entry_id,
+//						v.version_id,
+//						e.dir_id,
+//						e.entry_name,
+//						t.type_id,
+//						t.file_ext,
+//						e.cat_id,
+//						c.cat_name,
+//						v.file_size as latest_size,
+//						pg_size_pretty(v.file_size) as str_latest_size,
+//						null as local_size,
+//						'' as str_local_size,
+//						v.file_modify_stamp as latest_stamp,
+//						to_char(v.file_modify_stamp, 'yyyy-MM-dd HH24:mm:ss') as str_latest_stamp,
+//						null as local_stamp,
+//						'' as str_local_stamp,
+//						v.md5sum as latest_md5,
+//						null as local_md5,
+//						e.checkout_user,
+//						u.last_name || ', ' || u.first_name as ck_user_name,
+//						e.checkout_date,
+//						to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
+//						e.checkout_node,
+//						false as is_local,
+//						true as is_remote,
+//						'.ro' as client_status_code,
+//						:strTreePath as relative_path,
+//						:strFilePath as absolute_path,
+//						t.icon,
+//						false as is_depend_searched,
+//						null as is_readonly
+//					from hp_entry as e
+//					left join hp_user as u on u.user_id=e.checkout_user
+//					left join hp_category as c on c.cat_id=e.cat_id
+//					left join hp_type as t on t.type_id=e.type_id
+//					left join (
+//						select distinct on (entry_id)
+//							entry_id,
+//							version_id,
+//							file_size,
+//							create_stamp,
+//							file_modify_stamp,
+//							md5sum
+//						from hp_version
+//						order by entry_id, create_stamp desc
+//					) as v on v.entry_id=e.entry_id
+//					where e.dir_id=:dir_id
+//					order by dir_id,entry_id;
+//				";
+
+//                // put the remote list in the DataSet
+//                NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+//                daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", NpgsqlTypes.NpgsqlDbType.Integer));
+//                daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strTreePath", NpgsqlTypes.NpgsqlDbType.Text));
+//                daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strFilePath", NpgsqlTypes.NpgsqlDbType.Text));
+//                daTemp.SelectCommand.Parameters["dir_id"].Value = intDirId;
+//                daTemp.SelectCommand.Parameters["strTreePath"].Value = strRelPath;
+//                daTemp.SelectCommand.Parameters["strFilePath"].Value = strAbsPath;
+//                daTemp.Fill(dsList);
+
+//            }
+
+//            if (dsList.Tables.Count == 0)
+//            {
+//                // make an empty DataTable
+//                dsList.Tables.Add(CreateFileTable());
+//            }
+
+//            // get local files
+//            if (Directory.Exists(strAbsPath) == true)
+//            {
+
+//                string[] strFiles;
+//                try
+//                {
+
+//                    strFiles = Directory.GetFiles(strAbsPath);
+//                }
+//                catch (IOException e)
+//                {
+//                    MessageBox.Show("Error: Drive not ready or directory does not exist: " + e);
+//                    return;
+//                }
+//                catch (UnauthorizedAccessException e)
+//                {
+//                    MessageBox.Show("Error: Drive or directory access denided: " + e);
+//                    return;
+//                }
+//                catch (Exception e)
+//                {
+//                    MessageBox.Show("Error: " + e);
+//                    return;
+//                }
+
+//                string strFileName = "";
+//                DateTime dtModifyDate;
+//                Int64 lngFileSize = 0;
+
+//                //loop through all files
+//                foreach (string strFile in strFiles)
+//                {
+
+//                    // get file info
+//                    strFileName = GetShortName(strFile);
+//                    FileInfo fiCurrFile = new FileInfo(strFile);
+//                    lngFileSize = fiCurrFile.Length;
+//                    dtModifyDate = fiCurrFile.LastWriteTime;
+
+//                    Tuple<string, string, string, string> tplExtensions = ftmStart.GetFileExt(strFile);
+//                    string strFileExt = tplExtensions.Item1;
+//                    string strRemFileExt = tplExtensions.Item2;
+//                    string strRemBlockExt = tplExtensions.Item3;
+//                    string strWinFileExt = tplExtensions.Item4;
+
+//                    // get matching remote file
+//                    DataRow[] drRemFile = dsList.Tables[0].Select("entry_name='" + strFileName.Replace("'", "\\'") + "'");
+
+//                    // set status code to "ro" again, just to be safe
+//                    string strClientStatusCode = "ro";
+
+//                    if (drRemFile.Length != 0)
+//                    {
+
+//                        // flag remote file as also being local
+//                        DataRow drTemp = drRemFile[0];
+//                        drTemp.SetField<bool>("is_local", true);
+
+//                        // set status code
+//                        // if local stamp is greater than remote stamp
+//                        if (dtModifyDate.Subtract(drTemp.Field<DateTime>("latest_stamp")).TotalSeconds > 1)
+//                        {
+//                            // lm: modified locally without checking out (apparently)
+//                            strClientStatusCode = "lm";
+//                        }
+//                        // if remote stamp is greater than local stamp
+//                        else if (dtModifyDate.Subtract(drTemp.Field<DateTime>("latest_stamp")).TotalSeconds < -1)
+//                        {
+//                            // nv: new remote version
+//                            strClientStatusCode = "nv";
+//                        }
+//                        else
+//                        {
+//                            // ok: identical files
+//                            strClientStatusCode = "ok";
+//                        }
+
+//                        if (drTemp.Field<int?>("checkout_user") != null)
+//                        {
+//                            if (drTemp.Field<int?>("checkout_user") == intMyUserId)
+//                            {
+//                                // checked out to me (current user)
+//                                strClientStatusCode = "cm";
+//                            }
+//                            else
+//                            {
+//                                // checked out to someone else
+//                                strClientStatusCode = "co";
+//                            }
+//                        }
+
+
+//                        if (dtModifyDate < drTemp.Field<DateTime>("latest_stamp")) strClientStatusCode = "nv";
+//                        drTemp.SetField<string>("client_status_code", strClientStatusCode);
+
+//                        // format the remote file size
+//                        drTemp.SetField<string>("str_latest_size", FormatSize(drTemp.Field<long>("latest_size")));
+
+//                        // format the remote modify date
+//                        drTemp.SetField<string>("str_latest_stamp", FormatDate(drTemp.Field<DateTime>("latest_stamp")));
+
+//                        // format the local file size
+//                        drTemp.SetField<Int64>("local_size", lngFileSize);
+//                        drTemp.SetField<string>("str_local_size", FormatSize(lngFileSize));
+
+//                        // format the local modify date
+//                        drTemp.SetField<DateTime>("local_stamp", dtModifyDate);
+//                        drTemp.SetField<string>("str_local_stamp", FormatDate(dtModifyDate));
+
+//                        // format the checkout date
+//                        object oDate = drTemp["checkout_date"];
+//                        if (oDate == System.DBNull.Value)
+//                        {
+//                            drTemp.SetField<string>("str_checkout_date", null);
+//                        }
+//                        else
+//                        {
+//                            drTemp.SetField<string>("str_checkout_date", FormatDate(Convert.ToDateTime(oDate)));
+//                        }
+
+//                        // get local checksum
+//                        drTemp.SetField<string>("local_md5", StringMD5(strFile));
+
+//                    }
+//                    else
+//                    {
+
+//                        // insert new row for local-only file
+
+//                        // set status code
+//                        strClientStatusCode = "lo";
+//                        if (strRemBlockExt == strFileExt)
+//                        {
+//                            strClientStatusCode = "if";
+//                        }
+//                        else if (strRemFileExt == "")
+//                        {
+//                            strClientStatusCode = "ft";
+//                        }
+
+//                        dsList.Tables[0].Rows.Add(
+//                                null, // entry_id
+//                                null, // version_id
+//                                intDirId, // dir_id
+//                                strFileName, // entry_name
+//                                null, // type_id
+//                                strFileExt, // file_ext
+//                                null, // cat_id
+//                                null, // cat_name
+//                                lngFileSize, // latest_size
+//                                FormatSize(lngFileSize), // str_latest_size
+//                                lngFileSize, // local_size
+//                                FormatSize(lngFileSize), // str_local_size
+//                                null, // latest_stamp
+//                                "", // str_latest_stamp
+//                                dtModifyDate, // local stamp
+//                                FormatDate(dtModifyDate), // local formatted stamp
+//                                null, // latest_md5
+//                                null, // local_md5 (set null because if we AddNew, we will calculate MD5 then)
+//                                null, // checkout_user
+//                                null, // ck_user_name
+//                                null, // checkout_date
+//                                null, // str_checkout_date
+//                                null, // checkout_node
+//                                true, // is_local
+//                                false, // is_remote
+//                                strClientStatusCode, // client_status_code
+//                                strRelPath, // relative_path
+//                                strAbsPath, // absolute_path
+//                                null, // icon
+//                                false, // is_depend_searched
+//                                fiCurrFile.IsReadOnly // is_readonly
+//                            );
+
+//                    } // end else
+
+//                } // end foreach
+
+//            } // end if
+
+//        }
 
 		protected void PopulateList(TreeNode nodeCurrent) {
 
@@ -1901,7 +2200,7 @@ namespace HackPDM
 				throw new System.Exception("Files with no remote file type " + drNoRemFiles.Length.ToString());
 			}
 
-			// check for files over 2GB
+            // check for files over 2GB
 			DataRow[] drBigFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'if' and local_size>{0} and absolute_path like '{1}%'", lngMaxFileSize, strLocalFileRoot));
 			foreach (DataRow drCurrent in drBigFiles)
 			{
@@ -2379,7 +2678,16 @@ namespace HackPDM
             if (strRelParentPath != "")
                 strParentName = Utils.GetBaseName(strRelParentPath);
 
-
+            //Int32 intParentId = 0;
+            //string strBaseName = strRelBasePath;
+            //string strRelParentPath = strRelBasePath;
+            //string strParentName = strRelParentPath;
+            //if (strRelBasePath.Contains("\\"))
+            //{
+            //    strBaseName = strRelBasePath.Substring(strRelBasePath.LastIndexOf("\\") + 1);
+            //    strRelParentPath = strRelBasePath.Substring(0, strRelBasePath.LastIndexOf("\\"));
+            //    strParentName = strRelParentPath.Substring(strRelParentPath.LastIndexOf("\\") + 1);
+            //}
 			dictTree.TryGetValue(strRelBasePath, out intDirId);
 			dictTree.TryGetValue(strRelParentPath, out intParentId);
 			dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strBaseName, strRelBasePath, GetAbsolutePath(strRelBasePath));
@@ -2702,8 +3010,8 @@ namespace HackPDM
 				// get remote entries in a DataSet
 				string strSql = "select * from fcn_latest_w_depends_by_dir_list( array [" + strDirs + "] );";
 				NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strLocalFileRoot", strLocalFileRoot));
-				daTemp.Fill(dsTemp);
+                daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strLocalFileRoot", strLocalFileRoot));
+                daTemp.Fill(dsTemp);
 
 			}
 
@@ -2898,6 +3206,13 @@ namespace HackPDM
 					// get parent directory's parent id
 				//	string strParentsParentRelPath = strParentRelPath.Substring(0, strParentRelPath.LastIndexOf("\\"));
                     string strParentsParentRelPath = Utils.GetParentDirectory(strParentRelPath);
+                    if (strParentsParentRelPath == "")
+                        break;
+                    //string strParentsParentRelPath = "";
+                    //if (strParentsParentRelPath.Contains("\\"))
+                    //{
+                    //    strParentsParentRelPath = strParentRelPath.Substring(0, strParentRelPath.LastIndexOf("\\"));
+                    //}
 					dictTree.TryGetValue(strParentsParentRelPath, out intParentId);
 
 					// add the parent directory to table
@@ -4127,36 +4442,104 @@ namespace HackPDM
 
 		void CmsListUndoCheckoutClick(object sender, EventArgs e) {
 
-			// get directory info
-			int intDirId = (int)treeView1.SelectedNode.Tag;
+            //// get directory info
+            //int intDirId = (int)treeView1.SelectedNode.Tag;
 
-			// get a data table of selected items
-			DataTable dtSelected = dsList.Tables[0].Clone();
-			ListView.SelectedListViewItemCollection lviSelection = listView1.SelectedItems;
-			foreach (ListViewItem lviSelected in lviSelection) {
-				string strFileName = (string)lviSelected.SubItems[0].Text;
-				DataRow drSelected = dsList.Tables[0].Select("dir_id=" + intDirId + " and entry_name='" + strFileName+"'")[0];
-				dtSelected.ImportRow(drSelected);
-			}
+            //// get a data table of selected items
+            //DataTable dtSelected = dsList.Tables[0].Clone();
+            //ListView.SelectedListViewItemCollection lviSelection = listView1.SelectedItems;
+            //foreach (ListViewItem lviSelected in lviSelection) {
+            //    string strFileName = (string)lviSelected.SubItems[0].Text;
+            //    DataRow drSelected = dsList.Tables[0].Select("dir_id=" + intDirId + " and entry_name='" + strFileName+"'")[0];
+            //    dtSelected.ImportRow(drSelected);
+            //}
 
-			// create the status dialog
-			dlgStatus = new StatusDialog();
+            //// create the status dialog
+            //dlgStatus = new StatusDialog();
 
-			// launch the background thread
-			BackgroundWorker worker = new BackgroundWorker();
-			worker.WorkerSupportsCancellation = true;
-			worker.DoWork += new DoWorkEventHandler(worker_UndoCheckout);
-			worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
-			dlgStatus.AddStatusLine("Undo Checkout", "Selected items: "+lviSelection.Count);
-			worker.RunWorkerAsync(dtSelected);
+            //// launch the background thread
+            //BackgroundWorker worker = new BackgroundWorker();
+            //worker.WorkerSupportsCancellation = true;
+            //worker.DoWork += new DoWorkEventHandler(worker_UndoCheckout);
+            //worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
+            //dlgStatus.AddStatusLine("Undo Checkout", "Selected items: "+lviSelection.Count);
+            //worker.RunWorkerAsync(dtSelected);
 
-			bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Undo Checkout");
-			if (blnWorkCanceled == true) {
-				worker.CancelAsync();
-			}
+            //bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Undo Checkout");
+            //if (blnWorkCanceled == true) {
+            //    worker.CancelAsync();
+            //}
 
-			ResetView(treeView1.SelectedNode.FullPath);
+            //ResetView(treeView1.SelectedNode.FullPath);
 
+
+
+
+
+            // refresh file data
+            LoadListData(treeView1.SelectedNode);
+
+            // create the status dialog
+            dlgStatus = new StatusDialog();
+
+            // get directory info
+            TreeNode tnCurrent = treeView1.SelectedNode;
+            if (tnCurrent.Tag == null)
+            {
+                MessageBox.Show("The current directory doesn't exist remotely, therefore you can't get latest on any of the selected files.");
+                return;
+            }
+            int intDirId = (int)tnCurrent.Tag;
+            string strRelBasePath = tnCurrent.FullPath;
+
+            // get a list of selected items
+            List<int> lstSelected = new List<int>();
+            ListView.SelectedListViewItemCollection lviSelection = listView1.SelectedItems;
+            foreach (ListViewItem lviSelected in lviSelection)
+            {
+                DataRow drSelected = dsList.Tables[0].Select("entry_name='" + lviSelected.SubItems[0].Text + "'")[0];
+                if (drSelected.Field<int?>("entry_id") != null)
+                {
+                    // ignore local-only files
+                    int intSelectedEntryId = drSelected.Field<int>("entry_id");
+                    lstSelected.Add(intSelectedEntryId);
+                }
+            }
+            if (lstSelected.Count == 0)
+            {
+                MessageBox.Show("No remote files were selected.");
+                return;
+            }
+
+            // start the database transaction
+            t = connDb.BeginTransaction();
+
+            // package arguments for the background worker
+            List<object> arguments = new List<object>();
+
+            arguments.Add(t);
+            arguments.Add(intDirId);
+            arguments.Add(strRelBasePath);
+            arguments.Add(lstSelected);
+
+            // launch the background thread
+            BackgroundWorker worker = new BackgroundWorker();
+            worker.WorkerSupportsCancellation = true;
+            worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
+            worker.DoWork += new DoWorkEventHandler(worker_GetLatest);
+            worker.RunWorkerAsync(arguments);
+
+
+            // show dialog and handle cancel button
+            bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Get Latest");
+            if (blnWorkCanceled == true)
+            {
+                worker.CancelAsync();
+            }
+            t.Commit();
+
+            // refresh the main window
+            ResetView(tnCurrent.FullPath);
 		}
 
 		void CmsListDeletePermanentClick(object sender, EventArgs e)
