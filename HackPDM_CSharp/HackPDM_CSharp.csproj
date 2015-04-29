@@ -178,6 +178,7 @@
     <Compile Include="StatusDialog.Designer.cs">
       <DependentUpon>StatusDialog.cs</DependentUpon>
     </Compile>
+    <Compile Include="Utils.cs" />
     <Compile Include="WebDAVClient.cs" />
   </ItemGroup>
   <ItemGroup>

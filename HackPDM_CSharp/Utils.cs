@@ -3,9 +3,9 @@ using System.Windows.Forms;
 
 namespace HackPDM
 {
-    static class Utils
+    public static class Utils
     {
-        static string GetParentDirectory(string path)
+        public static string GetParentDirectory(string path)
         {
             try
             {
@@ -39,6 +39,23 @@ namespace HackPDM
             catch
             {
                 MessageBox.Show("Could not find the parent directory for \"" + path + "\".",
+                        "Path Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                return ("");
+            }
+        }
+
+
+        public static string GetBaseName(string path)
+        {
+            try
+            {
+                return (System.IO.Path.GetFileName(path));
+            }
+            catch
+            {
+                MessageBox.Show("Error getting Base Name from \"" + path + "\".",
                         "Path Error",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error);

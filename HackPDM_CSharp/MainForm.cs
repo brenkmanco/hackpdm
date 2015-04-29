@@ -1514,7 +1514,8 @@ namespace HackPDM
 		}
 
 		protected string GetShortName(string FullName) {
-			return FullName.Substring(FullName.LastIndexOf("\\") + 1);
+		//	return FullName.Substring(FullName.LastIndexOf("\\") + 1);
+            return Utils.GetBaseName(FullName);
 		}
 
 		//protected string GetFileExt(string strFileName) {
@@ -2369,9 +2370,16 @@ namespace HackPDM
 			// add this directory to the dirs table
 			Int32 intDirId = 0;
 			Int32 intParentId = 0;
-			string strBaseName = strRelBasePath.Substring(strRelBasePath.LastIndexOf("\\") + 1);
-			string strRelParentPath = strRelBasePath.Substring(0, strRelBasePath.LastIndexOf("\\"));
-			string strParentName = strRelParentPath.Substring(strRelParentPath.LastIndexOf("\\") + 1);
+            //string strBaseName = strRelBasePath.Substring(strRelBasePath.LastIndexOf("\\") + 1);
+            //string strRelParentPath = strRelBasePath.Substring(0, strRelBasePath.LastIndexOf("\\"));
+            //string strParentName = strRelParentPath.Substring(strRelParentPath.LastIndexOf("\\") + 1);
+            string strBaseName = Utils.GetBaseName(strRelBasePath);
+            string strRelParentPath = Utils.GetParentDirectory(strRelBasePath);
+            string strParentName = "";
+            if (strRelParentPath != "")
+                strParentName = Utils.GetBaseName(strRelParentPath);
+
+
 			dictTree.TryGetValue(strRelBasePath, out intDirId);
 			dictTree.TryGetValue(strRelParentPath, out intParentId);
 			dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strBaseName, strRelBasePath, GetAbsolutePath(strRelBasePath));
@@ -2512,7 +2520,8 @@ namespace HackPDM
 			string[] ChildDirectories = Directory.GetDirectories(strAbsolutePath);
 			foreach (string strChildAbsPath in ChildDirectories)
 			{
-				string strChildName = strChildAbsPath.Substring(strChildAbsPath.LastIndexOf("\\") + 1);
+			//	string strChildName = strChildAbsPath.Substring(strChildAbsPath.LastIndexOf("\\") + 1);
+                string strChildName = Utils.GetBaseName(strChildAbsPath);
 				string strChildRelPath = GetAbsolutePath(strChildAbsPath);
 				int intChildId = 0;
 				dictTree.TryGetValue(strRelativePath, out intChildId);
@@ -2614,7 +2623,8 @@ namespace HackPDM
 							if (drCheck.Length == 0)
 							{
 								// get directory name
-								string strDirName = strRelativePath.Substring(strRelativePath.LastIndexOf("\\") + 1);
+							//	string strDirName = strRelativePath.Substring(strRelativePath.LastIndexOf("\\") + 1);
+                                string strDirName = Utils.GetParentDirectory(strRelativePath);
 
 								// get directory id
 								Int32 intDirId = 0;
@@ -2625,7 +2635,8 @@ namespace HackPDM
 								if (strRelativePath != "")
 								{
 									// if the path is in pwa
-									string strParentPath = strRelativePath.Substring(0, strRelativePath.LastIndexOf("\\"));
+								//	string strParentPath = strRelativePath.Substring(0, strRelativePath.LastIndexOf("\\"));
+                                    string strParentPath = Utils.GetParentDirectory(strRelativePath);
 									dictTree.TryGetValue(strParentPath, out intParentId);
 								}
 								dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strDirName, strRelativePath, strAbsolutePath);
@@ -2879,11 +2890,14 @@ namespace HackPDM
 				while (intParentId < 1)
 				{
 					// get parent directory name and path
-					string strParentRelPath = strCurrPath.Substring(0, strCurrPath.LastIndexOf("\\"));
-					string strParentName = strParentRelPath.Substring(strParentRelPath.LastIndexOf("\\") + 1);
+				//	string strParentRelPath = strCurrPath.Substring(0, strCurrPath.LastIndexOf("\\"));
+				//	string strParentName = strParentRelPath.Substring(strParentRelPath.LastIndexOf("\\") + 1);
+                    string strParentRelPath = Utils.GetParentDirectory(strCurrPath);
+                    string strParentName = Utils.GetBaseName(strParentRelPath);
 
 					// get parent directory's parent id
-					string strParentsParentRelPath = strParentRelPath.Substring(0, strParentRelPath.LastIndexOf("\\"));
+				//	string strParentsParentRelPath = strParentRelPath.Substring(0, strParentRelPath.LastIndexOf("\\"));
+                    string strParentsParentRelPath = Utils.GetParentDirectory(strParentRelPath);
 					dictTree.TryGetValue(strParentsParentRelPath, out intParentId);
 
 					// add the parent directory to table
@@ -3606,9 +3620,12 @@ namespace HackPDM
 				// add this directory to the dirs table
 				Int32 intDirId = 0;
 				Int32 intParentId = 0;
-				string strBaseName = strRelBasePath.Substring(strRelBasePath.LastIndexOf("\\") + 1);
-				string strRelParentPath = strRelBasePath.Substring(0, strRelBasePath.LastIndexOf("\\"));
-				string strParentName = strRelParentPath.Substring(strRelParentPath.LastIndexOf("\\") + 1);
+			//	string strBaseName = strRelBasePath.Substring(strRelBasePath.LastIndexOf("\\") + 1);
+			//	string strRelParentPath = strRelBasePath.Substring(0, strRelBasePath.LastIndexOf("\\"));
+			//	string strParentName = strRelParentPath.Substring(strRelParentPath.LastIndexOf("\\") + 1);
+                string strBaseName = Utils.GetBaseName(strRelBasePath);
+                string strRelParentPath = Utils.GetParentDirectory(strRelBasePath);
+                string strParentName = Utils.GetParentDirectory(strRelParentPath);
 				dictTree.TryGetValue(strRelBasePath, out intDirId);
 				dictTree.TryGetValue(strRelParentPath, out intParentId);
 				dsDeletes.Tables["dirs"].Rows.Add(intDirId, intParentId, strBaseName, strRelBasePath, strAbsBasePath);
