@@ -234,18 +234,18 @@ namespace HackPDM
 			// running in the debugger causes the config file to be in a different place everytime
 			// that means you have to create a new one everytime
 			// TODO: erase this stuff when building for release
-		//	var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds.config");
-		//	var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
-		//	var sectionGroup = configuration.GetSectionGroup("tempSettingsGroup"); // This is the section group name, change to your needs
-		//	var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
-			//var setting = section.Settings.Get("usetDefaultProfile"); // This is the setting name, change to your needs
-		//	strCurrProfileId = section.Settings.Get("usetDefaultProfile").Value.ValueXml.InnerText;
-        //    strXmlProfiles = section.Settings.Get("usetProfiles").Value.ValueXml.InnerText;
+            var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds.config");
+            var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
+            var sectionGroup = configuration.GetSectionGroup("tempSettingsGroup"); // This is the section group name, change to your needs
+            var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
+            //var setting = section.Settings.Get("usetDefaultProfile"); // This is the setting name, change to your needs
+            strCurrProfileId = section.Settings.Get("usetDefaultProfile").Value.ValueXml.InnerText;
+            strXmlProfiles = section.Settings.Get("usetProfiles").Value.ValueXml.InnerText;
 
 
             // These are for jared's testing (couldn't get the config file thing working...):
-            strCurrProfileId = "96ab093f-f106-49bd-8626-6d3bb2877965";
-            strXmlProfiles = "<DocumentElement>\r\n  <profiles>\r\n    <PfGuid>96ab093f-f106-49bd-8626-6d3bb2877965</PfGuid>\r\n    <PfName>jared</PfName>\r\n    <DbServ>192.168.52.134</DbServ>\r\n    <DbPort>5432</DbPort>\r\n    <DbUser>demouser</DbUser>\r\n    <DbPass>demo</DbPass>\r\n    <DbName>hackpdm</DbName>\r\n    <DavServ>http://192.168.52.134</DavServ>\r\n    <DavPort>80</DavPort>\r\n    <DavUser/>\r\n    <DavPass/>\r\n    <DavPath>webdav</DavPath>\r\n    <FsRoot>D:\\Desktop Stuff\\Work\\Asphalt Zipper</FsRoot>\r\n    <Username>demo</Username>\r\n    <Password>demo</Password>\r\n  </profiles>\r\n</DocumentElement>";
+ //           strCurrProfileId = "96ab093f-f106-49bd-8626-6d3bb2877965";
+ //           strXmlProfiles = "<DocumentElement>\r\n  <profiles>\r\n    <PfGuid>96ab093f-f106-49bd-8626-6d3bb2877965</PfGuid>\r\n    <PfName>jared</PfName>\r\n    <DbServ>192.168.52.134</DbServ>\r\n    <DbPort>5432</DbPort>\r\n    <DbUser>demouser</DbUser>\r\n    <DbPass>demo</DbPass>\r\n    <DbName>hackpdm</DbName>\r\n    <DavServ>http://192.168.52.134</DavServ>\r\n    <DavPort>80</DavPort>\r\n    <DavUser/>\r\n    <DavPass/>\r\n    <DavPath>webdav</DavPath>\r\n    <FsRoot>D:\\Desktop Stuff\\Work\\Asphalt Zipper</FsRoot>\r\n    <Username>demo</Username>\r\n    <Password>demo</Password>\r\n  </profiles>\r\n</DocumentElement>";
 #endif
 
 			// check existence
