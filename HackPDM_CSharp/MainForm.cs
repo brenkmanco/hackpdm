@@ -654,35 +654,17 @@ namespace HackPDM
 
 		}
 
-		protected void LoadListData(TreeNode nodeCurrent) {
+		protected void LoadListData(TreeNode nodeCurrent)
+		{
 
-			// TODO: add additional icons
-			// nv and co could co-exist --> add new icon for nvco
-			// ro and co could co-exist --> add new icon for roco
-			//
-			// until I get around to it, let these take affect in the following order
-			// for example, nv comes before co and ro comes before co
-			// that means if a file is both nv and co, it should get assigned co
-			//
-			// ro: remote only
-			// lo: local only
-			// lm: modified locally without checking out
-			// nv: new remote version
-			// cm: checked out to me
-			// co: checked out to other
-			// ft: no remote file type
-			// if: ignore filter
-			// ok: nothing to report (none of the above)
-
-			// TODO: consider changing this method so that it could be called by the worker_Delete methods
-			// we would have to make this method callable by thread workers
-			// that requires the calling method to pass an absolute path, rather than passing a tree node
-			// the main problem with doing that, is that we don't need to load all the file data for deletes
-			// for example, we don't need the checksum or the icon
+			// TODO: consider changing this method so that it calls the LoadCombinedData() method
+			// the main problem with doing that, is that the delete methods don't need to load all the file data for deletes
+			// for example, they don't need the checksum or the icon
 
 			// clear dataset
 			dsList = new DataSet();
 
+			DataSet dsCombined = new DataSet();
 			// get directory path
 			string strAbsPath = GetAbsolutePath(nodeCurrent.FullPath);
 			string strRelPath = nodeCurrent.FullPath;
@@ -799,12 +781,6 @@ namespace HackPDM
 					lngFileSize = fiCurrFile.Length;
 					dtModifyDate = fiCurrFile.LastWriteTime;
 
-					Tuple<string, string, string, string> tplExtensions = ftmStart.GetFileExt(strFile);
-					string strFileExt = tplExtensions.Item1;
-					string strRemFileExt = tplExtensions.Item2;
-					string strRemBlockExt = tplExtensions.Item3;
-					string strWinFileExt = tplExtensions.Item4;
-
 					// get matching remote file
 					DataRow[] drRemFile = dsList.Tables[0].Select("entry_name='"+strFileName.Replace("'","\\'")+"'");
 
@@ -813,6 +789,7 @@ namespace HackPDM
 
 					if (drRemFile.Length != 0)
 					{
+						// update row for remote file with local data
 
 						// flag remote file as also being local
 						DataRow drTemp = drRemFile[0];
@@ -880,8 +857,13 @@ namespace HackPDM
 						drTemp.SetField<string>("local_md5", StringMD5(strFile));
 
 					} else {
-
 						// insert new row for local-only file
+
+						Tuple<string, string, string, string> tplExtensions = ftmStart.GetFileExt(strFile);
+						string strFileExt = tplExtensions.Item1;
+						string strRemFileExt = tplExtensions.Item2;
+						string strRemBlockExt = tplExtensions.Item3;
+						string strWinFileExt = tplExtensions.Item4;
 
 						// set status code
 						strClientStatusCode = "lo";
@@ -2564,6 +2546,8 @@ namespace HackPDM
 			List<string> lstSelectedNames = (List<string>)genericlist[2];
 			bool blnPermanent = (bool)genericlist[3];
 
+			bool blnDeleteDirs = lstSelectedNames.Equals(null);
+
 			// get deletes data
 			DataSet dsDeletes = LoadDeletesData(sender, e, t, strRelBasePath, lstSelectedNames);
 
@@ -2571,12 +2555,12 @@ namespace HackPDM
 
 			// log files checked-out to other
 
-			// check for write access
-			DataRow[] drLocalFiles = dsDeletes.Tables["files"].Select("client_status_code not in ('co','me')");
-			Int32 intNewCount = drLocalFiles.Length;
-			for (int i = 0; i < drLocalFiles.Length; i++)
+			// check for locked files
+			DataRow[] drDeletFiles = dsDeletes.Tables["files"].Select("client_status_code not in ('co','cm')");
+			Int32 intNewCount = drDeletFiles.Length;
+			for (int i = 0; i < drDeletFiles.Length; i++)
 			{
-				DataRow drCurrent = drLocalFiles[i];
+				DataRow drCurrent = drDeletFiles[i];
 
 				// check for cancellation
 				if ((myWorker.CancellationPending == true))
@@ -2591,7 +2575,7 @@ namespace HackPDM
 				FileInfo fiCurrFile = new FileInfo(strFullName);
 
 				// report status
-				dlgStatus.AddStatusLine("INFO", "Checking for write access (" + (i + 1).ToString() + " of " + drLocalFiles.Length.ToString() + "): " + strFileName);
+				dlgStatus.AddStatusLine("INFO", "Checking for write access (" + (i + 1).ToString() + " of " + drDeletFiles.Length.ToString() + "): " + strFileName);
 
 				// check if file is writeable
 				if (IsFileLocked(fiCurrFile) == true)
@@ -2615,7 +2599,7 @@ namespace HackPDM
 			}
 
 			// remove local files and directories
-			blnFailed = blnFailed || DeleteLocalFiles(sender, e, t, ref dsDeletes);
+			blnFailed = blnFailed || DeleteLocalFiles(sender, e, t, blnDeleteDirs, ref dsDeletes);
 
 			// commit to database
 			if (blnFailed == true)
@@ -2631,6 +2615,8 @@ namespace HackPDM
 			else
 			{
 				t.Commit();
+
+				// TODO: purge the webdav lost-and-found directory as described above
 			}
 
 		}
@@ -3842,6 +3828,13 @@ namespace HackPDM
 			// init DataSet
 			DataSet dsDeletes = new DataSet();
 
+			// check for cancellation
+			if ((myWorker.CancellationPending == true))
+			{
+				e.Cancel = true;
+				return null;
+			}
+
 			// get remote directory data
 			int intBaseDirId = 0;
 			dictTree.TryGetValue(strRelBasePath, out intBaseDirId);
@@ -3891,11 +3884,14 @@ namespace HackPDM
 					dsDeletes.Tables[1].TableName = "files";
 				}
 
-				// get and match local files and directories
-				// only necessary if both remote and local data exist, and the user selected a directory
-				// (as opposed to selecting individual entries from the list view)
-				// the recursive method is necessary because there may be local only directories inside the selected base directory 
-				blnFailed = LoadDeletesDataRecurse(sender, e, ref dsDeletes, strRelBasePath);
+				if (Directory.Exists(GetAbsolutePath(strRelBasePath)))
+				{
+					// get and match local files and directories
+					// only necessary if both remote and local data exist, and the user selected a directory
+					// (as opposed to selecting individual entries from the list view)
+					// the recursive method is necessary because there may be local only directories inside the selected base directory 
+					blnFailed = LoadDeletesDataRecurse(sender, e, ref dsDeletes, strRelBasePath);
+				}
 
 				// return results
 				return dsDeletes;
@@ -3964,12 +3960,310 @@ namespace HackPDM
 
 		private bool LoadDeletesDataRecurse(object sender, DoWorkEventArgs e, ref DataSet dsDeletes, string strRelBasePath)
 		{
-			throw new NotImplementedException();
+
+			// running in separate thread
+			BackgroundWorker myWorker = sender as BackgroundWorker;
+
+			// check for cancellation
+			if ((myWorker.CancellationPending == true))
+			{
+				e.Cancel = true;
+				return true;
+			}
+
+			// merge local data with remote data for this directory
+			bool blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelBasePath);
+
+			// get child directories
+			string strAbsBasePath = GetAbsolutePath(strRelBasePath);
+			string[] strDirs = Directory.GetDirectories(strAbsBasePath);
+			foreach (string strDir in strDirs)
+			{
+				// check for cancellation
+				if ((myWorker.CancellationPending == true))
+				{
+					e.Cancel = true;
+					return true;
+				}
+
+				// recurse
+				blnFailed = LoadDeletesDataRecurse(sender, e, ref dsDeletes, strRelBasePath);
+			}
+
+			return blnFailed;
+
 		}
 
-		private bool DeleteLocalFiles(object sender, DoWorkEventArgs e, NpgsqlTransaction t, ref DataSet dsDeletes)
+		protected bool LoadCombinedData(object sender, DoWorkEventArgs e, ref DataSet dsCombined, string strRelPath)
+		{
+
+			// TODO: add additional status codes
+			// nv and co could co-exist --> add new icon for nvco
+			// ro and co could co-exist --> add new icon for roco
+			//
+			// until I get around to adding the additional codes, let these take affect in the following order
+			// for example, nv comes before co and ro comes before co
+			// that means if a file is both nv and co, it should get assigned co
+			//
+			// ro: remote only
+			// lo: local only
+			// lm: modified locally without checking out
+			// nv: new remote version
+			// cm: checked out to me
+			// co: checked out to other
+			// ft: no remote file type
+			// if: ignore filter
+			// ok: nothing to report (none of the above)
+
+			// TODO: set status code to co if the file was checked out by this user, but on a different node
+
+			// running in separate thread
+			BackgroundWorker myWorker = sender as BackgroundWorker;
+
+			// check for cancellation
+			if ((myWorker.CancellationPending == true))
+			{
+				e.Cancel = true;
+				return true;
+			}
+
+			// check for non-local directory
+			string strAbsPath = GetAbsolutePath(strRelPath);
+			if (!Directory.Exists(strAbsPath))
+			{
+				return false;
+			}
+
+			// try to get remote directory id
+			int intDirId = 0;
+			dictTree.TryGetValue(strRelPath, out intDirId);
+
+			// try to get a list of local files from this directory
+			string[] strFiles;
+			try
+			{
+
+				strFiles = Directory.GetFiles(strAbsPath);
+			}
+			catch (IOException ex)
+			{
+				MessageBox.Show("Error: Drive not ready or directory does not exist: " + ex);
+				return true;
+			}
+			catch (UnauthorizedAccessException ex)
+			{
+				MessageBox.Show("Error: Drive or directory access denided: " + ex);
+				return true;
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show("Error: " + ex);
+				return true;
+			}
+
+			string strFileName = "";
+			DateTime dtModifyDate;
+			Int64 lngFileSize = 0;
+
+			//loop through local files
+			foreach (string strFile in strFiles)
+			{
+
+				// check for cancellation
+				if ((myWorker.CancellationPending == true))
+				{
+					e.Cancel = true;
+					return true;
+				}
+
+				// get file info
+				strFileName = GetShortName(strFile);
+				FileInfo fiCurrFile = new FileInfo(strFile);
+				lngFileSize = fiCurrFile.Length;
+				dtModifyDate = fiCurrFile.LastWriteTime;
+
+				// get matching remote file
+				DataRow[] drRemFile = dsCombined.Tables["files"].Select(String.Format("entry_name='{0}' and absolute_path='{1}'", strFileName.Replace("'", "\\'"), strAbsPath));
+
+				// set status code to "ro" again, just to be safe
+				string strClientStatusCode = "ro";
+
+				if (drRemFile.Length != 0)
+				{
+					// update row for remote file with local data
+
+					// flag remote file as also being local
+					DataRow drTemp = drRemFile[0];
+					drTemp.SetField<bool>("is_local", true);
+
+					// set status code
+					// if local stamp is greater than remote stamp
+					if (dtModifyDate.Subtract(drTemp.Field<DateTime>("latest_stamp")).TotalSeconds > 1)
+					{
+						// lm: modified locally without checking out (apparently)
+						strClientStatusCode = "lm";
+					}
+					// if remote stamp is greater than local stamp
+					else if (dtModifyDate.Subtract(drTemp.Field<DateTime>("latest_stamp")).TotalSeconds < -1)
+					{
+						// nv: new remote version
+						strClientStatusCode = "nv";
+					}
+					else
+					{
+						// ok: identical files
+						strClientStatusCode = "ok";
+					}
+
+					if (drTemp.Field<int?>("checkout_user") != null)
+					{
+						if (drTemp.Field<int?>("checkout_user") == intMyUserId)
+						{
+							// checked out to me (current user)
+							strClientStatusCode = "cm";
+						}
+						else
+						{
+							// checked out to someone else
+							strClientStatusCode = "co";
+						}
+					}
+
+					// we have identified the correct client_status_code, now set it
+					drTemp.SetField<string>("client_status_code", strClientStatusCode);
+
+					// format the remote file size
+					drTemp.SetField<string>("str_latest_size", FormatSize(drTemp.Field<long>("latest_size")));
+
+					// format the remote modify date
+					drTemp.SetField<string>("str_latest_stamp", FormatDate(drTemp.Field<DateTime>("latest_stamp")));
+
+					// format the local file size
+					drTemp.SetField<Int64>("local_size", lngFileSize);
+					drTemp.SetField<string>("str_local_size", FormatSize(lngFileSize));
+
+					// format the local modify date
+					drTemp.SetField<DateTime>("local_stamp", dtModifyDate);
+					drTemp.SetField<string>("str_local_stamp", FormatDate(dtModifyDate));
+
+					// format the checkout date
+					object oDate = drTemp["checkout_date"];
+					if (oDate == System.DBNull.Value)
+					{
+						drTemp.SetField<string>("str_checkout_date", null);
+					}
+					else
+					{
+						drTemp.SetField<string>("str_checkout_date", FormatDate(Convert.ToDateTime(oDate)));
+					}
+
+					// get local checksum
+					drTemp.SetField<string>("local_md5", StringMD5(strFile));
+
+				}
+				else
+				{
+					// insert new row for local-only file
+
+					// identify file type
+					Tuple<string, string, string, string> tplExtensions = ftmStart.GetFileExt(strFile);
+					string strFileExt = tplExtensions.Item1;
+					string strRemFileExt = tplExtensions.Item2;
+					string strRemBlockExt = tplExtensions.Item3;
+					string strWinFileExt = tplExtensions.Item4;
+
+					// set status code
+					strClientStatusCode = "lo";
+					if (strRemBlockExt == strFileExt)
+					{
+						strClientStatusCode = "if";
+					}
+					else if (strRemFileExt == "")
+					{
+						strClientStatusCode = "ft";
+					}
+
+					dsList.Tables[0].Rows.Add(
+							null, // entry_id
+							null, // version_id
+							intDirId, // dir_id
+							strFileName, // entry_name
+							null, // type_id
+							strFileExt, // file_ext
+							null, // cat_id
+							null, // cat_name
+							lngFileSize, // latest_size
+							FormatSize(lngFileSize), // str_latest_size
+							lngFileSize, // local_size
+							FormatSize(lngFileSize), // str_local_size
+							null, // latest_stamp
+							"", // str_latest_stamp
+							dtModifyDate, // local stamp
+							FormatDate(dtModifyDate), // local formatted stamp
+							null, // latest_md5
+							null, // local_md5 (set null because if we AddNew, we will calculate MD5 then)
+							null, // checkout_user
+							null, // ck_user_name
+							null, // checkout_date
+							null, // str_checkout_date
+							null, // checkout_node
+							true, // is_local
+							false, // is_remote
+							strClientStatusCode, // client_status_code
+							strRelPath, // relative_path
+							strAbsPath, // absolute_path
+							null, // icon
+							false, // is_depend_searched
+							fiCurrFile.IsReadOnly // is_readonly
+						);
+
+				} // end else
+
+			} // end foreach
+
+			return false;
+
+		}
+
+		private bool DeleteLocalFiles(object sender, DoWorkEventArgs e, NpgsqlTransaction t, bool blnDeleteDirs, ref DataSet dsDeletes)
 		{
 			throw new NotImplementedException();
+
+			// get files in deletion order (child directories before parent directories)
+			DataRow[] drFiles = dsDeletes.Tables["files"].Select("client_status_code not in ('co','cm')", "absolute_path desc");
+
+			// delete files
+			foreach (DataRow drFile in drFiles)
+			{
+				// delete this file
+			}
+
+			// delete directories
+			if (blnDeleteDirs)
+			{
+
+				// get list of unique directories that won't delete
+				DataRow[] drBadFiles = dsDeletes.Tables["files"].Select("client_status_code in ('co','cm')", "absolute_path desc");
+				List<string> lstBadDirs = new List<string>();
+				foreach (DataRow drBadFile in drBadFiles)
+				{
+					string strBad = drBadFile.Field<string>("absolute_path");
+					if (!lstBadDirs.Contains(strBad))
+					lstBadDirs.Add(strBad);
+				}
+
+				// get directories
+				DataRow[] drDirs = dsDeletes.Tables["dirs"].Select("", "absolute_path desc");
+
+				foreach (DataRow drDir in drDirs)
+				{
+					string strAbsPath = drDir.Field<string>("absolute_path");
+
+					// check for children that won't delete
+
+				}
+			}
+
 		}
 
 		private bool DeleteRemoteFiles(object sender, DoWorkEventArgs e, NpgsqlTransaction t, ref DataSet dsDeletes)
