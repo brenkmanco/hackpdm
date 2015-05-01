@@ -355,6 +355,7 @@ namespace HackPDM
             using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse())
             {
                 statusCode = (int)response.StatusCode;
+                statusString = response.StatusDescription;
             }
 
         }
@@ -374,6 +375,37 @@ namespace HackPDM
             {
                 statusCode = (int)response.StatusCode;
 				statusString = response.StatusDescription;
+            }
+
+        }
+
+        /// <summary>
+        /// Move a directory on the server
+        /// 201 (Created) - The source resource was successfully moved, and a new resource was created at the destination.
+        /// 204 (No Content) - The source resource was successfully moved to a pre-existing destination resource.
+        /// 403 (Forbidden) - The source and destination URIs are the same.
+        /// 409 (Conflict) - A resource cannot be created at the destination until one or more intermediate collections have been created.
+        /// 412 (Precondition Failed) - The server was unable to maintain the liveness of the properties listed in the propertybehavior XML element or the Overwrite header is "F" and the state of the destination resource is non-null.
+        /// 423 (Locked) - The source or the destination resource was locked.
+        /// 502 (Bad Gateway) - This may occur when the destination is on another server and the destination server refuses to accept the resource.
+        /// </summary>
+        /// <param name="remoteSourcePath"></param>
+        /// <param name="remoteDestPath"></param>
+        public void MoveDir(string remoteSourcePath, string remoteDestPath)
+        {
+            Uri srcUri = getServerUrl(remoteSourcePath, false);
+            Uri dstUri = getServerUrl(remoteDestPath, false);
+
+            // Depth header: http://www.webdav.org/specs/rfc2518.html#rfc.section.9.3
+            IDictionary<string, string> headers = new Dictionary<string, string>();
+            headers.Add("Destination", dstUri.ToString());
+
+            HTTPRequest(srcUri, "MOVE", headers, null, null);
+
+            using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse())
+            {
+                statusCode = (int)response.StatusCode;
+                statusString = response.StatusDescription;
             }
 
         }

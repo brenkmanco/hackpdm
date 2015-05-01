@@ -703,8 +703,8 @@ namespace HackPDM
 						false as is_local,
 						true as is_remote,
 						'ro' as client_status_code,
-						:strTreePath as relative_path,
-						:strFilePath as absolute_path,
+						:rel_path as relative_path,
+						:abs_path as absolute_path,
 						t.icon,
 						false as is_depend_searched,
 						null as is_readonly
@@ -730,11 +730,11 @@ namespace HackPDM
 				// put the remote list in the DataSet
 				NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
 				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", NpgsqlTypes.NpgsqlDbType.Integer));
-				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strTreePath", NpgsqlTypes.NpgsqlDbType.Text));
-				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strFilePath", NpgsqlTypes.NpgsqlDbType.Text));
+				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("rel_path", NpgsqlTypes.NpgsqlDbType.Text));
+				daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("abs_path", NpgsqlTypes.NpgsqlDbType.Text));
 				daTemp.SelectCommand.Parameters["dir_id"].Value = intDirId;
-				daTemp.SelectCommand.Parameters["strTreePath"].Value = strRelPath;
-				daTemp.SelectCommand.Parameters["strFilePath"].Value = strAbsPath;
+				daTemp.SelectCommand.Parameters["rel_path"].Value = strRelPath;
+				daTemp.SelectCommand.Parameters["abs_path"].Value = strAbsPath;
 				daTemp.Fill(dsList);
 
 			}
@@ -2544,23 +2544,23 @@ namespace HackPDM
 			NpgsqlTransaction t = (NpgsqlTransaction)genericlist[0];
 			string strRelBasePath = (string)genericlist[1];
 			List<string> lstSelectedNames = (List<string>)genericlist[2];
-			bool blnPermanent = (bool)genericlist[3];
+			bool blnDestroy = (bool)genericlist[3];
 
 			bool blnDeleteDirs = lstSelectedNames.Equals(null);
 
 			// get deletes data
 			DataSet dsDeletes = LoadDeletesData(sender, e, t, strRelBasePath, lstSelectedNames);
 
-			// log files checked-out to me
+            // start commiting data
+            bool blnFailed = false;
+            string strGuid = "";
 
-			// log files checked-out to other
-
-			// check for locked files
-			DataRow[] drDeletFiles = dsDeletes.Tables["files"].Select("client_status_code not in ('co','cm')");
-			Int32 intNewCount = drDeletFiles.Length;
-			for (int i = 0; i < drDeletFiles.Length; i++)
+            // check for locked files
+			DataRow[] drDeleteFiles = dsDeletes.Tables["files"].Select("client_status_code not in ('co','cm')");
+			Int32 intNewCount = drDeleteFiles.Length;
+			for (int i = 0; i < drDeleteFiles.Length; i++)
 			{
-				DataRow drCurrent = drDeletFiles[i];
+				DataRow drCurrent = drDeleteFiles[i];
 
 				// check for cancellation
 				if ((myWorker.CancellationPending == true))
@@ -2575,39 +2575,67 @@ namespace HackPDM
 				FileInfo fiCurrFile = new FileInfo(strFullName);
 
 				// report status
-				dlgStatus.AddStatusLine("INFO", "Checking for write access (" + (i + 1).ToString() + " of " + drDeletFiles.Length.ToString() + "): " + strFileName);
+				dlgStatus.AddStatusLine("INFO", "Checking for write access (" + (i + 1).ToString() + " of " + drDeleteFiles.Length.ToString() + "): " + strFullName);
 
 				// check if file is writeable
 				if (IsFileLocked(fiCurrFile) == true)
 				{
-					// file is in use: don't continue
-					throw new System.Exception("File \"" + fiCurrFile.Name + "\" is locked.  Release it first.");
+                    dlgStatus.AddStatusLine("ERROR", "File is locked: " + strFullName);
+                    blnFailed = true;
+                    // file is in use: don't continue
+					//throw new System.Exception("File \"" + fiCurrFile.Name + "\" is locked.  Release it first.");
 				}
 
 			}
 
-			// start commiting data
-			bool blnFailed = false;
+            // check for files that won't delete
+            DataRow[] drWontFiles = dsDeletes.Tables["files"].Select("client_status_code in ('co','cm')");
+            foreach (DataRow drCurrent in drWontFiles)
+            {
+                string strFileName = drCurrent.Field<string>("entry_name");
+                string strAbsolutePath = drCurrent.Field<string>("absolute_path");
+                string strFullName = strAbsolutePath + "\\" + strFileName;
+                dlgStatus.AddStatusLine("ERROR", "File is checked out: " + strFullName);
+                blnFailed = true;
+            }
 
-			// remove remote versions, entries, directories (set the permanently deleted flag)
-			blnFailed = blnFailed || DeleteRemoteEntries(sender, e, t, blnPermanent, ref dsDeletes);
+            // report directories that won't delete
+            DataRow[] drWontDirs = dsDeletes.Tables["dirs"].Select("wont_delete != null");
+            foreach (DataRow drCurrent in drWontFiles)
+            {
+                string strFileName = drCurrent.Field<string>("entry_name");
+                string strAbsolutePath = drCurrent.Field<string>("absolute_path");
+                string strFullName = strAbsolutePath + "\\" + strFileName;
+                dlgStatus.AddStatusLine("WARNING", "File is checked out and won't be deleted: " + strFullName);
+            }
 
-			// remove remote files from webdav server
-			if (blnPermanent)
-			{
-				blnFailed = blnFailed || DeleteRemoteFiles(sender, e, t, ref dsDeletes);
-			}
+            if (blnFailed == false)
+            {
+                // remove remote versions, entries, directories (set the permanently deleted flag)
+                blnFailed = blnFailed || DeleteRemoteEntries(sender, e, t, blnDestroy, ref dsDeletes);
 
-			// remove local files and directories
-			blnFailed = blnFailed || DeleteLocalFiles(sender, e, t, blnDeleteDirs, ref dsDeletes);
+                // remove remote files from webdav server
+                if (blnDestroy)
+                {
+                    strGuid = Guid.NewGuid().ToString().ToUpper();
+                    blnFailed = blnFailed || DeleteRemoteFiles(sender, e, t, strGuid, ref dsDeletes);
+                }
+
+                // remove local files and directories
+                blnFailed = blnFailed || DeleteLocalFiles(sender, e, t, blnDeleteDirs, ref dsDeletes);
+            }
 
 			// commit to database
 			if (blnFailed == true)
 			{
+                // roll back database work
 				t.Rollback();
 
-				// TODO: figure out how to rollback WebDav changes
-				// we could move files on the webdav server to a lost-and-found directory, and then call methods to restore those files upon failure
+                // undo webdav work
+                if (strGuid!="")
+                {
+                    RollbackDeletes(sender, e, t, strGuid, ref dsDeletes);
+                }
 
 				dlgStatus.AddStatusLine("ERROR", "Operation failed. Rolling back the database transaction.");
 				throw new System.Exception("Operation failed. Rolling back the database transaction.");
@@ -3844,16 +3872,22 @@ namespace HackPDM
 
 				// get remote directories
 				string strSql = @"
-					select
-						s.dir_id,
-						s.parent_id,
-						t.dir_name,
-						t.dir_path as relative_path,
-						':local_root'::text || '\' || t.dir_path as absolute_path,
-						d.true as is_remote
-					from fcn_directory_recursive(:dir_id) as s
-					left join view_dir_tree as t on s.dir_id=t.dir_id and s.parent_id=t.parent_id
-					order by s.parent_id, s.dir_id;
+                    select
+	                    s.dir_id,
+	                    s.parent_id,
+	                    t.dir_name,
+	                    replace('pwa' || coalesce(t.rel_path,''), '/', '\') as relative_path,
+	                    replace(':local_root'::text || coalesce(t.rel_path,''), '/', '\') as absolute_path,
+	                    true as is_remote,
+                    	case when c.dir_id is null then false else true end as wont_delete
+                    from fcn_directory_recursive(:dir_id) as s
+                    left join view_dir_tree as t on s.dir_id=t.dir_id and s.parent_id=t.parent_id
+                    left join (
+	                    select distinct dir_id
+	                    from hp_entry
+	                    where checkout_user is not null
+                    ) as c on c.dir_id=s.dir_id
+                    order by relative_path desc;
 				";
 
 				if (dsDeletes.Tables.Count == 1)
@@ -3870,8 +3904,7 @@ namespace HackPDM
 				// select entries in or below the specified direcory
 				// don't select dependencies of those entries
 				strSql = @"
-					select
-					from fcn_latest_by_dir(:dir_id);
+					select * from fcn_latest_by_dir(:dir_id);
 				";
 
 				// put the remote entries in the DataSet
@@ -3905,7 +3938,8 @@ namespace HackPDM
 			dsDeletes.Tables["dirs"].Columns.Add("dir_name", Type.GetType("System.String"));
 			dsDeletes.Tables["dirs"].Columns.Add("relative_path", Type.GetType("System.String"));
 			dsDeletes.Tables["dirs"].Columns.Add("absolute_path", Type.GetType("System.String"));
-			dsDeletes.Tables["dirs"].Columns.Add("is_remote", Type.GetType("System.Boolean"));
+            dsDeletes.Tables["dirs"].Columns.Add("is_remote", Type.GetType("System.Boolean"));
+            dsDeletes.Tables["dirs"].Columns.Add("wont_delete", Type.GetType("System.Boolean"));
 
 			// get data for selected entries
 			if (lstSelectedNames != null)
@@ -3926,6 +3960,7 @@ namespace HackPDM
 			if (strRelBasePath != null)
 			{
 				// if we get here, we are operating on a local only directory
+
 				string strAbsBasePath = GetAbsolutePath(strRelBasePath);
 
 				// add this directory to the dirs table
@@ -4015,7 +4050,7 @@ namespace HackPDM
 			// if: ignore filter
 			// ok: nothing to report (none of the above)
 
-			// TODO: set status code to co if the file was checked out by this user, but on a different node
+			// TODO: set status code to co if the file was checked out to me, but on a different node
 
 			// running in separate thread
 			BackgroundWorker myWorker = sender as BackgroundWorker;
@@ -4227,56 +4262,279 @@ namespace HackPDM
 
 		private bool DeleteLocalFiles(object sender, DoWorkEventArgs e, NpgsqlTransaction t, bool blnDeleteDirs, ref DataSet dsDeletes)
 		{
-			throw new NotImplementedException();
+            // running in separate thread
+            BackgroundWorker myWorker = sender as BackgroundWorker;
 
-			// get files in deletion order (child directories before parent directories)
-			DataRow[] drFiles = dsDeletes.Tables["files"].Select("client_status_code not in ('co','cm')", "absolute_path desc");
+            bool blnFailed = false;
 
-			// delete files
-			foreach (DataRow drFile in drFiles)
-			{
-				// delete this file
-			}
+            // if deleting directories
+            if (blnDeleteDirs)
+            {
 
-			// delete directories
-			if (blnDeleteDirs)
-			{
+                // all directories will be in a single tree
+                // in other words, we won't have any independent paths
+                // that means we can get the highest level path (shortest path) simply by sorting and taking the first one
+                string strAbsPath = dsDeletes.Tables["dirs"].Select("", "absolute_path")[0].Field<string>("absolute_path");
 
-				// get list of unique directories that won't delete
-				DataRow[] drBadFiles = dsDeletes.Tables["files"].Select("client_status_code in ('co','cm')", "absolute_path desc");
-				List<string> lstBadDirs = new List<string>();
-				foreach (DataRow drBadFile in drBadFiles)
-				{
-					string strBad = drBadFile.Field<string>("absolute_path");
-					if (!lstBadDirs.Contains(strBad))
-					lstBadDirs.Add(strBad);
-				}
+                // delete recursively
+                dlgStatus.AddStatusLine("INFO", "Deleting directory: " + strAbsPath);
+                DirectoryInfo dir = new DirectoryInfo(strAbsPath);
+                try
+                {
+                    dir.Delete(true);
+                }
+                catch (Exception ex)
+                {
+                    dlgStatus.AddStatusLine("ERROR", "Failed on recursive delete of directory (" + ex.Message + "): " + strAbsPath);
+                    blnFailed = true;
+                }
 
-				// get directories
-				DataRow[] drDirs = dsDeletes.Tables["dirs"].Select("", "absolute_path desc");
+            }
+            else
+            {
 
-				foreach (DataRow drDir in drDirs)
-				{
-					string strAbsPath = drDir.Field<string>("absolute_path");
+                foreach (DataRow drFile in dsDeletes.Tables["files"].Rows)
+                {
 
-					// check for children that won't delete
+                    // check for cancellation
+                    if ((myWorker.CancellationPending == true))
+                    {
+                        e.Cancel = true;
+                        return true;
+                    }
 
-				}
-			}
+                    // get the file
+                    string strFileName = drFile.Field<string>("entry_name");
+                    string strAbsolutePath = drFile.Field<string>("absolute_path");
+                    string strFullName = strAbsolutePath + "\\" + strFileName;
+                    FileInfo fiCurrent = new FileInfo(strFullName);
+
+                    // try deleting it
+                    dlgStatus.AddStatusLine("INFO", "Deleting file: " + strFullName);
+                    try
+                    {
+                        fiCurrent.Delete();
+                    }
+                    catch (Exception ex)
+                    {
+                        dlgStatus.AddStatusLine("ERROR", "Failed deleting file (" + ex.Message + "): " + strFullName);
+                        blnFailed = true;
+                    }
+                }
+
+            }
+
+            return blnFailed;
 
 		}
 
-		private bool DeleteRemoteFiles(object sender, DoWorkEventArgs e, NpgsqlTransaction t, ref DataSet dsDeletes)
+		private bool DeleteRemoteFiles(object sender, DoWorkEventArgs e, NpgsqlTransaction t, string strGuid, ref DataSet dsDeletes)
 		{
-			throw new NotImplementedException();
+
+            // move entry directories to a temporary directory
+            // we will actually delete them later, upon successful completion of all other operations
+
+            // running in separate thread
+            BackgroundWorker myWorker = sender as BackgroundWorker;
+
+            bool blnFailed = false;
+
+            // create webdav directory to be deleted
+            connDav.CreateDir("/" + strGuid);
+
+            DataRow[] drRemotes = dsDeletes.Tables["files"].Select("entry_id is not null");
+            foreach(DataRow drRemote in drRemotes)
+            {
+
+                // check for cancellation
+                if ((myWorker.CancellationPending == true))
+                {
+                    e.Cancel = true;
+                    return true;
+                }
+
+                // get the collection name (that's webdav terminology for a directory name)
+                // the collection is named after the entry_id
+                int intEntryId = drRemote.Field<int>("entry_id");
+                string strSrcPath = "/" + intEntryId.ToString();
+                string strDestPath = "/" + strGuid + "/" + intEntryId.ToString();
+
+                // get the file name
+                string strFileName = drRemote.Field<string>("entry_name");
+                string strAbsolutePath = drRemote.Field<string>("absolute_path");
+                string strFullName = strAbsolutePath + "\\" + strFileName;
+
+                // move the collection inside our new temporary collection (guid) on the webdav server
+                // later, we will delete the temporary collection, and everything inside
+                dlgStatus.AddStatusLine("INFO", "Staging file for delete: " + strFullName + ")");
+                connDav.MoveDir(strSrcPath, strDestPath);
+                if (connDav.StatusCode - 200 >= 100)
+                {
+                    dlgStatus.AddStatusLine("ERROR", connDav.StatusCode + "(file: " + strFullName + ")");
+                    blnFailed = true;
+                }
+
+            }
+
+            return blnFailed;
+
 		}
 
-		private bool DeleteRemoteEntries(object sender, DoWorkEventArgs e, NpgsqlTransaction t, bool blnPermanent, ref DataSet dsDeletes)
+        private bool RollbackDeletes(object sender, DoWorkEventArgs e, NpgsqlTransaction t, string strGuid, ref DataSet dsDeletes)
+        {
+
+            // move entry directories from the temporary directory, back to the root directory
+
+            // running in separate thread
+            BackgroundWorker myWorker = sender as BackgroundWorker;
+
+            bool blnFailed = false;
+
+            List<string> lstDirs = connDav.List(strGuid);
+
+            foreach (string strDir in lstDirs)
+            {
+
+                // check for cancellation
+                if ((myWorker.CancellationPending == true))
+                {
+                    e.Cancel = true;
+                    return true;
+                }
+
+                // get the collection name (that's webdav terminology for a directory name)
+                // the collection is named after the entry_id
+                string strDestPath = "/" + strDir;
+                string strSrcPath = "/" + strGuid + "/" + strDir;
+
+                // move the collection inside our new temporary collection (guid) on the webdav server
+                // later, we will delete the temporary collection, and everything inside
+                dlgStatus.AddStatusLine("INFO", "Restoring entry ID: " + strDir);
+                connDav.MoveDir(strSrcPath, strDestPath);
+                if (connDav.StatusCode - 200 >= 100)
+                {
+                    dlgStatus.AddStatusLine("ERROR", connDav.StatusCode + "(entry_id: " + strDir + ")");
+                    blnFailed = true;
+                }
+
+            }
+
+            return blnFailed;
+
+        }
+
+        private bool DeleteRemoteEntries(object sender, DoWorkEventArgs e, NpgsqlTransaction t, bool blnDestroy, ref DataSet dsDeletes)
 		{
-			throw new NotImplementedException();
-		}
 
-		#endregion
+            // we don't actually ever delete from the database
+            // for logical deletes, we set the active field to false
+            // for permanent deletes, we also set the destroyed field to true
+
+            BackgroundWorker myWorker = sender as BackgroundWorker;
+            bool blnFailed = false;
+
+            // make sure we are working inside of a transaction
+            if (t.Connection == null)
+            {
+                MessageBox.Show("The database transaction is not functional");
+                return true;
+            }
+
+            string strSql;
+
+            // build comma separated list of entries
+            string strEntries = "";
+            foreach (DataRow row in dsDeletes.Tables["files"].Rows)
+            {
+                strEntries += row.Field<int>("entry_id").ToString() + ",";
+            }
+
+            // drop trailing comma
+            strEntries = strEntries.Substring(0, strEntries.Length - 1);
+
+            // prepare a database command to delete (inactivate) entries, all-at-once
+            strSql = @"
+				update hp_entry set
+					active=:active_flag,
+					destroyed=:destroyed_flag
+                where entry_id in (" + strEntries + ")";
+
+            NpgsqlCommand cmdInactivateEntry = new NpgsqlCommand(strSql, connDb, t);
+            cmdInactivateEntry.Parameters.Add(new NpgsqlParameter("active_flag", NpgsqlTypes.NpgsqlDbType.Boolean));
+            cmdInactivateEntry.Parameters.Add(new NpgsqlParameter("destroyed_flag", NpgsqlTypes.NpgsqlDbType.Boolean));
+            cmdInactivateEntry.Parameters["active_flag"].Value = false;
+            cmdInactivateEntry.Parameters["destroyed_flag"].Value = blnDestroy;
+
+            // try deleting (inactivating)
+            try
+            {
+                cmdInactivateEntry.ExecuteNonQuery();
+            }
+            catch (NpgsqlException ex)
+            {
+                // integrity constraint violation?
+                dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                blnFailed = true;
+            }
+
+            return blnFailed;
+
+        }
+
+        private bool DeleteRemoteDirs(object sender, DoWorkEventArgs e, NpgsqlTransaction t, ref DataSet dsDeletes)
+        {
+
+            // we don't actually ever delete from the database
+            // directories only get logically deleted, there's nothing to destroy on the webdav side
+
+            BackgroundWorker myWorker = sender as BackgroundWorker;
+            bool blnFailed = false;
+
+            // make sure we are working inside of a transaction
+            if (t.Connection == null)
+            {
+                MessageBox.Show("The database transaction is not functional");
+                return true;
+            }
+
+            string strSql;
+
+            // build comma separated list of dirs
+            string strDirs = "";
+            foreach (DataRow row in dsDeletes.Tables["files"].Rows)
+            {
+                strDirs += row.Field<int>("entry_id").ToString() + ",";
+            }
+
+            // drop trailing comma
+            strDirs = strDirs.Substring(0, strDirs.Length - 1);
+
+            // prepare a database command to delete (inactivate) entries, all-at-once
+            strSql = @"
+				update hp_directory set active=:active_flag
+                where dir_id in (" + strDirs + ")";
+
+            NpgsqlCommand cmdInactivateDir = new NpgsqlCommand(strSql, connDb, t);
+            cmdInactivateDir.Parameters.Add(new NpgsqlParameter("active_flag", NpgsqlTypes.NpgsqlDbType.Boolean));
+            cmdInactivateDir.Parameters["active_flag"].Value = false;
+
+            // try deleting (inactivating)
+            try
+            {
+                cmdInactivateDir.ExecuteNonQuery();
+            }
+            catch (NpgsqlException ex)
+            {
+                // integrity constraint violation?
+                dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                blnFailed = true;
+            }
+
+            return blnFailed;
+
+        }
+
+        #endregion
 
 
 		#region TreeView actions
