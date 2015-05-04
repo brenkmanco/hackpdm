@@ -112,7 +112,6 @@ insert into hp_category (cat_id,cat_name,cat_description,track_version,track_dep
 
 -- -----------------------------------------------------------------------------
 
-
 --drop table hp_directory;
 --drop sequence seq_hp_directory_dir_id;
 
@@ -127,6 +126,7 @@ CREATE TABLE hp_directory (
 	create_user integer NOT NULL,
 	modify_stamp timestamp(6) without time zone NOT NULL DEFAULT now(),
 	modify_user integer NOT NULL,
+	active boolean NOT NULL default true,
 	
 	primary key (dir_id),
 	foreign key (parent_id) references hp_directory (dir_id),
@@ -146,49 +146,9 @@ CREATE TRIGGER trg_hp_directory_1_modify_stamp
 CREATE UNIQUE INDEX ON hp_directory (parent_id, lower(dir_name::text));
 
 insert into hp_directory (dir_id,parent_id,dir_name,default_cat,create_user,modify_user) values (1,NULL,'root',1,0,0);
--- insert into hp_directory (parent_id,dir_name,default_cat,create_user,modify_user) values (0,'1',1,0,0);
--- insert into hp_directory (parent_id,dir_name,default_cat,create_user,modify_user) values (1001,'1.1',1,0,0);
--- insert into hp_directory (parent_id,dir_name,default_cat,create_user,modify_user) values (1001,'1.2',1,0,0);
--- insert into hp_directory (parent_id,dir_name,default_cat,create_user,modify_user) values (1002,'2.1',1,0,0);
 
 /* upgrade
-ALTER TABLE hp_directory drop CONSTRAINT hp_directory_check;
-insert into hp_directory (dir_id,parent_id,dir_name,default_cat,create_user,modify_user) values (1,NULL,'root',1,0,0);
-update hp_directory set parent_id=1 where parent_id=0;
-delete from hp_directory where dir_id=0;
-ALTER TABLE hp_directory add CONSTRAINT hp_directory_check CHECK (parent_id IS NOT NULL OR dir_id = 1);
-*/
-
-/*
-	
-	select
-		dir_id,
-		parent_id,
-		dir_name
-		create_stamp,
-		create_user,
-		modify_stamp,
-		modify_user,
-		true as is_remote
-	from hp_directory
-	order by parent_id,dir_id;
-	
-	
-	with recursive dir_tree(dir_id,parent_id) as (
-			select
-				dir_id,
-				parent_id
-			from hp_directory
-			where parent_id is null
-		union all
-			select
-				d.dir_id,
-				d.parent_id
-			from dir_tree as p, hp_directory as d
-			where d.parent_id=p.dir_id
-	)
-	select * from dir_tree
-	
+	ALTER TABLE hp_directory add column active boolean NOT NULL default true;
 */
 
 
@@ -216,23 +176,7 @@ create table hp_type (
 
 CREATE UNIQUE INDEX ON hp_type (lower(file_ext::text));
 
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (1,'SLDPRT',1,'\.(SLDPRT)$','SolidWorks Part File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (2,'SLDASM',1,'\.(SLDASM)$','SolidWorks Assembly File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (3,'SLDDRW',1,'\.(SLDDRW)$','SolidWorks Drawing File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (4,'sldmat',2,'\.(sldmat)$','SolidWorks Material Definition File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (5,'SLDLFP',2,'\.(SLDLFP)$','SolidWorks File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (6,'png',4,'\.(png)$','PNG Image File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (7,'jpg',4,'\.(jpg)$','JPG Image File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (8,'mdb',4,'\.(mdb)$','MS Access Database File');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (9,'doc',4,'\.(doc)$','MS Word 97/2003');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (10,'docx',4,'\.(docx)$','MS Word 2007+');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (11,'xls',4,'\.(xls)$','MS Excel 97/2003');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (12,'xlsx',4,'\.(xls)x$','MS Excel 2007+');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (13,'pdf',4,'\.(pdf)$','Adobe PDF Document');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (14,'prt.1',4,'\.(prt\.[0-9]+)$','Pro/Engineer Part');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (15,'asm.1',4,'\.(asm\.[0-9]+)$','Pro/Engineer Assembly');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (15,'drw.1',4,'\.(drw\.[0-9]+)$','Pro/Engineer Drawing');
--- insert into hp_type (type_id,file_ext,default_cat,type_regex,description) values (15,'txt.1',4,'\.(txt\.[0-9]+)$','Pro/Engineer Trail/Log File');
+-- you can load standard type data with file ./type_data.sql
 
 
 
@@ -287,6 +231,8 @@ create table hp_entry (
 	checkout_user integer,
 	checkout_date timestamp(6) without time zone,
 	checkout_node integer,
+	active boolean NOT NULL default true,
+	destroyed boolean NOT NULL default false,
 	
 	primary key (entry_id),
 	foreign key (dir_id) references hp_directory (dir_id),
@@ -300,7 +246,10 @@ create table hp_entry (
 
 CREATE UNIQUE INDEX ON hp_entry (dir_id, lower(entry_name::text));
 
-
+/* upgrade
+	alter table hp_entry add column active boolean NOT NULL default true;
+	alter table hp_entry add column destroyed boolean NOT NULL default false;
+*/
 
 
 -- -----------------------------------------------------------------------------

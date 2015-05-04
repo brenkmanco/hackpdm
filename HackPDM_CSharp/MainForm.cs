@@ -744,6 +744,8 @@ namespace HackPDM
 				dsList.Tables.Add(CreateFileTable());
 			}
 
+            dsList.Tables[0].TableName = "files";
+
 			// get local files
 			if(Directory.Exists(strAbsPath) == true) {
 
@@ -1940,7 +1942,7 @@ namespace HackPDM
 			bool blnFailed = false;
 
 			BackgroundWorker myWorker = sender as BackgroundWorker;
-			dlgStatus.AddStatusLine("Info", "Starting worker");
+			dlgStatus.AddStatusLine("INFO", "Starting worker");
 
 			// get arguments
 			List<object> genericlist = e.Argument as List<object>;
@@ -1965,7 +1967,7 @@ namespace HackPDM
 			foreach (DataRow drBad in drBads)
 			{
 				string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
-				dlgStatus.AddStatusLine("Info", "File has been modified, but is not checked out: " + strFullName);
+				dlgStatus.AddStatusLine("INFO", "File has been modified, but is not checked out: " + strFullName);
 				blnFailed = true;
 			}
 
@@ -1981,7 +1983,7 @@ namespace HackPDM
 			foreach (DataRow drBad in drBads)
 			{
 				string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
-				dlgStatus.AddStatusLine("Info", "File is writeable, but is not checked out: " + strFullName);
+				dlgStatus.AddStatusLine("INFO", "File is writeable, but is not checked out: " + strFullName);
 				blnFailed = true;
 			}
 
@@ -2014,7 +2016,7 @@ namespace HackPDM
 				FileInfo fiCurrFile = new FileInfo(strFullName);
 
 				// report status
-				dlgStatus.AddStatusLine("Info", "Checking for write access (" + (i + 1).ToString() + " of " + intUpdateCount.ToString() + "): " + strFileName);
+				dlgStatus.AddStatusLine("INFO", "Checking for write access (" + (i + 1).ToString() + " of " + intUpdateCount.ToString() + "): " + strFileName);
 
 				// check if file is writeable
 				if (IsFileLocked(fiCurrFile) == true)
@@ -2049,7 +2051,7 @@ namespace HackPDM
 				FileInfo fiCurrFile = new FileInfo(strFullName);
 
 				// report status
-				dlgStatus.AddStatusLine("Info", "Updating file (" + (i + 1).ToString() + " of " + intUpdateCount.ToString() + "): " + strFileName);
+				dlgStatus.AddStatusLine("INFO", "Updating file (" + (i + 1).ToString() + " of " + intUpdateCount.ToString() + "): " + strFileName);
 
 				// name and download the file
 				int intEntryId = (int)drCurrent["entry_id"];
@@ -2062,14 +2064,19 @@ namespace HackPDM
 
 				// report status and stream file
 				string strFileSize = drCurrent.Field<string>("str_latest_size");
-				dlgStatus.AddStatusLine("Retrieving Content (" + strFileSize + ")", strDavName);
+				dlgStatus.AddStatusLine("INFO", "Retrieving Content (" + strFileSize + "): " + strDavName);
 				connDav.Download(strDavName, strFullName);
+
+                // webdav does not handle file time stamps
+                // set last write time from server data
+                File.SetLastWriteTime(fiCurrFile.FullName, drCurrent.Field<DateTime>("latest_stamp"));
+                File.SetCreationTime(fiCurrFile.FullName, drCurrent.Field<DateTime>("latest_stamp"));
 
 				// set the file readonly
 				fiCurrFile.IsReadOnly = true;
 
 				// report status
-				dlgStatus.AddStatusLine("File transfer complete", strFileName);
+				dlgStatus.AddStatusLine("INFO", "File transfer complete: " + strFileName);
 
 			}
 
@@ -2093,7 +2100,7 @@ namespace HackPDM
 				FileInfo fiCurrFile = new FileInfo(strFullName);
 
 				// report status
-				dlgStatus.AddStatusLine("Info", "Downloading new file (" + (i + 1).ToString() + " of " + intUpdateCount.ToString() + "): " + strFileName);
+				dlgStatus.AddStatusLine("INFO", "Downloading new file (" + (i + 1).ToString() + " of " + intUpdateCount.ToString() + "): " + strFileName);
 
 				// name and download the file
 				int intEntryId = (int)drCurrent["entry_id"];
@@ -2103,14 +2110,19 @@ namespace HackPDM
 
 				// report status and stream file
 				string strFileSize = drCurrent.Field<string>("str_latest_size");
-				dlgStatus.AddStatusLine("Retrieving Content (" + strFileSize + ")", strDavName);
+				dlgStatus.AddStatusLine("INFO", "Retrieving Content (" + strFileSize + "): " + strDavName);
 				connDav.Download(strDavName, strFullName);
+
+                // webdav does not handle file time stamps
+                // set last write time from server data
+                File.SetLastWriteTime(fiCurrFile.FullName, drCurrent.Field<DateTime>("latest_stamp"));
+                File.SetCreationTime(fiCurrFile.FullName, drCurrent.Field<DateTime>("latest_stamp"));
 
 				// set the file readonly
 				fiCurrFile.IsReadOnly = true;
 
 				// report status
-				dlgStatus.AddStatusLine("File transfer complete", strFileName);
+				dlgStatus.AddStatusLine("INFO", "File transfer complete:" + strFileName);
 
 			}
 
@@ -2274,19 +2286,19 @@ namespace HackPDM
 					FileInfo fiCurrFile = new FileInfo(strFullName);
 					if (fiCurrFile.Exists)
 					{
-						dlgStatus.AddStatusLine("Info", "Setting file ReadOnly (" + (i + 1).ToString() + " of " + intNewCount.ToString() + "): " + strFileName);
+						dlgStatus.AddStatusLine("INFO", "Setting file ReadOnly (" + (i + 1).ToString() + " of " + intNewCount.ToString() + "): " + strFileName);
 						try
 						{
 							fiCurrFile.IsReadOnly = true;
 						}
 						catch (Exception ex)
 						{
-							dlgStatus.AddStatusLine("Info", "Failed to set file \"" + fiCurrFile.Name + "\" to readonly." + System.Environment.NewLine + ex.ToString());
+							dlgStatus.AddStatusLine("INFO", "Failed to set file \"" + fiCurrFile.Name + "\" to readonly." + System.Environment.NewLine + ex.ToString());
 						}
 					}
 					else
 					{
-						dlgStatus.AddStatusLine("Info", "File doesn't exist locally, can't set ReadOnly (" + (i + 1).ToString() + " of " + intNewCount.ToString() + "): " + strFileName);
+						dlgStatus.AddStatusLine("INFO", "File doesn't exist locally, can't set ReadOnly (" + (i + 1).ToString() + " of " + intNewCount.ToString() + "): " + strFileName);
 					}
 
 				} // end for
@@ -2304,7 +2316,7 @@ namespace HackPDM
 			worker_GetLatest(sender, e);
 
 			BackgroundWorker myWorker = sender as BackgroundWorker;
-			dlgStatus.AddStatusLine("Info", "Beginning checkout worker");
+			dlgStatus.AddStatusLine("INFO", "Beginning checkout worker");
 
 			// get arguments
 			List<object> genericlist = e.Argument as List<object>;
@@ -2322,7 +2334,7 @@ namespace HackPDM
 			foreach (DataRow drBad in drBads)
 			{
 				string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
-				dlgStatus.AddStatusLine("Info", "File is checked out by another user: " + strFullName);
+				dlgStatus.AddStatusLine("INFO", "File is checked out by another user: " + strFullName);
 			}
 
 			// warn checked-out-by-me
@@ -2330,7 +2342,7 @@ namespace HackPDM
 			foreach (DataRow drBad in drBads)
 			{
 				string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
-				dlgStatus.AddStatusLine("Info", "File is already checked out to you: " + strFullName);
+				dlgStatus.AddStatusLine("INFO", "File is already checked out to you: " + strFullName);
 			}
 
 			// get rows of selected files
@@ -2599,30 +2611,42 @@ namespace HackPDM
                 blnFailed = true;
             }
 
-            // report directories that won't delete
-            DataRow[] drWontDirs = dsDeletes.Tables["dirs"].Select("wont_delete != null");
-            foreach (DataRow drCurrent in drWontFiles)
-            {
-                string strFileName = drCurrent.Field<string>("entry_name");
-                string strAbsolutePath = drCurrent.Field<string>("absolute_path");
-                string strFullName = strAbsolutePath + "\\" + strFileName;
-                dlgStatus.AddStatusLine("WARNING", "File is checked out and won't be deleted: " + strFullName);
-            }
-
+            // flag as deleted all remote versions, entries (set the destroyed flag)
             if (blnFailed == false)
             {
-                // remove remote versions, entries, directories (set the permanently deleted flag)
                 blnFailed = blnFailed || DeleteRemoteEntries(sender, e, t, blnDestroy, ref dsDeletes);
+            }
 
-                // remove remote files from webdav server
+            // flag as deleted all remote directories (set the destroyed flag)
+            if (blnFailed == false)
+            {
+                blnFailed = blnFailed || DeleteRemoteDirs(sender, e, t, ref dsDeletes);
+            }
+
+            // stage remote files for deletion from webdav server
+            if (blnFailed == false)
+            {
                 if (blnDestroy)
                 {
                     strGuid = Guid.NewGuid().ToString().ToUpper();
-                    blnFailed = blnFailed || DeleteRemoteFiles(sender, e, t, strGuid, ref dsDeletes);
+                    blnFailed = blnFailed || StageRemotesForDelete(sender, e, t, strGuid, ref dsDeletes);
                 }
+            }
 
-                // remove local files and directories
+            // remove local files and directories
+            if (blnFailed == false)
+            {
                 blnFailed = blnFailed || DeleteLocalFiles(sender, e, t, blnDeleteDirs, ref dsDeletes);
+            }
+
+			// TODO: purge files staged for delete from the webdav server
+            if (blnFailed == false)
+            {
+                if (blnDestroy)
+                {
+                    strGuid = Guid.NewGuid().ToString().ToUpper();
+                    blnFailed = blnFailed || PurgeRemoteFiles(sender, e, t, strGuid, ref dsDeletes);
+                }
             }
 
 			// commit to database
@@ -2644,7 +2668,6 @@ namespace HackPDM
 			{
 				t.Commit();
 
-				// TODO: purge the webdav lost-and-found directory as described above
 			}
 
 		}
@@ -3453,7 +3476,7 @@ namespace HackPDM
 				string strMd5sum = StringMD5(strFullName);
 
 				// report status
-				dlgStatus.AddStatusLine("Info", "Adding new file to db (" + (i + 1).ToString() + " of " + intNewCount.ToString() + "): " + strFileName);
+				dlgStatus.AddStatusLine("INFO", "Adding new file to db (" + (i + 1).ToString() + " of " + intNewCount.ToString() + "): " + strFileName);
 
 				// get the parent directory id
 				int intParentDir = drNewFile.Field<int>("dir_id");
@@ -3766,7 +3789,7 @@ namespace HackPDM
 				drRemote.SetField<string>("absolute_path", GetAbsolutePath(drRemote.Field<string>("relative_path")));
 
 				// log status
-				dlgStatus.AddStatusLine("Matching Local Files", "Checking file: " + strFullName);
+				dlgStatus.AddStatusLine("INFO", "Checking for local copy: " + strFullName);
 
 				if (File.Exists(strFullName))
 				{
@@ -3863,10 +3886,12 @@ namespace HackPDM
 				return null;
 			}
 
-			// get remote directory data
+            // get remote directory id
 			int intBaseDirId = 0;
 			dictTree.TryGetValue(strRelBasePath, out intBaseDirId);
-			if (intBaseDirId != 0)
+
+            // get deletes data starting from remote data
+            if (lstSelectedNames == null && intBaseDirId != 0)
 			{
 				// if we get here, the user selected a remote directory in the tree view
 
@@ -3941,23 +3966,23 @@ namespace HackPDM
             dsDeletes.Tables["dirs"].Columns.Add("is_remote", Type.GetType("System.Boolean"));
             dsDeletes.Tables["dirs"].Columns.Add("wont_delete", Type.GetType("System.Boolean"));
 
-			// get data for selected entries
-			if (lstSelectedNames != null)
-			{
-				// if we get here, the user selected individual entries (files) from the list view
+            // get data for selected entries
+            if (lstSelectedNames != null)
+            {
+                // if we get here, the user selected individual entries (files) from the list view
 
-				// get selected entries (files) into a new datatable
-				string strSelectedNames = String.Join("','", lstSelectedNames.ToArray());
-				DataTable dtTemp = dsList.Tables["files"].Select("entry_name in ('" + strSelectedNames + "')").CopyToDataTable();
-				dsDeletes.Tables.Add(dtTemp);
-				dsDeletes.Tables[1].TableName = "files";
+                // get selected entries (files) into a new datatable
+                string strSelectedNames = String.Join("','", lstSelectedNames.ToArray());
+                DataTable dtTemp = dsList.Tables["files"].Select("entry_name in ('" + strSelectedNames + "')").CopyToDataTable();
+                dsDeletes.Tables.Add(dtTemp);
+                dsDeletes.Tables[1].TableName = "files";
 
-				// return results
-				return dsDeletes;
+                // return results
+                return dsDeletes;
 
-			}
+            }
 
-			if (strRelBasePath != null)
+            if (strRelBasePath != null)
 			{
 				// if we get here, we are operating on a local only directory
 
@@ -3976,7 +4001,7 @@ namespace HackPDM
 				dictTree.TryGetValue(strRelParentPath, out intParentId);
 				dsDeletes.Tables["dirs"].Rows.Add(intDirId, intParentId, strBaseName, strRelBasePath, strAbsBasePath);
 
-				// make an empty DataTable
+				// add an empty DataTable for files
 				dsDeletes.Tables.Add(CreateFileTable());
 
 				// recursively build list of local directories and files to be deleted
@@ -4278,7 +4303,13 @@ namespace HackPDM
 
                 // delete recursively
                 dlgStatus.AddStatusLine("INFO", "Deleting directory: " + strAbsPath);
-                DirectoryInfo dir = new DirectoryInfo(strAbsPath);
+                var dir = new DirectoryInfo(strAbsPath) { Attributes = FileAttributes.Normal };
+
+                foreach (var info in dir.GetFileSystemInfos("*", SearchOption.AllDirectories))
+                {
+                    info.Attributes = FileAttributes.Normal;
+                }
+
                 try
                 {
                     dir.Delete(true);
@@ -4309,6 +4340,9 @@ namespace HackPDM
                     string strFullName = strAbsolutePath + "\\" + strFileName;
                     FileInfo fiCurrent = new FileInfo(strFullName);
 
+                    // set the file not readonly
+                    fiCurrent.IsReadOnly = false;
+
                     // try deleting it
                     dlgStatus.AddStatusLine("INFO", "Deleting file: " + strFullName);
                     try
@@ -4317,7 +4351,7 @@ namespace HackPDM
                     }
                     catch (Exception ex)
                     {
-                        dlgStatus.AddStatusLine("ERROR", "Failed deleting file (" + ex.Message + "): " + strFullName);
+                        dlgStatus.AddStatusLine("ERROR", "Failed deleting file:" + ex.Message);
                         blnFailed = true;
                     }
                 }
@@ -4328,7 +4362,7 @@ namespace HackPDM
 
 		}
 
-		private bool DeleteRemoteFiles(object sender, DoWorkEventArgs e, NpgsqlTransaction t, string strGuid, ref DataSet dsDeletes)
+		private bool StageRemotesForDelete(object sender, DoWorkEventArgs e, NpgsqlTransaction t, string strGuid, ref DataSet dsDeletes)
 		{
 
             // move entry directories to a temporary directory
@@ -4366,7 +4400,7 @@ namespace HackPDM
 
                 // move the collection inside our new temporary collection (guid) on the webdav server
                 // later, we will delete the temporary collection, and everything inside
-                dlgStatus.AddStatusLine("INFO", "Staging file for delete: " + strFullName + ")");
+                dlgStatus.AddStatusLine("INFO", "Staging file for delete: " + strFullName);
                 connDav.MoveDir(strSrcPath, strDestPath);
                 if (connDav.StatusCode - 200 >= 100)
                 {
@@ -4390,7 +4424,9 @@ namespace HackPDM
 
             bool blnFailed = false;
 
+            // get list of entries to be restored
             List<string> lstDirs = connDav.List(strGuid);
+            lstDirs.Remove(strGuid + "/");
 
             foreach (string strDir in lstDirs)
             {
@@ -4404,8 +4440,8 @@ namespace HackPDM
 
                 // get the collection name (that's webdav terminology for a directory name)
                 // the collection is named after the entry_id
-                string strDestPath = "/" + strDir;
-                string strSrcPath = "/" + strGuid + "/" + strDir;
+                string strSrcPath = "/" + strDir;
+                string strDestPath = strDir.Replace(strGuid,"");
 
                 // move the collection inside our new temporary collection (guid) on the webdav server
                 // later, we will delete the temporary collection, and everything inside
@@ -4418,6 +4454,9 @@ namespace HackPDM
                 }
 
             }
+
+            // delete the now-empty staging directory
+            connDav.Delete("/" + strGuid);
 
             return blnFailed;
 
@@ -4527,6 +4566,37 @@ namespace HackPDM
             {
                 // integrity constraint violation?
                 dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                blnFailed = true;
+            }
+
+            return blnFailed;
+
+        }
+
+        private bool PurgeRemoteFiles(object sender, DoWorkEventArgs e, NpgsqlTransaction t, string strGuid, ref DataSet dsDeletes)
+        {
+
+            // delete files staged for delete on the webdav server
+
+            // running in separate thread
+            BackgroundWorker myWorker = sender as BackgroundWorker;
+
+            // check for cancellation
+            if ((myWorker.CancellationPending == true))
+            {
+                e.Cancel = true;
+                return true;
+            }
+
+            bool blnFailed = false;
+
+            // write status
+            dlgStatus.AddStatusLine("INFO", "Deleting staged files from webdav server: staging directory /" + strGuid + "");
+            connDav.Delete("/" + strGuid);
+
+            if (connDav.StatusCode - 200 >= 100)
+            {
+                dlgStatus.AddStatusLine("ERROR", connDav.StatusCode + "(staging directory: " + strGuid + ")");
                 blnFailed = true;
             }
 
@@ -4646,7 +4716,6 @@ namespace HackPDM
 			{
 				worker.CancelAsync();
 			}
-			t.Commit();
 
 			// refresh the main window
 			ResetView(tnCurrent.FullPath);
@@ -4871,7 +4940,6 @@ namespace HackPDM
 			{
 				worker.CancelAsync();
 			}
-			t.Commit();
 
 			// refresh the main window
 			ResetView(tnCurrent.FullPath);
@@ -5088,7 +5156,6 @@ namespace HackPDM
             {
                 worker.CancelAsync();
             }
-            t.Commit();
 
             // refresh the main window
             ResetView(tnCurrent.FullPath);
@@ -5124,7 +5191,7 @@ namespace HackPDM
 			arguments.Add(t);
 			arguments.Add(strRelBasePath);
 			arguments.Add(lstSelectedNames);
-			arguments.Add(true); // permanent flag
+			arguments.Add(true); // destroy flag
 
 			// launch the background thread
 			BackgroundWorker worker = new BackgroundWorker();
@@ -5174,7 +5241,7 @@ namespace HackPDM
 			arguments.Add(t);
 			arguments.Add(strRelBasePath);
 			arguments.Add(lstSelectedNames);
-			arguments.Add(false); // permanent flag
+			arguments.Add(false); // destroy flag
 
 			// launch the background thread
 			BackgroundWorker worker = new BackgroundWorker();
