@@ -8,34 +8,34 @@
  */
 namespace HackPDM
 {
-	partial class MainForm
-	{
-		/// <summary>
-		/// Designer variable used to keep track of non-visual components.
-		/// </summary>
-		private System.ComponentModel.IContainer components = null;
-		
-		/// <summary>
-		/// Disposes resources used by the form.
-		/// </summary>
-		/// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
-		protected override void Dispose(bool disposing)
-		{
-			if (disposing) {
-				if (components != null) {
-					components.Dispose();
-				}
-			}
-			base.Dispose(disposing);
-		}
-		
-		/// <summary>
-		/// This method is required for Windows Forms designer support.
-		/// Do not change the method contents inside the source code editor. The Forms designer might
-		/// not be able to load this method if it was changed manually.
-		/// </summary>
-		private void InitializeComponent()
-		{
+    partial class MainForm
+    {
+        /// <summary>
+        /// Designer variable used to keep track of non-visual components.
+        /// </summary>
+        private System.ComponentModel.IContainer components = null;
+        
+        /// <summary>
+        /// Disposes resources used by the form.
+        /// </summary>
+        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) {
+                if (components != null) {
+                    components.Dispose();
+                }
+            }
+            base.Dispose(disposing);
+        }
+        
+        /// <summary>
+        /// This method is required for Windows Forms designer support.
+        /// Do not change the method contents inside the source code editor. The Forms designer might
+        /// not be able to load this method if it was changed manually.
+        /// </summary>
+        private void InitializeComponent()
+        {
             this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             this.cmsTree = new System.Windows.Forms.ContextMenuStrip(this.components);
@@ -510,43 +510,43 @@ namespace HackPDM
             this.ResumeLayout(false);
             this.PerformLayout();
 
-		}
-		private System.Windows.Forms.ToolStripMenuItem cmdManageFileTypes;
-		private System.Windows.Forms.ToolStripMenuItem cmdRefreshView;
-		private System.Windows.Forms.ToolStripDropDownButton toolStripDropDownButton1;
-		private System.Windows.Forms.ListView lvProperties;
-		private System.Windows.Forms.PictureBox pbPreview;
-		private System.Windows.Forms.TabPage tabPage4;
-		private System.Windows.Forms.ListView lvChildren;
-		private System.Windows.Forms.TabPage tabPage3;
-		private System.Windows.Forms.ListView lvParents;
-		private System.Windows.Forms.TabPage tabPage2;
-		private System.Windows.Forms.TabPage tabPage1;
-		private System.Windows.Forms.TabControl tabControl1;
-		private System.Windows.Forms.ListView lvHistory;
-		private System.Windows.Forms.ListView listView1;
-		private System.Windows.Forms.TreeView treeView1;
-		private System.Windows.Forms.SplitContainer splitContainer2;
-		private System.Windows.Forms.SplitContainer splitContainer1;
-		private System.Windows.Forms.StatusStrip statusStrip1;
-		private System.Windows.Forms.ToolStripMenuItem cmsTreeAnalyze;
-		private System.Windows.Forms.ToolStripMenuItem cmsListUndoCheckout;
-		private System.Windows.Forms.ToolStripMenuItem cmsListCommit;
-		private System.Windows.Forms.ToolStripMenuItem cmsTreeUndoCheckout;
-		private System.Windows.Forms.ToolStripMenuItem cmsTreeCommit;
-		private System.Windows.Forms.ToolStripMenuItem cmsListCheckOut;
-		private System.Windows.Forms.ToolStripMenuItem cmsListGetLatest;
-		private System.Windows.Forms.ContextMenuStrip cmsList;
-		private System.Windows.Forms.ToolStripMenuItem cmsTreeCheckout;
-		private System.Windows.Forms.ToolStripMenuItem cmsTreeGetLatest;
-		private System.Windows.Forms.ContextMenuStrip cmsTree;
-		private System.Windows.Forms.ImageList ilListIcons;
-		private System.Windows.Forms.ImageList ilTreeIcons;
-		private System.Windows.Forms.ToolStripMenuItem logicalDeleteToolStripMenuItem;
-		private System.Windows.Forms.ToolStripMenuItem logicalDeleteToolStripMenuItem1;
-		private System.Windows.Forms.ToolStripMenuItem permanentDeleteToolStripMenuItem;
+        }
+        private System.Windows.Forms.ToolStripMenuItem cmdManageFileTypes;
+        private System.Windows.Forms.ToolStripMenuItem cmdRefreshView;
+        private System.Windows.Forms.ToolStripDropDownButton toolStripDropDownButton1;
+        private System.Windows.Forms.ListView lvProperties;
+        private System.Windows.Forms.PictureBox pbPreview;
+        private System.Windows.Forms.TabPage tabPage4;
+        private System.Windows.Forms.ListView lvChildren;
+        private System.Windows.Forms.TabPage tabPage3;
+        private System.Windows.Forms.ListView lvParents;
+        private System.Windows.Forms.TabPage tabPage2;
+        private System.Windows.Forms.TabPage tabPage1;
+        private System.Windows.Forms.TabControl tabControl1;
+        private System.Windows.Forms.ListView lvHistory;
+        private System.Windows.Forms.ListView listView1;
+        private System.Windows.Forms.TreeView treeView1;
+        private System.Windows.Forms.SplitContainer splitContainer2;
+        private System.Windows.Forms.SplitContainer splitContainer1;
+        private System.Windows.Forms.StatusStrip statusStrip1;
+        private System.Windows.Forms.ToolStripMenuItem cmsTreeAnalyze;
+        private System.Windows.Forms.ToolStripMenuItem cmsListUndoCheckout;
+        private System.Windows.Forms.ToolStripMenuItem cmsListCommit;
+        private System.Windows.Forms.ToolStripMenuItem cmsTreeUndoCheckout;
+        private System.Windows.Forms.ToolStripMenuItem cmsTreeCommit;
+        private System.Windows.Forms.ToolStripMenuItem cmsListCheckOut;
+        private System.Windows.Forms.ToolStripMenuItem cmsListGetLatest;
+        private System.Windows.Forms.ContextMenuStrip cmsList;
+        private System.Windows.Forms.ToolStripMenuItem cmsTreeCheckout;
+        private System.Windows.Forms.ToolStripMenuItem cmsTreeGetLatest;
+        private System.Windows.Forms.ContextMenuStrip cmsTree;
+        private System.Windows.Forms.ImageList ilListIcons;
+        private System.Windows.Forms.ImageList ilTreeIcons;
+        private System.Windows.Forms.ToolStripMenuItem logicalDeleteToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem logicalDeleteToolStripMenuItem1;
+        private System.Windows.Forms.ToolStripMenuItem permanentDeleteToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem deleteToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem logicalDeleteToolStripMenuItem2;
         private System.Windows.Forms.ToolStripMenuItem permanentDeleteToolStripMenuItem1;
-	}
+    }
 }

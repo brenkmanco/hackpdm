@@ -26,80 +26,80 @@ using System.Windows.Forms;
 
 namespace HackPDM
 {
-	/// <summary>
-	/// Description of StatusDialog.
-	/// </summary>
-	public partial class StatusDialog : Form
-	{
-		
-		private bool blnCanceled = false;
-		
-		public bool Canceled {
-			get { return blnCanceled; }
-			private set { blnCanceled = value; }
-		}
-		
-		public bool ShowStatusDialog(string TitleText) {
-			//var dlg = new StatusDialog(TitleText);
-			this.Text = TitleText;
-			this.ShowDialog();
-			return this.Canceled;
-		}
-		
-		public StatusDialog() {
-			InitializeComponent();
-		}
-		
-		private StatusDialog(string TitleText) {
-			InitializeComponent();
-			this.Text = TitleText;
-		}
-		
-		public void ClearStatus() {
-			lvMessages.Clear();
-			lvMessages.Columns.Add("Action",120,System.Windows.Forms.HorizontalAlignment.Left);
-			lvMessages.Columns.Add("Description",460, System.Windows.Forms.HorizontalAlignment.Left);
-		}
-		
-		public void AddStatusLine(string Action, string Description) {
-			string[] strStatusParams = new String[2] {Action, Description};
-			AddStatusLine(strStatusParams);
-		}
-		
-		private delegate void AddStatusLineDel(string[] Params);
-		private void AddStatusLine(string[] Params) {
-			if (this.InvokeRequired) {
-				// this is a worker thread so delegate the task
-				AddStatusLineDel del = new AddStatusLineDel(AddStatusLine);
+    /// <summary>
+    /// Description of StatusDialog.
+    /// </summary>
+    public partial class StatusDialog : Form
+    {
+        
+        private bool blnCanceled = false;
+        
+        public bool Canceled {
+            get { return blnCanceled; }
+            private set { blnCanceled = value; }
+        }
+        
+        public bool ShowStatusDialog(string TitleText) {
+            //var dlg = new StatusDialog(TitleText);
+            this.Text = TitleText;
+            this.ShowDialog();
+            return this.Canceled;
+        }
+        
+        public StatusDialog() {
+            InitializeComponent();
+        }
+        
+        private StatusDialog(string TitleText) {
+            InitializeComponent();
+            this.Text = TitleText;
+        }
+        
+        public void ClearStatus() {
+            lvMessages.Clear();
+            lvMessages.Columns.Add("Action",120,System.Windows.Forms.HorizontalAlignment.Left);
+            lvMessages.Columns.Add("Description",460, System.Windows.Forms.HorizontalAlignment.Left);
+        }
+        
+        public void AddStatusLine(string Action, string Description) {
+            string[] strStatusParams = new String[2] {Action, Description};
+            AddStatusLine(strStatusParams);
+        }
+        
+        private delegate void AddStatusLineDel(string[] Params);
+        private void AddStatusLine(string[] Params) {
+            if (this.InvokeRequired) {
+                // this is a worker thread so delegate the task
+                AddStatusLineDel del = new AddStatusLineDel(AddStatusLine);
                 //object[] delParam = new object[1] { Params };
                 this.Invoke(del, (object)Params);
-			} else {
-				// we are executing in the UI thread
-				ListViewItem lvItem = new ListViewItem(Params);
-				lvMessages.Items.Add(lvItem);
-				lvMessages.EnsureVisible(lvMessages.Items.Count - 1);
-			}
-		}
-		
-		private void CmdCancelClick(object sender, EventArgs e) {
-			blnCanceled = true;
-			this.Close();
-		}
-		
-		void CmdCloseClick(object sender, EventArgs e)
-		{
-			this.Close();
-		}
-		
-		public void OperationCompleted() {
-			if (cbxAutoClose.Checked == true) {
-				this.Close();
-			} else {
-				cmdCancel.Enabled = false;
-				cmdClose.Enabled = true;
-			}
-		}
-		
-		
-	}
+            } else {
+                // we are executing in the UI thread
+                ListViewItem lvItem = new ListViewItem(Params);
+                lvMessages.Items.Add(lvItem);
+                lvMessages.EnsureVisible(lvMessages.Items.Count - 1);
+            }
+        }
+        
+        private void CmdCancelClick(object sender, EventArgs e) {
+            blnCanceled = true;
+            this.Close();
+        }
+        
+        void CmdCloseClick(object sender, EventArgs e)
+        {
+            this.Close();
+        }
+        
+        public void OperationCompleted() {
+            if (cbxAutoClose.Checked == true) {
+                this.Close();
+            } else {
+                cmdCancel.Enabled = false;
+                cmdClose.Enabled = true;
+            }
+        }
+        
+        
+    }
 }
