@@ -113,7 +113,7 @@ namespace HackPDM
 			intMyNodeId = GetNodeId();
 
 			// get remote file type manager
-			ftmStart = new FileTypeManager(connDb, strLocalFileRoot, GetRelativePath(strLocalFileRoot));
+            ftmStart = new FileTypeManager(connDb, strLocalFileRoot, Utils.GetRelativePath(strLocalFileRoot, strLocalFileRoot));
 
 			// Populate data
 			ResetView();
@@ -242,10 +242,9 @@ namespace HackPDM
             strCurrProfileId = section.Settings.Get("usetDefaultProfile").Value.ValueXml.InnerText;
             strXmlProfiles = section.Settings.Get("usetProfiles").Value.ValueXml.InnerText;
 
-
-            // These are for jared's testing (couldn't get the config file thing working...):
- //           strCurrProfileId = "96ab093f-f106-49bd-8626-6d3bb2877965";
- //           strXmlProfiles = "<DocumentElement>\r\n  <profiles>\r\n    <PfGuid>96ab093f-f106-49bd-8626-6d3bb2877965</PfGuid>\r\n    <PfName>jared</PfName>\r\n    <DbServ>192.168.52.134</DbServ>\r\n    <DbPort>5432</DbPort>\r\n    <DbUser>demouser</DbUser>\r\n    <DbPass>demo</DbPass>\r\n    <DbName>hackpdm</DbName>\r\n    <DavServ>http://192.168.52.134</DavServ>\r\n    <DavPort>80</DavPort>\r\n    <DavUser/>\r\n    <DavPass/>\r\n    <DavPath>webdav</DavPath>\r\n    <FsRoot>D:\\Desktop Stuff\\Work\\Asphalt Zipper</FsRoot>\r\n    <Username>demo</Username>\r\n    <Password>demo</Password>\r\n  </profiles>\r\n</DocumentElement>";
+             // These are for jared's testing (couldn't get the config file thing working...):
+       //     strCurrProfileId = "96ab093f-f106-49bd-8626-6d3bb2877965";
+       //     strXmlProfiles = "<DocumentElement>\r\n  <profiles>\r\n    <PfGuid>96ab093f-f106-49bd-8626-6d3bb2877965</PfGuid>\r\n    <PfName>jared</PfName>\r\n    <DbServ>192.168.52.134</DbServ>\r\n    <DbPort>5432</DbPort>\r\n    <DbUser>demouser</DbUser>\r\n    <DbPass>demo</DbPass>\r\n    <DbName>hackpdm</DbName>\r\n    <DavServ>http://192.168.52.134</DavServ>\r\n    <DavPort>80</DavPort>\r\n    <DavUser/>\r\n    <DavPass/>\r\n    <DavPath>webdav</DavPath>\r\n    <FsRoot>D:\\Desktop Stuff\\Work\\Asphalt Zipper</FsRoot>\r\n    <Username>demo</Username>\r\n    <Password>demo</Password>\r\n  </profiles>\r\n</DocumentElement>";
 #endif
 
 			// check existence
@@ -315,6 +314,7 @@ namespace HackPDM
 				}
 				LoadProfile(true);
 			}
+
 
 		}
 
@@ -495,14 +495,14 @@ namespace HackPDM
 		protected void PopulateTree(TreeNode tnParentNode, int intParentId) {
 
 			// get local sub-directories
-			string[] stringDirectories = Directory.GetDirectories(GetAbsolutePath(tnParentNode.FullPath));
+            string[] stringDirectories = Directory.GetDirectories(Utils.GetAbsolutePath(strLocalFileRoot, tnParentNode.FullPath));
 
 			// loop through all local sub-directories
 			foreach (string strDir in stringDirectories) {
 
 				string strFilePath = strDir;
-				string strTreePath = GetRelativePath(strFilePath);
-				string strDirName = GetShortName(strFilePath);
+                string strTreePath = Utils.GetRelativePath(strLocalFileRoot, strFilePath);
+                string strDirName = Utils.GetShortName(strFilePath);
 				TreeNode tnChild = new TreeNode(strDirName);
 
 				// get matching remote directory
@@ -548,7 +548,7 @@ namespace HackPDM
 				// remote only
 				string strDirName = row["dir_name"].ToString();
 				string strTreePath = tnParentNode.FullPath + "\\" + strDirName;
-				string strFilePath = GetAbsolutePath(strTreePath);
+                string strFilePath = Utils.GetAbsolutePath(strLocalFileRoot, strTreePath);
 				int intDirId = (int)row["dir_id"];
 
 				TreeNode tnChild = new TreeNode(strDirName);
@@ -571,14 +571,14 @@ namespace HackPDM
 			// the parent is local only, so this is also local only
 
 			// get local sub-directories
-			string[] stringDirectories = Directory.GetDirectories(GetAbsolutePath(tnParentNode.FullPath));
+            string[] stringDirectories = Directory.GetDirectories(Utils.GetAbsolutePath(strLocalFileRoot, tnParentNode.FullPath));
 
 			// loop through all local sub-directories
 			foreach (string strDir in stringDirectories) {
 
 				string strFilePath = strDir;
-				string strTreePath = GetRelativePath(strFilePath);
-				string strDirName = GetShortName(strFilePath);
+                string strTreePath = Utils.GetRelativePath(strLocalFileRoot, strFilePath);
+				string strDirName = Utils.GetShortName(strFilePath);
 				TreeNode tnChild = new TreeNode(strDirName);
 
 				// local only icon
@@ -604,7 +604,7 @@ namespace HackPDM
 				// remote only
 				string strDirName = row["dir_name"].ToString();
 				string strTreePath = tnParentNode.FullPath + "\\" + strDirName;
-				string strFilePath = GetAbsolutePath(strTreePath);
+                string strFilePath = Utils.GetAbsolutePath(strLocalFileRoot, strTreePath);
 				int intDirId = (int)row["dir_id"];
 
 				TreeNode tnChild = new TreeNode(strDirName);
@@ -666,7 +666,7 @@ namespace HackPDM
 
 			DataSet dsCombined = new DataSet();
 			// get directory path
-			string strAbsPath = GetAbsolutePath(nodeCurrent.FullPath);
+            string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, nodeCurrent.FullPath);
 			string strRelPath = nodeCurrent.FullPath;
 
 			// get remote entries
@@ -778,7 +778,7 @@ namespace HackPDM
 				foreach (string strFile in strFiles) {
 
 					// get file info
-					strFileName = GetShortName(strFile);
+					strFileName = Utils.GetShortName(strFile);
 					FileInfo fiCurrFile = new FileInfo(strFile);
 					lngFileSize = fiCurrFile.Length;
 					dtModifyDate = fiCurrFile.LastWriteTime;
@@ -834,29 +834,29 @@ namespace HackPDM
 						drTemp.SetField<string>("client_status_code", strClientStatusCode);
 
 						// format the remote file size
-						drTemp.SetField<string>("str_latest_size", FormatSize(drTemp.Field<long>("latest_size")));
+						drTemp.SetField<string>("str_latest_size", Utils.FormatSize(drTemp.Field<long>("latest_size")));
 
 						// format the remote modify date
-						drTemp.SetField<string>("str_latest_stamp", FormatDate(drTemp.Field<DateTime>("latest_stamp")));
+						drTemp.SetField<string>("str_latest_stamp", Utils.FormatDate(drTemp.Field<DateTime>("latest_stamp")));
 
 						// format the local file size
 						drTemp.SetField<Int64>("local_size", lngFileSize);
-						drTemp.SetField<string>("str_local_size", FormatSize(lngFileSize));
+						drTemp.SetField<string>("str_local_size", Utils.FormatSize(lngFileSize));
 
 						// format the local modify date
 						drTemp.SetField<DateTime>("local_stamp", dtModifyDate);
-						drTemp.SetField<string>("str_local_stamp", FormatDate(dtModifyDate));
+						drTemp.SetField<string>("str_local_stamp", Utils.FormatDate(dtModifyDate));
 
 						// format the checkout date
 						object oDate = drTemp["checkout_date"];
 						if (oDate == System.DBNull.Value) {
 							drTemp.SetField<string>("str_checkout_date", null);
 						} else {
-							drTemp.SetField<string>("str_checkout_date", FormatDate(Convert.ToDateTime(oDate)));
+							drTemp.SetField<string>("str_checkout_date", Utils.FormatDate(Convert.ToDateTime(oDate)));
 						}
 
 						// get local checksum
-						drTemp.SetField<string>("local_md5", StringMD5(strFile));
+						drTemp.SetField<string>("local_md5", Utils.StringMD5(strFile));
 
 					} else {
 						// insert new row for local-only file
@@ -888,13 +888,13 @@ namespace HackPDM
 								null, // cat_id
 								null, // cat_name
 								lngFileSize, // latest_size
-								FormatSize(lngFileSize), // str_latest_size
+								Utils.FormatSize(lngFileSize), // str_latest_size
 								lngFileSize, // local_size
-								FormatSize(lngFileSize), // str_local_size
+								Utils.FormatSize(lngFileSize), // str_local_size
 								null, // latest_stamp
 								"", // str_latest_stamp
 								dtModifyDate, // local stamp
-								FormatDate(dtModifyDate), // local formatted stamp
+                                Utils.FormatDate(dtModifyDate), // local formatted stamp
 								null, // latest_md5
 								null, // local_md5 (set null because if we AddNew, we will calculate MD5 then)
 								null, // checkout_user
@@ -1630,7 +1630,7 @@ namespace HackPDM
 
 				string strValue = "";
 				if (row.Field<string>("text_value") != null) strValue = row.Field<string>("text_value");
-				if (row.Field<string>("date_value") != null) strValue = FormatDate(row.Field<DateTime>("date_value"));
+                if (row.Field<string>("date_value") != null) strValue = Utils.FormatDate(row.Field<DateTime>("date_value"));
 				if (row.Field<string>("number_value") != null) strValue = row.Field<Decimal>("number_value").ToString();
 				if (row.Field<string>("yesno_value") != null) strValue = row.Field<Boolean>("yesno_value").ToString();
 
@@ -1777,99 +1777,107 @@ namespace HackPDM
 			}
 		}
 
-		protected string GetAbsolutePath(string stringPath) {
-			//Get Full path
-			string stringParse = "";
-			//replace pwa with actual root path
-			stringParse = strLocalFileRoot + stringPath.Substring(3);
-			return stringParse;
-		}
+        //protected string GetAbsolutePath(string stringPath) {
+        //    //Get Full path
+        //    string stringParse = "";
+        //    if (stringPath.Substring(0, 3) == "pwa")
+        //    {
+        //        //replace pwa with actual root path
+        //        stringParse = strLocalFileRoot + stringPath.Substring(3);
+        //    } 
+        //    else
+        //    {
+        //        // TODO:  This assumes that the path is absolute already if it doesn't start with "pwa"...
+        //        stringParse = stringPath;
+        //    }
+        //    return stringParse;
+        //}
 
-		protected string GetRelativePath(string stringPath) {
-			// get tree path
-			string stringParse = "";
-			// replace actual root path with pwa
-			if (stringPath.IndexOf(strLocalFileRoot, 0, StringComparison.CurrentCultureIgnoreCase) != -1)
-			{
-				stringParse = "pwa" + stringPath.Substring(strLocalFileRoot.Length);
-			}
-			return stringParse;
-		}
+        //protected string GetRelativePath(string stringPath) {
+        //    // get tree path
+        //    string stringParse = "";
+        //    // replace actual root path with pwa
+        //    if (stringPath.IndexOf(strLocalFileRoot, 0, StringComparison.CurrentCultureIgnoreCase) != -1)
+        //    {
+        //        stringParse = "pwa" + stringPath.Substring(strLocalFileRoot.Length);
+        //    }
+        //    return stringParse;
+        //}
 
-		protected string GetShortName(string FullName) {
-		//	return FullName.Substring(FullName.LastIndexOf("\\") + 1);
-            return Utils.GetBaseName(FullName);
-		}
+        //protected string GetShortName(string FullName) {
+        ////	return FullName.Substring(FullName.LastIndexOf("\\") + 1);
+        //    return Utils.GetBaseName(FullName);
+        //}
 
-		//protected string GetFileExt(string strFileName) {
-		//    //Get Name of folder
-		//    string[] strSplit = strFileName.Split('.');
-		//    int _maxIndex = strSplit.Length-1;
-		//    return strSplit[_maxIndex];
-		//}
+        ////protected string GetFileExt(string strFileName) {
+        ////    //Get Name of folder
+        ////    string[] strSplit = strFileName.Split('.');
+        ////    int _maxIndex = strSplit.Length-1;
+        ////    return strSplit[_maxIndex];
+        ////}
 
-		protected string FormatDate(DateTime dtDate) {
+        //protected string FormatDate(DateTime dtDate) {
 
-			// if file not in local current day light saving time, then add an hour?
-			if (TimeZone.CurrentTimeZone.IsDaylightSavingTime(dtDate) == false) {
-				dtDate = dtDate.AddHours(1);
-			}
+        //    // if file not in local current day light saving time, then add an hour?
+        //    if (TimeZone.CurrentTimeZone.IsDaylightSavingTime(dtDate) == false) {
+        //        dtDate = dtDate.AddHours(1);
+        //    }
 
-			// get date and time in short format and return it
-			string stringDate = "";
-			//stringDate = dtDate.ToShortDateString().ToString() + " " + dtDate.ToShortTimeString().ToString();
-			stringDate = dtDate.ToString("yyyy-MM-dd HH:mm:ss");
-			return stringDate;
+        //    // get date and time in short format and return it
+        //    string stringDate = "";
+        //    //stringDate = dtDate.ToShortDateString().ToString() + " " + dtDate.ToShortTimeString().ToString();
+        //    stringDate = dtDate.ToString("yyyy-MM-dd HH:mm:ss");
+        //    return stringDate;
 
-		}
+        //}
 
-		protected string FormatSize(Int64 lSize)
-		{
-			//Format number to KB
-			string stringSize = "";
-			NumberFormatInfo myNfi = new NumberFormatInfo();
+        //protected string FormatSize(Int64 lSize)
+        //{
+        //    //Format number to KB
+        //    string stringSize = "";
+        //    NumberFormatInfo myNfi = new NumberFormatInfo();
 
-			Int64 lKBSize = 0;
+        //    Int64 lKBSize = 0;
 
-			if (lSize < 1024 )
-			{
-				if (lSize == 0)
-				{
-					//zero byte
-					stringSize = "0";
-				}
-				else
-				{
-					//less than 1K but not zero byte
-					stringSize = "1";
-				}
-			}
-			else
-			{
-				//convert to KB
-				lKBSize = lSize / 1024;
-				//format number with default format
-				stringSize = lKBSize.ToString("n",myNfi);
-				//remove decimal
-				stringSize = stringSize.Replace(".00", "");
-			}
+        //    if (lSize < 1024 )
+        //    {
+        //        if (lSize == 0)
+        //        {
+        //            //zero byte
+        //            stringSize = "0";
+        //        }
+        //        else
+        //        {
+        //            //less than 1K but not zero byte
+        //            stringSize = "1";
+        //        }
+        //    }
+        //    else
+        //    {
+        //        //convert to KB
+        //        lKBSize = lSize / 1024;
+        //        //format number with default format
+        //        stringSize = lKBSize.ToString("n",myNfi);
+        //        //remove decimal
+        //        stringSize = stringSize.Replace(".00", "");
+        //    }
 
-			return stringSize + " KB";
+        //    return stringSize + " KB";
 
-		}
+        //}
 
-		static string StringMD5(string FileName)
-		{
-			// get local file checksum
-			using (var md5 = MD5.Create())
-			{
-				//using (var stream = File.OpenRead(FileName))
-				using (var stream = File.Open(FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-				{
-					return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
-				}
-			}
-		}
+        //static string StringMD5(string FileName)
+        //{
+        //    // get local file checksum
+        //    using (var md5 = MD5.Create())
+        //    {
+        //        //using (var stream = File.OpenRead(FileName))
+        //        using (var stream = File.Open(FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        //        {
+        //            return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
+        //        }
+        //    }
+        //}
 
 		protected TreeNode FindNode(TreeNode tnParent, string strPath) {
 			foreach (TreeNode tnChild in tnParent.Nodes) {
@@ -2727,7 +2735,7 @@ namespace HackPDM
             //}
 			dictTree.TryGetValue(strRelBasePath, out intDirId);
 			dictTree.TryGetValue(strRelParentPath, out intParentId);
-			dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strBaseName, strRelBasePath, GetAbsolutePath(strRelBasePath));
+            dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strBaseName, strRelBasePath, Utils.GetAbsolutePath(strLocalFileRoot, strRelBasePath));
 
 			// check for cancellation
 			if ((myWorker.CancellationPending == true))
@@ -2784,7 +2792,7 @@ namespace HackPDM
 			BackgroundWorker myWorker = sender as BackgroundWorker;
 
 			// get absolute directory path 
-			string strAbsolutePath = GetAbsolutePath(strRelativePath);
+            string strAbsolutePath = Utils.GetAbsolutePath(strLocalFileRoot, strRelativePath);
 
 			// get remote directory id (0 if doesn't exist remotely)
 			int intDirId = 0;
@@ -2814,7 +2822,7 @@ namespace HackPDM
 				}
 
 				// get file info
-				strFileName = GetShortName(strFile);
+                strFileName = Utils.GetShortName(strFile);
 				FileInfo fiCurrFile = new FileInfo(strFile);
 				string strFileExt = fiCurrFile.Extension.Substring(1, fiCurrFile.Extension.Length - 1).ToLower();
 				lngFileSize = fiCurrFile.Length;
@@ -2836,11 +2844,11 @@ namespace HackPDM
 					null, // latest_size
 					null, // str_latest_size
 					lngFileSize, // local_size
-					FormatSize(lngFileSize), // str_local_size
+                    Utils.FormatSize(lngFileSize), // str_local_size
 					null, // latest_stamp
 					null, // str_latest_stamp
 					dtModifyDate, // local_stamp
-					FormatDate(dtModifyDate), // str_local_stamp
+                    Utils.FormatDate(dtModifyDate), // str_local_stamp
 					null, // latest_md5
 					null, // local_md5
 					null, // checkout_user
@@ -2867,7 +2875,7 @@ namespace HackPDM
 			{
 			//	string strChildName = strChildAbsPath.Substring(strChildAbsPath.LastIndexOf("\\") + 1);
                 string strChildName = Utils.GetBaseName(strChildAbsPath);
-				string strChildRelPath = GetAbsolutePath(strChildAbsPath);
+                string strChildRelPath = Utils.GetAbsolutePath(strLocalFileRoot, strChildAbsPath);
 				int intChildId = 0;
 				dictTree.TryGetValue(strRelativePath, out intChildId);
 				dsCommits.Tables["dirs"].Rows.Add(intChildId, intDirId, strChildName, strChildRelPath, strChildAbsPath);
@@ -2927,7 +2935,7 @@ namespace HackPDM
 							long lngFileSize = fiCurrFile.Length;
 							DateTime dtModifyDate = fiCurrFile.LastWriteTime;
 							string strAbsolutePath = fiCurrFile.DirectoryName;
-							string strRelativePath = GetRelativePath(strAbsolutePath);
+                            string strRelativePath = Utils.GetRelativePath(strLocalFileRoot, strAbsolutePath);
 
 							dsCommits.Tables["files"].Rows.Add(
 								null, // entry_id
@@ -2941,11 +2949,11 @@ namespace HackPDM
 								null, // latest_size
 								null, // str_latest_size
 								lngFileSize, // local_size
-								FormatSize(lngFileSize), // str_local_size
+                                Utils.FormatSize(lngFileSize), // str_local_size
 								null, // latest_stamp
 								null, // str_latest_stamp
 								dtModifyDate, // local_stamp
-								FormatDate(dtModifyDate), // str_local_stamp
+                                Utils.FormatDate(dtModifyDate), // str_local_stamp
 								null, // latest_md5
 								null, // local_md5
 								null, // checkout_user
@@ -3086,11 +3094,11 @@ namespace HackPDM
 					drLocalFile.SetField<Int32>("cat_id", drTemp.Field<Int32>("cat_id"));
 					drLocalFile.SetField<string>("cat_name", drTemp.Field<string>("cat_name"));
 					drLocalFile.SetField<Int64>("latest_size", drTemp.Field<Int64>("latest_size"));
-					drLocalFile.SetField<string>("str_latest_size", FormatSize(drTemp.Field<long>("latest_size")));
+                    drLocalFile.SetField<string>("str_latest_size", Utils.FormatSize(drTemp.Field<long>("latest_size")));
 					//drLocalFile.SetField<Int64>("local_size", drTemp.Field<Int64>("local_size"));
 					//drLocalFile.SetField<string>("str_local_size", drTemp.Field<string>("str_local_size"));
 					drLocalFile.SetField<DateTime>("latest_stamp", drTemp.Field<DateTime>("latest_stamp"));
-					drLocalFile.SetField<string>("str_latest_stamp", FormatDate(drTemp.Field<DateTime>("latest_stamp")));
+                    drLocalFile.SetField<string>("str_latest_stamp", Utils.FormatDate(drTemp.Field<DateTime>("latest_stamp")));
 					//drLocalFile.SetField<DateTime>("local_stamp", drTemp.Field<DateTime>("local_stamp"));
 					//drLocalFile.SetField<string>("str_local_stamp", drTemp.Field<string>("str_local_stamp"));
 					drLocalFile.SetField<string>("latest_md5", drTemp.Field<string>("latest_md5"));
@@ -3473,7 +3481,7 @@ namespace HackPDM
 				FileInfo fiNewFile = new FileInfo(strFullName);
 				long lngFileSize = intNewCount;
 				DateTime dtModifyDate = fiNewFile.LastWriteTime;
-				string strMd5sum = StringMD5(strFullName);
+                string strMd5sum = Utils.StringMD5(strFullName);
 
 				// report status
 				dlgStatus.AddStatusLine("INFO", "Adding new file to db (" + (i + 1).ToString() + " of " + intNewCount.ToString() + "): " + strFileName);
@@ -3574,7 +3582,7 @@ namespace HackPDM
 					//
 
 					// upload the file to webdav server
-					dlgStatus.AddStatusLine("INFO", "Uploading " + FormatSize(lngFileSize) + " (file " + strFileName + ")");
+                    dlgStatus.AddStatusLine("INFO", "Uploading " + Utils.FormatSize(lngFileSize) + " (file " + strFileName + ")");
 					connDav.Upload(strFullName, strDavName);
 					if (connDav.StatusCode-200 >= 100)
 					{
@@ -3782,11 +3790,11 @@ namespace HackPDM
 			{
 
 				string strFileName = drRemote.Field<string>("entry_name");
-				string strAbsPath = GetAbsolutePath(drRemote.Field<string>("relative_path"));
+                string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, drRemote.Field<string>("relative_path"));
 				drRemote.SetField<string>("absolute_path", strAbsPath);
 				string strFullName = strAbsPath + "\\" + strFileName;
 
-				drRemote.SetField<string>("absolute_path", GetAbsolutePath(drRemote.Field<string>("relative_path")));
+                drRemote.SetField<string>("absolute_path", Utils.GetAbsolutePath(strLocalFileRoot, drRemote.Field<string>("relative_path")));
 
 				// log status
 				dlgStatus.AddStatusLine("INFO", "Checking for local copy: " + strFullName);
@@ -3804,11 +3812,11 @@ namespace HackPDM
 
 					// update the local file size
 					drRemote.SetField<long>("local_size", lngFileSize);
-					drRemote.SetField<string>("str_local_size", FormatSize(lngFileSize));
+                    drRemote.SetField<string>("str_local_size", Utils.FormatSize(lngFileSize));
 
 					// update the local modify date
 					drRemote.SetField<DateTime>("local_stamp", dtModifyDate);
-					drRemote.SetField<string>("str_local_stamp", FormatDate(dtModifyDate));
+                    drRemote.SetField<string>("str_local_stamp", Utils.FormatDate(dtModifyDate));
 
 					// update client_status_code
 					string strClientStatusCode = drRemote.Field<string>("client_status_code");
@@ -3889,7 +3897,7 @@ namespace HackPDM
             // get remote directory id
 			int intBaseDirId = 0;
 			dictTree.TryGetValue(strRelBasePath, out intBaseDirId);
-            string strAbsBasePath = GetAbsolutePath(strRelBasePath);
+            string strAbsBasePath = Utils.GetAbsolutePath(strLocalFileRoot, strRelBasePath);
 
             // get deletes data starting from remote data
             if (lstSelectedNames == null && intBaseDirId != 0)
@@ -3949,7 +3957,7 @@ namespace HackPDM
                 {
 
                     string strAbsPath = dir.FullName;
-                    string strRelPath = GetRelativePath(strAbsPath);
+                    string strRelPath = Utils.GetRelativePath(strLocalFileRoot, strAbsPath);
                     string strParentRelPath = Utils.GetParentDirectory(strRelPath);
 
                     int intDirId = 0;
@@ -3968,7 +3976,7 @@ namespace HackPDM
                         false //wont_delete
                     );
 
-                    blnFailed = LoadCombinedData(sender, e, ref dsDeletes, GetRelativePath(dir.FullName));
+                    blnFailed = LoadCombinedData(sender, e, ref dsDeletes, Utils.GetRelativePath(strLocalFileRoot, dir.FullName));
 
                 }
 
@@ -4031,8 +4039,8 @@ namespace HackPDM
 
                 foreach (DirectoryInfo dir in dirBase.GetFileSystemInfos("*", SearchOption.AllDirectories))
                 {
-                    dsDeletes.Tables["dirs"].Rows.Add(0, 0, dir.Name, GetRelativePath(dir.FullName), dir.FullName);
-                    blnFailed = LoadCombinedData(sender, e, ref dsDeletes, GetRelativePath(dir.FullName));
+                    dsDeletes.Tables["dirs"].Rows.Add(0, 0, dir.Name, Utils.GetRelativePath(strLocalFileRoot, dir.FullName), dir.FullName);
+                    blnFailed = LoadCombinedData(sender, e, ref dsDeletes, Utils.GetRelativePath(strLocalFileRoot, dir.FullName));
                 }
 
 				return dsDeletes;
@@ -4060,17 +4068,17 @@ namespace HackPDM
         //    // merge local data with remote data for this directory
         //    bool blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelBasePath);
 
-        //    // get child directories
-        //    string strAbsBasePath = GetAbsolutePath(strRelBasePath);
-        //    string[] strDirs = Directory.GetDirectories(strAbsBasePath);
-        //    foreach (string strDir in strDirs)
-        //    {
-        //        // check for cancellation
-        //        if ((myWorker.CancellationPending == true))
-        //        {
-        //            e.Cancel = true;
-        //            return true;
-        //        }
+        //  // get child directories
+        //  string strAbsBasePath = Utils.GetAbsolutePath(strLocalFileRoot, strRelBasePath);
+        //  string[] strDirs = Directory.GetDirectories(strAbsBasePath);
+        //  foreach (string strDir in strDirs)
+        //  {
+        //      // check for cancellation
+        //      if ((myWorker.CancellationPending == true))
+        //      {
+        //          e.Cancel = true;
+        //          return true;
+        //      }
 
         //        // recurse
         //        blnFailed = LoadDeletesDataRecurse(sender, e, ref dsDeletes, strDir);
@@ -4114,7 +4122,7 @@ namespace HackPDM
 			}
 
 			// check for non-local directory
-			string strAbsPath = GetAbsolutePath(strRelPath);
+            string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelPath);
 			if (!Directory.Exists(strAbsPath))
 			{
 				return false;
@@ -4163,7 +4171,7 @@ namespace HackPDM
 				}
 
 				// get file info
-				strFileName = GetShortName(strFile);
+                strFileName = Utils.GetShortName(strFile);
 				FileInfo fiCurrFile = new FileInfo(strFile);
 				lngFileSize = fiCurrFile.Length;
 				dtModifyDate = fiCurrFile.LastWriteTime;
@@ -4219,18 +4227,18 @@ namespace HackPDM
 					drTemp.SetField<string>("client_status_code", strClientStatusCode);
 
 					// format the remote file size
-					drTemp.SetField<string>("str_latest_size", FormatSize(drTemp.Field<long>("latest_size")));
+                    drTemp.SetField<string>("str_latest_size", Utils.FormatSize(drTemp.Field<long>("latest_size")));
 
 					// format the remote modify date
-					drTemp.SetField<string>("str_latest_stamp", FormatDate(drTemp.Field<DateTime>("latest_stamp")));
+                    drTemp.SetField<string>("str_latest_stamp", Utils.FormatDate(drTemp.Field<DateTime>("latest_stamp")));
 
 					// format the local file size
 					drTemp.SetField<Int64>("local_size", lngFileSize);
-					drTemp.SetField<string>("str_local_size", FormatSize(lngFileSize));
+                    drTemp.SetField<string>("str_local_size", Utils.FormatSize(lngFileSize));
 
 					// format the local modify date
 					drTemp.SetField<DateTime>("local_stamp", dtModifyDate);
-					drTemp.SetField<string>("str_local_stamp", FormatDate(dtModifyDate));
+                    drTemp.SetField<string>("str_local_stamp", Utils.FormatDate(dtModifyDate));
 
 					// format the checkout date
 					object oDate = drTemp["checkout_date"];
@@ -4240,11 +4248,11 @@ namespace HackPDM
 					}
 					else
 					{
-						drTemp.SetField<string>("str_checkout_date", FormatDate(Convert.ToDateTime(oDate)));
+                        drTemp.SetField<string>("str_checkout_date", Utils.FormatDate(Convert.ToDateTime(oDate)));
 					}
 
 					// get local checksum
-					drTemp.SetField<string>("local_md5", StringMD5(strFile));
+                    drTemp.SetField<string>("local_md5", Utils.StringMD5(strFile));
 
 				}
 				else
@@ -4279,13 +4287,13 @@ namespace HackPDM
 							null, // cat_id
 							null, // cat_name
 							lngFileSize, // latest_size
-							FormatSize(lngFileSize), // str_latest_size
+                            Utils.FormatSize(lngFileSize), // str_latest_size
 							lngFileSize, // local_size
-							FormatSize(lngFileSize), // str_local_size
+                            Utils.FormatSize(lngFileSize), // str_local_size
 							null, // latest_stamp
 							"", // str_latest_stamp
 							dtModifyDate, // local stamp
-							FormatDate(dtModifyDate), // local formatted stamp
+                            Utils.FormatDate(dtModifyDate), // local formatted stamp
 							null, // latest_md5
 							null, // local_md5 (set null because if we AddNew, we will calculate MD5 then)
 							null, // checkout_user
@@ -4687,7 +4695,8 @@ namespace HackPDM
 				//cmsTree.Items["cmsTreeAddNew"].Enabled = false;
 
 				// test for local
-				if(Directory.Exists(GetAbsolutePath(tnClicked.FullPath)) != true) {
+                if (Directory.Exists(Utils.GetAbsolutePath(strLocalFileRoot, tnClicked.FullPath)) != true)
+                {
 					// does not exist locally, so we can't commit or undo a checkout
 					cmsTree.Items["cmsTreeCommit"].Enabled = false;
 					cmsTree.Items["cmsTreeUndoCheckout"].Enabled = false;
