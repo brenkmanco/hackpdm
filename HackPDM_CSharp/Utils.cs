@@ -5,6 +5,11 @@ namespace HackPDM
 {
     public static class Utils
     {
+        /// <summary>
+        /// Returns an absolute or relative path for the parent of the passed argument
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
         public static string GetParentDirectory(string path)
         {
             // Check if path is a relative or absolute path:

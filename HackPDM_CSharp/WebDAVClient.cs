@@ -279,10 +279,10 @@ namespace HackPDM
             Uri downloadUri = getServerUrl(remoteFilePath, false);
             string method = WebRequestMethods.Http.Get.ToString();
 
-			// send the request
+            // send the request
             HTTPRequest(downloadUri, method, null, null, null);
 
-			// get the response
+            // get the response
             byte[] content = new byte[4096];
             using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse())
             {
@@ -374,7 +374,7 @@ namespace HackPDM
             using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse())
             {
                 statusCode = (int)response.StatusCode;
-				statusString = response.StatusDescription;
+                statusString = response.StatusDescription;
             }
 
         }
@@ -496,8 +496,8 @@ namespace HackPDM
                 if (content != null) {
                     streamResponse.Write(content, 0, content.Length);
                 } else {
-					using (FileStream fs = new FileStream(uploadFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-					{
+                    using (FileStream fs = new FileStream(uploadFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    {
                         content = new byte[4096];
                         int bytesRead = 0;
                         do {

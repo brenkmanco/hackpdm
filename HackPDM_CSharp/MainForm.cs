@@ -2558,7 +2558,7 @@ namespace HackPDM
 			List<string> lstSelectedNames = (List<string>)genericlist[2];
 			bool blnDestroy = (bool)genericlist[3];
 
-			bool blnDeleteDirs = lstSelectedNames.Equals(null);
+			bool blnDeleteDirs = (lstSelectedNames == null);
 
 			// get deletes data
 			DataSet dsDeletes = LoadDeletesData(sender, e, t, strRelBasePath, lstSelectedNames);
@@ -3889,6 +3889,7 @@ namespace HackPDM
             // get remote directory id
 			int intBaseDirId = 0;
 			dictTree.TryGetValue(strRelBasePath, out intBaseDirId);
+            string strAbsBasePath = GetAbsolutePath(strRelBasePath);
 
             // get deletes data starting from remote data
             if (lstSelectedNames == null && intBaseDirId != 0)
@@ -3928,9 +3929,7 @@ namespace HackPDM
 
 				// select entries in or below the specified direcory
 				// don't select dependencies of those entries
-				strSql = @"
-					select * from fcn_latest_by_dir(:dir_id);
-				";
+				strSql = "select * from fcn_latest_by_dir(:dir_id);";
 
 				// put the remote entries in the DataSet
 				NpgsqlDataAdapter daTemp2 = new NpgsqlDataAdapter(strSql, connDb);
@@ -3942,14 +3941,36 @@ namespace HackPDM
 					dsDeletes.Tables[1].TableName = "files";
 				}
 
-				if (Directory.Exists(GetAbsolutePath(strRelBasePath)))
-				{
-					// get and match local files and directories
-					// only necessary if both remote and local data exist, and the user selected a directory
-					// (as opposed to selecting individual entries from the list view)
-					// the recursive method is necessary because there may be local only directories inside the selected base directory 
-					blnFailed = LoadDeletesDataRecurse(sender, e, ref dsDeletes, strRelBasePath);
-				}
+                // loop local directories, matching or adding directories/files to be deleted
+                DirectoryInfo dirBase = new DirectoryInfo(strAbsBasePath);
+                blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelBasePath);
+
+                foreach (DirectoryInfo dir in dirBase.GetFileSystemInfos("*", SearchOption.AllDirectories))
+                {
+
+                    string strAbsPath = dir.FullName;
+                    string strRelPath = GetRelativePath(strAbsPath);
+                    string strParentRelPath = Utils.GetParentDirectory(strRelPath);
+
+                    int intDirId = 0;
+                    dictTree.TryGetValue(strRelPath, out intDirId);
+
+                    int intParentId = 0;
+                    dictTree.TryGetValue(strParentRelPath, out intParentId);
+
+                    dsDeletes.Tables["dirs"].Rows.Add(
+                        intDirId, // dir_id
+                        intParentId, // parent_id
+                        dir.Name, // dir_name
+                        strRelPath, // relative_path
+                        strAbsPath, // absolute_path
+                        (intDirId != 0), // is_remote
+                        false //wont_delete
+                    );
+
+                    blnFailed = LoadCombinedData(sender, e, ref dsDeletes, GetRelativePath(dir.FullName));
+
+                }
 
 				// return results
 				return dsDeletes;
@@ -3986,28 +4007,33 @@ namespace HackPDM
 			{
 				// if we get here, we are operating on a local only directory
 
-				string strAbsBasePath = GetAbsolutePath(strRelBasePath);
-
 				// add this directory to the dirs table
-				Int32 intDirId = 0;
-				Int32 intParentId = 0;
-			//	string strBaseName = strRelBasePath.Substring(strRelBasePath.LastIndexOf("\\") + 1);
-			//	string strRelParentPath = strRelBasePath.Substring(0, strRelBasePath.LastIndexOf("\\"));
-			//	string strParentName = strRelParentPath.Substring(strRelParentPath.LastIndexOf("\\") + 1);
+                // this directory is local only, so all child directories will be local only
+                // that means they won't have a directory id
+                // we don't care if the parent is remote, since we do nothing with the parent
                 string strBaseName = Utils.GetBaseName(strRelBasePath);
-                string strRelParentPath = Utils.GetParentDirectory(strRelBasePath);
-                string strParentName = Utils.GetParentDirectory(strRelParentPath);
-				dictTree.TryGetValue(strRelBasePath, out intDirId);
-				dictTree.TryGetValue(strRelParentPath, out intParentId);
-				dsDeletes.Tables["dirs"].Rows.Add(intDirId, intParentId, strBaseName, strRelBasePath, strAbsBasePath);
+                dsDeletes.Tables["dirs"].Rows.Add(
+                    0, // dir_id
+                    0, // parent_id
+                    strBaseName, // dir_name
+                    strRelBasePath, // relative_path
+                    strAbsBasePath, // absolute_path
+                    false, // is_remote
+                    false // wont_delete
+                );
 
 				// add an empty DataTable for files
 				dsDeletes.Tables.Add(CreateFileTable());
 
-				// recursively build list of local directories and files to be deleted
-				// we would like to use the same method used for a remotely existing selected base directory (i.e. the one selected in the tree view by the user)
-				// I'm not sure how well this will work out
-				blnFailed = LoadDeletesDataRecurse(sender, e, ref dsDeletes, strRelBasePath);
+				// loop list of local directories, adding local files to be deleted
+                DirectoryInfo dirBase = new DirectoryInfo(strAbsBasePath);
+                blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelBasePath);
+
+                foreach (DirectoryInfo dir in dirBase.GetFileSystemInfos("*", SearchOption.AllDirectories))
+                {
+                    dsDeletes.Tables["dirs"].Rows.Add(0, 0, dir.Name, GetRelativePath(dir.FullName), dir.FullName);
+                    blnFailed = LoadCombinedData(sender, e, ref dsDeletes, GetRelativePath(dir.FullName));
+                }
 
 				return dsDeletes;
 
@@ -4018,41 +4044,41 @@ namespace HackPDM
 
 		}
 
-		private bool LoadDeletesDataRecurse(object sender, DoWorkEventArgs e, ref DataSet dsDeletes, string strRelBasePath)
-		{
+        //private bool LoadDeletesDataRecurse(object sender, DoWorkEventArgs e, ref DataSet dsDeletes, string strRelBasePath)
+        //{
 
-			// running in separate thread
-			BackgroundWorker myWorker = sender as BackgroundWorker;
+        //    // running in separate thread
+        //    BackgroundWorker myWorker = sender as BackgroundWorker;
 
-			// check for cancellation
-			if ((myWorker.CancellationPending == true))
-			{
-				e.Cancel = true;
-				return true;
-			}
+        //    // check for cancellation
+        //    if ((myWorker.CancellationPending == true))
+        //    {
+        //        e.Cancel = true;
+        //        return true;
+        //    }
 
-			// merge local data with remote data for this directory
-			bool blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelBasePath);
+        //    // merge local data with remote data for this directory
+        //    bool blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelBasePath);
 
-			// get child directories
-			string strAbsBasePath = GetAbsolutePath(strRelBasePath);
-			string[] strDirs = Directory.GetDirectories(strAbsBasePath);
-			foreach (string strDir in strDirs)
-			{
-				// check for cancellation
-				if ((myWorker.CancellationPending == true))
-				{
-					e.Cancel = true;
-					return true;
-				}
+        //    // get child directories
+        //    string strAbsBasePath = GetAbsolutePath(strRelBasePath);
+        //    string[] strDirs = Directory.GetDirectories(strAbsBasePath);
+        //    foreach (string strDir in strDirs)
+        //    {
+        //        // check for cancellation
+        //        if ((myWorker.CancellationPending == true))
+        //        {
+        //            e.Cancel = true;
+        //            return true;
+        //        }
 
-				// recurse
-				blnFailed = LoadDeletesDataRecurse(sender, e, ref dsDeletes, strRelBasePath);
-			}
+        //        // recurse
+        //        blnFailed = LoadDeletesDataRecurse(sender, e, ref dsDeletes, strDir);
+        //    }
 
-			return blnFailed;
+        //    return blnFailed;
 
-		}
+        //}
 
 		protected bool LoadCombinedData(object sender, DoWorkEventArgs e, ref DataSet dsCombined, string strRelPath)
 		{
@@ -4303,7 +4329,7 @@ namespace HackPDM
 
                 // delete recursively
                 dlgStatus.AddStatusLine("INFO", "Deleting directory: " + strAbsPath);
-                var dir = new DirectoryInfo(strAbsPath) { Attributes = FileAttributes.Normal };
+                DirectoryInfo dir = new DirectoryInfo(strAbsPath) { Attributes = FileAttributes.Normal };
 
                 foreach (var info in dir.GetFileSystemInfos("*", SearchOption.AllDirectories))
                 {
@@ -4778,7 +4804,85 @@ namespace HackPDM
 
 		}
 
-		#endregion
+        private void CmsTreeDeleteLogicalClick(object sender, EventArgs e)
+        {
+
+            // create the status dialog
+            dlgStatus = new StatusDialog();
+
+            // get directory info
+            TreeNode tnCurrent = treeView1.SelectedNode;
+            string strRelBasePath = tnCurrent.FullPath;
+
+            // start the database transaction
+            t = connDb.BeginTransaction();
+
+            // package arguments for the background worker
+            List<object> arguments = new List<object>();
+
+            arguments.Add(t);
+            arguments.Add(strRelBasePath);
+            arguments.Add(null);
+            arguments.Add(false); // destroy flag
+
+            // launch the background thread
+            BackgroundWorker worker = new BackgroundWorker();
+            worker.WorkerSupportsCancellation = true;
+            worker.DoWork += new DoWorkEventHandler(worker_Delete);
+            worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
+            worker.RunWorkerAsync(arguments);
+
+            // show dialog and handle cancel button
+            bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Delete Logical");
+            if (blnWorkCanceled == true)
+            {
+                worker.CancelAsync();
+            }
+
+            ResetView(tnCurrent.FullPath);
+
+        }
+
+        private void CmsTreeDeletePermanentClick(object sender, EventArgs e)
+        {
+
+            // create the status dialog
+            dlgStatus = new StatusDialog();
+
+            // get directory info
+            TreeNode tnCurrent = treeView1.SelectedNode;
+            string strRelBasePath = tnCurrent.FullPath;
+
+            // start the database transaction
+            t = connDb.BeginTransaction();
+
+            // package arguments for the background worker
+            List<object> arguments = new List<object>();
+
+            arguments.Add(t);
+            arguments.Add(strRelBasePath);
+            arguments.Add(null);
+            arguments.Add(true); // destroy flag
+
+            // launch the background thread
+            BackgroundWorker worker = new BackgroundWorker();
+            worker.WorkerSupportsCancellation = true;
+            worker.DoWork += new DoWorkEventHandler(worker_Delete);
+            worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
+            worker.RunWorkerAsync(arguments);
+
+            // show dialog and handle cancel button
+            bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Delete Permanent");
+            if (blnWorkCanceled == true)
+            {
+                worker.CancelAsync();
+            }
+
+            ResetView(tnCurrent.FullPath);
+
+        }
+
+        #endregion
 
 
 		#region ListView actions
