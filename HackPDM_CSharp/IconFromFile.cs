@@ -84,11 +84,10 @@ namespace HackPDM
 			{
 				string strFileExt = Path.GetExtension(fileName).ToLower();
 				string strTempName = System.IO.Path.GetTempPath() + Guid.NewGuid().ToString() + "." + strFileExt;
-				FileInfo fileInfo = new FileInfo(fileName);
 
-				//using (new FileStream(fileName, FileMode.CreateNew))
-				using (new FileStream(fileName, FileMode.CreateNew))
+				using (new FileStream(strTempName, FileMode.CreateNew))
 				{
+                    FileInfo fileInfo = new FileInfo(strTempName);
 					fileInfo.Attributes = FileAttributes.Temporary;
 					return GetLargeFileIcon(fileInfo);
 				}

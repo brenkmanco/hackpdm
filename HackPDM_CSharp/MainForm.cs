@@ -1440,7 +1440,7 @@ namespace HackPDM
                     r.rel_parent_id,
                     r.rel_child_id,
                     e.entry_name
-                from hp_versionrelationship as r
+                from hp_version_relationship as r
                 left join hp_version as vp on vp.version_id=r.rel_parent_id
                 left join hp_version as vc on vc.version_id=r.rel_child_id
                 left join hp_entry as e on e.entry_id=vp.entry_id
@@ -1532,7 +1532,7 @@ namespace HackPDM
                         e.entry_name,
                         :absolute_path || '\\' || e.entry_name as full_name,
                         false as outside_pwa
-                    from hp_versionrelationship as r
+                    from hp_version_relationship as r
                     left join hp_version as vp on vp.version_id=r.rel_parent_id
                     left join hp_version as vc on vc.version_id=r.rel_child_id
                     left join hp_entry as e on e.entry_id=vc.entry_id
@@ -2105,6 +2105,12 @@ namespace HackPDM
                 string strFileName = drCurrent.Field<string>("entry_name");
                 string strAbsolutePath = drCurrent.Field<string>("absolute_path");
                 string strFullName = strAbsolutePath + "\\" + strFileName;
+
+                // create a directory, if necessary
+                if (!Directory.Exists(strAbsolutePath))
+                {
+                    Directory.CreateDirectory(strAbsolutePath);
+                }
                 FileInfo fiCurrFile = new FileInfo(strFullName);
 
                 // report status
@@ -2575,8 +2581,19 @@ namespace HackPDM
             bool blnFailed = false;
             string strGuid = "";
 
+            // check for files that won't delete
+            DataRow[] drWontFiles = dsDeletes.Tables["files"].Select("checkout_user is not null");
+            foreach (DataRow drCurrent in drWontFiles)
+            {
+                string strFileName = drCurrent.Field<string>("entry_name");
+                string strAbsolutePath = drCurrent.Field<string>("absolute_path");
+                string strFullName = strAbsolutePath + "\\" + strFileName;
+                dlgStatus.AddStatusLine("ERROR", "File is checked out: " + strFullName);
+                blnFailed = true;
+            }
+
             // check for locked files
-            DataRow[] drDeleteFiles = dsDeletes.Tables["files"].Select("client_status_code not in ('co','cm')");
+            DataRow[] drDeleteFiles = dsDeletes.Tables["files"].Select("checkout_user is null");
             Int32 intNewCount = drDeleteFiles.Length;
             for (int i = 0; i < drDeleteFiles.Length; i++)
             {
@@ -2606,17 +2623,6 @@ namespace HackPDM
                     //throw new System.Exception("File \"" + fiCurrFile.Name + "\" is locked.  Release it first.");
                 }
 
-            }
-
-            // check for files that won't delete
-            DataRow[] drWontFiles = dsDeletes.Tables["files"].Select("client_status_code in ('co','cm')");
-            foreach (DataRow drCurrent in drWontFiles)
-            {
-                string strFileName = drCurrent.Field<string>("entry_name");
-                string strAbsolutePath = drCurrent.Field<string>("absolute_path");
-                string strFullName = strAbsolutePath + "\\" + strFileName;
-                dlgStatus.AddStatusLine("ERROR", "File is checked out: " + strFullName);
-                blnFailed = true;
             }
 
             // flag as deleted all remote versions, entries (set the destroyed flag)
@@ -3636,7 +3642,7 @@ namespace HackPDM
 
             // prepare the database command
             string strSql = @"
-                insert into hp_versionrelationship (
+                insert into hp_version_relationship (
                     rel_parent_id,
                     rel_child_id
                 ) values (
@@ -3911,7 +3917,7 @@ namespace HackPDM
                         s.parent_id,
                         t.dir_name,
                         replace('pwa' || coalesce(t.rel_path,''), '/', '\') as relative_path,
-                        replace(':local_root'::text || coalesce(t.rel_path,''), '/', '\') as absolute_path,
+                        null::text as absolute_path,
                         true as is_remote,
                         case when c.dir_id is null then false else true end as wont_delete
                     from fcn_directory_recursive(:dir_id) as s
@@ -3924,16 +3930,12 @@ namespace HackPDM
                     order by relative_path desc;
                 ";
 
-                if (dsDeletes.Tables.Count == 1)
-                {
-                    dsDeletes.Tables[0].TableName = "dirs";
-                }
-
                 // put the remote directories in the DataSet
                 NpgsqlDataAdapter daTemp1 = new NpgsqlDataAdapter(strSql, connDb);
                 daTemp1.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", intBaseDirId));
                 daTemp1.SelectCommand.Parameters.Add(new NpgsqlParameter("local_root", strLocalFileRoot));
-                daTemp1.Fill(dsDeletes);
+                dsDeletes.Tables.Add("dirs");
+                daTemp1.Fill(dsDeletes.Tables["dirs"]);
 
                 // select entries in or below the specified direcory
                 // don't select dependencies of those entries
@@ -3942,18 +3944,14 @@ namespace HackPDM
                 // put the remote entries in the DataSet
                 NpgsqlDataAdapter daTemp2 = new NpgsqlDataAdapter(strSql, connDb);
                 daTemp2.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", intBaseDirId));
-                daTemp2.Fill(dsDeletes);
-
-                if (dsDeletes.Tables.Count == 2)
-                {
-                    dsDeletes.Tables[1].TableName = "files";
-                }
+                dsDeletes.Tables.Add("files");
+                daTemp2.Fill(dsDeletes.Tables["files"]);
 
                 // loop local directories, matching or adding directories/files to be deleted
                 DirectoryInfo dirBase = new DirectoryInfo(strAbsBasePath);
                 blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelBasePath);
 
-                foreach (DirectoryInfo dir in dirBase.GetFileSystemInfos("*", SearchOption.AllDirectories))
+                foreach (DirectoryInfo dir in dirBase.GetDirectories("*", SearchOption.AllDirectories))
                 {
 
                     string strAbsPath = dir.FullName;
@@ -3966,6 +3964,7 @@ namespace HackPDM
                     int intParentId = 0;
                     dictTree.TryGetValue(strParentRelPath, out intParentId);
 
+                    DataRow[] drTest = dsDeletes.Tables["dirs"].Select("");
                     dsDeletes.Tables["dirs"].Rows.Add(
                         intDirId, // dir_id
                         intParentId, // parent_id
@@ -4020,6 +4019,7 @@ namespace HackPDM
                 // that means they won't have a directory id
                 // we don't care if the parent is remote, since we do nothing with the parent
                 string strBaseName = Utils.GetBaseName(strRelBasePath);
+
                 dsDeletes.Tables["dirs"].Rows.Add(
                     0, // dir_id
                     0, // parent_id
@@ -4037,9 +4037,17 @@ namespace HackPDM
                 DirectoryInfo dirBase = new DirectoryInfo(strAbsBasePath);
                 blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelBasePath);
 
-                foreach (DirectoryInfo dir in dirBase.GetFileSystemInfos("*", SearchOption.AllDirectories))
+                foreach (DirectoryInfo dir in dirBase.GetDirectories("*", SearchOption.AllDirectories))
                 {
-                    dsDeletes.Tables["dirs"].Rows.Add(0, 0, dir.Name, Utils.GetRelativePath(strLocalFileRoot, dir.FullName), dir.FullName);
+                    dsDeletes.Tables["dirs"].Rows.Add(
+                        0, // dir_id
+                        0, // parent_id
+                        dir.Name, // dir_name
+                        Utils.GetRelativePath(strLocalFileRoot, dir.FullName), // relative_path
+                        dir.FullName, // absolute_path
+                        false, // is_remote
+                        false // wont_delete
+                    );
                     blnFailed = LoadCombinedData(sender, e, ref dsDeletes, Utils.GetRelativePath(strLocalFileRoot, dir.FullName));
                 }
 
@@ -4333,7 +4341,8 @@ namespace HackPDM
                 // all directories will be in a single tree
                 // in other words, we won't have any independent paths
                 // that means we can get the highest level path (shortest path) simply by sorting and taking the first one
-                string strAbsPath = dsDeletes.Tables["dirs"].Select("", "absolute_path")[0].Field<string>("absolute_path");
+                string strRelPath = dsDeletes.Tables["dirs"].Select("", "relative_path")[0].Field<string>("relative_path");
+                string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelPath);
 
                 // delete recursively
                 dlgStatus.AddStatusLine("INFO", "Deleting directory: " + strAbsPath);

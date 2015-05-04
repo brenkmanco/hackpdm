@@ -40,8 +40,8 @@ namespace HackPDM
             this.cmdClose = new System.Windows.Forms.Button();
             this.cbxAutoClose = new System.Windows.Forms.CheckBox();
             this.lvMessages = new System.Windows.Forms.ListView();
-            this.chAction = new System.Windows.Forms.ColumnHeader();
-            this.chDesc = new System.Windows.Forms.ColumnHeader();
+            this.chAction = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.chDesc = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.SuspendLayout();
             // 
             // cmdCancel
@@ -79,9 +79,12 @@ namespace HackPDM
             // 
             // lvMessages
             // 
+            this.lvMessages.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.lvMessages.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
-                                    this.chAction,
-                                    this.chDesc});
+            this.chAction,
+            this.chDesc});
             this.lvMessages.Location = new System.Drawing.Point(12, 12);
             this.lvMessages.Name = "lvMessages";
             this.lvMessages.Size = new System.Drawing.Size(600, 269);
@@ -112,6 +115,7 @@ namespace HackPDM
             this.Name = "StatusDialog";
             this.Text = "StatusDialog";
             this.ResumeLayout(false);
+
         }
         private System.Windows.Forms.ColumnHeader chDesc;
         private System.Windows.Forms.ColumnHeader chAction;
