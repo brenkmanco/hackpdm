@@ -3937,6 +3937,12 @@ namespace HackPDM
                 dsDeletes.Tables.Add("dirs");
                 daTemp1.Fill(dsDeletes.Tables["dirs"]);
 
+                // populate absolute paths
+                foreach(DataRow dr in dsDeletes.Tables["dirs"].Rows)
+                {
+                    dr.SetField<string>("absolute_path", Utils.GetAbsolutePath(strLocalFileRoot, dr.Field<string>("relative_path")));
+                }
+
                 // select entries in or below the specified direcory
                 // don't select dependencies of those entries
                 strSql = "select * from fcn_latest_by_dir(:dir_id);";
@@ -3946,6 +3952,12 @@ namespace HackPDM
                 daTemp2.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", intBaseDirId));
                 dsDeletes.Tables.Add("files");
                 daTemp2.Fill(dsDeletes.Tables["files"]);
+
+                // populate absolute paths
+                foreach (DataRow dr in dsDeletes.Tables["files"].Rows)
+                {
+                    dr.SetField<string>("absolute_path", Utils.GetAbsolutePath(strLocalFileRoot, dr.Field<string>("relative_path")));
+                }
 
                 // loop local directories, matching or adding directories/files to be deleted
                 DirectoryInfo dirBase = new DirectoryInfo(strAbsBasePath);
@@ -3964,18 +3976,24 @@ namespace HackPDM
                     int intParentId = 0;
                     dictTree.TryGetValue(strParentRelPath, out intParentId);
 
-                    DataRow[] drTest = dsDeletes.Tables["dirs"].Select("");
-                    dsDeletes.Tables["dirs"].Rows.Add(
-                        intDirId, // dir_id
-                        intParentId, // parent_id
-                        dir.Name, // dir_name
-                        strRelPath, // relative_path
-                        strAbsPath, // absolute_path
-                        (intDirId != 0), // is_remote
-                        false //wont_delete
-                    );
+                    // check for remote existence
+                    DataRow[] drTest = dsDeletes.Tables["dirs"].Select("absolute_path='" + strAbsPath + "'");
+                    if (drTest.Length == 0)
+                    {
+                        // add local-only directory
+                        dsDeletes.Tables["dirs"].Rows.Add(
+                            intDirId, // dir_id
+                            intParentId, // parent_id
+                            dir.Name, // dir_name
+                            strRelPath, // relative_path
+                            strAbsPath, // absolute_path
+                            (intDirId != 0), // is_remote
+                            false //wont_delete
+                        );
+                    }
 
-                    blnFailed = LoadCombinedData(sender, e, ref dsDeletes, Utils.GetRelativePath(strLocalFileRoot, dir.FullName));
+                    // combine remote data with local data
+                    blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelPath);
 
                 }
 
@@ -4039,16 +4057,17 @@ namespace HackPDM
 
                 foreach (DirectoryInfo dir in dirBase.GetDirectories("*", SearchOption.AllDirectories))
                 {
+                    string strRelPath = Utils.GetRelativePath(strLocalFileRoot, dir.FullName);
                     dsDeletes.Tables["dirs"].Rows.Add(
                         0, // dir_id
                         0, // parent_id
                         dir.Name, // dir_name
-                        Utils.GetRelativePath(strLocalFileRoot, dir.FullName), // relative_path
+                        strRelPath, // relative_path
                         dir.FullName, // absolute_path
                         false, // is_remote
                         false // wont_delete
                     );
-                    blnFailed = LoadCombinedData(sender, e, ref dsDeletes, Utils.GetRelativePath(strLocalFileRoot, dir.FullName));
+                    blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelPath);
                 }
 
                 return dsDeletes;
