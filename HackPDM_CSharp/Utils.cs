@@ -92,18 +92,21 @@ namespace HackPDM
         public static string GetAbsolutePath(string strLocalFileRoot, string stringPath)
         {
             //Get Full path
-            string stringParse = "";
-            if (stringPath.Substring(0, 3) == "pwa")
+ //           if (stringPath.Substring(0, 3) == "pwa")
+            if (!System.IO.Path.IsPathRooted(stringPath))
             {
                 //replace pwa with actual root path
-                stringParse = strLocalFileRoot + stringPath.Substring(3);
+                return (strLocalFileRoot + stringPath.Substring(3));
             }
             else
             {
-                // TODO:  This assumes that the path is absolute already if it doesn't start with "pwa"...
-                stringParse = stringPath;
+                // NOTE 1:  This will occur if:
+                //  a) stringPath starts with a drive identifier (e.g., "C:/"), or
+                //  b) stringPath starts with a root folder slash (e.g., "\\").
+                //
+                // NOTE 2:  System.IO.Path.IsPathRooted() does not check if stringPath is an actual path.
+                return(stringPath);
             }
-            return stringParse;
         }
 
         public static string GetRelativePath(string strLocalFileRoot, string stringPath)
