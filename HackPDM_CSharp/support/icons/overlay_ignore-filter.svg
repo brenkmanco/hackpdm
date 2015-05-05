@@ -15,9 +15,9 @@
    version="1.1"
    inkscape:version="0.48.5 r10040"
    sodipodi:docname="overlay_ignore-filter.svg"
-   inkscape:export-filename="C:\Users\mtaylor\Documents\GitHub\hackpdm\HackPDM_CSharp\support\icons\overlay_ignore-filter.gif.png"
-   inkscape:export-xdpi="4.5"
-   inkscape:export-ydpi="4.5">
+   inkscape:export-filename="C:\Users\mtaylor\Documents\GitHub\hackpdm\HackPDM_CSharp\support\icons\overlay_ignore-filter.png"
+   inkscape:export-xdpi="90"
+   inkscape:export-ydpi="90">
   <defs
      id="defs4" />
   <sodipodi:namedview
@@ -28,7 +28,7 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.98994949"
-     inkscape:cx="370.66287"
+     inkscape:cx="213.07907"
      inkscape:cy="322.76283"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
@@ -55,13 +55,17 @@
      inkscape:groupmode="layer"
      id="layer1">
     <path
-       style="fill:none;stroke:#c80000;stroke-width:80;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
-       d="M 86.862915,86.862915 313.13708,313.13708"
-       id="path2983"
-       inkscape:connector-curvature="0" />
+       sodipodi:type="arc"
+       style="fill:none;stroke:#c80000;stroke-width:60;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       id="path2984"
+       sodipodi:cx="202.5"
+       sodipodi:cy="202.5"
+       sodipodi:rx="163.80247"
+       sodipodi:ry="163.80247"
+       d="m 366.30247,202.5 a 163.80247,163.80247 0 1 1 -327.604945,0 163.80247,163.80247 0 1 1 327.604945,0 z" />
     <path
-       style="fill:none;stroke:#c80000;stroke-width:80;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
-       d="M 86.862915,313.13708 313.13708,86.862915"
+       style="fill:none;stroke:#c80000;stroke-width:60;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       d="M 90,315 315,90"
        id="path2985"
        inkscape:connector-curvature="0" />
   </g>

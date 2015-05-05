@@ -68,17 +68,27 @@ namespace HackPDM
         
         private delegate void AddStatusLineDel(string[] Params);
         private void AddStatusLine(string[] Params) {
+
             if (this.InvokeRequired) {
-                // this is a worker thread so delegate the task
+
+                // this is a worker thread so delegate the task to the UI thread
                 AddStatusLineDel del = new AddStatusLineDel(AddStatusLine);
-                //object[] delParam = new object[1] { Params };
                 this.Invoke(del, (object)Params);
+
             } else {
+
                 // we are executing in the UI thread
                 ListViewItem lvItem = new ListViewItem(Params);
+
+                // set background color, based on status action
+                if (Params[0]=="WARNING") { lvItem.BackColor = Color.Yellow; }
+                else if (Params[0]=="ERROR") { lvItem.BackColor = Color.Red; }
+                
                 lvMessages.Items.Add(lvItem);
                 lvMessages.EnsureVisible(lvMessages.Items.Count - 1);
+
             }
+
         }
         
         private void CmdCancelClick(object sender, EventArgs e) {

@@ -528,7 +528,9 @@ CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_dir(
 	OUT absolute_path varchar,
 	OUT icon bytea,
 	OUT is_depend_searched boolean,
-	OUT is_readonly boolean
+	OUT is_readonly boolean,
+	OUT active boolean,
+	OUT destroyed boolean
 )
   RETURNS SETOF record AS
 $BODY$
@@ -575,12 +577,14 @@ $BODY$
 		e.checkout_node,
 		false as is_local,
 		true as is_remote,
-		'ro'::varchar as client_status_code,
+		case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
 		'pwa' || replace(d.rel_path, '/', '\') as relative_path,
 		null::varchar as absolute_path,
 		t.icon,
 		false as is_depend_searched,
-		null::boolean as is_readonly
+		null::boolean as is_readonly,
+		e.active,
+		e.destroyed
 	from hp_entry as e
 	left join hp_user as u on u.user_id=e.checkout_user
 	left join hp_category as c on c.cat_id=e.cat_id
@@ -647,7 +651,9 @@ CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_entry_list(
 	OUT absolute_path varchar,
 	OUT icon bytea,
 	OUT is_depend_searched boolean,
-	OUT is_readonly boolean
+	OUT is_readonly boolean,
+	OUT active boolean,
+	OUT destroyed boolean
 )
   RETURNS SETOF record AS
 $BODY$
@@ -690,12 +696,14 @@ $BODY$
 		e.checkout_node,
 		false as is_local,
 		true as is_remote,
-		'ro'::varchar as client_status_code,
+		case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
 		'pwa' || replace(d.rel_path, '/', '\') as relative_path,
 		null::varchar as absolute_path,
 		t.icon,
 		false as is_depend_searched,
-		null::boolean as is_readonly
+		null::boolean as is_readonly,
+		e.active,
+		e.destroyed
 	from hp_entry as e
 	left join hp_user as u on u.user_id=e.checkout_user
 	left join hp_category as c on c.cat_id=e.cat_id
@@ -762,7 +770,9 @@ CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_dir_list(
 	OUT absolute_path varchar,
 	OUT icon bytea,
 	OUT is_depend_searched boolean,
-	OUT is_readonly boolean
+	OUT is_readonly boolean,
+	OUT active boolean,
+	OUT destroyed boolean
 )
   RETURNS SETOF record AS
 $BODY$
@@ -805,12 +815,14 @@ $BODY$
 		e.checkout_node,
 		false as is_local,
 		true as is_remote,
-		'ro'::varchar as client_status_code,
+		case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
 		'pwa' || replace(d.rel_path, '/', '\') as relative_path,
 		null::varchar as absolute_path,
 		t.icon,
 		false as is_depend_searched,
-		null::boolean as is_readonly
+		null::boolean as is_readonly,
+		e.active,
+		e.destroyed
 	from hp_entry as e
 	left join hp_user as u on u.user_id=e.checkout_user
 	left join hp_category as c on c.cat_id=e.cat_id
@@ -877,7 +889,9 @@ CREATE OR REPLACE FUNCTION fcn_latest_by_dir(
 	OUT absolute_path varchar,
 	OUT icon bytea,
 	OUT is_depend_searched boolean,
-	OUT is_readonly boolean
+	OUT is_readonly boolean,
+	OUT active boolean,
+	OUT destroyed boolean
 )
   RETURNS SETOF record AS
 $BODY$
@@ -924,12 +938,14 @@ $BODY$
 		e.checkout_node,
 		false as is_local,
 		true as is_remote,
-		'ro'::varchar as client_status_code,
+		case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
 		'pwa' || replace(d.rel_path, '/', '\') as relative_path,
 		null::varchar as absolute_path,
 		t.icon,
 		false as is_depend_searched,
-		null::boolean as is_readonly
+		null::boolean as is_readonly,
+		e.active,
+		e.destroyed
 	from hp_entry as e
 	left join hp_user as u on u.user_id=e.checkout_user
 	left join hp_category as c on c.cat_id=e.cat_id
@@ -982,7 +998,9 @@ CREATE OR REPLACE FUNCTION fcn_latest_by_entry_list(
 	OUT absolute_path varchar,
 	OUT icon bytea,
 	OUT is_depend_searched boolean,
-	OUT is_readonly boolean
+	OUT is_readonly boolean,
+	OUT active boolean,
+	OUT destroyed boolean
 )
   RETURNS SETOF record AS
 $BODY$
@@ -1025,12 +1043,14 @@ $BODY$
 		e.checkout_node,
 		false as is_local,
 		true as is_remote,
-		'ro'::varchar as client_status_code,
+		case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
 		'pwa' || replace(d.rel_path, '/', '\') as relative_path,
 		null::varchar as absolute_path,
 		t.icon,
 		false as is_depend_searched,
-		null::boolean as is_readonly
+		null::boolean as is_readonly,
+		e.active,
+		e.destroyed
 	from hp_entry as e
 	left join hp_user as u on u.user_id=e.checkout_user
 	left join hp_category as c on c.cat_id=e.cat_id
