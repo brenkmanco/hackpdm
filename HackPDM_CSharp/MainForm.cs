@@ -905,9 +905,7 @@ namespace HackPDM
             lvHistory.Columns.Add("ModUser", 140, System.Windows.Forms.HorizontalAlignment.Left);
             lvHistory.Columns.Add("ModDate", 140, System.Windows.Forms.HorizontalAlignment.Left);
             lvHistory.Columns.Add("Size", 75, System.Windows.Forms.HorizontalAlignment.Right);
-            lvHistory.Columns.Add("Release", 75, System.Windows.Forms.HorizontalAlignment.Right);
             lvHistory.Columns.Add("RelDate", 75, System.Windows.Forms.HorizontalAlignment.Right);
-            lvHistory.Columns.Add("RelUser", 75, System.Windows.Forms.HorizontalAlignment.Right);
 
             // new dataset
             DataSet dsTemp = new DataSet();
@@ -925,12 +923,17 @@ namespace HackPDM
                     pg_size_pretty(v.file_size) as version_size,
                     to_char(v.create_stamp, 'yyyy-MM-dd HH24:mm:ss') as action_date,
                     u.last_name || ', ' || u.first_name as action_user,
-                    v.release_tag,
-                    r.last_name || ', ' || r.first_name as release_user,
-                    to_char(v.release_date, 'yyyy-MM-dd HH24:mm:ss') as release_date
+                    to_char(r.release_date, 'yyyy-MM-dd HH24:mm:ss') as release_date
                 from hp_version as v
                 left join hp_user as u on u.user_id=v.create_user
-                left join hp_user as r on r.user_id=v.release_user
+                left join (
+                    select
+	                    rv.rel_version_id,
+	                    max(r.release_date) as release_date
+                    from hp_release_version_rel as rv
+                    left join hp_release as r on r.release_id=rv.rel_version_id
+                    group by rv.rel_version_id
+                ) as r on r.rel_version_id=v.version_id
                 where v.entry_id=:entry_id
                 order by action_date desc;
             ";
@@ -951,13 +954,11 @@ namespace HackPDM
             {
 
                 // build array
-                string[] lvData =  new string[6];
+                string[] lvData =  new string[4];
                 lvData[0] = row.Field<string>("action_user");
                 lvData[1] = row.Field<string>("action_date");
                 lvData[2] = row.Field<string>("version_size");
-                lvData[3] = row.Field<string>("release_tag");
-                lvData[4] = row.Field<string>("release_date");
-                lvData[5] = row.Field<string>("release_user");
+                lvData[3] = row.Field<string>("release_date");
 
                 // create actual list item
                 ListViewItem lvItem = new ListViewItem(lvData);

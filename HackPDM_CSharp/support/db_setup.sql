@@ -147,10 +147,6 @@ CREATE UNIQUE INDEX ON hp_directory (parent_id, lower(dir_name::text));
 
 insert into hp_directory (dir_id,parent_id,dir_name,default_cat,create_user,modify_user) values (1,NULL,'root',1,0,0);
 
-/* upgrade
-	ALTER TABLE hp_directory add column active boolean NOT NULL default true;
-*/
-
 
 
 
@@ -246,10 +242,7 @@ create table hp_entry (
 
 CREATE UNIQUE INDEX ON hp_entry (dir_id, lower(entry_name::text));
 
-/* upgrade
-	alter table hp_entry add column active boolean NOT NULL default true;
-	alter table hp_entry add column destroyed boolean NOT NULL default false;
-*/
+
 
 
 -- -----------------------------------------------------------------------------
@@ -267,20 +260,20 @@ create table hp_version (
 	file_modify_stamp timestamp(6) without time zone NOT NULL,
 	create_stamp timestamp(6) without time zone NOT NULL DEFAULT now(),
 	create_user integer NOT NULL,
-	blob_ref oid NOT NULL,
 	md5sum text NOT NULL,
 	preview_image bytea NOT NULL,
-	release_user integer,
-	release_date timestamp(6) without time zone,
-	release_tag varchar(255),
 	
 	primary key (version_id),
 	foreign key (entry_id) references hp_entry (entry_id),
-	foreign key (create_user) references hp_user (user_id),
-	foreign key (release_user) references hp_user (user_id)
+	foreign key (create_user) references hp_user (user_id)
 	
 );
 
+/* upgrade
+	alter table hp_version drop column release_user;
+	alter table hp_version drop column release_date;
+	alter table hp_version drop column release_tag;
+*/
 
 
 
@@ -366,6 +359,46 @@ create table hp_version_relationship (
 	primary key (rel_parent_id, rel_child_id),
 	foreign key(rel_parent_id) references hp_version(version_id),
 	foreign key(rel_child_id) references hp_version(version_id)
+	
+);
+
+
+
+
+-- -----------------------------------------------------------------------------
+
+
+--drop table hp_release;
+
+CREATE SEQUENCE seq_hp_release_release_id START 1001;
+create table hp_release (
+	
+	release_id integer NOT NULL default nextval('seq_hp_release_release_id'::regclass),
+	release_user integer NOT NULL,
+	release_date timestamp(6) without time zone NOT NULL default now(),
+	release_note varchar(255) NOT NULL,
+	
+	primary key (release_id),
+	foreign key (release_user) references hp_user (user_id)
+	
+);
+
+
+
+
+-- -----------------------------------------------------------------------------
+
+
+--drop table hp_release_version_rel;
+
+create table hp_release_version_rel (
+	
+	rel_release_id integer,
+	rel_version_id integer,
+	
+	primary key (rel_release_id, rel_version_id),
+	foreign key (rel_release_id) references hp_release (release_id),
+	foreign key (rel_version_id) references hp_version (version_id)
 	
 );
 

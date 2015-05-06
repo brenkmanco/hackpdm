@@ -9,7 +9,7 @@
 
 # files that will always have LF (Linux) line endings on checkout
 *.py text eol=lf
-*.sql
+*.sql text eol=lf
 
 # don't change binary files
 *.psd binary
