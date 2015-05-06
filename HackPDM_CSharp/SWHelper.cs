@@ -87,7 +87,7 @@ namespace HackPDM
                 string strReadOnly = varDepends[3 * i + 2];
 
                 // only return non-virtual components
-                if (strTempPath != strFullName.Substring(0,strTempPath.Length))
+                if (!strFullName.Contains(strTempPath))
                 {
                     string[] strDepend = new string[3] {strName, strFullName, strReadOnly};
                     listDepends.Add(strDepend);

@@ -1030,9 +1030,10 @@ namespace HackPDM
 
             // clear list
             lvChildren.Clear();
-            lvChildren.Columns.Add("Version", 140, System.Windows.Forms.HorizontalAlignment.Left);
-            lvChildren.Columns.Add("Name", 300, System.Windows.Forms.HorizontalAlignment.Left);
-            lvChildren.Columns.Add("OutsidePWA", 140, System.Windows.Forms.HorizontalAlignment.Left);
+            lvChildren.Columns.Add("Version", 50, System.Windows.Forms.HorizontalAlignment.Left);
+            lvChildren.Columns.Add("Name", 350, System.Windows.Forms.HorizontalAlignment.Left);
+            lvChildren.Columns.Add("PWA", 70, System.Windows.Forms.HorizontalAlignment.Left);
+            lvChildren.Columns.Add("FullName", 120, System.Windows.Forms.HorizontalAlignment.Left);
 
             // new dataset
             DataSet dsTemp = new DataSet();
@@ -1109,13 +1110,14 @@ namespace HackPDM
             {
 
                 // build array
-                string[] lvData = new string[3];
+                string[] lvData = new string[4];
                 lvData[0] = row.Field<int>("rel_parent_id").ToString();
                 lvData[1] = row.Field<string>("entry_name") + " (v" + row.Field<int>("rel_child_id").ToString() + ")";
                 if (row.Field<Boolean>("outside_pwa"))
                 {
                     lvData[2] = "OUTSIDE";
                 }
+                lvData[3] = row.Field<string>("full_name");
 
                 // create actual list item
                 ListViewItem lvItem = new ListViewItem(lvData);
@@ -1508,12 +1510,11 @@ namespace HackPDM
             // get arguments
             List<object> genericlist = e.Argument as List<object>;
             NpgsqlTransaction t = (NpgsqlTransaction)genericlist[0];
-            int intBaseDirId = (int)genericlist[1];
-            string strBasePath = (string)genericlist[2];
-            List<int> lstSelected = (List<int>)genericlist[3];
+            string strBasePath = (string)genericlist[1];
+            List<int> lstSelected = (List<int>)genericlist[2];
 
             // load fetch data
-            DataSet dsFetches = LoadFetchData(sender, e, t, intBaseDirId, strBasePath, lstSelected);
+            DataSet dsFetches = LoadFetchData(sender, e, t, strBasePath, lstSelected);
             DataRow[] drBads;
 
             // check for cancellation
@@ -1524,12 +1525,35 @@ namespace HackPDM
             }
 
             // check for files modified, but not checked out
+            // TODO: handle conflicts by making copies of the conflicting files and letting the user resolve the conflict
+            //  - theirs.<filename>
+            //  - ours.<filename>
             drBads = dsFetches.Tables["files"].Select("local_stamp>latest_stamp and client_status_code<>'cm'");
             foreach (DataRow drBad in drBads)
             {
                 string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
-                dlgStatus.AddStatusLine("INFO", "File has been modified, but is not checked out: " + strFullName);
+                dlgStatus.AddStatusLine("ERROR", "File has been modified, but is not checked out: " + strFullName);
                 blnFailed = true;
+            }
+            if (blnFailed)
+            {
+                var result = MessageBox.Show("Files have been modified locally, and will be overwritten.\nOverwrite and continue?",
+                    "Overwriting Locally Modified Files",
+                    MessageBoxButtons.YesNoCancel,
+                    MessageBoxIcon.Error,
+                    MessageBoxDefaultButton.Button2);
+                switch (result)
+                {
+                    case System.Windows.Forms.DialogResult.Cancel:
+                        e.Cancel = true;
+                        return;
+                    case System.Windows.Forms.DialogResult.Yes:
+                        blnFailed = false;
+                        break;
+                    default:
+                        blnFailed = true;
+                        break;
+                }
             }
 
             // check for cancellation
@@ -1540,12 +1564,11 @@ namespace HackPDM
             }
 
             // check for files writeable, but not checked out
-            drBads = dsFetches.Tables["files"].Select("is_readonly=false and client_status_code<>'cm'");
+            drBads = dsFetches.Tables["files"].Select("str_latest_stamp=str_local_stamp and is_local=true and is_remote=true and is_readonly=false and client_status_code<>'cm'");
             foreach (DataRow drBad in drBads)
             {
                 string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
-                dlgStatus.AddStatusLine("INFO", "File is writeable, but is not checked out: " + strFullName);
-                blnFailed = true;
+                dlgStatus.AddStatusLine("WARNING", "File is writeable, but is not checked out: " + strFullName);
             }
 
             // check for cancellation
@@ -1556,7 +1579,13 @@ namespace HackPDM
             }
 
             // get files to be updated
-            DataRow[] drUpdateFiles = dsFetches.Tables["files"].Select("client_status_code='nv'");
+            // files that are both local and remote
+            // having differing timestamps
+            // not checked out to me on this node
+            // this will include newer remote versions (nv), and locally modified but not checked out to me (lm)
+            // this may also include checked-out-to-other
+            //DataRow[] drUpdateFiles = dsFetches.Tables["files"].Select("client_status_code in ('lm','nv')");
+            DataRow[] drUpdateFiles = dsFetches.Tables["files"].Select("is_local=true and is_remote=true and str_latest_stamp <> str_local_stamp and client_status_code <> 'cm'");
 
             // check for files locked, but needing update
             int intUpdateCount = drUpdateFiles.Length;
@@ -1594,7 +1623,6 @@ namespace HackPDM
                 return;
             }
 
-            // update files with newer remote versions
             for (int i = 0; i < intUpdateCount; i++)
             {
                 DataRow drCurrent = drUpdateFiles[i];
@@ -1612,7 +1640,14 @@ namespace HackPDM
                 FileInfo fiCurrFile = new FileInfo(strFullName);
 
                 // report status
-                dlgStatus.AddStatusLine("INFO", "Updating file (" + (i + 1).ToString() + " of " + intUpdateCount.ToString() + "): " + strFileName);
+                if (drCurrent.Field<string>("client_status_code") == "lm")
+                {
+                    dlgStatus.AddStatusLine("WARNING", "Overwriting locally modified file (" + (i + 1).ToString() + " of " + intUpdateCount.ToString() + "): " + strFileName);
+                }
+                else
+                {
+                    dlgStatus.AddStatusLine("INFO", "Updating file (" + (i + 1).ToString() + " of " + intUpdateCount.ToString() + "): " + strFileName);
+                }
 
                 // name and download the file
                 int intEntryId = (int)drCurrent["entry_id"];
@@ -1815,16 +1850,72 @@ namespace HackPDM
             bool blnFailed = false;
 
             // add remote directories
-            blnFailed = blnFailed || AddRemoteDirs(sender, e, t, ref dsCommits);
+            if (blnFailed == false)
+            {
+                blnFailed = blnFailed || AddRemoteDirs(sender, e, t, ref dsCommits);
+            }
 
             // add remote files
-            blnFailed = blnFailed || AddNewVersions(sender, e, t, ref dsCommits);
+            if (blnFailed == false)
+            {
+                blnFailed = blnFailed || AddNewVersions(sender, e, t, ref dsCommits);
+            }
 
             // add remote relationships (file dependencies)
-            blnFailed = blnFailed || AddVersionDepends(sender, e, t, ref dsCommits);
+            if (blnFailed == false)
+            {
+                blnFailed = blnFailed || AddVersionDepends(sender, e, t, ref dsCommits);
+            }
 
             // TODO: insert file properties
-            //blnFailed = blnFailed || AddFileProps(sender, e, t, ref dsCommits);
+            //if (blnFailed == false)
+            //{
+            //    blnFailed = blnFailed || AddFileProps(sender, e, t, ref dsCommits);
+            //}
+
+            // clear checkout data
+            if (blnFailed == false)
+            {
+
+                // get files that were checked out to me
+                DataRow[] drCheckins = dsCommits.Tables["files"].Select("client_status_code='cm'");
+                int intRowCount = drCheckins.Length;
+                if (intRowCount != 0)
+                {
+
+                    string strEntryIds = "";
+                    foreach (DataRow dr in drCheckins)
+                    {
+                        strEntryIds += dr.Field<int>("entry_id").ToString() + ",";
+                    }
+                    strEntryIds.Substring(0, strEntryIds.Length - 1); // remove trailing comma
+
+                    dlgStatus.AddStatusLine("INFO", "Clearing checkout data on " + intRowCount.ToString() + " files");
+                    string strSql;
+                    strSql = @"
+                        update hp_entry
+                        set
+                            checkout_user=null,
+                            checkout_date=null,
+                            checkout_node=null
+                        where checkout_user=:myuser
+                        and checkout_node=:mynode
+                        and entry_id in (" + strEntryIds + ");";
+                    NpgsqlCommand cmdUpdateEntry = new NpgsqlCommand(strSql, connDb, t);
+                    cmdUpdateEntry.Parameters.AddWithValue("myuser", intMyUserId);
+                    cmdUpdateEntry.Parameters.AddWithValue("mynode", intMyNodeId);
+                    int intUpdateCount = cmdUpdateEntry.ExecuteNonQuery();
+
+                    if (intUpdateCount != intRowCount)
+                    {
+                        // throw exception, and let worker_RunWorkerCompleted rollback the database
+                        dlgStatus.AddStatusLine("ERROR", "Failed to clear checkout data for " + (intRowCount - intUpdateCount).ToString() + " of " + intRowCount.ToString() + " files");
+                        blnFailed = true;
+                    }
+
+                }
+
+            }
 
             // commit to database and set files ReadOnly
             if (blnFailed == true)
@@ -1888,9 +1979,8 @@ namespace HackPDM
             // get arguments
             List<object> genericlist = e.Argument as List<object>;
             NpgsqlTransaction t = (NpgsqlTransaction)genericlist[0];
-            int intBaseDirId = (int)genericlist[1];
-            string strRelBasePath = (string)genericlist[2];
-            List<int> lstSelected = (List<int>)genericlist[3];
+            string strRelBasePath = (string)genericlist[1];
+            List<int> lstSelected = (List<int>)genericlist[2];
 
             string strEntries = String.Join(",", lstSelected.ToArray());
 
@@ -1971,187 +2061,85 @@ namespace HackPDM
         void worker_UndoCheckout(object sender, DoWorkEventArgs e)
         {
 
+            // this method will be called from the tree view or list view
+            // that means it needs to handle directory traversing as well as a selected file list
+
+            // required steps
+            //  - get files to be undo-checkout-ed
+            //  - update hp_entry table, setting checkout_* fields to null
+            //  - download server version of the files, overwriting our local copies
+            //   - use worker_GetLatest
+            //   - this has the noteable side effect that, when executed on a directory, it downloads files new to this node
+            //   - worker_GetLatest sets files readonly, so we don't need to do that here
+
             BackgroundWorker myWorker = sender as BackgroundWorker;
             dlgStatus.AddStatusLine("INFO", "Beginning undo checkout worker");
 
             // get arguments
             List<object> genericlist = e.Argument as List<object>;
             NpgsqlTransaction t = (NpgsqlTransaction)genericlist[0];
-            int intBaseDirId = (int)genericlist[1];
-            string strBasePath = (string)genericlist[2];
-            List<int> lstSelected = (List<int>)genericlist[3];
+            string strRelBasePath = (string)genericlist[1];
+            List<int> lstSelectedIds = (List<int>)genericlist[2];
 
+            string strEntries = "";
+            int intRowCount;
+            DataRow[] drSelected;
+            if (lstSelectedIds != null)
+            {
+                // get selected file data
+                strEntries = String.Join(",", lstSelectedIds.ToArray());
+                drSelected = dsList.Tables[0].Select("client_status_code='cm' and entry_id in (" + strEntries + ")");
+            }
+            else
+            {
+                // we don't want to get commits data and use it to undo checkouts i.e. LoadCommitsData()
+                // that's too heavy
+                // maybe we should make our own lighter method for this
 
-            string strEntries = String.Join(",", lstSelected.ToArray());
+                // get data from selected directory
+                DataSet dsUndos = LoadCommitsData(sender, e, t, strRelBasePath, null);
+                drSelected = dsList.Tables[0].Select("client_status_code='cm'");
+                foreach (DataRow dr in drSelected)
+                {
+                    strEntries += dr.Field<int>("entry_id").ToString() + ",";
+                }
+                strEntries.Substring(0, strEntries.Length - 1); // remove trailing comma
+            }
+            intRowCount = drSelected.Length;
+            if (intRowCount == 0)
+            {
+                dlgStatus.AddStatusLine("WARNING", "No checked-out files were found");
+                e.Cancel = true;
+                return;
+            }
 
-            DataRow[] drBads;
+            // TODO: think of some conflicts to test for
 
-            // get rows of selected files
-            DataRow[] drSelected = dsList.Tables[0].Select("client_status_code in ('','ro') and entry_id in (" + strEntries + ")");
-            int intRowCount = drSelected.Length;
-
-
-
-
-            //BackgroundWorker myWorker = sender as BackgroundWorker;
-            //DataTable dtItems = (DataTable)e.Argument;
-            //int intRowCount = dtItems.Rows.Count;
-            //dlgStatus.AddStatusLine("info", "Starting worker");
-
-            //// start the database transaction
-            //t = connDb.BeginTransaction();
-            ////LargeObjectManager lbm = new LargeObjectManager(connDb);
-
-
-
-            // prepare to get latest version file id
+            // clear checkout data on selected files
+            dlgStatus.AddStatusLine("INFO", "Clearing checkout data on selected files");
             string strSql;
-    /*        strSql = @"
-                    select blob_ref
-                    from hp_version
-                    where entry_id=:entry_id
-                    order by create_stamp
-                    limit 1;
-                ";
-            NpgsqlCommand cmdGetId = new NpgsqlCommand(strSql, connDb, t);
-            cmdGetId.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
-            cmdGetId.Prepare(); */
-
-            // prepare to undo checkout info
             strSql = @"
                 update hp_entry
                 set
                     checkout_user=null,
                     checkout_date=null,
                     checkout_node=null
-                where entry_id=:entry_id;
-            ";
+                where checkout_user=:myuser
+                and checkout_node=:mynode
+                and entry_id in (" + strEntries + ");";
             NpgsqlCommand cmdUpdateEntry = new NpgsqlCommand(strSql, connDb, t);
-            cmdUpdateEntry.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
-            cmdUpdateEntry.Prepare();
+            cmdUpdateEntry.Parameters.AddWithValue("myuser", intMyUserId);
+            cmdUpdateEntry.Parameters.AddWithValue("mynode", intMyNodeId);
+            int intUpdateCount = cmdUpdateEntry.ExecuteNonQuery();
 
-
-
-
-
-            //DataRow drCurrent = drSelected[i];
-
-            //string strFileName = drCurrent.Field<string>("entry_name");
-            //string strFilePath = drCurrent.Field<string>("absolute_path");
-            //string strFullName = strFilePath + "\\" + strFileName;
-            //FileInfo fiCurrFile = new FileInfo(strFullName);
-            //dlgStatus.AddStatusLine("Setting file Writeable (" + (i + 1).ToString() + " of " + intRowCount.ToString() + ")", strFileName);
-            //try
-            //{
-            //    fiCurrFile.IsReadOnly = false;
-            //}
-            //catch (Exception ex)
-            //{
-            //    dlgStatus.AddStatusLine("Error", "Failed to set file \"" + fiCurrFile.Name + "\" to writeable." + System.Environment.NewLine + ex.ToString());
-            //}
-
-
-
-
-
-            for (int i = 0; i < intRowCount; i++)
+            if (intUpdateCount != intRowCount)
             {
-
-
-                if ((myWorker.CancellationPending == true))
-                {
-                    e.Cancel = true;
-                    break;
-                }
-
-                DataRow drCurrent = drSelected[i];
-                string strFileName = drCurrent.Field<string>("entry_name");
-                string strFilePath = drCurrent.Field<string>("absolute_path");
-                string strFullName = strFilePath + "\\" + strFileName;
-                FileInfo fiCurrFile = new FileInfo(strFullName);
-
-                // report status
-                dlgStatus.AddStatusLine("INFO", "Testing file fitness (" + (i + 1).ToString() + " of " + intRowCount.ToString() + "): " + strFileName);
-
-                // test for checked-out-by-me
-                object oTest = drCurrent["checkout_user"];
-                if ((oTest == System.DBNull.Value) || (drCurrent.Field<int>("checkout_user") != intMyUserId))
-                {
-                    // it is not checked out to me
-                    dlgStatus.AddStatusLine("WARNING", "You don't have this file checked out (" + (i + 1).ToString() + " of " + intRowCount.ToString() + "): " + strFileName);
-                    continue;
-                }
-
-                // test for local file existence
-                if (File.Exists(strFullName))
-                {
-
-                    // test for newer version
-                    if ((DateTime)drCurrent["latest_stamp"] >= fiCurrFile.LastWriteTime)
-                    {
-                        // we have the latest version
-                        // undo the checkout info in the database
-                        dlgStatus.AddStatusLine("INFO", "File is unmodified (" + (i + 1).ToString() + " of " + intRowCount.ToString() + "): " + strFullName);
-                        cmdUpdateEntry.Parameters["entry_id"].Value = (int)drCurrent["entry_id"];
-                        cmdUpdateEntry.ExecuteNonQuery();
-                        //  continue to the next file
-                        continue;
-                    }
-
-                }
-
-                // get the file oid
-         /*       cmdGetId.Parameters["entry_id"].Value = (int)drCurrent["entry_id"];
-                object oTemp = cmdGetId.ExecuteScalar();
-                int intFileId;
-                if (oTemp != null)
-                {
-                    intFileId = (int)(long)oTemp;
-                }
-                else
-                {
-                    throw new System.Exception("Failed to get file ID: \"" + fiCurrFile.Name + "\"");
-                    //return;
-                } */
-
-                // report status
-                string strFileSize = drCurrent.Field<string>("str_latest_size");
-                dlgStatus.AddStatusLine("INFO", "Begin streaming file to client (" + strFileSize + "): " + strFullName);
-
-                // open the blob
-                //LargeObject lo =  lbm.Open(intFileId,LargeObjectManager.READ);
-                //lo =  lbm.Open(intFileId,LargeObjectManager.READ);
-
-                // acquire and lock the file stream
-                //FileStream fs = fiCurrFile.OpenWrite();
-                //try {
-                //    fs.Lock(0,fs.Length);
-                //} catch {
-                //    throw new System.Exception("The file \"" + fiCurrFile.Name + "\" has been locked by another process.  Release it before committing it.");
-                //    //return;
-                //}
-
-                // stream the blob into the file
-                //byte[] buf = new byte[lo.Size()];
-                //buf = lo.Read(lo.Size());
-                //fs.Write(buf, 0, (int)lo.Size());
-                //fs.Flush();
-                //fs.Close();
-                //lo.Close();
-
-
-
-                // set the file readonly
-                fiCurrFile.IsReadOnly = true;
-
-                // report status
-                dlgStatus.AddStatusLine("INFO", "File transfer complete: " + strFullName);
-
-                // undo the checkout info in the database
-                cmdUpdateEntry.Parameters["entry_id"].Value = (int)drCurrent["entry_id"];
-                cmdUpdateEntry.ExecuteNonQuery();
-
+                // throw exception, and let worker_RunWorkerCompleted rollback the database
+                throw new System.Exception("Failed to clear checkout data for " + (intRowCount - intUpdateCount).ToString() + " of " + intRowCount.ToString() + " files");
             }
+
+            // get latest versions, including dependencies
+            worker_GetLatest(sender, e);
 
             // commit to database
             t.Commit();
@@ -2285,6 +2273,36 @@ namespace HackPDM
 
             }
 
+        }
+
+        void worker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            if (e.Cancelled == true)
+            {
+                t.ToString();
+                if (t.Connection != null) {
+                    t.Rollback();
+                    // TODO: figure out how to rollback WebDav changes
+                }
+                dlgStatus.AddStatusLine("CANCEL", "Operation canceled");
+            }
+            else if (e.Error != null)
+            {
+                dlgStatus.AddStatusLine("ERROR", e.Error.Message);
+                if (t.Connection != null) {
+                    t.Rollback();
+                    // TODO: figure out how to rollback WebDav changes
+                }
+            }
+            else
+            {
+                if (t.Connection != null) {
+                    t.Rollback();
+                    // TODO: figure out how to rollback WebDav changes
+                }
+                dlgStatus.AddStatusLine("INFO", "Operation completed");
+                dlgStatus.OperationCompleted();
+            }
         }
 
         // commits data (assuming actions like Commit or CheckIn):
@@ -2675,7 +2693,7 @@ namespace HackPDM
                 // get remote entries in a DataSet
                 string strSql = "select * from fcn_latest_w_depends_by_dir_list( array [" + strDirs + "] );";
                 NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-                daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("strLocalFileRoot", strLocalFileRoot));
+                daTemp.SelectCommand.Parameters.AddWithValue("strLocalFileRoot", strLocalFileRoot);
                 daTemp.Fill(dsTemp);
 
             }
@@ -2925,9 +2943,9 @@ namespace HackPDM
             cmdInsert.Parameters.Add(new NpgsqlParameter("dir_id", NpgsqlTypes.NpgsqlDbType.Integer));
             cmdInsert.Parameters.Add(new NpgsqlParameter("parent_id", NpgsqlTypes.NpgsqlDbType.Integer));
             cmdInsert.Parameters.Add(new NpgsqlParameter("dir_name", NpgsqlTypes.NpgsqlDbType.Text));
-            cmdInsert.Parameters.Add(new NpgsqlParameter("default_cat", (int)1));
-            cmdInsert.Parameters.Add(new NpgsqlParameter("create_user", intMyUserId));
-            cmdInsert.Parameters.Add(new NpgsqlParameter("modify_user", intMyUserId));
+            cmdInsert.Parameters.AddWithValue("default_cat", (int)1);
+            cmdInsert.Parameters.AddWithValue("create_user", intMyUserId);
+            cmdInsert.Parameters.AddWithValue("modify_user", intMyUserId);
 
             Boolean blnFailed = false;
             int intParentId = 0;
@@ -3305,40 +3323,15 @@ namespace HackPDM
 
         }
 
-        void worker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        private bool ClearCheckout(object sender, DoWorkEventArgs e, NpgsqlTransaction t, ref DataSet dsCommits)
         {
-            if (e.Cancelled == true)
-            {
-                t.ToString();
-                if (t.Connection != null) {
-                    t.Rollback();
-                    // TODO: figure out how to rollback WebDav changes
-                }
-                dlgStatus.AddStatusLine("CANCEL", "Operation canceled");
-            }
-            else if (e.Error != null)
-            {
-                dlgStatus.AddStatusLine("ERROR", e.Error.Message);
-                if (t.Connection != null) {
-                    t.Rollback();
-                    // TODO: figure out how to rollback WebDav changes
-                }
-            }
-            else
-            {
-                if (t.Connection != null) {
-                    t.Rollback();
-                    // TODO: figure out how to rollback WebDav changes
-                }
-                dlgStatus.AddStatusLine("INFO", "Operation completed");
-                dlgStatus.OperationCompleted();
-            }
+            throw new NotImplementedException();
         }
 
         // fetch data (called from get latest method)
         // very similar to getting commits data, only in reverse
         // get data from remote and match to local stuff
-        private DataSet LoadFetchData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, int intBaseDirId=0, string strBasePath=null, List<int> lstSelected=null)
+        private DataSet LoadFetchData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, string strRelBasePath=null, List<int> lstSelected=null)
         {
             // running in separate thread
             BackgroundWorker myWorker = sender as BackgroundWorker;
@@ -3370,6 +3363,9 @@ namespace HackPDM
             }
             else
             {
+                // get directory id
+                int intBaseDirId = 0;
+                dictTree.TryGetValue(strRelBasePath, out intBaseDirId);
 
                 // sql command for remote entry list
                 // select entries in or below the specified direcory
@@ -3378,7 +3374,7 @@ namespace HackPDM
 
                 // put the remote list in the DataSet
                 NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-                daTemp.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", intBaseDirId));
+                daTemp.SelectCommand.Parameters.AddWithValue("dir_id", intBaseDirId);
                 daTemp.Fill(dsFetches);
 
             }
@@ -3548,8 +3544,8 @@ namespace HackPDM
 
                 // put the remote directories in the DataSet
                 NpgsqlDataAdapter daTemp1 = new NpgsqlDataAdapter(strSql, connDb);
-                daTemp1.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", intBaseDirId));
-                daTemp1.SelectCommand.Parameters.Add(new NpgsqlParameter("local_root", strLocalFileRoot));
+                daTemp1.SelectCommand.Parameters.AddWithValue("dir_id", intBaseDirId);
+                daTemp1.SelectCommand.Parameters.AddWithValue("local_root", strLocalFileRoot);
                 dsDeletes.Tables.Add("dirs");
                 daTemp1.Fill(dsDeletes.Tables["dirs"]);
 
@@ -3565,7 +3561,7 @@ namespace HackPDM
 
                 // put the remote entries in the DataSet
                 NpgsqlDataAdapter daTemp2 = new NpgsqlDataAdapter(strSql, connDb);
-                daTemp2.SelectCommand.Parameters.Add(new NpgsqlParameter("dir_id", intBaseDirId));
+                daTemp2.SelectCommand.Parameters.AddWithValue("dir_id", intBaseDirId);
                 dsDeletes.Tables.Add("files");
                 daTemp2.Fill(dsDeletes.Tables["files"]);
 
@@ -4358,7 +4354,6 @@ namespace HackPDM
                 MessageBox.Show("The current directory doesn't exist remotely, therefore you can't get latest on any of the selected files.");
                 return;
             }
-            int intDirId = (int)tnCurrent.Tag;
             string strRelBasePath = tnCurrent.FullPath;
 
             // start the database transaction
@@ -4367,7 +4362,6 @@ namespace HackPDM
             // package arguments for the background worker
             List<object> arguments = new List<object>();
             arguments.Add(t);
-            arguments.Add(intDirId);
             arguments.Add(strRelBasePath);
             arguments.Add(null);
 
@@ -4412,7 +4406,6 @@ namespace HackPDM
             arguments.Add(t); // transaction
             arguments.Add(strRelBasePath); // selected path
             arguments.Add(null); // selected list
-            arguments.Add(null); // DataSet dsCommits
 
             // launch the background thread
             BackgroundWorker worker = new BackgroundWorker();
@@ -4444,6 +4437,46 @@ namespace HackPDM
         }
 
         void CmsTreeUndoCheckoutClick(object sender, EventArgs e) {
+
+            // create the status dialog
+            dlgStatus = new StatusDialog();
+
+            // start the database transaction
+            t = connDb.BeginTransaction();
+
+            // get directory info
+            TreeNode tnCurrent = treeView1.SelectedNode;
+            if (tnCurrent.Tag == null)
+            {
+                // it shouldn't be possible to get here because we disable the option on the context menu
+                MessageBox.Show("The current directory doesn't exist remotely, therefore you can't have any of the contained files checked out.");
+                return;
+            }
+            string strRelBasePath = tnCurrent.FullPath;
+
+            // package arguments for the background worker
+            List<object> arguments = new List<object>();
+            arguments.Add(t); // transaction
+            arguments.Add(strRelBasePath); // selected path
+            arguments.Add(null); // selected list
+
+            // launch the background thread
+            BackgroundWorker worker = new BackgroundWorker();
+            worker.WorkerSupportsCancellation = true;
+            worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
+            worker.DoWork += new DoWorkEventHandler(worker_Commit);
+            worker.RunWorkerAsync(arguments);
+
+
+            // handle the cancel button
+            bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Tree Undo Checkout");
+            if (blnWorkCanceled == true)
+            {
+                worker.CancelAsync();
+            }
+
+            // refresh the main window
+            ResetView(tnCurrent.FullPath);
 
         }
 
@@ -4640,7 +4673,6 @@ namespace HackPDM
                 MessageBox.Show("The current directory doesn't exist remotely, therefore you can't get latest on any of the selected files.");
                 return;
             }
-            int intDirId = (int)tnCurrent.Tag;
             string strRelBasePath = tnCurrent.FullPath;
 
             // get a list of selected items
@@ -4669,7 +4701,6 @@ namespace HackPDM
             List<object> arguments = new List<object>();
 
             arguments.Add(t);
-            arguments.Add(intDirId);
             arguments.Add(strRelBasePath);
             arguments.Add(lstSelected);
 
@@ -4708,7 +4739,6 @@ namespace HackPDM
                 MessageBox.Show("The current directory doesn't exist remotely, therefore you can't get latest on any of the selected files.");
                 return;
             }
-            int intDirId = (int)tnCurrent.Tag;
             string strRelBasePath = tnCurrent.FullPath;
 
             // get a list of selected items
@@ -4737,7 +4767,6 @@ namespace HackPDM
             List<object> arguments = new List<object>();
 
             arguments.Add(t);
-            arguments.Add(intDirId);
             arguments.Add(strRelBasePath);
             arguments.Add(lstSelected);
 
@@ -4809,40 +4838,6 @@ namespace HackPDM
 
         void CmsListUndoCheckoutClick(object sender, EventArgs e) {
 
-            //// get directory info
-            //int intDirId = (int)treeView1.SelectedNode.Tag;
-
-            //// get a data table of selected items
-            //DataTable dtSelected = dsList.Tables[0].Clone();
-            //ListView.SelectedListViewItemCollection lviSelection = listView1.SelectedItems;
-            //foreach (ListViewItem lviSelected in lviSelection) {
-            //    string strFileName = (string)lviSelected.SubItems[0].Text;
-            //    DataRow drSelected = dsList.Tables[0].Select("dir_id=" + intDirId + " and entry_name='" + strFileName+"'")[0];
-            //    dtSelected.ImportRow(drSelected);
-            //}
-
-            //// create the status dialog
-            //dlgStatus = new StatusDialog();
-
-            //// launch the background thread
-            //BackgroundWorker worker = new BackgroundWorker();
-            //worker.WorkerSupportsCancellation = true;
-            //worker.DoWork += new DoWorkEventHandler(worker_UndoCheckout);
-            //worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
-            //dlgStatus.AddStatusLine("Undo Checkout", "Selected items: "+lviSelection.Count);
-            //worker.RunWorkerAsync(dtSelected);
-
-            //bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Undo Checkout");
-            //if (blnWorkCanceled == true) {
-            //    worker.CancelAsync();
-            //}
-
-            //ResetView(treeView1.SelectedNode.FullPath);
-
-
-
-
-
             // refresh file data
             LoadListData(treeView1.SelectedNode);
 
@@ -4853,10 +4848,10 @@ namespace HackPDM
             TreeNode tnCurrent = treeView1.SelectedNode;
             if (tnCurrent.Tag == null)
             {
-                MessageBox.Show("The current directory doesn't exist remotely, therefore you can't get latest on any of the selected files.");
+                // it shouldn't be possible to get here because we disable the option on the context menu
+                MessageBox.Show("The current directory doesn't exist remotely, therefore you can't have any of the selected files checked out.");
                 return;
             }
-            int intDirId = (int)tnCurrent.Tag;
             string strRelBasePath = tnCurrent.FullPath;
 
             // get a list of selected items
@@ -4870,6 +4865,10 @@ namespace HackPDM
                     // ignore local-only files
                     int intSelectedEntryId = drSelected.Field<int>("entry_id");
                     lstSelected.Add(intSelectedEntryId);
+                }
+                else
+                {
+                    dlgStatus.AddStatusLine("WARNING", "Ignoring local only file: " + drSelected.Field<string>("entry_name"));
                 }
             }
             if (lstSelected.Count == 0)
@@ -4885,7 +4884,6 @@ namespace HackPDM
             List<object> arguments = new List<object>();
 
             arguments.Add(t);
-            arguments.Add(intDirId);
             arguments.Add(strRelBasePath);
             arguments.Add(lstSelected);
 
@@ -4898,7 +4896,7 @@ namespace HackPDM
 
 
             // show dialog and handle cancel button
-            bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Undo Checkout");
+            bool blnWorkCanceled = dlgStatus.ShowStatusDialog("List Undo Checkout");
             if (blnWorkCanceled == true)
             {
                 worker.CancelAsync();
@@ -4906,6 +4904,7 @@ namespace HackPDM
 
             // refresh the main window
             ResetView(tnCurrent.FullPath);
+
         }
 
         void CmsListDeletePermanentClick(object sender, EventArgs e)
@@ -5030,6 +5029,7 @@ namespace HackPDM
             // Set cursor as hourglass
             Cursor.Current = Cursors.WaitCursor;
 
+            if (listView1.SelectedItems.Count == 0) { return; }
             string strFileName = listView1.SelectedItems[0].SubItems[0].Text;
             PopulatePreviewImage(strFileName);
 
