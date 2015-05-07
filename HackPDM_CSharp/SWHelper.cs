@@ -7,6 +7,7 @@ using System.IO;
 
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
+using System.Runtime.InteropServices;
 using SolidWorks.Interop.swdocumentmgr;
 //using stdole;
 //using Microsoft.VisualBasic.Compatibility.VB6;
@@ -32,29 +33,25 @@ namespace HackPDM
             //    return;
             //}
 
+            //try
+            //{
+            //    // get a running instance
+            //    swRunApp = (SldWorks.SldWorks)System.Runtime.InteropServices.Marshal.GetActiveObject("SldWorks.Application");
+            //}
+            //catch { }
+
             try
             {
-                // start background instance
-                swRunApp = (SldWorks.SldWorks)System.Runtime.InteropServices.Marshal.GetActiveObject("SldWorks.Application");
+                swApp = new SldWorks.SldWorks();
             }
-            catch { }
-
-    //        if (swRunApp == null)
+            catch
             {
-                try
-                {
-                    swApp = new SldWorks.SldWorks();
-                }
-                catch
-                {
-                    DialogResult dr = MessageBox.Show("Failed to get a SolidWorks instance",
-                        "Loading SW",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Exclamation,
-                        MessageBoxDefaultButton.Button1);
-                }
+                DialogResult dr = MessageBox.Show("Failed to get a SolidWorks instance",
+                    "Loading SW",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Exclamation,
+                    MessageBoxDefaultButton.Button1);
             }
-            return;
 
         }
 
@@ -99,18 +96,103 @@ namespace HackPDM
 
         }
 
-        //private swDocumentTypes_e GetDocType(string FileName)
-        //{
-        //    ModelDoc2 swDoc = (ModelDoc2)swApp.GetDocuments();
-        //    return (swDocumentTypes_e)swDoc.GetType();
-        //}
+        public List<string[]> GetProperties(string FileName)
+        {
+            List<string[]> lstProps = new List<string[]>();
 
-        //public string GetActiveDocName()
-        //{
-        //    ModelDoc2 swDoc = (ModelDoc2)swApp.ActiveDoc;
-        //    return strModelFile = swDoc.GetPathName();
-        //}
+            // get doc type
+            swDocumentTypes_e swDocType = GetTypeFromString(FileName);
 
+            // document open options
+            // swOpenDocOptions_e is a bitmask enumerator
+            // use bitwise "and" to select multiple options
+            swOpenDocOptions_e swOpenDocOptions = swOpenDocOptions_e.swOpenDocOptions_Silent &
+                swOpenDocOptions_e.swOpenDocOptions_DontLoadHiddenComponents &
+                swOpenDocOptions_e.swOpenDocOptions_LoadLightweight &
+                swOpenDocOptions_e.swOpenDocOptions_ReadOnly;
+
+            // try to load the model file
+            int intWarnings = 0;
+            int intErrors = 0;
+            SldWorks.ModelDoc2 swModelDoc;
+            try
+            {
+                swModelDoc = swApp.OpenDoc6(FileName, (int)swDocType, (int)swOpenDocOptions, "", ref intErrors, ref intWarnings);
+            }
+            catch (Exception ex)
+            {
+                return null;
+            }
+            SldWorks.ModelDocExtension swDocExt = swModelDoc.Extension;
+
+            // get list of configs
+			string[] strConfgNames = (string[])swModelDoc.GetConfigurationNames();
+            foreach (string strConfigName in strConfgNames)
+            {
+
+                SldWorks.CustomPropertyManager swCustPropMgr = swDocExt.get_CustomPropertyManager(strConfigName);
+
+                object oPropNames;
+                object oPropTypes;
+                object oPropValues;
+                object oResolved;
+
+                //swCustPropMgr.GetAll2(ref oPropNames, ref oPropTypes, ref oPropValues, ref oResolved);
+                swCustPropMgr.GetAll(ref oPropNames, ref oPropTypes, ref oPropValues);
+
+                int intPropCount = ((string[])oPropNames).Length;
+                string[] strProps = new string[5];
+                for (int i = 0; i < intPropCount; i++ )
+                {
+                    strProps[0] = ((string[])oPropNames)[i]; // property name
+                    strProps[1] = ((string[])oPropTypes)[i]; // property type
+                    strProps[2] = ((string[])oPropValues)[i]; // value with GetAll(), definition with GetAll2()
+                    //strProps[3] = ((string[])oResolved)[i]; // resolved value
+                    strProps[3] = ((string[])oPropValues)[i]; // resolved value
+                    strProps[4] = strConfigName;
+
+                }
+
+                lstProps.Add(strProps);
+
+            }
+
+            return lstProps;
+
+        }
+
+        swDocumentTypes_e GetTypeFromString(string ModelPathName)
+        {
+
+            //------------------------------------------------------------
+            //--     strModelPathName = fully qualified name of file
+            //------------------------------------------------------------
+            string strModelName;
+            string strFileExt;
+            swDocumentTypes_e swDocType;
+
+            strModelName = ModelPathName.Substring(ModelPathName.LastIndexOf("\\") + 1, ModelPathName.Length - ModelPathName.LastIndexOf("\\") - 1);
+            strFileExt = ModelPathName.Substring(ModelPathName.LastIndexOf(".") + 1, ModelPathName.Length - ModelPathName.LastIndexOf(".") - 1);
+
+            switch (strFileExt)
+            {
+                case "SLDASM":
+                    swDocType = swDocumentTypes_e.swDocASSEMBLY;
+                    break;
+                case "SLDPRT":
+                    swDocType = swDocumentTypes_e.swDocPART;
+                    break;
+                case "SLDDRW":
+                    swDocType = swDocumentTypes_e.swDocDRAWING;
+                    break;
+                default:
+                    swDocType = swDocumentTypes_e.swDocNONE;
+                    break;
+            }
+
+            return (swDocType);
+
+        }			
 
         // class destructor
         ~SWHelper()
@@ -122,11 +204,11 @@ namespace HackPDM
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    "Failed to close SolidWorks instance: " + ex.Message,
-                    "Failed Closing SolidWork",
-                    MessageBoxButtons.OK
-                );
+                //MessageBox.Show(
+                //    "Failed to close SolidWorks instance: " + ex.Message,
+                //    "Failed Closing SolidWork",
+                //    MessageBoxButtons.OK
+                //);
             }
         }
 

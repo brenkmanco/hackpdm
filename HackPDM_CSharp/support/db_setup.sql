@@ -21,6 +21,29 @@ $BODY$
 
 -- -----------------------------------------------------------------------------
 
+--drop table hp_settings;
+
+create table hp_settings (
+	
+	setting_name varchar(100) NOT NULL,
+	setting_desc text NOT NULL,
+	setting_text_value text,
+	setting_date_value timestamp(6) without time zone,
+	setting_number_value decimal,
+	setting_bool_value boolean,
+	
+	primary key (setting_name)
+	
+);
+
+insert into hp_settings (setting_name,setting_desc,setting_bool_value) values ('restrict_properties','Only import properties that have been previously defined',true);
+insert into hp_settings (setting_name,setting_desc,setting_bool_value) values ('restrict_types','Only allow file types that have been previously defined',true);
+
+
+
+
+-- -----------------------------------------------------------------------------
+
 --drop table hp_user;
 --drop sequence seq_hp_user_user_id;
 
@@ -49,8 +72,8 @@ CREATE TRIGGER trg_hp_user_1_modify_stamp
   EXECUTE PROCEDURE fcn_common_modify_stamp();
 
 
-insert into hp_user (user_id,login_name,last_name,first_name,modify_user,passwd) values (0,'admin','User','Admin',0,'admin');
-insert into hp_user (user_id,login_name,last_name,first_name,modify_user,passwd) values (1001,'demo','User','Demo',0,'demo');
+insert into hp_user (user_id,login_name,last_name,first_name,modify_user,passwd) values (1,'admin','User','Admin',1,'admin');
+insert into hp_user (user_id,login_name,last_name,first_name,modify_user,passwd) values (1001,'demo','User','Demo',1,'demo');
 
 
 
@@ -102,10 +125,10 @@ create table hp_category (
 	
 );
 
-insert into hp_category (cat_id,cat_name,cat_description,track_version,track_depends,create_user) values (1,'CAD','CAD files are versioned and have dependencies.',true,true,0);
-insert into hp_category (cat_id,cat_name,cat_description,track_version,track_depends,create_user) values (2,'Library','Typically CAD files, however no versions are kept.  The files may have dependencies.',false,true,0);
-insert into hp_category (cat_id,cat_name,cat_description,track_version,track_depends,create_user) values (3,'Static','No dependency tracking.  No versioning.',false,false,0);
-insert into hp_category (cat_id,cat_name,cat_description,track_version,track_depends,create_user) values (4,'Documents','Keep file versions, but no dependency tracking.',true,false,0);
+insert into hp_category (cat_id,cat_name,cat_description,track_version,track_depends,create_user) values (1,'CAD','CAD files are versioned and have dependencies.',true,true,1);
+insert into hp_category (cat_id,cat_name,cat_description,track_version,track_depends,create_user) values (2,'Library','Typically CAD files, however no versions are kept.  The files may have dependencies.',false,true,1);
+insert into hp_category (cat_id,cat_name,cat_description,track_version,track_depends,create_user) values (3,'Static','No dependency tracking.  No versioning.',false,false,1);
+insert into hp_category (cat_id,cat_name,cat_description,track_version,track_depends,create_user) values (4,'Documents','Keep file versions, but no dependency tracking.',true,false,1);
 
 
 
@@ -145,7 +168,7 @@ CREATE TRIGGER trg_hp_directory_1_modify_stamp
 
 CREATE UNIQUE INDEX ON hp_directory (parent_id, lower(dir_name::text));
 
-insert into hp_directory (dir_id,parent_id,dir_name,default_cat,create_user,modify_user) values (1,NULL,'root',1,0,0);
+insert into hp_directory (dir_id,parent_id,dir_name,default_cat,create_user,modify_user) values (1,NULL,'root',1,1,1);
 
 
 
@@ -296,6 +319,43 @@ create table hp_property (
 	foreign key(create_user) references hp_user(user_id)
 	
 );
+
+insert into hp_property (prop_name, prop_type, create_user) values ('Author (in Summary tab)','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Comments (in Summary tab)','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Created date (in Summary tab)','date',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Keywords (in Summary tab)','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Last saved by (in Summary tab)','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Last saved date (in Summary tab)','date',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Subject (in Summary tab)','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Title (in Summary tab)','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('AltQty','number',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Coating','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Date1','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Date2','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Description','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Designed By','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('ECO','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('EcoChk','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('EcoDescription','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('EcoRevs','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Eng Appr Date','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Eng Approval','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Engineer Approval','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Finish','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Material','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Mfg Appr Date','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Mfg Approval','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Notes','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('P_M','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('PartNum','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Purch Appr Date','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Purch Approval','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('QA Appr Date','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('QA Approval','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Revision','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Type','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('UOM','text',1);
+insert into hp_property (prop_name, prop_type, create_user) values ('Zone','text',1);
 
 
 
