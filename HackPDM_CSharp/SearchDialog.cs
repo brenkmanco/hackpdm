@@ -265,7 +265,25 @@ namespace HackPDM
                 info += " AND e.checkout_user=" + intMyUserId.ToString();
             }
 
-            
+            if (cbxDeletedLocal.Checked)
+            {
+                // Searching for any files that are marked as "deleted" on the server, but that still exist locally:
+                //  Get the list of local files:
+                List<string> localfiles = new List<string>();
+                Utils.GetAllFilesInDir(strFilePath, ref localfiles);
+
+                // Add that to the SQL string:
+                info += " AND e.destroyed=true AND CONCAT(t.rel_path, '/', e.entry_name) IN (";
+                foreach (string s in localfiles)
+                {
+                    if (s != localfiles[0])
+                        info += ",";
+                    info += "'" + s.Substring(strFilePath.Length, s.Length - strFilePath.Length).Replace("\\", "/") + "'";
+                }
+                info += ")";
+            }
+
+
 
             return info;
         }
