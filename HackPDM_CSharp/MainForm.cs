@@ -60,6 +60,8 @@ namespace HackPDM
 
         #region declarations
 
+    //    public delegate void Delegate_ShowFileInTree(string filepath);
+
         private string strDbConn;
         private NpgsqlConnection connDb = new NpgsqlConnection();
         private NpgsqlTransaction t;
@@ -468,7 +470,6 @@ namespace HackPDM
         {
             ResetView(treeView1.SelectedNode.FullPath);
         }
-
 
         protected void InitTreeView() {
 
@@ -5073,6 +5074,14 @@ namespace HackPDM
         }
 
 
+        void CmdSearchClick(object sender, EventArgs e)
+        {
+            // load the search dialog:
+
+            SearchDialog srchdialog = new SearchDialog(connDb, strLocalFileRoot, intMyUserId, ShowFileInTree);
+            srchdialog.ShowDialog();
+            
+        }
 
 
         void MainFormFormClosed(object sender, FormClosedEventArgs e) {
@@ -5081,6 +5090,61 @@ namespace HackPDM
         }
 
 
+        public void ShowFileInTree(string filepath)
+        {
+        //    string fullpath = Utils.GetAbsolutePath(strLocalFileRoot, filepath);
+
+            treeView1.TopNode.Expand();
+            ExpandTreeBelow(filepath.Substring(1, filepath.Length - 1), treeView1.TopNode);
+
+
+
+        }
+
+
+        public void ExpandTreeBelow(string filepath, TreeNode parentnode)
+        {
+            int nextslash = filepath.IndexOf("\\");
+            if (nextslash == -1)
+                nextslash = filepath.IndexOf("/");
+
+            if (nextslash >= 0)
+            {
+                // More directories below this one:
+                string thisdir = filepath.Substring(0, nextslash);
+                string nextleveldownpath = filepath.Substring(nextslash + 1, filepath.Length - nextslash - 1);
+
+                // Find the next node out of the children nodes:
+                foreach (TreeNode child in parentnode.Nodes)
+                {
+                    if (child.Text == thisdir)
+                    {
+                        // Expand this node:
+                        child.Expand();
+
+                        // Go another level:
+                        ExpandTreeBelow(nextleveldownpath, child);
+                    }
+                }
+            }
+            else
+            {
+                // This is the file.  Highlight the node:
+                treeView1.SelectedNode = parentnode;
+
+                // Find the file in the listView:
+                foreach (ListViewItem item in listView1.Items)
+                {
+                    if (item.Text == filepath)
+                    {
+                        // Highlight the file in the listView:
+                        item.Selected = true;
+                    }
+                }
+            }
+
+            return;
+        }
 
     }
 }

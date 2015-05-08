@@ -75,6 +75,7 @@ namespace HackPDM
             this.lvChildren = new System.Windows.Forms.ListView();
             this.tabPage4 = new System.Windows.Forms.TabPage();
             this.lvProperties = new System.Windows.Forms.ListView();
+            this.searchToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cmsTree.SuspendLayout();
             this.cmsList.SuspendLayout();
             this.statusStrip1.SuspendLayout();
@@ -278,6 +279,7 @@ namespace HackPDM
             this.toolStripDropDownButton1.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
             this.toolStripDropDownButton1.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.cmdRefreshView,
+            this.searchToolStripMenuItem,
             this.cmdManageFileTypes});
             this.toolStripDropDownButton1.Image = ((System.Drawing.Image)(resources.GetObject("toolStripDropDownButton1.Image")));
             this.toolStripDropDownButton1.ImageTransparentColor = System.Drawing.Color.Magenta;
@@ -424,7 +426,7 @@ namespace HackPDM
             this.tabPage2.Location = new System.Drawing.Point(4, 22);
             this.tabPage2.Name = "tabPage2";
             this.tabPage2.Padding = new System.Windows.Forms.Padding(3);
-            this.tabPage2.Size = new System.Drawing.Size(608, 258);
+            this.tabPage2.Size = new System.Drawing.Size(608, 256);
             this.tabPage2.TabIndex = 1;
             this.tabPage2.Text = "WhereUsed";
             this.tabPage2.UseVisualStyleBackColor = true;
@@ -434,7 +436,7 @@ namespace HackPDM
             this.lvParents.Dock = System.Windows.Forms.DockStyle.Fill;
             this.lvParents.Location = new System.Drawing.Point(3, 3);
             this.lvParents.Name = "lvParents";
-            this.lvParents.Size = new System.Drawing.Size(602, 252);
+            this.lvParents.Size = new System.Drawing.Size(602, 250);
             this.lvParents.TabIndex = 0;
             this.lvParents.UseCompatibleStateImageBehavior = false;
             this.lvParents.View = System.Windows.Forms.View.Details;
@@ -445,7 +447,7 @@ namespace HackPDM
             this.tabPage3.Location = new System.Drawing.Point(4, 22);
             this.tabPage3.Name = "tabPage3";
             this.tabPage3.Padding = new System.Windows.Forms.Padding(3);
-            this.tabPage3.Size = new System.Drawing.Size(608, 258);
+            this.tabPage3.Size = new System.Drawing.Size(608, 256);
             this.tabPage3.TabIndex = 2;
             this.tabPage3.Text = "Dependents";
             this.tabPage3.UseVisualStyleBackColor = true;
@@ -455,7 +457,7 @@ namespace HackPDM
             this.lvChildren.Dock = System.Windows.Forms.DockStyle.Fill;
             this.lvChildren.Location = new System.Drawing.Point(3, 3);
             this.lvChildren.Name = "lvChildren";
-            this.lvChildren.Size = new System.Drawing.Size(602, 252);
+            this.lvChildren.Size = new System.Drawing.Size(602, 250);
             this.lvChildren.TabIndex = 0;
             this.lvChildren.UseCompatibleStateImageBehavior = false;
             this.lvChildren.View = System.Windows.Forms.View.Details;
@@ -466,7 +468,7 @@ namespace HackPDM
             this.tabPage4.Location = new System.Drawing.Point(4, 22);
             this.tabPage4.Name = "tabPage4";
             this.tabPage4.Padding = new System.Windows.Forms.Padding(3);
-            this.tabPage4.Size = new System.Drawing.Size(608, 258);
+            this.tabPage4.Size = new System.Drawing.Size(608, 256);
             this.tabPage4.TabIndex = 3;
             this.tabPage4.Text = "Properties";
             this.tabPage4.UseVisualStyleBackColor = true;
@@ -476,10 +478,17 @@ namespace HackPDM
             this.lvProperties.Dock = System.Windows.Forms.DockStyle.Fill;
             this.lvProperties.Location = new System.Drawing.Point(3, 3);
             this.lvProperties.Name = "lvProperties";
-            this.lvProperties.Size = new System.Drawing.Size(602, 252);
+            this.lvProperties.Size = new System.Drawing.Size(602, 250);
             this.lvProperties.TabIndex = 0;
             this.lvProperties.UseCompatibleStateImageBehavior = false;
             this.lvProperties.View = System.Windows.Forms.View.Details;
+            // 
+            // searchToolStripMenuItem
+            // 
+            this.searchToolStripMenuItem.Name = "searchToolStripMenuItem";
+            this.searchToolStripMenuItem.Size = new System.Drawing.Size(172, 22);
+            this.searchToolStripMenuItem.Text = "Search";
+            this.searchToolStripMenuItem.Click += new System.EventHandler(this.CmdSearchClick);
             // 
             // MainForm
             // 
@@ -550,5 +559,6 @@ namespace HackPDM
         private System.Windows.Forms.ToolStripMenuItem deleteToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem logicalDeleteToolStripMenuItem2;
         private System.Windows.Forms.ToolStripMenuItem permanentDeleteToolStripMenuItem1;
+        private System.Windows.Forms.ToolStripMenuItem searchToolStripMenuItem;
     }
 }
