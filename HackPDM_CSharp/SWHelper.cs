@@ -44,9 +44,9 @@ namespace HackPDM
             {
                 swApp = new SldWorks.SldWorks();
             }
-            catch
+            catch (Exception ex)
             {
-                DialogResult dr = MessageBox.Show("Failed to get a SolidWorks instance",
+                DialogResult dr = MessageBox.Show("Failed to get a SolidWorks instance: " + ex.Message,
                     "Loading SW",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Exclamation,
@@ -96,9 +96,14 @@ namespace HackPDM
 
         }
 
-        public List<string[]> GetProperties(string FileName)
+        public List<Tuple<string, string, string, string, object>> GetProperties(string FileName)
         {
-            List<string[]> lstProps = new List<string[]>();
+            // config name
+            // property name
+            // property type
+            // definition
+            // resolved value (boxed object)
+            List<Tuple<string, string, string, string, object>> lstProps = new List<Tuple<string, string, string, string, object>>();
 
             // get doc type
             swDocumentTypes_e swDocType = GetTypeFromString(FileName);
@@ -132,28 +137,62 @@ namespace HackPDM
 
                 SldWorks.CustomPropertyManager swCustPropMgr = swDocExt.get_CustomPropertyManager(strConfigName);
 
-                object oPropNames;
-                object oPropTypes;
-                object oPropValues;
-                object oResolved;
+                object oPropNames = null;
+                object oPropTypes = null;
+                object oPropValues = null;
+                //object oResolved = null;
 
                 //swCustPropMgr.GetAll2(ref oPropNames, ref oPropTypes, ref oPropValues, ref oResolved);
                 swCustPropMgr.GetAll(ref oPropNames, ref oPropTypes, ref oPropValues);
 
+                // get list of properties for this config
                 int intPropCount = ((string[])oPropNames).Length;
-                string[] strProps = new string[5];
                 for (int i = 0; i < intPropCount; i++ )
                 {
-                    strProps[0] = ((string[])oPropNames)[i]; // property name
-                    strProps[1] = ((string[])oPropTypes)[i]; // property type
-                    strProps[2] = ((string[])oPropValues)[i]; // value with GetAll(), definition with GetAll2()
-                    //strProps[3] = ((string[])oResolved)[i]; // resolved value
-                    strProps[3] = ((string[])oPropValues)[i]; // resolved value
-                    strProps[4] = strConfigName;
+                    // property name
+                    string strPropName = ((string[])oPropNames)[i]; // property name
+
+                    // property type
+                    string strPropType = "";
+                    swCustomInfoType_e eCustInfoType = ((swCustomInfoType_e[])oPropTypes)[i]; // property type
+                    switch (eCustInfoType)
+                    {
+                        case swCustomInfoType_e.swCustomInfoDate:
+                            strPropType = "date";
+                            break;
+                        case swCustomInfoType_e.swCustomInfoDouble:
+                            strPropType = "number";
+                            break;
+                        case swCustomInfoType_e.swCustomInfoNumber:
+                            strPropType = "number";
+                            break;
+                        case swCustomInfoType_e.swCustomInfoText:
+                            strPropType = "text";
+                            break;
+                        case swCustomInfoType_e.swCustomInfoUnknown:
+                            strPropType = "";
+                            break;
+                        case swCustomInfoType_e.swCustomInfoYesOrNo:
+                            strPropType = "yesno";
+                            break;
+                    }
+
+                    // property definition
+                    string strPropDef = ((string[])oPropValues)[i]; // definition
+
+                    // property value
+                    //object oPropValue = ((object[])oResolved)[i]; // resolved value, with GetAll2()
+                    object oPropValue = ((object[])oPropValues)[i]; // resolved value, with GetAll()
+                    oPropValue.GetType();
+                    if (oPropValue.GetType() == typeof(System.Double))
+                    {
+                        oPropValue = (Decimal)oPropValue;
+                    }
+
+                    // add to list
+                    lstProps.Add(Tuple.Create<string, string, string, string, object>(strConfigName, strPropName, strPropType, strPropDef, oPropValue));
 
                 }
-
-                lstProps.Add(strProps);
 
             }
 

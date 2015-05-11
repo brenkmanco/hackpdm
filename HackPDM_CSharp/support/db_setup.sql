@@ -310,15 +310,21 @@ CREATE SEQUENCE seq_hp_property_prop_id START 1001;
 create table hp_property (
 	
 	prop_id integer NOT NULL default nextval('seq_hp_property_prop_id'::regclass),
-	prop_name varchar(255) NOT NULL,
+	prop_name varchar(255) NOT NULL UNIQUE,
 	prop_type varchar(10) NOT NULL CHECK (prop_type='text' or prop_type='date' or prop_type='number' or prop_type='yesno'),
 	create_stamp timestamp(6) without time zone NOT NULL DEFAULT now(),
 	create_user integer NOT NULL,
+	active boolean NOT NULL default true,
 	
 	primary key (prop_id),
 	foreign key(create_user) references hp_user(user_id)
 	
 );
+
+/* upgrade
+	alter table hp_property add unique (prop_name);
+	alter table hp_property add column active boolean NOT NULL default true;
+*/
 
 insert into hp_property (prop_name, prop_type, create_user) values ('Author (in Summary tab)','text',1);
 insert into hp_property (prop_name, prop_type, create_user) values ('Comments (in Summary tab)','text',1);
@@ -1156,7 +1162,6 @@ $BODY$
   LANGUAGE sql VOLATILE
   COST 100
   ROWS 1000;
-
 
 
 

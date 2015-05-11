@@ -72,6 +72,11 @@ namespace HackPDM
         private DataSet dsTree = new DataSet();
         private DataSet dsList = new DataSet();
 
+        private DataTable dtServSettings = new DataTable("settings");
+
+        private Dictionary<string, int> dictPropIds;
+        private Dictionary<int, string> dictPropTypes;
+
         private string strLocalFileRoot;
         private int intMyUserId;
         private int intMyNodeId;
@@ -111,6 +116,9 @@ namespace HackPDM
 
             // get (and set if necessary) my node_id
             intMyNodeId = GetNodeId();
+
+            // get server settings
+            LoadServerSettings();
 
             // get remote file type manager
             ftmStart = new FileTypeManager(connDb, strLocalFileRoot, Utils.GetRelativePath(strLocalFileRoot, strLocalFileRoot));
@@ -362,6 +370,14 @@ namespace HackPDM
 
         }
 
+        private void LoadServerSettings()
+        {
+            // try to get settings data from the server
+            string strSql = "select * from hp_settings;";
+            NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+            daTemp.Fill(dtServSettings);
+        }
+
 
         private void LoadRemoteDirs() {
 
@@ -402,6 +418,50 @@ namespace HackPDM
 
         }
 
+        private void LoadPropertyMaps()
+        {
+
+            // clear the ids dict
+            dictPropIds = new Dictionary<string, int>();
+
+            // load custom property info to dictionary
+            string strSql = @"
+                select
+                    prop_name,
+                    prop_id
+                from hp_property
+                where active=true;
+            ";
+            NpgsqlCommand command = new NpgsqlCommand(strSql, connDb);
+            using (NpgsqlDataReader dr = command.ExecuteReader())
+            {
+                while (dr.Read())
+                {
+                    dictPropIds.Add((string)dr[0], (int)dr[1]);
+                }
+            }
+
+            // clear the types dict
+            dictPropTypes = new Dictionary<int, string>();
+
+            // load custom property info to dictionary
+            strSql = @"
+                select
+                    prop_id,
+                    prop_type
+                from hp_property
+                where active=true;
+            ";
+            command = new NpgsqlCommand(strSql, connDb);
+            using (NpgsqlDataReader dr = command.ExecuteReader())
+            {
+                while (dr.Read())
+                {
+                    dictPropTypes.Add((int)dr[0], (string)dr[1]);
+                }
+            }
+
+        }
 
         private void ResetView(string strTreePath = "")
         {
@@ -928,8 +988,8 @@ namespace HackPDM
                 left join hp_user as u on u.user_id=v.create_user
                 left join (
                     select
-	                    rv.rel_version_id,
-	                    max(r.release_date) as release_date
+                        rv.rel_version_id,
+                        max(r.release_date) as release_date
                     from hp_release_version_rel as rv
                     left join hp_release as r on r.release_id=rv.rel_version_id
                     group by rv.rel_version_id
@@ -1867,12 +1927,6 @@ namespace HackPDM
             {
                 blnFailed = blnFailed || AddVersionDepends(sender, e, t, ref dsCommits);
             }
-
-            // TODO: insert file properties
-            //if (blnFailed == false)
-            //{
-            //    blnFailed = blnFailed || AddFileProps(sender, e, t, ref dsCommits);
-            //}
 
             // clear checkout data
             if (blnFailed == false)
@@ -3033,6 +3087,9 @@ namespace HackPDM
                 return true;
             }
 
+            // load custom property map
+            LoadPropertyMaps();
+
             string strSql;
 
             // prepare to get new entry ids
@@ -3188,6 +3245,10 @@ namespace HackPDM
                         blnFailed = true;
                 }
 
+                // get and insert custom properties
+                dlgStatus.AddStatusLine("INFO", "Adding file properties db (" + (i + 1).ToString() + " of " + intNewCount.ToString() + "): " + strFileName);
+                blnFailed = AddFileProps(sender, e, t, intVersionId, strFullName);
+
                 // update relationships parent_id or child_id with new version_id
                 DataRow[] drRels = dsCommits.Tables["rels"].Select(String.Format("(child_name='{0}' and child_absolute_path='{1}') or (parent_name='{0}' and parent_absolute_path='{1}')", strFileName, strAbsPath));
                 foreach (DataRow drRel in drRels)
@@ -3232,6 +3293,124 @@ namespace HackPDM
                 drNewFile.SetField<int>("entry_id", intEntryId);
                 drNewFile.SetField<int>("version_id", intVersionId);
 
+            }
+
+            return blnFailed;
+
+        }
+
+        private bool AddFileProps(object sender, DoWorkEventArgs e, NpgsqlTransaction t, int VersionId, string FullName)
+        {
+            BackgroundWorker myWorker = sender as BackgroundWorker;
+            bool blnFailed = false;
+
+            // make sure we are working inside of a transaction
+            if (t.Connection == null)
+            {
+                MessageBox.Show("The database transaction is not functional");
+                return true;
+            }
+
+            // get custom properties
+            // 1 - config name
+            // 2 - property name
+            // 3 - property type
+            // 4 - definition
+            // 5 - resolved value (boxed object)
+            List<Tuple<string, string, string, string, object>> lstProps = connSw.GetProperties(FullName);
+
+            // get server setting
+            bool blnRestrict = dtServSettings.Select("setting_name = 'restrict_properties'")[0].Field<bool>("setting_bool_value");
+
+            // initialize sql statement
+            string strSql = @"
+                insert into hp_version_property (
+                    version_id,
+                    config_name,
+                    prop_id,
+                    text_value,
+                    date_value,
+                    number_value,
+                    yesno_value
+                ) values
+                ";
+            string strSqlTemplate = "({0}, {1}, {2}, {3}, {4}, {5}, {6}),";
+
+            foreach (Tuple<string, string, string, string, object> tplProps in lstProps)
+            {
+                string strConfigName = tplProps.Item1; // config name
+                string strPropName = tplProps.Item2;   // property name
+                string strPropType = tplProps.Item3;   // property type
+                string strPropValue = tplProps.Item4;  // value with GetAll(), definition with GetAll2()
+                object oResolved = tplProps.Item5;     // resolved value
+
+                // check for property definition on server
+                int intPropId = 0;
+                dictPropIds.TryGetValue(strPropName, out intPropId);
+                string strServPropType = "";
+                dictPropTypes.TryGetValue(intPropId, out strServPropType);
+
+                // if not defined on server
+                if (intPropId == 0){
+                    // if restricting undefined properties
+                    if (blnRestrict)
+                    {
+                        // send a warning, and skip this property
+                        dlgStatus.AddStatusLine("WARNING", String.Format("Undefined property ({0}) on file {1}", strPropName, FullName));
+                        continue;
+                    }
+                    else
+                    {
+                        // send info and process this property definition
+                        dlgStatus.AddStatusLine("INFO", String.Format("Creating new property ({0}) on file {1}", strPropName, FullName));
+
+                        // get new property id
+                        NpgsqlCommand cmdGetPropId = new NpgsqlCommand("select nextval('seq_hp_entry_entry_id'::regclass);", connDb, t);
+                        intPropId = (int)cmdGetPropId.ExecuteScalar();
+
+                        // TODO: add to sql for inserting property definitions
+
+                    }
+                }
+
+                // if property types do not match
+                if (strPropType!=strServPropType)
+                {
+                        // send a warning, and skip this property
+                        dlgStatus.AddStatusLine("WARNING", String.Format("Mismatched property type ({0}) ({1}!={2}): {3}", strPropName, strServPropType, strPropType, FullName));
+                        continue;
+                }
+
+                // establish string values
+                string strText = (strPropType == "text" ? "'" + ((string)oResolved).Replace("'", "\'").Replace("\\", "\\\\") + "'" : "NULL");
+                string strDate = (strPropType == "date" ? "'" + ((DateTime)oResolved).ToString("yyyy-mm-dd HH:MM:ss") + "'" : "NULL");
+                string strNumber = (strPropType == "number" ? ((Decimal)oResolved).ToString() : "NULL");
+                string strBool = (strPropType == "yesno" ? ((Boolean)oResolved).ToString() : "NULL");
+
+                // add to the sql command
+                strSql += String.Format(strSqlTemplate,
+                    VersionId,
+                    "'" + strConfigName.Replace("\\", "\\\\").Replace("'","\'") + "'",
+                    intPropId,
+                    strText,
+                    strDate,
+                    strNumber,
+                    strBool
+                );
+
+            }
+
+            // execute the command
+            NpgsqlCommand cmdInsert = new NpgsqlCommand(strSql, connDb, t);
+            try
+            {
+                cmdInsert.ExecuteNonQuery();
+            }
+            catch (NpgsqlException ex)
+            {
+                // integrity constraint violation?
+                dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                blnFailed = true;
             }
 
             return blnFailed;
