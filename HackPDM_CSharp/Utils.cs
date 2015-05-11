@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows.Forms;
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Collections.Generic;
 
 namespace HackPDM
 {
@@ -89,6 +90,7 @@ namespace HackPDM
             }
         }
 
+
         public static string GetAbsolutePath(string strLocalFileRoot, string stringPath)
         {
             //Get Full path
@@ -109,6 +111,7 @@ namespace HackPDM
             }
         }
 
+
         public static string GetRelativePath(string strLocalFileRoot, string stringPath)
         {
             // get tree path
@@ -121,11 +124,13 @@ namespace HackPDM
             return stringParse;
         }
 
+
         public static string GetShortName(string FullName)
         {
             //    return FullName.Substring(FullName.LastIndexOf("\\") + 1);
             return Utils.GetBaseName(FullName);
         }
+
 
         //protected string GetFileExt(string strFileName) {
         //    //Get Name of folder
@@ -133,6 +138,7 @@ namespace HackPDM
         //    int _maxIndex = strSplit.Length-1;
         //    return strSplit[_maxIndex];
         //}
+
 
         public static string FormatDate(DateTime dtDate)
         {
@@ -150,6 +156,7 @@ namespace HackPDM
             return stringDate;
 
         }
+
 
         public static string FormatSize(Int64 lSize)
         {
@@ -186,6 +193,7 @@ namespace HackPDM
 
         }
 
+
         public static string StringMD5(string FileName)
         {
             // get local file checksum
@@ -196,6 +204,30 @@ namespace HackPDM
                 {
                     return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
                 }
+            }
+        }
+
+
+        public static void GetAllFilesInDir(string dirpath, ref List<string> filesfound)
+        {
+            try
+            {
+                foreach (string d in Directory.GetDirectories(dirpath))
+                {
+                    foreach (string f in Directory.GetFiles(d))
+                    {
+                        filesfound.Add(f);
+                    }
+
+                    GetAllFilesInDir(d, ref filesfound);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MessageBox.Show("Error finding local files.",
+                        "File Discovery Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
             }
         }
     }

@@ -40,6 +40,8 @@
             this.btnCancel = new System.Windows.Forms.Button();
             this.cbxDeletedLocal = new System.Windows.Forms.CheckBox();
             this.lvSearchResults = new System.Windows.Forms.ListView();
+            this.columnHeader1 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.columnHeader2 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.cmsListItemMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.goToToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.openToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -58,7 +60,7 @@
             // 
             // txtFilename
             // 
-            this.txtFilename.Location = new System.Drawing.Point(15, 25);
+            this.txtFilename.Location = new System.Drawing.Point(12, 25);
             this.txtFilename.Name = "txtFilename";
             this.txtFilename.Size = new System.Drawing.Size(341, 20);
             this.txtFilename.TabIndex = 10;
@@ -75,15 +77,17 @@
             // 
             // cboProperty
             // 
+            this.cboProperty.AutoCompleteMode = System.Windows.Forms.AutoCompleteMode.Suggest;
+            this.cboProperty.AutoCompleteSource = System.Windows.Forms.AutoCompleteSource.ListItems;
             this.cboProperty.FormattingEnabled = true;
-            this.cboProperty.Location = new System.Drawing.Point(15, 70);
+            this.cboProperty.Location = new System.Drawing.Point(12, 70);
             this.cboProperty.Name = "cboProperty";
             this.cboProperty.Size = new System.Drawing.Size(121, 21);
             this.cboProperty.TabIndex = 20;
             // 
             // txtProperty
             // 
-            this.txtProperty.Location = new System.Drawing.Point(150, 70);
+            this.txtProperty.Location = new System.Drawing.Point(147, 70);
             this.txtProperty.Name = "txtProperty";
             this.txtProperty.Size = new System.Drawing.Size(206, 20);
             this.txtProperty.TabIndex = 30;
@@ -118,6 +122,7 @@
             // 
             // btnCancel
             // 
+            this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
             this.btnCancel.Location = new System.Drawing.Point(871, 41);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(75, 23);
@@ -138,11 +143,27 @@
             // 
             // lvSearchResults
             // 
+            this.lvSearchResults.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
+            this.columnHeader1,
+            this.columnHeader2});
+            this.lvSearchResults.HideSelection = false;
             this.lvSearchResults.Location = new System.Drawing.Point(12, 117);
+            this.lvSearchResults.MultiSelect = false;
             this.lvSearchResults.Name = "lvSearchResults";
             this.lvSearchResults.Size = new System.Drawing.Size(934, 424);
             this.lvSearchResults.TabIndex = 90;
             this.lvSearchResults.UseCompatibleStateImageBehavior = false;
+            // 
+            // columnHeader1
+            // 
+            this.columnHeader1.Text = "File Name";
+            this.columnHeader1.Width = 100;
+            // 
+            // columnHeader2
+            // 
+            this.columnHeader2.Text = "File Path";
+            this.columnHeader2.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
+            this.columnHeader2.Width = 200;
             // 
             // cmsListItemMenu
             // 
@@ -178,9 +199,11 @@
             // 
             // SearchDialog
             // 
+            this.AcceptButton = this.btnSearch;
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(958, 553);
+            this.CancelButton = this.btnCancel;
+            this.ClientSize = new System.Drawing.Size(960, 554);
             this.Controls.Add(this.cbxLocalOnly);
             this.Controls.Add(this.lvSearchResults);
             this.Controls.Add(this.cbxDeletedLocal);
@@ -218,5 +241,7 @@
         private System.Windows.Forms.ToolStripMenuItem goToToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem openToolStripMenuItem;
         private System.Windows.Forms.CheckBox cbxLocalOnly;
+        private System.Windows.Forms.ColumnHeader columnHeader1;
+        private System.Windows.Forms.ColumnHeader columnHeader2;
     }
 }
