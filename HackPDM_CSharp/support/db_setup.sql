@@ -334,34 +334,6 @@ insert into hp_property (prop_name, prop_type, create_user) values ('Last saved 
 insert into hp_property (prop_name, prop_type, create_user) values ('Last saved date (in Summary tab)','date',1);
 insert into hp_property (prop_name, prop_type, create_user) values ('Subject (in Summary tab)','text',1);
 insert into hp_property (prop_name, prop_type, create_user) values ('Title (in Summary tab)','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('AltQty','number',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Coating','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Date1','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Date2','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Description','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Designed By','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('ECO','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('EcoChk','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('EcoDescription','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('EcoRevs','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Eng Appr Date','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Eng Approval','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Engineer Approval','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Finish','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Material','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Mfg Appr Date','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Mfg Approval','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Notes','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('P_M','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('PartNum','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Purch Appr Date','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Purch Approval','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('QA Appr Date','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('QA Approval','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Revision','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Type','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('UOM','text',1);
-insert into hp_property (prop_name, prop_type, create_user) values ('Zone','text',1);
 
 
 
