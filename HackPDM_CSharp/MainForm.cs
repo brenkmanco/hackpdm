@@ -1223,7 +1223,7 @@ namespace HackPDM
                 left join hp_property as p on p.prop_id=vp.prop_id
                 left join hp_version as v on v.version_id=vp.version_id
                 where v.entry_id=:entry_id
-                order by vp.version_id desc, p.prop_name;
+                order by vp.version_id desc, vp.config_name, p.prop_name;
             ";
 
             // put the remote list in the DataSet
@@ -1249,7 +1249,7 @@ namespace HackPDM
 
                 // build array
                 string[] lvData = new string[5];
-                lvData[0] = row.Field<string>("version_id");
+                lvData[0] = row.Field<int>("version_id").ToString();
                 lvData[1] = row.Field<string>("config_name");
                 lvData[2] = row.Field<string>("prop_name");
                 lvData[3] = strValue;
@@ -1944,7 +1944,7 @@ namespace HackPDM
                     {
                         strEntryIds += dr.Field<int>("entry_id").ToString() + ",";
                     }
-                    strEntryIds.Substring(0, strEntryIds.Length - 1); // remove trailing comma
+                    strEntryIds = strEntryIds.Remove(strEntryIds.Length - 1); // remove trailing comma
 
                     dlgStatus.AddStatusLine("INFO", "Clearing checkout data on " + intRowCount.ToString() + " files");
                     string strSql;
@@ -1981,7 +1981,6 @@ namespace HackPDM
                 // TODO: figure out how to rollback WebDav changes
                 // we could just look for orphaned ids on the webdav server, and then call methods to delete those files
 
-                dlgStatus.AddStatusLine("ERROR", "Operation failed. Rolling back the database transaction.");
                 throw new System.Exception("Operation failed. Rolling back the database transaction.");
             }
             else
@@ -2159,7 +2158,7 @@ namespace HackPDM
                 {
                     strEntries += dr.Field<int>("entry_id").ToString() + ",";
                 }
-                strEntries.Substring(0, strEntries.Length - 1); // remove trailing comma
+                strEntries = strEntries.Remove(strEntries.Length - 1); // remove trailing comma
             }
             intRowCount = drSelected.Length;
             if (intRowCount == 0)
@@ -2629,10 +2628,14 @@ namespace HackPDM
                             string strAbsolutePath = fiCurrFile.DirectoryName;
                             string strRelativePath = Utils.GetRelativePath(strLocalFileRoot, strAbsolutePath);
 
+                            // get directory id
+                            Int32 intDirId = 0;
+                            dictTree.TryGetValue(strRelativePath, out intDirId);
+
                             dsCommits.Tables["files"].Rows.Add(
                                 null, // entry_id
                                 null, // version_id
-                                0, // dir_id
+                                intDirId, // dir_id
                                 strDepends[0], // entry_name
                                 null, // type_id
                                 strFileExt, // file_ext
@@ -2669,20 +2672,14 @@ namespace HackPDM
                             DataRow[] drCheck = dsCommits.Tables["dirs"].Select("absolute_path = '" + strAbsolutePath + "'");
                             if (drCheck.Length == 0)
                             {
-                                // get directory name
-                            //    string strDirName = strRelativePath.Substring(strRelativePath.LastIndexOf("\\") + 1);
+                                // get parent directory name
                                 string strDirName = Utils.GetParentDirectory(strRelativePath);
-
-                                // get directory id
-                                Int32 intDirId = 0;
-                                dictTree.TryGetValue(strRelativePath, out intDirId);
 
                                 // get parent directory id
                                 Int32 intParentId = 0;
                                 if (strRelativePath != "")
                                 {
                                     // if the path is in pwa
-                                //    string strParentPath = strRelativePath.Substring(0, strRelativePath.LastIndexOf("\\"));
                                     string strParentPath = Utils.GetParentDirectory(strRelativePath);
                                     dictTree.TryGetValue(strParentPath, out intParentId);
                                 }
@@ -2797,9 +2794,9 @@ namespace HackPDM
                     //drLocalFile.SetField<string>("str_local_stamp", drTemp.Field<string>("str_local_stamp"));
                     drLocalFile.SetField<string>("latest_md5", drTemp.Field<string>("latest_md5"));
                     //drLocalFile.SetField<string>("local_md5", drTemp.Field<string>("local_md5"));
-                    drLocalFile.SetField<Int32>("checkout_user", drTemp.Field<Int32>("checkout_user"));
+                    drLocalFile.SetField<Int32?>("checkout_user", drTemp.Field<Int32?>("checkout_user"));
                     drLocalFile.SetField<string>("ck_user_name", drTemp.Field<string>("ck_user_name"));
-                    drLocalFile.SetField<DateTime>("checkout_date", drTemp.Field<DateTime>("checkout_date"));
+                    drLocalFile.SetField<DateTime?>("checkout_date", drTemp.Field<DateTime?>("checkout_date"));
                     drLocalFile.SetField<string>("str_checkout_date", drTemp.Field<string>("str_checkout_date"));
                     drLocalFile.SetField<string>("checkout_node", drTemp.Field<string>("checkout_node"));
                     //drLocalFile.SetField<Boolean>("is_local", drTemp.Field<Boolean>("is_local"));
@@ -3402,6 +3399,7 @@ namespace HackPDM
             }
 
             // execute the command
+            strSql = strSql.Remove(strSql.Length - 1); // remove trailing comma
             NpgsqlCommand cmdInsert = new NpgsqlCommand(strSql, connDb, t);
             try
             {

@@ -131,8 +131,10 @@ namespace HackPDM
             SldWorks.ModelDocExtension swDocExt = swModelDoc.Extension;
 
             // get list of configs
-			string[] strConfgNames = (string[])swModelDoc.GetConfigurationNames();
-            foreach (string strConfigName in strConfgNames)
+            //string[] strConfgNames = (string[])swModelDoc.GetConfigurationNames();
+            List<string> lstConfigNames = new List<string>((string[])swModelDoc.GetConfigurationNames());
+            lstConfigNames.Add("");
+            foreach (string strConfigName in lstConfigNames)
             {
 
                 SldWorks.CustomPropertyManager swCustPropMgr = swDocExt.get_CustomPropertyManager(strConfigName);
@@ -144,6 +146,11 @@ namespace HackPDM
 
                 //swCustPropMgr.GetAll2(ref oPropNames, ref oPropTypes, ref oPropValues, ref oResolved);
                 swCustPropMgr.GetAll(ref oPropNames, ref oPropTypes, ref oPropValues);
+
+                if (oPropNames == null)
+                {
+                    continue;
+                }
 
                 // get list of properties for this config
                 int intPropCount = ((string[])oPropNames).Length;
