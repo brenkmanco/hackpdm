@@ -140,6 +140,7 @@
             this.cbxDeletedLocal.TabIndex = 50;
             this.cbxDeletedLocal.Text = "Deleted Existing Locally";
             this.cbxDeletedLocal.UseVisualStyleBackColor = true;
+            this.cbxDeletedLocal.CheckedChanged += new System.EventHandler(this.chkbxDeletedRemote_OnChanged);
             // 
             // lvSearchResults
             // 
@@ -196,6 +197,7 @@
             this.cbxLocalOnly.TabIndex = 60;
             this.cbxLocalOnly.Text = "Only Existing Locally";
             this.cbxLocalOnly.UseVisualStyleBackColor = true;
+            this.cbxLocalOnly.CheckedChanged += new System.EventHandler(this.chkbxLocalOnly_OnChanged);
             // 
             // SearchDialog
             // 

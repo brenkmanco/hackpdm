@@ -258,7 +258,7 @@ namespace HackPDM
             {
                 // These are for jared's testing (couldn't get the config file thing working...):
                 strCurrProfileId = "96ab093f-f106-49bd-8626-6d3bb2877965";
-                strXmlProfiles = "<DocumentElement>\r\n  <profiles>\r\n    <PfGuid>96ab093f-f106-49bd-8626-6d3bb2877965</PfGuid>\r\n    <PfName>jared</PfName>\r\n    <DbServ>192.168.52.134</DbServ>\r\n    <DbPort>5432</DbPort>\r\n    <DbUser>demouser</DbUser>\r\n    <DbPass>demo</DbPass>\r\n    <DbName>hackpdm</DbName>\r\n    <DavServ>http://192.168.52.134</DavServ>\r\n    <DavPort>80</DavPort>\r\n    <DavUser/>\r\n    <DavPass/>\r\n    <DavPath>webdav</DavPath>\r\n    <FsRoot>D:\\Desktop Stuff\\Work\\Asphalt Zipper</FsRoot>\r\n    <Username>demo</Username>\r\n    <Password>demo</Password>\r\n  </profiles>\r\n</DocumentElement>";
+                strXmlProfiles = "<DocumentElement>\r\n  <profiles>\r\n    <PfGuid>96ab093f-f106-49bd-8626-6d3bb2877965</PfGuid>\r\n    <PfName>jared</PfName>\r\n    <DbServ>192.168.52.135</DbServ>\r\n    <DbPort>5432</DbPort>\r\n    <DbUser>demouser</DbUser>\r\n    <DbPass>demo</DbPass>\r\n    <DbName>hackpdm</DbName>\r\n    <DavServ>http://192.168.52.135</DavServ>\r\n    <DavPort>80</DavPort>\r\n    <DavUser/>\r\n    <DavPass/>\r\n    <DavPath>webdav</DavPath>\r\n    <FsRoot>D:\\Desktop Stuff\\Work\\Asphalt Zipper</FsRoot>\r\n    <Username>demo</Username>\r\n    <Password>demo</Password>\r\n  </profiles>\r\n</DocumentElement>";
             }
 #endif
 

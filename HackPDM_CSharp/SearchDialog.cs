@@ -87,7 +87,14 @@ namespace HackPDM
                 string filenameContains = txtFilename.Text;
                 string chkbxInfo = GetCheckboxInfo();
 
-                sqlquerystr = @"SELECT * FROM hp_entry AS e LEFT JOIN view_dir_tree AS t ON t.dir_id=e.dir_id WHERE (UPPER(e.entry_name) LIKE '%" + filenameContains.ToUpper() + "%' " + chkbxInfo + ");";
+                if (cbxLocalOnly.Checked)
+                {
+                    sqlquerystr = chkbxInfo;
+
+                    sqlquerystr += " AND UPPER(l.entry_name) LIKE '%" + filenameContains.ToUpper() + "%');";
+                }
+                else
+                    sqlquerystr = @"SELECT * FROM hp_entry AS e LEFT JOIN view_dir_tree AS t ON t.dir_id=e.dir_id WHERE (UPPER(e.entry_name) LIKE '%" + filenameContains.ToUpper() + "%' " + chkbxInfo + ");";
             }
             else if (txtFilename.TextLength > 0 && cboProperty.Text != "")
             {
@@ -99,9 +106,20 @@ namespace HackPDM
                 if (propContains == "")
                     return;
                 string chkbxInfo = GetCheckboxInfo();
-                proptype = PropTypeMap[cboProperty.Text] + "_value";
 
-                sqlquerystr = @"SELECT * FROM hp_entry AS e LEFT JOIN view_dir_tree AS t ON t.dir_id=e.dir_id INNER JOIN hp_version AS v ON v.entry_id=e.entry_id INNER JOIN hp_version_property AS vp ON vp.version_id=v.version_id WHERE (UPPER(e.entry_name) LIKE '%" + filenameContains.ToUpper() + "%' AND " + propContains + chkbxInfo + ");";
+                if (cbxLocalOnly.Checked)
+                {
+                    sqlquerystr = chkbxInfo;
+
+                    //  chkbxInfo += " AND WHERE (UPPER(e.entry_name) LIKE '%" + filenameContains.ToUpper() + "%' AND " + propContains + ");";
+                    sqlquerystr += " AND UPPER(l.entry_name) LIKE '%" + filenameContains.ToUpper() + "%')";
+                }
+                else
+                {
+                    proptype = PropTypeMap[cboProperty.Text] + "_value";
+
+                    sqlquerystr = @"SELECT * FROM hp_entry AS e LEFT JOIN view_dir_tree AS t ON t.dir_id=e.dir_id INNER JOIN hp_version AS v ON v.entry_id=e.entry_id INNER JOIN hp_version_property AS vp ON vp.version_id=v.version_id WHERE (UPPER(e.entry_name) LIKE '%" + filenameContains.ToUpper() + "%' AND " + propContains + chkbxInfo + ");";
+                }
             }
             else if (txtFilename.TextLength == 0 && cboProperty.Text != "")
             {
@@ -110,9 +128,25 @@ namespace HackPDM
                 if (propContains == "")
                     return;
                 string chkbxInfo = GetCheckboxInfo();
-                proptype = PropTypeMap[cboProperty.Text] + "_value";
 
-                sqlquerystr = @"SELECT * FROM hp_entry AS e LEFT JOIN view_dir_tree AS t ON t.dir_id=e.dir_id INNER JOIN hp_version AS v ON v.entry_id=e.entry_id INNER JOIN hp_version_property AS vp ON vp.version_id=v.version_id WHERE (" + propContains + chkbxInfo + ");";
+                if (cbxLocalOnly.Checked)
+                    sqlquerystr = chkbxInfo + ");";
+                else
+                {
+                    proptype = PropTypeMap[cboProperty.Text] + "_value";
+
+                    sqlquerystr = @"SELECT * FROM hp_entry AS e LEFT JOIN view_dir_tree AS t ON t.dir_id=e.dir_id INNER JOIN hp_version AS v ON v.entry_id=e.entry_id INNER JOIN hp_version_property AS vp ON vp.version_id=v.version_id WHERE (" + propContains + chkbxInfo + ");";
+                }
+            }
+            else if (txtFilename.TextLength == 0 && cboProperty.Text == "" && cbxLocalOnly.Checked == true)
+            {
+                // Display all local-only files:
+                sqlquerystr = GetCheckboxInfo() + ");";
+            }
+            else
+            {
+                MessageBox.Show("No search parameters provided." + System.Environment.NewLine + "Search not performed.", "Search Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
 
             // Perform the search:
@@ -128,10 +162,28 @@ namespace HackPDM
             try
             {
                 NpgsqlDataReader dr = command.ExecuteReader();
+                string filename = "";
+                string path = "";
                 while (dr.Read())
                 {
-                    string filename = dr["entry_name"].ToString();
-                    string path = dr["rel_path"].ToString();
+                    try
+                    {
+                        filename = dr["entry_name"].ToString();
+                        path = dr["rel_path"].ToString();
+                        if (filename.Length == 0)
+                        {
+                            // Nothing useful was returned:
+                            dr.Close();
+                            break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Failed reading query results." + System.Environment.NewLine + ex.Message, "Query Error",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        dr.Close();
+                        break;
+                    }
 
                     // Add the file to the list view:
                     if (proptype == "")
@@ -265,6 +317,12 @@ namespace HackPDM
                 info += " AND e.checkout_user=" + intMyUserId.ToString();
             }
 
+
+
+
+            // TODO:  The following two checkboxes might need to be mutually exclusive (i.e., what happens if both are checked?...).
+
+
             if (cbxDeletedLocal.Checked)
             {
                 // Searching for any files that are marked as "deleted" on the server, but that still exist locally:
@@ -283,7 +341,30 @@ namespace HackPDM
                 info += ")";
             }
 
+            if (cbxLocalOnly.Checked)
+            {
+                // Searching for any files that exist locally, but do not exist on the server:
+                List<string> localfiles = new List<string>();
+                Utils.GetAllFilesInDir(strFilePath, ref localfiles);
 
+                // Add these to the SQL string:
+                string tmpstr = "";
+                info = @"SELECT * FROM (";
+                foreach (string s in localfiles)
+                {
+                    if (s != localfiles[0])
+                        info += "UNION";
+                    tmpstr = Utils.GetParentDirectory(s);
+                    info += " SELECT '" + tmpstr.Substring(strFilePath.Length, tmpstr.Length - strFilePath.Length).Replace("\\", "/") + "' AS rel_path,'" + Utils.GetBaseName(s) + "' AS entry_name ";
+                }
+                info += ") AS l LEFT JOIN view_dir_tree AS t ON t.dir_name=l.rel_path LEFT JOIN hp_entry AS e ON l.entry_name=e.entry_name WHERE (e.entry_id IS NULL";
+                
+                // TODO:  Add support for searching local-only files by property.
+                if (cboProperty.Text != "")
+                {
+                    MessageBox.Show("Searching local-only files by property is currently not supported.", "Search Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
 
             return info;
         }
@@ -294,6 +375,25 @@ namespace HackPDM
             this.Close();
         }
 
+
+        private void chkbxDeletedRemote_OnChanged(object sender, EventArgs e)
+        {
+            if (cbxDeletedLocal.Checked)
+            {
+                // Uncheck the "Local Files Only" check box:
+                cbxLocalOnly.Checked = false;
+            }
+        }
+
+        private void chkbxLocalOnly_OnChanged(object sender, EventArgs e)
+        {
+            if (cbxLocalOnly.Checked)
+            {
+                // Uncheck the "Deleted Existing Locally" check box:
+                cbxDeletedLocal.Checked = false;
+                cbxCheckedMe.Checked = false;
+            }
+        }
 
         private void goToToolStripMenuItem_Click(object sender, EventArgs e)
         {

@@ -200,7 +200,6 @@ namespace HackPDM
                     lstProps.Add(Tuple.Create<string, string, string, string, object>(strConfigName, strPropName, strPropType, strPropDef, oPropValue));
 
                 }
-
             }
 
             return lstProps;
