@@ -817,7 +817,7 @@ namespace HackPDM
             // get local files
             LoadCombinedData(null, null, ref dsList, strRelPath);
 
-       }
+        }
 
         protected void PopulateList(TreeNode nodeCurrent) {
 

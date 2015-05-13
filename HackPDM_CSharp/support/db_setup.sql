@@ -149,6 +149,7 @@ CREATE TABLE hp_directory (
 	create_user integer NOT NULL,
 	modify_stamp timestamp(6) without time zone NOT NULL DEFAULT now(),
 	modify_user integer NOT NULL,
+	sandboxed boolean NOT NULL default false,
 	active boolean NOT NULL default true,
 	
 	primary key (dir_id),
@@ -169,6 +170,10 @@ CREATE TRIGGER trg_hp_directory_1_modify_stamp
 CREATE UNIQUE INDEX ON hp_directory (parent_id, lower(dir_name::text));
 
 insert into hp_directory (dir_id,parent_id,dir_name,default_cat,create_user,modify_user) values (1,NULL,'root',1,1,1);
+
+/* upgrade
+	alter table hp_directory add column sandboxed boolean NOT NULL default false;
+*/
 
 
 
@@ -224,10 +229,10 @@ insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.m
 insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.dll', '\.(dll)$', 'Microsoft Dynamic Linked Library');
 insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.exe', '\.(exe)$', 'Microsoft Executable');
 insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.bak', '\.(bak)$', 'AutoCAD Drawing Backup File');
-insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.db', '^.+\.(db)$', 'Windows Display Settings File');
 insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.dropbox', '^.+\.(dropbox)$', 'Dropbox Settings');
 insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.hold', '^.+\.(hold)$', 'Held File');
 insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.old', '^.+\.(old)$', 'Old Copy of Any File');
+insert into hp_entry_name_filter (name_proto,name_regex,description) values ('.swj', '^.+\.(swj)$', 'SolidWorks Journal File');
 
 
 
@@ -251,7 +256,11 @@ create table hp_entry (
 	checkout_date timestamp(6) without time zone,
 	checkout_node integer,
 	active boolean NOT NULL default true,
+	delete_user integer,
+	delete_date timestamp(6) without time zone,
 	destroyed boolean NOT NULL default false,
+	destroy_user integer,
+	destroy_date timestamp(6) without time zone,
 	
 	primary key (entry_id),
 	foreign key (dir_id) references hp_directory (dir_id),
@@ -260,10 +269,19 @@ create table hp_entry (
 	foreign key (create_user) references hp_user (user_id),
 	foreign key (checkout_user) references hp_user (user_id),
 	foreign key (checkout_node) references hp_node (node_id)
+	foreign key (delete_user) references hp_user (user_id),
+	foreign key (destroy_user) references hp_user (user_id),
 	
 );
 
 CREATE UNIQUE INDEX ON hp_entry (dir_id, lower(entry_name::text));
+
+/* upgrade
+	alter table hp_entry add column delete_user integer references hp_user (user_id);
+	alter table hp_entry add column delete_date timestamp(6) without time zone;
+	alter table hp_entry add column destroy_user integer references hp_user (user_id);
+	alter table hp_entry add column destroy_date timestamp(6) without time zone;
+*/
 
 
 
@@ -284,7 +302,8 @@ create table hp_version (
 	create_stamp timestamp(6) without time zone NOT NULL DEFAULT now(),
 	create_user integer NOT NULL,
 	md5sum text NOT NULL,
-	preview_image bytea NOT NULL,
+	preview_image bytea,
+	destroyed boolean NOT NULL default false,
 	
 	primary key (version_id),
 	foreign key (entry_id) references hp_entry (entry_id),
@@ -296,6 +315,8 @@ create table hp_version (
 	alter table hp_version drop column release_user;
 	alter table hp_version drop column release_date;
 	alter table hp_version drop column release_tag;
+	alter table hp_version alter column preview_image drop NOT NULL;
+	alter table hp_version add column destroyed boolean NOT NULL default false;
 */
 
 
