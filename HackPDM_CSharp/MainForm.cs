@@ -75,6 +75,7 @@ namespace HackPDM
         private DataSet dsList = new DataSet();
 
         private DataTable dtServSettings = new DataTable("settings");
+        private int intSecondsTolerance = 2;
 
         private Dictionary<string, int> dictPropIds;
         private Dictionary<int, string> dictPropTypes;
@@ -143,7 +144,7 @@ namespace HackPDM
             // test the connection
             try
             {
-               List<string> strTest = connDav.List("/",1);
+               List<string> strTest = connDav.List("/admin/",1);
             }
             catch (System.Exception e)
             {
@@ -708,7 +709,8 @@ namespace HackPDM
             listView1.Columns.Add("Size", 75, System.Windows.Forms.HorizontalAlignment.Right);
             listView1.Columns.Add("Type", 120, System.Windows.Forms.HorizontalAlignment.Left);
             listView1.Columns.Add("Stat", 60, System.Windows.Forms.HorizontalAlignment.Left);
-            listView1.Columns.Add("Modified", 120, System.Windows.Forms.HorizontalAlignment.Left);
+            listView1.Columns.Add("Local-Date", 120, System.Windows.Forms.HorizontalAlignment.Left);
+            listView1.Columns.Add("Remote-Date", 120, System.Windows.Forms.HorizontalAlignment.Left);
             listView1.Columns.Add("CheckOut", 120, System.Windows.Forms.HorizontalAlignment.Left);
             listView1.Columns.Add("Category", 140, System.Windows.Forms.HorizontalAlignment.Left);
             listView1.Columns.Add("FullName", 0, System.Windows.Forms.HorizontalAlignment.Left);
@@ -830,15 +832,16 @@ namespace HackPDM
             if (dsList.Tables[0] != null) {
                 foreach (DataRow row in dsList.Tables[0].Rows) {
 
-                    string[] lvData =  new string[8];
+                    string[] lvData =  new string[9];
                     lvData[0] = row.Field<string>("entry_name"); // Name
                     lvData[1] = row.Field<string>("str_latest_size"); // Size
                     lvData[2] = row.Field<string>("file_ext"); // Type
                     lvData[3] = row.Field<string>("client_status_code"); // Stat
-                    lvData[4] = row.Field<string>("str_latest_stamp"); // Modified
-                    lvData[5] = row.Field<string>("ck_user_name"); // CheckOut
-                    lvData[6] = row.Field<string>("cat_name"); // Category
-                    lvData[7] = row.Field<string>("absolute_path") + "\\" + row.Field<string>("entry_name"); // FullName
+                    lvData[4] = row.Field<string>("str_local_stamp"); // Local Modified
+                    lvData[5] = row.Field<string>("str_latest_stamp"); // Server Modified
+                    lvData[6] = row.Field<string>("ck_user_name"); // CheckOut
+                    lvData[7] = row.Field<string>("cat_name"); // Category
+                    lvData[8] = row.Field<string>("absolute_path") + "\\" + row.Field<string>("entry_name"); // FullName
 
                     // get file type
                     string strFileExt = row.Field<string>("file_ext");
@@ -984,13 +987,13 @@ namespace HackPDM
                     pg_size_pretty(v.file_size) as version_size,
                     to_char(v.create_stamp, 'yyyy-MM-dd HH24:mm:ss') as action_date,
                     u.last_name || ', ' || u.first_name as action_user,
-                    to_char(r.release_date, 'yyyy-MM-dd HH24:mm:ss') as release_date
+                    to_char(r.release_stamp, 'yyyy-MM-dd HH24:mm:ss') as release_stamp
                 from hp_version as v
                 left join hp_user as u on u.user_id=v.create_user
                 left join (
                     select
                         rv.rel_version_id,
-                        max(r.release_date) as release_date
+                        max(r.release_stamp) as release_stamp
                     from hp_release_version_rel as rv
                     left join hp_release as r on r.release_id=rv.rel_version_id
                     group by rv.rel_version_id
@@ -1019,7 +1022,7 @@ namespace HackPDM
                 lvData[0] = row.Field<string>("action_user");
                 lvData[1] = row.Field<string>("action_date");
                 lvData[2] = row.Field<string>("version_size");
-                lvData[3] = row.Field<string>("release_date");
+                lvData[3] = row.Field<string>("release_stamp");
 
                 // create actual list item
                 ListViewItem lvItem = new ListViewItem(lvData);
@@ -3991,13 +3994,13 @@ namespace HackPDM
                     // set status code
                     #region set status code
                     // if local stamp is greater than remote stamp
-                    if (dtModifyDate.Subtract(drTemp.Field<DateTime>("latest_stamp")).TotalSeconds > 1)
+                    if (dtModifyDate.Subtract(drTemp.Field<DateTime>("latest_stamp")).TotalSeconds > intSecondsTolerance)
                     {
                         // lm: modified locally without checking out (apparently)
                         strClientStatusCode = "lm";
                     }
                     // if remote stamp is greater than local stamp
-                    else if (dtModifyDate.Subtract(drTemp.Field<DateTime>("latest_stamp")).TotalSeconds < -1)
+                    else if (dtModifyDate.Subtract(drTemp.Field<DateTime>("latest_stamp")).TotalSeconds < -intSecondsTolerance)
                     {
                         // nv: new remote version
                         strClientStatusCode = "nv";
@@ -4338,14 +4341,35 @@ namespace HackPDM
             strSql = @"
                 update hp_entry set
                     active=:active_flag,
+                    delete_user=:delete_user,
+                    delete_stamp=:delete_stamp,
                     destroyed=:destroyed_flag
+                    destroy_user=:destroy_user,
+                    destroy_stamp=:destroy_stamp
                 where entry_id in (" + strEntries + ")";
 
             NpgsqlCommand cmdInactivateEntry = new NpgsqlCommand(strSql, connDb, t);
             cmdInactivateEntry.Parameters.Add(new NpgsqlParameter("active_flag", NpgsqlTypes.NpgsqlDbType.Boolean));
             cmdInactivateEntry.Parameters.Add(new NpgsqlParameter("destroyed_flag", NpgsqlTypes.NpgsqlDbType.Boolean));
+            cmdInactivateEntry.Parameters.Add(new NpgsqlParameter("delete_user", NpgsqlTypes.NpgsqlDbType.Integer));
+            cmdInactivateEntry.Parameters.Add(new NpgsqlParameter("delete_stamp", NpgsqlTypes.NpgsqlDbType.Timestamp));
+            cmdInactivateEntry.Parameters.Add(new NpgsqlParameter("destroy_user", NpgsqlTypes.NpgsqlDbType.Integer));
+            cmdInactivateEntry.Parameters.Add(new NpgsqlParameter("destroy_stamp", NpgsqlTypes.NpgsqlDbType.Timestamp));
             cmdInactivateEntry.Parameters["active_flag"].Value = false;
             cmdInactivateEntry.Parameters["destroyed_flag"].Value = blnDestroy;
+            cmdInactivateEntry.Parameters["delete_user"].Value = intMyUserId;
+            cmdInactivateEntry.Parameters["delete_stamp"].Value = DateTime.Now;
+
+            if (blnDestroy)
+            {
+                cmdInactivateEntry.Parameters["destroy_user"].Value = intMyUserId;
+                cmdInactivateEntry.Parameters["destroy_stamp"].Value = DateTime.Now;
+            }
+            else
+            {
+                cmdInactivateEntry.Parameters["destroy_user"].Value = DBNull.Value;
+                cmdInactivateEntry.Parameters["destroy_stamp"].Value = DBNull.Value;
+            }
 
             // try deleting (inactivating)
             try

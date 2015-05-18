@@ -257,10 +257,10 @@ create table hp_entry (
 	checkout_node integer,
 	active boolean NOT NULL default true,
 	delete_user integer,
-	delete_date timestamp(6) without time zone,
+	delete_stamp timestamp(6) without time zone,
 	destroyed boolean NOT NULL default false,
 	destroy_user integer,
-	destroy_date timestamp(6) without time zone,
+	destroy_stamp timestamp(6) without time zone,
 	
 	primary key (entry_id),
 	foreign key (dir_id) references hp_directory (dir_id),
@@ -277,10 +277,8 @@ create table hp_entry (
 CREATE UNIQUE INDEX ON hp_entry (dir_id, lower(entry_name::text));
 
 /* upgrade
-	alter table hp_entry add column delete_user integer references hp_user (user_id);
-	alter table hp_entry add column delete_date timestamp(6) without time zone;
-	alter table hp_entry add column destroy_user integer references hp_user (user_id);
-	alter table hp_entry add column destroy_date timestamp(6) without time zone;
+	alter table hp_entry rename column delete_date to delete_stamp;
+	alter table hp_entry rename column destroy_date to destroy_stamp;
 */
 
 
@@ -380,7 +378,12 @@ create table hp_version_property (
 	
 );
 
-CREATE UNIQUE INDEX ON hp_version_property (lower(config_name::text));
+CREATE UNIQUE INDEX ON hp_version_property (version_id,lower(config_name::text),prop_id);
+
+/* upgrade
+	DROP INDEX hp_version_property_lower_idx;
+	CREATE UNIQUE INDEX ON hp_version_property (version_id,lower(config_name::text),prop_id);
+*/
 
 
 
@@ -434,7 +437,7 @@ create table hp_release (
 	
 	release_id integer NOT NULL default nextval('seq_hp_release_release_id'::regclass),
 	release_user integer NOT NULL,
-	release_date timestamp(6) without time zone NOT NULL default now(),
+	release_stamp timestamp(6) without time zone NOT NULL default now(),
 	release_note varchar(255) NOT NULL,
 	
 	primary key (release_id),
@@ -442,6 +445,9 @@ create table hp_release (
 	
 );
 
+/* upgrade
+	alter table hp_release rename column release_date to release_stamp;
+*/
 
 
 
@@ -454,13 +460,20 @@ create table hp_release_version_rel (
 	
 	rel_release_id integer,
 	rel_version_id integer,
+	rel_ver_user integer NOT NULL,
+	rel_ver_stamp timestamp(6) without time zone NOT NULL default now(),
 	
 	primary key (rel_release_id, rel_version_id),
 	foreign key (rel_release_id) references hp_release (release_id),
-	foreign key (rel_version_id) references hp_version (version_id)
+	foreign key (rel_version_id) references hp_version (version_id),
+	foreign key (release_user) references hp_user (user_id)
 	
 );
 
+/* upgrade
+	alter table hp_release_version_rel add column rel_ver_user integer NOT NULL;
+	alter table hp_release_version_rel add column rel_ver_stamp timestamp(6) without time zone NOT NULL default now();
+*/
 
 
 
