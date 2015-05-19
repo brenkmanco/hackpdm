@@ -67,7 +67,9 @@ namespace HackPDM
                 }
                 else
                 {
-                    // This is the last parent directory.  Return the empty string:
+                    // This is the last parent directory
+                    // TODO: Correct code to be more consisent (Some code may expect this method to return "pwa")
+                    // Return the empty string:
                     return ("");
                 }
             }

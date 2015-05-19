@@ -38,6 +38,7 @@ create table hp_settings (
 
 insert into hp_settings (setting_name,setting_desc,setting_bool_value) values ('restrict_properties','Only import properties that have been previously defined',true);
 insert into hp_settings (setting_name,setting_desc,setting_bool_value) values ('restrict_types','Only allow file types that have been previously defined',true);
+insert into hp_settings (setting_name,setting_desc,setting_number_value) values ('seconds_tolerance','Number of seconds between file modified stamps to consider the files different',2);
 
 
 

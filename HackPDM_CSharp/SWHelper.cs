@@ -107,6 +107,10 @@ namespace HackPDM
 
             // get doc type
             swDocumentTypes_e swDocType = GetTypeFromString(FileName);
+            if (swDocType == swDocumentTypes_e.swDocNONE)
+            {
+                return null;
+            }
 
             // document open options
             // swOpenDocOptions_e is a bitmask enumerator

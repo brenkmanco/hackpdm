@@ -75,7 +75,7 @@ namespace HackPDM
         private DataSet dsList = new DataSet();
 
         private DataTable dtServSettings = new DataTable("settings");
-        private int intSecondsTolerance = 2;
+        private int intSecondsTolerance;
 
         private Dictionary<string, int> dictPropIds;
         private Dictionary<int, string> dictPropTypes;
@@ -83,6 +83,7 @@ namespace HackPDM
         private string strLocalFileRoot;
         private int intMyUserId;
         private int intMyNodeId;
+        private bool blnShowDeleted = false;
 
         private long lngMaxFileSize = 2147483648;
 
@@ -379,6 +380,9 @@ namespace HackPDM
             string strSql = "select * from hp_settings;";
             NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
             daTemp.Fill(dtServSettings);
+
+            Decimal decSecondsTolerance = dtServSettings.Select("setting_name='seconds_tolerance'")[0].Field<Decimal>("setting_number_value");
+            intSecondsTolerance = (Int32)decSecondsTolerance;
         }
 
 
@@ -397,6 +401,7 @@ namespace HackPDM
                     create_user,
                     modify_stamp,
                     modify_user,
+                    active,
                     true as is_remote
                 from hp_directory
                 order by parent_id,dir_id;
@@ -583,8 +588,20 @@ namespace HackPDM
                     drChild.SetField("path", strTreePath);
                     int intChildId = (int)drChild["dir_id"];
                     tnChild.Tag = (object)intChildId;
-                    tnChild.ImageIndex = 0;
-                    tnChild.SelectedImageIndex = 0;
+
+                    // select icon
+                    if (drChild.Field<bool>("active"))
+                    {
+                        tnChild.ImageIndex = 0;
+                        tnChild.SelectedImageIndex = 0;
+                    }
+                    else
+                    {
+                        // directory exists locally, and remotely, and is deleted
+                        tnChild.ImageIndex = 5;
+                        tnChild.SelectedImageIndex = 5;
+                    }
+
                     tnParentNode.Nodes.Add(tnChild);
 
                     // add to dictionary
@@ -622,8 +639,24 @@ namespace HackPDM
                 row.SetField("is_local", false);
                 row.SetField("path", strTreePath);
                 tnChild.Tag = (object)intDirId;
-                tnChild.ImageIndex = 2;
-                tnChild.SelectedImageIndex = 2;
+
+                if (!row.Field<bool>("active") && ! blnShowDeleted)
+                {
+                    // inactive (deleted) and we are not showing deleted
+                    continue;
+                }
+                else if (!row.Field<bool>("active"))
+                {
+                    // inactive (deleted) but we are showing deleted
+                    tnChild.ImageIndex = 5;
+                    tnChild.SelectedImageIndex = 5;
+                }
+                else
+                {
+                    // active remote only directory
+                    tnChild.ImageIndex = 2;
+                    tnChild.SelectedImageIndex = 2;
+                }
                 tnParentNode.Nodes.Add(tnChild);
 
                 //Recursively build the tree
@@ -677,7 +710,15 @@ namespace HackPDM
                 TreeNode tnChild = new TreeNode(strDirName);
                 row.SetField("is_local", false);
                 row.SetField("path", strTreePath);
-                tnChild.Tag = (object)intDirId;
+
+                if (row.Field<bool>("active"))
+                {
+                    tnChild.Tag = (object)intDirId;
+                }
+                else if (blnShowDeleted)
+                {
+                    tnChild.Tag = (object)intDirId;
+                }
 
                 // remote only icon
                 tnChild.ImageIndex = 2;
@@ -2322,7 +2363,6 @@ namespace HackPDM
                     RollbackDeletes(sender, e, t, strGuid, ref dsDeletes);
                 }
 
-                dlgStatus.AddStatusLine("ERROR", "Operation failed. Rolling back the database transaction.");
                 throw new System.Exception("Operation failed. Rolling back the database transaction.");
             }
             else
@@ -2921,8 +2961,8 @@ namespace HackPDM
             // C:\pwa\Designed\AZ400
             // C:\pwa\Designed\Mining\ZM1800\Top Assemblies
 
-            // get directories that are inside the pwa
-            DataRow[] OtherDirs = dsCommits.Tables["dirs"].Select("dir_id=0 and relative_path like 'pwa%'", "relative_path asc");
+            // get directories with no dir_id and no parent_id and that are inside the pwa
+            DataRow[] OtherDirs = dsCommits.Tables["dirs"].Select("dir_id=0 and parent_id=0 and relative_path like 'pwa%'", "relative_path asc");
 
             string strPrevDir = "";
             foreach (DataRow dir in OtherDirs)
@@ -2939,25 +2979,18 @@ namespace HackPDM
                 while (intParentId < 1)
                 {
                     // get parent directory name and path
-                //    string strParentRelPath = strCurrPath.Substring(0, strCurrPath.LastIndexOf("\\"));
-                //    string strParentName = strParentRelPath.Substring(strParentRelPath.LastIndexOf("\\") + 1);
                     string strParentRelPath = Utils.GetParentDirectory(strCurrPath);
                     string strParentName = Utils.GetBaseName(strParentRelPath);
 
                     // get parent directory's parent id
-                //    string strParentsParentRelPath = strParentRelPath.Substring(0, strParentRelPath.LastIndexOf("\\"));
                     string strParentsParentRelPath = Utils.GetParentDirectory(strParentRelPath);
                     if (strParentsParentRelPath == "")
+                        // we reached the pwa root directory
                         break;
-                    //string strParentsParentRelPath = "";
-                    //if (strParentsParentRelPath.Contains("\\"))
-                    //{
-                    //    strParentsParentRelPath = strParentRelPath.Substring(0, strParentRelPath.LastIndexOf("\\"));
-                    //}
                     dictTree.TryGetValue(strParentsParentRelPath, out intParentId);
 
                     // add the parent directory to table
-                    // dir_id=0 and parent_id=0 because no remote directory exists for the current path
+                    // dir_id=0 because no remote directory exists for the current path
                     dsCommits.Tables["dirs"].Rows.Add(0, intParentId, strParentName, strParentRelPath);
                     strCurrPath = strParentRelPath;
                 }
@@ -3007,7 +3040,7 @@ namespace HackPDM
             int intParentId = 0;
             // create only directories that need to be created for files being commited
             // sorting by path ensures that parents will be created before children
-            // having called ClimbToRemoteParents, the highest directory in each unique path will have a remote parent id
+            // having called ClimbToRemoteParents, the highest directory in each unique path will have a remote parent id (parent_id != 0)
             DataRow[] drNewDirs = dsCommits.Tables["dirs"].Select("relative_path<>'' and dir_id=0", "relative_path asc");
             foreach (DataRow drCurrent in drNewDirs)
             {
@@ -3322,6 +3355,12 @@ namespace HackPDM
 
             // get server setting
             bool blnRestrict = dtServSettings.Select("setting_name = 'restrict_properties'")[0].Field<bool>("setting_bool_value");
+
+            // return if no properties
+            if (lstProps == null)
+            {
+                return blnFailed;
+            }
 
             // initialize sql statement
             string strSql = @"
@@ -4343,7 +4382,7 @@ namespace HackPDM
                     active=:active_flag,
                     delete_user=:delete_user,
                     delete_stamp=:delete_stamp,
-                    destroyed=:destroyed_flag
+                    destroyed=:destroyed_flag,
                     destroy_user=:destroy_user,
                     destroy_stamp=:destroy_stamp
                 where entry_id in (" + strEntries + ")";
@@ -4417,12 +4456,16 @@ namespace HackPDM
 
             // prepare a database command to delete (inactivate) entries, all-at-once
             strSql = @"
-                update hp_directory set active=:active_flag
+                update hp_directory set
+                    active=:active_flag,
+                    modify_user=:mod_user,
+                    modify_stamp=:mod_stamp
                 where dir_id in (" + strDirs + ")";
 
             NpgsqlCommand cmdInactivateDir = new NpgsqlCommand(strSql, connDb, t);
-            cmdInactivateDir.Parameters.Add(new NpgsqlParameter("active_flag", NpgsqlTypes.NpgsqlDbType.Boolean));
-            cmdInactivateDir.Parameters["active_flag"].Value = false;
+            cmdInactivateDir.Parameters.AddWithValue("active_flag", false);
+            cmdInactivateDir.Parameters.AddWithValue("mod_user", intMyUserId);
+            cmdInactivateDir.Parameters.AddWithValue("mod_stamp", DateTime.Now);
 
             // try deleting (inactivating)
             try
