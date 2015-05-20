@@ -1756,10 +1756,11 @@ namespace HackPDM
                 }
 
                 // name and download the file
+                // webdav is case sensitive, so the server should be forced to all lower case
                 int intEntryId = (int)drCurrent["entry_id"];
                 int intVersionId = (int)drCurrent["version_id"];
                 string strFileExt = drCurrent.Field<string>("file_ext");
-                string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt;
+                string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt.ToLower();
 
                 // set the file not readonly
                 fiCurrFile.IsReadOnly = false;
@@ -1814,7 +1815,7 @@ namespace HackPDM
                 int intEntryId = (int)drCurrent["entry_id"];
                 int intVersionId = (int)drCurrent["version_id"];
                 string strFileExt = drCurrent.Field<string>("file_ext");
-                string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt;
+                string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt.ToLower();
 
                 // report status and stream file
                 string strFileSize = drCurrent.Field<string>("str_latest_size");
@@ -3296,7 +3297,7 @@ namespace HackPDM
 
 
                 // name the file for webdav storage
-                string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt;
+                string strDavName = "/" + intEntryId.ToString() + "/" + intVersionId.ToString() + "." + strFileExt.ToLower();
 
                 // check database success
                 if (blnFailed)
