@@ -97,6 +97,14 @@ namespace HackPDM
 
         private ListViewColumnSorter lvwColumnSorter;
 
+        // For storing search parameters:
+        string FileContainsText;
+        string PropDropDownText;
+        string PropContainsText;
+        string CheckedOutMeBox;
+        string DeletedLocalBox;
+        string LocalOnlyBox;
+
         #endregion
 
 
@@ -130,6 +138,13 @@ namespace HackPDM
             // Populate data
             ResetView();
 
+            // Initialize stored search params:
+            FileContainsText = "";
+            PropDropDownText = "";
+            PropContainsText = "";
+            CheckedOutMeBox = "0";
+            DeletedLocalBox = "0";
+            LocalOnlyBox = "0";
         }
 
         private void DavConnect()
@@ -145,7 +160,8 @@ namespace HackPDM
             // test the connection
             try
             {
-               List<string> strTest = connDav.List("/admin/",1);
+                List<string> strTest = connDav.List("/admin/", 1);
+         //       List<string> strTest = connDav.List("/", 1);
             }
             catch (System.Exception e)
             {
@@ -5323,7 +5339,7 @@ namespace HackPDM
         {
             // load the search dialog:
 
-            SearchDialog srchdialog = new SearchDialog(connDb, strLocalFileRoot, intMyUserId, ShowFileInTree);
+            SearchDialog srchdialog = new SearchDialog(connDb, strLocalFileRoot, intMyUserId, ShowFileInTree, StoreSearchParams, FileContainsText, PropDropDownText, PropContainsText, CheckedOutMeBox, DeletedLocalBox, LocalOnlyBox);
             srchdialog.ShowDialog();
             
         }
@@ -5344,6 +5360,18 @@ namespace HackPDM
 
 
 
+        }
+
+
+        // This is used to store the parameters used in the search dialog:
+        public void StoreSearchParams(List<string> paramlist)
+        {
+            FileContainsText = paramlist[0];
+            PropDropDownText = paramlist[1];
+            PropContainsText = paramlist[2];
+            CheckedOutMeBox = paramlist[3];
+            DeletedLocalBox = paramlist[4];
+            LocalOnlyBox = paramlist[5];
         }
 
 
