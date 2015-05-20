@@ -257,7 +257,16 @@ namespace HackPDM
 
             StoreSearchParams();
         }
-
+        
+        private void btnReset_Click(object sender, EventArgs e)
+        {
+            txtFilename.Clear();
+            cboProperty.Text = "";
+            txtProperty.Clear();
+            cbxCheckedMe.Checked = false;
+            cbxDeletedLocal.Checked = false;
+            cbxLocalOnly.Checked = false;
+        }
 
         private void lvSearchResults_DoubleClick(object sender, MouseEventArgs e)
         {

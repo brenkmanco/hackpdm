@@ -46,6 +46,7 @@
             this.goToToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.openToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cbxLocalOnly = new System.Windows.Forms.CheckBox();
+            this.btnReset = new System.Windows.Forms.Button();
             this.cmsListItemMenu.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -199,6 +200,17 @@
             this.cbxLocalOnly.UseVisualStyleBackColor = true;
             this.cbxLocalOnly.CheckedChanged += new System.EventHandler(this.chkbxLocalOnly_OnChanged);
             // 
+            // btnReset
+            // 
+            this.btnReset.Location = new System.Drawing.Point(871, 84);
+            this.btnReset.Name = "btnReset";
+            this.btnReset.RightToLeft = System.Windows.Forms.RightToLeft.No;
+            this.btnReset.Size = new System.Drawing.Size(75, 23);
+            this.btnReset.TabIndex = 91;
+            this.btnReset.Text = "Reset";
+            this.btnReset.UseVisualStyleBackColor = true;
+            this.btnReset.Click += new System.EventHandler(this.btnReset_Click);
+            // 
             // SearchDialog
             // 
             this.AcceptButton = this.btnSearch;
@@ -206,6 +218,7 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.btnCancel;
             this.ClientSize = new System.Drawing.Size(960, 554);
+            this.Controls.Add(this.btnReset);
             this.Controls.Add(this.cbxLocalOnly);
             this.Controls.Add(this.lvSearchResults);
             this.Controls.Add(this.cbxDeletedLocal);
@@ -245,5 +258,6 @@
         private System.Windows.Forms.CheckBox cbxLocalOnly;
         private System.Windows.Forms.ColumnHeader columnHeader1;
         private System.Windows.Forms.ColumnHeader columnHeader2;
+        private System.Windows.Forms.Button btnReset;
     }
 }
