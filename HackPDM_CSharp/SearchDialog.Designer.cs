@@ -85,6 +85,7 @@
             this.cboProperty.Name = "cboProperty";
             this.cboProperty.Size = new System.Drawing.Size(121, 21);
             this.cboProperty.TabIndex = 20;
+            this.cboProperty.TextChanged += new System.EventHandler(this.cmboProperty_OnChanged);
             // 
             // txtProperty
             // 

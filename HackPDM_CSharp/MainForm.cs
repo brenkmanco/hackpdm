@@ -5411,6 +5411,7 @@ namespace HackPDM
                     {
                         // Highlight the file in the listView:
                         item.Selected = true;
+                        item.EnsureVisible();
                     }
                 }
             }
