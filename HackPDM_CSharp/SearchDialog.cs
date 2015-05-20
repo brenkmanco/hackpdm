@@ -21,11 +21,13 @@ namespace HackPDM
         int intMyUserId;
 
         Action<string> MainFormCallbackFunc;
+        Action<List<string> > StoreParamsFunc;
 
         private SortedDictionary<string, string> PropTypeMap;
 
 
-        public SearchDialog(NpgsqlConnection dbConn, string FilePath, int UserId, Action<string> callbackfunc)
+        public SearchDialog(NpgsqlConnection dbConn, string FilePath, int UserId, Action<string> callbackfunc, Action<List<string> > storeparamsfunc, string FileContainsText,
+            string PropDropDownText, string PropContainsText, string CheckedOutMeBox, string DeletedLocalBox, string LocalOnlyBox)
         {
             InitializeComponent();
 
@@ -37,6 +39,7 @@ namespace HackPDM
             strFilePath = FilePath;
             intMyUserId = UserId;
             MainFormCallbackFunc = callbackfunc;
+            StoreParamsFunc = storeparamsfunc;
 
             // Get the list of available properties from the database:
             // Initialize the SQL command:
@@ -69,6 +72,54 @@ namespace HackPDM
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
+
+            // Get any parameters that were used in the last search:
+            txtFilename.Text = FileContainsText;
+            cboProperty.Text = PropDropDownText;
+            txtProperty.Text = PropContainsText;
+            if (CheckedOutMeBox == "1")
+                cbxCheckedMe.Checked = true;
+            else
+                cbxCheckedMe.Checked = false;
+
+            if (DeletedLocalBox == "1")
+                cbxDeletedLocal.Checked = true;
+            else
+                cbxDeletedLocal.Checked = false;
+
+            if (LocalOnlyBox == "1")
+                cbxLocalOnly.Checked = true;
+            else
+                cbxLocalOnly.Checked = false;
+        }
+
+        ~SearchDialog()
+        {
+            StoreSearchParams();
+        }
+
+        private void StoreSearchParams()
+        {
+            List<string> paramlist = new List<string>();
+            paramlist.Add(txtFilename.Text);
+            paramlist.Add(cboProperty.Text);
+            paramlist.Add(txtProperty.Text);
+            if (cbxCheckedMe.Checked)
+                paramlist.Add("1");
+            else
+                paramlist.Add("0");
+
+            if (cbxDeletedLocal.Checked)
+                paramlist.Add("1");
+            else
+                paramlist.Add("0");
+
+            if (cbxLocalOnly.Checked)
+                paramlist.Add("1");
+            else
+                paramlist.Add("0");
+
+            StoreParamsFunc(paramlist);
         }
 
 
@@ -203,11 +254,15 @@ namespace HackPDM
             // Set the width of the columns:
             lvSearchResults.AutoResizeColumns(ColumnHeaderAutoResizeStyle.ColumnContent);
             lvSearchResults.AutoResizeColumns(ColumnHeaderAutoResizeStyle.HeaderSize);
+
+            StoreSearchParams();
         }
 
 
         private void lvSearchResults_DoubleClick(object sender, MouseEventArgs e)
         {
+            StoreSearchParams();
+
             // Check to see if a valid item was selected:
             ListViewHitTestInfo info = lvSearchResults.HitTest(e.X, e.Y);
             ListViewItem item = info.Item;
@@ -372,6 +427,7 @@ namespace HackPDM
 
         private void btnCancel_Click(object sender, EventArgs e)
         {
+            StoreSearchParams();
             this.Close();
         }
 
