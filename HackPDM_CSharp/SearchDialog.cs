@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Text.RegularExpressions;
+using System.IO;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -132,89 +133,27 @@ namespace HackPDM
         private void btnSearch_Click(object sender, EventArgs e)
         {
             int MAXCOUNT = 100;
+            DataTable dtSearchResults = new DataTable();
+            dtSearchResults.Columns.Add("rel_path", Type.GetType("System.String"));
+            dtSearchResults.Columns.Add("entry_name", Type.GetType("System.String"));
 
-            string sqlquerystr = @"";
+            bool blnFailed = false;
+
             if (cbxLocalOnly.Checked)
             {
-                // Ignore all other search parameters, and return all files that exist only locally:
-                List<string> localfiles = new List<string>();
-                Utils.GetAllFilesInDir(strFilePath, ref localfiles);
-
-                // Add these to the SQL string:
-                string tmpstr = "";
-                sqlquerystr = @"SELECT * FROM (";
-                foreach (string s in localfiles)
-                {
-                    if (s != localfiles[0])
-                        sqlquerystr += @"UNION";
-                    tmpstr = Utils.GetParentDirectory(s);
-                    sqlquerystr += @" SELECT '" + tmpstr.Substring(strFilePath.Length, tmpstr.Length - strFilePath.Length).Replace("\\", "/") + @"' AS rel_path,'" + Utils.GetBaseName(s) + @"' AS entry_name ";
-                }
-                sqlquerystr += @") AS l LEFT JOIN view_dir_tree AS t ON t.dir_name=l.rel_path LEFT JOIN hp_entry AS e ON l.entry_name=e.entry_name WHERE e.entry_id IS NULL LIMIT " + MAXCOUNT.ToString() + @";";
+                // Ignore all other search parameters, and return all files that exist only locally
+                blnFailed = GetResults_LocalOnly(MAXCOUNT, ref dtSearchResults);
+            }
+            else if (cbxDeletedLocal.Checked)
+            {
+                // Ignore all other search parameters, and return all files that exist locally and are deleted on the server
+                blnFailed = GetResults_LocalDeleted(MAXCOUNT, ref dtSearchResults);
             }
             else
             {
-                sqlquerystr = @"
-                    SELECT DISTINCT
-                        e.entry_name,
-                        t.rel_path
-                    FROM hp_entry AS e
-                    LEFT JOIN view_dir_tree AS t ON t.dir_id=e.dir_id
-                    FULL OUTER JOIN hp_version AS v ON v.entry_id=e.entry_id
-                    FULL OUTER JOIN hp_version_property AS p ON p.version_id=v.version_id
-                    WHERE 1=1";
-
-                // Add the parameters from the search criteria:
-                if (txtFilename.TextLength > 0)
-                {
-                    sqlquerystr += @"
-                         AND UPPER(e.entry_name) LIKE '%" + txtFilename.Text.ToUpper() + "%'";
-                }
-
-                if (cboProperty.Text != "")
-                {
-                    string propcontains = GetPropertyInfo();
-                    if (propcontains == "")
-                        return;
-
-                    sqlquerystr += @"
-                         AND " + propcontains;
-                }
-                else
-                {
-                    // No property was specified, so ensure that the property value criteria box is empty:
-                    txtProperty.Clear();
-                }
-
-                if (cbxCheckedMe.Checked)
-                {
-                    sqlquerystr += @"
-                         AND e.checkout_user=" + intMyUserId.ToString();
-                }
-
-                if (cbxDeletedLocal.Checked)
-                {
-                    // Searching for any files that are marked as "deleted" on the server, but that still exist locally:
-                    List<string> localfiles = new List<string>();
-                    Utils.GetAllFilesInDir(strFilePath, ref localfiles);
-
-                    // Add that to the SQL string:
-                    sqlquerystr += @" AND e.destroyed=true AND CONCAT(t.rel_path, '/', e.entry_name) IN (";
-                    foreach (string s in localfiles)
-                    {
-                        if (s != localfiles[0])
-                            sqlquerystr += @",";
-                        sqlquerystr += @"'" + s.Substring(strFilePath.Length, s.Length - strFilePath.Length).Replace("\\", "/") + @"'";
-                    }
-                    sqlquerystr += @")";
-                }
-
-                sqlquerystr += @" LIMIT " + MAXCOUNT.ToString() + @";";
+                blnFailed = GetResults_General(MAXCOUNT, ref dtSearchResults);
             }
 
-
-            // Perform the search:
-            NpgsqlCommand command = new NpgsqlCommand(sqlquerystr, connDb);
 
             // Update the UI:
             lvSearchResults.Clear();
@@ -222,51 +161,24 @@ namespace HackPDM
             lvSearchResults.Columns.Add("File Name", -2);
             lvSearchResults.Columns.Add("File Path", -2);
 
-            try
+            string filename = "";
+            string path = "";
+            int counter = 0;
+            foreach (DataRow dr in dtSearchResults.Rows)
             {
-                NpgsqlDataReader dr = command.ExecuteReader();
-                string filename = "";
-                string path = "";
-                int counter = 0;
-                while (dr.Read())
+                filename = dr.Field<string>("entry_name");
+                path = dr.Field<string>("rel_path");
+
+                // Add the file to the list view:
+                lvSearchResults.Items.Add(filename).SubItems.Add(Utils.GetAbsolutePath(strFilePath, path));
+
+                counter++;
+                if (counter >= MAXCOUNT)
                 {
-                    try
-                    {
-                        filename = dr["entry_name"].ToString();
-                        path = dr["rel_path"].ToString();
-                        if (filename.Length == 0)
-                        {
-                            // Nothing useful was returned:
-                            dr.Close();
-                            break;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show("Failed reading query results." + System.Environment.NewLine + ex.Message, "Query Error",
-                            MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        dr.Close();
-                        break;
-                    }
-
-                    // Add the file to the list view:
-                    lvSearchResults.Items.Add(filename).SubItems.Add(Utils.GetAbsolutePath(strFilePath, path));
-
-                    counter++;
-                    if (counter >= MAXCOUNT)
-                    {
-                        // Inform the user that there were too many results returned to display all of them:
-                        lvSearchResults.Items.Add("...< ONLY THE FIRST " + MAXCOUNT.ToString() + " ITEMS ARE SHOWN >...");
-                        break;
-                    }
+                    // Inform the user that there were too many results returned to display all of them:
+                    lvSearchResults.Items.Add("...< ONLY THE FIRST " + MAXCOUNT.ToString() + " ITEMS ARE SHOWN >...");
                 }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Failed updating search results list." + System.Environment.NewLine + ex.Message,
-                    "Data Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+
             }
 
             // Set the width of the columns:
@@ -276,7 +188,206 @@ namespace HackPDM
             StoreSearchParams();
         }
 
-        
+        private bool GetResults_LocalOnly(int MAXCOUNT, ref DataTable dtSearchResults)
+        {
+
+            // get all local files
+            string[] strLocals = Directory.GetFiles(strFilePath, "*", SearchOption.AllDirectories);
+
+            NpgsqlTransaction t = connDb.BeginTransaction();
+
+            // clear and create temp table
+            string strMakeTempTable = @"
+                    drop table if exists _local;
+                    create temp table _local (
+                        rel_path varchar,
+                        entry_name varchar
+                    ) on commit drop;
+                ";
+            NpgsqlCommand cmdMakeTempTable = new NpgsqlCommand(strMakeTempTable, connDb, t);
+            cmdMakeTempTable.ExecuteNonQuery();
+
+            // build insert sql string
+            string strInsertSql = "insert into _local (rel_path, entry_name) values";
+            foreach (string s in strLocals)
+            {
+                // get relative path, formatted to match server paths
+                string strRelPathForm = Utils.GetParentDirectory(s);
+                strRelPathForm = strRelPathForm.Substring(strFilePath.Length, strRelPathForm.Length - strFilePath.Length);
+                strRelPathForm = strRelPathForm.Replace("\\", "/");
+                strRelPathForm = strRelPathForm.Replace("'", "''");
+
+                // append insert values
+                strInsertSql += String.Format("\n('{0}','{1}'),", strRelPathForm, Utils.GetBaseName(s));
+            }
+
+            strInsertSql = strInsertSql.Remove(strInsertSql.Length - 1); // remove trailing comma
+            strInsertSql += ";"; // add trailing semi-colon
+
+            // push file list to server temp table
+            NpgsqlCommand cmdPushFileList = new NpgsqlCommand(strInsertSql, connDb, t);
+            cmdPushFileList.ExecuteNonQuery();
+
+            string strGetLocalOnly = @"
+                    SELECT l.rel_path,l.entry_name
+                    FROM _local AS l
+                    LEFT JOIN view_dir_tree AS t ON lower(t.rel_path)=lower(l.rel_path)
+                    LEFT JOIN hp_entry AS e ON lower(l.entry_name)=lower(e.entry_name) AND e.dir_id=t.dir_id
+                    WHERE e.entry_id IS NULL
+                    ORDER BY l.rel_path, l.entry_name
+                    LIMIT " + MAXCOUNT.ToString() + ";";
+
+            // execute and retrieve data
+            NpgsqlCommand cmdGetResults = new NpgsqlCommand(strGetLocalOnly, connDb, t);
+            NpgsqlDataAdapter daGetResults = new NpgsqlDataAdapter(cmdGetResults);
+            try
+            {
+                daGetResults.Fill(dtSearchResults);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed retrieving search results from the server." + System.Environment.NewLine + ex.Message,
+                    "Data Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                t.Rollback();
+                return true;
+            }
+            t.Commit();
+
+            return false;
+
+        }
+
+        private bool GetResults_LocalDeleted(int MAXCOUNT, ref DataTable dtSearchResults)
+        {
+
+            // get all deleted files from the server
+            string strGetAllDeleted = @"
+                    SELECT DISTINCT
+                        e.entry_name,
+                        t.rel_path
+                    FROM hp_entry AS e
+                    LEFT JOIN view_dir_tree AS t ON t.dir_id=e.dir_id
+                    WHERE e.active=false;
+                ";
+
+            // execute and retrieve data
+            DataTable dtDeleted = new DataTable();
+            NpgsqlCommand cmdGetResults = new NpgsqlCommand(strGetAllDeleted, connDb);
+            NpgsqlDataAdapter daGetResults = new NpgsqlDataAdapter(cmdGetResults);
+            try
+            {
+                daGetResults.Fill(dtDeleted);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed retrieving search results from the server." + System.Environment.NewLine + ex.Message,
+                    "Data Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                return true;
+            }
+
+            // get all local files
+            string[] strLocals = Directory.GetFiles(strFilePath, "*", SearchOption.AllDirectories);
+
+            // loop through all local files, comparing against server delete list
+            int intCounter = 0;
+            foreach (string s in strLocals)
+            {
+                // get relative path, formatted to match server paths
+                string strRelPathForm = Utils.GetParentDirectory(s);
+                strRelPathForm = strRelPathForm.Substring(strFilePath.Length, strRelPathForm.Length - strFilePath.Length);
+                strRelPathForm = strRelPathForm.Replace("\\", "/");
+                strRelPathForm = strRelPathForm.Replace("'", "''");
+
+                // get matching deletion
+                DataRow[] drMatches = dtDeleted.Select(String.Format("rel_path='{0}' and entry_name='{1}'", strRelPathForm, Utils.GetBaseName(s)));
+
+                if (drMatches.Length > 0)
+                {
+                    // append to results table
+                    dtSearchResults.ImportRow(drMatches[0]);
+                    intCounter++;
+                    if (intCounter > MAXCOUNT)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return false;
+
+        }
+
+        private bool GetResults_General(int MAXCOUNT, ref DataTable dtSearchResults)
+        {
+
+            string strGetResults = @"
+                    SELECT DISTINCT
+                        e.entry_name,
+                        t.rel_path
+                    FROM hp_entry AS e
+                    LEFT JOIN view_dir_tree AS t ON t.dir_id=e.dir_id
+                    FULL OUTER JOIN hp_version AS v ON v.entry_id=e.entry_id
+                    FULL OUTER JOIN hp_version_property AS p ON p.version_id=v.version_id
+                    WHERE 1=1
+                ";
+
+            // Add file name contains criteria
+            if (txtFilename.TextLength > 0)
+            {
+                strGetResults += String.Format("\nAND e.entry_name ILIKE '%{0}%'", txtFilename.Text.Replace("'", "''"));
+            }
+            else
+            {
+                strGetResults += "\nAND e.entry_name IS NOT NULL";
+            }
+
+            // Add property contains criteria
+            if (cboProperty.Text != "")
+            {
+                string propcontains = GetPropertyInfo();
+                if (propcontains == "")
+
+                    strGetResults += String.Format("\nAND {0}", propcontains);
+            }
+            else
+            {
+                // No property was specified, so ensure that the property value criteria box is empty:
+                txtProperty.Clear();
+            }
+
+            if (cbxCheckedMe.Checked)
+            {
+                strGetResults += String.Format("\nAND e.checkout_user={0}", intMyUserId.ToString());
+            }
+
+
+            strGetResults += String.Format("\nLIMIT {0};", MAXCOUNT.ToString());
+
+            // execute and retrieve data
+            NpgsqlCommand cmdGetResults = new NpgsqlCommand(strGetResults, connDb);
+            NpgsqlDataAdapter daGetResults = new NpgsqlDataAdapter(cmdGetResults);
+            try
+            {
+                daGetResults.Fill(dtSearchResults);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed retrieving search results from the server." + System.Environment.NewLine + ex.Message,
+                    "Data Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                return true;
+            }
+
+            return false;
+
+        }
+
+         
         private void btnReset_Click(object sender, EventArgs e)
         {
             txtFilename.Clear();
@@ -341,8 +452,8 @@ namespace HackPDM
                 // Searching for files with the given property value that contains in the given text property.
 
                 // Ask for case-insensitive search:
-                propContains = "UPPER(p.text_value)";
-                propContains += " LIKE '%" + txtProperty.Text.ToUpper() + "%'";
+                propContains = "p.text_value";
+                propContains += " ILIKE '%" + txtProperty.Text + "%'";
             }
             else if (PropTypeMap[cboProperty.Text] == "date")
             {

@@ -5355,8 +5355,8 @@ namespace HackPDM
         {
         //    string fullpath = Utils.GetAbsolutePath(strLocalFileRoot, filepath);
 
-            treeView1.TopNode.Expand();
-            ExpandTreeBelow(filepath.Substring(1, filepath.Length - 1), treeView1.TopNode);
+            treeView1.Nodes[0].Expand();
+            ExpandTreeBelow(filepath.Substring(1, filepath.Length - 1), treeView1.Nodes[0]);
 
 
 
@@ -5397,12 +5397,13 @@ namespace HackPDM
 
                         // Go another level:
                         ExpandTreeBelow(nextleveldownpath, child);
+                        break;
                     }
                 }
             }
             else
             {
-                // This is the file.  Highlight the node:
+                // This is the directory.  Highlight the node:
                 treeView1.SelectedNode = parentnode;
 
                 // Find the file in the listView:
