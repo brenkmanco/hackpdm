@@ -24,7 +24,7 @@ namespace HackPDM
         Action<string> MainFormCallbackFunc;
         Action<List<string> > StoreParamsFunc;
 
-        private SortedDictionary<string, string> PropTypeMap;
+        private SortedDictionary<string, Tuple<string, string> > PropTypeMap;
 
 
         public SearchDialog(NpgsqlConnection dbConn, string FilePath, int UserId, Action<string> callbackfunc, Action<List<string> > storeparamsfunc, string FileContainsText,
@@ -46,13 +46,13 @@ namespace HackPDM
             // Initialize the SQL command:
             string strcomm = @"
                 select
-                    prop_name, prop_type
+                    prop_name, prop_type, prop_id
                 from hp_property
                 order by prop_name;
             ";
 
             // Send the command:
-            PropTypeMap = new SortedDictionary<string,string>();
+            PropTypeMap = new SortedDictionary<string, Tuple<string, string> >();
             NpgsqlCommand command = new NpgsqlCommand(strcomm, connDb);
             try
             {
@@ -63,7 +63,8 @@ namespace HackPDM
                     cboProperty.Items.Add(dr["prop_name"]);
 
                     // Add the property to the PropTypeMap:
-                    PropTypeMap.Add(dr["prop_name"].ToString(), dr["prop_type"].ToString());
+                    var t = new Tuple<string, string>(dr["prop_type"].ToString(), dr["prop_id"].ToString());
+                    PropTypeMap.Add(dr["prop_name"].ToString(), t);
                 }
             }
             catch (Exception ex)
@@ -289,8 +290,16 @@ namespace HackPDM
                 return true;
             }
 
+//                // Add the parameters from the search criteria:
+//                if (txtFilename.TextLength > 0)
+//                {
+//                    sqlquerystr += @"
+//                        AND UPPER(e.entry_name) LIKE '%" + txtFilename.Text.ToUpper() + "%'";
+//                }
+
             // get all local files
             string[] strLocals = Directory.GetFiles(strFilePath, "*", SearchOption.AllDirectories);
+
 
             // loop through all local files, comparing against server delete list
             int intCounter = 0;
@@ -304,6 +313,23 @@ namespace HackPDM
 
                 // get matching deletion
                 DataRow[] drMatches = dtDeleted.Select(String.Format("rel_path='{0}' and entry_name='{1}'", strRelPathForm, Utils.GetBaseName(s)));
+
+
+//                    sqlquerystr += @"
+//                        AND " + propcontains;
+//                }
+//                else
+//                {
+//                    // No property was specified, so ensure that the property value criteria box is empty:
+//                    txtProperty.Clear();
+//                }
+
+//                if (cbxCheckedMe.Checked)
+//                {
+//                    sqlquerystr += @"
+//                        AND e.checkout_user=" + intMyUserId.ToString();
+//                }
+
 
                 if (drMatches.Length > 0)
                 {
@@ -441,13 +467,14 @@ namespace HackPDM
                 return "";
             }
 
-            string propContains = "p." + PropTypeMap[cboProperty.Text] + "_value";
+            string propContains = @"p.prop_id=" + PropTypeMap[cboProperty.Text].Item2;
             if (txtProperty.TextLength == 0)
             {
                 // Searching for files with any value of the given property:
-                propContains += " IS NOT NULL";
+                propContains += @"
+                        AND p." + PropTypeMap[cboProperty.Text].Item1 + @"_value IS NOT NULL";
             }
-            else if (PropTypeMap[cboProperty.Text] == "text")
+            else if (PropTypeMap[cboProperty.Text].Item1 == "text")
             {
                 // Searching for files with the given property value that contains in the given text property.
 
@@ -455,13 +482,14 @@ namespace HackPDM
                 propContains = "p.text_value";
                 propContains += " ILIKE '%" + txtProperty.Text + "%'";
             }
-            else if (PropTypeMap[cboProperty.Text] == "date")
+            else if (PropTypeMap[cboProperty.Text].Item1 == "date")
             {
                 DateTime date;
                 if (DateTime.TryParse(txtProperty.Text, out date))
                 {
                     // Searching with a date property criteria:
-                    propContains += "=" + date.ToString();
+                    propContains += @"
+                        AND p.date_value=" + date.ToString();
                 }
                 else
                 {
@@ -472,13 +500,14 @@ namespace HackPDM
                     return "";
                 }
             }
-            else if (PropTypeMap[cboProperty.Text] == "number")
+            else if (PropTypeMap[cboProperty.Text].Item1 == "number")
             {
                 double d;
                 if (double.TryParse(txtProperty.Text, out d))
                 {
                     // Searching with a number property criteria:
-                    propContains += "=" + d.ToString();
+                    propContains += @"
+                        AND p.number_value=" + d.ToString();
                 }
                 else
                 {
@@ -489,13 +518,14 @@ namespace HackPDM
                     return "";
                 }
             }
-            else if (PropTypeMap[cboProperty.Text] == "yesno")
+            else if (PropTypeMap[cboProperty.Text].Item1 == "yesno")
             {
                 bool b;
                 if (bool.TryParse(txtProperty.Text, out b))
                 {
                     // Searching with a yes/no property criteria:
-                    propContains += "=" + b.ToString().ToLower();
+                    propContains += @"
+                        AND p.yesno_value=" + b.ToString().ToLower();
                 }
                 else
                 {
