@@ -155,6 +155,11 @@ namespace HackPDM
                 blnFailed = GetResults_General(MAXCOUNT, ref dtSearchResults);
             }
 
+            if (blnFailed)
+            {
+                // Don't do anything else:
+                return;
+            }
 
             // Update the UI:
             lvSearchResults.Clear();
@@ -290,13 +295,6 @@ namespace HackPDM
                 return true;
             }
 
-//                // Add the parameters from the search criteria:
-//                if (txtFilename.TextLength > 0)
-//                {
-//                    sqlquerystr += @"
-//                        AND UPPER(e.entry_name) LIKE '%" + txtFilename.Text.ToUpper() + "%'";
-//                }
-
             // get all local files
             string[] strLocals = Directory.GetFiles(strFilePath, "*", SearchOption.AllDirectories);
 
@@ -313,23 +311,6 @@ namespace HackPDM
 
                 // get matching deletion
                 DataRow[] drMatches = dtDeleted.Select(String.Format("rel_path='{0}' and entry_name='{1}'", strRelPathForm, Utils.GetBaseName(s)));
-
-
-//                    sqlquerystr += @"
-//                        AND " + propcontains;
-//                }
-//                else
-//                {
-//                    // No property was specified, so ensure that the property value criteria box is empty:
-//                    txtProperty.Clear();
-//                }
-
-//                if (cbxCheckedMe.Checked)
-//                {
-//                    sqlquerystr += @"
-//                        AND e.checkout_user=" + intMyUserId.ToString();
-//                }
-
 
                 if (drMatches.Length > 0)
                 {
@@ -376,8 +357,8 @@ namespace HackPDM
             {
                 string propcontains = GetPropertyInfo();
                 if (propcontains == "")
-
-                    strGetResults += String.Format("\nAND {0}", propcontains);
+                    return true;
+                strGetResults += String.Format("\nAND {0}", propcontains);
             }
             else
             {
