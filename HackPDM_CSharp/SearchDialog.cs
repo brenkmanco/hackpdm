@@ -375,8 +375,7 @@ namespace HackPDM
             if (cboProperty.Text != "")
             {
                 string propcontains = GetPropertyInfo();
-                if (propcontains == "")
-
+                if (propcontains != "")
                     strGetResults += String.Format("\nAND {0}", propcontains);
             }
             else
@@ -479,8 +478,7 @@ namespace HackPDM
                 // Searching for files with the given property value that contains in the given text property.
 
                 // Ask for case-insensitive search:
-                propContains = "p.text_value";
-                propContains += " ILIKE '%" + txtProperty.Text + "%'";
+                propContains += "\nAND p.text_value ILIKE '%" + txtProperty.Text + "%'";
             }
             else if (PropTypeMap[cboProperty.Text].Item1 == "date")
             {
