@@ -1023,6 +1023,7 @@ namespace HackPDM
 
             // clear list
             lvHistory.Clear();
+            lvHistory.Columns.Add("Version", 50, System.Windows.Forms.HorizontalAlignment.Left);
             lvHistory.Columns.Add("ModUser", 140, System.Windows.Forms.HorizontalAlignment.Left);
             lvHistory.Columns.Add("ModDate", 140, System.Windows.Forms.HorizontalAlignment.Left);
             lvHistory.Columns.Add("Size", 75, System.Windows.Forms.HorizontalAlignment.Right);
@@ -1075,11 +1076,12 @@ namespace HackPDM
             {
 
                 // build array
-                string[] lvData =  new string[4];
-                lvData[0] = row.Field<string>("action_user");
-                lvData[1] = row.Field<string>("action_date");
-                lvData[2] = row.Field<string>("version_size");
-                lvData[3] = row.Field<string>("release_stamp");
+                string[] lvData =  new string[5];
+                lvData[0] = row.Field<int>("version_id").ToString();
+                lvData[1] = row.Field<string>("action_user");
+                lvData[2] = row.Field<string>("action_date");
+                lvData[3] = row.Field<string>("version_size");
+                lvData[4] = row.Field<string>("release_stamp");
 
                 // create actual list item
                 ListViewItem lvItem = new ListViewItem(lvData);
@@ -1254,8 +1256,8 @@ namespace HackPDM
 
             // clear list
             lvProperties.Clear();
-            lvProperties.Columns.Add("Version", 140, System.Windows.Forms.HorizontalAlignment.Left);
-            lvProperties.Columns.Add("Configuration", 140, System.Windows.Forms.HorizontalAlignment.Left);
+            lvProperties.Columns.Add("Version", 50, System.Windows.Forms.HorizontalAlignment.Left);
+            lvProperties.Columns.Add("Configuration", 100, System.Windows.Forms.HorizontalAlignment.Left);
             lvProperties.Columns.Add("Property", 140, System.Windows.Forms.HorizontalAlignment.Left);
             lvProperties.Columns.Add("Value", 400, System.Windows.Forms.HorizontalAlignment.Left);
             lvProperties.Columns.Add("Type", 140, System.Windows.Forms.HorizontalAlignment.Left);
@@ -1273,6 +1275,7 @@ namespace HackPDM
                 select
                     vp.version_id,
                     vp.config_name,
+                    vp.prop_id,
                     p.prop_name,
                     p.prop_type,
                     vp.text_value,
@@ -1301,11 +1304,11 @@ namespace HackPDM
             foreach (DataRow row in dsTemp.Tables[0].Rows)
             {
 
+                // get property value
+                string strPropField = row.Field<string>("prop_type") + "_value";
                 string strValue = "";
-                if (row.Field<string>("text_value") != null) strValue = row.Field<string>("text_value");
-                if (row.Field<string>("date_value") != null) strValue = Utils.FormatDate(row.Field<DateTime>("date_value"));
-                if (row.Field<string>("number_value") != null) strValue = row.Field<Decimal>("number_value").ToString();
-                if (row.Field<string>("yesno_value") != null) strValue = row.Field<Boolean>("yesno_value").ToString();
+                var varValue = row[strPropField];
+                if (varValue != null) strValue = varValue.ToString();
 
                 // build array
                 string[] lvData = new string[5];
@@ -2328,6 +2331,19 @@ namespace HackPDM
                     //throw new System.Exception("File \"" + fiCurrFile.Name + "\" is locked.  Release it first.");
                 }
 
+            }
+
+            // verify with user
+            if (blnDestroy)
+            {
+                var result = MessageBox.Show(String.Format("You are destroying {0} entries.  Continue?", intNewCount.ToString()),
+                    "Confirm Destruction",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+                if (result == System.Windows.Forms.DialogResult.No)
+                {
+                    return;
+                }
             }
 
             // flag as deleted all remote versions, entries (set the destroyed flag)
@@ -4785,6 +4801,16 @@ namespace HackPDM
         private void CmsTreeDeletePermanentClick(object sender, EventArgs e)
         {
 
+            // check user
+            if (intMyUserId != 1)
+            {
+                var result = MessageBox.Show("Only the administrator can destroy",
+                "Permission Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Exclamation);
+                return;
+            }
+
             // create the status dialog
             dlgStatus = new StatusDialog();
 
@@ -5172,6 +5198,16 @@ namespace HackPDM
 
         void CmsListDeletePermanentClick(object sender, EventArgs e)
         {
+
+            // check user
+            if (intMyUserId != 1)
+            {
+                var result = MessageBox.Show("Only the administrator can destroy",
+                "Permission Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Exclamation);
+                return;
+            }
 
             // refresh file data
             LoadListData(treeView1.SelectedNode);

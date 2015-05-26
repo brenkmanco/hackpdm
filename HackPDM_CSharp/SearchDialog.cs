@@ -51,6 +51,7 @@ namespace HackPDM
                 order by prop_name;
             ";
 
+            // TODO: re-use the property map from MainForm: LoadPropertyMaps()
             // Send the command:
             PropTypeMap = new SortedDictionary<string, Tuple<string, string> >();
             NpgsqlCommand command = new NpgsqlCommand(strcomm, connDb);
