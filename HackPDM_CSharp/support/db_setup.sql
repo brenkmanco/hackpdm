@@ -269,9 +269,9 @@ create table hp_entry (
 	foreign key (cat_id) references hp_category (cat_id),
 	foreign key (create_user) references hp_user (user_id),
 	foreign key (checkout_user) references hp_user (user_id),
-	foreign key (checkout_node) references hp_node (node_id)
+	foreign key (checkout_node) references hp_node (node_id),
 	foreign key (delete_user) references hp_user (user_id),
-	foreign key (destroy_user) references hp_user (user_id),
+	foreign key (destroy_user) references hp_user (user_id)
 	
 );
 
@@ -467,7 +467,7 @@ create table hp_release_version_rel (
 	primary key (rel_release_id, rel_version_id),
 	foreign key (rel_release_id) references hp_release (release_id),
 	foreign key (rel_version_id) references hp_version (version_id),
-	foreign key (release_user) references hp_user (user_id)
+	foreign key (rel_ver_user) references hp_user (user_id)
 	
 );
 
