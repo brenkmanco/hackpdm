@@ -264,7 +264,7 @@ namespace HackPDM
             // TODO: erase this stuff when building for release
             try
             {
-                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds.config");
+                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds_bounty-2.config");
                 var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
                 var sectionGroup = configuration.GetSectionGroup("tempSettingsGroup"); // This is the section group name, change to your needs
                 var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
@@ -360,7 +360,7 @@ namespace HackPDM
             t = connDb.BeginTransaction();
 
             // try to get the node_id
-            string strSqlGet = "select node_id from hp_node where node_name='" + System.Environment.MachineName + "';";
+            string strSqlGet = "select node_id from hp_node where node_name ilike '" + System.Environment.MachineName + "';";
             NpgsqlCommand cmdGetNode = new NpgsqlCommand(strSqlGet, connDb, t);
             object oTemp = cmdGetNode.ExecuteScalar();
 
@@ -374,7 +374,7 @@ namespace HackPDM
                 intNodeId = Convert.ToInt32(oNewNodeId);
 
                 // insert the new node
-                string strSqlSet = "insert into hp_node (node_id,node_name,create_user) values (" + intNodeId.ToString() + ",'" + System.Environment.MachineName + "'," + intMyUserId + ");";
+                string strSqlSet = "insert into hp_node (node_id,node_name,create_user) values (" + intNodeId.ToString() + ",'" + System.Environment.MachineName.ToLower() + "'," + intMyUserId + ");";
                 cmdGetNode.CommandText = strSqlSet;
                 int intRows = cmdGetNode.ExecuteNonQuery();
 
