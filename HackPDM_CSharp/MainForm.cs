@@ -264,7 +264,7 @@ namespace HackPDM
             // TODO: erase this stuff when building for release
             try
             {
-                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds_bounty-2.config");
+                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds_alderaan.config");
                 var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
                 var sectionGroup = configuration.GetSectionGroup("tempSettingsGroup"); // This is the section group name, change to your needs
                 var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
@@ -1381,6 +1381,7 @@ namespace HackPDM
             // checkout_date
             // str_checkout_date
             // checkout_node
+            // checkout_node_name
             // is_local
             // is_remote
             // client_status_code
@@ -2736,6 +2737,7 @@ namespace HackPDM
                                 null, // checkout_date
                                 null, // str_checkout_date
                                 null, // checkout_node
+                                null, // checkout_node_name
                                 true, // is_local
                                 false, // is_remote
                                 "lo", // client_status_code
@@ -2878,7 +2880,7 @@ namespace HackPDM
                     drLocalFile.SetField<string>("ck_user_name", drTemp.Field<string>("ck_user_name"));
                     drLocalFile.SetField<DateTime?>("checkout_date", drTemp.Field<DateTime?>("checkout_date"));
                     drLocalFile.SetField<string>("str_checkout_date", drTemp.Field<string>("str_checkout_date"));
-                    drLocalFile.SetField<int>("checkout_node", drTemp.Field<int>("checkout_node"));
+                    drLocalFile.SetField<int?>("checkout_node", drTemp.Field<int?>("checkout_node"));
                     drLocalFile.SetField<string>("checkout_node_name", drTemp.Field<string>("checkout_node_name"));
                     //drLocalFile.SetField<Boolean>("is_local", drTemp.Field<Boolean>("is_local"));
                     drLocalFile.SetField<Boolean>("is_remote", drTemp.Field<Boolean>("is_remote"));
