@@ -891,6 +891,7 @@ namespace HackPDM
             if (dsList.Tables[0] != null) {
                 foreach (DataRow row in dsList.Tables[0].Rows) {
 
+                    string strCheckout = String.Format("%s (%s), %s", row.Field<string>("ck_user_name"), row.Field<string>("checkout_node_name"), row.Field<string>("str_checkout_date"));
                     string[] lvData =  new string[9];
                     lvData[0] = row.Field<string>("entry_name"); // Name
                     lvData[1] = row.Field<string>("str_latest_size"); // Size
@@ -898,7 +899,7 @@ namespace HackPDM
                     lvData[3] = row.Field<string>("client_status_code"); // Stat
                     lvData[4] = row.Field<string>("str_local_stamp"); // Local Modified
                     lvData[5] = row.Field<string>("str_latest_stamp"); // Server Modified
-                    lvData[6] = row.Field<string>("ck_user_name"); // CheckOut
+                    lvData[6] = strCheckout; // CheckOut
                     lvData[7] = row.Field<string>("cat_name"); // Category
                     lvData[8] = row.Field<string>("absolute_path") + "\\" + row.Field<string>("entry_name"); // FullName
 
