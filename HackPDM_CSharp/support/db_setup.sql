@@ -627,6 +627,7 @@ CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_dir(
 	OUT checkout_date timestamp(6) without time zone,
 	OUT str_checkout_date varchar,
 	OUT checkout_node integer,
+	OUT checkout_node_name varchar,
 	OUT is_local boolean,
 	OUT is_remote boolean,
 	OUT client_status_code varchar,
@@ -681,6 +682,7 @@ $BODY$
 		e.checkout_date,
 		to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
 		e.checkout_node,
+		n.node_name as checkout_node_name,
 		false as is_local,
 		true as is_remote,
 		case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
@@ -697,6 +699,7 @@ $BODY$
 	left join hp_type as t on t.type_id=e.type_id
 	left join view_dir_tree as d on d.dir_id = e.dir_id
 	left join lvs as v on v.entry_id=e.entry_id
+	left join hp_node as n on n.node_id=e.checkout_node
 	where e.dir_id in (select dir_id from dirs)
 	or e.entry_id in (
 		-- get dependency entries
@@ -750,6 +753,7 @@ CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_entry_list(
 	OUT checkout_date timestamp(6) without time zone,
 	OUT str_checkout_date varchar,
 	OUT checkout_node integer,
+	OUT checkout_node_name varchar,
 	OUT is_local boolean,
 	OUT is_remote boolean,
 	OUT client_status_code varchar,
@@ -800,6 +804,7 @@ $BODY$
 		e.checkout_date,
 		to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
 		e.checkout_node,
+		n.node_name as checkout_node_name,
 		false as is_local,
 		true as is_remote,
 		case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
@@ -816,6 +821,7 @@ $BODY$
 	left join hp_type as t on t.type_id=e.type_id
 	left join view_dir_tree as d on d.dir_id = e.dir_id
 	left join lvs as v on v.entry_id=e.entry_id
+	left join hp_node as n on n.node_id=e.checkout_node
 	where e.entry_id in ( select unnest($1) )
 	or e.entry_id in (
 		-- get dependency entries
@@ -869,6 +875,7 @@ CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_dir_list(
 	OUT checkout_date timestamp(6) without time zone,
 	OUT str_checkout_date varchar,
 	OUT checkout_node integer,
+	OUT checkout_node_name varchar,
 	OUT is_local boolean,
 	OUT is_remote boolean,
 	OUT client_status_code varchar,
@@ -919,6 +926,7 @@ $BODY$
 		e.checkout_date,
 		to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
 		e.checkout_node,
+		n.node_name as checkout_node_name,
 		false as is_local,
 		true as is_remote,
 		case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
@@ -935,6 +943,7 @@ $BODY$
 	left join hp_type as t on t.type_id=e.type_id
 	left join view_dir_tree as d on d.dir_id = e.dir_id
 	left join lvs as v on v.entry_id=e.entry_id
+	left join hp_node as n on n.node_id=e.checkout_node
 	where e.dir_id in (select unnest($1))
 	or e.entry_id in (
 		-- get dependency entries
@@ -988,6 +997,7 @@ CREATE OR REPLACE FUNCTION fcn_latest_by_dir(
 	OUT checkout_date timestamp(6) without time zone,
 	OUT str_checkout_date varchar,
 	OUT checkout_node integer,
+	OUT checkout_node_name varchar,
 	OUT is_local boolean,
 	OUT is_remote boolean,
 	OUT client_status_code varchar,
@@ -1042,6 +1052,7 @@ $BODY$
 		e.checkout_date,
 		to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
 		e.checkout_node,
+		n.node_name as checkout_node_name,
 		false as is_local,
 		true as is_remote,
 		case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
@@ -1058,6 +1069,7 @@ $BODY$
 	left join hp_type as t on t.type_id=e.type_id
 	left join view_dir_tree as d on d.dir_id = e.dir_id
 	left join lvs as v on v.entry_id=e.entry_id
+	left join hp_node as n on n.node_id=e.checkout_node
 	where e.dir_id in (select dir_id from dirs)
 	order by dir_id,entry_id;
 $BODY$
@@ -1097,6 +1109,7 @@ CREATE OR REPLACE FUNCTION fcn_latest_by_entry_list(
 	OUT checkout_date timestamp(6) without time zone,
 	OUT str_checkout_date varchar,
 	OUT checkout_node integer,
+	OUT checkout_node_name varchar,
 	OUT is_local boolean,
 	OUT is_remote boolean,
 	OUT client_status_code varchar,
@@ -1147,6 +1160,7 @@ $BODY$
 		e.checkout_date,
 		to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
 		e.checkout_node,
+		n.node_name as checkout_node_name,
 		false as is_local,
 		true as is_remote,
 		case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
@@ -1163,6 +1177,7 @@ $BODY$
 	left join hp_type as t on t.type_id=e.type_id
 	left join view_dir_tree as d on d.dir_id = e.dir_id
 	left join lvs as v on v.entry_id=e.entry_id
+	left join hp_node as n on n.node_id=e.checkout_node
 	where e.entry_id in ( select unnest($1) )
 	order by dir_id,entry_id;
 $BODY$
