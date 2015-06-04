@@ -3474,17 +3474,20 @@ namespace HackPDM
             }
 
             // execute the command
-            strSql = strSql.Remove(strSql.Length - 1); // remove trailing comma
-            NpgsqlCommand cmdInsert = new NpgsqlCommand(strSql, connDb, t);
-            try
+            if (lstProps.Count > 0)
             {
-                cmdInsert.ExecuteNonQuery();
-            }
-            catch (NpgsqlException ex)
-            {
-                // integrity constraint violation?
-                dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
-                blnFailed = true;
+                strSql = strSql.Remove(strSql.Length - 1); // remove trailing comma
+                NpgsqlCommand cmdInsert = new NpgsqlCommand(strSql, connDb, t);
+                try
+                {
+                    cmdInsert.ExecuteNonQuery();
+                }
+                catch (NpgsqlException ex)
+                {
+                    // integrity constraint violation?
+                    dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                    blnFailed = true;
+                }
             }
 
             return blnFailed;
