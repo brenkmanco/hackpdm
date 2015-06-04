@@ -825,6 +825,7 @@ namespace HackPDM
                         e.checkout_date,
                         to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
                         e.checkout_node,
+                        n.node_name as checkout_node_name,
                         false as is_local,
                         true as is_remote,
                         case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
@@ -850,6 +851,7 @@ namespace HackPDM
                         from hp_version
                         order by entry_id, create_stamp desc
                     ) as v on v.entry_id=e.entry_id
+                    left join hp_node as n on n.node_id=e.checkout_node
                     where e.dir_id=:dir_id
                     order by dir_id,entry_id;
                 ";
@@ -1413,6 +1415,7 @@ namespace HackPDM
             dtList.Columns.Add("checkout_date", Type.GetType("System.DateTime"));
             dtList.Columns.Add("str_checkout_date", Type.GetType("System.String"));
             dtList.Columns.Add("checkout_node", Type.GetType("System.String"));
+            dtList.Columns.Add("checkout_node_name", Type.GetType("System.Int32"));
             dtList.Columns.Add("is_local", Type.GetType("System.Boolean"));
             dtList.Columns.Add("is_remote", Type.GetType("System.Boolean"));
             dtList.Columns.Add("client_status_code", Type.GetType("System.String"));
@@ -2874,7 +2877,8 @@ namespace HackPDM
                     drLocalFile.SetField<string>("ck_user_name", drTemp.Field<string>("ck_user_name"));
                     drLocalFile.SetField<DateTime?>("checkout_date", drTemp.Field<DateTime?>("checkout_date"));
                     drLocalFile.SetField<string>("str_checkout_date", drTemp.Field<string>("str_checkout_date"));
-                    drLocalFile.SetField<string>("checkout_node", drTemp.Field<string>("checkout_node"));
+                    drLocalFile.SetField<int>("checkout_node", drTemp.Field<int>("checkout_node"));
+                    drLocalFile.SetField<string>("checkout_node_name", drTemp.Field<string>("checkout_node_name"));
                     //drLocalFile.SetField<Boolean>("is_local", drTemp.Field<Boolean>("is_local"));
                     drLocalFile.SetField<Boolean>("is_remote", drTemp.Field<Boolean>("is_remote"));
                     //drLocalFile.SetField<string>("relative_path", drTemp.Field<string>("relative_path"));
@@ -4182,6 +4186,7 @@ namespace HackPDM
                             null, // checkout_date
                             null, // str_checkout_date
                             null, // checkout_node
+                            null, // checkout_node_name
                             true, // is_local
                             false, // is_remote
                             strClientStatusCode, // client_status_code
