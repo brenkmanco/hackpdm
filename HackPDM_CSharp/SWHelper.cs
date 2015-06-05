@@ -23,26 +23,33 @@ namespace HackPDM
         // constructor
         public SWHelper()
         {
-            //if (System.Diagnostics.Process.GetProcessesByName("sldworks").Length > 1)
-            //{
-            //    DialogResult dr = MessageBox.Show("Multiple SolidWorks Instances Detected",
-            //        "Loading SW",
-            //        MessageBoxButtons.OK,
-            //        MessageBoxIcon.Exclamation,
-            //        MessageBoxDefaultButton.Button1);
-            //    return;
-            //}
+            if (System.Diagnostics.Process.GetProcessesByName("sldworks").Length > 1)
+            {
+                DialogResult dr = MessageBox.Show("Multiple SolidWorks Instances Detected",
+                    "Loading SW",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Exclamation,
+                    MessageBoxDefaultButton.Button1);
+                return;
+            }
 
-            //try
-            //{
-            //    // get a running instance
-            //    swRunApp = (SldWorks.SldWorks)System.Runtime.InteropServices.Marshal.GetActiveObject("SldWorks.Application");
-            //}
-            //catch { }
+            if (System.Diagnostics.Process.GetProcessesByName("sldworks").Length < 1)
+            {
+                DialogResult dr = MessageBox.Show("SolidWorks is not running",
+                    "Loading SW",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Exclamation,
+                    MessageBoxDefaultButton.Button1);
+                return;
+            }
 
             try
             {
-                swApp = new SldWorks.SldWorks();
+                // get a running instance
+                swRunApp = (SldWorks.SldWorks)System.Runtime.InteropServices.Marshal.GetActiveObject("SldWorks.Application");
+
+                // or try this way, as recommended by someone on stackoverflow.com
+                //swRunApp = (SldWorks.SldWorks)Activator.CreateInstance(Type.GetTypeFromProgID("SldWorks.Application"));
             }
             catch (Exception ex)
             {
@@ -53,10 +60,26 @@ namespace HackPDM
                     MessageBoxDefaultButton.Button1);
             }
 
+            //try
+            //{
+            //    swApp = new SldWorks.SldWorks();
+            //}
+            //catch (Exception ex)
+            //{
+            //    DialogResult dr = MessageBox.Show("Failed to get a SolidWorks instance: " + ex.Message,
+            //        "Loading SW",
+            //        MessageBoxButtons.OK,
+            //        MessageBoxIcon.Exclamation,
+            //        MessageBoxDefaultButton.Button1);
+            //}
+
         }
 
         public List<string[]> GetDependencies(string FileName, bool Deep=false)
         {
+            // check for solidworks instance
+            if (swApp==null) return null;
+
             // returns list of string arrays
             // 0: short file name
             // 1: long file name
@@ -98,6 +121,9 @@ namespace HackPDM
 
         public List<Tuple<string, string, string, string, object>> GetProperties(string FileName)
         {
+            // check for solidworks instance
+            if (swApp == null) return null;
+
             // config name
             // property name
             // property type
@@ -244,22 +270,22 @@ namespace HackPDM
         }			
 
         // class destructor
-        ~SWHelper()
-        {
-            // cleanup statements
-            try
-            {
-                swApp.ExitApp();
-            }
-            catch (Exception ex)
-            {
-                //MessageBox.Show(
-                //    "Failed to close SolidWorks instance: " + ex.Message,
-                //    "Failed Closing SolidWork",
-                //    MessageBoxButtons.OK
-                //);
-            }
-        }
+        //~SWHelper()
+        //{
+        //    // cleanup statements
+        //    try
+        //    {
+        //        swApp.ExitApp();
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        //MessageBox.Show(
+        //        //    "Failed to close SolidWorks instance: " + ex.Message,
+        //        //    "Failed Closing SolidWork",
+        //        //    MessageBoxButtons.OK
+        //        //);
+        //    }
+        //}
 
     }
 }
