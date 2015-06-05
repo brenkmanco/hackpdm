@@ -313,6 +313,7 @@ namespace HackPDM
         {
 
             // get remote file types
+            dsRemTypes = new DataSet();
 
             // initialize sql command for remote type list
             string strSql = @"
