@@ -23,46 +23,33 @@ namespace HackPDM
         // constructor
         public SWHelper()
         {
-            if (System.Diagnostics.Process.GetProcessesByName("sldworks").Length > 1)
-            {
-                DialogResult dr = MessageBox.Show("Multiple SolidWorks Instances Detected",
-                    "Loading SW",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Exclamation,
-                    MessageBoxDefaultButton.Button1);
-                return;
-            }
+            //if (System.Diagnostics.Process.GetProcessesByName("sldworks").Length > 1)
+            //{
+            //    DialogResult dr = MessageBox.Show("Multiple SolidWorks Instances Detected",
+            //        "Loading SW",
+            //        MessageBoxButtons.OK,
+            //        MessageBoxIcon.Exclamation,
+            //        MessageBoxDefaultButton.Button1);
+            //    return;
+            //}
 
-            if (System.Diagnostics.Process.GetProcessesByName("sldworks").Length < 1)
-            {
-                DialogResult dr = MessageBox.Show("SolidWorks is not running",
-                    "Loading SW",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Exclamation,
-                    MessageBoxDefaultButton.Button1);
-                return;
-            }
-
-            try
-            {
-                // get a running instance
-                swRunApp = (SldWorks.SldWorks)System.Runtime.InteropServices.Marshal.GetActiveObject("SldWorks.Application");
-
-                // or try this way, as recommended by someone on stackoverflow.com
-                //swRunApp = (SldWorks.SldWorks)Activator.CreateInstance(Type.GetTypeFromProgID("SldWorks.Application"));
-            }
-            catch (Exception ex)
-            {
-                DialogResult dr = MessageBox.Show("Failed to get a SolidWorks instance: " + ex.Message,
-                    "Loading SW",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Exclamation,
-                    MessageBoxDefaultButton.Button1);
-            }
+            //if (System.Diagnostics.Process.GetProcessesByName("sldworks").Length < 1)
+            //{
+            //    DialogResult dr = MessageBox.Show("SolidWorks is not running",
+            //        "Loading SW",
+            //        MessageBoxButtons.OK,
+            //        MessageBoxIcon.Exclamation,
+            //        MessageBoxDefaultButton.Button1);
+            //    return;
+            //}
 
             //try
             //{
-            //    swApp = new SldWorks.SldWorks();
+            //    // get a running instance
+            //    swRunApp = (SldWorks.SldWorks)System.Runtime.InteropServices.Marshal.GetActiveObject("SldWorks.Application");
+
+            //    // or try this way, as recommended by someone on stackoverflow.com
+            //    //swRunApp = (SldWorks.SldWorks)Activator.CreateInstance(Type.GetTypeFromProgID("SldWorks.Application"));
             //}
             //catch (Exception ex)
             //{
@@ -72,6 +59,23 @@ namespace HackPDM
             //        MessageBoxIcon.Exclamation,
             //        MessageBoxDefaultButton.Button1);
             //}
+
+            try
+            {
+                swApp = new SldWorks.SldWorks();
+                swApp.Visible = false;
+                swApp.DocumentVisible(false, (int)swDocumentTypes_e.swDocASSEMBLY);
+                swApp.DocumentVisible(false, (int)swDocumentTypes_e.swDocDRAWING);
+                swApp.DocumentVisible(false, (int)swDocumentTypes_e.swDocPART);
+            }
+            catch (Exception ex)
+            {
+                DialogResult dr = MessageBox.Show("Failed to get a SolidWorks instance: " + ex.Message,
+                    "Loading SW",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Exclamation,
+                    MessageBoxDefaultButton.Button1);
+            }
 
         }
 
