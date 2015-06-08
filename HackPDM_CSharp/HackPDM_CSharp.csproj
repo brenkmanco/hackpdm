@@ -178,13 +178,14 @@
     </Compile>
     <Compile Include="SecureCredentialsLibrary.cs" />
     <Compile Include="Settings.cs" />
-    <Compile Include="SWHelper.cs" />
+    <Compile Include="SWDocMgr.cs" />
     <Compile Include="StatusDialog.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="StatusDialog.Designer.cs">
       <DependentUpon>StatusDialog.cs</DependentUpon>
     </Compile>
+    <Compile Include="SWHelper.cs" />
     <Compile Include="Utils.cs" />
     <Compile Include="WebDAVClient.cs" />
   </ItemGroup>

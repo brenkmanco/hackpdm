@@ -891,7 +891,11 @@ namespace HackPDM
             if (dsList.Tables[0] != null) {
                 foreach (DataRow row in dsList.Tables[0].Rows) {
 
-                    string strCheckout = String.Format("%s (%s), %s", row.Field<string>("ck_user_name"), row.Field<string>("checkout_node_name"), row.Field<string>("str_checkout_date"));
+                    string strCheckout = "";
+                    if (row.Field<string>("ck_user_name") != null)
+                    {
+                        strCheckout = String.Format("{0} ({1}), {2}", row.Field<string>("ck_user_name"), row.Field<string>("checkout_node_name"), row.Field<string>("str_checkout_date"));
+                    }
                     string[] lvData =  new string[9];
                     lvData[0] = row.Field<string>("entry_name"); // Name
                     lvData[1] = row.Field<string>("str_latest_size"); // Size
