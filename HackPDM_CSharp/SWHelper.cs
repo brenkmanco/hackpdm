@@ -46,10 +46,10 @@ namespace HackPDM
             //try
             //{
             //    // get a running instance
-            //    swRunApp = (SldWorks.SldWorks)System.Runtime.InteropServices.Marshal.GetActiveObject("SldWorks.Application");
+            //    swApp = (SldWorks.SldWorks)System.Runtime.InteropServices.Marshal.GetActiveObject("SldWorks.Application");
 
             //    // or try this way, as recommended by someone on stackoverflow.com
-            //    //swRunApp = (SldWorks.SldWorks)Activator.CreateInstance(Type.GetTypeFromProgID("SldWorks.Application"));
+            //    //swApp = (SldWorks.SldWorks)Activator.CreateInstance(Type.GetTypeFromProgID("SldWorks.Application"));
             //}
             //catch (Exception ex)
             //{
@@ -67,6 +67,9 @@ namespace HackPDM
                 swApp.DocumentVisible(false, (int)swDocumentTypes_e.swDocASSEMBLY);
                 swApp.DocumentVisible(false, (int)swDocumentTypes_e.swDocDRAWING);
                 swApp.DocumentVisible(false, (int)swDocumentTypes_e.swDocPART);
+                SldWorks.Frame pFrame = swApp.Frame();
+                pFrame.KeepInvisible = true;
+                swApp.UserControl = false;
             }
             catch (Exception ex)
             {
@@ -123,7 +126,7 @@ namespace HackPDM
 
         }
 
-        public List<Tuple<string, string, string, string, object>> GetProperties(string FileName)
+        public List<Tuple<string, string, string, object>> GetProperties(string FileName)
         {
             // check for solidworks instance
             if (swApp == null) return null;
@@ -131,9 +134,8 @@ namespace HackPDM
             // config name
             // property name
             // property type
-            // definition
             // resolved value (boxed object)
-            List<Tuple<string, string, string, string, object>> lstProps = new List<Tuple<string, string, string, string, object>>();
+            List<Tuple<string, string, string, object>> lstProps = new List<Tuple<string, string, string, object>>();
 
             // get doc type
             swDocumentTypes_e swDocType = GetTypeFromString(FileName);
@@ -148,6 +150,7 @@ namespace HackPDM
             swOpenDocOptions_e swOpenDocOptions = swOpenDocOptions_e.swOpenDocOptions_Silent &
                 swOpenDocOptions_e.swOpenDocOptions_DontLoadHiddenComponents &
                 swOpenDocOptions_e.swOpenDocOptions_LoadLightweight &
+                swOpenDocOptions_e.swOpenDocOptions_Silent &
                 swOpenDocOptions_e.swOpenDocOptions_ReadOnly;
 
             // try to load the model file
@@ -158,7 +161,7 @@ namespace HackPDM
             {
                 swModelDoc = swApp.OpenDoc6(FileName, (int)swDocType, (int)swOpenDocOptions, "", ref intErrors, ref intWarnings);
             }
-            catch (Exception ex)
+            catch
             {
                 return null;
             }
@@ -218,9 +221,6 @@ namespace HackPDM
                             break;
                     }
 
-                    // property definition
-                    string strPropDef = ((string[])oPropValues)[i]; // definition
-
                     // property value
                     //object oPropValue = ((object[])oResolved)[i]; // resolved value, with GetAll2()
                     object oPropValue = ((object[])oPropValues)[i]; // resolved value, with GetAll()
@@ -231,11 +231,14 @@ namespace HackPDM
                     }
 
                     // add to list
-                    lstProps.Add(Tuple.Create<string, string, string, string, object>(strConfigName, strPropName, strPropType, strPropDef, oPropValue));
+                    lstProps.Add(Tuple.Create<string, string, string, object>(strConfigName, strPropName, strPropType, oPropValue));
 
                 }
+
             }
 
+            swModelDoc = null;
+            swApp.CloseDoc(FileName);
             return lstProps;
 
         }

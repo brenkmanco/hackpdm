@@ -69,6 +69,7 @@ namespace HackPDM
         private WebDAVClient connDav = new WebDAVClient();
 
         private SWHelper connSw = new SWHelper();
+        private SWDocMgr connDocMgr;
 
         private Dictionary<string, Int32> dictTree;
         private DataSet dsTree = new DataSet();
@@ -397,8 +398,14 @@ namespace HackPDM
             NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
             daTemp.Fill(dtServSettings);
 
+            // seconds tolerance on file timestamps
             Decimal decSecondsTolerance = dtServSettings.Select("setting_name='seconds_tolerance'")[0].Field<Decimal>("setting_number_value");
             intSecondsTolerance = (Int32)decSecondsTolerance;
+
+            // get license key, and instantiate solidworks document manager
+            String strSWDocMgrKey = dtServSettings.Select("setting_name='swdocmgr_key'")[0].Field<String>("setting_text_value");
+            connDocMgr = new SWDocMgr(strSWDocMgrKey);
+
         }
 
 
@@ -674,6 +681,9 @@ namespace HackPDM
                     tnChild.SelectedImageIndex = 2;
                 }
                 tnParentNode.Nodes.Add(tnChild);
+
+                // add to dictionary
+                dictTree.Add(tnChild.FullPath, intDirId);
 
                 //Recursively build the tree
                 PopulateTreeRemote(tnChild, intDirId);
@@ -1176,6 +1186,7 @@ namespace HackPDM
             if (dr.Field<bool>("is_remote") == false || dr.Field<string>("client_status_code") == "cm")
             {
                 // get from SolidWorks
+                //List<string[]> lstDepends = connDocMgr.GetDependencies(strFullName);
                 List<string[]> lstDepends = connSw.GetDependencies(strFullName);
 
                 if (lstDepends != null)
@@ -2676,6 +2687,7 @@ namespace HackPDM
                     string strParentShortName = row.Field<string>("entry_name");
                     string strParentAbsPath = row.Field<string>("absolute_path");
                     string strParentFullName = strParentAbsPath + "\\" + strParentShortName;
+                    //List<string[]> lstDepends = connDocMgr.GetDependencies(strParentFullName, false);
                     List<string[]> lstDepends = connSw.GetDependencies(strParentFullName, false);
 
                     if (lstDepends != null)
@@ -3393,9 +3405,9 @@ namespace HackPDM
             // 1 - config name
             // 2 - property name
             // 3 - property type
-            // 4 - definition
-            // 5 - resolved value (boxed object)
-            List<Tuple<string, string, string, string, object>> lstProps = connSw.GetProperties(FullName);
+            // 4 - resolved value (boxed object)
+            //List<Tuple<string, string, string, object>> lstProps = connDocMgr.GetProperties(FullName);
+            List<Tuple<string, string, string, object>> lstProps = connSw.GetProperties(FullName);
 
             // get server setting
             bool blnRestrict = dtServSettings.Select("setting_name = 'restrict_properties'")[0].Field<bool>("setting_bool_value");
@@ -3420,13 +3432,13 @@ namespace HackPDM
                 ";
             string strSqlTemplate = "({0}, {1}, {2}, {3}, {4}, {5}, {6}),";
 
-            foreach (Tuple<string, string, string, string, object> tplProps in lstProps)
+            int intInsertCount = 0;
+            foreach (Tuple<string, string, string, object> tplProps in lstProps)
             {
                 string strConfigName = tplProps.Item1; // config name
                 string strPropName = tplProps.Item2;   // property name
                 string strPropType = tplProps.Item3;   // property type
-                string strPropValue = tplProps.Item4;  // value with GetAll(), definition with GetAll2()
-                object oResolved = tplProps.Item5;     // resolved value
+                object oResolved = tplProps.Item4;     // resolved value
 
                 // check for property definition on server
                 int intPropId = 0;
@@ -3481,11 +3493,12 @@ namespace HackPDM
                     strNumber,
                     strBool
                 );
+                intInsertCount++;
 
             }
 
             // execute the command
-            if (lstProps.Count > 0)
+            if (intInsertCount > 0)
             {
                 strSql = strSql.Remove(strSql.Length - 1); // remove trailing comma
                 NpgsqlCommand cmdInsert = new NpgsqlCommand(strSql, connDb, t);

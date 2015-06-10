@@ -12,8 +12,6 @@ namespace HackPDM
     class SWDocMgr
     {
 
-        private SldWorks.SldWorks swApp;
-        private SldWorks.SldWorks swRunApp;
         private SwDMApplication swDocMgr = default(SwDMApplication);
 
         // constructor
@@ -22,7 +20,6 @@ namespace HackPDM
 
             SwDMClassFactory swClassFact = default(SwDMClassFactory);
             swClassFact = new SwDMClassFactory();
-            
 
             try
             {
@@ -41,62 +38,15 @@ namespace HackPDM
 
         public List<string[]> GetDependencies(string FileName, bool Deep=false)
         {
-            // check for solidworks instance
-            if (swApp==null) return null;
+            // external references for assembly files (GetAllExternalReferences4)
+            // external references for part files (GetExternalFeatureReferences)
+            SwDMDocument13 swDoc = default(SwDMDocument13);
+            SwDMSearchOption swSearchOpt = default(SwDMSearchOption);
 
             // returns list of string arrays
             // 0: short file name
             // 1: long file name
-            // 2: loaded read only
             List<string[]> listDepends = new List<string[]>();
-
-            // test for dependencies
-            int size = swApp.IGetDocumentDependenciesCount2(FileName, Deep, false, true);
-            if (size == 0) return null;
-
-            // get array of dependency info (one-dimensional)
-            string[] varDepends = (string[])swApp.GetDocumentDependencies2(FileName, false, false, true);
-
-            string strTempPath = Path.GetTempPath();
-            for (int i = 0; i < varDepends.Length/3; i++)
-            {
-
-                // file name with absolute path
-                string strFullName = varDepends[3 * i + 1];
-
-                // short file name with extension
-                string strName = strFullName.Substring(strFullName.LastIndexOf("\\") + 1);
-
-                // read only status
-                string strReadOnly = varDepends[3 * i + 2];
-
-                // only return non-virtual components
-                if (!strFullName.Contains(strTempPath))
-                {
-                    string[] strDepend = new string[3] {strName, strFullName, strReadOnly};
-                    listDepends.Add(strDepend);
-                }
-
-            }
-
-            return listDepends;
-
-        }
-
-        public List<Tuple<string, string, string, string, object>> GetProperties(string FileName)
-        {
-            // check for solidworks instance
-            if (swApp == null) return null;
-            SwDMDocument17 swDoc = default(SwDMDocument17);
-            SwDMConfigurationMgr swCfgMgr = default(SwDMConfigurationMgr);
-            SwDMConfiguration14 swCfg = default(SwDMConfiguration14);
-
-            // config name
-            // property name
-            // property type
-            // definition
-            // resolved value (boxed object)
-            List<Tuple<string, string, string, string, object>> lstProps = new List<Tuple<string, string, string, string, object>>();
 
             // get doc type
             SwDmDocumentType swDocType = GetTypeFromString(FileName);
@@ -107,7 +57,69 @@ namespace HackPDM
 
             // get the document
             SwDmDocumentOpenError nRetVal = 0;
-            swDoc = (SwDMDocument17)swDocMgr.GetDocument(FileName, swDocType, false, out nRetVal);
+            swDoc = (SwDMDocument13)swDocMgr.GetDocument(FileName, swDocType, false, out nRetVal);
+            if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
+            {
+                DialogResult dr = MessageBox.Show("Failed to open solidworks file: " + FileName,
+                    "Loading SW File",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Exclamation,
+                    MessageBoxDefaultButton.Button1);
+                return null;
+            }
+
+            // get arrays of dependency info (one-dimensional)
+            object oBrokenRefVar;
+            object oIsVirtual;
+            object oTimeStamp;
+            swSearchOpt = swDocMgr.GetSearchOptionObject();
+            string[] varDepends = (string[])swDoc.GetAllExternalReferences4(swSearchOpt, out oBrokenRefVar, out oIsVirtual, out oTimeStamp);
+
+            Boolean[] blnIsVirtual = (Boolean[])oIsVirtual;
+            for (int i = 0; i < varDepends.Length; i++)
+            {
+
+                // file name with absolute path
+                string strFullName = varDepends[i];
+
+                // short file name with extension
+                string strName = strFullName.Substring(strFullName.LastIndexOf("\\") + 1);
+
+                // only return non-virtual components
+                if ((bool)blnIsVirtual[i] != true)
+                {
+                    string[] strDepend = new string[2] {strName, strFullName};
+                    listDepends.Add(strDepend);
+                }
+
+            }
+
+            return listDepends;
+
+        }
+
+        public List<Tuple<string, string, string, object>> GetProperties(string FileName)
+        {
+            SwDMDocument swDoc = default(SwDMDocument);
+            SwDMConfigurationMgr swCfgMgr = default(SwDMConfigurationMgr);
+            SwDMConfiguration14 swCfg = default(SwDMConfiguration14);
+
+            // config name
+            // property name
+            // property type
+            // resolved value (boxed object)
+            List<Tuple<string, string, string, object>> lstProps = new List<Tuple<string, string, string, object>>();
+
+            // get doc type
+            SwDmDocumentType swDocType = GetTypeFromString(FileName);
+            if (swDocType == SwDmDocumentType.swDmDocumentUnknown)
+            {
+                return null;
+            }
+
+            // get the document
+            SwDmDocumentOpenError nRetVal = 0;
+            swDoc = (SwDMDocument)swDocMgr.GetDocument(FileName, swDocType, false, out nRetVal);
             if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
             {
                 DialogResult dr = MessageBox.Show("Failed to open solidworks file: " + FileName,
@@ -118,16 +130,41 @@ namespace HackPDM
             }
 
             // get document custom properties (file level properties)
-            string[] vDocPropNames = (string[])swDoc.GetCustomPropertyNames();
-            foreach (string vCustPropName in vCustPropNameArr)
+            string[] strDocPropNames = (string[])swDoc.GetCustomPropertyNames();
+            foreach (string strPropName in strDocPropNames)
             {
-                sCustPropStr = swDoc.GetCustomProperty(vCustPropName, out nPropType);
-                Debug.Print("   Prefaced      = " + vCustPropName + " <" + nPropType + "> = " + sCustPropStr);
 
-                sCustPropStr = swDoc.GetCustomProperty2(vCustPropName, out nPropType);
-                Debug.Print("   Not prefaced  = " + vCustPropName + " <" + nPropType + "> = " + sCustPropStr);
+                SwDmCustomInfoType nPropType = 0;
+                object oPropValue = swDoc.GetCustomProperty(strPropName, out nPropType);
 
-                Debug.Print("");
+                // property type
+                string strPropType = "";
+                switch (nPropType)
+                {
+                    case SwDmCustomInfoType.swDmCustomInfoDate:
+                        strPropType = "date";
+                        oPropValue = (DateTime)oPropValue;
+                        break;
+                    case SwDmCustomInfoType.swDmCustomInfoNumber:
+                        strPropType = "number";
+                        oPropValue = (Decimal)oPropValue;
+                        break;
+                    case SwDmCustomInfoType.swDmCustomInfoText:
+                        strPropType = "text";
+                        oPropValue = (String)oPropValue;
+                        break;
+                    case SwDmCustomInfoType.swDmCustomInfoYesOrNo:
+                        strPropType = "yesno";
+                        oPropValue = (Boolean)oPropValue;
+                        break;
+                    case SwDmCustomInfoType.swDmCustomInfoUnknown:
+                        strPropType = "";
+                        break;
+                }
+
+                // add to list
+                lstProps.Add(Tuple.Create<string, string, string, object>("", strPropName, strPropType, oPropValue));
+
             }
 
             // drawings don't have configurations, so we can return here
@@ -146,16 +183,11 @@ namespace HackPDM
             foreach (string strConfigName in lstConfigNames)
             {
 
-                object oPropNames = null;
-                object oPropTypes = null;
-                object oPropValues = null;
-                //object oResolved = null;
-
-                string[] strPropNames = swCfg.GetCustomPropertyNames();
-                foreach (string strPropName in strPropNames)
+                string[] strCfgPropNames = swCfg.GetCustomPropertyNames();
+                foreach (string strPropName in strCfgPropNames)
                 {
                     SwDmCustomInfoType nPropType = 0;
-                    var vCustPropVal = swCfg.GetCustomProperty2(strPropName, out nPropType);
+                    object oPropValue = swCfg.GetCustomProperty2(strPropName, out nPropType);
 
                     // property type
                     string strPropType = "";
@@ -163,35 +195,27 @@ namespace HackPDM
                     {
                         case SwDmCustomInfoType.swDmCustomInfoDate:
                             strPropType = "date";
+                            oPropValue = (DateTime)oPropValue;
                             break;
                         case SwDmCustomInfoType.swDmCustomInfoNumber:
                             strPropType = "number";
+                            oPropValue = (Decimal)oPropValue;
                             break;
                         case SwDmCustomInfoType.swDmCustomInfoText:
                             strPropType = "text";
+                            oPropValue = (String)oPropValue;
+                            break;
+                        case SwDmCustomInfoType.swDmCustomInfoYesOrNo:
+                            strPropType = "yesno";
+                            oPropValue = (Boolean)oPropValue;
                             break;
                         case SwDmCustomInfoType.swDmCustomInfoUnknown:
                             strPropType = "";
                             break;
-                        case SwDmCustomInfoType.swDmCustomInfoYesOrNo:
-                            strPropType = "yesno";
-                            break;
-                    }
-
-                    // property definition
-                    string strPropDef = vCustPropVal; // definition
-
-                    // property value
-                    //object oPropValue = ((object[])oResolved)[i]; // resolved value, with GetAll2()
-                    object oPropValue = vCustPropVal; // resolved value, with GetAll()
-                    oPropValue.GetType();
-                    if (oPropValue.GetType() == typeof(System.Double))
-                    {
-                        oPropValue = (Decimal)oPropValue;
                     }
 
                     // add to list
-                    lstProps.Add(Tuple.Create<string, string, string, string, object>(strConfigName, strPropName, strPropType, strPropDef, oPropValue));
+                    lstProps.Add(Tuple.Create<string, string, string, object>(strConfigName, strPropName, strPropType, oPropValue));
 
                 }
 
@@ -204,9 +228,7 @@ namespace HackPDM
         SwDmDocumentType GetTypeFromString(string ModelPathName)
         {
 
-            //------------------------------------------------------------
-            //--     ModelPathName = fully qualified name of file
-            //------------------------------------------------------------
+            // ModelPathName = fully qualified name of file
             SwDmDocumentType nDocType = 0;
 
             // Determine type of SOLIDWORKS file based on file extension
@@ -231,24 +253,6 @@ namespace HackPDM
             return nDocType;
 
         }
-
-        // class destructor
-        //~SWHelper()
-        //{
-        //    // cleanup statements
-        //    try
-        //    {
-        //        swApp.ExitApp();
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        //MessageBox.Show(
-        //        //    "Failed to close SolidWorks instance: " + ex.Message,
-        //        //    "Failed Closing SolidWork",
-        //        //    MessageBoxButtons.OK
-        //        //);
-        //    }
-        //}
 
     }
 }
