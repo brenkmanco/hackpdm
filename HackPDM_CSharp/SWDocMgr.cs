@@ -57,7 +57,7 @@ namespace HackPDM
 
             // get the document
             SwDmDocumentOpenError nRetVal = 0;
-            swDoc = (SwDMDocument13)swDocMgr.GetDocument(FileName, swDocType, false, out nRetVal);
+            swDoc = (SwDMDocument13)swDocMgr.GetDocument(FileName, swDocType, true, out nRetVal);
             if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
             {
                 DialogResult dr = MessageBox.Show("Failed to open solidworks file: " + FileName,
@@ -94,6 +94,7 @@ namespace HackPDM
 
             }
 
+            swDoc.CloseDoc();
             return listDepends;
 
         }
@@ -102,7 +103,6 @@ namespace HackPDM
         {
             SwDMDocument swDoc = default(SwDMDocument);
             SwDMConfigurationMgr swCfgMgr = default(SwDMConfigurationMgr);
-            SwDMConfiguration14 swCfg = default(SwDMConfiguration14);
 
             // config name
             // property name
@@ -119,7 +119,7 @@ namespace HackPDM
 
             // get the document
             SwDmDocumentOpenError nRetVal = 0;
-            swDoc = (SwDMDocument)swDocMgr.GetDocument(FileName, swDocType, false, out nRetVal);
+            swDoc = (SwDMDocument)swDocMgr.GetDocument(FileName, swDocType, true, out nRetVal);
             if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
             {
                 DialogResult dr = MessageBox.Show("Failed to open solidworks file: " + FileName,
@@ -183,7 +183,10 @@ namespace HackPDM
             foreach (string strConfigName in lstConfigNames)
             {
 
+                SwDMConfiguration14 swCfg = (SwDMConfiguration14)swCfgMgr.GetConfigurationByName(strConfigName);
                 string[] strCfgPropNames = swCfg.GetCustomPropertyNames();
+                if (strCfgPropNames==null) continue;
+
                 foreach (string strPropName in strCfgPropNames)
                 {
                     SwDmCustomInfoType nPropType = 0;
@@ -221,6 +224,7 @@ namespace HackPDM
 
             }
 
+            swDoc.CloseDoc();
             return lstProps;
 
         }

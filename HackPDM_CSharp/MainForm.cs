@@ -68,8 +68,9 @@ namespace HackPDM
 
         private WebDAVClient connDav = new WebDAVClient();
 
-        private SWHelper connSw = new SWHelper();
-        private SWDocMgr connDocMgr;
+        private SWHelper connSwApi = new SWHelper();
+        private SWDocMgr connDocMgrApi;
+        bool blnUseSwApi = false;
 
         private Dictionary<string, Int32> dictTree;
         private DataSet dsTree = new DataSet();
@@ -404,7 +405,7 @@ namespace HackPDM
 
             // get license key, and instantiate solidworks document manager
             String strSWDocMgrKey = dtServSettings.Select("setting_name='swdocmgr_key'")[0].Field<String>("setting_text_value");
-            connDocMgr = new SWDocMgr(strSWDocMgrKey);
+            connDocMgrApi = new SWDocMgr(strSWDocMgrKey);
 
         }
 
@@ -1186,8 +1187,15 @@ namespace HackPDM
             if (dr.Field<bool>("is_remote") == false || dr.Field<string>("client_status_code") == "cm")
             {
                 // get from SolidWorks
-                //List<string[]> lstDepends = connDocMgr.GetDependencies(strFullName);
-                List<string[]> lstDepends = connSw.GetDependencies(strFullName);
+                List<string[]> lstDepends;
+                if (blnUseSwApi)
+                {
+                    lstDepends = connSwApi.GetDependencies(strFullName);
+                }
+                else
+                {
+                    lstDepends = connDocMgrApi.GetDependencies(strFullName);
+                }
 
                 if (lstDepends != null)
                 {
@@ -2687,8 +2695,17 @@ namespace HackPDM
                     string strParentShortName = row.Field<string>("entry_name");
                     string strParentAbsPath = row.Field<string>("absolute_path");
                     string strParentFullName = strParentAbsPath + "\\" + strParentShortName;
-                    //List<string[]> lstDepends = connDocMgr.GetDependencies(strParentFullName, false);
-                    List<string[]> lstDepends = connSw.GetDependencies(strParentFullName, false);
+
+                    // get solidworks dependencies
+                    List<string[]> lstDepends;
+                    if (blnUseSwApi)
+                    {
+                        lstDepends = connSwApi.GetDependencies(strParentFullName, false);
+                    }
+                    else
+                    {
+                        lstDepends = connDocMgrApi.GetDependencies(strParentFullName, false);
+                    }
 
                     if (lstDepends != null)
                     {
@@ -3406,8 +3423,17 @@ namespace HackPDM
             // 2 - property name
             // 3 - property type
             // 4 - resolved value (boxed object)
-            //List<Tuple<string, string, string, object>> lstProps = connDocMgr.GetProperties(FullName);
-            List<Tuple<string, string, string, object>> lstProps = connSw.GetProperties(FullName);
+            List<Tuple<string, string, string, object>> lstProps;
+            if (blnUseSwApi)
+            {
+                lstProps = connSwApi.GetProperties(FullName);
+            }
+            else
+            {
+                lstProps = connDocMgrApi.GetProperties(FullName);
+            }
+            //List<Tuple<string, string, string, object>> 
+            
 
             // get server setting
             bool blnRestrict = dtServSettings.Select("setting_name = 'restrict_properties'")[0].Field<bool>("setting_bool_value");
