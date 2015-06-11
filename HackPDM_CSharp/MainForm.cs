@@ -2129,12 +2129,13 @@ namespace HackPDM
             string strRelBasePath = (string)genericlist[1];
             List<int> lstSelected = (List<int>)genericlist[2];
 
-            string strEntries = String.Join(",", lstSelected.ToArray());
+            // concatenate selected entries into a comma separated string
+            string strSelected = String.Join(",", lstSelected.ToArray());
 
             DataRow[] drBads;
 
             // warn checked-out-by-other
-            drBads = dsList.Tables[0].Select("client_status_code='co' and entry_id in (" + strEntries + ")");
+            drBads = dsList.Tables[0].Select("client_status_code='co' and entry_id in (" + strSelected + ")");
             foreach (DataRow drBad in drBads)
             {
                 string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
@@ -2142,7 +2143,7 @@ namespace HackPDM
             }
 
             // warn checked-out-by-me
-            drBads = dsList.Tables[0].Select("client_status_code='cm'  and entry_id in (" + strEntries + ")");
+            drBads = dsList.Tables[0].Select("client_status_code='cm'  and entry_id in (" + strSelected + ")");
             foreach (DataRow drBad in drBads)
             {
                 string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
@@ -2150,8 +2151,20 @@ namespace HackPDM
             }
 
             // get rows of selected files
-            DataRow[] drSelected = dsList.Tables[0].Select("client_status_code in ('ok','ro') and entry_id in (" + strEntries + ")");
-            int intRowCount = drSelected.Length;
+            DataRow[] drAllowed = dsList.Tables[0].Select("client_status_code in ('ok','ro') and entry_id in (" + strSelected + ")");
+            int intRowCount = drAllowed.Length;
+            if (intRowCount == 0)
+            {
+                throw new System.Exception("None of the selected files can be checked out");
+            }
+
+            // concatenate allowed entries into a comma separated string
+            string strAllowed = "";
+            foreach (DataRow dr in drAllowed)
+            {
+                strAllowed += dr.Field<int>("entry_id").ToString() + ",";
+            }
+            strAllowed = strAllowed.Remove(strAllowed.Length - 1); // remove trailing comma
 
             // prepare to checkout file
             string strSql = @"
@@ -2162,7 +2175,7 @@ namespace HackPDM
                         checkout_node=:node_id
                     where entry_id in ({0});
                 ";
-            strSql = String.Format(strSql, strEntries);
+            strSql = String.Format(strSql, strAllowed);
             NpgsqlCommand cmdCheckOut = new NpgsqlCommand(strSql, connDb, t);
             cmdCheckOut.Parameters.Add(new NpgsqlParameter("user_id", NpgsqlTypes.NpgsqlDbType.Integer));
             cmdCheckOut.Parameters.Add(new NpgsqlParameter("node_id", NpgsqlTypes.NpgsqlDbType.Integer));
@@ -2171,9 +2184,9 @@ namespace HackPDM
             cmdCheckOut.Parameters["user_id"].Value = intMyUserId;
             cmdCheckOut.Parameters["node_id"].Value = intMyNodeId;
             int intRows = cmdCheckOut.ExecuteNonQuery();
-            if (intRows == drSelected.Length)
+            if (intRows == drAllowed.Length)
             {
-                foreach (DataRow drRow in drSelected)
+                foreach (DataRow drRow in drAllowed)
                 {
                     string strFullName = drRow.Field<string>("absolute_path") + "\\" + drRow.Field<string>("entry_name");
                     dlgStatus.AddStatusLine("INFO", "File checkout info set: " + strFullName);
@@ -2185,7 +2198,7 @@ namespace HackPDM
             for (int i = 0; i < intRowCount; i++)
             {
 
-                DataRow drCurrent = drSelected[i];
+                DataRow drCurrent = drAllowed[i];
 
                 string strFileName = drCurrent.Field<string>("entry_name");
                 string strFilePath = drCurrent.Field<string>("absolute_path");

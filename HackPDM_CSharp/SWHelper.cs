@@ -169,7 +169,11 @@ namespace HackPDM
 
             // get list of configs
             //string[] strConfgNames = (string[])swModelDoc.GetConfigurationNames();
-            List<string> lstConfigNames = new List<string>((string[])swModelDoc.GetConfigurationNames());
+            List<string> lstConfigNames = new List<string>();
+            if (swDocType != swDocumentTypes_e.swDocDRAWING)
+            {
+                lstConfigNames = new List<string>((string[])swModelDoc.GetConfigurationNames());
+            }
             lstConfigNames.Add("");
             foreach (string strConfigName in lstConfigNames)
             {
