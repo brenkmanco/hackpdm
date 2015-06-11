@@ -2790,7 +2790,7 @@ namespace HackPDM
                                 strRelativePath, // relative_path
                                 strAbsolutePath, // absolute_path
                                 null, // icon
-                                null, // is_depend_searched
+                                false, // is_depend_searched
                                 fiCurrFile.IsReadOnly, // is_readonly
                                 true, // active
                                 false // destroyed

@@ -74,6 +74,7 @@ namespace HackPDM
             object oTimeStamp;
             swSearchOpt = swDocMgr.GetSearchOptionObject();
             string[] varDepends = (string[])swDoc.GetAllExternalReferences4(swSearchOpt, out oBrokenRefVar, out oIsVirtual, out oTimeStamp);
+            if (varDepends == null) return null;
 
             Boolean[] blnIsVirtual = (Boolean[])oIsVirtual;
             for (int i = 0; i < varDepends.Length; i++)
@@ -131,6 +132,8 @@ namespace HackPDM
 
             // get document custom properties (file level properties)
             string[] strDocPropNames = (string[])swDoc.GetCustomPropertyNames();
+            if (strDocPropNames == null) return null;
+
             foreach (string strPropName in strDocPropNames)
             {
 
