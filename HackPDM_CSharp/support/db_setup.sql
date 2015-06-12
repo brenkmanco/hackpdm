@@ -300,13 +300,15 @@ create table hp_version (
 	file_modify_stamp timestamp(6) without time zone NOT NULL,
 	create_stamp timestamp(6) without time zone NOT NULL DEFAULT now(),
 	create_user integer NOT NULL,
+	create_node integer NOT NULL,
 	md5sum text NOT NULL,
 	preview_image bytea,
 	destroyed boolean NOT NULL default false,
 	
 	primary key (version_id),
 	foreign key (entry_id) references hp_entry (entry_id),
-	foreign key (create_user) references hp_user (user_id)
+	foreign key (create_user) references hp_user (user_id),
+	foreign key (create_node) references hp_node (node_id)
 	
 );
 
@@ -316,6 +318,10 @@ create table hp_version (
 	alter table hp_version drop column release_tag;
 	alter table hp_version alter column preview_image drop NOT NULL;
 	alter table hp_version add column destroyed boolean NOT NULL default false;
+
+	alter table hp_version add column create_node integer references hp_node (node_id);
+	update hp_version set create_node=1024;
+	alter table hp_version alter column create_node set NOT NULL;
 */
 
 

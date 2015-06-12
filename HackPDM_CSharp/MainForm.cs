@@ -70,7 +70,7 @@ namespace HackPDM
 
         private SWHelper connSwApi = new SWHelper();
         private SWDocMgr connDocMgrApi;
-        bool blnUseSwApi = false;
+        bool blnUseSwApi = true;
 
         private Dictionary<string, Int32> dictTree;
         private DataSet dsTree = new DataSet();
@@ -790,7 +790,7 @@ namespace HackPDM
 
         }
 
-        protected void LoadListData(TreeNode nodeCurrent)
+        protected void LoadListData(string strRelPath)
         {
 
             // TODO: consider changing this method so that it calls the LoadCombinedData() method
@@ -802,14 +802,13 @@ namespace HackPDM
 
             DataSet dsCombined = new DataSet();
             // get directory path
-            string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, nodeCurrent.FullPath);
-            string strRelPath = nodeCurrent.FullPath;
+            string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelPath);
 
             // get remote entries
             int intDirId = 0;
-            if (nodeCurrent.Tag != null) {
+            dictTree.TryGetValue(strRelPath, out intDirId);
+            if (intDirId != 0) {
 
-                intDirId = (int)nodeCurrent.Tag;
                 // initialize sql command for remote entry list
                 string strSql = @"
                     select
@@ -896,7 +895,7 @@ namespace HackPDM
             // clear list
             InitListView();
             InitTabPages();
-            LoadListData(nodeCurrent);
+            LoadListData(nodeCurrent.FullPath);
 
             // if we have any files to show, then populate listview with files
             if (dsList.Tables[0] != null) {
@@ -1666,6 +1665,9 @@ namespace HackPDM
             string strBasePath = (string)genericlist[1];
             List<int> lstSelected = (List<int>)genericlist[2];
 
+            // refresh file data in the currently selected directory
+            LoadListData(strBasePath);
+
             // load fetch data
             DataSet dsFetches = LoadFetchData(sender, e, t, strBasePath, lstSelected);
             DataRow[] drBads;
@@ -1698,6 +1700,7 @@ namespace HackPDM
                 switch (result)
                 {
                     case System.Windows.Forms.DialogResult.Cancel:
+                        blnFailed = true;
                         e.Cancel = true;
                         return;
                     case System.Windows.Forms.DialogResult.Yes:
@@ -1705,7 +1708,8 @@ namespace HackPDM
                         break;
                     default:
                         blnFailed = true;
-                        break;
+                        e.Cancel = true;
+                        return;
                 }
             }
 
@@ -2119,6 +2123,10 @@ namespace HackPDM
 
             // get latest versions, including dependencies
             worker_GetLatest(sender, e);
+            if (e.Cancel)
+            {
+                return;
+            }
 
             BackgroundWorker myWorker = sender as BackgroundWorker;
             dlgStatus.AddStatusLine("INFO", "Beginning checkout worker");
@@ -2128,6 +2136,9 @@ namespace HackPDM
             NpgsqlTransaction t = (NpgsqlTransaction)genericlist[0];
             string strRelBasePath = (string)genericlist[1];
             List<int> lstSelected = (List<int>)genericlist[2];
+
+            // refresh file data in the currently selected directory
+            LoadListData(strRelBasePath);
 
             // concatenate selected entries into a comma separated string
             string strSelected = String.Join(",", lstSelected.ToArray());
@@ -2150,7 +2161,7 @@ namespace HackPDM
                 dlgStatus.AddStatusLine("INFO", "File is already checked out to you: " + strFullName);
             }
 
-            // get rows of selected files
+            // get comma separated list of allowed files
             DataRow[] drAllowed = dsList.Tables[0].Select("client_status_code in ('ok','ro') and entry_id in (" + strSelected + ")");
             int intRowCount = drAllowed.Length;
             if (intRowCount == 0)
@@ -2191,8 +2202,13 @@ namespace HackPDM
                     string strFullName = drRow.Field<string>("absolute_path") + "\\" + drRow.Field<string>("entry_name");
                     dlgStatus.AddStatusLine("INFO", "File checkout info set: " + strFullName);
                 }
+                t.Commit();
             }
-            t.Commit();
+            else
+            {
+                dlgStatus.AddStatusLine("WARNING", "Failed to checkout " + (drAllowed.Length - intRows).ToString() + " of " + drAllowed.Length + " files" + Environment.NewLine + "We already got latest versions, but we won't checkout");
+                t.Rollback();
+            }
 
             // set the local files writeable
             for (int i = 0; i < intRowCount; i++)
@@ -2211,7 +2227,7 @@ namespace HackPDM
                 }
                 catch (Exception ex)
                 {
-                    dlgStatus.AddStatusLine("ERROR", "Failed to set file \"" + fiCurrFile.Name + "\" to writeable." + System.Environment.NewLine + ex.ToString());
+                    dlgStatus.AddStatusLine("WARNING", "Failed to set file \"" + fiCurrFile.Name + "\" to writeable." + System.Environment.NewLine + ex.ToString());
                 }
 
             } // end for
@@ -2454,8 +2470,8 @@ namespace HackPDM
                 t.ToString();
                 if (t.Connection != null) {
                     t.Rollback();
-                    // TODO: figure out how to rollback WebDav changes
                 }
+                // TODO: figure out how to rollback WebDav changes
                 dlgStatus.AddStatusLine("CANCEL", "Operation canceled");
             }
             else if (e.Error != null)
@@ -2463,8 +2479,9 @@ namespace HackPDM
                 dlgStatus.AddStatusLine("ERROR", e.Error.Message);
                 if (t.Connection != null) {
                     t.Rollback();
-                    // TODO: figure out how to rollback WebDav changes
                 }
+                // TODO: figure out how to rollback WebDav changes
+                dlgStatus.AddStatusLine("ERROR", "Operation failed");
             }
             else
             {
@@ -3254,6 +3271,7 @@ namespace HackPDM
                     file_size,
                     file_modify_stamp,
                     create_user,
+                    create_node,
                     preview_image,
                     md5sum
                 ) values (
@@ -3262,6 +3280,7 @@ namespace HackPDM
                     :file_size,
                     :file_modify_stamp,
                     :create_user,
+                    :create_node,
                     :preview_image,
                     :md5sum
                 );
@@ -3272,6 +3291,7 @@ namespace HackPDM
             cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_size", NpgsqlTypes.NpgsqlDbType.Bigint));
             cmdInsertVersion.Parameters.Add(new NpgsqlParameter("file_modify_stamp", NpgsqlTypes.NpgsqlDbType.Timestamp));
             cmdInsertVersion.Parameters.Add(new NpgsqlParameter("create_user", NpgsqlTypes.NpgsqlDbType.Integer));
+            cmdInsertVersion.Parameters.Add(new NpgsqlParameter("create_node", NpgsqlTypes.NpgsqlDbType.Integer));
             cmdInsertVersion.Parameters.Add(new NpgsqlParameter("preview_image", NpgsqlTypes.NpgsqlDbType.Bytea));
             cmdInsertVersion.Parameters.Add(new NpgsqlParameter("md5sum", NpgsqlTypes.NpgsqlDbType.Text));
 
@@ -3352,6 +3372,7 @@ namespace HackPDM
                 cmdInsertVersion.Parameters["file_size"].Value = lngFileSize;
                 cmdInsertVersion.Parameters["file_modify_stamp"].Value = dtModifyDate;
                 cmdInsertVersion.Parameters["create_user"].Value = intMyUserId;
+                cmdInsertVersion.Parameters["create_node"].Value = intMyNodeId;
                 cmdInsertVersion.Parameters["preview_image"].Value = GetLocalPreview(drNewFile);
                 cmdInsertVersion.Parameters["md5sum"].Value = strMd5sum;
                 try
@@ -5017,7 +5038,7 @@ namespace HackPDM
         void CmsListGetLatestClick(object sender, EventArgs e) {
 
             // refresh file data
-            LoadListData(treeView1.SelectedNode);
+            LoadListData(treeView1.SelectedNode.FullPath);
 
             // create the status dialog
             dlgStatus = new StatusDialog();
@@ -5082,9 +5103,6 @@ namespace HackPDM
 
         void CmsListCheckOutClick(object sender, EventArgs e) {
 
-            // refresh file data
-            LoadListData(treeView1.SelectedNode);
-
             // create the status dialog
             dlgStatus = new StatusDialog();
 
@@ -5147,7 +5165,7 @@ namespace HackPDM
         {
 
             // refresh file data
-            LoadListData(treeView1.SelectedNode);
+            LoadListData(treeView1.SelectedNode.FullPath);
 
             // create the status dialog
             dlgStatus = new StatusDialog();
@@ -5195,7 +5213,7 @@ namespace HackPDM
         void CmsListUndoCheckoutClick(object sender, EventArgs e) {
 
             // refresh file data
-            LoadListData(treeView1.SelectedNode);
+            LoadListData(treeView1.SelectedNode.FullPath);
 
             // create the status dialog
             dlgStatus = new StatusDialog();
@@ -5277,7 +5295,7 @@ namespace HackPDM
             }
 
             // refresh file data
-            LoadListData(treeView1.SelectedNode);
+            LoadListData(treeView1.SelectedNode.FullPath);
 
             // create the status dialog
             dlgStatus = new StatusDialog();
@@ -5327,7 +5345,7 @@ namespace HackPDM
         {
 
             // refresh file data
-            LoadListData(treeView1.SelectedNode);
+            LoadListData(treeView1.SelectedNode.FullPath);
 
             // create the status dialog
             dlgStatus = new StatusDialog();
