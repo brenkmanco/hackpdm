@@ -1683,7 +1683,7 @@ namespace HackPDM
             // TODO: handle conflicts by making copies of the conflicting files and letting the user resolve the conflict
             //  - theirs.<filename>
             //  - ours.<filename>
-            drBads = dsFetches.Tables["files"].Select("local_stamp>latest_stamp and client_status_code<>'cm'");
+            drBads = dsFetches.Tables["files"].Select("str_local_stamp>str_latest_stamp and client_status_code<>'cm'");
             foreach (DataRow drBad in drBads)
             {
                 string strFullName = drBad.Field<string>("absolute_path") + "\\" + drBad.Field<string>("entry_name");
