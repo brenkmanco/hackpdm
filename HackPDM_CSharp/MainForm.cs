@@ -825,7 +825,7 @@ namespace HackPDM
                         null as local_size,
                         '' as str_local_size,
                         v.file_modify_stamp as latest_stamp,
-                        to_char(v.file_modify_stamp, 'yyyy-MM-dd HH24:mm:ss') as str_latest_stamp,
+                        to_char(v.file_modify_stamp, 'yyyy-MM-dd HH24:MI:SS') as str_latest_stamp,
                         null as local_stamp,
                         '' as str_local_stamp,
                         v.md5sum as latest_md5,
@@ -833,7 +833,7 @@ namespace HackPDM
                         e.checkout_user,
                         u.last_name || ', ' || u.first_name as ck_user_name,
                         e.checkout_date,
-                        to_char(e.checkout_date, 'yyyy-MM-dd HH24:mm:ss') as str_checkout_date,
+                        to_char(e.checkout_date, 'yyyy-MM-dd HH24:MI:SS') as str_checkout_date,
                         e.checkout_node,
                         n.node_name as checkout_node_name,
                         false as is_local,
@@ -1060,9 +1060,9 @@ namespace HackPDM
                     v.version_id,
                     v.entry_id,
                     pg_size_pretty(v.file_size) as version_size,
-                    to_char(v.create_stamp, 'yyyy-MM-dd HH24:mm:ss') as action_date,
+                    to_char(v.create_stamp, 'yyyy-MM-dd HH24:MI:SS') as action_date,
                     u.last_name || ', ' || u.first_name as action_user,
-                    to_char(r.release_stamp, 'yyyy-MM-dd HH24:mm:ss') as release_stamp
+                    to_char(r.release_stamp, 'yyyy-MM-dd HH24:MI:SS') as release_stamp
                 from hp_version as v
                 left join hp_user as u on u.user_id=v.create_user
                 left join (
@@ -1741,6 +1741,7 @@ namespace HackPDM
             // not checked out to me on this node
             // this will include newer remote versions (nv), and locally modified but not checked out to me (lm)
             // this may also include checked-out-to-other
+            // TODO: don't everwrite files checkout out to other, but in the same pwa
             //DataRow[] drUpdateFiles = dsFetches.Tables["files"].Select("client_status_code in ('lm','nv')");
             DataRow[] drUpdateFiles = dsFetches.Tables["files"].Select("is_local=true and is_remote=true and str_latest_stamp <> str_local_stamp and client_status_code <> 'cm'");
 
@@ -2060,9 +2061,8 @@ namespace HackPDM
 
                     if (intUpdateCount != intRowCount)
                     {
-                        // throw exception, and let worker_RunWorkerCompleted rollback the database
-                        dlgStatus.AddStatusLine("ERROR", "Failed to clear checkout data for " + (intRowCount - intUpdateCount).ToString() + " of " + intRowCount.ToString() + " files");
-                        blnFailed = true;
+                        // throw warning, and continue
+                        dlgStatus.AddStatusLine("WARNING", "Cleared checkout data for " + (intRowCount - intUpdateCount).ToString() + " files; expected " + intRowCount.ToString() + " files");
                     }
 
                 }
@@ -2645,6 +2645,13 @@ namespace HackPDM
                 // log status
                 dlgStatus.AddStatusLine("INFO", "Processing local file: " + strFile);
 
+                // check for file exists
+                if (!File.Exists(strFile))
+                {
+                    dlgStatus.AddStatusLine("WARNING", "Skipping missing file: " + strFile);
+                    continue;
+                }
+
                 // insert new row for presumed local-only file
                 dsCommits.Tables["files"].Rows.Add(
                     null, // entry_id
@@ -2757,6 +2764,18 @@ namespace HackPDM
                             dlgStatus.AddStatusLine("INFO", "Processing dependency: " + strLongName);
 
                             FileInfo fiCurrFile = new FileInfo(strLongName);
+                            string strAbsolutePath = fiCurrFile.DirectoryName;
+                            string strRelativePath = Utils.GetRelativePath(strLocalFileRoot, strAbsolutePath);
+
+                            // check for existing relationships
+                            DataRow[] drExists = dsCommits.Tables["rels"].Select(
+                                    String.Format("parent_name='{0}' and child_name='{1}'and child_absolute_path='{2}' and parent_absolute_path='{3}'",
+                                    strParentShortName,
+                                    strDepends[0],
+                                    strAbsolutePath,
+                                    strParentAbsPath)
+                                );
+                            if (drExists.Length > 0) continue;
 
                             // get exact file extension for status check
                             Tuple<string, string, string, string> tplExtensions = ftmStart.GetFileExt(strShortName);
@@ -2769,12 +2788,20 @@ namespace HackPDM
                                 lngFileSize = fiCurrFile.Length;
                                 dtModifyDate = fiCurrFile.LastWriteTime;
                             }
-                            string strAbsolutePath = fiCurrFile.DirectoryName;
-                            string strRelativePath = Utils.GetRelativePath(strLocalFileRoot, strAbsolutePath);
-
                             // get directory id
                             Int32 intDirId = 0;
                             dictTree.TryGetValue(strRelativePath, out intDirId);
+
+                            // check for duplicate
+                            if (dsCommits.Tables["files"].Select(String.Format("entry_name='{0}' and absolute_path='{1}'", strDepends[0], strAbsolutePath)).Length > 0) continue;
+
+                            // check for file exists
+                            if (!File.Exists(strLongName))
+                            {
+                                dlgStatus.AddStatusLine("WARNING", "Skipping missing file: " + strLongName);
+                                continue;
+                            }
+
 
                             dsCommits.Tables["files"].Rows.Add(
                                 null, // entry_id
@@ -3539,7 +3566,7 @@ namespace HackPDM
 
                 // establish string values
                 string strText = (strPropType == "text" ? "'" + ((string)oResolved).Replace("'", "\'").Replace("\\", "\\\\") + "'" : "NULL");
-                string strDate = (strPropType == "date" ? "'" + ((DateTime)oResolved).ToString("yyyy-mm-dd HH:MM:ss") + "'" : "NULL");
+                string strDate = (strPropType == "date" ? "'" + ((DateTime)oResolved).ToString("yyyy-mm-dd HH:mm:ss") + "'" : "NULL");
                 string strNumber = (strPropType == "number" ? ((Decimal)oResolved).ToString() : "NULL");
                 string strBool = (strPropType == "yesno" ? ((Boolean)oResolved).ToString() : "NULL");
 

@@ -130,6 +130,7 @@ namespace HackPDM
         {
             // check for solidworks instance
             if (swApp == null) return null;
+            if (!File.Exists(FileName)) return null;
 
             // config name
             // property name

@@ -146,10 +146,10 @@ namespace HackPDM
         {
 
             // if file not in local current day light saving time, then add an hour?
-            if (TimeZone.CurrentTimeZone.IsDaylightSavingTime(dtDate) == false)
-            {
-                dtDate = dtDate.AddHours(1);
-            }
+            //if (TimeZone.CurrentTimeZone.IsDaylightSavingTime(dtDate) == false)
+            //{
+            //    dtDate = dtDate.AddHours(1);
+            //}
 
             // get date and time in short format and return it
             string stringDate = "";
@@ -198,6 +198,7 @@ namespace HackPDM
 
         public static string StringMD5(string FileName)
         {
+            if (!File.Exists(FileName)) return null;
             // get local file checksum
             using (var md5 = MD5.Create())
             {

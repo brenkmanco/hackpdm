@@ -497,7 +497,7 @@ $BODY$
 				rel_child_id
 			FROM hp_version_relationship
 			WHERE rel_parent_id in ( select unnest($1) )
-		UNION ALL
+		UNION -- union all can cause an infinite loop
 			SELECT
 				c.rel_parent_id,
 				c.rel_child_id
@@ -561,7 +561,7 @@ $BODY$
 					dir_id,
 					dir_name::text as path
 				from hp_directory
-				where dir_id=1010
+				where dir_id=$1
 			union all
 				select
 					p.parent_id,
@@ -571,7 +571,7 @@ $BODY$
 				where c.parent_id = p.dir_id
 		)
 		select
-			1010::integer as dir_id,
+			$1::integer as dir_id,
 			path
 		from rev_path
 		where parent_id is null;
