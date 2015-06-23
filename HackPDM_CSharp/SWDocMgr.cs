@@ -186,14 +186,14 @@ namespace HackPDM
             foreach (string strConfigName in lstConfigNames)
             {
 
-                SwDMConfiguration14 swCfg = (SwDMConfiguration14)swCfgMgr.GetConfigurationByName(strConfigName);
+                SwDMConfiguration swCfg = (SwDMConfiguration)swCfgMgr.GetConfigurationByName(strConfigName);
                 string[] strCfgPropNames = swCfg.GetCustomPropertyNames();
                 if (strCfgPropNames==null) continue;
 
                 foreach (string strPropName in strCfgPropNames)
                 {
                     SwDmCustomInfoType nPropType = 0;
-                    object oPropValue = swCfg.GetCustomProperty2(strPropName, out nPropType);
+                    object oPropValue = swCfg.GetCustomProperty(strPropName, out nPropType);
 
                     // property type
                     string strPropType = "";

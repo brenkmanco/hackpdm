@@ -23,6 +23,10 @@ namespace HackPDM
         // constructor
         public SWHelper()
         {
+
+            // ---------------------------------------------------
+            // acquire a running process
+
             //if (System.Diagnostics.Process.GetProcessesByName("sldworks").Length > 1)
             //{
             //    DialogResult dr = MessageBox.Show("Multiple SolidWorks Instances Detected",
@@ -60,25 +64,28 @@ namespace HackPDM
             //        MessageBoxDefaultButton.Button1);
             //}
 
-            try
-            {
-                swApp = new SldWorks.SldWorks();
-                swApp.Visible = false;
-                swApp.DocumentVisible(false, (int)swDocumentTypes_e.swDocASSEMBLY);
-                swApp.DocumentVisible(false, (int)swDocumentTypes_e.swDocDRAWING);
-                swApp.DocumentVisible(false, (int)swDocumentTypes_e.swDocPART);
-                SldWorks.Frame pFrame = swApp.Frame();
-                pFrame.KeepInvisible = true;
-                swApp.UserControl = false;
-            }
-            catch (Exception ex)
-            {
-                DialogResult dr = MessageBox.Show("Failed to get a SolidWorks instance: " + ex.Message,
-                    "Loading SW",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Exclamation,
-                    MessageBoxDefaultButton.Button1);
-            }
+            // ---------------------------------------------------
+            // start a new process
+
+            //try
+            //{
+            //    swApp = new SldWorks.SldWorks();
+            //    swApp.Visible = false;
+            //    swApp.DocumentVisible(false, (int)swDocumentTypes_e.swDocASSEMBLY);
+            //    swApp.DocumentVisible(false, (int)swDocumentTypes_e.swDocDRAWING);
+            //    swApp.DocumentVisible(false, (int)swDocumentTypes_e.swDocPART);
+            //    SldWorks.Frame pFrame = swApp.Frame();
+            //    pFrame.KeepInvisible = true;
+            //    swApp.UserControl = false;
+            //}
+            //catch (Exception ex)
+            //{
+            //    DialogResult dr = MessageBox.Show("Failed to get a SolidWorks instance: " + ex.Message,
+            //        "Loading SW",
+            //        MessageBoxButtons.OK,
+            //        MessageBoxIcon.Exclamation,
+            //        MessageBoxDefaultButton.Button1);
+            //}
 
         }
 

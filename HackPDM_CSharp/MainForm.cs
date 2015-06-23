@@ -70,7 +70,7 @@ namespace HackPDM
 
         private SWHelper connSwApi = new SWHelper();
         private SWDocMgr connDocMgrApi;
-        bool blnUseSwApi = true;
+        bool blnUseSwApi = false;
 
         private Dictionary<string, Int32> dictTree;
         private DataSet dsTree = new DataSet();
@@ -266,7 +266,7 @@ namespace HackPDM
             // TODO: erase this stuff when building for release
             try
             {
-                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds_alderaan.config");
+                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds_bounty-2.config");
                 var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
                 var sectionGroup = configuration.GetSectionGroup("tempSettingsGroup"); // This is the section group name, change to your needs
                 var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
@@ -1744,9 +1744,15 @@ namespace HackPDM
             // TODO: don't everwrite files checkout out to other, but in the same pwa
             //DataRow[] drUpdateFiles = dsFetches.Tables["files"].Select("client_status_code in ('lm','nv')");
             DataRow[] drUpdateFiles = dsFetches.Tables["files"].Select("is_local=true and is_remote=true and str_latest_stamp <> str_local_stamp and client_status_code <> 'cm'");
+            int intUpdateCount = drUpdateFiles.Length;
+
+            // notify all up-to-date
+            if (intUpdateCount<1)
+            {
+                dlgStatus.AddStatusLine("INFO", "All selected files are already up to date");
+            }
 
             // check for files locked, but needing update
-            int intUpdateCount = drUpdateFiles.Length;
             for (int i = 0; i < intUpdateCount; i++)
             {
                 DataRow drCurrent = drUpdateFiles[i];
@@ -2770,10 +2776,10 @@ namespace HackPDM
                             // check for existing relationships
                             DataRow[] drExists = dsCommits.Tables["rels"].Select(
                                     String.Format("parent_name='{0}' and child_name='{1}'and child_absolute_path='{2}' and parent_absolute_path='{3}'",
-                                    strParentShortName,
-                                    strDepends[0],
-                                    strAbsolutePath,
-                                    strParentAbsPath)
+                                    strParentShortName.Replace("'", "''"),
+                                    strDepends[0].Replace("'", "''"),
+                                    strAbsolutePath.Replace("'", "''"),
+                                    strParentAbsPath.Replace("'", "''"))
                                 );
                             if (drExists.Length > 0) continue;
 
@@ -2793,7 +2799,7 @@ namespace HackPDM
                             dictTree.TryGetValue(strRelativePath, out intDirId);
 
                             // check for duplicate
-                            if (dsCommits.Tables["files"].Select(String.Format("entry_name='{0}' and absolute_path='{1}'", strDepends[0], strAbsolutePath)).Length > 0) continue;
+                            if (dsCommits.Tables["files"].Select(String.Format("entry_name='{0}' and absolute_path='{1}'", strDepends[0].Replace("'", "''"), strAbsolutePath.Replace("'", "''"))).Length > 0) continue;
 
                             // check for file exists
                             if (!File.Exists(strLongName))
@@ -2841,7 +2847,7 @@ namespace HackPDM
                             );
 
                             // add this file's directory, if necessary
-                            DataRow[] drCheck = dsCommits.Tables["dirs"].Select("absolute_path = '" + strAbsolutePath + "'");
+                            DataRow[] drCheck = dsCommits.Tables["dirs"].Select("absolute_path = '" + strAbsolutePath.Replace("'", "''") + "'");
                             if (drCheck.Length == 0)
                             {
                                 // get parent directory name
@@ -2940,7 +2946,7 @@ namespace HackPDM
                 string strFileName = drLocalFile.Field<string>("entry_name");
                 string strAbsPath = drLocalFile.Field<string>("absolute_path");
                 Int32 intDirId = drLocalFile.Field<Int32>("dir_id");
-                DataRow[] drRemoteFile = dsTemp.Tables[0].Select(String.Format("entry_name='{0}' and dir_id={1}",strFileName,intDirId));
+                DataRow[] drRemoteFile = dsTemp.Tables[0].Select(String.Format("entry_name='{0}' and dir_id={1}", strFileName.Replace("'", "''"), intDirId));
 
                 if (drRemoteFile.Length != 0)
                 {
@@ -3009,7 +3015,7 @@ namespace HackPDM
                     // update version ids in relationships
                     if (strClientStatusCode != "cm")
                     {
-                        DataRow[] drRels = dsCommits.Tables["rels"].Select(String.Format("(child_name='{0}' and child_absolute_path='{1}') or (parent_name='{0}' and parent_absolute_path='{1}')", strFileName, strAbsPath));
+                        DataRow[] drRels = dsCommits.Tables["rels"].Select(String.Format("(child_name='{0}' and child_absolute_path='{1}') or (parent_name='{0}' and parent_absolute_path='{1}')", strFileName.Replace("'", "''"), strAbsPath.Replace("'", "''")));
                         foreach (DataRow drRel in drRels)
                         {
 
@@ -3052,7 +3058,7 @@ namespace HackPDM
                     else
                     {
                         // get default type_id for this file extension
-                        DataRow[] drType = ftmStart.RemoteFileTypes.Select("file_ext = '" + strFileExt + "'");
+                        DataRow[] drType = ftmStart.RemoteFileTypes.Select("file_ext = '" + strFileExt.Replace("'", "''") + "'");
                         if (drType.Length != 0)
                         {
                             drLocalFile.SetField<Int32>("type_id", drType[0].Field<int>("type_id"));
@@ -3183,7 +3189,7 @@ namespace HackPDM
 
                 // check if we need to create this directory
                 // by comparing relative path, we avoid directories outside pwa
-                DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("relative_path like '{0}%' and client_status_code in ('lo','cm')", drCurrent.Field<string>("relative_path")));
+                DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("relative_path like '{0}%' and client_status_code in ('lo','cm')", drCurrent.Field<string>("relative_path").Replace("'", "''")));
                 if (drNewFiles.Length < 1) continue;
 
                 // when starting a new unique path, get this path's pre-existing remote parentid
@@ -3323,7 +3329,7 @@ namespace HackPDM
             cmdInsertVersion.Parameters.Add(new NpgsqlParameter("md5sum", NpgsqlTypes.NpgsqlDbType.Text));
 
             // get new files, write to db, upload to webdav
-            DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code in ('lo','cm') and absolute_path like '{0}%'", strLocalFileRoot));
+            DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code in ('lo','cm') and absolute_path like '{0}%'", strLocalFileRoot.Replace("'", "''")));
             Int32 intNewCount = drNewFiles.Length;
             for (int i = 0; i < intNewCount; i++)
             {
@@ -3418,7 +3424,7 @@ namespace HackPDM
                 blnFailed = AddFileProps(sender, e, t, intVersionId, strFullName);
 
                 // update relationships parent_id or child_id with new version_id
-                DataRow[] drRels = dsCommits.Tables["rels"].Select(String.Format("(child_name='{0}' and child_absolute_path='{1}') or (parent_name='{0}' and parent_absolute_path='{1}')", strFileName, strAbsPath));
+                DataRow[] drRels = dsCommits.Tables["rels"].Select(String.Format("(child_name='{0}' and child_absolute_path='{1}') or (parent_name='{0}' and parent_absolute_path='{1}')", strFileName.Replace("'", "''"), strAbsPath.Replace("'", "''")));
                 foreach (DataRow drRel in drRels)
                 {
                     // either set the id on the parent side
@@ -3615,7 +3621,7 @@ namespace HackPDM
 
             // get files to be committed and build list of version ids
             List<int> lstVersions = new List<int>();
-            DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code in ('lo','cm') and absolute_path like '{0}%'", strLocalFileRoot));
+            DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code in ('lo','cm') and absolute_path like '{0}%'", strLocalFileRoot.Replace("'", "''")));
             foreach (DataRow drFile in drNewFiles)
             {
                 lstVersions.Add(drFile.Field<int>("version_id"));
@@ -3631,7 +3637,7 @@ namespace HackPDM
 
             // check for children with no version id inside the pwa
             // this can happen when a child is outside the pwa, but we will ignore those
-            DataRow[] drBads = dsCommits.Tables["rels"].Select(String.Format("child_id=0 and child_absolute_path like '{0}%'", strLocalFileRoot));
+            DataRow[] drBads = dsCommits.Tables["rels"].Select(String.Format("child_id=0 and child_absolute_path like '{0}%'", strLocalFileRoot.Replace("'", "''")));
             foreach (DataRow dr in drBads)
             {
                 string strDepend = String.Format("{0}\\{1} <-- {2}\\{3}", dr.Field<string>("parent_name"), dr.Field<string>("parent_absolute_path"), dr.Field<string>("child_name"), dr.Field<string>("child_absolute_path"));
@@ -3957,7 +3963,7 @@ namespace HackPDM
                     dictTree.TryGetValue(strParentRelPath, out intParentId);
 
                     // check for remote existence
-                    DataRow[] drTest = dsDeletes.Tables["dirs"].Select("absolute_path='" + strAbsPath + "'");
+                    DataRow[] drTest = dsDeletes.Tables["dirs"].Select("absolute_path='" + strAbsPath.Replace("'", "''") + "'");
                     if (drTest.Length == 0)
                     {
                         // add local-only directory
@@ -4164,7 +4170,7 @@ namespace HackPDM
                 dtModifyDate = fiCurrFile.LastWriteTime;
 
                 // get matching remote file
-                DataRow[] drRemFile = dsCombined.Tables["files"].Select(String.Format("entry_name='{0}' and absolute_path='{1}'", strFileName.Replace("'", "\\'"), strAbsPath));
+                DataRow[] drRemFile = dsCombined.Tables["files"].Select(String.Format("entry_name='{0}' and absolute_path='{1}'", strFileName.Replace("'", "''"), strAbsPath.Replace("'", "''")));
 
                 // set status code empty, so we can detect unexpected status combinations
                 string strClientStatusCode = "";
@@ -5336,7 +5342,7 @@ namespace HackPDM
             ListView.SelectedListViewItemCollection lviSelection = listView1.SelectedItems;
             foreach (ListViewItem lviSelected in lviSelection)
             {
-                lstSelectedNames.Add(lviSelected.SubItems[0].Text);
+                lstSelectedNames.Add(lviSelected.SubItems[0].Text.Replace("'", "''"));
             }
 
             // start the database transaction
@@ -5386,7 +5392,7 @@ namespace HackPDM
             ListView.SelectedListViewItemCollection lviSelection = listView1.SelectedItems;
             foreach (ListViewItem lviSelected in lviSelection)
             {
-                lstSelectedNames.Add(lviSelected.SubItems[0].Text);
+                lstSelectedNames.Add(lviSelected.SubItems[0].Text.Replace("'", "''"));
             }
 
             // start the database transaction
