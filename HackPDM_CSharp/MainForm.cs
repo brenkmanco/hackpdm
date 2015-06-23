@@ -499,7 +499,7 @@ namespace HackPDM
         {
 
             // clear the tree
-            dictTree = new Dictionary<string, Int32>();
+            dictTree = new Dictionary<string, Int32>(StringComparer.OrdinalIgnoreCase);
             InitTreeView();
 
             // get root tree node
@@ -2851,7 +2851,7 @@ namespace HackPDM
                             if (drCheck.Length == 0)
                             {
                                 // get parent directory name
-                                string strDirName = Utils.GetBaseName(Utils.GetParentDirectory(strRelativePath));
+                                string strDirName = Utils.GetBaseName(strRelativePath);
 
                                 // get parent directory id
                                 Int32 intParentId = 0;
