@@ -266,7 +266,7 @@ namespace HackPDM
             // TODO: erase this stuff when building for release
             try
             {
-                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds_bounty-2.config");
+                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds.config");
                 var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
                 var sectionGroup = configuration.GetSectionGroup("tempSettingsGroup"); // This is the section group name, change to your needs
                 var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
@@ -499,7 +499,7 @@ namespace HackPDM
         {
 
             // clear the tree
-            dictTree = new Dictionary<string, Int32>();
+            dictTree = new Dictionary<string, Int32>(StringComparer.OrdinalIgnoreCase);
             InitTreeView();
 
             // get root tree node
@@ -2851,7 +2851,7 @@ namespace HackPDM
                             if (drCheck.Length == 0)
                             {
                                 // get parent directory name
-                                string strDirName = Utils.GetBaseName(Utils.GetParentDirectory(strRelativePath));
+                                string strDirName = Utils.GetBaseName(strRelativePath);
 
                                 // get parent directory id
                                 Int32 intParentId = 0;
