@@ -2851,7 +2851,7 @@ namespace HackPDM
                             if (drCheck.Length == 0)
                             {
                                 // get parent directory name
-                                string strDirName = Utils.GetParentDirectory(strRelativePath);
+                                string strDirName = Utils.GetBaseName(Utils.GetParentDirectory(strRelativePath));
 
                                 // get parent directory id
                                 Int32 intParentId = 0;
