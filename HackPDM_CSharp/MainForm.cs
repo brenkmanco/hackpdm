@@ -266,7 +266,7 @@ namespace HackPDM
             // TODO: erase this stuff when building for release
             try
             {
-                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds.config");
+                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds_bounty-2.config");
                 var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
                 var sectionGroup = configuration.GetSectionGroup("tempSettingsGroup"); // This is the section group name, change to your needs
                 var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
@@ -510,7 +510,7 @@ namespace HackPDM
             dictTree.Add(tnRoot.FullPath, (int)1);
 
             // build the tree recursively
-            PopulateTree(tnRoot, (int)1);
+            PopulateTree(tnRoot, (int)1, "pwa");
 
             // clear the list window
             InitListView();
@@ -588,17 +588,18 @@ namespace HackPDM
 
         }
 
-        protected void PopulateTree(TreeNode tnParentNode, int intParentId) {
+        protected void PopulateTree(TreeNode tnParentNode, int intParentId, string strParentRelPath) {
 
             // get local sub-directories
-            string[] stringDirectories = Directory.GetDirectories(Utils.GetAbsolutePath(strLocalFileRoot, tnParentNode.FullPath));
+            string strParentAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strParentRelPath);
+            string[] stringDirectories = Directory.GetDirectories(strParentAbsPath);
 
             // loop through all local sub-directories
             foreach (string strDir in stringDirectories) {
 
-                string strFilePath = strDir;
-                string strTreePath = Utils.GetRelativePath(strLocalFileRoot, strFilePath);
-                string strDirName = Utils.GetShortName(strFilePath);
+                string strAbsPath = strDir;
+                string strRelPath = Utils.GetRelativePath(strLocalFileRoot, strAbsPath);
+                string strDirName = Utils.GetShortName(strAbsPath);
                 TreeNode tnChild = new TreeNode(strDirName);
 
                 // get matching remote directory
@@ -609,7 +610,7 @@ namespace HackPDM
 
                     // local and remote
                     drChild.SetField("is_local", true);
-                    drChild.SetField("path", strTreePath);
+                    drChild.SetField("path", strRelPath);
                     int intChildId = (int)drChild["dir_id"];
                     tnChild.Tag = (object)intChildId;
 
@@ -632,7 +633,7 @@ namespace HackPDM
                     dictTree.Add(tnChild.FullPath, intChildId);
 
                     //Recursively build the tree
-                    PopulateTree(tnChild, intChildId);
+                    PopulateTree(tnChild, intChildId, strRelPath);
 
                 } else {
 
@@ -655,39 +656,42 @@ namespace HackPDM
 
                 // remote only
                 string strDirName = row["dir_name"].ToString();
-                string strTreePath = tnParentNode.FullPath + "\\" + strDirName;
-                string strFilePath = Utils.GetAbsolutePath(strLocalFileRoot, strTreePath);
+                string strRelPath = tnParentNode.FullPath + "\\" + strDirName;
+                string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelPath);
                 int intDirId = (int)row["dir_id"];
 
                 TreeNode tnChild = new TreeNode(strDirName);
                 row.SetField("is_local", false);
-                row.SetField("path", strTreePath);
+                row.SetField("path", strRelPath);
                 tnChild.Tag = (object)intDirId;
 
                 if (!row.Field<bool>("active") && ! blnShowDeleted)
                 {
                     // inactive (deleted) and we are not showing deleted
-                    continue;
+                    //continue;
+                    // go ahead and recurse below deleted directories
+                    // we need to have all directories in the dictionary so we can identify directories newly created by the user which are identical to deleted directories
                 }
                 else if (!row.Field<bool>("active"))
                 {
                     // inactive (deleted) but we are showing deleted
                     tnChild.ImageIndex = 5;
                     tnChild.SelectedImageIndex = 5;
+                    tnParentNode.Nodes.Add(tnChild);
                 }
                 else
                 {
                     // active remote only directory
                     tnChild.ImageIndex = 2;
                     tnChild.SelectedImageIndex = 2;
+                    tnParentNode.Nodes.Add(tnChild);
                 }
-                tnParentNode.Nodes.Add(tnChild);
 
                 // add to dictionary
-                dictTree.Add(tnChild.FullPath, intDirId);
+                dictTree.Add(strRelPath, intDirId);
 
                 //Recursively build the tree
-                PopulateTreeRemote(tnChild, intDirId);
+                PopulateTreeRemote(tnChild, intDirId, strRelPath);
 
             }
 
@@ -720,7 +724,7 @@ namespace HackPDM
 
         }
 
-        protected void PopulateTreeRemote(TreeNode tnParentNode, int intParentId) {
+        protected void PopulateTreeRemote(TreeNode tnParentNode, int intParentId, string strParentRelPath) {
 
             // the parent is remote only, so this is also remote only
 
@@ -730,13 +734,14 @@ namespace HackPDM
 
                 // remote only
                 string strDirName = row["dir_name"].ToString();
-                string strTreePath = tnParentNode.FullPath + "\\" + strDirName;
-                string strFilePath = Utils.GetAbsolutePath(strLocalFileRoot, strTreePath);
+                //string strTreePath = tnParentNode.FullPath + "\\" + strDirName;
+                string strRelPath = strParentRelPath + "\\" + strDirName;
+                string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelPath);
                 int intDirId = (int)row["dir_id"];
 
                 TreeNode tnChild = new TreeNode(strDirName);
                 row.SetField("is_local", false);
-                row.SetField("path", strTreePath);
+                row.SetField("path", strRelPath);
 
                 if (row.Field<bool>("active"))
                 {
@@ -753,10 +758,10 @@ namespace HackPDM
                 tnParentNode.Nodes.Add(tnChild);
 
                 // add to dictionary
-                dictTree.Add(tnChild.FullPath, intDirId);
+                dictTree.Add(strRelPath, intDirId);
 
                 //Recursively build the tree
-                PopulateTreeRemote(tnChild, intDirId);
+                PopulateTreeRemote(tnChild, intDirId, strRelPath);
 
             }
 
@@ -3949,38 +3954,41 @@ namespace HackPDM
                 DirectoryInfo dirBase = new DirectoryInfo(strAbsBasePath);
                 blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelBasePath);
 
-                foreach (DirectoryInfo dir in dirBase.GetDirectories("*", SearchOption.AllDirectories))
+                if (dirBase.Exists)
                 {
-
-                    string strAbsPath = dir.FullName;
-                    string strRelPath = Utils.GetRelativePath(strLocalFileRoot, strAbsPath);
-                    string strParentRelPath = Utils.GetParentDirectory(strRelPath);
-
-                    int intDirId = 0;
-                    dictTree.TryGetValue(strRelPath, out intDirId);
-
-                    int intParentId = 0;
-                    dictTree.TryGetValue(strParentRelPath, out intParentId);
-
-                    // check for remote existence
-                    DataRow[] drTest = dsDeletes.Tables["dirs"].Select("absolute_path='" + strAbsPath.Replace("'", "''") + "'");
-                    if (drTest.Length == 0)
+                    foreach (DirectoryInfo dir in dirBase.GetDirectories("*", SearchOption.AllDirectories))
                     {
-                        // add local-only directory
-                        dsDeletes.Tables["dirs"].Rows.Add(
-                            intDirId, // dir_id
-                            intParentId, // parent_id
-                            dir.Name, // dir_name
-                            strRelPath, // relative_path
-                            strAbsPath, // absolute_path
-                            (intDirId != 0), // is_remote
-                            false //wont_delete
-                        );
+
+                        string strAbsPath = dir.FullName;
+                        string strRelPath = Utils.GetRelativePath(strLocalFileRoot, strAbsPath);
+                        string strParentRelPath = Utils.GetParentDirectory(strRelPath);
+
+                        int intDirId = 0;
+                        dictTree.TryGetValue(strRelPath, out intDirId);
+
+                        int intParentId = 0;
+                        dictTree.TryGetValue(strParentRelPath, out intParentId);
+
+                        // check for remote existence
+                        DataRow[] drTest = dsDeletes.Tables["dirs"].Select("absolute_path='" + strAbsPath.Replace("'", "''") + "'");
+                        if (drTest.Length == 0)
+                        {
+                            // add local-only directory
+                            dsDeletes.Tables["dirs"].Rows.Add(
+                                intDirId, // dir_id
+                                intParentId, // parent_id
+                                dir.Name, // dir_name
+                                strRelPath, // relative_path
+                                strAbsPath, // absolute_path
+                                (intDirId != 0), // is_remote
+                                false //wont_delete
+                            );
+                        }
+
+                        // combine remote data with local data
+                        blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelPath);
+
                     }
-
-                    // combine remote data with local data
-                    blnFailed = LoadCombinedData(sender, e, ref dsDeletes, strRelPath);
-
                 }
 
                 // return results
@@ -4341,22 +4349,25 @@ namespace HackPDM
                 string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelPath);
 
                 // delete recursively
-                dlgStatus.AddStatusLine("INFO", "Deleting directory: " + strAbsPath);
-                DirectoryInfo dir = new DirectoryInfo(strAbsPath) { Attributes = FileAttributes.Normal };
+                if (Directory.Exists(strAbsPath))
+                {
+                    dlgStatus.AddStatusLine("INFO", "Deleting directory: " + strAbsPath);
+                    DirectoryInfo dir = new DirectoryInfo(strAbsPath) { Attributes = FileAttributes.Normal };
 
-                foreach (var info in dir.GetFileSystemInfos("*", SearchOption.AllDirectories))
-                {
-                    info.Attributes = FileAttributes.Normal;
-                }
+                    foreach (var info in dir.GetFileSystemInfos("*", SearchOption.AllDirectories))
+                    {
+                        info.Attributes = FileAttributes.Normal;
+                    }
 
-                try
-                {
-                    dir.Delete(true);
-                }
-                catch (Exception ex)
-                {
-                    dlgStatus.AddStatusLine("ERROR", "Failed on recursive delete of directory (" + ex.Message + "): " + strAbsPath);
-                    blnFailed = true;
+                    try
+                    {
+                        dir.Delete(true);
+                    }
+                    catch (Exception ex)
+                    {
+                        dlgStatus.AddStatusLine("ERROR", "Failed on recursive delete of directory (" + ex.Message + "): " + strAbsPath);
+                        blnFailed = true;
+                    }
                 }
 
             }
@@ -4413,7 +4424,7 @@ namespace HackPDM
             bool blnFailed = false;
 
             // create webdav directory to be deleted
-            connDav.CreateDir("/" + strGuid);
+            connDav.CreateDir("/tmp/" + strGuid);
 
             DataRow[] drRemotes = dsDeletes.Tables["files"].Select("entry_id is not null");
             foreach(DataRow drRemote in drRemotes)
@@ -4430,7 +4441,7 @@ namespace HackPDM
                 // the collection is named after the entry_id
                 int intEntryId = drRemote.Field<int>("entry_id");
                 string strSrcPath = "/" + intEntryId.ToString();
-                string strDestPath = "/" + strGuid + "/" + intEntryId.ToString();
+                string strDestPath = "/tmp/" + strGuid + "/" + intEntryId.ToString();
 
                 // get the file name
                 string strFileName = drRemote.Field<string>("entry_name");
@@ -4440,11 +4451,18 @@ namespace HackPDM
                 // move the collection inside our new temporary collection (guid) on the webdav server
                 // later, we will delete the temporary collection, and everything inside
                 dlgStatus.AddStatusLine("INFO", "Staging file for delete: " + strFullName);
-                connDav.MoveDir(strSrcPath, strDestPath);
-                if (connDav.StatusCode - 200 >= 100)
+                try
                 {
-                    dlgStatus.AddStatusLine("ERROR", connDav.StatusCode + "(file: " + strFullName + ")");
-                    blnFailed = true;
+                    connDav.MoveDir(strSrcPath, strDestPath);
+                }
+                catch (Exception ex)
+                {
+                    dlgStatus.AddStatusLine("WARNING", ex.Message);
+                    //if (connDav.StatusCode - 200 >= 100)
+                    //{
+                    //    dlgStatus.AddStatusLine("ERROR", connDav.StatusCode + "(file: " + strFullName + ")");
+                    //    blnFailed = true;
+                    //}
                 }
 
             }
@@ -4464,8 +4482,8 @@ namespace HackPDM
             bool blnFailed = false;
 
             // get list of entries to be restored
-            List<string> lstDirs = connDav.List(strGuid);
-            lstDirs.Remove(strGuid + "/");
+            List<string> lstDirs = connDav.List("/tmp/" + strGuid);
+            lstDirs.Remove("/tmp/" + strGuid + "/");
 
             foreach (string strDir in lstDirs)
             {
@@ -4480,7 +4498,7 @@ namespace HackPDM
                 // get the collection name (that's webdav terminology for a directory name)
                 // the collection is named after the entry_id
                 string strSrcPath = "/" + strDir;
-                string strDestPath = strDir.Replace(strGuid,"");
+                string strDestPath = strDir.Replace("/tmp/" + strGuid, "");
 
                 // move the collection inside our new temporary collection (guid) on the webdav server
                 // later, we will delete the temporary collection, and everything inside
@@ -4488,14 +4506,14 @@ namespace HackPDM
                 connDav.MoveDir(strSrcPath, strDestPath);
                 if (connDav.StatusCode - 200 >= 100)
                 {
-                    dlgStatus.AddStatusLine("ERROR", connDav.StatusCode + "(entry_id: " + strDir + ")");
+                    dlgStatus.AddStatusLine("WARNING", connDav.StatusCode + "(entry_id: " + strDir + ")");
                     blnFailed = true;
                 }
 
             }
 
             // delete the now-empty staging directory
-            connDav.Delete("/" + strGuid);
+            connDav.Delete("/tmp/" + strGuid);
 
             return blnFailed;
 
@@ -4600,9 +4618,9 @@ namespace HackPDM
 
             // build comma separated list of dirs
             string strDirs = "";
-            foreach (DataRow row in dsDeletes.Tables["files"].Rows)
+            foreach (DataRow row in dsDeletes.Tables["dirs"].Rows)
             {
-                strDirs += row.Field<int>("entry_id").ToString() + ",";
+                strDirs += row.Field<int>("dir_id").ToString() + ",";
             }
 
             // drop trailing comma
@@ -4655,12 +4673,12 @@ namespace HackPDM
             bool blnFailed = false;
 
             // write status
-            dlgStatus.AddStatusLine("INFO", "Deleting staged files from webdav server: staging directory /" + strGuid + "");
-            connDav.Delete("/" + strGuid);
+            dlgStatus.AddStatusLine("INFO", "Deleting staged files from webdav server: staging directory /tmp/" + strGuid + "");
+            connDav.Delete("/tmp/" + strGuid);
 
             if (connDav.StatusCode - 200 >= 100)
             {
-                dlgStatus.AddStatusLine("ERROR", connDav.StatusCode + "(staging directory: " + strGuid + ")");
+                dlgStatus.AddStatusLine("ERROR", connDav.StatusCode + "(staging directory: /tmp/" + strGuid + ")");
                 blnFailed = true;
             }
 
