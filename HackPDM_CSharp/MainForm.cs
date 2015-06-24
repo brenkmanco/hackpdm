@@ -418,35 +418,32 @@ namespace HackPDM
             // load remote directories to a DataTable
             string strSql = @"
                 select
-                    dir_id,
-                    parent_id,
-                    dir_name,
-                    create_stamp,
-                    create_user,
-                    modify_stamp,
-                    modify_user,
-                    active,
-                    true as is_remote
-                from hp_directory
-                order by parent_id,dir_id;
+                    t.dir_id,
+                    t.parent_id,
+                    t.dir_name,
+                    d.create_stamp,
+                    d.create_user,
+                    d.modify_stamp,
+                    d.modify_user,
+                    d.active,
+                    true as is_remote,
+                    false as is_local,
+                    'pwa' || t.rel_path as path
+                from view_dir_tree as t
+                left join hp_directory as d on d.dir_id=t.dir_id
+                order by t.rel_path;
             ";
             NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
             daTemp.Fill(dsTree);
-            DataTable dtTree = dsTree.Tables[0];
-
-            // add a column for flagging directories that exist locally
-            DataColumn dcLocal = new DataColumn("is_local");
-            dcLocal.DataType = Type.GetType("System.Boolean");
-            dcLocal.DefaultValue = false;
-            dtTree.Columns.Add(dcLocal);
-
-            // add a column for the path definition
-            DataColumn dcPath = new DataColumn("path");
-            dcPath.DataType = Type.GetType("System.String");
-            dtTree.Columns.Add(dcPath);
 
             // create parent-child relationship
-            dsTree.Relations.Add("rsParentChild", dtTree.Columns["dir_id"], dtTree.Columns["parent_id"]);
+            dsTree.Relations.Add("rsParentChild", dsTree.Tables[0].Columns["dir_id"], dsTree.Tables[0].Columns["parent_id"]);
+
+            // add remotes to dictionary
+            foreach (DataRow row in dsTree.Tables[0].Rows)
+            {
+                dictTree.Add(row.Field<string>("path"), row.Field<int>("dir_id"));
+            }
 
         }
 
@@ -498,7 +495,7 @@ namespace HackPDM
         private void ResetView(string strTreePath = "")
         {
 
-            // clear the tree
+            // clear and re-populate the directory data
             dictTree = new Dictionary<string, Int32>(StringComparer.OrdinalIgnoreCase);
             InitTreeView();
 
@@ -506,11 +503,8 @@ namespace HackPDM
             TreeNode tnRoot = treeView1.Nodes[0];
             TreeNode tnSelect = new TreeNode();
 
-            // add to dictionary
-            dictTree.Add(tnRoot.FullPath, (int)1);
-
-            // build the tree recursively
-            PopulateTree(tnRoot, (int)1, "pwa");
+            // build the tree view structure
+            PopulateTree(tnRoot, (int)1, tnRoot.FullPath);
 
             // clear the list window
             InitListView();
@@ -574,7 +568,9 @@ namespace HackPDM
             // get the root directory row and set values
             DataRow drRoot = dsTree.Tables[0].Select("dir_id=1")[0];
             drRoot.SetField<bool>("is_local", true);
-            drRoot.SetField<string>("path", "pwa");
+
+            // combine local directories
+            CombineLocalDirs();
 
             // clear the tree
             treeView1.Nodes.Clear();
@@ -585,6 +581,11 @@ namespace HackPDM
             tnRoot.ImageIndex = 0;
             tnRoot.SelectedImageIndex = 0;
             treeView1.Nodes.Add(tnRoot);
+
+        }
+
+        private void CombineLocalDirs()
+        {
 
         }
 
