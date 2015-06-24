@@ -410,7 +410,7 @@ namespace HackPDM
         }
 
 
-        private void LoadRemoteDirs() {
+        private void LoadDirData() {
 
             // clear the dataset
             dsTree = new DataSet();
@@ -428,7 +428,7 @@ namespace HackPDM
                     d.active,
                     true as is_remote,
                     false as is_local,
-                    'pwa' || t.rel_path as path
+                    replace('pwa' || t.rel_path, '/', '\') as path
                 from view_dir_tree as t
                 left join hp_directory as d on d.dir_id=t.dir_id
                 order by t.rel_path;
@@ -437,12 +437,59 @@ namespace HackPDM
             daTemp.Fill(dsTree);
 
             // create parent-child relationship
-            dsTree.Relations.Add("rsParentChild", dsTree.Tables[0].Columns["dir_id"], dsTree.Tables[0].Columns["parent_id"]);
+            // can't do this because all local directories get dir_id=0, which violates implied uniquness
+            //dsTree.Relations.Add("rsParentChild", dsTree.Tables[0].Columns["dir_id"], dsTree.Tables[0].Columns["parent_id"]);
 
             // add remotes to dictionary
             foreach (DataRow row in dsTree.Tables[0].Rows)
             {
                 dictTree.Add(row.Field<string>("path"), row.Field<int>("dir_id"));
+            }
+
+            // get all local directories
+            DirectoryInfo dirBase = new DirectoryInfo(strLocalFileRoot);
+            foreach (DirectoryInfo dir in dirBase.GetDirectories("*", SearchOption.AllDirectories))
+            {
+
+                string strAbsPath = dir.FullName;
+                string strRelPath = Utils.GetRelativePath(strLocalFileRoot, strAbsPath);
+                string strParentRelPath = Utils.GetParentDirectory(strRelPath);
+
+                int intDirId = 0;
+                dictTree.TryGetValue(strRelPath, out intDirId);
+
+                int intParentId = 0;
+                dictTree.TryGetValue(strParentRelPath, out intParentId);
+
+                // check for remote existence
+                if (intDirId != 0)
+                {
+                    // update is_local flag
+                    DataRow drRemote = dsTree.Tables[0].Select("dir_id=" + intDirId)[0];
+                    drRemote.SetField<bool>("is_local", true);
+                }
+                else
+                {
+                    // get parent active status
+                    DataRow drParent = dsTree.Tables[0].Select("path='" + strParentRelPath.Replace("'", "''") + "'")[0];
+                    bool blnActive = drParent.Field<bool>("active");
+
+                    // add local-only directory
+                    dsTree.Tables[0].Rows.Add(
+                        intDirId,    // dir_id
+                        intParentId, // parent_id
+                        dir.Name,    // dir_name
+                        null,        // create_stamp
+                        null,        // create_user
+                        null,        // modify_stamp
+                        null,        // modify_user
+                        blnActive,   // active
+                        false,       // is_remote
+                        true,        // is_local
+                        strRelPath   // path
+                    );
+                }
+
             }
 
         }
@@ -501,16 +548,17 @@ namespace HackPDM
 
             // get root tree node
             TreeNode tnRoot = treeView1.Nodes[0];
-            TreeNode tnSelect = new TreeNode();
 
             // build the tree view structure
-            PopulateTree(tnRoot, (int)1, tnRoot.FullPath);
+            PopulateTree2(tnRoot);
 
             // clear the list window
             InitListView();
 
             // select the top node or the specified node
-            if (strTreePath == "") {
+            TreeNode tnSelect = new TreeNode();
+            if (strTreePath == "")
+            {
                 treeView1.SelectedNode = tnRoot;
                 PopulateList(tnRoot);
             } else {
@@ -563,14 +611,11 @@ namespace HackPDM
             }
 
             // load remote directory structure
-            LoadRemoteDirs();
+            LoadDirData();
 
             // get the root directory row and set values
             DataRow drRoot = dsTree.Tables[0].Select("dir_id=1")[0];
             drRoot.SetField<bool>("is_local", true);
-
-            // combine local directories
-            CombineLocalDirs();
 
             // clear the tree
             treeView1.Nodes.Clear();
@@ -584,189 +629,246 @@ namespace HackPDM
 
         }
 
-        private void CombineLocalDirs()
+        protected void PopulateTree(TreeNode tnParent)
         {
 
-        }
+            // dsTree contains the following columns:
+            //   parent_id
+            //   dir_name
+            //   create_stamp
+            //   create_user
+            //   modify_stamp
+            //   modify_user
+            //   active
+            //   is_remote
+            //   is_local
+            //   path
 
-        protected void PopulateTree(TreeNode tnParentNode, int intParentId, string strParentRelPath) {
+            // directory icons are as follows:
+            //   0 - simple-folder-icon
+            //   1 - folder-icon_localonly
+            //   2 - folder-icon_remoteonly
+            //   3 - folder-icon_checkme
+            //   4 - folder-icon_checkedother
+            //   5 - folder-icon_deleted
 
-            // get local sub-directories
-            string strParentAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strParentRelPath);
-            string[] stringDirectories = Directory.GetDirectories(strParentAbsPath);
-
-            // loop through all local sub-directories
-            foreach (string strDir in stringDirectories) {
-
-                string strAbsPath = strDir;
-                string strRelPath = Utils.GetRelativePath(strLocalFileRoot, strAbsPath);
-                string strDirName = Utils.GetShortName(strAbsPath);
-                TreeNode tnChild = new TreeNode(strDirName);
-
-                // get matching remote directory
-                DataRow[] drChilds = dsTree.Tables[0].Select(String.Format("parent_id={0} and dir_name='{1}'", intParentId, strDirName.ToString().Replace("'", "''")));
-                if (drChilds.Length != 0) {
-
-                    DataRow drChild = drChilds[0];
-
-                    // local and remote
-                    drChild.SetField("is_local", true);
-                    drChild.SetField("path", strRelPath);
-                    int intChildId = (int)drChild["dir_id"];
-                    tnChild.Tag = (object)intChildId;
-
-                    // select icon
-                    if (drChild.Field<bool>("active"))
-                    {
-                        tnChild.ImageIndex = 0;
-                        tnChild.SelectedImageIndex = 0;
-                    }
-                    else
-                    {
-                        // directory exists locally, and remotely, and is deleted
-                        tnChild.ImageIndex = 5;
-                        tnChild.SelectedImageIndex = 5;
-                    }
-
-                    tnParentNode.Nodes.Add(tnChild);
-
-                    // add to dictionary
-                    dictTree.Add(tnChild.FullPath, intChildId);
-
-                    //Recursively build the tree
-                    PopulateTree(tnChild, intChildId, strRelPath);
-
-                } else {
-
-                    // local only icon
-                    tnChild.ImageIndex = 1;
-                    tnChild.SelectedImageIndex = 1;
-                    tnParentNode.Nodes.Add(tnChild);
-
-                    // Recursively build the tree
-                    // from here, any subdirectories will be local only
-                    PopulateTreeLocal(tnChild);
-
-                }
-
+            // get immediate child directories
+            string strParentRelPath = tnParent.FullPath;
+            DataRow[] drShows;
+            if (blnShowDeleted)
+            {
+                drShows = dsTree.Tables[0].Select(String.Format("path='{0}\\'+dir_name", strParentRelPath.Replace("'", "''")), "path asc");
+            }
+            else
+            {
+                drShows = dsTree.Tables[0].Select(String.Format("path='{0}\\'+dir_name and (active=true or (active=false and is_local=true))", strParentRelPath.Replace("'", "''")), "path asc");
             }
 
-            // get remote only sub-directories
-            DataRow[] drRemChild = dsTree.Tables[0].Select("parent_id="+intParentId+" and is_local=0");
-            foreach (DataRow row in drRemChild) {
+            // loop through directories, adding nodes to the treeview
+            foreach (DataRow dr in drShows)
+            {
 
-                // remote only
-                string strDirName = row["dir_name"].ToString();
-                string strRelPath = tnParentNode.FullPath + "\\" + strDirName;
-                string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelPath);
-                int intDirId = (int)row["dir_id"];
+                TreeNode tnChild = new TreeNode(dr.Field<string>("dir_name"));
+                tnChild.Tag = dr.Field<object>("dir_id");
 
-                TreeNode tnChild = new TreeNode(strDirName);
-                row.SetField("is_local", false);
-                row.SetField("path", strRelPath);
-                tnChild.Tag = (object)intDirId;
-
-                if (!row.Field<bool>("active") && ! blnShowDeleted)
+                // select icon
+                if (dr.Field<bool>("active") && dr.Field<bool>("is_local") && dr.Field<bool>("is_remote"))
                 {
-                    // inactive (deleted) and we are not showing deleted
-                    //continue;
-                    // go ahead and recurse below deleted directories
-                    // we need to have all directories in the dictionary so we can identify directories newly created by the user which are identical to deleted directories
+                    // is active, is local, is remote
+                    tnChild.ImageIndex = 0;
+                    tnChild.SelectedImageIndex = 0;
                 }
-                else if (!row.Field<bool>("active"))
+                else if (dr.Field<bool>("active") && dr.Field<bool>("is_local") && !dr.Field<bool>("is_remote"))
                 {
-                    // inactive (deleted) but we are showing deleted
+                    // is active, is local, not remote
+                    tnChild.ImageIndex = 1;
+                    tnChild.SelectedImageIndex = 1;
+                }
+                else if (dr.Field<bool>("active") && !dr.Field<bool>("is_local") && dr.Field<bool>("is_remote"))
+                {
+                    // is active, not local, is remote
+                    tnChild.ImageIndex = 2;
+                    tnChild.SelectedImageIndex = 2;
+                }
+                else if (!dr.Field<bool>("active") && (dr.Field<bool>("is_local") || blnShowDeleted))
+                {
+                    // not active, and either it's local or the user wants to see deleted
                     tnChild.ImageIndex = 5;
                     tnChild.SelectedImageIndex = 5;
-                    tnParentNode.Nodes.Add(tnChild);
                 }
                 else
                 {
-                    // active remote only directory
+                    // whatever else comes up
+                    tnChild.ImageIndex = 0;
+                    tnChild.SelectedImageIndex = 0;
+                }
+
+                tnParent.Nodes.Add(tnChild);
+
+                //Recursively build the tree
+                PopulateTree(tnChild);
+
+            }
+
+        }
+
+        protected void PopulateTree2(TreeNode tnParent)
+        {
+
+            // dsTree contains the following columns:
+            //   parent_id
+            //   dir_name
+            //   create_stamp
+            //   create_user
+            //   modify_stamp
+            //   modify_user
+            //   active
+            //   is_remote
+            //   is_local
+            //   path
+
+            // directory icons are as follows:
+            //   0 - simple-folder-icon
+            //   1 - folder-icon_localonly
+            //   2 - folder-icon_remoteonly
+            //   3 - folder-icon_checkme
+            //   4 - folder-icon_checkedother
+            //   5 - folder-icon_deleted
+
+            // get all directories
+            DataRow[] drShows;
+            if (blnShowDeleted)
+            {
+                drShows = dsTree.Tables[0].Select("dir_id<>1", "path asc");
+            }
+            else
+            {
+                drShows = dsTree.Tables[0].Select("dir_id<>1 and (active=true or (active=false and is_local=true))", "path asc");
+            }
+
+            // create dictionary of tree nodes
+            Dictionary<string,TreeNode> dictNodes = new Dictionary<string,TreeNode>();
+            dictNodes.Add(tnParent.FullPath, tnParent);
+
+            // loop through directories, adding nodes to the treeview
+            foreach (DataRow dr in drShows)
+            {
+
+                string strRelPath = dr.Field<string>("path");
+                string strParentRelPath = Utils.GetParentDirectory(strRelPath);
+
+                // create the node
+                TreeNode tnChild = new TreeNode(dr.Field<string>("dir_name"));
+                tnChild.Tag = dr.Field<object>("dir_id");
+
+                // select icon
+                if (dr.Field<bool>("active") && dr.Field<bool>("is_local") && dr.Field<bool>("is_remote"))
+                {
+                    // is active, is local, is remote
+                    tnChild.ImageIndex = 0;
+                    tnChild.SelectedImageIndex = 0;
+                }
+                else if (dr.Field<bool>("active") && dr.Field<bool>("is_local") && !dr.Field<bool>("is_remote"))
+                {
+                    // is active, is local, not remote
+                    tnChild.ImageIndex = 1;
+                    tnChild.SelectedImageIndex = 1;
+                }
+                else if (dr.Field<bool>("active") && !dr.Field<bool>("is_local") && dr.Field<bool>("is_remote"))
+                {
+                    // is active, not local, is remote
                     tnChild.ImageIndex = 2;
                     tnChild.SelectedImageIndex = 2;
-                    tnParentNode.Nodes.Add(tnChild);
                 }
-
-                // add to dictionary
-                dictTree.Add(strRelPath, intDirId);
-
-                //Recursively build the tree
-                PopulateTreeRemote(tnChild, intDirId, strRelPath);
-
-            }
-
-        }
-
-        protected void PopulateTreeLocal(TreeNode tnParentNode) {
-
-            // the parent is local only, so this is also local only
-
-            // get local sub-directories
-            string[] stringDirectories = Directory.GetDirectories(Utils.GetAbsolutePath(strLocalFileRoot, tnParentNode.FullPath));
-
-            // loop through all local sub-directories
-            foreach (string strDir in stringDirectories) {
-
-                string strFilePath = strDir;
-                string strTreePath = Utils.GetRelativePath(strLocalFileRoot, strFilePath);
-                string strDirName = Utils.GetShortName(strFilePath);
-                TreeNode tnChild = new TreeNode(strDirName);
-
-                // local only icon
-                tnChild.ImageIndex = 1;
-                tnChild.SelectedImageIndex = 1;
-                tnParentNode.Nodes.Add(tnChild);
-
-                //Recursively build the tree
-                PopulateTreeLocal(tnChild);
-
-            }
-
-        }
-
-        protected void PopulateTreeRemote(TreeNode tnParentNode, int intParentId, string strParentRelPath) {
-
-            // the parent is remote only, so this is also remote only
-
-            // get remote only sub-directories
-            DataRow[] drRemChild = dsTree.Tables[0].Select("parent_id="+intParentId);
-            foreach (DataRow row in drRemChild) {
-
-                // remote only
-                string strDirName = row["dir_name"].ToString();
-                //string strTreePath = tnParentNode.FullPath + "\\" + strDirName;
-                string strRelPath = strParentRelPath + "\\" + strDirName;
-                string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelPath);
-                int intDirId = (int)row["dir_id"];
-
-                TreeNode tnChild = new TreeNode(strDirName);
-                row.SetField("is_local", false);
-                row.SetField("path", strRelPath);
-
-                if (row.Field<bool>("active"))
+                else if (!dr.Field<bool>("active") && (dr.Field<bool>("is_local") || blnShowDeleted))
                 {
-                    tnChild.Tag = (object)intDirId;
+                    // not active, and either it's local or the user wants to see deleted
+                    tnChild.ImageIndex = 5;
+                    tnChild.SelectedImageIndex = 5;
                 }
-                else if (blnShowDeleted)
+                else
                 {
-                    tnChild.Tag = (object)intDirId;
+                    // whatever else comes up
+                    tnChild.ImageIndex = 0;
+                    tnChild.SelectedImageIndex = 0;
                 }
 
-                // remote only icon
-                tnChild.ImageIndex = 2;
-                tnChild.SelectedImageIndex = 2;
-                tnParentNode.Nodes.Add(tnChild);
-
-                // add to dictionary
-                dictTree.Add(strRelPath, intDirId);
-
-                //Recursively build the tree
-                PopulateTreeRemote(tnChild, intDirId, strRelPath);
+                dictNodes[strParentRelPath].Nodes.Add(tnChild);
+                dictNodes.Add(strRelPath, tnChild);
 
             }
 
         }
+
+        //protected void PopulateTreeLocal(TreeNode tnParentNode) {
+
+        //    // the parent is local only, so this is also local only
+
+        //    // get local sub-directories
+        //    string[] stringDirectories = Directory.GetDirectories(Utils.GetAbsolutePath(strLocalFileRoot, tnParentNode.FullPath));
+
+        //    // loop through all local sub-directories
+        //    foreach (string strDir in stringDirectories) {
+
+        //        string strFilePath = strDir;
+        //        string strTreePath = Utils.GetRelativePath(strLocalFileRoot, strFilePath);
+        //        string strDirName = Utils.GetShortName(strFilePath);
+        //        TreeNode tnChild = new TreeNode(strDirName);
+
+        //        // local only icon
+        //        tnChild.ImageIndex = 1;
+        //        tnChild.SelectedImageIndex = 1;
+        //        tnParentNode.Nodes.Add(tnChild);
+
+        //        //Recursively build the tree
+        //        PopulateTreeLocal(tnChild);
+
+        //    }
+
+        //}
+
+        //protected void PopulateTreeRemote(TreeNode tnParentNode, int intParentId, string strParentRelPath) {
+
+        //    // the parent is remote only, so this is also remote only
+
+        //    // get remote only sub-directories
+        //    DataRow[] drRemChild = dsTree.Tables[0].Select("parent_id="+intParentId);
+        //    foreach (DataRow row in drRemChild) {
+
+        //        // remote only
+        //        string strDirName = row["dir_name"].ToString();
+        //        //string strTreePath = tnParentNode.FullPath + "\\" + strDirName;
+        //        string strRelPath = strParentRelPath + "\\" + strDirName;
+        //        string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelPath);
+        //        int intDirId = (int)row["dir_id"];
+
+        //        TreeNode tnChild = new TreeNode(strDirName);
+        //        row.SetField("is_local", false);
+        //        row.SetField("path", strRelPath);
+
+        //        if (row.Field<bool>("active"))
+        //        {
+        //            tnChild.Tag = (object)intDirId;
+        //        }
+        //        else if (blnShowDeleted)
+        //        {
+        //            tnChild.Tag = (object)intDirId;
+        //        }
+
+        //        // remote only icon
+        //        tnChild.ImageIndex = 2;
+        //        tnChild.SelectedImageIndex = 2;
+        //        tnParentNode.Nodes.Add(tnChild);
+
+        //        // add to dictionary
+        //        dictTree.Add(strRelPath, intDirId);
+
+        //        //Recursively build the tree
+        //        PopulateTreeRemote(tnChild, intDirId, strRelPath);
+
+        //    }
+
+        //}
 
 
         protected void InitListView() {
