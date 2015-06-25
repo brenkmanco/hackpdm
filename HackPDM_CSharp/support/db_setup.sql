@@ -588,17 +588,32 @@ $BODY$
 -- DROP VIEW view_dir_tree;
 
 CREATE OR REPLACE VIEW view_dir_tree AS 
- WITH RECURSIVE dir_tree(parent_id, dir_id, dir_name, rel_path) AS (
-                 SELECT hp_directory.parent_id, hp_directory.dir_id, hp_directory.dir_name, ''::text AS rel_path
-                   FROM hp_directory
-                  WHERE hp_directory.parent_id IS NULL
-        UNION ALL 
-                 SELECT c.parent_id, c.dir_id, c.dir_name, (p.rel_path || '/'::text) || c.dir_name::text
-                   FROM hp_directory c, dir_tree p
-                  WHERE c.parent_id = p.dir_id
-        )
- SELECT dir_tree.parent_id, dir_tree.dir_id, dir_tree.dir_name, dir_tree.rel_path
-   FROM dir_tree;
+ WITH RECURSIVE dir_tree(parent_id, dir_id, dir_name, active, rel_path) AS (
+   SELECT
+    hp_directory.parent_id,
+    hp_directory.dir_id,
+    hp_directory.dir_name,
+    hp_directory.active,
+    ''::text AS rel_path
+   FROM hp_directory
+   WHERE hp_directory.parent_id IS NULL
+  UNION ALL
+   SELECT
+    c.parent_id,
+    c.dir_id,
+    c.dir_name,
+    p.active and c.active,
+    (p.rel_path || '/'::text) || c.dir_name::text
+   FROM hp_directory c, dir_tree p
+   WHERE c.parent_id = p.dir_id
+ )
+ SELECT
+  dir_tree.parent_id,
+  dir_tree.dir_id,
+  dir_tree.dir_name,
+  dir_tree.active,
+  dir_tree.rel_path
+ FROM dir_tree;
 
 
 
