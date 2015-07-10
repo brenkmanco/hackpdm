@@ -2370,7 +2370,7 @@ namespace HackPDM
             }
 
             // flag as deleted all remote directories (set the destroyed flag)
-            if (blnFailed == false)
+            if (blnFailed == false && blnDeleteDirs == true)
             {
                 blnFailed = blnFailed || DeleteRemoteDirs(sender, e, t, ref dsDeletes);
             }
@@ -4339,13 +4339,14 @@ namespace HackPDM
                     string strFullName = strAbsolutePath + "\\" + strFileName;
                     FileInfo fiCurrent = new FileInfo(strFullName);
 
-                    // set the file not readonly
-                    fiCurrent.IsReadOnly = false;
+                    if (!fiCurrent.Exists) continue;
 
                     // try deleting it
                     dlgStatus.AddStatusLine("INFO", "Deleting file: " + strFullName);
                     try
                     {
+                        // set the file not readonly
+                        fiCurrent.IsReadOnly = false;
                         fiCurrent.Delete();
                     }
                     catch (Exception ex)
@@ -4562,6 +4563,9 @@ namespace HackPDM
                 MessageBox.Show("The database transaction is not functional");
                 return true;
             }
+
+            // return when no directories to be deleted
+            if (dsDeletes.Tables["dirs"].Rows.Count < 1) return blnFailed;
 
             string strSql;
 
