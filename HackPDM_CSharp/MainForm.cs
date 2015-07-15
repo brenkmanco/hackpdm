@@ -960,7 +960,7 @@ namespace HackPDM
 
         }
 
-        protected void PopulatePreviewImage(string FileName)
+        protected void PopulatePreviewImage(string FileName, int intVersionId=0)
         {
 
             DataRow dr = dsList.Tables[0].Select("entry_name='" + FileName + "'")[0];
@@ -974,10 +974,22 @@ namespace HackPDM
             }
             else
             {
-                // otherwise, load the image from the server
-                NpgsqlCommand command = new NpgsqlCommand("select preview_image from hp_version where entry_id=:entry_id order by version_id limit 1;", connDb);
-                command.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
-                command.Parameters["entry_id"].Value = dr.Field<int>("entry_id");
+
+                NpgsqlCommand command;
+                if (intVersionId != 0)
+                {
+                    // if specific version selected, load its image
+                    command = new NpgsqlCommand("select preview_image from hp_version where entry_id=:entry_id and version_id=:version_id;", connDb);
+                    command.Parameters.AddWithValue("entry_id", dr.Field<int>("entry_id"));
+                    command.Parameters.AddWithValue("version_id", intVersionId);
+                }
+                else
+                {
+                    // otherwise, load the latest version image
+                    command = new NpgsqlCommand("select preview_image from hp_version where entry_id=:entry_id order by version_id desc limit 1;", connDb);
+                    command.Parameters.Add(new NpgsqlParameter("entry_id", NpgsqlTypes.NpgsqlDbType.Integer));
+                    command.Parameters["entry_id"].Value = dr.Field<int>("entry_id");
+                }
 
                 try
                 {
@@ -5450,6 +5462,26 @@ namespace HackPDM
 
         }
 
+        private void lvHistory_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+            // get selected file
+            if (listView1.SelectedItems.Count == 0) { return; }
+            string strFileName = listView1.SelectedItems[0].SubItems[0].Text;
+
+            // get selected version
+            int intVersionId = 0;
+            if (lvHistory.SelectedItems.Count>0)
+            {
+                int.TryParse(lvHistory.SelectedItems[0].SubItems[0].Text, out intVersionId);
+            }
+
+            // load  preview image
+            pbPreview.Image = null;
+            PopulatePreviewImage(strFileName, intVersionId);
+
+        }
+
         #endregion
 
 
@@ -5510,6 +5542,50 @@ namespace HackPDM
             CheckedOutMeBox = paramlist[3];
             DeletedLocalBox = paramlist[4];
             LocalOnlyBox = paramlist[5];
+        }
+
+        // open files in the default application
+        private void openToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+
+            // how many items selected
+            int intSelected = listView1.SelectedItems.Count;
+
+            // get a list of selected items
+            int intOpened = 0;
+            ListView.SelectedListViewItemCollection lviSelection = listView1.SelectedItems;
+            foreach (ListViewItem lviSelected in lviSelection)
+            {
+                DataRow drSelected = dsList.Tables[0].Select("entry_name='" + lviSelected.SubItems[0].Text + "'")[0];
+                // ignore remote-only files
+                if (drSelected.Field<Boolean>("is_local") == true)
+                {
+                    // get full file name
+                    string strAbsPath = drSelected.Field<string>("absolute_path");
+                    string strFullName = strAbsPath + "\\" + lviSelected.SubItems[0].Text;
+
+                    // count successful opens
+                    intOpened++;
+
+                    // open the file
+                    try
+                    {
+                        System.Diagnostics.Process.Start(@strFullName);
+                    }
+                    catch
+                    {
+                        intOpened--;
+                    }
+                }
+            }
+
+            // report
+            if (intSelected > intOpened)
+            {
+                MessageBox.Show(String.Format("{0} of {1} files could not be opened", intSelected-intOpened, intSelected));
+                return;
+            }
+
         }
 
 

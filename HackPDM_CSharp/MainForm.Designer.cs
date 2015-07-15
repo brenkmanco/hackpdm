@@ -60,6 +60,7 @@ namespace HackPDM
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
             this.toolStripDropDownButton1 = new System.Windows.Forms.ToolStripDropDownButton();
             this.cmdRefreshView = new System.Windows.Forms.ToolStripMenuItem();
+            this.searchToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cmdManageFileTypes = new System.Windows.Forms.ToolStripMenuItem();
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
             this.splitContainer2 = new System.Windows.Forms.SplitContainer();
@@ -75,7 +76,7 @@ namespace HackPDM
             this.lvChildren = new System.Windows.Forms.ListView();
             this.tabPage4 = new System.Windows.Forms.TabPage();
             this.lvProperties = new System.Windows.Forms.ListView();
-            this.searchToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.openToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cmsTree.SuspendLayout();
             this.cmsList.SuspendLayout();
             this.statusStrip1.SuspendLayout();
@@ -190,10 +191,11 @@ namespace HackPDM
             this.cmsListCheckOut,
             this.cmsListCommit,
             this.cmsListUndoCheckout,
-            this.logicalDeleteToolStripMenuItem});
+            this.logicalDeleteToolStripMenuItem,
+            this.openToolStripMenuItem});
             this.cmsList.Name = "cmsTreeMenu";
             this.cmsList.ShowImageMargin = false;
-            this.cmsList.Size = new System.Drawing.Size(133, 114);
+            this.cmsList.Size = new System.Drawing.Size(133, 136);
             // 
             // cmsListGetLatest
             // 
@@ -293,6 +295,13 @@ namespace HackPDM
             this.cmdRefreshView.Size = new System.Drawing.Size(172, 22);
             this.cmdRefreshView.Text = "Refresh View";
             this.cmdRefreshView.Click += new System.EventHandler(this.CmdRefreshViewClick);
+            // 
+            // searchToolStripMenuItem
+            // 
+            this.searchToolStripMenuItem.Name = "searchToolStripMenuItem";
+            this.searchToolStripMenuItem.Size = new System.Drawing.Size(172, 22);
+            this.searchToolStripMenuItem.Text = "Search";
+            this.searchToolStripMenuItem.Click += new System.EventHandler(this.CmdSearchClick);
             // 
             // cmdManageFileTypes
             // 
@@ -419,6 +428,7 @@ namespace HackPDM
             this.lvHistory.TabIndex = 0;
             this.lvHistory.UseCompatibleStateImageBehavior = false;
             this.lvHistory.View = System.Windows.Forms.View.Details;
+            this.lvHistory.SelectedIndexChanged += new System.EventHandler(this.lvHistory_SelectedIndexChanged);
             // 
             // tabPage2
             // 
@@ -483,12 +493,12 @@ namespace HackPDM
             this.lvProperties.UseCompatibleStateImageBehavior = false;
             this.lvProperties.View = System.Windows.Forms.View.Details;
             // 
-            // searchToolStripMenuItem
+            // openToolStripMenuItem
             // 
-            this.searchToolStripMenuItem.Name = "searchToolStripMenuItem";
-            this.searchToolStripMenuItem.Size = new System.Drawing.Size(172, 22);
-            this.searchToolStripMenuItem.Text = "Search";
-            this.searchToolStripMenuItem.Click += new System.EventHandler(this.CmdSearchClick);
+            this.openToolStripMenuItem.Name = "openToolStripMenuItem";
+            this.openToolStripMenuItem.Size = new System.Drawing.Size(132, 22);
+            this.openToolStripMenuItem.Text = "Open";
+            this.openToolStripMenuItem.Click += new System.EventHandler(this.openToolStripMenuItem_Click);
             // 
             // MainForm
             // 
@@ -560,5 +570,6 @@ namespace HackPDM
         private System.Windows.Forms.ToolStripMenuItem logicalDeleteToolStripMenuItem2;
         private System.Windows.Forms.ToolStripMenuItem permanentDeleteToolStripMenuItem1;
         private System.Windows.Forms.ToolStripMenuItem searchToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem openToolStripMenuItem;
     }
 }

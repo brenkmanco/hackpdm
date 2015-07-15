@@ -213,7 +213,7 @@ namespace HackPDM
                             break;
                         case SwDmCustomInfoType.swDmCustomInfoYesOrNo:
                             strPropType = "yesno";
-                            oPropValue = (Boolean)oPropValue;
+                            oPropValue = oPropValue.Equals("Yes");
                             break;
                         case SwDmCustomInfoType.swDmCustomInfoUnknown:
                             strPropType = "";
