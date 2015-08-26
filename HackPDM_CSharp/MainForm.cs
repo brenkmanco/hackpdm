@@ -3316,7 +3316,7 @@ namespace HackPDM
                 int intTypeId = drNewFile.Field<int>("type_id");
 
                 FileInfo fiNewFile = new FileInfo(strFullName);
-                long lngFileSize = intNewCount;
+                long lngFileSize = fiNewFile.Length;
                 DateTime dtModifyDate = fiNewFile.LastWriteTime;
                 string strMd5sum = Utils.StringMD5(strFullName);
 
