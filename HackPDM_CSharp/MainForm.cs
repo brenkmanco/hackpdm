@@ -76,6 +76,7 @@ namespace HackPDM
         Dictionary<string, TreeNode> dictTreeNodes;
         private DataSet dsTree = new DataSet();
         private DataSet dsList = new DataSet();
+        private List<string> lstSandboxed = new List<string>();
 
         private DataTable dtServSettings = new DataTable("settings");
         private int intSecondsTolerance;
@@ -267,7 +268,7 @@ namespace HackPDM
             // TODO: erase this stuff when building for release
             try
             {
-                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds_bounty-2.config");
+                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds_production.config");
                 var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
                 var sectionGroup = configuration.GetSectionGroup("tempSettingsGroup"); // This is the section group name, change to your needs
                 var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
@@ -426,6 +427,7 @@ namespace HackPDM
                     d.create_user,
                     d.modify_stamp,
                     d.modify_user,
+                    t.sandboxed, -- view_dir_tree cascades the sandboxed flag down through child directories
                     t.active, -- view_dir_tree cascades the active flag down through child directories
                     true as is_remote,
                     false as is_local,
@@ -445,6 +447,7 @@ namespace HackPDM
             foreach (DataRow row in dsTree.Tables[0].Rows)
             {
                 dictTree.Add(row.Field<string>("path"), row.Field<int>("dir_id"));
+                if (row.Field<bool>("sandboxed")) lstSandboxed.Add(row.Field<string>("path"));
             }
 
             // get all local directories
@@ -474,10 +477,10 @@ namespace HackPDM
                     // get parent active status
                     DataRow drParent = dsTree.Tables[0].Select("path='" + strParentRelPath.Replace("'", "''") + "'")[0];
                     bool blnActive = drParent.Field<bool>("active");
-                    if (strRelPath == "pwa\\Designed\\AZ304")
-                    {
-                        Debug.Print(strRelPath);
-                    }
+
+                    // add to sandbox list
+                    bool blnSandboxed = drParent.Field<bool>("sandboxed");
+                    if (blnSandboxed) lstSandboxed.Add(strRelPath);
 
                     // add local-only directory
                     dsTree.Tables[0].Rows.Add(
@@ -488,6 +491,7 @@ namespace HackPDM
                         null,        // create_user
                         null,        // modify_stamp
                         null,        // modify_user
+                        blnSandboxed,// sandboxed
                         blnActive,   // active
                         false,       // is_remote
                         true,        // is_local
@@ -2556,6 +2560,8 @@ namespace HackPDM
             dsCommits.Tables["rels"].Columns.Add("child_name", Type.GetType("System.String"));
             dsCommits.Tables["rels"].Columns.Add("parent_absolute_path", Type.GetType("System.String"));
             dsCommits.Tables["rels"].Columns.Add("child_absolute_path", Type.GetType("System.String"));
+            dsCommits.Tables["rels"].Columns.Add("parent_sandboxed", Type.GetType("System.Boolean"));
+            dsCommits.Tables["rels"].Columns.Add("child_sandboxed", Type.GetType("System.Boolean"));
 
             // get dependencies of local files, while appending to list of directories
             GetSWDepends(sender, e, ref dsCommits);
@@ -2830,6 +2836,10 @@ namespace HackPDM
                                 dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strDirName, strRelativePath, strAbsolutePath);
                             }
 
+                            // check for sandboxing
+                            bool blnParentSandboxed = lstSandboxed.Contains(Utils.GetRelativePath(strLocalFileRoot, strParentAbsPath));
+                            bool blnChildSandboxed = lstSandboxed.Contains(strRelativePath);
+
                             // add relationships
                             // the calling method will associate entry ids for only the files to be committed
                             dsCommits.Tables["rels"].Rows.Add(
@@ -2838,7 +2848,9 @@ namespace HackPDM
                                 strParentShortName, // parent_name
                                 strDepends[0],      // child_name
                                 strParentAbsPath,   // parent_absolute_path
-                                strAbsolutePath     // child_absolute_path
+                                strAbsolutePath,    // child_absolute_path
+                                blnParentSandboxed, // parent_sandboxed
+                                blnChildSandboxed   // child_sandboxed
                             );
 
                         }
@@ -3606,8 +3618,17 @@ namespace HackPDM
             DataRow[] drBads = dsCommits.Tables["rels"].Select(String.Format("child_id=0 and child_absolute_path like '{0}%'", strLocalFileRoot.Replace("'", "''")));
             foreach (DataRow dr in drBads)
             {
-                string strDepend = String.Format("{0}\\{1} <-- {2}\\{3}", dr.Field<string>("parent_name"), dr.Field<string>("parent_absolute_path"), dr.Field<string>("child_name"), dr.Field<string>("child_absolute_path"));
+                string strDepend = String.Format("{0}\\{1} <-- {2}\\{3}", dr.Field<string>("parent_absolute_path"), dr.Field<string>("parent_name"), dr.Field<string>("child_absolute_path"), dr.Field<string>("child_name"));
                 dlgStatus.AddStatusLine("ERROR", "Ignoring Failed Dependency: Could not get remote id for dependency: " + strDepend);
+                blnFailed = true;
+            }
+
+            // check for parents not sandboxed with children that are sandboxed
+            drBads = dsCommits.Tables["rels"].Select("parent_sandboxed=false and child_sandboxed=true");
+            foreach (DataRow dr in drBads)
+            {
+                string strDepend = String.Format("{0}\\{1} <-- {2}\\{3}", dr.Field<string>("parent_absolute_path"), dr.Field<string>("parent_name"), dr.Field<string>("child_absolute_path"), dr.Field<string>("child_name"));
+                dlgStatus.AddStatusLine("ERROR", "Ignoring Failed Dependency: Child sandboxed, parent not: " + strDepend);
                 blnFailed = true;
             }
 
