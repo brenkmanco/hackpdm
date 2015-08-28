@@ -753,7 +753,7 @@ $BODY$
 -- DROP FUNCTION fcn_latest_w_depends_by_entry_list(integer[]);
 
 CREATE OR REPLACE FUNCTION fcn_latest_w_depends_by_entry_list(
-	IN v_version_ids integer[],
+	IN v_entry_ids integer[],
 	OUT entry_id integer,
 	OUT version_id integer,
 	OUT dir_id integer,
@@ -1109,7 +1109,7 @@ $BODY$
 -- DROP FUNCTION fcn_latest_by_entry_list(integer[]);
 
 CREATE OR REPLACE FUNCTION fcn_latest_by_entry_list(
-	IN v_version_ids integer[],
+	IN v_entry_ids integer[],
 	OUT entry_id integer,
 	OUT version_id integer,
 	OUT dir_id integer,
@@ -1208,6 +1208,111 @@ $BODY$
   LANGUAGE sql VOLATILE
   COST 100
   ROWS 1000;
+
+
+
+
+-- -----------------------------------------------------------------------------
+
+-- DROP FUNCTION fcn_version_w_depends(integer[]);
+
+CREATE OR REPLACE FUNCTION fcn_version_w_depends(
+	IN v_version_id integer,
+	OUT entry_id integer,
+	OUT version_id integer,
+	OUT dir_id integer,
+	OUT entry_name varchar,
+	OUT type_id integer,
+	OUT file_ext varchar,
+	OUT cat_id integer,
+	OUT cat_name varchar,
+	OUT latest_size bigint,
+	OUT str_latest_size varchar,
+	OUT local_size bigint,
+	OUT str_local_size varchar,
+	OUT latest_stamp timestamp(6) without time zone,
+	OUT str_latest_stamp varchar,
+	OUT local_stamp timestamp(6) without time zone,
+	OUT str_local_stamp varchar,
+	OUT latest_md5 text,
+	OUT local_md5 text,
+	OUT checkout_user integer,
+	OUT ck_user_name varchar,
+	OUT checkout_date timestamp(6) without time zone,
+	OUT str_checkout_date varchar,
+	OUT checkout_node integer,
+	OUT checkout_node_name varchar,
+	OUT is_local boolean,
+	OUT is_remote boolean,
+	OUT client_status_code varchar,
+	OUT relative_path varchar,
+	OUT absolute_path varchar,
+	OUT icon bytea,
+	OUT is_depend_searched boolean,
+	OUT is_readonly boolean,
+	OUT active boolean,
+	OUT destroyed boolean
+)
+  RETURNS SETOF record AS
+$BODY$
+	-- several of the values are returned null because they are things only the client would know
+	select
+		e.entry_id,
+		v.version_id,
+		e.dir_id,
+		e.entry_name,
+		t.type_id,
+		t.file_ext,
+		e.cat_id,
+		c.cat_name,
+		v.file_size::bigint as latest_size,
+		pg_size_pretty(v.file_size) as str_latest_size,
+		0::bigint as local_size,
+		'0'::varchar as str_local_size,
+		v.file_modify_stamp as latest_stamp,
+		to_char(v.file_modify_stamp, 'yyyy-MM-dd HH24:MI:SS') as str_latest_stamp,
+		null::timestamp as local_stamp,
+		''::varchar as str_local_stamp,
+		v.md5sum as latest_md5,
+		null::text as local_md5,
+		e.checkout_user,
+		u.last_name || ', ' || u.first_name as ck_user_name,
+		e.checkout_date,
+		to_char(e.checkout_date, 'yyyy-MM-dd HH24:MI:SS') as str_checkout_date,
+		e.checkout_node,
+		n.node_name as checkout_node_name,
+		false as is_local,
+		true as is_remote,
+		case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
+		'pwa' || replace(d.rel_path, '/', '\') as relative_path,
+		null::varchar as absolute_path,
+		t.icon,
+		false as is_depend_searched,
+		null::boolean as is_readonly,
+		e.active,
+		e.destroyed
+	from (
+		-- get dependency entries
+		select *
+		from hp_version where version_id=62185
+		union
+		select distinct on (entry_id) v.*
+		from fcn_dependency_recursive( array[ 62185 ] ) as rel
+		left join hp_version as v on v.version_id=rel_child_id
+	) as v
+	left join hp_entry as e on e.entry_id=v.entry_id
+	left join hp_user as u on u.user_id=e.checkout_user
+	left join hp_category as c on c.cat_id=e.cat_id
+	left join hp_type as t on t.type_id=e.type_id
+	left join view_dir_tree as d on d.dir_id = e.dir_id
+	left join hp_node as n on n.node_id=e.checkout_node
+	order by dir_id,entry_id;
+$BODY$
+  LANGUAGE sql VOLATILE
+  COST 100
+  ROWS 1000;
+
+
 
 
 
