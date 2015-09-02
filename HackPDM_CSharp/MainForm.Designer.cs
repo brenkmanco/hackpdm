@@ -56,6 +56,7 @@ namespace HackPDM
             this.logicalDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.logicalDeleteToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
             this.permanentDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.openToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.ilListIcons = new System.Windows.Forms.ImageList(this.components);
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
             this.toolStripDropDownButton1 = new System.Windows.Forms.ToolStripDropDownButton();
@@ -76,7 +77,6 @@ namespace HackPDM
             this.lvChildren = new System.Windows.Forms.ListView();
             this.tabPage4 = new System.Windows.Forms.TabPage();
             this.lvProperties = new System.Windows.Forms.ListView();
-            this.openToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cmsTree.SuspendLayout();
             this.cmsList.SuspendLayout();
             this.statusStrip1.SuspendLayout();
@@ -251,6 +251,13 @@ namespace HackPDM
             this.permanentDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
             this.permanentDeleteToolStripMenuItem.Text = "Permanent Delete";
             this.permanentDeleteToolStripMenuItem.Click += new System.EventHandler(this.CmsListDeletePermanentClick);
+            // 
+            // openToolStripMenuItem
+            // 
+            this.openToolStripMenuItem.Name = "openToolStripMenuItem";
+            this.openToolStripMenuItem.Size = new System.Drawing.Size(132, 22);
+            this.openToolStripMenuItem.Text = "Open";
+            this.openToolStripMenuItem.Click += new System.EventHandler(this.openToolStripMenuItem_Click);
             // 
             // ilListIcons
             // 
@@ -429,6 +436,7 @@ namespace HackPDM
             this.lvHistory.UseCompatibleStateImageBehavior = false;
             this.lvHistory.View = System.Windows.Forms.View.Details;
             this.lvHistory.SelectedIndexChanged += new System.EventHandler(this.lvHistory_SelectedIndexChanged);
+            this.lvHistory.MouseClick += new System.Windows.Forms.MouseEventHandler(this.lvHistoryRightMouseClick);
             // 
             // tabPage2
             // 
@@ -492,13 +500,6 @@ namespace HackPDM
             this.lvProperties.TabIndex = 0;
             this.lvProperties.UseCompatibleStateImageBehavior = false;
             this.lvProperties.View = System.Windows.Forms.View.Details;
-            // 
-            // openToolStripMenuItem
-            // 
-            this.openToolStripMenuItem.Name = "openToolStripMenuItem";
-            this.openToolStripMenuItem.Size = new System.Drawing.Size(132, 22);
-            this.openToolStripMenuItem.Text = "Open";
-            this.openToolStripMenuItem.Click += new System.EventHandler(this.openToolStripMenuItem_Click);
             // 
             // MainForm
             // 
