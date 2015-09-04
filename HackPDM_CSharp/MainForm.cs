@@ -5523,7 +5523,6 @@ namespace HackPDM
 
         }
 
-
         void lvHistoryRightMouseClick(object sender, MouseEventArgs e)
         {
             // First, remove it, regardless of what is being done (if there is one assigned already):
@@ -5550,210 +5549,144 @@ namespace HackPDM
             return;
         }
 
-
         void lvHistory_GetFile(object sender, EventArgs e)
         {
-            // This gets the currently-selected version of the file:
-            ListView.SelectedListViewItemCollection lviSelection = lvHistory.SelectedItems;
-            if (lviSelection.Count == 0)
-            {
-                // we never actually get here because the handler only gets called when an item is selected
+
+            // this gets the currently-selected entry
+            // we know only one item is selected in the main list, because the history tab is only visible
+            // when a single entry in the main window is selected
+            ListViewItem lviSelEntry = listView1.SelectedItems[0];
+            string strSelName = lviSelEntry.Text;
+
+            // all data about the entry are in the dsList DataSet
+            DataRow drEntry = dsList.Tables[0].Select("entry_name='" + strSelName.Replace("'", "''") + "'")[0];
+            int? intEntryId = drEntry.Field<int?>("entry_id");
+
+            // when entry_id is null, it indicates a local-only file
+            // we never actually return here because the history tab is empty for local-only files
+            // therefore, this method can't be called
+            if (intEntryId == null) return;
+
+            // Get information about the selected file itself:
+            string strFileName = drEntry.Field<string>("entry_name");
+            string strFileExt = drEntry.Field<string>("file_ext");
+            int intTypeId = drEntry.Field<int>("type_id");
+            string strRelBasePath = drEntry.Field<string>("relative_path");
+            string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelBasePath);
+
+            // There should only be one historical version selected
+            ListViewItem verSelected = lvHistory.SelectedItems[0];
+            string intOldVersionId = (string)verSelected.SubItems[0].Text;
+
+            // Get information about the type:
+            string strSql = "select description from hp_type where type_id=" + intTypeId.ToString() + ";";
+            NpgsqlCommand cmd = new NpgsqlCommand(strSql, connDb);
+            NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+            string strTypeDesc = (string)cmd.ExecuteScalar();
+
+            // Get the name of the new file:
+            SaveFileDialog dialog = new SaveFileDialog();
+            dialog.Filter = strTypeDesc + " (*" + strFileExt + ")|*" + strFileExt + "|All files (*)|*";
+            dialog.Title = "Save File Version As...";
+            dialog.InitialDirectory = strAbsPath;
+            dialog.FileName = intOldVersionId + "." + strFileName;
+            dialog.DefaultExt = strFileExt;
+            dialog.OverwritePrompt = true;
+            dialog.ShowDialog();
+            if (dialog.FileName == "")
                 return;
-            }
 
-            // Get the version from the server, saving it to the local directory:   
-            if (treeView1.SelectedNode.Tag != null && listView1.SelectedItems.Count > 0)
-            {
-                // Get information about the selected file itself:
-                int dir_id = (int)treeView1.SelectedNode.Tag;
-                TreeNode tnCurrent = treeView1.SelectedNode;
-                string strRelBasePath = tnCurrent.FullPath;
+            // Get the file from WebDav:
+            string strDavName = "/" + intEntryId.ToString() + "/" + intOldVersionId.ToString() + "." + strFileExt.ToLower();
+            connDav.Download(strDavName, dialog.FileName);
 
-                // There should only be one thing selected.
-                ListViewItem verSelected = lviSelection[0];
-                string versionId = (string)verSelected.SubItems[0].Text;
+            MessageBox.Show("The file has been successfully downloaded (I think)",
+                "Download Complete",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
 
-                // Get information about the version from the DB:
-                string strSql = "select * from hp_version where version_id=" + versionId + ";";
-                NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-                DataSet vFetches = new DataSet();
-                daTemp.Fill(vFetches);
-                if (vFetches.Tables.Count == 0)
-                    return;
-
-                // Extract the information about the version:
-                vFetches.Tables[0].TableName = "versions";
-                DataRow vRemote = vFetches.Tables["versions"].Rows[0];
-                long filesize = vRemote.Field<long>("file_size");
-                int entryId = vRemote.Field<int>("entry_id");
-
-
-                // Get information about the entry:
-                strSql = "select * from hp_entry where entry_id=" + entryId.ToString() + ";";
-                daTemp = new NpgsqlDataAdapter(strSql, connDb);
-                DataSet eFetches = new DataSet();
-                daTemp.Fill(eFetches);
-                if (eFetches.Tables.Count == 0)
-                    return;
-
-                // Extract the information about the entry:
-                eFetches.Tables[0].TableName = "entries";
-                DataRow eRemote = eFetches.Tables["entries"].Rows[0];
-                string strFileName = eRemote.Field<string>("entry_name");
-                string strFileExt = Path.GetExtension(strFileName);
-                int typeId = eRemote.Field<int>("type_id");
-                int dirId = eRemote.Field<int>("dir_id");
-
-
-                // Get information about the type:
-                strSql = "select description from hp_type where type_id=" + typeId.ToString() + ";";
-                daTemp = new NpgsqlDataAdapter(strSql, connDb);
-                DataSet tFetches = new DataSet();
-                daTemp.Fill(tFetches);
-                string type = "Default file type";
-                if (tFetches.Tables.Count >= 0)
-                {
-                    tFetches.Tables[0].TableName = "types";
-                    type = tFetches.Tables["types"].Rows[0].Field<string>("description");
-                }
-
-
-                //// Get information about the directory:
-                //strSql = "select * from hp_directory where dir_id=" + dirId.ToString() + ";";
-                //daTemp = new NpgsqlDataAdapter(strSql, connDb);
-                //DataSet dFetches = new DataSet();
-                //daTemp.Fill(dFetches);
-                //if (dFetches.Tables.Count == 0)
-                //    return;
-
-                //// Extract the information about the directory:
-                //dFetches.Tables[0].TableName = "directories";
-                //DataRow dRemote = dFetches.Tables["directories"].Rows[0];
-
-
-                string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelBasePath);
-
-                // Get the name of the new file:
-                SaveFileDialog dialog = new SaveFileDialog();
-                dialog.Filter = type + " (*" + strFileExt + ")|*" + strFileExt + "|All files (*)|*";
-                dialog.Title = "Save File Version As...";
-                dialog.InitialDirectory = strAbsPath;
-                dialog.FileName = versionId + "." + strFileName;
-                dialog.DefaultExt = strFileExt;
-                dialog.OverwritePrompt = true;
-                dialog.ShowDialog();
-                if (dialog.FileName == "")
-                    return;
-
-                // Get the file from WebDav:
-                string strDavName = "/" + entryId.ToString() + "/" + versionId + strFileExt.ToLower();
-                //         dlgStatus.AddStatusLine("INFO", "Retrieving Content (" + filesize.ToString() + "): " + strDavName);
-                connDav.Download(strDavName, dialog.FileName);
-
-                return;
-            }
+            return;
         }
-
 
         void lvHistory_GetDepends(object sender, EventArgs e)
         {
-            // This gets the currently-selected version of the file:
-            ListView.SelectedListViewItemCollection lviSelection = lvHistory.SelectedItems;
-            if (lviSelection.Count == 0)
-            {
-                // we never actually get here because the handler only gets called when an item is selected
+
+            // this gets the currently-selected entry
+            // we know only one item is selected in the main list, because the history tab is only visible
+            // when a single entry in the main window is selected
+            ListViewItem lviSelEntry = listView1.SelectedItems[0];
+            string strSelName = lviSelEntry.Text;
+
+            // all data about the entry are in the dsList DataSet
+            DataRow drEntry = dsList.Tables[0].Select("entry_name='" + strSelName.Replace("'", "''") + "'")[0];
+            int? intEntryId = drEntry.Field<int?>("entry_id");
+
+            // when entry_id is null, it indicates a local-only file
+            // we never actually return here because the history tab is empty for local-only files
+            // therefore, this method can't be called
+            if (intEntryId == null) return;
+
+            // Get information about the selected file itself:
+            string strFileName = drEntry.Field<string>("entry_name");
+            string strFileExt = drEntry.Field<string>("file_ext");
+            string strRelBasePath = drEntry.Field<string>("relative_path");
+            string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelBasePath);
+
+            // get the selected old version id
+            // There can only be one historical version selected
+            ListViewItem verSelected = lvHistory.SelectedItems[0];
+            string intOldVersionId = (string)verSelected.SubItems[0].Text;
+
+            // Request the dependency tree for this file version:
+            string strSql = "select * from fcn_version_w_depends( " + intOldVersionId + " );";
+            NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
+            DataSet dsFetches = new DataSet();
+            daTemp.Fill(dsFetches);
+            if (dsFetches.Tables.Count == 0)
                 return;
+            dsFetches.Tables[0].TableName = "files";
+
+            // Ask the user where the dependency tree should be saved:
+            FolderBrowserDialog dialog = new FolderBrowserDialog();
+            //dialog.Title = "Specify Version Dependency Directory";
+            //dialog.InitialDirectory = strAbsPath;
+            //dialog.OverwritePrompt = true;
+            DialogResult result = dialog.ShowDialog();
+            if (result != DialogResult.OK)
+                return;
+
+            string newdirectory = dialog.SelectedPath;
+
+            // Check to make sure the new directory already exists (create it, if not):
+            if (!Directory.Exists(newdirectory))
+                Directory.CreateDirectory(newdirectory);
+            else
+            {
+                // Make sure the directory is empty, if not warn the user:
+                if (Directory.EnumerateFileSystemEntries(newdirectory).Any())
+                    if (MessageBox.Show("The selected directory is not empty.  Continue anyway?", "Overwrite files?", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.No)
+                        return;
             }
 
-            // Get the version from the server, saving it to the local directory:   
-            if (treeView1.SelectedNode.Tag != null && listView1.SelectedItems.Count > 0)
+            // Copy the parent file from WebDav first:
+            string strDavName = "/" + intEntryId.ToString() + "/" + intOldVersionId + "." + strFileExt.ToLower();
+            connDav.Download(strDavName, newdirectory + "/" + strFileName);
+
+            // Download each of the dependency files:
+            foreach (DataRow dr in dsFetches.Tables["files"].Rows)
             {
-                // Get information about the selected file itself:
-                int dir_id = (int)treeView1.SelectedNode.Tag;
-                TreeNode tnCurrent = treeView1.SelectedNode;
-                string strRelBasePath = tnCurrent.FullPath;
-
-                // There should only be one thing selected.
-                ListViewItem verSelected = lviSelection[0];
-                string versionId = (string)verSelected.SubItems[0].Text;
-
-
-                // Get information about the version from the DB:
-                string strSql = "select * from hp_version where version_id=" + versionId + ";";
-                NpgsqlDataAdapter daTemp = new NpgsqlDataAdapter(strSql, connDb);
-                DataSet fetches = new DataSet();
-                daTemp.Fill(fetches);
-                if (fetches.Tables.Count == 0)
-                    return;
-
-                // Extract the information about the version:
-                fetches.Tables[0].TableName = "versions";
-                DataRow vRemote = fetches.Tables["versions"].Rows[0];
-                int entryId = vRemote.Field<int>("entry_id");
-
-
-                // Get information about the entry:
-                strSql = "select * from hp_entry where entry_id=" + entryId.ToString() + ";";
-                daTemp = new NpgsqlDataAdapter(strSql, connDb);
-                fetches = new DataSet();
-                daTemp.Fill(fetches);
-                if (fetches.Tables.Count == 0)
-                    return;
-
-                // Extract the information about the entry:
-                fetches.Tables[0].TableName = "entries";
-                DataRow eRemote = fetches.Tables["entries"].Rows[0];
-                string strFileName = eRemote.Field<string>("entry_name");
-                string strFileExt = Path.GetExtension(strFileName);
-
-                
-                // Request the dependency tree for this file version:
-                strSql = "select * from fcn_version_w_depends( " + versionId + " );";
-                daTemp = new NpgsqlDataAdapter(strSql, connDb);
-                fetches = new DataSet();
-                daTemp.Fill(fetches);
-                if (fetches.Tables.Count == 0)
-                    return;
-
-
-                // Ask the user where the dependency tree should be saved:
-                string strAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strRelBasePath);
-                FolderBrowserDialog dialog = new FolderBrowserDialog();
-                //dialog.Title = "Specify Version Dependency Directory";
-                //dialog.InitialDirectory = strAbsPath;
-                //dialog.OverwritePrompt = true;
-                DialogResult result = dialog.ShowDialog();
-                if (result != DialogResult.OK)
-                    return;
-
-                string newdirectory = dialog.SelectedPath;
-
-                // Check to make sure the new directory already exists (create it, if not):
-                if (!Directory.Exists(newdirectory))
-                    Directory.CreateDirectory(newdirectory);
-                else
-                {
-                    // Make sure the directory is empty, if not warn the user:
-                    if (Directory.EnumerateFileSystemEntries(newdirectory).Any())
-                        if (MessageBox.Show("The selected directory is not empty.  Continue anyway?", "Overwrite files?", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.No)
-                            return;
-                }
-
-                // Copy the assembly file from WebDav first:
-                string strDavName = "/" + entryId.ToString() + "/" + versionId + strFileExt.ToLower();
-                connDav.Download(strDavName, newdirectory + "/" + strFileName);
-
-                // Download each of the dependency files:
-                fetches.Tables[0].TableName = "files";
-                foreach (DataRow dr in fetches.Tables["files"].Rows)
-                {
-                    // Get the file from WebDav:
-                    strDavName = "/" + dr.Field<int>("entry_id").ToString() + "/" + dr.Field<int>("version_id").ToString() + Path.GetExtension(dr.Field<string>("entry_name")).ToLower();
-                    connDav.Download(strDavName, newdirectory + "/" + dr.Field<string>("entry_name"));
-                }
-
-                return;
+                // Get the file from WebDav:
+                strDavName = "/" + dr.Field<int>("entry_id").ToString() + "/" + dr.Field<int>("version_id").ToString() + "." + dr.Field<string>("file_ext").ToLower();
+                connDav.Download(strDavName, newdirectory + "/" + dr.Field<string>("entry_name"));
             }
+
+            MessageBox.Show("The files have been successfully downloaded (I think)",
+                "Download Complete",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+
         }
 
         private void lvHistory_SelectedIndexChanged(object sender, EventArgs e)

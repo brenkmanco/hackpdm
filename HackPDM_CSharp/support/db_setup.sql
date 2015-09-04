@@ -1294,10 +1294,10 @@ $BODY$
 	from (
 		-- get dependency entries
 		select *
-		from hp_version where version_id=62185
+		from hp_version where version_id=$1
 		union
 		select distinct on (entry_id) v.*
-		from fcn_dependency_recursive( array[ 62185 ] ) as rel
+		from fcn_dependency_recursive( array[ $1 ] ) as rel
 		left join hp_version as v on v.version_id=rel_child_id
 	) as v
 	left join hp_entry as e on e.entry_id=v.entry_id
