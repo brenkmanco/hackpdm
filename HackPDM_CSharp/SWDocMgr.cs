@@ -132,42 +132,42 @@ namespace HackPDM
 
             // get document custom properties (file level properties)
             string[] strDocPropNames = (string[])swDoc.GetCustomPropertyNames();
-            if (strDocPropNames == null) return null;
-
-            foreach (string strPropName in strDocPropNames)
+            if (strDocPropNames != null)
             {
-
-                SwDmCustomInfoType nPropType = 0;
-                object oPropValue = swDoc.GetCustomProperty(strPropName, out nPropType);
-
-                // property type
-                string strPropType = "";
-                switch (nPropType)
+                foreach (string strPropName in strDocPropNames)
                 {
-                    case SwDmCustomInfoType.swDmCustomInfoDate:
-                        strPropType = "date";
-                        oPropValue = (DateTime)oPropValue;
-                        break;
-                    case SwDmCustomInfoType.swDmCustomInfoNumber:
-                        strPropType = "number";
-                        oPropValue = (Decimal)oPropValue;
-                        break;
-                    case SwDmCustomInfoType.swDmCustomInfoText:
-                        strPropType = "text";
-                        oPropValue = (String)oPropValue;
-                        break;
-                    case SwDmCustomInfoType.swDmCustomInfoYesOrNo:
-                        strPropType = "yesno";
-                        oPropValue = (Boolean)oPropValue;
-                        break;
-                    case SwDmCustomInfoType.swDmCustomInfoUnknown:
-                        strPropType = "";
-                        break;
+
+                    SwDmCustomInfoType nPropType = 0;
+                    object oPropValue = swDoc.GetCustomProperty(strPropName, out nPropType);
+
+                    // property type
+                    string strPropType = "";
+                    switch (nPropType)
+                    {
+                        case SwDmCustomInfoType.swDmCustomInfoDate:
+                            strPropType = "date";
+                            oPropValue = (DateTime)oPropValue;
+                            break;
+                        case SwDmCustomInfoType.swDmCustomInfoNumber:
+                            strPropType = "number";
+                            oPropValue = (Decimal)oPropValue;
+                            break;
+                        case SwDmCustomInfoType.swDmCustomInfoText:
+                            strPropType = "text";
+                            oPropValue = (String)oPropValue;
+                            break;
+                        case SwDmCustomInfoType.swDmCustomInfoYesOrNo:
+                            strPropType = "yesno";
+                            oPropValue = (Boolean)oPropValue;
+                            break;
+                        case SwDmCustomInfoType.swDmCustomInfoUnknown:
+                            strPropType = "";
+                            break;
+                    }
+
+                    // add to list
+                    lstProps.Add(Tuple.Create<string, string, string, object>("", strPropName, strPropType, oPropValue));
                 }
-
-                // add to list
-                lstProps.Add(Tuple.Create<string, string, string, object>("", strPropName, strPropType, oPropValue));
-
             }
 
             // drawings don't have configurations, so we can return here

@@ -2173,7 +2173,22 @@ namespace HackPDM
             // checkout
             cmdCheckOut.Parameters["user_id"].Value = intMyUserId;
             cmdCheckOut.Parameters["node_id"].Value = intMyNodeId;
-            int intRows = cmdCheckOut.ExecuteNonQuery();
+
+            int intRows = 0;
+            try
+            {
+                intRows = cmdCheckOut.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                dlgStatus.AddStatusLine("ERROR", "Failed to set checkout info: user_id=" + intMyUserId.ToString() + ", node_id=" + intMyNodeId.ToString());
+                dlgStatus.AddStatusLine("ERROR", "Message was: " + ex.ToString());
+
+                dlgStatus.AddStatusLine("DEBUG", "user_id=" + intMyUserId.ToString());
+                dlgStatus.AddStatusLine("DEBUG", "node_id=" + intMyNodeId.ToString());
+                dlgStatus.AddStatusLine("DEBUG", "strAllowed=" + strAllowed);
+            }
+
             if (intRows == drAllowed.Length)
             {
                 foreach (DataRow drRow in drAllowed)
@@ -3395,9 +3410,17 @@ namespace HackPDM
                 }
                 catch (NpgsqlException ex)
                 {
-                        // integrity constraint violation?
-                        dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
-                        blnFailed = true;
+                    // integrity constraint violation?
+                    dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                    blnFailed = true;
+
+                    dlgStatus.AddStatusLine("DEBUG", "version_id=" + cmdInsertVersion.Parameters["version_id"].Value.ToString());
+                    dlgStatus.AddStatusLine("DEBUG", "entry_id=" + cmdInsertVersion.Parameters["entry_id"].Value.ToString());
+                    dlgStatus.AddStatusLine("DEBUG", "file_size=" + cmdInsertVersion.Parameters["file_size"].Value.ToString());
+                    dlgStatus.AddStatusLine("DEBUG", "file_modify_stamp=" + cmdInsertVersion.Parameters["file_modify_stamp"].Value.ToString());
+                    dlgStatus.AddStatusLine("DEBUG", "create_user=" + cmdInsertVersion.Parameters["create_user"].Value.ToString());
+                    dlgStatus.AddStatusLine("DEBUG", "create_node=" + cmdInsertVersion.Parameters["create_node"].Value.ToString());
+                    dlgStatus.AddStatusLine("DEBUG", "md5sum=" + cmdInsertVersion.Parameters["md5sum"].Value.ToString());
                 }
 
                 // get and insert custom properties
