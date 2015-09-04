@@ -2268,7 +2268,7 @@ namespace HackPDM
 
                 // get data from selected directory
                 DataSet dsUndos = LoadCommitsData(sender, e, t, strRelBasePath, null);
-                drSelected = dsList.Tables[0].Select("client_status_code='cm'");
+                drSelected = dsUndos.Tables["files"].Select("client_status_code='cm'");
                 foreach (DataRow dr in drSelected)
                 {
                     strEntries += dr.Field<int>("entry_id").ToString() + ",";
@@ -2310,6 +2310,20 @@ namespace HackPDM
 
             // get latest versions, including dependencies
             worker_GetLatest(sender, e);
+
+            // make sure all files got set to ReadOnly
+            foreach (DataRow drUndo in drSelected)
+            {
+                string strFileName = drUndo.Field<string>("entry_name");
+                string strAbsolutePath = drUndo.Field<string>("absolute_path");
+                string strFullName = strAbsolutePath + "\\" + strFileName;
+                FileInfo fiCurrFile = new FileInfo(strFullName);
+                if (fiCurrFile.IsReadOnly == false)
+                {
+                    fiCurrFile.IsReadOnly = true;
+                    dlgStatus.AddStatusLine("INFO", "Setting file ReadOnly: " + strFullName);
+                }
+            }
 
             // commit to database
             t.Commit();
