@@ -172,7 +172,8 @@ namespace HackPDM
 			try
 			{
 				byte[] bImage;
-				CompoundFile cf = new CompoundFile(FileName);
+                Stream fStream = File.Open(FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+				CompoundFile cf = new CompoundFile(fStream);
 				CFStream st;
 				st = cf.RootStorage.GetStream(StreamName);
 				bImage = st.GetData();
@@ -182,10 +183,14 @@ namespace HackPDM
 				cf.Close();
 				return (Bitmap)returnImage;
 			}
-			catch
-			{
-				return null;
-			}
+            catch (IOException ex)
+            {
+                //the file is unavailable because it is:
+                //still being written to
+                //or being processed by another thread
+                //or does not exist (has already been processed)
+                return null;
+            }
 
 		}
 

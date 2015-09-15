@@ -1419,8 +1419,8 @@ namespace HackPDM
             dtList.Columns.Add("ck_user_name", Type.GetType("System.String"));
             dtList.Columns.Add("checkout_date", Type.GetType("System.DateTime"));
             dtList.Columns.Add("str_checkout_date", Type.GetType("System.String"));
-            dtList.Columns.Add("checkout_node", Type.GetType("System.String"));
-            dtList.Columns.Add("checkout_node_name", Type.GetType("System.Int32"));
+            dtList.Columns.Add("checkout_node", Type.GetType("System.Int32"));
+            dtList.Columns.Add("checkout_node_name", Type.GetType("System.String"));
             dtList.Columns.Add("is_local", Type.GetType("System.Boolean"));
             dtList.Columns.Add("is_remote", Type.GetType("System.Boolean"));
             dtList.Columns.Add("client_status_code", Type.GetType("System.String"));
@@ -2652,6 +2652,12 @@ namespace HackPDM
                 lngFileSize = fiCurrFile.Length;
                 dtModifyDate = fiCurrFile.LastWriteTime;
 
+                // skip temp files
+                if (strFileName.StartsWith("~"))
+                {
+                    continue;
+                }
+
                 // log status
                 dlgStatus.AddStatusLine("INFO", "Processing local file: " + strFile);
 
@@ -2706,12 +2712,19 @@ namespace HackPDM
             string[] ChildDirectories = Directory.GetDirectories(strAbsolutePath);
             foreach (string strChildAbsPath in ChildDirectories)
             {
-            //    string strChildName = strChildAbsPath.Substring(strChildAbsPath.LastIndexOf("\\") + 1);
                 string strChildName = Utils.GetBaseName(strChildAbsPath);
                 string strChildRelPath = Utils.GetAbsolutePath(strLocalFileRoot, strChildAbsPath);
+
                 int intChildId = 0;
                 dictTree.TryGetValue(strRelativePath, out intChildId);
-                dsCommits.Tables["dirs"].Rows.Add(intChildId, intDirId, strChildName, strChildRelPath, strChildAbsPath);
+                dsCommits.Tables["dirs"].Rows.Add(
+                    intChildId,
+                    intDirId,
+                    strChildName,
+                    strChildRelPath,
+                    strChildAbsPath
+                );
+
                 blnFailed = LoadCommitsDataRecurse(sender, e, ref dsCommits, strChildRelPath);
             }
 
@@ -3197,7 +3210,18 @@ namespace HackPDM
                     return true;
                 }
 
-                // check if we need to create this directory
+                // check if we have already created it in a previous run
+                // I believe this would only happen if we have a duplicate entry in dsCommits.Tables["dirs"]
+                // TODO: find out why we are getting duplicate entries in dsCommits.Tables["dirs"]
+                int intChildId = 0;
+                dictTree.TryGetValue(drCurrent.Field<string>("relative_path"), out intChildId);
+                if (intChildId != 0)
+                {
+                    drCurrent.SetField<Int32>("dir_id", (Int32)intChildId);
+                    continue;
+                }
+
+                // check if we are creating any files that depend on this directory
                 // by comparing relative path, we avoid directories outside pwa
                 DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("relative_path like '{0}%' and client_status_code in ('lo','cm')", drCurrent.Field<string>("relative_path").Replace("'", "''")));
                 if (drNewFiles.Length < 1) continue;
@@ -3214,7 +3238,6 @@ namespace HackPDM
 
                 // get the next directory id
                 object oTemp = cmdGetId.ExecuteScalar();
-                int intChildId;
                 if (oTemp != null)
                 {
                     intChildId = (int)(long)oTemp;
@@ -3223,6 +3246,11 @@ namespace HackPDM
                 {
                     throw new System.Exception("Failed to get the next directory ID");
                 }
+                //int? intChildId = (int?)cmdGetId.ExecuteScalar();
+                //if (intChildId == null)
+                //{
+                //    throw new System.Exception("Failed to get the next directory ID");
+                //}
 
                 // set parameters
                 string strDirName = drCurrent.Field<string>("dir_name");
@@ -3238,15 +3266,18 @@ namespace HackPDM
                 catch (NpgsqlException ex)
                 {
                     // if unique key/index violation
+                    dlgStatus.AddStatusLine("DEBUG", "dir_id=" + intChildId.ToString());
+                    dlgStatus.AddStatusLine("DEBUG", "parent_id=" + intParentId.ToString());
+                    dlgStatus.AddStatusLine("DEBUG", "dir_name=" + strDirName);
                     throw new System.Exception("Directory \"" + strDirName + "\" already exists on the server.  Refresh your view.  " + System.Environment.NewLine + ex.Detail);
                 }
 
                 // update row with the new remote directory id
-                drCurrent.SetField<Int32>("dir_id", intChildId);
-                dictTree.Add(drCurrent.Field<string>("relative_path"), intChildId);
+                drCurrent.SetField<Int32>("dir_id", (Int32)intChildId);
+                dictTree.Add(drCurrent.Field<string>("relative_path"), (Int32)intChildId);
 
                 // pass this directory id as the next parent id
-                intParentId = intChildId;
+                intParentId = (Int32)intChildId;
 
             }
 
@@ -4198,6 +4229,12 @@ namespace HackPDM
                 FileInfo fiCurrFile = new FileInfo(strFile);
                 lngFileSize = fiCurrFile.Length;
                 dtModifyDate = fiCurrFile.LastWriteTime;
+
+                // skip temp files
+                if (strFileName.StartsWith("~"))
+                {
+                    continue;
+                }
 
                 // get matching remote file
                 DataRow[] drRemFile = dsCombined.Tables["files"].Select(String.Format("entry_name='{0}' and absolute_path='{1}'", strFileName.Replace("'", "''"), strAbsPath.Replace("'", "''")));

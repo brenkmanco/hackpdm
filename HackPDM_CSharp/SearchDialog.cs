@@ -241,6 +241,7 @@ namespace HackPDM
                     LEFT JOIN view_dir_tree AS t ON lower(t.rel_path)=lower(l.rel_path)
                     LEFT JOIN hp_entry AS e ON lower(l.entry_name)=lower(e.entry_name) AND e.dir_id=t.dir_id
                     WHERE e.entry_id IS NULL
+                    AND l.entry_name not like '~%'
                     ORDER BY l.rel_path, l.entry_name
                     LIMIT " + MAXCOUNT.ToString() + ";";
 
