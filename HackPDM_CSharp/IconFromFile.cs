@@ -191,6 +191,10 @@ namespace HackPDM
                 //or does not exist (has already been processed)
                 return null;
             }
+            catch
+            {
+                return null;
+            }
 
 		}
 
