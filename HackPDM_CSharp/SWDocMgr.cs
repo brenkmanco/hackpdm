@@ -40,7 +40,7 @@ namespace HackPDM
         {
             // external references for assembly files (GetAllExternalReferences4)
             // external references for part files (GetExternalFeatureReferences)
-            SwDMDocument13 swDoc = default(SwDMDocument13);
+            SwDMDocument19 swDoc = default(SwDMDocument19);
             SwDMSearchOption swSearchOpt = default(SwDMSearchOption);
 
             // returns list of string arrays
@@ -57,7 +57,7 @@ namespace HackPDM
 
             // get the document
             SwDmDocumentOpenError nRetVal = 0;
-            swDoc = (SwDMDocument13)swDocMgr.GetDocument(FileName, swDocType, true, out nRetVal);
+            swDoc = (SwDMDocument19)swDocMgr.GetDocument(FileName, swDocType, true, out nRetVal);
             if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
             {
                 DialogResult dr = MessageBox.Show("Failed to open solidworks file: " + FileName,

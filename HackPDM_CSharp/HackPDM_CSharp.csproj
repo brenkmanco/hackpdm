@@ -95,14 +95,6 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Interop.SldWorks">
-      <HintPath>lib\Interop.SldWorks.dll</HintPath>
-      <EmbedInteropTypes>True</EmbedInteropTypes>
-    </Reference>
-    <Reference Include="Interop.SwConst">
-      <HintPath>lib\Interop.SwConst.dll</HintPath>
-      <EmbedInteropTypes>True</EmbedInteropTypes>
-    </Reference>
     <Reference Include="LibRSync.Core">
       <HintPath>lib\LibRSync.Core.dll</HintPath>
     </Reference>
@@ -115,15 +107,15 @@
       <HintPath>lib\OpenMcdf.dll</HintPath>
     </Reference>
     <Reference Include="SolidWorks.Interop.sldworks">
-      <HintPath>lib\SolidWorks.Interop.sldworks.dll</HintPath>
+      <HintPath>..\..\..\..\..\..\Program Files\SolidWorks Corp\SolidWorks 2015\SOLIDWORKS\SolidWorks.Interop.sldworks.dll</HintPath>
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
     <Reference Include="SolidWorks.Interop.swconst">
-      <HintPath>lib\SolidWorks.Interop.swconst.dll</HintPath>
+      <HintPath>..\..\..\..\..\..\Program Files\SolidWorks Corp\SolidWorks 2015\SOLIDWORKS\SolidWorks.Interop.swconst.dll</HintPath>
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
     <Reference Include="SolidWorks.Interop.swdocumentmgr">
-      <HintPath>lib\SolidWorks.Interop.swdocumentmgr.dll</HintPath>
+      <HintPath>..\..\..\..\..\..\Program Files\SolidWorks Corp\SolidWorks 2015\SOLIDWORKS\SolidWorks.Interop.swdocumentmgr.dll</HintPath>
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
     <Reference Include="System" />

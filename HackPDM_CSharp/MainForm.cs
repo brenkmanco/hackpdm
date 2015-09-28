@@ -676,7 +676,7 @@ namespace HackPDM
             }
 
             // create dictionary of tree nodes
-            dictTreeNodes = new Dictionary<string,TreeNode>();
+            dictTreeNodes = new Dictionary<string, TreeNode>(StringComparer.OrdinalIgnoreCase);
             dictTreeNodes.Add(tnParent.FullPath, tnParent);
 
             // loop through directories, adding nodes to the treeview
@@ -1337,7 +1337,7 @@ namespace HackPDM
 
         private Boolean IsInPwa(string FullName)
         {
-            if (strLocalFileRoot == FullName.Substring(0,strLocalFileRoot.Length))
+            if (strLocalFileRoot.ToUpper() == FullName.ToUpper().Substring(0,strLocalFileRoot.Length))
             {
                 return false;
             } else {
@@ -2693,6 +2693,7 @@ namespace HackPDM
                     null, // checkout_date
                     null, // str_checkout_date
                     null, // checkout_node
+                    null, // checkout_node_name
                     true, // is_local
                     false, // is_remote
                     "lo", // client_status_code
@@ -2713,16 +2714,16 @@ namespace HackPDM
             foreach (string strChildAbsPath in ChildDirectories)
             {
                 string strChildName = Utils.GetBaseName(strChildAbsPath);
-                string strChildRelPath = Utils.GetAbsolutePath(strLocalFileRoot, strChildAbsPath);
+                string strChildRelPath = Utils.GetRelativePath(strLocalFileRoot, strChildAbsPath);
 
                 int intChildId = 0;
-                dictTree.TryGetValue(strRelativePath, out intChildId);
+                dictTree.TryGetValue(strChildRelPath, out intChildId);
                 dsCommits.Tables["dirs"].Rows.Add(
-                    intChildId,
-                    intDirId,
-                    strChildName,
-                    strChildRelPath,
-                    strChildAbsPath
+                    intChildId,      // dir_id
+                    intDirId,        // parent_id
+                    strChildName,    // dir_name
+                    strChildRelPath, // relative_path
+                    strChildAbsPath  // absolute_path
                 );
 
                 blnFailed = LoadCommitsDataRecurse(sender, e, ref dsCommits, strChildRelPath);
@@ -3147,10 +3148,17 @@ namespace HackPDM
                         // we reached the pwa root directory
                         break;
                     dictTree.TryGetValue(strParentsParentRelPath, out intParentId);
+                    string strParentAbsPath = Utils.GetAbsolutePath(strLocalFileRoot, strParentRelPath);
 
                     // add the parent directory to table
                     // dir_id=0 because no remote directory exists for the current path
-                    dsCommits.Tables["dirs"].Rows.Add(0, intParentId, strParentName, strParentRelPath);
+                    dsCommits.Tables["dirs"].Rows.Add(
+                        0,                // dir_id
+                        intParentId,      // parent_id
+                        strParentName,    // dir_name
+                        strParentRelPath, // relative_path
+                        strParentAbsPath  // absolute_path
+                    );
                     strCurrPath = strParentRelPath;
                 }
             }

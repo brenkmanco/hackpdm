@@ -17,8 +17,8 @@ namespace HackPDM
     class SWHelper
     {
 
-        private SldWorks.SldWorks swApp;
-        private SldWorks.SldWorks swRunApp;
+        private SolidWorks.Interop.sldworks.SldWorks swApp;
+        private SolidWorks.Interop.sldworks.SldWorks swRunApp;
 
         // constructor
         public SWHelper()
@@ -164,7 +164,7 @@ namespace HackPDM
             // try to load the model file
             int intWarnings = 0;
             int intErrors = 0;
-            SldWorks.ModelDoc2 swModelDoc;
+            ModelDoc2 swModelDoc;
             try
             {
                 swModelDoc = swApp.OpenDoc6(FileName, (int)swDocType, (int)swOpenDocOptions, "", ref intErrors, ref intWarnings);
@@ -173,7 +173,7 @@ namespace HackPDM
             {
                 return null;
             }
-            SldWorks.ModelDocExtension swDocExt = swModelDoc.Extension;
+            ModelDocExtension swDocExt = swModelDoc.Extension;
 
             // get list of configs
             //string[] strConfgNames = (string[])swModelDoc.GetConfigurationNames();
@@ -186,7 +186,7 @@ namespace HackPDM
             foreach (string strConfigName in lstConfigNames)
             {
 
-                SldWorks.CustomPropertyManager swCustPropMgr = swDocExt.get_CustomPropertyManager(strConfigName);
+                CustomPropertyManager swCustPropMgr = swDocExt.get_CustomPropertyManager(strConfigName);
 
                 object oPropNames = null;
                 object oPropTypes = null;
