@@ -6,13 +6,13 @@ using SolidWorks.Interop.swdocumentmgr;
 using System.Drawing;
 using System.Windows.Forms;
 
-
 namespace HackPDM
 {
     class SWDocMgr
     {
 
         private SwDMApplication swDocMgr = default(SwDMApplication);
+        private ImgConvert imgConv = new ImgConvert();
 
         // constructor
         public SWDocMgr(string strLicenseKey)
@@ -229,6 +229,40 @@ namespace HackPDM
 
             swDoc.CloseDoc();
             return lstProps;
+
+        }
+
+        public Bitmap GetPreview(string FileName, bool Deep = false)
+        {
+            // external references for assembly files (GetAllExternalReferences4)
+            // external references for part files (GetExternalFeatureReferences)
+            SwDMDocument19 swDoc = default(SwDMDocument19);
+
+            // get doc type
+            SwDmDocumentType swDocType = GetTypeFromString(FileName);
+            if (swDocType == SwDmDocumentType.swDmDocumentUnknown)
+            {
+                return null;
+            }
+
+            // get the document
+            SwDmDocumentOpenError nRetVal = 0;
+            swDoc = (SwDMDocument19)swDocMgr.GetDocument(FileName, swDocType, true, out nRetVal);
+            if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
+            {
+                DialogResult dr = MessageBox.Show("Failed to open solidworks file: " + FileName,
+                    "Loading SW File",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Exclamation,
+                    MessageBoxDefaultButton.Button1);
+                return null;
+            }
+
+            SwDmPreviewError ePrevError;
+            stdole.IPictureDisp pngPreview = swDoc.GetPreviewBitmap(out ePrevError);
+            Image imgPreview = imgConv.GetPicture(pngPreview);
+
+            return (Bitmap)imgPreview;
 
         }
 

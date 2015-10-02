@@ -95,6 +95,9 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Ionic.Zlib">
+      <HintPath>lib\Ionic.Zlib.dll</HintPath>
+    </Reference>
     <Reference Include="LibRSync.Core">
       <HintPath>lib\LibRSync.Core.dll</HintPath>
     </Reference>
@@ -103,7 +106,8 @@
     <Reference Include="Npgsql">
       <HintPath>lib\Npgsql.dll</HintPath>
     </Reference>
-    <Reference Include="OpenMcdf">
+    <Reference Include="OpenMcdf, Version=1.5.4.22637, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>lib\OpenMcdf.dll</HintPath>
     </Reference>
     <Reference Include="SolidWorks.Interop.sldworks">
@@ -116,6 +120,9 @@
     </Reference>
     <Reference Include="SolidWorks.Interop.swdocumentmgr">
       <HintPath>..\..\..\..\..\..\Program Files\SolidWorks Corp\SolidWorks 2015\SOLIDWORKS\SolidWorks.Interop.swdocumentmgr.dll</HintPath>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
+    </Reference>
+    <Reference Include="stdole, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
     <Reference Include="System" />
@@ -141,7 +148,9 @@
     <Compile Include="FileTypeManager.Designer.cs">
       <DependentUpon>FileTypeManager.cs</DependentUpon>
     </Compile>
-    <Compile Include="IconFromFile.cs" />
+    <Compile Include="IconFromFile.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="ListViewColumnSorter.cs" />
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
@@ -178,6 +187,7 @@
       <DependentUpon>StatusDialog.cs</DependentUpon>
     </Compile>
     <Compile Include="SWHelper.cs" />
+    <Compile Include="SwModelReaderCore.cs" />
     <Compile Include="Utils.cs" />
     <Compile Include="WebDAVClient.cs" />
   </ItemGroup>

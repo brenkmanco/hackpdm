@@ -7,6 +7,7 @@ using System.IO;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using OpenMcdf;
+using SwModelReaderCore;
 
 namespace HackPDM
 {
@@ -119,7 +120,7 @@ namespace HackPDM
 		[DllImport("shell32.dll")]
 		public static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbSizeFileInfo, uint uFlags);
 
-		public Image GetThumbnail(string FileName)
+		public Image GetThumbnail(string FileName, SWDocMgr swDocMgrInstance)
 		{
 			
 			if (isImage(FileName))
@@ -131,7 +132,7 @@ namespace HackPDM
 			else if (isSolidWorks(FileName))
 			{
 				// get preview image from solidworks file
-				Bitmap origBitmap = GetCompoundPreview(FileName, "PreviewPNG");
+                Bitmap origBitmap = swDocMgrInstance.GetPreview(FileName);
 				return (Image)origBitmap;
 			}
 			else
@@ -191,14 +192,14 @@ namespace HackPDM
                 //or does not exist (has already been processed)
                 return null;
             }
-            catch
+            catch (Exception ex)
             {
                 return null;
             }
 
 		}
 
-		private static Bitmap resizeImage(Bitmap sourceImage)
+        private static Bitmap resizeImage(Bitmap sourceImage)
 		{
 			int sourceWidth = sourceImage.Width;
 			int sourceHeight = sourceImage.Height;
@@ -263,4 +264,20 @@ namespace HackPDM
 
 
 	}
+
+    class ImgConvert : System.Windows.Forms.AxHost
+    {
+        
+        public ImgConvert() : base("c932ba85-4374-101b-a56c-00aa003668dc")
+        {
+            // try to do nothing
+        }
+
+        // expose GetPictureFromIPicture()
+        public Image GetPicture(stdole.IPictureDisp inPic)
+        {
+            return GetPictureFromIPicture(inPic);
+        }
+
+    }
 }

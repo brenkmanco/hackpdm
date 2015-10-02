@@ -1353,7 +1353,7 @@ namespace HackPDM
             string strFileExt = dr.Field<string>("file_ext").ToLower();
             IconFromFile ico = new IconFromFile();
 
-            Image img = ico.GetThumbnail(strFullName);
+            Image img = ico.GetThumbnail(strFullName, connDocMgrApi);
             bImage = ImageToByteArray(img);
             return bImage;
 
