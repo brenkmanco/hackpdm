@@ -15,7 +15,6 @@ namespace HackPDM
 	{
 
 		private static string imageFilter = ".jpg,.jpeg,.png,.gif";
-		private static string solidworksFilter = ".sldprt,.sldasm,.slddrw";
 		private static  System.Drawing.Size size = new System.Drawing.Size(256, 256);
 
 		private const uint SHGFI_ICON = 0x100;
@@ -120,19 +119,13 @@ namespace HackPDM
 		[DllImport("shell32.dll")]
 		public static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbSizeFileInfo, uint uFlags);
 
-		public Image GetThumbnail(string FileName, SWDocMgr swDocMgrInstance)
+		public Image GetThumbnail(string FileName)
 		{
 			
 			if (isImage(FileName))
 			{
 				// get thumbnail from image file
 				Bitmap origBitmap = GetImageThumbnail(FileName);
-				return (Image)origBitmap;
-			}
-			else if (isSolidWorks(FileName))
-			{
-				// get preview image from solidworks file
-                Bitmap origBitmap = swDocMgrInstance.GetPreview(FileName);
 				return (Image)origBitmap;
 			}
 			else
@@ -146,7 +139,7 @@ namespace HackPDM
 
 				Icon ico = GetLargeFileIcon(FileName);
 				if (ico == null) return null;
-				return resizeImage(ico.ToBitmap());
+				return resizeImage(ico.ToBitmap(), size);
 			}
 
 		}
@@ -158,7 +151,7 @@ namespace HackPDM
 			{
 				using (Bitmap origBitmap = new Bitmap(FileName))
 				{
-					return resizeImage(origBitmap);
+					return resizeImage(origBitmap, size);
 				}
 			}
 			catch {
@@ -199,7 +192,7 @@ namespace HackPDM
 
 		}
 
-        private static Bitmap resizeImage(Bitmap sourceImage)
+        private static Bitmap resizeImage(Bitmap sourceImage, System.Drawing.Size sizeOut)
 		{
 			int sourceWidth = sourceImage.Width;
 			int sourceHeight = sourceImage.Height;
@@ -208,8 +201,8 @@ namespace HackPDM
 			float nPercentW = 0;
 			float nPercentH = 0;
 
-			nPercentW = ((float)size.Width / (float)sourceWidth);
-			nPercentH = ((float)size.Height / (float)sourceHeight);
+			nPercentW = ((float)sizeOut.Width / (float)sourceWidth);
+			nPercentH = ((float)sizeOut.Height / (float)sourceHeight);
 
 			if (nPercentH < nPercentW)
 				nPercent = nPercentH;
@@ -218,13 +211,13 @@ namespace HackPDM
 
 			int destWidth = (int)(sourceWidth * nPercent);
 			int destHeight = (int)(sourceHeight * nPercent);
-			var destRect = new Rectangle(0, 0, destWidth, destWidth);
+			var destRect = new Rectangle(0, 0, destWidth, destHeight);
 
-			int leftOffset = (int)((size.Width - destWidth) / 2);
-			int topOffset = (int)((size.Height - destHeight) / 2);
+			int leftOffset = (int)((sizeOut.Width - destWidth) / 2);
+			int topOffset = (int)((sizeOut.Height - destHeight) / 2);
 
 
-			Bitmap destImage = new Bitmap(size.Width, size.Height);
+			Bitmap destImage = new Bitmap(sizeOut.Width, sizeOut.Height);
 			destImage.SetResolution(sourceImage.HorizontalResolution, sourceImage.VerticalResolution);
 
 			using (var graphics = Graphics.FromImage((Image)destImage))
@@ -254,30 +247,6 @@ namespace HackPDM
 			return (imageFilter.IndexOf(ext) != -1 && File.Exists(fileName));
 		}
 
-		private static bool isSolidWorks(string fileName)
-		{
-			string ext = Path.GetExtension(fileName).ToLower();
-			if (ext == "")
-				return false;
-			return (solidworksFilter.IndexOf(ext) != -1 && File.Exists(fileName));
-		}
-
-
 	}
 
-    class ImgConvert : System.Windows.Forms.AxHost
-    {
-        
-        public ImgConvert() : base("c932ba85-4374-101b-a56c-00aa003668dc")
-        {
-            // try to do nothing
-        }
-
-        // expose GetPictureFromIPicture()
-        public Image GetPicture(stdole.IPictureDisp inPic)
-        {
-            return GetPictureFromIPicture(inPic);
-        }
-
-    }
 }

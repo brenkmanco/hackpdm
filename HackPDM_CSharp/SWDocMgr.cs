@@ -2,8 +2,11 @@
 using System.Collections.Generic;
 using System.Text;
 using SolidWorks.Interop.swdocumentmgr;
+using System.IO;
 
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Windows.Forms;
 
 namespace HackPDM
@@ -12,13 +15,12 @@ namespace HackPDM
     {
 
         private SwDMApplication swDocMgr = default(SwDMApplication);
-        private ImgConvert imgConv = new ImgConvert();
 
         // constructor
         public SWDocMgr(string strLicenseKey)
         {
 
-            SwDMClassFactory swClassFact = default(SwDMClassFactory);
+            SwDMClassFactory swClassFact;
             swClassFact = new SwDMClassFactory();
 
             try
@@ -236,7 +238,7 @@ namespace HackPDM
         {
             // external references for assembly files (GetAllExternalReferences4)
             // external references for part files (GetExternalFeatureReferences)
-            SwDMDocument19 swDoc = default(SwDMDocument19);
+            SwDMDocument11 swDoc = default(SwDMDocument11);
 
             // get doc type
             SwDmDocumentType swDocType = GetTypeFromString(FileName);
@@ -246,6 +248,58 @@ namespace HackPDM
             }
 
             // get the document
+            SwDmDocumentOpenError nRetVal = 0;
+            swDoc = (SwDMDocument11)swDocMgr.GetDocument(FileName, swDocType, true, out nRetVal);
+            if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
+            {
+                DialogResult dr = MessageBox.Show("Failed to open solidworks file: " + FileName,
+                    "Loading SW File",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Exclamation,
+                    MessageBoxDefaultButton.Button1);
+                return null;
+            }
+
+            SwDmPreviewError ePrevError = SwDmPreviewError.swDmPreviewErrorNone;
+            try
+            {
+                byte[] bPreview = swDoc.GetPreviewBitmapBytes(out ePrevError);
+                MemoryStream ms = new MemoryStream(bPreview);
+                Bitmap bmp = (Bitmap)Bitmap.FromStream(ms);
+
+                // crop and pad the image to 640x480
+                Bitmap bmp2 = resizeImage(bmp);
+                return bmp2;
+            }
+            catch
+            {
+                DialogResult dr = MessageBox.Show("Failed to get solidworks preview image: " + FileName + ": " + ePrevError.ToString(),
+                    "Loading SW Preview",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Exclamation,
+                    MessageBoxDefaultButton.Button1);
+                return null;
+            }
+
+        }
+
+        public stdole.IPictureDisp GetPreview2(string FileName, bool Deep = false)
+        {
+            // This method is only supported for in-process execution.  We need this the execute in a multi-threaded environment.
+            // I tried starting a new instance of the SWDocMgr class for each thread, and
+            // that seemed to work once, then didn't work, no explanation.
+            // The error, when in a thread, is "Catastrophic Failure."
+            // Use GetPreview() instead
+
+            // get doc type
+            SwDmDocumentType swDocType = GetTypeFromString(FileName);
+            if (swDocType == SwDmDocumentType.swDmDocumentUnknown)
+            {
+                return null;
+            }
+
+            // get the document
+            SwDMDocument19 swDoc;
             SwDmDocumentOpenError nRetVal = 0;
             swDoc = (SwDMDocument19)swDocMgr.GetDocument(FileName, swDocType, true, out nRetVal);
             if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
@@ -258,11 +312,24 @@ namespace HackPDM
                 return null;
             }
 
-            SwDmPreviewError ePrevError;
-            stdole.IPictureDisp pngPreview = swDoc.GetPreviewBitmap(out ePrevError);
-            Image imgPreview = imgConv.GetPicture(pngPreview);
-
-            return (Bitmap)imgPreview;
+            SwDmPreviewError ePrevError = SwDmPreviewError.swDmPreviewErrorNone;
+            stdole.IPictureDisp ipicPreview;
+            try
+            {
+                ipicPreview = swDoc.GetPreviewPNGBitmap(out ePrevError);
+                swDoc.CloseDoc();
+                return ipicPreview;
+            }
+            catch
+            {
+                DialogResult dr = MessageBox.Show("Failed to get solidworks preview image: " + FileName + ": " + ePrevError.ToString(),
+                    "Loading SW Preview",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Exclamation,
+                    MessageBoxDefaultButton.Button1);
+                swDoc.CloseDoc();
+                return null;
+            }
 
         }
 
@@ -294,6 +361,169 @@ namespace HackPDM
             return nDocType;
 
         }
+
+
+
+
+        // methods for processing preview images
+
+        public static byte[][] GetRGB(Bitmap bmp)
+        {
+
+            BitmapData bmp_data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+            IntPtr ptr = bmp_data.Scan0;
+            int num_pixels = bmp.Width * bmp.Height;
+            int num_bytes = bmp_data.Stride * bmp.Height;
+            int padding = bmp_data.Stride - bmp.Width * 3;
+            int i = 0;
+            int ct = 1;
+
+            byte[] r = new byte[num_pixels];
+            byte[] g = new byte[num_pixels];
+            byte[] b = new byte[num_pixels];
+            byte[] rgb = new byte[num_bytes];
+            System.Runtime.InteropServices.Marshal.Copy(ptr, rgb, 0, num_bytes);
+
+            for (int x = 0; x < num_bytes - 3; x += 3)
+            {
+                if (x == (bmp_data.Stride * ct - padding))
+                {
+                    x += padding; ct++;
+                }
+                r[i] = rgb[x];
+                g[i] = rgb[x + 1];
+                b[i] = rgb[x + 2];
+                i++;
+            }
+
+            bmp.UnlockBits(bmp_data);
+            return new byte[3][] { r, g, b };
+
+        }
+
+        public static Bitmap AutoCrop(Bitmap bmp)
+        {
+
+            //Get an array containing the R,G,B components of each pixel
+            var pixels = GetRGB(bmp);
+
+            int h = bmp.Height - 1;
+            int w = bmp.Width;
+            int top = 0;
+            int bottom = h;
+            int left = bmp.Width;
+            int right = 0;
+            int white = 0;
+            int tolerance = 95; // 95%
+
+            bool prev_color = false;
+            for (int i = 0; i < pixels[0].Length; i++)
+            {
+                int x = (i % (w));
+                int y = (int)(Math.Floor((decimal)(i / w)));
+                int tol = 255 * tolerance / 100;
+
+                if (pixels[0][i] >= tol && pixels[1][i] >= tol && pixels[2][i] >= tol)
+                {
+                    white++; right = (x > right && white == 1) ? x : right;
+                }
+                else
+                {
+                    left = (x < left && white >= 1) ? x : left;
+                    right = (x == w - 1 && white == 0) ? w - 1 : right;
+                    white = 0;
+                }
+                if (white == w)
+                {
+                    top = (y - top < 3) ? y : top;
+                    bottom = (prev_color && x == w - 1 && y > top + 1) ? y : bottom;
+                }
+                left = (x == 0 && white == 0) ? 0 : left;
+                bottom = (y == h && x == w - 1 && white != w && prev_color) ? h + 1 : bottom;
+                if (x == w - 1)
+                {
+                    prev_color = (white < w) ? true : false; white = 0;
+                }
+            }
+            right = (right == 0) ? w : right;
+            left = (left == w) ? 0 : left;
+
+            //Crop the image
+            if (bottom - top > 0)
+            {
+                Bitmap bmpCrop = bmp.Clone(new Rectangle(left, top, right - left + 1, bottom - top), bmp.PixelFormat);
+
+                return (Bitmap)(bmpCrop);
+            }
+            else
+            {
+                return bmp;
+            }
+
+        }
+
+        private static Bitmap resizeImage(Bitmap bmpOrig)
+        {
+
+            bmpOrig.Save("C:\\temp\\test_orig.png", System.Drawing.Imaging.ImageFormat.Png);
+            Image sourceImage = (Image)AutoCrop(bmpOrig);
+            sourceImage.Save("C:\\temp\\test_cropped.png", System.Drawing.Imaging.ImageFormat.Png);
+
+            //return (Bitmap)sourceImage;
+
+            System.Drawing.Size sizeOut = new System.Drawing.Size(640, 480);
+            int sourceWidth = sourceImage.Width;
+            int sourceHeight = sourceImage.Height;
+
+            // percent size change
+            float nPercent = 0;
+            float nPercentW = 0;
+            float nPercentH = 0;
+            nPercentW = ((float)sizeOut.Width / (float)sourceWidth);
+            nPercentH = ((float)sizeOut.Height / (float)sourceHeight);
+
+            // keeping aspect ratio
+            if (nPercentH < nPercentW)
+                nPercent = nPercentH;
+            else
+                nPercent = nPercentW;
+
+
+            int destWidth = (int)(sourceWidth * nPercent);
+            int destHeight = (int)(sourceHeight * nPercent);
+            int leftOffset = (int)((sizeOut.Width - destWidth) / 2);
+            int topOffset = (int)((sizeOut.Height - destHeight) / 2);
+
+            var destRect = new Rectangle(leftOffset, topOffset, destWidth, destHeight);
+
+
+            Bitmap destImage = new Bitmap(sizeOut.Width, sizeOut.Height);
+            destImage.SetResolution(sourceImage.HorizontalResolution, sourceImage.VerticalResolution);
+
+            using (var graphics = Graphics.FromImage((Image)destImage))
+            {
+                graphics.CompositingMode = CompositingMode.SourceCopy;
+                graphics.CompositingQuality = CompositingQuality.HighQuality;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.SmoothingMode = SmoothingMode.HighQuality;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                graphics.Clear(Color.White);
+
+                //graphics.DrawImage(sourceImage, destRect, -leftOffset, -topOffset, sourceImage.Width, sourceImage.Height, GraphicsUnit.Pixel);
+                graphics.DrawImage(sourceImage, destRect, 0, 0, sourceImage.Width, sourceImage.Height, GraphicsUnit.Pixel);
+
+                //using (var wrapMode = new System.Drawing.Imaging.ImageAttributes())
+                //{
+                //    wrapMode.SetWrapMode(WrapMode.TileFlipXY);
+                //    graphics.DrawImage(sourceImage, destRect, leftOffset, topOffset, sourceImage.Width, sourceImage.Height, GraphicsUnit.Pixel, wrapMode);
+                //}
+            }
+            destImage.Save("C:\\temp\\test_resized.png", System.Drawing.Imaging.ImageFormat.Png);
+
+            return (Bitmap)destImage;
+
+        }
+
 
     }
 }

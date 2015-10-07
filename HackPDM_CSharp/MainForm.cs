@@ -63,6 +63,8 @@ namespace HackPDM
 
     //    public delegate void Delegate_ShowFileInTree(string filepath);
 
+        public static ImgConvert imgConv = new ImgConvert();
+
         private string strDbConn;
         private NpgsqlConnection connDb = new NpgsqlConnection();
         private NpgsqlTransaction t;
@@ -70,7 +72,8 @@ namespace HackPDM
         private WebDAVClient connDav = new WebDAVClient();
 
         private SWHelper connSwApi = new SWHelper();
-        private SWDocMgr connDocMgrApi;
+        private SWDocMgr docMgr;
+        private static String strSWDocMgrKey = "";
         bool blnUseSwApi = false;
 
         private Dictionary<string, Int32> dictTree;
@@ -408,9 +411,9 @@ namespace HackPDM
             Decimal decSecondsTolerance = dtServSettings.Select("setting_name='seconds_tolerance'")[0].Field<Decimal>("setting_number_value");
             intSecondsTolerance = (Int32)decSecondsTolerance;
 
-            // get license key, and instantiate solidworks document manager
-            String strSWDocMgrKey = dtServSettings.Select("setting_name='swdocmgr_key'")[0].Field<String>("setting_text_value");
-            connDocMgrApi = new SWDocMgr(strSWDocMgrKey);
+            // get license key
+            strSWDocMgrKey = dtServSettings.Select("setting_name='swdocmgr_key'")[0].Field<String>("setting_text_value");
+            docMgr = new SWDocMgr(strSWDocMgrKey);
 
         }
 
@@ -559,6 +562,19 @@ namespace HackPDM
         private void ResetView(string strTreePath = "")
         {
 
+            // Set cursor as hourglass
+            Cursor.Current = Cursors.WaitCursor;
+
+            // get a list of selected items
+            List<string> lstEntrySel = new List<string>();
+            if (listView1.SelectedItems.Count != 0)
+            {
+                foreach (ListViewItem lviSelected in listView1.SelectedItems)
+                {
+                    lstEntrySel.Add(lviSelected.Text);
+                }
+            }
+
             // clear and re-populate the directory data
             dictTree = new Dictionary<string, Int32>(StringComparer.OrdinalIgnoreCase);
             InitTreeView();
@@ -589,29 +605,24 @@ namespace HackPDM
                 }
             }
 
+            // select the previously selected entries
+            if (lstEntrySel == null) lstEntrySel = new List<string>();
+            int intLastIndex = 0;
+            foreach (ListViewItem li in listView1.Items)
+            {
+                if (lstEntrySel.Contains(li.Text))
+                {
+                    li.Selected = true;
+                    intLastIndex = li.Index;
+                }
+            }
+            listView1.EnsureVisible(intLastIndex);
+
             // reset file type manager
             ftmStart.RefreshRemote();
 
-
-
-            // get local file list
-            // easy
-
-
-            // get remote file list
-            // no big deal getting a few files, but retrieving the entire list could be very time consuming
-            // it might be better to store file info locally, and then only retrieve updates
-            // that would necessitate timestamping and change tracking on the server
-
-
-            // combine file lists
-            // identify local files not existing remotely (lo overlay)
-            // identify local files ignored by remote filter (if overlay)
-            // identify local files not existing remotely with no remote file type (ft overlay)
-            // identify remote files not existing locally (ro overlay)
-            // identify remote files with newer versions (nv overlay)
-            // no need to identify local files that have been changed.  If they have been checked out, identify those, and then just assume they have been changed. (cm overlay)
-
+            // Set cursor as default arrow
+            Cursor.Current = Cursors.Default;
 
         }
 
@@ -1174,7 +1185,8 @@ namespace HackPDM
                 }
                 else
                 {
-                    lstDepends = connDocMgrApi.GetDependencies(strFullName);
+                    SWDocMgr docMgr = new SWDocMgr(strSWDocMgrKey);
+                    lstDepends = docMgr.GetDependencies(strFullName);
                 }
 
                 if (lstDepends != null)
@@ -1345,16 +1357,33 @@ namespace HackPDM
             }
         }
 
-        protected byte[] GetLocalPreview(DataRow dr)
+        private byte[] GetLocalPreview(DataRow dr)
         {
 
+            IconFromFile ico = new IconFromFile();
+            Bitmap bmpImage;
             byte[] bImage;
             string strFullName = dr.Field<string>("absolute_path") + "\\" + dr.Field<string>("entry_name");
             string strFileExt = dr.Field<string>("file_ext").ToLower();
-            IconFromFile ico = new IconFromFile();
 
-            Image img = ico.GetThumbnail(strFullName, connDocMgrApi);
-            bImage = ImageToByteArray(img);
+            if (isSolidWorks(strFullName))
+            {
+                //SWDocMgr docMgr = new SWDocMgr(strSWDocMgrKey);
+                //stdole.IPictureDisp ipicPreview = docMgr.GetPreview(strFullName);
+                //bmpImage = (Bitmap)imgConv.GetPicture(ipicPreview);
+                
+                //bImage = docMgr.GetPreview3(strFullName);
+
+                bmpImage = (Bitmap)docMgr.GetPreview(strFullName);
+                bImage = ImageToByteArray(bmpImage);
+            }
+            else
+            {
+                bmpImage = (Bitmap)ico.GetThumbnail(strFullName);
+                bImage = ImageToByteArray(bmpImage);
+                // try to get preview image from other compound document
+            }
+
             return bImage;
 
         }
@@ -1445,13 +1474,20 @@ namespace HackPDM
             return Image.FromHbitmap(bitmap.GetHbitmap());
         }
 
-        private byte[] ImageToByteArray(System.Drawing.Image imageIn)
+        private static byte[] ImageToByteArray(System.Drawing.Image imageIn)
         {
             if (imageIn == null) return null;
             using (MemoryStream ms = new MemoryStream())
             {
-                imageIn.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-                return ms.ToArray();
+                try
+                {
+                    imageIn.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                    return ms.ToArray();
+                }
+                catch
+                {
+                    return null;
+                }
             }
         }
 
@@ -1598,7 +1634,8 @@ namespace HackPDM
 
         }
 
-        private Image GetLocalIcon(string FileName) {
+        private Image GetLocalIcon(string FileName)
+        {
 
             IconFromFile icoHelper = new IconFromFile();
             Icon ico = icoHelper.GetLargeFileIcon(FileName);
@@ -1612,6 +1649,15 @@ namespace HackPDM
                 return (Image)ico.ToBitmap();
             }
 
+        }
+
+        private static bool isSolidWorks(string fileName)
+        {
+    		string solidworksFilter = ".sldprt,.sldasm,.slddrw";
+            string ext = Path.GetExtension(fileName).ToLower();
+            if (ext == "")
+                return false;
+            return (solidworksFilter.IndexOf(ext) != -1 && File.Exists(fileName));
         }
 
         #endregion
@@ -2765,7 +2811,8 @@ namespace HackPDM
                     }
                     else
                     {
-                        lstDepends = connDocMgrApi.GetDependencies(strParentFullName, false);
+                        SWDocMgr docMgr = new SWDocMgr(strSWDocMgrKey);
+                        lstDepends = docMgr.GetDependencies(strParentFullName, false);
                     }
 
                     if (lstDepends != null)
@@ -3455,6 +3502,7 @@ namespace HackPDM
                 cmdInsertVersion.Parameters["file_modify_stamp"].Value = dtModifyDate;
                 cmdInsertVersion.Parameters["create_user"].Value = intMyUserId;
                 cmdInsertVersion.Parameters["create_node"].Value = intMyNodeId;
+                //SWDocMgr docMgr = new SWDocMgr(strSWDocMgrKey);
                 cmdInsertVersion.Parameters["preview_image"].Value = GetLocalPreview(drNewFile);
                 cmdInsertVersion.Parameters["md5sum"].Value = strMd5sum;
                 try
@@ -3554,7 +3602,8 @@ namespace HackPDM
             }
             else
             {
-                lstProps = connDocMgrApi.GetProperties(FullName);
+                SWDocMgr docMgr = new SWDocMgr(strSWDocMgrKey);
+                lstProps = docMgr.GetProperties(FullName);
             }
             //List<Tuple<string, string, string, object>> 
             
@@ -5864,4 +5913,45 @@ namespace HackPDM
 
 
     }
+
+
+
+
+    public class ImgConvert : System.Windows.Forms.AxHost
+    {
+
+        public ImgConvert()
+            : base("c932ba85-4374-101b-a56c-00aa003668dc")
+        {
+            // do nothing
+        }
+
+        private delegate Image GetPictureDel(stdole.IPictureDisp inPic);
+        public Image GetPicture(stdole.IPictureDisp inPic)
+        {
+            // expose GetPictureFromIPicture()
+            if (this.InvokeRequired)
+            {
+
+                // this is a worker thread so delegate the task to the UI thread
+                GetPictureDel del = new GetPictureDel(GetPicture);
+                this.Invoke(del, inPic);
+
+            }
+            else
+            {
+
+                // we are executing in the UI thread
+                return GetPictureFromIPicture(inPic);
+
+            }
+
+            return null;
+
+        }
+
+    }
+
+
+
 }
