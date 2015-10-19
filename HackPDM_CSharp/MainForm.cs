@@ -616,7 +616,7 @@ namespace HackPDM
                     intLastIndex = li.Index;
                 }
             }
-            listView1.EnsureVisible(intLastIndex);
+            if (listView1.Items.Count > 0) listView1.EnsureVisible(intLastIndex);
 
             // reset file type manager
             ftmStart.RefreshRemote();
