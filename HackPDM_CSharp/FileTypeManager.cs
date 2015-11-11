@@ -465,7 +465,14 @@ namespace HackPDM
 
             // use FileInfo to get file extension as recognized by windows
             FileInfo fiCurrFile = new FileInfo(strFileName);
-            strWinFileExt = fiCurrFile.Extension.Substring(1).ToLower();
+            if (fiCurrFile.Extension == "")
+            {
+                strWinFileExt = "";
+            }
+            else
+            {
+                strWinFileExt = fiCurrFile.Extension.Substring(1).ToLower();
+            }
 
             // get an exact match
             if (reAllTypes.IsMatch(strFileName) && reAllTypes.ToString() != "")
