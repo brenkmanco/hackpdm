@@ -272,7 +272,7 @@ namespace HackPDM
             // TODO: erase this stuff when building for release
             try
             {
-                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds_production.config");
+                var fileMap = new System.Configuration.ConfigurationFileMap("c:\\temp\\hackpdm_creds_production-admin.config");
                 var configuration = ConfigurationManager.OpenMappedMachineConfiguration(fileMap);
                 var sectionGroup = configuration.GetSectionGroup("tempSettingsGroup"); // This is the section group name, change to your needs
                 var section = (ClientSettingsSection)sectionGroup.Sections.Get("tempSettingsSection"); // This is the section name, change to your needs
@@ -1222,7 +1222,7 @@ namespace HackPDM
                         r.rel_parent_id,
                         r.rel_child_id,
                         e.entry_name,
-                        :absolute_path || '\\' || e.entry_name as full_name,
+                        :absolute_path || '\' || e.entry_name as full_name,
                         false as outside_pwa
                     from hp_version_relationship as r
                     left join hp_version as vp on vp.version_id=r.rel_parent_id
@@ -3533,10 +3533,10 @@ namespace HackPDM
                 foreach (DataRow drRel in drRels)
                 {
                     // either set the id on the parent side
-                    if (drRel.Field<string>("parent_name") == strFileName) drRel.SetField<int>("parent_id", intVersionId);
+                    if (drRel.Field<string>("parent_name").ToLower() == strFileName.ToLower()) drRel.SetField<int>("parent_id", intVersionId);
 
                     // or set the id on the child side
-                    if (drRel.Field<string>("child_name") == strFileName) drRel.SetField<int>("child_id", intVersionId);
+                    if (drRel.Field<string>("child_name").ToLower() == strFileName.ToLower()) drRel.SetField<int>("child_id", intVersionId);
                 }
 
 
@@ -3677,7 +3677,7 @@ namespace HackPDM
                 }
 
                 // establish string values
-                string strText = (strPropType == "text" ? "'" + ((string)oResolved).Replace("'", "\'").Replace("\\", "\\\\") + "'" : "NULL");
+                string strText = (strPropType == "text" ? "'" + ((string)oResolved).Replace("'", "''") + "'" : "NULL");
                 string strDate = (strPropType == "date" ? "'" + ((DateTime)oResolved).ToString("yyyy-mm-dd HH:mm:ss") + "'" : "NULL");
                 string strNumber = (strPropType == "number" ? ((Decimal)oResolved).ToString() : "NULL");
                 string strBool = (strPropType == "yesno" ? ((Boolean)oResolved).ToString() : "NULL");
@@ -3685,7 +3685,7 @@ namespace HackPDM
                 // add to the sql command
                 strSql += String.Format(strSqlTemplate,
                     VersionId,
-                    "'" + strConfigName.Replace("\\", "\\\\").Replace("'","\'") + "'",
+                    "'" + strConfigName.Replace("'","''") + "'",
                     intPropId,
                     strText,
                     strDate,

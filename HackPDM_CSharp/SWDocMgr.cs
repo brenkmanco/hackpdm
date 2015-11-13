@@ -148,19 +148,19 @@ namespace HackPDM
                     {
                         case SwDmCustomInfoType.swDmCustomInfoDate:
                             strPropType = "date";
-                            oPropValue = (DateTime)oPropValue;
+                            oPropValue = Convert.ToDateTime(oPropValue);
                             break;
                         case SwDmCustomInfoType.swDmCustomInfoNumber:
                             strPropType = "number";
-                            oPropValue = (Decimal)oPropValue;
+                            oPropValue = Convert.ToDecimal(oPropValue);
                             break;
                         case SwDmCustomInfoType.swDmCustomInfoText:
                             strPropType = "text";
-                            oPropValue = (String)oPropValue;
+                            oPropValue = Convert.ToString(oPropValue);
                             break;
                         case SwDmCustomInfoType.swDmCustomInfoYesOrNo:
                             strPropType = "yesno";
-                            oPropValue = (Boolean)oPropValue;
+                            oPropValue = oPropValue.Equals("Yes");
                             break;
                         case SwDmCustomInfoType.swDmCustomInfoUnknown:
                             strPropType = "";
@@ -203,15 +203,15 @@ namespace HackPDM
                     {
                         case SwDmCustomInfoType.swDmCustomInfoDate:
                             strPropType = "date";
-                            oPropValue = (DateTime)oPropValue;
+                            oPropValue = Convert.ToDateTime(oPropValue);
                             break;
                         case SwDmCustomInfoType.swDmCustomInfoNumber:
                             strPropType = "number";
-                            oPropValue = (Decimal)oPropValue;
+                            oPropValue = Convert.ToDecimal(oPropValue);
                             break;
                         case SwDmCustomInfoType.swDmCustomInfoText:
                             strPropType = "text";
-                            oPropValue = (String)oPropValue;
+                            oPropValue = Convert.ToString(oPropValue);
                             break;
                         case SwDmCustomInfoType.swDmCustomInfoYesOrNo:
                             strPropType = "yesno";
@@ -273,11 +273,11 @@ namespace HackPDM
             }
             catch
             {
-                DialogResult dr = MessageBox.Show("Failed to get solidworks preview image: " + FileName + ": " + ePrevError.ToString(),
-                    "Loading SW Preview",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Exclamation,
-                    MessageBoxDefaultButton.Button1);
+                //DialogResult dr = MessageBox.Show("Failed to get solidworks preview image: " + FileName + ": " + ePrevError.ToString(),
+                //    "Loading SW Preview",
+                //    MessageBoxButtons.OK,
+                //    MessageBoxIcon.Exclamation,
+                //    MessageBoxDefaultButton.Button1);
                 return null;
             }
 
@@ -322,11 +322,11 @@ namespace HackPDM
             }
             catch
             {
-                DialogResult dr = MessageBox.Show("Failed to get solidworks preview image: " + FileName + ": " + ePrevError.ToString(),
-                    "Loading SW Preview",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Exclamation,
-                    MessageBoxDefaultButton.Button1);
+                //DialogResult dr = MessageBox.Show("Failed to get solidworks preview image: " + FileName + ": " + ePrevError.ToString(),
+                //    "Loading SW Preview",
+                //    MessageBoxButtons.OK,
+                //    MessageBoxIcon.Exclamation,
+                //    MessageBoxDefaultButton.Button1);
                 swDoc.CloseDoc();
                 return null;
             }
