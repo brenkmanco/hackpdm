@@ -493,16 +493,25 @@ CREATE OR REPLACE FUNCTION fcn_dependency_recursive(IN parent_id_array integer[]
 $BODY$
 	WITH RECURSIVE child_versions (rel_parent_id, rel_child_id) AS (
 			SELECT
-				rel_parent_id,
-				rel_child_id
-			FROM hp_version_relationship
-			WHERE rel_parent_id in ( select unnest($1) )
+				r.rel_parent_id,
+				r.rel_child_id
+			FROM hp_version_relationship as r
+			LEFT JOIN hp_version as vp on vp.version_id=r.rel_parent_id
+			LEFT JOIN hp_entry as ep on ep.entry_id=vp.entry_id
+			LEFT JOIN hp_version as vc on vc.version_id=r.rel_child_id
+			LEFT JOIN hp_entry as ec on ec.entry_id=vc.entry_id
+			WHERE r.rel_parent_id in ( select unnest($1) )
+			AND ep.active=true
+			and ec.active=true
 		UNION -- union all can cause an infinite loop
 			SELECT
 				c.rel_parent_id,
 				c.rel_child_id
 			FROM child_versions AS p, hp_version_relationship AS c
+			LEFT JOIN hp_version as vc on vc.version_id=c.rel_child_id
+			LEFT JOIN hp_entry as ec on ec.entry_id=vc.entry_id
 			WHERE c.rel_parent_id=p.rel_child_id
+			and ec.active=true
 	)
 	SELECT DISTINCT
 		rel_parent_id,
@@ -724,21 +733,24 @@ $BODY$
 	left join view_dir_tree as d on d.dir_id = e.dir_id
 	left join lvs as v on v.entry_id=e.entry_id
 	left join hp_node as n on n.node_id=e.checkout_node
-	where e.dir_id in (select dir_id from dirs)
-	or e.entry_id in (
-		-- get dependency entries
-		select distinct v.entry_id
-		from fcn_dependency_recursive(
-			(select ARRAY(
-				-- using latest versions for entries under the specified directory
-				select v.version_id
-				from lvs as v
-				left join hp_entry as e on e.entry_id=v.entry_id
-				where e.dir_id in (select dir_id from dirs)
-			))
-		) as r
-		left join hp_version as v on v.version_id=r.rel_child_id
-	)
+	where e.active=true
+	and (
+	    e.dir_id in (select dir_id from dirs)
+	    or e.entry_id in (
+            -- get dependency entries
+            select distinct v.entry_id
+            from fcn_dependency_recursive(
+                (select ARRAY(
+                    -- using latest versions for entries under the specified directory
+                    select v.version_id
+                    from lvs as v
+                    left join hp_entry as e on e.entry_id=v.entry_id
+                    where e.dir_id in (select dir_id from dirs)
+                ))
+            ) as r
+            left join hp_version as v on v.version_id=r.rel_child_id
+        )
+    )
 	order by dir_id,entry_id;
 $BODY$
   LANGUAGE sql VOLATILE
