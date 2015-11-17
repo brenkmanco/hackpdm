@@ -116,7 +116,19 @@ namespace HackPDM
 
         public static string GetRelativePath(string strLocalFileRoot, string stringPath)
         {
-            // get tree path
+            // terminate paths to prevent matching with paths that begin the same as strLocalFileRoot
+            string strRootTest = strLocalFileRoot.ToUpper() + "\\";
+            string strPathTest = (stringPath.EndsWith("\\") ? stringPath + "\\" : stringPath + "\\");
+
+            // only return a value if this path is in strLocalFileRoot
+            if (strPathTest.Length < strRootTest.Length) return "";
+            if (!strPathTest.ToUpper().StartsWith(strRootTest))
+            {
+                return "";
+            }
+
+            // if we get here, this path is in the pwa
+            // get relative tree path
             string stringParse = "";
             // replace actual root path with pwa
             if (stringPath.IndexOf(strLocalFileRoot, 0, StringComparison.CurrentCultureIgnoreCase) != -1)
