@@ -1957,7 +1957,7 @@ namespace HackPDM
             }
 
             // log blocked files
-            DataRow[] drBlockedFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code='if' and (absolute_path + '\\') like '{0}\\%'", strLocalFileRoot.Replace("'", "''") + "\\"));
+            DataRow[] drBlockedFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code='if' and (absolute_path + '\\') like '{0}\\%'", strLocalFileRoot.Replace("'", "''")));
             foreach (DataRow drCurrent in drBlockedFiles)
             {
                 // check for cancellation
@@ -1989,7 +1989,7 @@ namespace HackPDM
             }
 
             // check for files over 2GB
-            DataRow[] drBigFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'if' and local_size>{0} and absolute_path like '{1}\\%'", lngMaxFileSize, strLocalFileRoot.Replace("'","''") + "\\"));
+            DataRow[] drBigFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'if' and local_size>{0} and absolute_path like '{1}\\%'", lngMaxFileSize, strLocalFileRoot.Replace("'", "''")));
             foreach (DataRow drCurrent in drBigFiles)
             {
                 // check for cancellation
@@ -2007,7 +2007,7 @@ namespace HackPDM
             }
 
             // check for write access
-            DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'if' and (absolute_path + '\\') like '{0}\\%'", strLocalFileRoot.Replace("'", "''") + "\\"));
+            DataRow[] drNewFiles = dsCommits.Tables["files"].Select(String.Format("client_status_code<>'if' and (absolute_path + '\\') like '{0}\\%'", strLocalFileRoot.Replace("'", "''")));
             Int32 intNewCount = drNewFiles.Length;
             for (int i = 0; i < drNewFiles.Length; i++)
             {
