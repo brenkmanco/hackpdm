@@ -111,15 +111,15 @@
       <HintPath>lib\OpenMcdf.dll</HintPath>
     </Reference>
     <Reference Include="SolidWorks.Interop.sldworks">
-      <HintPath>..\..\..\..\..\..\Program Files\SolidWorks Corp\SolidWorks 2015\SOLIDWORKS\SolidWorks.Interop.sldworks.dll</HintPath>
+      <HintPath>lib\SolidWorks.Interop.sldworks.dll</HintPath>
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
     <Reference Include="SolidWorks.Interop.swconst">
-      <HintPath>..\..\..\..\..\..\Program Files\SolidWorks Corp\SolidWorks 2015\SOLIDWORKS\SolidWorks.Interop.swconst.dll</HintPath>
+      <HintPath>lib\SolidWorks.Interop.swconst.dll</HintPath>
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
     <Reference Include="SolidWorks.Interop.swdocumentmgr">
-      <HintPath>..\..\..\..\..\..\Program Files\SolidWorks Corp\SolidWorks 2015\SOLIDWORKS\SolidWorks.Interop.swdocumentmgr.dll</HintPath>
+      <HintPath>lib\SolidWorks.Interop.swdocumentmgr.dll</HintPath>
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
     <Reference Include="stdole, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
@@ -148,9 +148,7 @@
     <Compile Include="FileTypeManager.Designer.cs">
       <DependentUpon>FileTypeManager.cs</DependentUpon>
     </Compile>
-    <Compile Include="IconFromFile.cs">
-      <SubType>Component</SubType>
-    </Compile>
+    <Compile Include="IconFromFile.cs" />
     <Compile Include="ListViewColumnSorter.cs" />
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>

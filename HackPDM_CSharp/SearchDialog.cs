@@ -134,7 +134,18 @@ namespace HackPDM
 
         private void btnSearch_Click(object sender, EventArgs e)
         {
-            int MAXCOUNT = 100;
+            // get max record count from text box
+            int MAXCOUNT = 0;
+            if (!int.TryParse(txtMaxRes.Text, out MAXCOUNT))
+            {
+                MessageBox.Show("Max Results must be an integer");
+                return;
+            }
+            else if (MAXCOUNT<1)
+            {
+                MessageBox.Show("Max Results must be a positive integer");
+                return;
+            }
             DataTable dtSearchResults = new DataTable();
             dtSearchResults.Columns.Add("rel_path", Type.GetType("System.String"));
             dtSearchResults.Columns.Add("entry_name", Type.GetType("System.String"));
@@ -177,7 +188,7 @@ namespace HackPDM
                 path = dr.Field<string>("rel_path");
 
                 // Add the file to the list view:
-                lvSearchResults.Items.Add(filename).SubItems.Add(Utils.GetAbsolutePath(strFilePath, path));
+                lvSearchResults.Items.Add(filename).SubItems.Add(path);
 
                 counter++;
                 if (counter >= MAXCOUNT)
@@ -200,57 +211,33 @@ namespace HackPDM
 
             // get all local files
             string[] strLocals = Directory.GetFiles(strFilePath, "*", SearchOption.AllDirectories);
+            List<string> allLocal = new List<string>(strLocals);
 
-            NpgsqlTransaction t = connDb.BeginTransaction();
+            // get all remote files
+            string strGetAllEntries = @"
+                select
+                    t.rel_path,
+                    e.entry_name
+                from hp_entry as e
+                left join view_dir_tree as t on t.dir_id=e.dir_id";
 
-            // clear and create temp table
-            string strMakeTempTable = @"
-                    drop table if exists _local;
-                    create temp table _local (
-                        rel_path varchar,
-                        entry_name varchar
-                    ) on commit drop;
-                ";
-            NpgsqlCommand cmdMakeTempTable = new NpgsqlCommand(strMakeTempTable, connDb, t);
-            cmdMakeTempTable.ExecuteNonQuery();
-
-            // build insert sql string
-            string strInsertSql = "insert into _local (rel_path, entry_name) values";
-            foreach (string s in strLocals)
-            {
-                // get relative path, formatted to match server paths
-                string strRelPathForm = Utils.GetParentDirectory(s);
-                strRelPathForm = strRelPathForm.Substring(strFilePath.Length, strRelPathForm.Length - strFilePath.Length);
-                strRelPathForm = strRelPathForm.Replace("\\", "/");
-                strRelPathForm = strRelPathForm.Replace("'", "''");
-
-                // append insert values
-                strInsertSql += String.Format("\n('{0}','{1}'),", strRelPathForm, Utils.GetBaseName(s));
-            }
-
-            strInsertSql = strInsertSql.Remove(strInsertSql.Length - 1); // remove trailing comma
-            strInsertSql += ";"; // add trailing semi-colon
-
-            // push file list to server temp table
-            NpgsqlCommand cmdPushFileList = new NpgsqlCommand(strInsertSql, connDb, t);
-            cmdPushFileList.ExecuteNonQuery();
-
-            string strGetLocalOnly = @"
-                    SELECT l.rel_path,l.entry_name
-                    FROM _local AS l
-                    LEFT JOIN view_dir_tree AS t ON lower(t.rel_path)=lower(l.rel_path)
-                    LEFT JOIN hp_entry AS e ON lower(l.entry_name)=lower(e.entry_name) AND e.dir_id=t.dir_id
-                    WHERE e.entry_id IS NULL
-                    AND l.entry_name not like '~%'
-                    ORDER BY l.rel_path, l.entry_name
-                    LIMIT " + MAXCOUNT.ToString() + ";";
-
-            // execute and retrieve data
-            NpgsqlCommand cmdGetResults = new NpgsqlCommand(strGetLocalOnly, connDb, t);
-            NpgsqlDataAdapter daGetResults = new NpgsqlDataAdapter(cmdGetResults);
             try
             {
-                daGetResults.Fill(dtSearchResults);
+                using (NpgsqlCommand cmdAllRemote = new NpgsqlCommand(strGetAllEntries, connDb))
+                {
+                    using (NpgsqlDataReader drAllRemote = cmdAllRemote.ExecuteReader())
+                    {
+                        while (drAllRemote.Read())
+                        {
+                            // get local absolute path from remote relative path
+                            string relPath = drAllRemote.GetString(0);
+                            string entryName = drAllRemote.GetString(1);
+                            string absPathName = strFilePath + relPath.Replace("/", "\\") + "\\" + entryName;
+                            // remove the local file from the list if it exists remotely
+                            allLocal.Remove(absPathName);
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -258,10 +245,33 @@ namespace HackPDM
                     "Data Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
-                t.Rollback();
                 return true;
             }
-            t.Commit();
+
+            int resCount = 1;
+            foreach (string s in allLocal)
+            {
+                if (resCount > MAXCOUNT)
+                {
+                    return false;
+                }
+                if (s.Contains("\\~"))
+                {
+                    continue;
+                }
+                // get relative path, formatted to match server paths
+                string strRelPathForm = Utils.GetParentDirectory(s);
+                strRelPathForm = strRelPathForm.Substring(strFilePath.Length, strRelPathForm.Length - strFilePath.Length);
+                strRelPathForm = strRelPathForm.Replace("\\", "/");
+                strRelPathForm = strRelPathForm.Replace("'", "''");
+                if (strRelPathForm == "")
+                {
+                    strRelPathForm = "/";
+                }
+                // and add it to the results table
+                dtSearchResults.Rows.Add(new object[] { strRelPathForm, Utils.GetBaseName(s) });
+                resCount++;
+            }
 
             return false;
 

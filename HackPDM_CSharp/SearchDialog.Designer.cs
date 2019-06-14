@@ -47,6 +47,8 @@
             this.openToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cbxLocalOnly = new System.Windows.Forms.CheckBox();
             this.btnReset = new System.Windows.Forms.Button();
+            this.txtMaxRes = new System.Windows.Forms.TextBox();
+            this.lblMaxRes = new System.Windows.Forms.Label();
             this.cmsListItemMenu.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -114,6 +116,7 @@
             // 
             // btnSearch
             // 
+            this.btnSearch.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.btnSearch.Location = new System.Drawing.Point(871, 12);
             this.btnSearch.Name = "btnSearch";
             this.btnSearch.Size = new System.Drawing.Size(75, 23);
@@ -124,6 +127,7 @@
             // 
             // btnCancel
             // 
+            this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
             this.btnCancel.Location = new System.Drawing.Point(871, 41);
             this.btnCancel.Name = "btnCancel";
@@ -146,6 +150,9 @@
             // 
             // lvSearchResults
             // 
+            this.lvSearchResults.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.lvSearchResults.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
             this.columnHeader1,
             this.columnHeader2});
@@ -203,6 +210,7 @@
             // 
             // btnReset
             // 
+            this.btnReset.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.btnReset.Location = new System.Drawing.Point(871, 84);
             this.btnReset.Name = "btnReset";
             this.btnReset.RightToLeft = System.Windows.Forms.RightToLeft.No;
@@ -212,6 +220,23 @@
             this.btnReset.UseVisualStyleBackColor = true;
             this.btnReset.Click += new System.EventHandler(this.btnReset_Click);
             // 
+            // txtMaxRes
+            // 
+            this.txtMaxRes.Location = new System.Drawing.Point(505, 84);
+            this.txtMaxRes.Name = "txtMaxRes";
+            this.txtMaxRes.Size = new System.Drawing.Size(54, 20);
+            this.txtMaxRes.TabIndex = 92;
+            this.txtMaxRes.Text = "100";
+            // 
+            // lblMaxRes
+            // 
+            this.lblMaxRes.AutoSize = true;
+            this.lblMaxRes.Location = new System.Drawing.Point(434, 86);
+            this.lblMaxRes.Name = "lblMaxRes";
+            this.lblMaxRes.Size = new System.Drawing.Size(65, 13);
+            this.lblMaxRes.TabIndex = 93;
+            this.lblMaxRes.Text = "Max Results";
+            // 
             // SearchDialog
             // 
             this.AcceptButton = this.btnSearch;
@@ -219,6 +244,8 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.btnCancel;
             this.ClientSize = new System.Drawing.Size(960, 554);
+            this.Controls.Add(this.lblMaxRes);
+            this.Controls.Add(this.txtMaxRes);
             this.Controls.Add(this.btnReset);
             this.Controls.Add(this.cbxLocalOnly);
             this.Controls.Add(this.lvSearchResults);
@@ -260,5 +287,7 @@
         private System.Windows.Forms.ColumnHeader columnHeader1;
         private System.Windows.Forms.ColumnHeader columnHeader2;
         private System.Windows.Forms.Button btnReset;
+        private System.Windows.Forms.TextBox txtMaxRes;
+        private System.Windows.Forms.Label lblMaxRes;
     }
 }

@@ -52,6 +52,17 @@ namespace HackPDM
 {
     /// <summary>
     /// Description of MainForm.
+    /// client_status_code:
+    ///     ro = remote only
+    ///     lo = local only
+    ///     nv = new remote version
+    ///     cm = checked out to me
+    ///     co = checked out to other
+    ///     if = ignore filter
+    ///     ft = no remote file type
+    ///     lm = local modification
+    ///     dt = deleted
+    ///     ds = destroyed
     /// </summary>
 
 
@@ -621,6 +632,9 @@ namespace HackPDM
             // reset file type manager
             ftmStart.RefreshRemote();
 
+            // set the Show Deleted checkbox
+            //chkShowDeleted.Checked = blnShowDeleted;
+
             // Set cursor as default arrow
             Cursor.Current = Cursors.Default;
 
@@ -818,7 +832,10 @@ namespace HackPDM
                         n.node_name as checkout_node_name,
                         false as is_local,
                         true as is_remote,
-                        case when e.active then 'ro'::varchar else 'dt'::varchar end as client_status_code,
+                        case
+                            when e.destroyed then 'ds'::varchar
+                            when e.active then 'ro'::varchar
+                            else 'dt'::varchar end as client_status_code,
                         :rel_path as relative_path,
                         :abs_path as absolute_path,
                         t.icon,
@@ -934,6 +951,7 @@ namespace HackPDM
                         ilListIcons.Images.Add(strFileExt + ".ft", ImageOverlay(imgCurrent, ilListIcons.Images["ft"])); // no remote file type
                         ilListIcons.Images.Add(strFileExt + ".lm", ImageOverlay(imgCurrent, ilListIcons.Images["lm"])); // local modification
                         ilListIcons.Images.Add(strFileExt + ".dt", ImageOverlay(imgCurrent, ilListIcons.Images["dt"])); // deleted
+                        ilListIcons.Images.Add(strFileExt + ".ds", ImageOverlay(imgCurrent, ilListIcons.Images["ds"])); // destroyed
 
                     }
 
@@ -942,7 +960,7 @@ namespace HackPDM
                     lvItem.ImageKey = strFileExt + strOverlay;
 
                     // show it in the list view
-                    if ( row.Field<bool>("active") )
+                    if ( row.Field<bool>("active") || blnShowDeleted )
                     {
                         // but, only if it is active (not deleted)
                         listView1.Items.Add(lvItem);
@@ -2386,8 +2404,6 @@ namespace HackPDM
 
         void worker_Delete(object sender, DoWorkEventArgs e)
         {
-            // TODO: make permanent and logical delete methods use the same worker
-            // that requires us to pass a permanent flag argument to the worker
 
             BackgroundWorker myWorker = sender as BackgroundWorker;
             dlgStatus.AddStatusLine("INFO", "Starting Permanent Delete worker");
@@ -2419,7 +2435,7 @@ namespace HackPDM
                 blnFailed = true;
             }
 
-            // check for locked files
+            // TODO: check for locked files
             DataRow[] drDeleteFiles = dsDeletes.Tables["files"].Select("checkout_user is null");
             Int32 intNewCount = drDeleteFiles.Length;
             for (int i = 0; i < drDeleteFiles.Length; i++)
@@ -2521,6 +2537,58 @@ namespace HackPDM
             {
                 t.Commit();
 
+            }
+
+        }
+
+        void worker_UnDelete(object sender, DoWorkEventArgs e)
+        {
+            BackgroundWorker myWorker = sender as BackgroundWorker;
+            dlgStatus.AddStatusLine("INFO", "Starting UnDelete worker");
+
+            // get arguments
+            List<object> genericlist = e.Argument as List<object>;
+            NpgsqlTransaction t = (NpgsqlTransaction)genericlist[0];
+            string strRelBasePath = (string)genericlist[1];
+            List<string> lstSelectedNames = (List<string>)genericlist[2];
+
+            bool blnDeleteDirs = (lstSelectedNames == null);
+
+            // get deletes data
+            DataSet dsDeletes = LoadDeletesData(sender, e, t, strRelBasePath, lstSelectedNames);
+
+            // check that files are logically deleted and not destroyed
+            DataRow[] drDestroyed = dsDeletes.Tables["files"].Select("destroyed=true");
+            foreach (DataRow dr in drDestroyed)
+            {
+                dlgStatus.AddStatusLine("WARNING", String.Format("{0} was destroyed. Can't undelete.", dr.Field<string>("entry_name")));
+            }
+
+            // start commiting data
+            bool blnFailed = false;
+
+            // unflag as deleted all remote versions, entries
+            if (blnFailed == false)
+            {
+                blnFailed = blnFailed || UnDeleteRemoteEntries(sender, e, t, ref dsDeletes);
+            }
+
+            // unflag as deleted all remote directories
+            if (blnFailed == false && blnDeleteDirs == true)
+            {
+                blnFailed = blnFailed || UnDeleteRemoteDirs(sender, e, t, ref dsDeletes);
+            }
+
+            // commit to database
+            if (blnFailed == true)
+            {
+                // roll back database work
+                t.Rollback();
+                throw new System.Exception("Operation failed. Rolling back the database transaction.");
+            }
+            else
+            {
+                t.Commit();
             }
 
         }
@@ -4067,7 +4135,7 @@ namespace HackPDM
                     dr.SetField<string>("absolute_path", Utils.GetAbsolutePath(strLocalFileRoot, dr.Field<string>("relative_path")));
                 }
 
-                // select entries in or below the specified direcory
+                // select entries in or below the specified directory
                 // don't select dependencies of those entries
                 strSql = "select * from fcn_latest_by_dir(:dir_id);";
 
@@ -4783,6 +4851,116 @@ namespace HackPDM
             cmdInactivateDir.Parameters.AddWithValue("mod_stamp", DateTime.Now);
 
             // try deleting (inactivating)
+            try
+            {
+                cmdInactivateDir.ExecuteNonQuery();
+            }
+            catch (NpgsqlException ex)
+            {
+                // integrity constraint violation?
+                dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                blnFailed = true;
+            }
+
+            return blnFailed;
+
+        }
+
+        private bool UnDeleteRemoteEntries(object sender, DoWorkEventArgs e, NpgsqlTransaction t, ref DataSet dsDeletes)
+        {
+
+            // we can't undelete permanent deletes, only logical deletes
+
+            BackgroundWorker myWorker = sender as BackgroundWorker;
+            bool blnFailed = false;
+
+            // make sure we are working inside of a transaction
+            if (t.Connection == null)
+            {
+                MessageBox.Show("The database transaction is not functional");
+                return true;
+            }
+
+            string strSql;
+
+            // build comma separated list of entries
+            string strEntries = "";
+            foreach (DataRow row in dsDeletes.Tables["files"].Rows)
+            {
+                strEntries += row.Field<int>("entry_id").ToString() + ",";
+            }
+
+            // drop trailing comma
+            strEntries = strEntries.Substring(0, strEntries.Length - 1);
+
+            // prepare a database command to undelete (activate) entries, all-at-once
+            strSql = @"
+                update hp_entry set
+                    active=true,
+                    delete_user=NULL,
+                    delete_stamp=NULL
+                where destroyed=false
+                and entry_id in (" + strEntries + ")";
+
+            NpgsqlCommand cmdActivateEntry = new NpgsqlCommand(strSql, connDb, t);
+
+            // try undeleting (activating)
+            try
+            {
+                cmdActivateEntry.ExecuteNonQuery();
+            }
+            catch (NpgsqlException ex)
+            {
+                // integrity constraint violation?
+                dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                blnFailed = true;
+            }
+
+            return blnFailed;
+
+        }
+
+        private bool UnDeleteRemoteDirs(object sender, DoWorkEventArgs e, NpgsqlTransaction t, ref DataSet dsDeletes)
+        {
+
+            // we can't undelete permanent deletes, only logical deletes
+
+            BackgroundWorker myWorker = sender as BackgroundWorker;
+            bool blnFailed = false;
+
+            // make sure we are working inside of a transaction
+            if (t.Connection == null)
+            {
+                MessageBox.Show("The database transaction is not functional");
+                return true;
+            }
+
+            // return when no directories to be undeleted
+            if (dsDeletes.Tables["dirs"].Rows.Count < 1) return blnFailed;
+
+            string strSql;
+
+            // build comma separated list of dirs
+            string strDirs = "";
+            foreach (DataRow row in dsDeletes.Tables["dirs"].Rows)
+            {
+                strDirs += row.Field<int>("dir_id").ToString() + ",";
+            }
+
+            // drop trailing comma
+            strDirs = strDirs.Substring(0, strDirs.Length - 1);
+
+            // prepare a database command to undelete (activate) directories, all-at-once
+            strSql = @"
+                update hp_directory set
+                    active=true,
+                    modify_user=NULL,
+                    modify_stamp=NULL
+                where dir_id in (" + strDirs + ")";
+
+            NpgsqlCommand cmdInactivateDir = new NpgsqlCommand(strSql, connDb, t);
+
+            // try undeleting (activating)
             try
             {
                 cmdInactivateDir.ExecuteNonQuery();
@@ -5934,6 +6112,71 @@ namespace HackPDM
 
         }
 
+        private void CmsUnDeleteToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+
+            // refresh file data
+            LoadListData(treeView1.SelectedNode.FullPath);
+
+            // create the status dialog
+            dlgStatus = new StatusDialog();
+
+            // get directory info from the tree view
+            TreeNode tnCurrent = treeView1.SelectedNode;
+            string strRelBasePath = tnCurrent.FullPath;
+
+            // get a list of selected items
+            List<string> lstSelectedNames = new List<string>();
+            ListView.SelectedListViewItemCollection lviSelection = listView1.SelectedItems;
+            foreach (ListViewItem lviSelected in lviSelection)
+            {
+                lstSelectedNames.Add(lviSelected.SubItems[0].Text.Replace("'", "''"));
+            }
+
+            // start the database transaction
+            t = connDb.BeginTransaction();
+
+            // package arguments for the background worker
+            List<object> arguments = new List<object>();
+
+            arguments.Add(t);
+            arguments.Add(strRelBasePath);
+            arguments.Add(lstSelectedNames);
+
+            // launch the background thread
+            BackgroundWorker worker = new BackgroundWorker();
+            worker.WorkerSupportsCancellation = true;
+            worker.DoWork += new DoWorkEventHandler(worker_UnDelete);
+            worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(worker_RunWorkerCompleted);
+            worker.RunWorkerAsync(arguments);
+
+            // show dialog and handle cancel button
+            bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Delete Logical");
+            if (blnWorkCanceled == true)
+            {
+                worker.CancelAsync();
+            }
+
+            ResetView(tnCurrent.FullPath);
+
+        }
+
+        private void ChkShowDeleted_CheckedChanged(object sender, EventArgs e)
+        {
+            blnShowDeleted = chkShowDeleted.Checked;
+            ResetView(treeView1.SelectedNode.FullPath);
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.F))
+            {
+                SearchDialog srchdialog = new SearchDialog(connDb, strLocalFileRoot, intMyUserId, ShowFileInTree, StoreSearchParams, FileContainsText, PropDropDownText, PropContainsText, CheckedOutMeBox, DeletedLocalBox, LocalOnlyBox);
+                srchdialog.ShowDialog();
+                listView1.Focus();
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
 
     }
 

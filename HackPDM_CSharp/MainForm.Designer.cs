@@ -55,6 +55,7 @@ namespace HackPDM
             this.cmsListUndoCheckout = new System.Windows.Forms.ToolStripMenuItem();
             this.logicalDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.logicalDeleteToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+            this.unDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.permanentDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.openToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.ilListIcons = new System.Windows.Forms.ImageList(this.components);
@@ -77,6 +78,7 @@ namespace HackPDM
             this.lvChildren = new System.Windows.Forms.ListView();
             this.tabPage4 = new System.Windows.Forms.TabPage();
             this.lvProperties = new System.Windows.Forms.ListView();
+            this.chkShowDeleted = new System.Windows.Forms.CheckBox();
             this.cmsTree.SuspendLayout();
             this.cmsList.SuspendLayout();
             this.statusStrip1.SuspendLayout();
@@ -233,6 +235,7 @@ namespace HackPDM
             // 
             this.logicalDeleteToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.logicalDeleteToolStripMenuItem1,
+            this.unDeleteToolStripMenuItem,
             this.permanentDeleteToolStripMenuItem});
             this.logicalDeleteToolStripMenuItem.Name = "logicalDeleteToolStripMenuItem";
             this.logicalDeleteToolStripMenuItem.Size = new System.Drawing.Size(132, 22);
@@ -245,6 +248,13 @@ namespace HackPDM
             this.logicalDeleteToolStripMenuItem1.Text = "Logical Delete";
             this.logicalDeleteToolStripMenuItem1.Click += new System.EventHandler(this.CmsListDeleteLogicalClick);
             // 
+            // unDeleteToolStripMenuItem
+            // 
+            this.unDeleteToolStripMenuItem.Name = "unDeleteToolStripMenuItem";
+            this.unDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
+            this.unDeleteToolStripMenuItem.Text = "UnDelete";
+            this.unDeleteToolStripMenuItem.Click += new System.EventHandler(this.CmsUnDeleteToolStripMenuItem_Click);
+            // 
             // permanentDeleteToolStripMenuItem
             // 
             this.permanentDeleteToolStripMenuItem.Name = "permanentDeleteToolStripMenuItem";
@@ -255,6 +265,7 @@ namespace HackPDM
             // openToolStripMenuItem
             // 
             this.openToolStripMenuItem.Name = "openToolStripMenuItem";
+            this.openToolStripMenuItem.ShortcutKeys = ((System.Windows.Forms.Keys)((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.O)));
             this.openToolStripMenuItem.Size = new System.Drawing.Size(132, 22);
             this.openToolStripMenuItem.Text = "Open";
             this.openToolStripMenuItem.Click += new System.EventHandler(this.openToolStripMenuItem_Click);
@@ -272,6 +283,7 @@ namespace HackPDM
             this.ilListIcons.Images.SetKeyName(6, "lm");
             this.ilListIcons.Images.SetKeyName(7, "dt");
             this.ilListIcons.Images.SetKeyName(8, "if");
+            this.ilListIcons.Images.SetKeyName(9, "ds");
             // 
             // statusStrip1
             // 
@@ -299,21 +311,21 @@ namespace HackPDM
             // cmdRefreshView
             // 
             this.cmdRefreshView.Name = "cmdRefreshView";
-            this.cmdRefreshView.Size = new System.Drawing.Size(172, 22);
+            this.cmdRefreshView.Size = new System.Drawing.Size(180, 22);
             this.cmdRefreshView.Text = "Refresh View";
             this.cmdRefreshView.Click += new System.EventHandler(this.CmdRefreshViewClick);
             // 
             // searchToolStripMenuItem
             // 
             this.searchToolStripMenuItem.Name = "searchToolStripMenuItem";
-            this.searchToolStripMenuItem.Size = new System.Drawing.Size(172, 22);
+            this.searchToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             this.searchToolStripMenuItem.Text = "Search";
             this.searchToolStripMenuItem.Click += new System.EventHandler(this.CmdSearchClick);
             // 
             // cmdManageFileTypes
             // 
             this.cmdManageFileTypes.Name = "cmdManageFileTypes";
-            this.cmdManageFileTypes.Size = new System.Drawing.Size(172, 22);
+            this.cmdManageFileTypes.Size = new System.Drawing.Size(180, 22);
             this.cmdManageFileTypes.Text = "Manage File Types";
             this.cmdManageFileTypes.Click += new System.EventHandler(this.CmdManageFileTypesClick);
             // 
@@ -501,11 +513,24 @@ namespace HackPDM
             this.lvProperties.UseCompatibleStateImageBehavior = false;
             this.lvProperties.View = System.Windows.Forms.View.Details;
             // 
+            // chkShowDeleted
+            // 
+            this.chkShowDeleted.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.chkShowDeleted.AutoSize = true;
+            this.chkShowDeleted.Location = new System.Drawing.Point(82, 601);
+            this.chkShowDeleted.Name = "chkShowDeleted";
+            this.chkShowDeleted.Size = new System.Drawing.Size(93, 17);
+            this.chkShowDeleted.TabIndex = 4;
+            this.chkShowDeleted.Text = "Show Deleted";
+            this.chkShowDeleted.UseVisualStyleBackColor = true;
+            this.chkShowDeleted.CheckedChanged += new System.EventHandler(this.ChkShowDeleted_CheckedChanged);
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(884, 618);
+            this.Controls.Add(this.chkShowDeleted);
             this.Controls.Add(this.splitContainer1);
             this.Controls.Add(this.statusStrip1);
             this.Name = "MainForm";
@@ -572,5 +597,7 @@ namespace HackPDM
         private System.Windows.Forms.ToolStripMenuItem permanentDeleteToolStripMenuItem1;
         private System.Windows.Forms.ToolStripMenuItem searchToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem openToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem unDeleteToolStripMenuItem;
+        private System.Windows.Forms.CheckBox chkShowDeleted;
     }
 }

@@ -99,7 +99,6 @@ namespace HackPDM
  //           if (stringPath.Substring(0, 3) == "pwa")
             if (!System.IO.Path.IsPathRooted(stringPath))
             {
-                //replace pwa with actual root path
                 return (strLocalFileRoot + stringPath.Substring(3));
             }
             else
