@@ -33,6 +33,7 @@ namespace HackPDM
     {
         
         private bool blnCanceled = false;
+        int ErrorCount = 0;
         
         public bool Canceled {
             get { return blnCanceled; }
@@ -81,9 +82,13 @@ namespace HackPDM
                 ListViewItem lvItem = new ListViewItem(Params);
 
                 // set background color, based on status action
-                if (Params[0]=="WARNING") { lvItem.BackColor = Color.Yellow; }
-                else if (Params[0]=="ERROR") { lvItem.BackColor = Color.Red; }
-                
+                if (Params[0] == "WARNING")
+                    lvItem.BackColor = Color.Yellow;
+                else if (Params[0] == "ERROR")
+                {
+                    lvItem.BackColor = Color.Red;
+                    ErrorCount++;
+                }
                 lvMessages.Items.Add(lvItem);
                 lvMessages.EnsureVisible(lvMessages.Items.Count - 1);
 
@@ -102,12 +107,14 @@ namespace HackPDM
         }
         
         public void OperationCompleted() {
-            if (cbxAutoClose.Checked == true) {
-                this.Close();
-            } else {
+            if (ErrorCount != 0)
+            {
+                AddStatusLine("ERROR", String.Format("Encountered {0} errors", ErrorCount));
                 cmdCancel.Enabled = false;
                 cmdClose.Enabled = true;
             }
+            else if (cbxAutoClose.Checked == true)
+                this.Close();
         }
         
         

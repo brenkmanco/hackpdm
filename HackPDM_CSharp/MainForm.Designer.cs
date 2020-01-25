@@ -311,21 +311,21 @@ namespace HackPDM
             // cmdRefreshView
             // 
             this.cmdRefreshView.Name = "cmdRefreshView";
-            this.cmdRefreshView.Size = new System.Drawing.Size(180, 22);
+            this.cmdRefreshView.Size = new System.Drawing.Size(172, 22);
             this.cmdRefreshView.Text = "Refresh View";
             this.cmdRefreshView.Click += new System.EventHandler(this.CmdRefreshViewClick);
             // 
             // searchToolStripMenuItem
             // 
             this.searchToolStripMenuItem.Name = "searchToolStripMenuItem";
-            this.searchToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.searchToolStripMenuItem.Size = new System.Drawing.Size(172, 22);
             this.searchToolStripMenuItem.Text = "Search";
             this.searchToolStripMenuItem.Click += new System.EventHandler(this.CmdSearchClick);
             // 
             // cmdManageFileTypes
             // 
             this.cmdManageFileTypes.Name = "cmdManageFileTypes";
-            this.cmdManageFileTypes.Size = new System.Drawing.Size(180, 22);
+            this.cmdManageFileTypes.Size = new System.Drawing.Size(172, 22);
             this.cmdManageFileTypes.Text = "Manage File Types";
             this.cmdManageFileTypes.Click += new System.EventHandler(this.CmdManageFileTypesClick);
             // 
@@ -441,6 +441,7 @@ namespace HackPDM
             // lvHistory
             // 
             this.lvHistory.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.lvHistory.HideSelection = false;
             this.lvHistory.Location = new System.Drawing.Point(3, 3);
             this.lvHistory.Name = "lvHistory";
             this.lvHistory.Size = new System.Drawing.Size(602, 250);
@@ -464,6 +465,7 @@ namespace HackPDM
             // lvParents
             // 
             this.lvParents.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.lvParents.HideSelection = false;
             this.lvParents.Location = new System.Drawing.Point(3, 3);
             this.lvParents.Name = "lvParents";
             this.lvParents.Size = new System.Drawing.Size(602, 250);
@@ -485,6 +487,7 @@ namespace HackPDM
             // lvChildren
             // 
             this.lvChildren.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.lvChildren.HideSelection = false;
             this.lvChildren.Location = new System.Drawing.Point(3, 3);
             this.lvChildren.Name = "lvChildren";
             this.lvChildren.Size = new System.Drawing.Size(602, 250);
@@ -506,6 +509,7 @@ namespace HackPDM
             // lvProperties
             // 
             this.lvProperties.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.lvProperties.HideSelection = false;
             this.lvProperties.Location = new System.Drawing.Point(3, 3);
             this.lvProperties.Name = "lvProperties";
             this.lvProperties.Size = new System.Drawing.Size(602, 250);
@@ -533,6 +537,7 @@ namespace HackPDM
             this.Controls.Add(this.chkShowDeleted);
             this.Controls.Add(this.splitContainer1);
             this.Controls.Add(this.statusStrip1);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "MainForm";
             this.Text = "HackPDM";
             this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.MainFormFormClosed);

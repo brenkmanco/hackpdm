@@ -6018,12 +6018,15 @@ namespace HackPDM
 
         void CmdSearchClick(object sender, EventArgs e)
         {
-            // load the search dialog:
+            DoSearch();
+        }
 
+        void DoSearch()
+        {
+            // load the search dialog:
             SearchDialog srchdialog = new SearchDialog(connDb, strLocalFileRoot, intMyUserId, ShowFileInTree, StoreSearchParams, FileContainsText, PropDropDownText, PropContainsText, CheckedOutMeBox, DeletedLocalBox, LocalOnlyBox);
             srchdialog.ShowDialog();
             listView1.Focus();
-
         }
 
 
@@ -6171,9 +6174,8 @@ namespace HackPDM
         {
             if (keyData == (Keys.Control | Keys.F))
             {
-                SearchDialog srchdialog = new SearchDialog(connDb, strLocalFileRoot, intMyUserId, ShowFileInTree, StoreSearchParams, FileContainsText, PropDropDownText, PropContainsText, CheckedOutMeBox, DeletedLocalBox, LocalOnlyBox);
-                srchdialog.ShowDialog();
-                listView1.Focus();
+                DoSearch();
+                return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
