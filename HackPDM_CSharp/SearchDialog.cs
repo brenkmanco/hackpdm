@@ -57,15 +57,17 @@ namespace HackPDM
             NpgsqlCommand command = new NpgsqlCommand(strcomm, connDb);
             try
             {
-                NpgsqlDataReader dr = command.ExecuteReader();
-                while (dr.Read())
+                using (NpgsqlDataReader dr = command.ExecuteReader())
                 {
-                    // Add the property to the drop-down box:
-                    cboProperty.Items.Add(dr["prop_name"]);
+                    while (dr.Read())
+                    {
+                        // Add the property to the drop-down box:
+                        cboProperty.Items.Add(dr["prop_name"]);
 
-                    // Add the property to the PropTypeMap:
-                    var t = new Tuple<string, string>(dr["prop_type"].ToString(), dr["prop_id"].ToString());
-                    PropTypeMap.Add(dr["prop_name"].ToString(), t);
+                        // Add the property to the PropTypeMap:
+                        var t = new Tuple<string, string>(dr["prop_type"].ToString(), dr["prop_id"].ToString());
+                        PropTypeMap.Add(dr["prop_name"].ToString(), t);
+                    }
                 }
             }
             catch (Exception ex)

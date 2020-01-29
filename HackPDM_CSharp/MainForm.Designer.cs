@@ -311,21 +311,21 @@ namespace HackPDM
             // cmdRefreshView
             // 
             this.cmdRefreshView.Name = "cmdRefreshView";
-            this.cmdRefreshView.Size = new System.Drawing.Size(172, 22);
+            this.cmdRefreshView.Size = new System.Drawing.Size(170, 22);
             this.cmdRefreshView.Text = "Refresh View";
             this.cmdRefreshView.Click += new System.EventHandler(this.CmdRefreshViewClick);
             // 
             // searchToolStripMenuItem
             // 
             this.searchToolStripMenuItem.Name = "searchToolStripMenuItem";
-            this.searchToolStripMenuItem.Size = new System.Drawing.Size(172, 22);
+            this.searchToolStripMenuItem.Size = new System.Drawing.Size(170, 22);
             this.searchToolStripMenuItem.Text = "Search";
             this.searchToolStripMenuItem.Click += new System.EventHandler(this.CmdSearchClick);
             // 
             // cmdManageFileTypes
             // 
             this.cmdManageFileTypes.Name = "cmdManageFileTypes";
-            this.cmdManageFileTypes.Size = new System.Drawing.Size(172, 22);
+            this.cmdManageFileTypes.Size = new System.Drawing.Size(170, 22);
             this.cmdManageFileTypes.Text = "Manage File Types";
             this.cmdManageFileTypes.Click += new System.EventHandler(this.CmdManageFileTypesClick);
             // 
@@ -348,6 +348,7 @@ namespace HackPDM
             this.splitContainer1.Size = new System.Drawing.Size(884, 596);
             this.splitContainer1.SplitterDistance = 310;
             this.splitContainer1.TabIndex = 3;
+            this.splitContainer1.SplitterMoved += new System.Windows.Forms.SplitterEventHandler(this.splitContainer1_SplitterMoved);
             // 
             // splitContainer2
             // 
@@ -365,6 +366,7 @@ namespace HackPDM
             this.splitContainer2.Size = new System.Drawing.Size(884, 310);
             this.splitContainer2.SplitterDistance = 267;
             this.splitContainer2.TabIndex = 0;
+            this.splitContainer2.SplitterMoved += new System.Windows.Forms.SplitterEventHandler(this.splitContainer2_SplitterMoved);
             // 
             // treeView1
             // 
@@ -395,6 +397,7 @@ namespace HackPDM
             this.listView1.UseCompatibleStateImageBehavior = false;
             this.listView1.View = System.Windows.Forms.View.Details;
             this.listView1.ColumnClick += new System.Windows.Forms.ColumnClickEventHandler(this.lv1ColumnClick);
+            this.listView1.ColumnWidthChanged += new System.Windows.Forms.ColumnWidthChangedEventHandler(this.listView1_ColumnWidthChanged);
             this.listView1.SelectedIndexChanged += new System.EventHandler(this.ListView1SelectedIndexChanged);
             this.listView1.MouseClick += new System.Windows.Forms.MouseEventHandler(this.ListRightMouseClick);
             // 

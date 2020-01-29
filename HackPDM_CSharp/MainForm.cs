@@ -38,8 +38,6 @@ using System.Configuration;
 using System.IO;
 using System.Data;
 using Npgsql;
-using NpgsqlTypes;
-//using LibRSync.Core;
 using System.Security.Cryptography;
 
 
@@ -72,7 +70,7 @@ namespace HackPDM
 
         #region declarations
 
-    //    public delegate void Delegate_ShowFileInTree(string filepath);
+        // public delegate void Delegate_ShowFileInTree(string filepath);
 
         public static ImgConvert imgConv = new ImgConvert();
 
@@ -124,17 +122,22 @@ namespace HackPDM
         string DeletedLocalBox;
         string LocalOnlyBox;
 
+        // For storing window layout settings
+        List<int> listView1ColWidths;
+
+        private int split1Dist;
+        private int split2Dist;
+
         #endregion
 
 
-        public MainForm() {
+        public MainForm()
+        {
             //
             // The InitializeComponent() call is required for Windows Forms designer support.
             //
             InitializeComponent();
-
-            // recall window size from last session
-            this.WindowState = Properties.Settings.Default.usetWindowState;
+            RecallWindowSettings();
 
             // setup listview column sorting
             lvwColumnSorter = new ListViewColumnSorter();
@@ -166,6 +169,34 @@ namespace HackPDM
             LocalOnlyBox = "0";
         }
 
+        private void RecallWindowSettings()
+        {
+            // set window size and location
+            this.Location = Properties.UserSettings.Default.usetWindowLocation;
+            this.Size = Properties.UserSettings.Default.usetWindowSize;
+            this.WindowState = Properties.UserSettings.Default.usetWindowState;
+
+            // load list view column sizes from settings
+            System.Collections.Specialized.StringCollection collection = Properties.UserSettings.Default.usetColumnWidths;
+            List<int> integers = collection.Cast<string>().ToList().ConvertAll(s => Int32.Parse(s));
+            listView1ColWidths = integers;
+
+            // load splitter distances
+            split1Dist = Properties.UserSettings.Default.usetSplitter1Distance;
+            if (split1Dist == 0)
+                split1Dist = splitContainer1.SplitterDistance;
+            else
+                splitContainer1.SplitterDistance = split1Dist;
+            split2Dist = Properties.UserSettings.Default.usetSplitter2Distance;
+            if (split2Dist == 0)
+                split2Dist = splitContainer2.SplitterDistance;
+            else
+                splitContainer2.SplitterDistance = split2Dist;
+
+            // load show deleted previous state
+            blnShowDeleted = Properties.UserSettings.Default.usetShowDeleted;
+        }
+
         private void DavConnect()
         {
 
@@ -180,7 +211,7 @@ namespace HackPDM
             try
             {
                 List<string> strTest = connDav.List("/admin/", 1);
-         //       List<string> strTest = connDav.List("/", 1);
+                //       List<string> strTest = connDav.List("/", 1);
             }
             catch (System.Exception e)
             {
@@ -210,11 +241,14 @@ namespace HackPDM
 
 
             // connect to the database
-            try {
+            try
+            {
                 connDb.Close();
                 connDb.ConnectionString = strDbConn;
                 connDb.Open();
-            } catch (System.Exception e) {
+            }
+            catch (System.Exception e)
+            {
                 var result = MessageBox.Show("Failed to make database connection: " + e.Message + "\r\nTry Again?",
                 "Startup Error",
                     MessageBoxButtons.OKCancel,
@@ -229,7 +263,7 @@ namespace HackPDM
             // authenticate
             string strSql = String.Format("select user_id from hp_user where login_name='{0}' and passwd='{1}';",
                 (string)drCurrProfile["Username"],
-                (string)drCurrProfile["Password"] );
+                (string)drCurrProfile["Password"]);
             NpgsqlCommand cmdGetId = new NpgsqlCommand(strSql, connDb);
             try
             {
@@ -273,8 +307,8 @@ namespace HackPDM
         {
 
             // load profile info
-            strCurrProfileId = Properties.Settings.Default.usetDefaultProfile;
-            string strXmlProfiles = Properties.Settings.Default.usetProfiles;
+            strCurrProfileId = Properties.UserSettings.Default.usetDefaultProfile;
+            string strXmlProfiles = Properties.UserSettings.Default.usetProfiles;
 
 #if DEBUG
             // TEMP: try to get a saved profile
@@ -310,8 +344,8 @@ namespace HackPDM
                 DialogResult pmResult = dlgPM.ShowDialog();
 
                 // try again to get the profiles
-                strCurrProfileId = Properties.Settings.Default.usetDefaultProfile;
-                strXmlProfiles = Properties.Settings.Default.usetProfiles;
+                strCurrProfileId = Properties.UserSettings.Default.usetDefaultProfile;
+                strXmlProfiles = Properties.UserSettings.Default.usetProfiles;
 
                 // failed again
                 if (strXmlProfiles == "" || strCurrProfileId == "")
@@ -386,7 +420,8 @@ namespace HackPDM
             object oTemp = cmdGetNode.ExecuteScalar();
 
             // check for a return value
-            if (oTemp == null) {
+            if (oTemp == null)
+            {
 
                 // no node_id returned: create one
                 string strSqlGetNew = "select nextval('seq_hp_node_node_id'::regclass);";
@@ -399,7 +434,9 @@ namespace HackPDM
                 cmdGetNode.CommandText = strSqlSet;
                 int intRows = cmdGetNode.ExecuteNonQuery();
 
-            } else {
+            }
+            else
+            {
 
                 // convert the node_id
                 intNodeId = (int)oTemp;
@@ -429,7 +466,8 @@ namespace HackPDM
         }
 
 
-        private void LoadDirData() {
+        private void LoadDirData()
+        {
 
             // clear the dataset
             dsTree = new DataSet();
@@ -605,12 +643,17 @@ namespace HackPDM
             {
                 treeView1.SelectedNode = tnRoot;
                 PopulateList(tnRoot);
-            } else {
+            }
+            else
+            {
                 tnSelect = FindNode(strTreePath);
-                if (tnSelect != null) {
+                if (tnSelect != null)
+                {
                     treeView1.SelectedNode = tnSelect;
                     PopulateList(tnSelect);
-                } else {
+                }
+                else
+                {
                     treeView1.SelectedNode = tnRoot;
                     PopulateList(tnRoot);
                 }
@@ -640,10 +683,12 @@ namespace HackPDM
 
         }
 
-        protected void InitTreeView() {
+        protected void InitTreeView()
+        {
 
             // reset context menu
-            foreach (ToolStripMenuItem tsmiItem in cmsTree.Items) {
+            foreach (ToolStripMenuItem tsmiItem in cmsTree.Items)
+            {
                 tsmiItem.Enabled = false;
             }
 
@@ -757,7 +802,8 @@ namespace HackPDM
 
         }
 
-        protected void InitListView() {
+        protected void InitListView()
+        {
 
             //init ListView control
             listView1.Clear();
@@ -767,7 +813,7 @@ namespace HackPDM
             //listView1.ColumnClick += new ColumnClickEventHandler(lv1ColumnClick);
 
             //create columns for ListView
-            listView1.Columns.Add("Name",300,System.Windows.Forms.HorizontalAlignment.Left);
+            listView1.Columns.Add("Name", 300, System.Windows.Forms.HorizontalAlignment.Left);
             listView1.Columns.Add("Size", 75, System.Windows.Forms.HorizontalAlignment.Right);
             listView1.Columns.Add("Type", 120, System.Windows.Forms.HorizontalAlignment.Left);
             listView1.Columns.Add("Stat", 60, System.Windows.Forms.HorizontalAlignment.Left);
@@ -778,9 +824,14 @@ namespace HackPDM
             listView1.Columns.Add("FullName", 0, System.Windows.Forms.HorizontalAlignment.Left);
 
             // reset context menu
-            foreach (ToolStripMenuItem tsmiItem in cmsList.Items) {
+            foreach (ToolStripMenuItem tsmiItem in cmsList.Items)
+            {
                 tsmiItem.Enabled = false;
             }
+
+            // set column widths
+            for (int i = 0; i < listView1.Columns.Count; i++)
+                listView1.Columns[i].Width = this.listView1ColWidths[i];
 
         }
 
@@ -801,7 +852,8 @@ namespace HackPDM
             // get remote entries
             int intDirId = 0;
             dictTree.TryGetValue(strRelPath, out intDirId);
-            if (intDirId != 0) {
+            if (intDirId != 0)
+            {
 
                 // initialize sql command for remote entry list
                 string strSql = @"
@@ -875,7 +927,8 @@ namespace HackPDM
 
             }
 
-            if (dsList.Tables.Count == 0) {
+            if (dsList.Tables.Count == 0)
+            {
                 // make an empty DataTable
                 dsList.Tables.Add(CreateFileTable());
             }
@@ -887,7 +940,8 @@ namespace HackPDM
 
         }
 
-        protected void PopulateList(TreeNode nodeCurrent) {
+        protected void PopulateList(TreeNode nodeCurrent)
+        {
 
             // clear list
             InitListView();
@@ -895,15 +949,17 @@ namespace HackPDM
             LoadListData(nodeCurrent.FullPath);
 
             // if we have any files to show, then populate listview with files
-            if (dsList.Tables[0] != null) {
-                foreach (DataRow row in dsList.Tables[0].Select("","entry_name asc")) {
+            if (dsList.Tables[0] != null)
+            {
+                foreach (DataRow row in dsList.Tables[0].Select("", "entry_name asc"))
+                {
 
                     string strCheckout = "";
                     if (row.Field<string>("ck_user_name") != null)
                     {
                         strCheckout = String.Format("{0} ({1}), {2}", row.Field<string>("ck_user_name"), row.Field<string>("checkout_node_name"), row.Field<string>("str_checkout_date"));
                     }
-                    string[] lvData =  new string[9];
+                    string[] lvData = new string[9];
                     lvData[0] = row.Field<string>("entry_name"); // Name
                     lvData[1] = row.Field<string>("str_latest_size"); // Size
                     lvData[2] = row.Field<string>("file_ext"); // Type
@@ -922,23 +978,27 @@ namespace HackPDM
                     strOverlay = strOverlay == "ok" ? "" : "." + strOverlay;
 
                     // get icon images for new file types (new to this session)
-                    if (ilListIcons.Images[strFileExt] == null) {
+                    if (ilListIcons.Images[strFileExt] == null)
+                    {
 
                         Image imgCurrent;
                         byte[] img = row.Field<byte[]>("icon");
-                        if (img == null) {
+                        if (img == null)
+                        {
                             // extract an image locally
                             string strFullName = row.Field<string>("absolute_path") + "\\" + row.Field<string>("entry_name");
                             imgCurrent = GetLocalIcon(strFullName);
-                        } else {
+                        }
+                        else
+                        {
                             // get remote image
                             MemoryStream ms = new MemoryStream();
-                            ms.Write(img,0,img.Length);
+                            ms.Write(img, 0, img.Length);
                             imgCurrent = Image.FromStream(ms);
                         }
 
                         // add bare icon to icon list
-                        ilListIcons.Images.Add(strFileExt,imgCurrent);
+                        ilListIcons.Images.Add(strFileExt, imgCurrent);
 
                         // add overlayed icons to icon list
                         // these are added at design time on the MainForm.cs designer ("Choose images" context menu item)
@@ -960,7 +1020,7 @@ namespace HackPDM
                     lvItem.ImageKey = strFileExt + strOverlay;
 
                     // show it in the list view
-                    if ( row.Field<bool>("active") || blnShowDeleted )
+                    if (row.Field<bool>("active") || blnShowDeleted)
                     {
                         // but, only if it is active (not deleted)
                         listView1.Items.Add(lvItem);
@@ -977,7 +1037,8 @@ namespace HackPDM
         }
 
 
-        protected void InitTabPages() {
+        protected void InitTabPages()
+        {
 
             // clear the preview image
             pbPreview.Image = null;
@@ -996,7 +1057,7 @@ namespace HackPDM
 
         }
 
-        protected void PopulatePreviewImage(string FileName, int intVersionId=0)
+        protected void PopulatePreviewImage(string FileName, int intVersionId = 0)
         {
 
             DataRow dr = dsList.Tables[0].Select("entry_name='" + FileName + "'")[0];
@@ -1103,7 +1164,7 @@ namespace HackPDM
             {
 
                 // build array
-                string[] lvData =  new string[5];
+                string[] lvData = new string[5];
                 lvData[0] = row.Field<int>("version_id").ToString();
                 lvData[1] = row.Field<string>("action_user");
                 lvData[2] = row.Field<string>("action_date");
@@ -1397,7 +1458,7 @@ namespace HackPDM
                 //SWDocMgr docMgr = new SWDocMgr(strSWDocMgrKey);
                 //stdole.IPictureDisp ipicPreview = docMgr.GetPreview(strFullName);
                 //bmpImage = (Bitmap)imgConv.GetPicture(ipicPreview);
-                
+
                 //bImage = docMgr.GetPreview3(strFullName);
 
                 bmpImage = (Bitmap)docMgr.GetPreview(strFullName);
@@ -1414,7 +1475,8 @@ namespace HackPDM
 
         }
 
-        private DataTable CreateFileTable() {
+        private DataTable CreateFileTable()
+        {
 
             // entry_id
             // version_id
@@ -1491,8 +1553,9 @@ namespace HackPDM
 
         }
 
-        public Image ImageOverlay(Image imgOrig, Image imgOverlay) {
-            Bitmap bitmap = new Bitmap(32,32);
+        public Image ImageOverlay(Image imgOrig, Image imgOverlay)
+        {
+            Bitmap bitmap = new Bitmap(32, 32);
             Graphics canvas = Graphics.FromImage(bitmap);
             canvas.DrawImage(imgOrig, new Point(0, 0));
             canvas.DrawImage(imgOverlay, new Point(0, 0));
@@ -1629,28 +1692,34 @@ namespace HackPDM
         //    }
         //}
 
-        protected TreeNode FindNode(string strPath) {
+        protected TreeNode FindNode(string strPath)
+        {
             TreeNode tnMatch;
             dictTreeNodes.TryGetValue(strPath, out tnMatch);
             return tnMatch;
         }
 
-        protected virtual bool IsFileLocked(FileInfo file) {
+        protected virtual bool IsFileLocked(FileInfo file)
+        {
 
             FileStream stream = null;
 
-            if (file.Exists) {
-                try {
+            if (file.Exists)
+            {
+                try
+                {
                     stream = file.Open(FileMode.Open, FileAccess.Read, FileShare.None);
                 }
-                catch (IOException) {
+                catch (IOException)
+                {
                     //the file is unavailable because it is:
                     //still being written to
                     //or being processed by another thread
                     //or does not exist (has already been processed)
                     return true;
                 }
-                finally {
+                finally
+                {
                     if (stream != null) stream.Close();
                 }
             }
@@ -1679,7 +1748,7 @@ namespace HackPDM
 
         private static bool isSolidWorks(string fileName)
         {
-    		string solidworksFilter = ".sldprt,.sldasm,.slddrw";
+            string solidworksFilter = ".sldprt,.sldasm,.slddrw";
             string ext = Path.GetExtension(fileName).ToLower();
             if (ext == "")
                 return false;
@@ -1792,7 +1861,7 @@ namespace HackPDM
             int intUpdateCount = drUpdateFiles.Length;
 
             // notify all up-to-date
-            if (intUpdateCount<1)
+            if (intUpdateCount < 1)
             {
                 dlgStatus.AddStatusLine("INFO", "All selected files are already up to date");
             }
@@ -2526,7 +2595,7 @@ namespace HackPDM
                 t.Rollback();
 
                 // undo webdav work
-                if (strGuid!="")
+                if (strGuid != "")
                 {
                     RollbackDeletes(sender, e, t, strGuid, ref dsDeletes);
                 }
@@ -2598,7 +2667,8 @@ namespace HackPDM
             if (e.Cancelled == true)
             {
                 t.ToString();
-                if (t.Connection != null) {
+                if (t.Connection != null)
+                {
                     t.Rollback();
                 }
                 // TODO: figure out how to rollback WebDav changes
@@ -2607,7 +2677,8 @@ namespace HackPDM
             else if (e.Error != null)
             {
                 dlgStatus.AddStatusLine("ERROR", e.Error.Message);
-                if (t.Connection != null) {
+                if (t.Connection != null)
+                {
                     t.Rollback();
                 }
                 // TODO: figure out how to rollback WebDav changes
@@ -2615,13 +2686,45 @@ namespace HackPDM
             }
             else
             {
-                if (t.Connection != null) {
+                if (t.Connection != null)
+                {
                     t.Rollback();
                     // TODO: figure out how to rollback WebDav changes
                 }
                 dlgStatus.AddStatusLine("INFO", "Operation completed");
                 dlgStatus.OperationCompleted();
             }
+        }
+
+        private DataSet BuildCommitsDataSet()
+        {
+            // init DataSet
+            DataSet dsCommits = new DataSet();
+
+            // init directories data table
+            dsCommits.Tables.Add("dirs");
+            dsCommits.Tables["dirs"].Columns.Add("dir_id", Type.GetType("System.Int32"));
+            dsCommits.Tables["dirs"].Columns.Add("parent_id", Type.GetType("System.Int32"));
+            dsCommits.Tables["dirs"].Columns.Add("dir_name", Type.GetType("System.String"));
+            dsCommits.Tables["dirs"].Columns.Add("relative_path", Type.GetType("System.String"));
+            dsCommits.Tables["dirs"].Columns.Add("absolute_path", Type.GetType("System.String"));
+
+            // init files data table
+            dsCommits.Tables.Add(CreateFileTable());
+            dsCommits.Tables[1].TableName = "files";
+
+            // init relationships (dependencies) data table
+            dsCommits.Tables.Add("rels");
+            dsCommits.Tables["rels"].Columns.Add("parent_id", Type.GetType("System.Int32"));
+            dsCommits.Tables["rels"].Columns.Add("child_id", Type.GetType("System.Int32"));
+            dsCommits.Tables["rels"].Columns.Add("parent_name", Type.GetType("System.String"));
+            dsCommits.Tables["rels"].Columns.Add("child_name", Type.GetType("System.String"));
+            dsCommits.Tables["rels"].Columns.Add("parent_absolute_path", Type.GetType("System.String"));
+            dsCommits.Tables["rels"].Columns.Add("child_absolute_path", Type.GetType("System.String"));
+            dsCommits.Tables["rels"].Columns.Add("parent_sandboxed", Type.GetType("System.Boolean"));
+            dsCommits.Tables["rels"].Columns.Add("child_sandboxed", Type.GetType("System.Boolean"));
+
+            return dsCommits;
         }
 
         // commits data (assuming actions like Commit or CheckIn):
@@ -2701,7 +2804,7 @@ namespace HackPDM
             {
                 // get files and directories from list
                 string strEntries = String.Join("','", lstSelectedNames.ToArray());
-                DataTable dtTemp = dsList.Tables[0].Select("entry_name in ('" + strEntries + "')").CopyToDataTable<System.Data.DataRow>();
+                DataTable dtTemp = dsList.Tables["files"].Select("entry_name in ('" + strEntries + "')").CopyToDataTable<System.Data.DataRow>();
                 dtTemp.TableName = "files";
                 dsCommits.Tables.Add(dtTemp);
             }
@@ -2915,14 +3018,12 @@ namespace HackPDM
                             string strRelativePath = Utils.GetRelativePath(strLocalFileRoot, strAbsolutePath);
 
                             // check for existing relationships
-                            DataRow[] drExists = dsCommits.Tables["rels"].Select(
-                                    String.Format("parent_name='{0}' and child_name='{1}'and child_absolute_path='{2}' and parent_absolute_path='{3}'",
+                            string searchRelExists = String.Format("parent_name='{0}' and child_name='{1}'and child_absolute_path='{2}' and parent_absolute_path='{3}'",
                                     strParentShortName.Replace("'", "''"),
                                     strDepends[0].Replace("'", "''"),
                                     strAbsolutePath.Replace("'", "''"),
-                                    strParentAbsPath.Replace("'", "''"))
-                                );
-                            if (drExists.Length > 0) continue;
+                                    strParentAbsPath.Replace("'", "''"));
+                            if (dsCommits.Tables["rels"].Select(searchRelExists).Length > 0) continue;
 
                             // get exact file extension for status check
                             Tuple<string, string, string, string> tplExtensions = ftmStart.GetFileExt(strShortName);
@@ -2935,74 +3036,112 @@ namespace HackPDM
                                 lngFileSize = fiCurrFile.Length;
                                 dtModifyDate = fiCurrFile.LastWriteTime;
                             }
-                            // get directory id
-                            Int32 intDirId = 0;
-                            dictTree.TryGetValue(strRelativePath, out intDirId);
-
-                            // check for duplicate
-                            if (dsCommits.Tables["files"].Select(String.Format("entry_name='{0}' and absolute_path='{1}'", strDepends[0].Replace("'", "''"), strAbsolutePath.Replace("'", "''"))).Length > 0) continue;
-
-                            // check for file exists
-                            if (!File.Exists(strLongName))
+                            else
                             {
                                 dlgStatus.AddStatusLine("WARNING", "Skipping missing file: " + strLongName);
                                 continue;
                             }
 
-
-                            dsCommits.Tables["files"].Rows.Add(
-                                null, // entry_id
-                                null, // version_id
-                                intDirId, // dir_id
-                                strDepends[0], // entry_name
-                                null, // type_id
-                                strFileExt, // file_ext
-                                null, // cat_id
-                                null, // cat_name
-                                null, // latest_size
-                                null, // str_latest_size
-                                lngFileSize, // local_size
-                                Utils.FormatSize(lngFileSize), // str_local_size
-                                null, // latest_stamp
-                                null, // str_latest_stamp
-                                dtModifyDate, // local_stamp
-                                Utils.FormatDate(dtModifyDate), // str_local_stamp
-                                null, // latest_md5
-                                null, // local_md5
-                                null, // checkout_user
-                                null, // ck_user_name
-                                null, // checkout_date
-                                null, // str_checkout_date
-                                null, // checkout_node
-                                null, // checkout_node_name
-                                true, // is_local
-                                false, // is_remote
-                                "lo", // client_status_code
-                                strRelativePath, // relative_path
-                                strAbsolutePath, // absolute_path
-                                null, // icon
-                                false, // is_depend_searched
-                                fiCurrFile.IsReadOnly, // is_readonly
-                                true, // active
-                                false // destroyed
-                            );
-
-                            // add this file's directory, if necessary
-                            DataRow[] drCheck = dsCommits.Tables["dirs"].Select("absolute_path = '" + strAbsolutePath.Replace("'", "''") + "'");
-                            if (drCheck.Length == 0)
+                            // add the referenced file, if it has not already been added to the files table
+                            string searchFileExists = String.Format("entry_name='{0}' and absolute_path='{1}'",
+                                strDepends[0].Replace("'", "''"),
+                                strAbsolutePath.Replace("'", "''"));
+                            if (dsCommits.Tables["files"].Select(searchFileExists).Length == 0)
                             {
-                                // get parent directory name
-                                string strDirName = Utils.GetBaseName(strRelativePath);
+                                // get directory id
+                                Int32 intDirId = 0;
+                                dictTree.TryGetValue(strRelativePath, out intDirId);
 
-                                // get parent directory id
-                                Int32 intParentId = 0;
-                                if (strRelativePath != "")
+                                dsCommits.Tables["files"].Rows.Add(
+                                    null, // entry_id
+                                    null, // version_id
+                                    intDirId, // dir_id
+                                    strDepends[0], // entry_name
+                                    null, // type_id
+                                    strFileExt, // file_ext
+                                    null, // cat_id
+                                    null, // cat_name
+                                    null, // latest_size
+                                    null, // str_latest_size
+                                    lngFileSize, // local_size
+                                    Utils.FormatSize(lngFileSize), // str_local_size
+                                    null, // latest_stamp
+                                    null, // str_latest_stamp
+                                    dtModifyDate, // local_stamp
+                                    Utils.FormatDate(dtModifyDate), // str_local_stamp
+                                    null, // latest_md5
+                                    null, // local_md5
+                                    null, // checkout_user
+                                    null, // ck_user_name
+                                    null, // checkout_date
+                                    null, // str_checkout_date
+                                    null, // checkout_node
+                                    null, // checkout_node_name
+                                    true, // is_local
+                                    false, // is_remote
+                                    "lo", // client_status_code
+                                    strRelativePath, // relative_path
+                                    strAbsolutePath, // absolute_path
+                                    null, // icon
+                                    false, // is_depend_searched
+                                    fiCurrFile.IsReadOnly, // is_readonly
+                                    true, // active
+                                    false // destroyed
+                                );
+                                //DataRow drFile = dsCommits.Tables["files"].NewRow();
+                                //drFile["entry_id"] = null;
+                                //drFile["version_id"] = null;
+                                //drFile["dir_id"] = intDirId;
+                                //drFile["entry_name"] = strDepends[0];
+                                //drFile["type_id"] = null;
+                                //drFile["file_ext"] = strFileExt;
+                                //drFile["cat_id"] = null;
+                                //drFile["cat_name"] = null;
+                                //drFile["latest_size"] = null;
+                                //drFile["str_latest_size"] = null;
+                                //drFile["local_size"] = lngFileSize;
+                                //drFile["str_local_size"] = Utils.FormatSize(lngFileSize);
+                                //drFile["latest_stamp"] = null;
+                                //drFile["str_latest_stamp"] = null;
+                                //drFile["local_stamp"] = dtModifyDate;
+                                //drFile["str_local_stamp"] = Utils.FormatDate(dtModifyDate);
+                                //drFile["latest_md5"] = null;
+                                //drFile["local_md5"] = null;
+                                //drFile["checkout_user"] = null;
+                                //drFile["ck_user_name"] = null;
+                                //drFile["checkout_date"] = null;
+                                //drFile["str_checkout_date"] = null;
+                                //drFile["checkout_node"] = null;
+                                //drFile["checkout_node_name"] = null;
+                                //drFile["is_local"] = true;
+                                //drFile["is_remote"] = false;
+                                //drFile["client_status_code"] = "lo";
+                                //drFile["relative_path"] = strRelativePath;
+                                //drFile["absolute_path"] = strAbsolutePath;
+                                //drFile["icon"] = null;
+                                //drFile["is_depend_searched"] = false;
+                                //drFile["is_readonly"] = fiCurrFile.IsReadOnly;
+                                //drFile["active"] = true;
+                                //drFile["destroyed"] = false;
+                                //dsCommits.Tables["files"].Rows.Add(drFile);
+
+                                // add this file's directory, if necessary
+                                DataRow[] drCheck = dsCommits.Tables["dirs"].Select("absolute_path = '" + strAbsolutePath.Replace("'", "''") + "'");
+                                if (drCheck.Length == 0)
                                 {
-                                    // if the path is in pwa
-                                    string strParentPath = Utils.GetParentDirectory(strRelativePath);
-                                    dictTree.TryGetValue(strParentPath, out intParentId);
+                                    // get parent directory name
+                                    string strDirName = Utils.GetBaseName(strRelativePath);
+
+                                    // get parent directory id
+                                    Int32 intParentId = 0;
+                                    if (strRelativePath != "")
+                                    {
+                                        // if the path is in pwa
+                                        string strParentPath = Utils.GetParentDirectory(strRelativePath);
+                                        dictTree.TryGetValue(strParentPath, out intParentId);
+                                    }
+                                    dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strDirName, strRelativePath, strAbsolutePath);
                                 }
-                                dsCommits.Tables["dirs"].Rows.Add(intDirId, intParentId, strDirName, strRelativePath, strAbsolutePath);
                             }
 
                             // check for sandboxing
@@ -3011,17 +3150,26 @@ namespace HackPDM
 
                             // add relationships
                             // the calling method will associate entry ids for only the files to be committed
-                            dsCommits.Tables["rels"].Rows.Add(
-                                0,                  // parent_id
-                                0,                  // child_id
-                                strParentShortName, // parent_name
-                                strDepends[0],      // child_name
-                                strParentAbsPath,   // parent_absolute_path
-                                strAbsolutePath,    // child_absolute_path
-                                blnParentSandboxed, // parent_sandboxed
-                                blnChildSandboxed   // child_sandboxed
-                            );
-
+                            //dsCommits.Tables["rels"].Rows.Add(
+                            //    0,                  // parent_id
+                            //    0,                  // child_id
+                            //    strParentShortName, // parent_name
+                            //    strDepends[0],      // child_name
+                            //    strParentAbsPath,   // parent_absolute_path
+                            //    strAbsolutePath,    // child_absolute_path
+                            //    blnParentSandboxed, // parent_sandboxed
+                            //    blnChildSandboxed   // child_sandboxed
+                            //);
+                            DataRow drRel = dsCommits.Tables["rels"].NewRow();
+                            drRel["parent_id"] = 0;
+                            drRel["child_id"] = 0;
+                            drRel["parent_name"] = strParentShortName;
+                            drRel["child_name"] = strDepends[0];
+                            drRel["parent_absolute_path"] = strParentAbsPath;
+                            drRel["child_absolute_path"] = strAbsolutePath;
+                            drRel["parent_sandboxed"] = blnParentSandboxed;
+                            drRel["child_sandboxed"] = blnChildSandboxed;
+                            dsCommits.Tables["rels"].Rows.Add(drRel);
                         }
                     }
 
@@ -3415,7 +3563,7 @@ namespace HackPDM
                     dlgStatus.AddStatusLine("DEBUG", "dir_id=" + intChildId.ToString());
                     dlgStatus.AddStatusLine("DEBUG", "parent_id=" + intParentId.ToString());
                     dlgStatus.AddStatusLine("DEBUG", "dir_name=" + strDirName);
-                    throw new System.Exception("Directory \"" + strDirName + "\" already exists on the server.  Refresh your view.  " + System.Environment.NewLine + ex.Detail);
+                    throw new System.Exception("Directory \"" + strDirName + "\" already exists on the server.  Refresh your view.  " + System.Environment.NewLine + ex.Message);
                 }
 
                 // update row with the new remote directory id
@@ -3573,7 +3721,7 @@ namespace HackPDM
                     catch (NpgsqlException ex)
                     {
                         // integrity constraint violation?
-                        dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                        dlgStatus.AddStatusLine("ERROR", ex.Message);
                         blnFailed = true;
                     }
                 }
@@ -3594,7 +3742,11 @@ namespace HackPDM
                 cmdInsertVersion.Parameters["create_user"].Value = intMyUserId;
                 cmdInsertVersion.Parameters["create_node"].Value = intMyNodeId;
                 //SWDocMgr docMgr = new SWDocMgr(strSWDocMgrKey);
-                cmdInsertVersion.Parameters["preview_image"].Value = GetLocalPreview(drNewFile);
+                byte[] preview = GetLocalPreview(drNewFile);
+                if (preview == null)
+                    cmdInsertVersion.Parameters["preview_image"].Value = System.DBNull.Value;
+                else
+                    cmdInsertVersion.Parameters["preview_image"].Value = preview;
                 cmdInsertVersion.Parameters["md5sum"].Value = strMd5sum;
                 try
                 {
@@ -3603,7 +3755,7 @@ namespace HackPDM
                 catch (NpgsqlException ex)
                 {
                     // integrity constraint violation?
-                    dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                    dlgStatus.AddStatusLine("ERROR", ex.Message);
                     blnFailed = true;
 
                     dlgStatus.AddStatusLine("DEBUG", "version_id=" + cmdInsertVersion.Parameters["version_id"].Value.ToString());
@@ -3651,12 +3803,12 @@ namespace HackPDM
                     // upload the file to webdav server
                     dlgStatus.AddStatusLine("INFO", "Uploading " + Utils.FormatSize(lngFileSize) + " (file " + strFileName + ")");
                     connDav.Upload(strFullName, strDavName);
-                    if (connDav.StatusCode-200 >= 100)
+                    if (connDav.StatusCode - 200 >= 100)
                     {
                         dlgStatus.AddStatusLine("ERROR", connDav.StatusCode + "(file " + strFileName + ")");
                         blnFailed = true;
                     }
-                    
+
                 }
 
                 // update row with new version_id and/or entry_id
@@ -3697,7 +3849,7 @@ namespace HackPDM
                 lstProps = docMgr.GetProperties(FullName);
             }
             //List<Tuple<string, string, string, object>> 
-            
+
 
             // get server setting
             bool blnRestrict = dtServSettings.Select("setting_name = 'restrict_properties'")[0].Field<bool>("setting_bool_value");
@@ -3737,7 +3889,8 @@ namespace HackPDM
                 dictPropTypes.TryGetValue(intPropId, out strServPropType);
 
                 // if not defined on server
-                if (intPropId == 0){
+                if (intPropId == 0)
+                {
                     // if restricting undefined properties
                     if (blnRestrict)
                     {
@@ -3760,11 +3913,11 @@ namespace HackPDM
                 }
 
                 // if property types do not match
-                if (strPropType!=strServPropType)
+                if (strPropType != strServPropType)
                 {
-                        // send a warning, and skip this property
-                        dlgStatus.AddStatusLine("WARNING", String.Format("Mismatched property type ({0}) ({1}!={2}): {3}", strPropName, strServPropType, strPropType, FullName));
-                        continue;
+                    // send a warning, and skip this property
+                    dlgStatus.AddStatusLine("WARNING", String.Format("Mismatched property type ({0}) ({1}!={2}): {3}", strPropName, strServPropType, strPropType, FullName));
+                    continue;
                 }
 
                 // establish string values
@@ -3776,7 +3929,7 @@ namespace HackPDM
                 // add to the sql command
                 strSql += String.Format(strSqlTemplate,
                     VersionId,
-                    "'" + strConfigName.Replace("'","''") + "'",
+                    "'" + strConfigName.Replace("'", "''") + "'",
                     intPropId,
                     strText,
                     strDate,
@@ -3799,7 +3952,7 @@ namespace HackPDM
                 catch (NpgsqlException ex)
                 {
                     // integrity constraint violation?
-                    dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                    dlgStatus.AddStatusLine("ERROR", ex.Message);
                     blnFailed = true;
                 }
             }
@@ -3824,7 +3977,7 @@ namespace HackPDM
                 lstVersions.Add(drFile.Field<int>("version_id"));
             }
 
-            if (lstVersions.Count<1)
+            if (lstVersions.Count < 1)
             {
                 // nothing to do here.  exit the method.
                 return blnFailed;
@@ -3893,7 +4046,7 @@ namespace HackPDM
                 catch (NpgsqlException ex)
                 {
                     string strDepend = String.Format("{0}\\{1} <-- {2}\\{3}", drNewRel.Field<string>("parent_name"), drNewRel.Field<string>("parent_absolute_path"), drNewRel.Field<string>("child_name"), drNewRel.Field<string>("child_absolute_path"));
-                    dlgStatus.AddStatusLine("ERROR", "Failed inserting relationship (" + ex.Detail + ") " + strDepend);
+                    dlgStatus.AddStatusLine("ERROR", "Failed inserting relationship (" + ex.Message + ") " + strDepend);
                     blnFailed = true;
                 }
 
@@ -3911,7 +4064,7 @@ namespace HackPDM
         // fetch data (called from get latest method)
         // very similar to getting commits data, only in reverse
         // get data from remote and match to local stuff
-        private DataSet LoadFetchData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, string strRelBasePath=null, List<int> lstSelected=null)
+        private DataSet LoadFetchData(object sender, DoWorkEventArgs e, NpgsqlTransaction t, string strRelBasePath = null, List<int> lstSelected = null)
         {
             // running in separate thread
             BackgroundWorker myWorker = sender as BackgroundWorker;
@@ -4033,7 +4186,7 @@ namespace HackPDM
                     if (strClientStatusCode != "cm")
                     {
                         // if local stamp is greater than remote stamp
-                        if (dtModifyDate.Subtract(drRemote.Field<DateTime>("latest_stamp")).TotalSeconds > 1 )
+                        if (dtModifyDate.Subtract(drRemote.Field<DateTime>("latest_stamp")).TotalSeconds > 1)
                         {
                             // lm: modified locally without checking out (apparently)
                             strClientStatusCode = "lm";
@@ -4130,7 +4283,7 @@ namespace HackPDM
                 daTemp1.Fill(dsDeletes.Tables["dirs"]);
 
                 // populate absolute paths
-                foreach(DataRow dr in dsDeletes.Tables["dirs"].Rows)
+                foreach (DataRow dr in dsDeletes.Tables["dirs"].Rows)
                 {
                     dr.SetField<string>("absolute_path", Utils.GetAbsolutePath(strLocalFileRoot, dr.Field<string>("relative_path")));
                 }
@@ -4635,7 +4788,7 @@ namespace HackPDM
             connDav.CreateDir("/tmp/" + strGuid);
 
             DataRow[] drRemotes = dsDeletes.Tables["files"].Select("entry_id is not null");
-            foreach(DataRow drRemote in drRemotes)
+            foreach (DataRow drRemote in drRemotes)
             {
 
                 // check for cancellation
@@ -4798,7 +4951,7 @@ namespace HackPDM
             catch (NpgsqlException ex)
             {
                 // integrity constraint violation?
-                dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                dlgStatus.AddStatusLine("ERROR", ex.Message);
                 blnFailed = true;
             }
 
@@ -4858,7 +5011,7 @@ namespace HackPDM
             catch (NpgsqlException ex)
             {
                 // integrity constraint violation?
-                dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                dlgStatus.AddStatusLine("ERROR", ex.Message);
                 blnFailed = true;
             }
 
@@ -4912,7 +5065,7 @@ namespace HackPDM
             catch (NpgsqlException ex)
             {
                 // integrity constraint violation?
-                dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                dlgStatus.AddStatusLine("ERROR", ex.Message);
                 blnFailed = true;
             }
 
@@ -4968,7 +5121,7 @@ namespace HackPDM
             catch (NpgsqlException ex)
             {
                 // integrity constraint violation?
-                dlgStatus.AddStatusLine("ERROR", ex.BaseMessage);
+                dlgStatus.AddStatusLine("ERROR", ex.Message);
                 blnFailed = true;
             }
 
@@ -5026,7 +5179,8 @@ namespace HackPDM
 
         }
 
-        void TreeRightMouseClick(object sender, MouseEventArgs e) {
+        void TreeRightMouseClick(object sender, MouseEventArgs e)
+        {
 
             // get latest
             // checkout
@@ -5035,13 +5189,15 @@ namespace HackPDM
             // undo checkout
 
             // check for the right mouse button
-            if (e.Button != MouseButtons.Right) {
+            if (e.Button != MouseButtons.Right)
+            {
                 return;
             }
 
             // verify that a tree node was right clicked, and select it
             treeView1.SelectedNode = treeView1.GetNodeAt(e.X, e.Y);
-            if (treeView1.SelectedNode == null) {
+            if (treeView1.SelectedNode == null)
+            {
                 return;
             }
             TreeNode tnClicked = treeView1.SelectedNode;
@@ -5051,13 +5207,15 @@ namespace HackPDM
             //   checkout
             //   commit
             //   undo checkout
-            foreach (ToolStripMenuItem tsmiItem in cmsTree.Items) {
+            foreach (ToolStripMenuItem tsmiItem in cmsTree.Items)
+            {
                 tsmiItem.Enabled = true;
                 tsmiItem.Visible = true;
             }
 
             // test for remote
-            if (tnClicked.Tag != null) {
+            if (tnClicked.Tag != null)
+            {
 
                 // exists remotely
                 // still allow AddNew and handle remotely existing files one-at-a-time
@@ -5070,7 +5228,9 @@ namespace HackPDM
                     cmsTree.Items["cmsTreeCommit"].Enabled = false;
                     cmsTree.Items["cmsTreeUndoCheckout"].Enabled = false;
                 }
-            } else {
+            }
+            else
+            {
                 // does not exist remotely (local only)
                 // can't do any of the following
                 cmsTree.Items["cmsTreeGetLatest"].Enabled = false;
@@ -5081,7 +5241,8 @@ namespace HackPDM
             return;
         }
 
-        void CmsTreeGetLatestClick(object sender, EventArgs e) {
+        void CmsTreeGetLatestClick(object sender, EventArgs e)
+        {
 
             // create the status dialog
             dlgStatus = new StatusDialog();
@@ -5124,11 +5285,13 @@ namespace HackPDM
 
         }
 
-        void CmsTreeCheckoutClick(object sender, EventArgs e) {
+        void CmsTreeCheckoutClick(object sender, EventArgs e)
+        {
 
         }
 
-        void CmsTreeCommitClick(object sender, EventArgs e) {
+        void CmsTreeCommitClick(object sender, EventArgs e)
+        {
 
             // create the status dialog
             dlgStatus = new StatusDialog();
@@ -5156,7 +5319,8 @@ namespace HackPDM
 
             // handle the cancel button
             bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Tree Commit");
-            if (blnWorkCanceled == true) {
+            if (blnWorkCanceled == true)
+            {
                 worker.CancelAsync();
             }
 
@@ -5165,7 +5329,8 @@ namespace HackPDM
 
         }
 
-        void CmsTreeAnalyzeClick(object sender, EventArgs e) {
+        void CmsTreeAnalyzeClick(object sender, EventArgs e)
+        {
 
             // do something useful for all directories and files beneath this node:
             //   load another window with a list of special items
@@ -5175,7 +5340,8 @@ namespace HackPDM
 
         }
 
-        void CmsTreeUndoCheckoutClick(object sender, EventArgs e) {
+        void CmsTreeUndoCheckoutClick(object sender, EventArgs e)
+        {
 
             // create the status dialog
             dlgStatus = new StatusDialog();
@@ -5312,17 +5478,24 @@ namespace HackPDM
 
         #region ListView actions
 
-        void lv1ColumnClick(object sender, ColumnClickEventArgs e) {
+        void lv1ColumnClick(object sender, ColumnClickEventArgs e)
+        {
 
             // Determine if clicked column is already the column that is being sorted.
-            if ( e.Column == lvwColumnSorter.SortColumn ) {
+            if (e.Column == lvwColumnSorter.SortColumn)
+            {
                 // Reverse the current sort direction for this column.
-                if (lvwColumnSorter.Order == SortOrder.Ascending) {
+                if (lvwColumnSorter.Order == SortOrder.Ascending)
+                {
                     lvwColumnSorter.Order = SortOrder.Descending;
-                } else {
+                }
+                else
+                {
                     lvwColumnSorter.Order = SortOrder.Ascending;
                 }
-            } else {
+            }
+            else
+            {
                 // Set the column number that is to be sorted; default to ascending.
                 lvwColumnSorter.SortColumn = e.Column;
                 lvwColumnSorter.Order = SortOrder.Ascending;
@@ -5333,7 +5506,8 @@ namespace HackPDM
 
         }
 
-        void ListRightMouseClick(object sender, MouseEventArgs e) {
+        void ListRightMouseClick(object sender, MouseEventArgs e)
+        {
 
             // get latest
             // checkout
@@ -5342,37 +5516,43 @@ namespace HackPDM
             // undo checkout
 
             // check for the right mouse button
-            if (e.Button != MouseButtons.Right) {
+            if (e.Button != MouseButtons.Right)
+            {
                 return;
             }
 
             // verify that a list item was right clicked, and select it/them
             ListView.SelectedListViewItemCollection lviSelection = listView1.SelectedItems;
-            if (lviSelection.Count == 0) {
+            if (lviSelection.Count == 0)
+            {
                 // we never actually get here because the handler only gets called when an item is selected
                 return;
             }
-                // reset context menu items
+            // reset context menu items
             //   get latest     (remote)
             //   checkout       (remote)
             //   add new        (local only)
             //   commit         (checked-out to me)
             //   undo checkout  (checked-out to me)
-            foreach (ToolStripMenuItem tsmiItem in cmsList.Items) {
+            foreach (ToolStripMenuItem tsmiItem in cmsList.Items)
+            {
                 tsmiItem.Enabled = true;
             }
 
             // test for remote directory
             int dir_id;
-            if (treeView1.SelectedNode.Tag != null) {
+            if (treeView1.SelectedNode.Tag != null)
+            {
                 dir_id = (int)treeView1.SelectedNode.Tag;
 
-                foreach (ListViewItem lviSelected in lviSelection) {
+                foreach (ListViewItem lviSelected in lviSelection)
+                {
 
                     string strFileName = (string)lviSelected.SubItems[0].Text;
-                    DataRow drCurrent = dsList.Tables[0].Select("dir_id="+dir_id+" and entry_name='"+strFileName+"'")[0];
+                    DataRow drCurrent = dsList.Tables[0].Select("dir_id=" + dir_id + " and entry_name='" + strFileName + "'")[0];
 
-                    if (drCurrent.Field<bool>("is_remote") == false) {
+                    if (drCurrent.Field<bool>("is_remote") == false)
+                    {
                         // local only: need to disable "getlatest" and "checkout" but we
                         // really shouldn't do it now because there may be other items in the
                         // list that do exist remotely
@@ -5397,7 +5577,9 @@ namespace HackPDM
                     }
                 }
 
-            } else {
+            }
+            else
+            {
                 // all items are local only
                 cmsList.Items["cmsListGetLatest"].Enabled = false;
                 cmsList.Items["cmsListCheckout"].Enabled = false;
@@ -5407,7 +5589,8 @@ namespace HackPDM
             return;
         }
 
-        void CmsListGetLatestClick(object sender, EventArgs e) {
+        void CmsListGetLatestClick(object sender, EventArgs e)
+        {
 
             // refresh file data
             LoadListData(treeView1.SelectedNode.FullPath);
@@ -5473,7 +5656,8 @@ namespace HackPDM
 
         }
 
-        void CmsListCheckOutClick(object sender, EventArgs e) {
+        void CmsListCheckOutClick(object sender, EventArgs e)
+        {
 
             // create the status dialog
             dlgStatus = new StatusDialog();
@@ -5525,7 +5709,8 @@ namespace HackPDM
 
             // show dialog and handle cancel button
             bool blnWorkCanceled = dlgStatus.ShowStatusDialog("Check Out");
-            if (blnWorkCanceled == true) {
+            if (blnWorkCanceled == true)
+            {
                 worker.CancelAsync();
             }
 
@@ -5582,7 +5767,8 @@ namespace HackPDM
 
         }
 
-        void CmsListUndoCheckoutClick(object sender, EventArgs e) {
+        void CmsListUndoCheckoutClick(object sender, EventArgs e)
+        {
 
             // refresh file data
             LoadListData(treeView1.SelectedNode.FullPath);
@@ -5763,14 +5949,24 @@ namespace HackPDM
 
         }
 
+        private void listView1_ColumnWidthChanged(object sender, ColumnWidthChangedEventArgs e)
+        {
+            for (int i = 0; i < listView1.Columns.Count; i++)
+            {
+                listView1ColWidths[i] = listView1.Columns[i].Width;
+            }
+        }
+
         #endregion
 
 
         #region tab page actions
 
-        void ListView1SelectedIndexChanged(object sender, EventArgs e) {
+        void ListView1SelectedIndexChanged(object sender, EventArgs e)
+        {
 
-            if (listView1.SelectedItems.Count != 1 ) {
+            if (listView1.SelectedItems.Count != 1)
+            {
                 // clear list
                 InitTabPages();
                 return;
@@ -5995,7 +6191,7 @@ namespace HackPDM
 
             // get selected version
             int intVersionId = 0;
-            if (lvHistory.SelectedItems.Count>0)
+            if (lvHistory.SelectedItems.Count > 0)
             {
                 int.TryParse(lvHistory.SelectedItems[0].SubItems[0].Text, out intVersionId);
             }
@@ -6030,9 +6226,27 @@ namespace HackPDM
         }
 
 
-        void MainFormFormClosed(object sender, FormClosedEventArgs e) {
-            //connSw.Close;
-            Properties.Settings.Default.usetWindowState = this.WindowState;
+        void MainFormFormClosed(object sender, FormClosedEventArgs e)
+        {
+            // save window layout
+            Properties.UserSettings.Default.usetWindowLocation = this.Location;
+            Properties.UserSettings.Default.usetWindowSize = this.Size;
+            Properties.UserSettings.Default.usetWindowState = this.WindowState;
+
+            // save list view column size
+            System.Collections.Specialized.StringCollection collection = new System.Collections.Specialized.StringCollection();
+            foreach (int element in listView1ColWidths)
+                collection.Add(element.ToString());
+            Properties.UserSettings.Default.usetColumnWidths = collection;
+
+            // save splitter distances
+            Properties.UserSettings.Default.usetSplitter1Distance = split1Dist;
+            Properties.UserSettings.Default.usetSplitter2Distance = split2Dist;
+
+            // save show deleted previous state
+            Properties.UserSettings.Default.usetShowDeleted = blnShowDeleted;
+
+            Properties.UserSettings.Default.Save();
         }
 
 
@@ -6046,8 +6260,8 @@ namespace HackPDM
             treeView1.SelectedNode = tnSelected;
             treeView1.SelectedNode.Expand();
 
-            dsList.Tables[0].Select(String.Format("entry_name='{0}'", strShortName.Replace("'","''")));
-            foreach(ListViewItem li in listView1.Items)
+            dsList.Tables[0].Select(String.Format("entry_name='{0}'", strShortName.Replace("'", "''")));
+            foreach (ListViewItem li in listView1.Items)
             {
                 if (li.Text == strShortName)
                 {
@@ -6109,7 +6323,7 @@ namespace HackPDM
             // report
             if (intSelected > intOpened)
             {
-                MessageBox.Show(String.Format("{0} of {1} files could not be opened", intSelected-intOpened, intSelected));
+                MessageBox.Show(String.Format("{0} of {1} files could not be opened", intSelected - intOpened, intSelected));
                 return;
             }
 
@@ -6177,13 +6391,23 @@ namespace HackPDM
                 DoSearch();
                 return true;
             }
+            if (keyData == Keys.F5)
+            {
+                ResetView(treeView1.SelectedNode.FullPath);
+            }
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
+        private void splitContainer2_SplitterMoved(object sender, SplitterEventArgs e)
+        {
+            split2Dist = splitContainer2.SplitterDistance;
+        }
+
+        private void splitContainer1_SplitterMoved(object sender, SplitterEventArgs e)
+        {
+            split1Dist = splitContainer1.SplitterDistance;
+        }
     }
-
-
-
 
     public class ImgConvert : System.Windows.Forms.AxHost
     {

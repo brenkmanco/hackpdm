@@ -7,7 +7,6 @@ using System.IO;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using OpenMcdf;
-using SwModelReaderCore;
 
 namespace HackPDM
 {

@@ -213,12 +213,11 @@ namespace HackPDM
             items.Add(0,"");
             try
             {
-                NpgsqlDataReader dr = command.ExecuteReader();
-                while (dr.Read())
+                using (NpgsqlDataReader dr = command.ExecuteReader())
                 {
-                    items.Add( (Int32)dr["cat_id"], (string)dr["cat_name"] );
+                    while (dr.Read())
+                        items.Add((Int32)dr["cat_id"], (string)dr["cat_name"]);
                 }
-
             }
             catch (Exception ex)
             {

@@ -56,8 +56,8 @@ namespace HackPDM
 
             // load profile strings
             //string strTest = Application.LocalUserAppDataPath;
-            strDefaultProfileId = Properties.Settings.Default.usetDefaultProfile;
-            string strXmlProfiles = Properties.Settings.Default.usetProfiles;
+            strDefaultProfileId = Properties.UserSettings.Default.usetDefaultProfile;
+            string strXmlProfiles = Properties.UserSettings.Default.usetProfiles;
 
 
             if (strXmlProfiles == "")
@@ -179,9 +179,9 @@ namespace HackPDM
         {
             StringWriter writer = new StringWriter();
             dtProfiles.WriteXml(writer);
-            Properties.Settings.Default.usetProfiles = writer.ToString();
-            Properties.Settings.Default.usetDefaultProfile = strDefaultProfileId;
-            Properties.Settings.Default.Save();
+            Properties.UserSettings.Default.usetProfiles = writer.ToString();
+            Properties.UserSettings.Default.usetDefaultProfile = strDefaultProfileId;
+            Properties.UserSettings.Default.Save();
             this.Close();
         }
 

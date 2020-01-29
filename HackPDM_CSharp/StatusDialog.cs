@@ -108,15 +108,13 @@ namespace HackPDM
         
         public void OperationCompleted() {
             if (ErrorCount != 0)
-            {
                 AddStatusLine("ERROR", String.Format("Encountered {0} errors", ErrorCount));
-                cmdCancel.Enabled = false;
-                cmdClose.Enabled = true;
-            }
             else if (cbxAutoClose.Checked == true)
                 this.Close();
+            cmdCancel.Enabled = false;
+            cmdClose.Enabled = true;
         }
-        
-        
+
+
     }
 }
