@@ -2,16 +2,43 @@
 <SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="HackPDM.Properties" GeneratedClassName="UserSettings">
   <Profiles />
   <Settings>
+    <Setting Name="usetShowDeleted" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="OdooUrl" Type="System.String" Scope="User">
+      <Value Profile="(Default)">http://10.0.0.52:8069/xmlrpc</Value>
+    </Setting>
+    <Setting Name="OdooDb" Type="System.String" Scope="User">
+      <Value Profile="(Default)">odoopdm</Value>
+    </Setting>
     <Setting Name="usetWindowState" Type="System.Windows.Forms.FormWindowState" Scope="User">
-      <Value Profile="(Default)">Normal</Value>
+      <Value Profile="(Default)">Maximized</Value>
     </Setting>
     <Setting Name="usetProfiles" Type="System.String" Scope="User">
-      <Value Profile="(Default)" />
+      <Value Profile="(Default)">&lt;DocumentElement&gt;
+  &lt;profiles&gt;
+    &lt;PfGuid&gt;71fa2431-ceaf-4147-86e4-0c971edf14cb&lt;/PfGuid&gt;
+    &lt;PfName&gt;New&lt;/PfName&gt;
+    &lt;DbServ&gt;hackpdm.zip.azi&lt;/DbServ&gt;
+    &lt;DbPort&gt;5432&lt;/DbPort&gt;
+    &lt;DbUser&gt;hackpdm&lt;/DbUser&gt;
+    &lt;DbPass&gt;hackpdm&lt;/DbPass&gt;
+    &lt;DbName&gt;hackpdm&lt;/DbName&gt;
+    &lt;DavServ&gt;http://hackpdm.zip.azi&lt;/DavServ&gt;
+    &lt;DavPort&gt;80&lt;/DavPort&gt;
+    &lt;DavUser /&gt;
+    &lt;DavPass /&gt;
+    &lt;DavPath&gt;/webdav&lt;/DavPath&gt;
+    &lt;FsRoot&gt;C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa&lt;/FsRoot&gt;
+    &lt;Username&gt;mtaylor&lt;/Username&gt;
+    &lt;Password&gt;matt&lt;/Password&gt;
+  &lt;/profiles&gt;
+&lt;/DocumentElement&gt;</Value>
     </Setting>
     <Setting Name="usetColumnWidths" Type="System.Collections.Specialized.StringCollection" Scope="User">
       <Value Profile="(Default)">&lt;?xml version="1.0" encoding="utf-16"?&gt;
-&lt;ArrayOfString xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"&gt;
-  &lt;string&gt;300&lt;/string&gt;
+&lt;ArrayOfString xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"&gt;
+  &lt;string&gt;655&lt;/string&gt;
   &lt;string&gt;75&lt;/string&gt;
   &lt;string&gt;120&lt;/string&gt;
   &lt;string&gt;60&lt;/string&gt;
@@ -23,22 +50,43 @@
 &lt;/ArrayOfString&gt;</Value>
     </Setting>
     <Setting Name="usetDefaultProfile" Type="System.String" Scope="User">
-      <Value Profile="(Default)" />
-    </Setting>
-    <Setting Name="usetShowDeleted" Type="System.Boolean" Scope="User">
-      <Value Profile="(Default)">False</Value>
+      <Value Profile="(Default)">71fa2431-ceaf-4147-86e4-0c971edf14cb</Value>
     </Setting>
     <Setting Name="usetWindowSize" Type="System.Drawing.Size" Scope="User">
-      <Value Profile="(Default)">0, 0</Value>
+      <Value Profile="(Default)">1874, 1096</Value>
     </Setting>
     <Setting Name="usetWindowLocation" Type="System.Drawing.Point" Scope="User">
-      <Value Profile="(Default)">0, 0</Value>
+      <Value Profile="(Default)">54, -8</Value>
     </Setting>
     <Setting Name="usetSplitter2Distance" Type="System.Int32" Scope="User">
-      <Value Profile="(Default)">0</Value>
+      <Value Profile="(Default)">350</Value>
     </Setting>
     <Setting Name="usetSplitter1Distance" Type="System.Int32" Scope="User">
-      <Value Profile="(Default)">0</Value>
+      <Value Profile="(Default)">757</Value>
+    </Setting>
+    <Setting Name="usetLv1SortColumn" Type="System.String" Scope="User">
+      <Value Profile="(Default)">2</Value>
+    </Setting>
+    <Setting Name="usetLv1SortOrder" Type="System.String" Scope="User">
+      <Value Profile="(Default)">Ascending</Value>
+    </Setting>
+    <Setting Name="DownloadBatchSize" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">25</Value>
+    </Setting>
+    <Setting Name="HistoryLengthSize" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">1000</Value>
+    </Setting>
+    <Setting Name="SkipText" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="PWAPathAbsolute" Type="System.String" Scope="User">
+      <Value Profile="(Default)">C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa</Value>
+    </Setting>
+    <Setting Name="PWAPathRelative" Type="System.String" Scope="User">
+      <Value Profile="(Default)">pwa</Value>
+    </Setting>
+    <Setting Name="ProjectDirectory" Type="System.String" Scope="User">
+      <Value Profile="(Default)">C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp</Value>
     </Setting>
   </Settings>
 </SettingsFile>

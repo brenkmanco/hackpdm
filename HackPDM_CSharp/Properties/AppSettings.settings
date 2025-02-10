@@ -1,0 +1,24 @@
+﻿<?xml version='1.0' encoding='utf-8'?>
+<SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="HackPDM.Properties" GeneratedClassName="AppSettings">
+  <Profiles />
+  <Settings>
+    <Setting Name="OdooCredentialTarget" Type="System.String" Scope="User">
+      <Value Profile="(Default)">HackPDM-OdooUser</Value>
+    </Setting>
+    <Setting Name="SwLicenseKey" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="AreaFactor" Type="System.Decimal" Scope="User">
+      <Value Profile="(Default)">2.75</Value>
+    </Setting>
+    <Setting Name="MeasureByteSize" Type="System.Double" Scope="User">
+      <Value Profile="(Default)">1024</Value>
+    </Setting>
+    <Setting Name="MeasureFileSize" Type="System.String" Scope="User">
+      <Value Profile="(Default)">KiloByte</Value>
+    </Setting>
+    <Setting Name="FileSizeMult" Type="System.Double" Scope="User">
+      <Value Profile="(Default)">1</Value>
+    </Setting>
+  </Settings>
+</SettingsFile>

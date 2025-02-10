@@ -547,7 +547,7 @@ $BODY$
 		)
 		SELECT
 			parent_id,
-			dir_id
+			dir_id4
 		FROM included_dirs;
 $BODY$
   LANGUAGE sql VOLATILE

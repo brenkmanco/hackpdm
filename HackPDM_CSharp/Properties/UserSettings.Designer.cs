@@ -12,7 +12,7 @@ namespace HackPDM.Properties {
     
     
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "16.4.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "17.12.0.0")]
     internal sealed partial class UserSettings : global::System.Configuration.ApplicationSettingsBase {
         
         private static UserSettings defaultInstance = ((UserSettings)(global::System.Configuration.ApplicationSettingsBase.Synchronized(new UserSettings())));
@@ -25,7 +25,43 @@ namespace HackPDM.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("Normal")]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool usetShowDeleted {
+            get {
+                return ((bool)(this["usetShowDeleted"]));
+            }
+            set {
+                this["usetShowDeleted"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("http://10.0.0.52:8069/xmlrpc")]
+        public string OdooUrl {
+            get {
+                return ((string)(this["OdooUrl"]));
+            }
+            set {
+                this["OdooUrl"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("odoopdm")]
+        public string OdooDb {
+            get {
+                return ((string)(this["OdooDb"]));
+            }
+            set {
+                this["OdooDb"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Maximized")]
         public global::System.Windows.Forms.FormWindowState usetWindowState {
             get {
                 return ((global::System.Windows.Forms.FormWindowState)(this["usetWindowState"]));
@@ -37,7 +73,25 @@ namespace HackPDM.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        [global::System.Configuration.DefaultSettingValueAttribute(@"<DocumentElement>
+  <profiles>
+    <PfGuid>71fa2431-ceaf-4147-86e4-0c971edf14cb</PfGuid>
+    <PfName>New</PfName>
+    <DbServ>hackpdm.zip.azi</DbServ>
+    <DbPort>5432</DbPort>
+    <DbUser>hackpdm</DbUser>
+    <DbPass>hackpdm</DbPass>
+    <DbName>hackpdm</DbName>
+    <DavServ>http://hackpdm.zip.azi</DavServ>
+    <DavPort>80</DavPort>
+    <DavUser />
+    <DavPass />
+    <DavPath>/webdav</DavPath>
+    <FsRoot>C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa</FsRoot>
+    <Username>mtaylor</Username>
+    <Password>matt</Password>
+  </profiles>
+</DocumentElement>")]
         public string usetProfiles {
             get {
                 return ((string)(this["usetProfiles"]));
@@ -50,8 +104,8 @@ namespace HackPDM.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute(@"<?xml version=""1.0"" encoding=""utf-16""?>
-<ArrayOfString xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"">
-  <string>300</string>
+<ArrayOfString xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"">
+  <string>655</string>
   <string>75</string>
   <string>120</string>
   <string>60</string>
@@ -72,7 +126,7 @@ namespace HackPDM.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        [global::System.Configuration.DefaultSettingValueAttribute("71fa2431-ceaf-4147-86e4-0c971edf14cb")]
         public string usetDefaultProfile {
             get {
                 return ((string)(this["usetDefaultProfile"]));
@@ -84,19 +138,7 @@ namespace HackPDM.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
-        public bool usetShowDeleted {
-            get {
-                return ((bool)(this["usetShowDeleted"]));
-            }
-            set {
-                this["usetShowDeleted"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0, 0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("1874, 1096")]
         public global::System.Drawing.Size usetWindowSize {
             get {
                 return ((global::System.Drawing.Size)(this["usetWindowSize"]));
@@ -108,7 +150,7 @@ namespace HackPDM.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0, 0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("54, -8")]
         public global::System.Drawing.Point usetWindowLocation {
             get {
                 return ((global::System.Drawing.Point)(this["usetWindowLocation"]));
@@ -120,7 +162,7 @@ namespace HackPDM.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("350")]
         public int usetSplitter2Distance {
             get {
                 return ((int)(this["usetSplitter2Distance"]));
@@ -132,13 +174,109 @@ namespace HackPDM.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("757")]
         public int usetSplitter1Distance {
             get {
                 return ((int)(this["usetSplitter1Distance"]));
             }
             set {
                 this["usetSplitter1Distance"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
+        public string usetLv1SortColumn {
+            get {
+                return ((string)(this["usetLv1SortColumn"]));
+            }
+            set {
+                this["usetLv1SortColumn"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Ascending")]
+        public string usetLv1SortOrder {
+            get {
+                return ((string)(this["usetLv1SortOrder"]));
+            }
+            set {
+                this["usetLv1SortOrder"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("25")]
+        public int DownloadBatchSize {
+            get {
+                return ((int)(this["DownloadBatchSize"]));
+            }
+            set {
+                this["DownloadBatchSize"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1000")]
+        public int HistoryLengthSize {
+            get {
+                return ((int)(this["HistoryLengthSize"]));
+            }
+            set {
+                this["HistoryLengthSize"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool SkipText {
+            get {
+                return ((bool)(this["SkipText"]));
+            }
+            set {
+                this["SkipText"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\pwa")]
+        public string PWAPathAbsolute {
+            get {
+                return ((string)(this["PWAPathAbsolute"]));
+            }
+            set {
+                this["PWAPathAbsolute"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("pwa")]
+        public string PWAPathRelative {
+            get {
+                return ((string)(this["PWAPathRelative"]));
+            }
+            set {
+                this["PWAPathRelative"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp")]
+        public string ProjectDirectory {
+            get {
+                return ((string)(this["ProjectDirectory"]));
+            }
+            set {
+                this["ProjectDirectory"] = value;
             }
         }
     }
