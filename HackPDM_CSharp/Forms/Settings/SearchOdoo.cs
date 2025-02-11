@@ -373,6 +373,7 @@ namespace HackPDM.Forms.Settings
 		}
 		#endregion
 
+		
 		private async void FindSearchSelection(ListViewItem item)
 		{
 			if (item == null) return;
@@ -492,18 +493,18 @@ namespace HackPDM.Forms.Settings
 				MessageBox.Show("Can't checkout local only entries");
 				return;
 			}
-			CheckOutItems(OdooSearchResults.SelectedItems);
+			await CheckOutItems(OdooSearchResults.SelectedItems);
 		}
-		private void unCheckoutToolStripMenuItem_Click( object sender, EventArgs e )
+		private async void unCheckoutToolStripMenuItem_Click( object sender, EventArgs e )
 		{
 			if (OdooLocalOnly.Checked)
 			{
 				MessageBox.Show("Can't uncheckout local only entries");
 				return;
 			}
-			CheckOutItems(OdooSearchResults.SelectedItems, false);
+			await CheckOutItems(OdooSearchResults.SelectedItems, false);
 		}
-		private async void CheckOutItems(IEnumerable items, bool willCheckout = true)
+		private async Task CheckOutItems(IEnumerable items, bool willCheckout = true)
 		{
 			ArrayList ids = new();
 			foreach (ListViewItem item in items)
@@ -526,9 +527,61 @@ namespace HackPDM.Forms.Settings
 
 		private void openToolStripMenuItem_Click( object sender, EventArgs e )
 		{
+			if (OdooLocalOnly.Checked)
+			{
+				foreach (ListViewItem item in OdooSearchResults.SelectedItems)
+				{
+					string path = item.SubItems[HackFileManager.NameConfig [ "SearchName" ]].Text;
+					OpenLocalFile(path);
+				}
+			}
+			else
+			{
+				foreach (ListViewItem item in OdooSearchResults.SelectedItems)
+				{
+					int id = int.Parse(item.SubItems[HackFileManager.NameConfig [ "SearchID" ]].Text);
+					DownloadRemoteFile(id);
+				}
+			}
+			
+		}
 
+		private void checkoutOpenToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+			CheckOutMenuItem_Click(sender, e);
+			openToolStripMenuItem_Click(sender, e);
+		}
+
+		private void OpenLocalFile( string path )
+		{
+			FileOperations.OpenFile( path );
+		}
+		private void DownloadRemoteFile( int entryID )
+		{
+			const string latest_version = "latest_version_id";
+			HpVersion version = HpEntry.GetRelatedRecordByIDS<HpVersion>(new ArrayList() { entryID }, latest_version, excludedFields: ["preview_image"]).First();
+
+			if ( version == null )
+				return;
+
+			// download version data and place into temporary folder
+			version.DownloadFile();
+			FileOperations.OpenFile( Path.Combine(HackDefaults.PWAPathAbsolute, version.winPathway, version.name));
+		}
+		private void PreviewRemoteFile( int entryID )
+		{
+			const string latest_version = "latest_version_id";
+			HpVersion version = HpEntry.GetRelatedRecordByIDS<HpVersion>(new ArrayList() { entryID }, latest_version, excludedFields: ["preview_image"]).First();
+
+			if ( version == null )
+				return;
+
+			// download version data and place into temporary folder
+			version.DownloadFile( Path.GetTempPath() );
+			FileOperations.OpenFile( Path.Combine( version.winPathway, version.name ) );
 		}
 	}
+
 
 	public class ListNameCompare : IComparer, IComparer<ListViewItem>
 	{

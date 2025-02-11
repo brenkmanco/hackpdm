@@ -33,6 +33,8 @@
 			this.OdooDirectoryTree = new System.Windows.Forms.TreeView();
 			this.OdooCMSTree = new System.Windows.Forms.ContextMenuStrip(this.components);
 			this.getLatestToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.topDirectoryToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.allDirectoriesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.toolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
 			this.commitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.undoToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -54,6 +56,7 @@
 			this.OpenEntryStrip = new System.Windows.Forms.ToolStripMenuItem();
 			this.OpenLatestRemoteStrip = new System.Windows.Forms.ToolStripMenuItem();
 			this.OpenLatestLocalStrip = new System.Windows.Forms.ToolStripMenuItem();
+			this.fileDirectoryToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.ilListIcons = new System.Windows.Forms.ImageList(this.components);
 			this.tabControl1 = new System.Windows.Forms.TabControl();
 			this.OdooHistoryPage = new System.Windows.Forms.TabPage();
@@ -75,8 +78,9 @@
 			this.OdooRefreshDropdown = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooSearchDropdown = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooManageTypesDropdown = new System.Windows.Forms.ToolStripMenuItem();
-			this.topDirectoryToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-			this.allDirectoriesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.unDeleteToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+			this.topDirectoryToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+			this.allDirectoriesToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooCMSTree.SuspendLayout();
 			this.OdooCMSList.SuspendLayout();
 			this.tabControl1.SuspendLayout();
@@ -123,42 +127,57 @@
             this.topDirectoryToolStripMenuItem,
             this.allDirectoriesToolStripMenuItem});
 			this.getLatestToolStripMenuItem.Name = "getLatestToolStripMenuItem";
-			this.getLatestToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.getLatestToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.getLatestToolStripMenuItem.Text = "Get Latest";
 			this.getLatestToolStripMenuItem.Click += new System.EventHandler(this.GetLatestStrip_Click);
+			// 
+			// topDirectoryToolStripMenuItem
+			// 
+			this.topDirectoryToolStripMenuItem.Name = "topDirectoryToolStripMenuItem";
+			this.topDirectoryToolStripMenuItem.Size = new System.Drawing.Size(147, 22);
+			this.topDirectoryToolStripMenuItem.Text = "Top Directory";
+			this.topDirectoryToolStripMenuItem.Click += new System.EventHandler(this.topDirectoryToolStripMenuItem_Click);
+			// 
+			// allDirectoriesToolStripMenuItem
+			// 
+			this.allDirectoriesToolStripMenuItem.Name = "allDirectoriesToolStripMenuItem";
+			this.allDirectoriesToolStripMenuItem.Size = new System.Drawing.Size(147, 22);
+			this.allDirectoriesToolStripMenuItem.Text = "All Directories";
+			this.allDirectoriesToolStripMenuItem.Click += new System.EventHandler(this.allDirectoriesToolStripMenuItem_Click);
 			// 
 			// toolStripMenuItem1
 			// 
 			this.toolStripMenuItem1.Name = "toolStripMenuItem1";
-			this.toolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
+			this.toolStripMenuItem1.Size = new System.Drawing.Size(157, 22);
 			this.toolStripMenuItem1.Text = "Checkout";
 			this.toolStripMenuItem1.Click += new System.EventHandler(this.CheckoutTreeStrip_Click);
 			// 
 			// commitToolStripMenuItem
 			// 
 			this.commitToolStripMenuItem.Name = "commitToolStripMenuItem";
-			this.commitToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.commitToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.commitToolStripMenuItem.Text = "Commit";
 			this.commitToolStripMenuItem.Click += new System.EventHandler(this.CommitTreeStrip_Click);
 			// 
 			// undoToolStripMenuItem
 			// 
 			this.undoToolStripMenuItem.Name = "undoToolStripMenuItem";
-			this.undoToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.undoToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.undoToolStripMenuItem.Text = "Undo Checkout";
 			this.undoToolStripMenuItem.Click += new System.EventHandler(this.UnCheckoutTreeStrip_Click);
 			// 
 			// analyzeToolStripMenuItem
 			// 
 			this.analyzeToolStripMenuItem.Name = "analyzeToolStripMenuItem";
-			this.analyzeToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.analyzeToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.analyzeToolStripMenuItem.Text = "Analyze";
 			// 
 			// deleteToolStripMenuItem
 			// 
 			this.deleteToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.logicalDeleteToolStripMenuItem,
-            this.perminentDeleteToolStripMenuItem});
+            this.perminentDeleteToolStripMenuItem,
+            this.unDeleteToolStripMenuItem1});
 			this.deleteToolStripMenuItem.Name = "deleteToolStripMenuItem";
 			this.deleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
 			this.deleteToolStripMenuItem.Text = "Delete";
@@ -222,6 +241,8 @@
 			this.toolStripMenuItem2.Name = "toolStripMenuItem2";
 			this.toolStripMenuItem2.Size = new System.Drawing.Size(157, 22);
 			this.toolStripMenuItem2.Text = "Get Latest";
+			this.toolStripMenuItem2.ToolTipText = "Checks to see if you have the same checksum as any of the version records and if " +
+    "not then it will try to download it to the specific local directory";
 			this.toolStripMenuItem2.Click += new System.EventHandler(this.GetLatestEntryStrip_Click);
 			// 
 			// CheckoutStripMenuItem
@@ -236,6 +257,8 @@
 			this.CommitEntryStrip.Name = "CommitEntryStrip";
 			this.CommitEntryStrip.Size = new System.Drawing.Size(157, 22);
 			this.CommitEntryStrip.Text = "Commit";
+			this.CommitEntryStrip.ToolTipText = "Checks to see if the version has the same checksum in the versions records and if" +
+    " not then it will try to commit the file to Odoo to store.";
 			this.CommitEntryStrip.Click += new System.EventHandler(this.CommitEntryStrip_Click);
 			// 
 			// toolStripMenuItem5
@@ -252,33 +275,36 @@
             this.unDeleteToolStripMenuItem,
             this.permanentDeleteToolStripMenuItem});
 			this.toolStripMenuItem6.Name = "toolStripMenuItem6";
-			this.toolStripMenuItem6.Size = new System.Drawing.Size(157, 22);
+			this.toolStripMenuItem6.Size = new System.Drawing.Size(180, 22);
 			this.toolStripMenuItem6.Text = "Delete";
 			// 
 			// logicalDeleteToolStripMenuItem1
 			// 
 			this.logicalDeleteToolStripMenuItem1.Name = "logicalDeleteToolStripMenuItem1";
-			this.logicalDeleteToolStripMenuItem1.Size = new System.Drawing.Size(168, 22);
+			this.logicalDeleteToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
 			this.logicalDeleteToolStripMenuItem1.Text = "Logical Delete";
+			this.logicalDeleteToolStripMenuItem1.ToolTipText = "sets the Entry to inactive in Odoo";
 			this.logicalDeleteToolStripMenuItem1.Click += new System.EventHandler(this.LogicalDeleteEntryStrip_Click);
 			// 
 			// unDeleteToolStripMenuItem
 			// 
 			this.unDeleteToolStripMenuItem.Name = "unDeleteToolStripMenuItem";
-			this.unDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
+			this.unDeleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
 			this.unDeleteToolStripMenuItem.Text = "UnDelete";
+			this.unDeleteToolStripMenuItem.Click += new System.EventHandler(this.unDeleteToolStripMenuItem_Click);
 			// 
 			// permanentDeleteToolStripMenuItem
 			// 
 			this.permanentDeleteToolStripMenuItem.Name = "permanentDeleteToolStripMenuItem";
-			this.permanentDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
+			this.permanentDeleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
 			this.permanentDeleteToolStripMenuItem.Text = "Permanent Delete";
 			// 
 			// OpenEntryStrip
 			// 
 			this.OpenEntryStrip.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.OpenLatestRemoteStrip,
-            this.OpenLatestLocalStrip});
+            this.OpenLatestLocalStrip,
+            this.fileDirectoryToolStripMenuItem});
 			this.OpenEntryStrip.Name = "OpenEntryStrip";
 			this.OpenEntryStrip.Size = new System.Drawing.Size(157, 22);
 			this.OpenEntryStrip.Text = "Open";
@@ -286,17 +312,28 @@
 			// 
 			// OpenLatestRemoteStrip
 			// 
+			this.OpenLatestRemoteStrip.AutoToolTip = true;
 			this.OpenLatestRemoteStrip.Name = "OpenLatestRemoteStrip";
-			this.OpenLatestRemoteStrip.Size = new System.Drawing.Size(149, 22);
-			this.OpenLatestRemoteStrip.Text = "Latest Remote";
+			this.OpenLatestRemoteStrip.Size = new System.Drawing.Size(193, 22);
+			this.OpenLatestRemoteStrip.Text = "Preview Latest Remote";
+			this.OpenLatestRemoteStrip.ToolTipText = "Downloads the version file and puts it in the temporary folder path";
 			this.OpenLatestRemoteStrip.Click += new System.EventHandler(this.OpenLatestRemoteStrip_Click);
 			// 
 			// OpenLatestLocalStrip
 			// 
 			this.OpenLatestLocalStrip.Name = "OpenLatestLocalStrip";
-			this.OpenLatestLocalStrip.Size = new System.Drawing.Size(149, 22);
+			this.OpenLatestLocalStrip.Size = new System.Drawing.Size(193, 22);
 			this.OpenLatestLocalStrip.Text = "Latest Local";
+			this.OpenLatestLocalStrip.ToolTipText = "Opens the latest local file";
 			this.OpenLatestLocalStrip.Click += new System.EventHandler(this.OpenLatestLocalStrip_Click);
+			// 
+			// fileDirectoryToolStripMenuItem
+			// 
+			this.fileDirectoryToolStripMenuItem.Name = "fileDirectoryToolStripMenuItem";
+			this.fileDirectoryToolStripMenuItem.Size = new System.Drawing.Size(193, 22);
+			this.fileDirectoryToolStripMenuItem.Text = "File Directory";
+			this.fileDirectoryToolStripMenuItem.ToolTipText = "Open file explorer to the parent folder";
+			this.fileDirectoryToolStripMenuItem.Click += new System.EventHandler(this.fileDirectoryToolStripMenuItem_Click);
 			// 
 			// ilListIcons
 			// 
@@ -376,6 +413,7 @@
 			this.OdooParents.UseCompatibleStateImageBehavior = false;
 			this.OdooParents.View = System.Windows.Forms.View.Details;
 			this.OdooParents.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.OdooParents_ItemSelectionChanged);
+			this.OdooParents.DoubleClick += new System.EventHandler(this.OdooParents_DoubleClick);
 			// 
 			// OdooChildrenPage
 			// 
@@ -399,6 +437,7 @@
 			this.OdooChildren.UseCompatibleStateImageBehavior = false;
 			this.OdooChildren.View = System.Windows.Forms.View.Details;
 			this.OdooChildren.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.OdooChildren_ItemSelectionChanged);
+			this.OdooChildren.DoubleClick += new System.EventHandler(this.OdooChildren_DoubleClick);
 			// 
 			// OdooPropertiesPage
 			// 
@@ -536,19 +575,29 @@
 			this.OdooManageTypesDropdown.Text = "Manage File Types";
 			this.OdooManageTypesDropdown.Click += new System.EventHandler(this.OdooManageTypesDropdown_Click);
 			// 
-			// topDirectoryToolStripMenuItem
+			// unDeleteToolStripMenuItem1
 			// 
-			this.topDirectoryToolStripMenuItem.Name = "topDirectoryToolStripMenuItem";
-			this.topDirectoryToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
-			this.topDirectoryToolStripMenuItem.Text = "Top Directory";
-			this.topDirectoryToolStripMenuItem.Click += new System.EventHandler(this.topDirectoryToolStripMenuItem_Click);
+			this.unDeleteToolStripMenuItem1.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.topDirectoryToolStripMenuItem1,
+            this.allDirectoriesToolStripMenuItem1});
+			this.unDeleteToolStripMenuItem1.Name = "unDeleteToolStripMenuItem1";
+			this.unDeleteToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
+			this.unDeleteToolStripMenuItem1.Text = "UnDelete";
+			this.unDeleteToolStripMenuItem1.Click += new System.EventHandler(this.unDeleteToolStripMenuItem1_Click);
 			// 
-			// allDirectoriesToolStripMenuItem
+			// topDirectoryToolStripMenuItem1
 			// 
-			this.allDirectoriesToolStripMenuItem.Name = "allDirectoriesToolStripMenuItem";
-			this.allDirectoriesToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
-			this.allDirectoriesToolStripMenuItem.Text = "All Directories";
-			this.allDirectoriesToolStripMenuItem.Click += new System.EventHandler(this.allDirectoriesToolStripMenuItem_Click);
+			this.topDirectoryToolStripMenuItem1.Name = "topDirectoryToolStripMenuItem1";
+			this.topDirectoryToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
+			this.topDirectoryToolStripMenuItem1.Text = "Top Directory";
+			this.topDirectoryToolStripMenuItem1.Click += new System.EventHandler(this.topDirectoryToolStripMenuItem1_Click);
+			// 
+			// allDirectoriesToolStripMenuItem1
+			// 
+			this.allDirectoriesToolStripMenuItem1.Name = "allDirectoriesToolStripMenuItem1";
+			this.allDirectoriesToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
+			this.allDirectoriesToolStripMenuItem1.Text = "All Directories";
+			this.allDirectoriesToolStripMenuItem1.Click += new System.EventHandler(this.allDirectoriesToolStripMenuItem1_Click);
 			// 
 			// HackFileManager
 			// 
@@ -630,5 +679,9 @@
 		private System.Windows.Forms.ToolStripMenuItem OpenLatestLocalStrip;
 		private System.Windows.Forms.ToolStripMenuItem topDirectoryToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem allDirectoriesToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem fileDirectoryToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem unDeleteToolStripMenuItem1;
+		private System.Windows.Forms.ToolStripMenuItem topDirectoryToolStripMenuItem1;
+		private System.Windows.Forms.ToolStripMenuItem allDirectoriesToolStripMenuItem1;
 	}
 }

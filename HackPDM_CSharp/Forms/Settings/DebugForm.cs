@@ -27,7 +27,7 @@ namespace HackPDM.Forms.Settings
 			{
 				DebugChooseForm.Items.Add(form);
 				//if (form == FormSelection.HackFileManager)
-				if (form == FormSelection.OdooFileTypeManager)
+				if (form == FormSelection.HackFileManager)
 					DebugChooseForm.SelectedItem = form;
 			}
 		}

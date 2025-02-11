@@ -518,10 +518,16 @@ namespace HackPDM
             deleted = true;
             await WriteChangedValuesAsync( "deleted" );
 		}
+		internal async Task LogicalUnDelete() 
+        {
+            deleted = false;
+            await WriteChangedValuesAsync( "deleted" );
+        }
 		public override string ToString()
 		{
 			return name;
 		}
+
 	}
     public class HpEntryNameFilter : HpBaseModel<HpEntryNameFilter>
     {

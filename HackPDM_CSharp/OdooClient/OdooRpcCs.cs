@@ -98,10 +98,6 @@ namespace OdooRpcCs
         }
 
         //  [("res_model", "=", "hp.version"), ("res_id", "=", 1)]
-        public static ArrayList ParamHelper(ParameterHelper PH)
-        {
-            return PH.Build();
-        }
         public static object Execute(string model, string method, ArrayList parameters, int? timeout = null)
         {
             latestException = "";

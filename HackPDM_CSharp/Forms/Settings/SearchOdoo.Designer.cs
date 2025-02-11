@@ -36,6 +36,11 @@
 			this.OdooSearchResults = new System.Windows.Forms.ListView();
 			this.columnHeader1 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
 			this.columnHeader2 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+			this.SearchContext = new System.Windows.Forms.ContextMenuStrip(this.components);
+			this.CheckOutMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.checkoutOpenToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.unCheckoutToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.openToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooDeletedIsLocal = new System.Windows.Forms.CheckBox();
 			this.btnCancel = new System.Windows.Forms.Button();
 			this.btnSearch = new System.Windows.Forms.Button();
@@ -54,10 +59,6 @@
 			this.OdooPropertyReset = new System.Windows.Forms.Button();
 			this.label4 = new System.Windows.Forms.Label();
 			this.OdooSearchComparer = new System.Windows.Forms.ComboBox();
-			this.SearchContext = new System.Windows.Forms.ContextMenuStrip(this.components);
-			this.CheckOutMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-			this.unCheckoutToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-			this.openToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.SearchContext.SuspendLayout();
 			this.SuspendLayout();
 			// 
@@ -131,6 +132,45 @@
 			this.columnHeader2.Text = "File Path";
 			this.columnHeader2.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
 			this.columnHeader2.Width = 638;
+			// 
+			// SearchContext
+			// 
+			this.SearchContext.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.CheckOutMenuItem,
+            this.unCheckoutToolStripMenuItem,
+            this.openToolStripMenuItem});
+			this.SearchContext.Name = "SearchContext";
+			this.SearchContext.Size = new System.Drawing.Size(141, 70);
+			// 
+			// CheckOutMenuItem
+			// 
+			this.CheckOutMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.checkoutOpenToolStripMenuItem});
+			this.CheckOutMenuItem.Name = "CheckOutMenuItem";
+			this.CheckOutMenuItem.Size = new System.Drawing.Size(140, 22);
+			this.CheckOutMenuItem.Text = "Checkout";
+			this.CheckOutMenuItem.Click += new System.EventHandler(this.CheckOutMenuItem_Click);
+			// 
+			// checkoutOpenToolStripMenuItem
+			// 
+			this.checkoutOpenToolStripMenuItem.Name = "checkoutOpenToolStripMenuItem";
+			this.checkoutOpenToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.checkoutOpenToolStripMenuItem.Text = "Checkout and Open";
+			this.checkoutOpenToolStripMenuItem.Click += new System.EventHandler(this.checkoutOpenToolStripMenuItem_Click);
+			// 
+			// unCheckoutToolStripMenuItem
+			// 
+			this.unCheckoutToolStripMenuItem.Name = "unCheckoutToolStripMenuItem";
+			this.unCheckoutToolStripMenuItem.Size = new System.Drawing.Size(140, 22);
+			this.unCheckoutToolStripMenuItem.Text = "UnCheckout";
+			this.unCheckoutToolStripMenuItem.Click += new System.EventHandler(this.unCheckoutToolStripMenuItem_Click);
+			// 
+			// openToolStripMenuItem
+			// 
+			this.openToolStripMenuItem.Name = "openToolStripMenuItem";
+			this.openToolStripMenuItem.Size = new System.Drawing.Size(140, 22);
+			this.openToolStripMenuItem.Text = "Open";
+			this.openToolStripMenuItem.Click += new System.EventHandler(this.openToolStripMenuItem_Click);
 			// 
 			// OdooDeletedIsLocal
 			// 
@@ -319,36 +359,6 @@
 			this.OdooSearchComparer.Size = new System.Drawing.Size(48, 21);
 			this.OdooSearchComparer.TabIndex = 115;
 			// 
-			// SearchContext
-			// 
-			this.SearchContext.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.CheckOutMenuItem,
-            this.unCheckoutToolStripMenuItem,
-            this.openToolStripMenuItem});
-			this.SearchContext.Name = "SearchContext";
-			this.SearchContext.Size = new System.Drawing.Size(181, 92);
-			// 
-			// CheckOutMenuItem
-			// 
-			this.CheckOutMenuItem.Name = "CheckOutMenuItem";
-			this.CheckOutMenuItem.Size = new System.Drawing.Size(180, 22);
-			this.CheckOutMenuItem.Text = "Checkout";
-			this.CheckOutMenuItem.Click += new System.EventHandler(this.CheckOutMenuItem_Click);
-			// 
-			// unCheckoutToolStripMenuItem
-			// 
-			this.unCheckoutToolStripMenuItem.Name = "unCheckoutToolStripMenuItem";
-			this.unCheckoutToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
-			this.unCheckoutToolStripMenuItem.Text = "UnCheckout";
-			this.unCheckoutToolStripMenuItem.Click += new System.EventHandler(this.unCheckoutToolStripMenuItem_Click);
-			// 
-			// openToolStripMenuItem
-			// 
-			this.openToolStripMenuItem.Name = "openToolStripMenuItem";
-			this.openToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
-			this.openToolStripMenuItem.Text = "Open";
-			this.openToolStripMenuItem.Click += new System.EventHandler(this.openToolStripMenuItem_Click);
-			// 
 			// SearchOdoo
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -416,5 +426,6 @@
 		private System.Windows.Forms.ToolStripMenuItem CheckOutMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem unCheckoutToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem openToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem checkoutOpenToolStripMenuItem;
 	}
 }

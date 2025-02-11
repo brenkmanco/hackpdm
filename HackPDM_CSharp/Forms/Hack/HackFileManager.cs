@@ -50,8 +50,10 @@ namespace HackPDM
 			{"HistoryRelDate", "RelDate"},
 			{"ParentVersion", "Version"},
 			{"ParentName", "Name"},
+			{"ParentBasePath", "Base Path"},
 			{"ChildrenVersion", "Version"},
 			{"ChildrenName", "Name"},
+			{"ChildrenBasePath", "Base Path"},
 			{"PropertiesVersion", "Version"},
 			{"PropertiesConfiguration", "Configuration"},
 			{"PropertiesName", "Name"},
@@ -116,12 +118,14 @@ namespace HackPDM
 		readonly Dictionary<string, int> ParentRows = new()
 		{
 			{NameConfig["ParentVersion"], 50},
-			{NameConfig["ParentName"], 600},
+			{NameConfig["ParentName"], 400},
+			{NameConfig["ParentBasePath"], 600},
 		};
 		readonly Dictionary<string, int> ChildrenRows = new()
 		{
 			{NameConfig["ChildrenVersion"], 50},
-			{NameConfig["ChildrenName"], 600},
+			{NameConfig["ChildrenName"], 400},
+			{NameConfig["ChildrenBasePath"], 600},
 		};
 		readonly Dictionary<string, int> PropertiesRows = new()
 		{
@@ -842,7 +846,7 @@ namespace HackPDM
 			Task historyAndProperties = Task.Run(() =>
 			{
                 // get history list
-                versions = GetVersionsForEntry(ID, HpVersion.UsualExcludedFields);
+                versions = GetVersionsForEntry(ID, ["preview_image", "file_contents"]);
 			})
 			.ContinueWith(task1 =>
 			{
@@ -920,7 +924,7 @@ namespace HackPDM
             {
                 Hashtable ht = (Hashtable)al[0];
                 ArrayList result = (ArrayList)ht["version_ids"];
-                if (excludedFields == null) excludedFields = ["preview_image"];
+                if (excludedFields == null) excludedFields = ["preview_image", "file_contents"];
                 versions = HpVersion.GetRecordsByIDS(result, excludedFields:excludedFields);
             }
             return versions;
@@ -968,12 +972,12 @@ namespace HackPDM
             if (versionRelationship.Item1 != null 
                 && versionRelationship.Item1.Count > 0)
             {
-                parents = HpVersion.GetRecordsByIDS(versionRelationship.Item1, excludedFields: ["preview_image", "node_id", "entry_id", "dir_id", "file_modify_stamp", "checksum", "file_contents"] );
+                parents = HpVersion.GetRecordsByIDS(versionRelationship.Item1, excludedFields: ["preview_image", "node_id", "entry_id", "file_modify_stamp", "checksum", "file_contents"] );
             }
             if (versionRelationship.Item2 != null
                 && versionRelationship.Item2.Count > 0)
             {
-                children = HpVersion.GetRecordsByIDS(versionRelationship.Item2, excludedFields: ["preview_image", "node_id", "entry_id", "dir_id", "file_modify_stamp", "checksum", "file_contents"]);
+                children = HpVersion.GetRecordsByIDS(versionRelationship.Item2, excludedFields: ["preview_image", "node_id", "entry_id", "file_modify_stamp", "checksum", "file_contents"]);
             }
 
             
@@ -1084,7 +1088,7 @@ namespace HackPDM
                         ListViewItem item = EmptyListItemInternal(OdooChildren);
                         item.SubItems[ NameConfig [ "ChildrenVersion" ] ].Text      = version.ID.ToString();
                         item.SubItems[ NameConfig [ "ChildrenName" ] ].Text         = version.name;
-					
+						item.SubItems[ NameConfig [ "ChildrenBasePath" ] ].Text		= Path.Combine(/*HackDefaults.PWAPathAbsolute,*/ version.winPathway);
                         OdooChildren.Items.Add(item);
                     }
                 });
@@ -1107,6 +1111,7 @@ namespace HackPDM
 					    ListViewItem item = EmptyListItemInternal(OdooParents);
 					    item.SubItems [ NameConfig [ "ParentVersion" ] ].Text       = version.ID.ToString();
 					    item.SubItems [ NameConfig [ "ParentName" ] ].Text          = version.name;
+						item.SubItems [ NameConfig [ "ParentBasePath" ] ].Text		= version.winPathway;
 
 					    OdooParents.Items.Add( item );
 				    }
@@ -1210,53 +1215,7 @@ namespace HackPDM
 		#region Background Worker functions
 		// initialize background workers    
 		// download latest version
-		/// <summary>Handles the GetLatest event of the worker control.</summary>
-		/// <param name="sender">The source of the event.</param>
-		/// <param name="e">The <see cref="DoWorkEventArgs" /> instance containing the event data.</param>
-		private void worker_GetLatest( object sender, DoWorkEventArgs e )
-		{
-			BackgroundWorker myWorker = sender as BackgroundWorker;
-
-			HpDirectory directory = HpBaseModel<HpDirectory>.GetRecordByID((int)e.Argument);
-
-			Dialog.AddStatusLine( "INFO", $"Retrieving all entries within {directory.name}" );
-			ArrayList entryIDs = directory.GetDirectoryEntryIDs(true);
-			Dialog.AddStatusLine( "INFO", $"Found {entryIDs.Count} entries" );
-			Dialog.AddStatusLine( "INFO", $"Retrieving all latest versions associated with entries" );
-			HpVersion[] versions = GetLatestVersions(entryIDs);
-
-
-			int counter = 0;
-			int maxCount = versions.Length;
-			List<string[]> queuedAddStatus = [];
-			foreach ( HpVersion version in versions )
-			{
-				counter++;
-				bool sameChecksum = FileOperations.SameChecksum(version, ChecksumType.SHA1);
-				string fileName = Path.Combine(version.winPathway, version.name);
-				if ( !sameChecksum )
-				{
-					//dialog.AddStatusLine();
-					queuedAddStatus.Add( [ "INFO", $"Downloading missing latest file: {fileName}" ] );
-					if (!version.DownloadFile())
-					{
-						queuedAddStatus.Add( [ "INFO", $"Error downloading file: {fileName}" ] );
-					}
-				}
-				else
-				{
-					//dialog.AddStatusLine("INFO", $"Skipping download (Found): {fileName}");
-					queuedAddStatus.Add( [ "INFO", $"Skipping download (Found): {fileName}" ] );
-				}
-				if ( counter % 100 == 0 )
-				{
-					Dialog.AddStatusLines( queuedAddStatus );
-					queuedAddStatus.Clear();
-				}
-				Dialog.SetProgressBar( counter, maxCount );
-			}
-			//RestartEntries();
-		}
+		
 		/// <summary>Handles the GetLatestAsync event of the worker control.</summary>
 		/// <param name="sender">The source of the event.</param>
 		/// <param name="e">The <see cref="DoWorkEventArgs" /> instance containing the event data.</param>
@@ -1371,6 +1330,19 @@ namespace HackPDM
 				await entry.LogicalDelete();
 			}
 		}
+		private async void worker_LogicalUnDelete( object sender, DoWorkEventArgs e ) 
+		{
+			HpEntry[] entries = (HpEntry[])e.Argument;
+			object lockObject = new();
+			foreach ( var entry in entries )
+			{
+				lock ( lockObject )
+				{
+					Dialog.AddStatusLine( "INFO", $"Setting Active {entry.name}: {entry.ID}" );
+				}
+				await entry.LogicalUnDelete();
+			}
+		}
 
 		// list item select
 		private async void worker_ListItemChange(object sender, DoWorkEventArgs e)
@@ -1422,66 +1394,6 @@ namespace HackPDM
 		#endregion
 
 		#region Commit Functions
-
-		private async Task<(ConcurrentBag<HpEntry>, ConcurrentSet<HackFile>)> FilterAllEntries(ConcurrentBag<HpEntry> entries, ConcurrentSet<HackFile> hackFiles)
-		{
-			if ( entries == null || entries.Count < 1 )
-				return (null, await FilterCommitHackFiles(hackFiles));
-			if ( hackFiles == null || hackFiles.Count < 1 )
-				return (await FilterCommitEntries( entries ), null);
-
-			string[] excludedFields = ["preview_image", "attachment_id", "file_modify_stamp", "file_size", "node_id", "file_contents"];
-			ConcurrentBag<Task<HpEntry>> tasks = [];
-			object lockObject = new();
-
-			while ( entries.TryTake( out HpEntry entry ) )
-			{
-				Task<HpEntry> entryTask = Task.Run(() =>
-				{
-                    // true means that this entry is checked out
-                    if (entry.checkout_date != null && entry.checkout_date != "False")
-					{
-						lock (lockObject)
-						{
-							Dialog.AddStatusLine("INFO", $"Entry {entry.name} ({entry.ID}) is checked out to user id ({entry.checkout_user})");
-						}
-						return null;
-					}
-                    // can eventually just change this to get the list of id's available instead
-                    HpVersion[] entryVersions = GetVersionsForEntry(entry.ID, excludedFields);
-
-
-                    // check if any of the versions checksums are local
-                    if (HackFile.GetLocalVersion(entryVersions, out HackFile hack))
-					{
-						
-						lock (lockObject)
-						{
-							HpVersion temp = entryVersions.First();
-							Dialog.AddStatusLine("INFO", $"Remote {temp.name} has local version");
-						}
-
-						return null;
-					}
-					lock (lockObject)
-					{
-						Dialog.AddStatusLine("INFO", $"Remote {entryVersions.First().name} was unable to find local version");
-					}
-					return entry;
-				});
-				await entryTask;
-				tasks.Add( entryTask );
-			}
-			await Task.WhenAll( tasks );
-			return (tasks.SkipSelect(
-				taskPredicate =>
-				{
-					if ( taskPredicate.Result == null )
-						return true;
-					return false;
-				},
-				taskSelect => taskSelect.Result ).ConvertToBag(), hackFiles);
-		}
         private async Task<ConcurrentBag<HpEntry>> FilterCommitEntries( ConcurrentBag<HpEntry> entries )
         {
             if (entries == null || entries.Count < 1) return null;
@@ -1931,6 +1843,40 @@ namespace HackPDM
 				worker.CancelAsync();
 
 		}
+
+		//
+		// TODO: Implement UnDeleting from Entry List
+		//
+		private void unDeleteToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+			
+		}
+		private void unDeleteToolStripMenuItem1_Click( object sender, EventArgs e ) => UnDelete(false);
+		private void allDirectoriesToolStripMenuItem1_Click( object sender, EventArgs e ) => MessageBox.Show("Not Implemented Yet");//UnDelete(true);
+		private void topDirectoryToolStripMenuItem1_Click( object sender, EventArgs e ) => UnDelete(false);
+
+
+
+		private void UnDelete(bool withSubdirectories = false)
+		{
+			Dialog = new StatusDialog();
+			
+			HpEntry[] entries = HpEntry.GetRecordsByIDS(null, searchFilters: [new ArrayList(){"deleted", "=", true}, new ArrayList(){"dir_id", "=", (int)lastSelectedNode.Tag}], excludedFields:["type_id", "cat_id", "checkout_node"]);
+			object arguments = entries;
+
+			BackgroundWorker worker = new()
+			{
+				WorkerSupportsCancellation = true
+			};
+			worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler( ( s, ev ) => MessageBox.Show( "Finished" ) );
+			worker.DoWork += new DoWorkEventHandler( worker_LogicalUnDelete );
+			worker.RunWorkerAsync( arguments );
+
+			bool blnWorkCanceled = Dialog.ShowStatusDialog("Logically UnDelete Files");
+			if ( blnWorkCanceled )
+				worker.CancelAsync();
+		}
+
 		private void UnCheckoutTreeStrip_Click			( object sender, EventArgs e )
 		{
 			Dialog = new StatusDialog();
@@ -2138,7 +2084,32 @@ namespace HackPDM
 			}
 			if (errors.Length > 0) MessageBox.Show(errors.ToString());
 		}
+		private void fileDirectoryToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+			foreach(ListViewItem item in OdooEntryList.SelectedItems) 
+			{
+				string path = item.SubItems[ NameConfig [ "RowFullName" ] ].Text;
+				string id = item.SubItems[ NameConfig [ "RowID" ] ].Text;
 
+				try
+				{
+					// remote file path
+					if (int.TryParse(id, out int entryID))
+					{
+						path = HpDirectory.ConvertToWindowsPath(path, true);
+					}
+					FileInfo file = new FileInfo(path);
+					if (!file.Exists) continue;
+
+					FileOperations.OpenFolder(file.DirectoryName);
+				}
+				catch
+				{
+					continue;
+				}
+				//FileOperations.OpenFile(  );
+			}
+		}
 		private void OdooManageTypesDropdown_Click		( object sender, EventArgs e )
 			=> new OdooFileTypeManager( this ).Show();
 		private void OdooHistory_ItemSelectionChanged	( object sender, ListViewItemSelectionChangedEventArgs e )
@@ -2147,6 +2118,24 @@ namespace HackPDM
 			=> PreviewImageSelection( e.Item, "ParentVersion" );
 		private void OdooChildren_ItemSelectionChanged	( object sender, ListViewItemSelectionChangedEventArgs e )
 			=> PreviewImageSelection( e.Item, "ChildrenVersion" );
+		private async void OdooParents_DoubleClick		( object sender, EventArgs e )
+		{
+			ListViewItem item = OdooParents.SelectedItems?[0];
+			if (item == null) return;
+
+			string pwaPath = item.SubItems[ NameConfig[ "ParentBasePath" ] ].Text;
+			string fileName = item.SubItems[ NameConfig[ "ParentName" ] ].Text;
+			await FindSearchSelectionAsync(pwaPath, fileName);
+		}
+		private async void OdooChildren_DoubleClick		( object sender, EventArgs e )
+		{
+			ListViewItem item = OdooChildren.SelectedItems?[0];
+			if (item == null) return;
+
+			string pwaPath = item.SubItems[ NameConfig[ "ChildrenBasePath" ] ].Text;
+			string fileName = item.SubItems[ NameConfig[ "ChildrenName" ] ].Text;
+			await FindSearchSelectionAsync(pwaPath, fileName);
+		}
 
 		#endregion
 
@@ -2180,7 +2169,6 @@ namespace HackPDM
             else
                 action.Invoke(data);
 		}
-
 		internal void SafeInvoke(Control control, Action action)
 			=> SafeInvoker( control, action );
 		internal static void SafeInvoker( Control control, Action action )
@@ -2190,13 +2178,7 @@ namespace HackPDM
             else
                 action.Invoke();
 		}
-
-		#endregion
-
-
-
 		internal ImageList GetImageList() => ilListIcons;
-
 		private void OpenLocalFile( string path )
 		{
 			FileOperations.OpenFile( path );
@@ -2220,7 +2202,65 @@ namespace HackPDM
 				PreviewImage( result );
 			}
 		}
+		public async Task FindSearchSelectionAsync(string pwaPath, string fileName, string delimiter = "\\")
+		{
+			// first select the treeview node
+			// then select the listview item
+			string[] paths = pwaPath.Split([delimiter], StringSplitOptions.None);
+			
+			TreeNodeCollection nodes = OdooDirectoryTree.Nodes;
+			TreeNode node = nodes[0];
 
-		
+			try
+			{
+				for (int i = 0; i < paths.Length; i++)
+				{
+					nodes = node.Nodes;
+					
+					bool wasFound = false;
+					foreach (TreeNode n in nodes)
+					{
+						if ( n.Text == paths [ i ] )
+						{
+							wasFound = true;
+							node = n;
+							break;
+						}
+					}
+					if (!wasFound) throw new ArgumentException();
+				}
+				OdooDirectoryTree.CollapseAll();
+				lastSelectedNode = node;
+				lastSelectedNode.EnsureVisible();
+				OdooDirectoryTree.Select();
+				
+				while (!IsListLoaded)
+				{
+					await Task.Delay(100);
+				}
+				ListViewItem listItem = null;
+				string index = NameConfig [ "SearchName" ];
+				foreach (ListViewItem lv in OdooEntryList.Items)
+				{
+					if (lv.SubItems[ index ].Text == fileName)
+					{
+						listItem = lv;
+						break;
+					}
+				}
+				if (listItem == null) throw new ArgumentException();
+				
+				listItem.Selected = true;
+				listItem.Focused = true;
+				OdooEntryList.FocusedItem = listItem;
+				OdooEntryList.EnsureVisible(listItem.Index);
+			}
+			catch 
+			{
+				return;
+			}
+		}
+
+		#endregion
 	}
 }

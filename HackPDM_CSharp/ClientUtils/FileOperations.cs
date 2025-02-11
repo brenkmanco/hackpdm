@@ -416,18 +416,32 @@ namespace HackPDM
             Uri relativeUri = baseUri.MakeRelativeUri(absoluteUri);
             return Uri.UnescapeDataString(relativeUri.ToString().Replace('/', '\\'));
         }
-        public static void OpenFile(string path)
+        public static void OpenFile(string fullpath)
         {
             try
             {
-                FileInfo fileInfo = new(path);
+                FileInfo fileInfo = new(fullpath);
                 if (!fileInfo.Exists) throw new Exception();
 
                 Process.Start(fileInfo.FullName);
             }
             catch
             {
-                MessageBox.Show($"unable to open {path}");
+                MessageBox.Show($"unable to open {fullpath}");
+            }
+        }
+        public static void OpenFolder(string folderPath)
+        {
+            try
+            {
+                DirectoryInfo folderInfo = new DirectoryInfo(folderPath);
+                if (!folderInfo.Exists) throw new Exception();
+
+                Process.Start("explorer.exe", folderPath);
+            }
+            catch
+            {
+                MessageBox.Show($"unable to open {folderPath}");
             }
         }
 		public static byte [] ImageToByteArray(Image imageIn)
