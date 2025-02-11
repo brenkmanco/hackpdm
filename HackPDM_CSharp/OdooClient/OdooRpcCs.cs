@@ -17,6 +17,7 @@ namespace OdooRpcCs
 {
     public static class OdooClient
     {
+        public static readonly string XMLRPC_ENDPOINT = "/xmlrpc";
         public static readonly string AUTHENTICATION_ENDPOINT = "/common";
         public static readonly string OBJECT_ENDPOINT = "/object";
 
@@ -73,7 +74,7 @@ namespace OdooRpcCs
             int ui;
             try
             {
-                XmlRpcResponse response = client.Send(OdooDefaults.OdooUrl + AUTHENTICATION_ENDPOINT, userTimeout);
+                XmlRpcResponse response = client.Send(OdooDefaults.OdooUrl + XMLRPC_ENDPOINT + AUTHENTICATION_ENDPOINT, userTimeout);
                 if (response.IsFault)
                 {
                     latestException = response.Value.ToString();
@@ -123,7 +124,7 @@ namespace OdooRpcCs
             object resVal;
             try
             {
-                XmlRpcResponse objectResponse = objectClient.Send(OdooDefaults.OdooUrl + OBJECT_ENDPOINT, userTimeout);
+                XmlRpcResponse objectResponse = objectClient.Send(OdooDefaults.OdooUrl + XMLRPC_ENDPOINT + OBJECT_ENDPOINT, userTimeout);
                 if (objectResponse.IsFault)
                 {
                     // possible for faultCode to have a null value
@@ -218,7 +219,7 @@ namespace OdooRpcCs
             object resVal;
             try
             {
-                XmlRpcResponse objectResponseAsync = await objectClient.SendAsync(OdooDefaults.OdooUrl + OBJECT_ENDPOINT, userTimeout);
+                XmlRpcResponse objectResponseAsync = await objectClient.SendAsync(OdooDefaults.OdooUrl + XMLRPC_ENDPOINT + OBJECT_ENDPOINT, userTimeout);
 
                 if (objectResponseAsync.IsFault)
                 {
@@ -415,7 +416,7 @@ namespace OdooRpcCs
             object resVal;
             try
             {
-                XmlRpcResponse objectResponseAsync = await objectClient.SendAsync(OdooDefaults.OdooUrl + OdooClient.OBJECT_ENDPOINT, userTimeout);
+                XmlRpcResponse objectResponseAsync = await objectClient.SendAsync(OdooDefaults.OdooUrl + OdooClient.XMLRPC_ENDPOINT + OdooClient.OBJECT_ENDPOINT, userTimeout);
 
                 if (objectResponseAsync.IsFault)
                 {

@@ -26,30 +26,30 @@ namespace HackPDM.ClientUtils
         // useful extension methods
         public static IEnumerable<Tout> Select<Tin, Tout>(this ArrayList list, Func<Tin, Tout> selector)
         {
-            foreach (object obj in list)
+            foreach (Tin obj in list.OfType<Tin>())
             {
-                yield return selector((Tin)obj);
+                yield return selector(obj);
             }
         }
         public static IEnumerable<Tout> Select<Tin, Tout>(this Hashtable ht, Func<Tin, Tout> selector)
         {
-            foreach (object obj in ht)
+            foreach (Tin obj in ht.Keys.OfType<Tin>())
             {
-                yield return selector((Tin)obj);
+                yield return selector(obj);
             }
         }
-        public static IEnumerable<Tout> SelectWhere<Tin, Tout>(this Hashtable ht, Func<Tin, Tout> selector, Predicate<Tout> predicate)
+        public static IEnumerable<Tout> SelectKeysWhere<Tin, Tout>(this Hashtable ht, Func<Tin, Tout> selector, Predicate<Tout> predicate)
         {
-            foreach (Tin obj in ht)
+            foreach (Tin obj in ht.Keys.OfType<Tin>())
             {
                 Tout result = selector(obj);
                 bool isPredicate = predicate(result);
                 if (isPredicate) yield return selector(obj);
             }
         }
-        public static IEnumerable<Tout> SelectWhere<Tin, Tout>(this Hashtable ht, Func<Tin, Tout> selector, Func<Tin, Tout, bool> predicate)
+        public static IEnumerable<Tout> SelectKeysWhere<Tin, Tout>(this Hashtable ht, Func<Tin, Tout> selector, Func<Tin, Tout, bool> predicate)
         {
-            foreach (Tin obj in ht)
+            foreach (Tin obj in ht.Keys.OfType<Tin>() )
             {
                 Tout result = selector(obj);
                 bool isPredicate = predicate(obj, result);
@@ -58,33 +58,27 @@ namespace HackPDM.ClientUtils
         }
         public static IEnumerable<Tout> SelectMany<Tin, Tout>(this Hashtable source, Func<Tin, IEnumerable<Tout>> selector)
         {
-            foreach (object item in source)
+            foreach (Tin item in source.Keys.OfType<Tin>())
             {
-                if (item is Tin al)
-                {
-                    foreach (var result in selector(al))
-                    {
-                        yield return result;
-                    }
-                }
-            }
+				foreach ( var result in selector( item ) )
+				{
+					yield return result;
+				}
+			}
         }
         public static IEnumerable<Tout> SelectMany<Tin, Tout>(this ArrayList source, Func<Tin, IEnumerable<Tout>> selector)
         {
-            foreach (object item in source)
-            {
-                if (item is Tin al)
-                {
-                    foreach (var result in selector(al))
-                    {
-                        yield return result;
-                    }
-                }
-            }
-        }
+			foreach ( Tin item in source.OfType<Tin>() )
+			{
+				foreach ( var result in selector( item ) )
+				{
+					yield return result;
+				}
+			}
+		}
         public static IEnumerable<Tout> SkipSelect<Tin, Tout>(this IEnumerable<Tin> source, Predicate<Tin> predicate, Func<Tin, Tout> selector)
         {
-            foreach (Tin obj in source)
+            foreach (Tin obj in source.OfType<Tin>() )
             {
                 if (!predicate(obj))
                 {

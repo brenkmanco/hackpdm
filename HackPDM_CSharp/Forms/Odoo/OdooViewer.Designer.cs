@@ -33,11 +33,7 @@
 			this.tabPage1 = new System.Windows.Forms.TabPage();
 			this.tabPage2 = new System.Windows.Forms.TabPage();
 			this.tabControl1 = new System.Windows.Forms.TabControl();
-			this.CreateRecord = new System.Windows.Forms.TabControl();
-			this.CreatorTab = new System.Windows.Forms.TabPage();
-			this.tabPage4 = new System.Windows.Forms.TabPage();
 			this.tabControl1.SuspendLayout();
-			this.CreateRecord.SuspendLayout();
 			this.SuspendLayout();
 			// 
 			// model_viewer
@@ -66,7 +62,7 @@
 			this.tabPage1.Location = new System.Drawing.Point(4, 22);
 			this.tabPage1.Name = "tabPage1";
 			this.tabPage1.Padding = new System.Windows.Forms.Padding(3);
-			this.tabPage1.Size = new System.Drawing.Size(417, 456);
+			this.tabPage1.Size = new System.Drawing.Size(832, 456);
 			this.tabPage1.TabIndex = 0;
 			this.tabPage1.Text = "model fields";
 			this.tabPage1.UseVisualStyleBackColor = true;
@@ -89,52 +85,20 @@
 			this.tabControl1.Location = new System.Drawing.Point(244, 13);
 			this.tabControl1.Name = "tabControl1";
 			this.tabControl1.SelectedIndex = 0;
-			this.tabControl1.Size = new System.Drawing.Size(425, 482);
+			this.tabControl1.Size = new System.Drawing.Size(840, 482);
 			this.tabControl1.TabIndex = 5;
-			// 
-			// CreateRecord
-			// 
-			this.CreateRecord.Controls.Add(this.CreatorTab);
-			this.CreateRecord.Controls.Add(this.tabPage4);
-			this.CreateRecord.Location = new System.Drawing.Point(675, 13);
-			this.CreateRecord.Name = "CreateRecord";
-			this.CreateRecord.SelectedIndex = 0;
-			this.CreateRecord.Size = new System.Drawing.Size(409, 482);
-			this.CreateRecord.TabIndex = 6;
-			// 
-			// CreatorTab
-			// 
-			this.CreatorTab.Location = new System.Drawing.Point(4, 22);
-			this.CreatorTab.Name = "CreatorTab";
-			this.CreatorTab.Padding = new System.Windows.Forms.Padding(3);
-			this.CreatorTab.Size = new System.Drawing.Size(401, 456);
-			this.CreatorTab.TabIndex = 0;
-			this.CreatorTab.Text = "Create Record";
-			this.CreatorTab.UseVisualStyleBackColor = true;
-			// 
-			// tabPage4
-			// 
-			this.tabPage4.Location = new System.Drawing.Point(4, 22);
-			this.tabPage4.Name = "tabPage4";
-			this.tabPage4.Padding = new System.Windows.Forms.Padding(3);
-			this.tabPage4.Size = new System.Drawing.Size(401, 456);
-			this.tabPage4.TabIndex = 1;
-			this.tabPage4.Text = "tabPage4";
-			this.tabPage4.UseVisualStyleBackColor = true;
 			// 
 			// OdooViewer
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
 			this.ClientSize = new System.Drawing.Size(1096, 753);
-			this.Controls.Add(this.CreateRecord);
 			this.Controls.Add(this.tabControl1);
 			this.Controls.Add(this.StatusBox);
 			this.Controls.Add(this.model_viewer);
 			this.Name = "OdooViewer";
 			this.Text = "OdooViewer";
 			this.tabControl1.ResumeLayout(false);
-			this.CreateRecord.ResumeLayout(false);
 			this.ResumeLayout(false);
 
         }
@@ -146,8 +110,5 @@
         private System.Windows.Forms.TabControl tabControl1;
         private System.Windows.Forms.TabPage tabPage1;
         private System.Windows.Forms.TabPage tabPage2;
-        private System.Windows.Forms.TabControl CreateRecord;
-        private System.Windows.Forms.TabPage CreatorTab;
-        private System.Windows.Forms.TabPage tabPage4;
     }
 }

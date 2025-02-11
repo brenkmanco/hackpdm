@@ -53,14 +53,42 @@ namespace HackPDM
                 Properties.UserSettings.Default.Save();
 			}
         }
-        public static string OdooUrl 
+        public static string OdooAddress
         {
-            get => Properties.UserSettings.Default.OdooUrl;
+            get => Properties.UserSettings.Default.OdooAddress;
+			set
+			{
+				Properties.UserSettings.Default.OdooAddress = value;
+				Properties.UserSettings.Default.Save();
+			}
+		}
+		public static string OdooPort
+		{
+			get => Properties.UserSettings.Default.OdooPort;
+			set
+			{
+				Properties.UserSettings.Default.OdooPort = value;
+				Properties.UserSettings.Default.Save();
+			}
+		}
+		public static string OdooUrl 
+        {
+            get 
+            {
+                if (field is null or "")
+                {
+                    string port = Properties.UserSettings.Default.OdooPort;
+                    if (port is null or "") port = "";
+                    else port = $":{port}";
+
+                    field = $"http://{OdooAddress}{port}";
+                }
+                return field;
+            }
 
             set
             {
-                Properties.UserSettings.Default.OdooUrl = value;
-                Properties.UserSettings.Default.Save();
+                field = value;
 			}
         }
         public static string OdooSwKey

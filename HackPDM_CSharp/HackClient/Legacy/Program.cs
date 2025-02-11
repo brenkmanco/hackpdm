@@ -22,7 +22,6 @@
 
 using System;
 using System.Windows.Forms;
-
 using HackPDM.Forms.Settings;
 
 namespace HackPDM

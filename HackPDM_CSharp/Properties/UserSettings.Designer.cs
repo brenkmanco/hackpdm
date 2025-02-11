@@ -37,7 +37,7 @@ namespace HackPDM.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("http://10.0.0.52:8069/xmlrpc")]
+        [global::System.Configuration.DefaultSettingValueAttribute("http://10.0.0.52:8069")]
         public string OdooUrl {
             get {
                 return ((string)(this["OdooUrl"]));
@@ -277,6 +277,30 @@ namespace HackPDM.Properties {
             }
             set {
                 this["ProjectDirectory"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("10.0.0.52")]
+        public string OdooAddress {
+            get {
+                return ((string)(this["OdooAddress"]));
+            }
+            set {
+                this["OdooAddress"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("8069")]
+        public string OdooPort {
+            get {
+                return ((string)(this["OdooPort"]));
+            }
+            set {
+                this["OdooPort"] = value;
             }
         }
     }

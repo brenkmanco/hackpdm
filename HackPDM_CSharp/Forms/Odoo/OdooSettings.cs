@@ -21,11 +21,14 @@ namespace HackPDM
 
         private void btnSubmit_Click(object sender, EventArgs e)
         {
-            SetInfoDefault(txtOdooUrl.Text, txtOdooDb.Text, txtOdooUser.Text, txtOdooPass.Text, txtSwKey.Text, txtAreaFactor.Text);
+            SetInfoDefault();
         }
         private void GetInfoDefault()
         {
-            txtOdooUrl.Text = Properties.UserSettings.Default.OdooUrl;
+            txtOdooAddress.Text = Properties.UserSettings.Default.OdooAddress;
+            txtOdooPort.Text = Properties.UserSettings.Default.OdooPort;
+            changeURL();
+
             txtOdooDb.Text = Properties.UserSettings.Default.OdooDb;
             txtSwKey.Text = Properties.AppSettings.Default.SwLicenseKey;
             txtAreaFactor.Text = Properties.AppSettings.Default.AreaFactor.ToString();
@@ -36,11 +39,19 @@ namespace HackPDM
                 txtOdooPass.Text = cm.Password;
             }
         }
-        private void SetInfoDefault(string url, string dbName, string username, string password, string swKey, string areaFactor)
+        private void SetInfoDefault()
         {
-            Properties.UserSettings.Default.OdooUrl = url;
-            Properties.UserSettings.Default.OdooDb = dbName;
-            Properties.AppSettings.Default.SwLicenseKey = swKey;
+            Properties.UserSettings.Default.OdooAddress = txtOdooAddress.Text;
+            Properties.UserSettings.Default.OdooPort = txtOdooPort.Text;
+
+            StringBuilder sb = new();
+            sb.Append($"http://{txtOdooAddress.Text}");
+            if (txtOdooPort.Text is not null && txtOdooPort.Text.Length > 0)
+            {
+                sb.Append($":{txtOdooPort.Text}");
+            }
+            Properties.UserSettings.Default.OdooDb = txtOdooDb.Text;
+            Properties.AppSettings.Default.SwLicenseKey = txtSwKey.Text;
             Decimal AF;
             if (!Decimal.TryParse(txtAreaFactor.Text, out AF))
             {
@@ -58,17 +69,40 @@ namespace HackPDM
             Credential cred = new()
             {
                 Target = HackPDM.Properties.AppSettings.Default.OdooCredentialTarget,
-                Username = username,
-                Password = password,
+                Username = txtOdooUser.Text,
+                Password = txtOdooPass.Text,
                 PersistanceType = PersistanceType.LocalComputer
             };
             cred.Save();
 
-            OdooDefaults.OdooUser = username;
-            OdooDefaults.OdooPass = password;
+            OdooDefaults.OdooUser = txtOdooUser.Text;
+            OdooDefaults.OdooPass = txtOdooPass.Text;
+            OdooDefaults.OdooUrl = sb.ToString();
             OdooDefaults.OdooID = 0;
 
             Close();
         }
-    }
+
+		private void textBox1_TextChanged( object sender, EventArgs e ) => changeURL();
+
+		private void txtOdooUrl_TextChanged( object sender, EventArgs e ) => changeURL();
+        private void changeURL()
+        {
+			StringBuilder sb = new();
+			sb.Append( $"Odoo Url: \thttp://" );
+			if ( txtOdooAddress.Text is not null and not "" )
+			{
+				sb.Append( $"{txtOdooAddress.Text}" );
+			}
+			else
+			{
+				sb.Append( "<address>" );
+			}
+			if ( txtOdooPort.Text is not null and not "" )
+			{
+				sb.Append( $":{txtOdooPort.Text}" );
+			}
+			label2.Text = sb.ToString();
+		}
+	}
 }

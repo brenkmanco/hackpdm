@@ -434,8 +434,8 @@ namespace OdooObjects
         public List<string> GetAllModels()
         {
 
-            ArrayList filter = [];
-            ArrayList records = OClient.Browse(OdooDefaults.IR_MODEL, filter);
+            ArrayList filter = ["model"];
+            ArrayList records = OClient.Browse(OdooDefaults.IR_MODEL, [new ArrayList(), filter]);
 
             List<string> models = [];
             foreach (Hashtable record in records)
@@ -454,7 +454,7 @@ namespace OdooObjects
         public Hashtable GetAllFieldsForModel(string modelName)
         {
             ArrayList emptyFilter = [];
-            Hashtable fields = OClient.GetFields(modelName, ParameterHelper.Empty);
+            Hashtable fields = OClient.GetFields(modelName, emptyFilter);
             return fields;
         } 
         // [("res_model", "=", "hp.version"), ("res_id", "=", 1)]
