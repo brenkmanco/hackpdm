@@ -1,2 +1,2 @@
-[assembly: System.Reflection.AssemblyMetadata("CommitHash", "7013cf60fa9ebfb924f250619c13cdcf25284d4a")]
-[assembly: System.Reflection.AssemblyMetadata("CommitDate", "2025-02-13 15:56:42 -0700")]
+[assembly: System.Reflection.AssemblyMetadata("CommitHash", "1108619bb796d052ec9f33dc8513ae6918285920")]
+[assembly: System.Reflection.AssemblyMetadata("CommitDate", "2025-02-13 15:59:42 -0700")]

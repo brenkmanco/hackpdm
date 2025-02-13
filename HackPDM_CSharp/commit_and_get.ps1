@@ -1,7 +1,6 @@
 ﻿# Change to the project directory
 cd $env:ProjectDir
 cd ..
-$actualProjectDirectory = (Get-Location).Path
 
 # Stage all changes
 git add .
@@ -12,6 +11,9 @@ git commit -m "Automated commit from build"
 # Get the current commit hash and commit date
 $commitHash = git log -1 --format="%H"
 $commitDate = git log -1 --format="%cd" --date=iso
+
+# go back into project folder
+cd $env:ProjectDir
 
 # Write the commit hash to a file
 # $commitHash | Out-File -FilePath
