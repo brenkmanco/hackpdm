@@ -25,6 +25,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
+
+using HackPDM.ClientUtils;
 using HackPDM.Forms.Settings;
 
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.Utilities;
@@ -45,9 +47,21 @@ namespace HackPDM
 			// git log --format="%H | %cd" --date=iso
 			var assembly = Assembly.GetExecutingAssembly();
 			
-			var Test = assembly.GetCustomAttribute<AssemblyMetadataAttribute>()?.Value;
-            // var commitHash = assembly.GetCustomAttribute<AssemblyMetadataAttribute>("CommitHash")?.Value;
-            // var commitDate = assembly.GetCustomAttribute<AssemblyMetadataAttribute>("CommitDate")?.Value;
+			var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+
+            if (informationalVersion != null)
+            {
+                var parts = informationalVersion.Split([.. ", "]);
+                var commitHash = parts.Length > 0 ? parts[0].Replace("Commit: ", "") : "Unknown";
+                var commitDate = parts.Length > 1 ? parts[1].Replace("Date: ", "") : "Unknown";
+
+                Console.WriteLine($"Commit Hash: {commitHash}");
+                Console.WriteLine($"Commit Date: {commitDate}");
+            }
+            else
+            {
+                Console.WriteLine("Commit information not found.");
+            }
 			return "";
 		}		
 #endif

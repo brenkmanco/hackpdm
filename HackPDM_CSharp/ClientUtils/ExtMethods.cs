@@ -178,68 +178,68 @@ namespace HackPDM.ClientUtils
                 }
             }
         }
-        public static IEnumerable<string> Split(this string str, string delimiter = " ", StringSplitOptions options = StringSplitOptions.RemoveEmptyEntries)
-        {
-            // "split/this/string"
-            if (str.Length < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(str));
-            }
+        //public static IEnumerable<string> Split(this string str, string delimiter = " ", StringSplitOptions options = StringSplitOptions.RemoveEmptyEntries)
+        //{
+        //    // "split/this/string"
+        //    if (str.Length < 0)
+        //    {
+        //        throw new ArgumentOutOfRangeException(nameof(str));
+        //    }
 
-            if (options < StringSplitOptions.None || options > StringSplitOptions.RemoveEmptyEntries)
-            {
-                throw new ArgumentException(nameof(options));
-            }
+        //    if (options < StringSplitOptions.None || options > StringSplitOptions.RemoveEmptyEntries)
+        //    {
+        //        throw new ArgumentException(nameof(options));
+        //    }
 
-            ReadOnlyMemory<char> newMem = str.AsMemory();
+        //    ReadOnlyMemory<char> newMem = str.AsMemory();
 
-            bool isRunning = true;
+        //    bool isRunning = true;
 
-            while (isRunning)
-            {
-                string newString;
-                string returnString;
+        //    while (isRunning)
+        //    {
+        //        string newString;
+        //        string returnString;
 
-                for (int i = 0; i < newMem.Length; i++)
-                {
-                    int indexDelimLength = delimiter.Length + i + 1;
-                    if (indexDelimLength - 1 >= newMem.Length)
-                    {
-                        returnString = newMem.ToString();
-                        if (returnString.HasEndingDelimiter(delimiter))
-                        {
-                            returnString = newMem.Slice(0, newMem.Length - delimiter.Length).ToString();
-                        }
+        //        for (int i = 0; i < newMem.Length; i++)
+        //        {
+        //            int indexDelimLength = delimiter.Length + i + 1;
+        //            if (indexDelimLength - 1 >= newMem.Length)
+        //            {
+        //                returnString = newMem.ToString();
+        //                if (returnString.HasEndingDelimiter(delimiter))
+        //                {
+        //                    returnString = newMem.Slice(0, newMem.Length - delimiter.Length).ToString();
+        //                }
                     
-                        if (options == StringSplitOptions.RemoveEmptyEntries && returnString.IsEmptySpace())
-                            break;
+        //                if (options == StringSplitOptions.RemoveEmptyEntries && returnString.IsEmptySpace())
+        //                    break;
 
-                        yield return returnString;
+        //                yield return returnString;
                         
-                        isRunning = false;
-                        break;
-                    }
+        //                isRunning = false;
+        //                break;
+        //            }
 
-                    if (delimiter == newMem.Slice(i, delimiter.Length).ToString())
-                    {
-                        returnString = newMem.Slice(0, i).ToString();
-                        newString = newMem.Slice(indexDelimLength - 1, newMem.Length - indexDelimLength + 1).ToString();
+        //            if (delimiter == newMem.Slice(i, delimiter.Length).ToString())
+        //            {
+        //                returnString = newMem.Slice(0, i).ToString();
+        //                newString = newMem.Slice(indexDelimLength - 1, newMem.Length - indexDelimLength + 1).ToString();
 
-                        newMem = newString.AsMemory();
+        //                newMem = newString.AsMemory();
 
-                        if (options == StringSplitOptions.RemoveEmptyEntries && returnString.IsEmptySpace())
-                            break;
+        //                if (options == StringSplitOptions.RemoveEmptyEntries && returnString.IsEmptySpace())
+        //                    break;
 
-                        yield return returnString;
-                        break;
-                    }
-                }
-            }
-        }
+        //                yield return returnString;
+        //                break;
+        //            }
+        //        }
+        //    }
+        //}
         public static Tarray Split<Tarray>(this string str, string delimiter = " ", StringSplitOptions options = StringSplitOptions.RemoveEmptyEntries)
             where Tarray : IList, new()
         {
-            IEnumerable<string> strSplit = str.Split(delimiter, options);
+            string[] strSplit = str.Split([.. delimiter]);
             Tarray tarray = new();
             foreach (string s in strSplit)
             {
