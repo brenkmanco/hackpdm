@@ -598,7 +598,7 @@
     <Error Condition="!Exists('packages\NUnit3TestAdapter.5.0.0\build\net462\NUnit3TestAdapter.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\NUnit3TestAdapter.5.0.0\build\net462\NUnit3TestAdapter.targets'))" />
   </Target>
 	<Target Name="BeforeBuild">
-		<Exec Command="powershell -ExecutionPolicy Bypass -File commit_and_get.ps1" />
+		<Exec Command="powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1" />
 		<ItemGroup>
             <Compile Include="GitInfo.cs" />
         </ItemGroup>
