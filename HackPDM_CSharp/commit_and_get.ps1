@@ -22,5 +22,5 @@ $infoContent = @"
 [assembly: System.Reflection.AssemblyMetadata("CommitHash", "$commitHash")]
 [assembly: System.Reflection.AssemblyMetadata("CommitDate", "$commitDate")]
 "@
-$infoFilePath = Join-Path -Path $actualProjectDirectory -ChildPath "GitInfo.cs"
+$infoFilePath = Join-Path -Path $env:ProjectDir -ChildPath "GitInfo.cs"
 Set-Content -Path $infoFilePath -Value $infoContent
