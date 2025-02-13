@@ -21,8 +21,14 @@
  */
 
 using System;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
 using System.Windows.Forms;
 using HackPDM.Forms.Settings;
+
+using NUnit.Framework;
+using SolidWorks.Interop.sldworks;
 
 namespace HackPDM
 {
@@ -31,20 +37,45 @@ namespace HackPDM
 	/// </summary>
 	internal sealed class Program
 	{
+#if DEBUG
+		private static string CurrentVersion()
+		{
+			// git log --format="%H | %cd" --date=iso
+			var assembly = Assembly.GetExecutingAssembly();
+			
+            //var commitHash = assembly.GetCustomAttribute<AssemblyMetadataAttribute>("CommitHash")?.Value;
+            //var commitDate = assembly.GetCustomAttribute<AssemblyMetadataAttribute>("CommitDate")?.Value;
+			return "";
+		}		
+#endif
+
+
+
+
+
+
 		/// <summary>
 		/// Program entry point.
 		/// </summary>
 		[STAThread]
 		private static void Main(string[] args)
 		{
+			#if DEBUG
+				CurrentVersion();
+			#endif
 			Application.EnableVisualStyles();
 			Application.SetCompatibleTextRenderingDefault(false);
 			#if DEBUG
 				Application.Run(new DebugForm());
+			#elif RELEASE || GITRELEASE
+				Application.Run(new HackFileManager());
+			#elif SERVER
+				string printer = string.Join( "\n", args);
+				MessageBox.Show(printer);
+			// .\HackPDM.exe test this -s out --help with -h me "and" -wompwomp
 			#else
-				Application.Run(new MainForm(ClientUtils.MainFormDirective.LegacyMainForm));
+				
 			#endif
-
 		}
 		
 	}

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "HackPDM_Server": {
+      "commandName": "Project",
+      "commandLineArgs": "config \"HackPDM-OdooUser\""
+    }
+  }
+}

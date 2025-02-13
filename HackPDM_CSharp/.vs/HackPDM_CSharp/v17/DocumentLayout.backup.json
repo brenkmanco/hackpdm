@@ -3,48 +3,8 @@
   "WorkspaceRootPath": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\forms\\hack\\hackfilemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:forms\\hack\\hackfilemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\odooclient\\odoodefaults.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:odooclient\\odoodefaults.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\odooclient\\hpbasemodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:odooclient\\hpbasemodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\clientutils\\fileoperations.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:clientutils\\fileoperations.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\forms\\hack\\hackfilemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:forms\\hack\\hackfilemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\forms\\legacy\\mainform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:forms\\legacy\\mainform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\forms\\settings\\searchodoo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:forms\\settings\\searchodoo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\forms\\settings\\searchodoo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:forms\\settings\\searchodoo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\clientutils\\extmethods.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:clientutils\\extmethods.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\odooclient\\odoorpccs.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:odooclient\\odoorpccs.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\forms\\settings\\debugform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:forms\\settings\\debugform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\hackclient\\legacy\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:hackclient\\legacy\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -54,176 +14,23 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 4,
+          "SelectedChildIndex": 1,
           "Children": [
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
             },
             {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{e1b7d1f8-9b3c-49b1-8f4f-bfc63a88835d}"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 5,
-              "Title": "MainForm.cs",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Legacy\\MainForm.cs",
-              "RelativeDocumentMoniker": "Forms\\Legacy\\MainForm.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Legacy\\MainForm.cs",
-              "RelativeToolTip": "Forms\\Legacy\\MainForm.cs",
-              "ViewState": "AgIAAK4AAAAAAAAAAAAgwLkAAAAsAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-11T22:39:16.756Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 6,
-              "Title": "SearchOdoo.cs [Design]",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Settings\\SearchOdoo.cs",
-              "RelativeDocumentMoniker": "Forms\\Settings\\SearchOdoo.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Settings\\SearchOdoo.cs [Design]",
-              "RelativeToolTip": "Forms\\Settings\\SearchOdoo.cs [Design]",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-11T21:18:35.237Z",
-              "EditorCaption": " [Design]"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 4,
-              "Title": "HackFileManager.cs [Design]",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Hack\\HackFileManager.cs",
-              "RelativeDocumentMoniker": "Forms\\Hack\\HackFileManager.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Hack\\HackFileManager.cs [Design]",
-              "RelativeToolTip": "Forms\\Hack\\HackFileManager.cs [Design]",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-11T20:17:51.749Z",
-              "EditorCaption": " [Design]"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 10,
-              "Title": "DebugForm.cs",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Settings\\DebugForm.cs",
-              "RelativeDocumentMoniker": "Forms\\Settings\\DebugForm.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Settings\\DebugForm.cs",
-              "RelativeToolTip": "Forms\\Settings\\DebugForm.cs",
-              "ViewState": "AgIAABIAAAAAAAAAAAAgwBwAAAAwAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-11T19:25:26.03Z",
-              "EditorCaption": ""
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "Orientation": 0,
-      "VerticalTabListWidth": 256,
-      "FloatingWindowState": {
-        "Id": "48dda62a-d0a2-42f8-a6da-43dc1ff3827c",
-        "Display": 1,
-        "X": 629,
-        "Y": -49,
-        "Width": 1641,
-        "Height": 939,
-        "WindowState": 2
-      },
-      "DocumentGroups": [
-        {
-          "DockedWidth": 200,
-          "SelectedChildIndex": 6,
-          "Children": [
-            {
-              "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "FileOperations.cs",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\ClientUtils\\FileOperations.cs",
-              "RelativeDocumentMoniker": "ClientUtils\\FileOperations.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\ClientUtils\\FileOperations.cs",
-              "RelativeToolTip": "ClientUtils\\FileOperations.cs",
-              "ViewState": "AgIAAIsBAAAAAAAAAAAvwLYBAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-11T22:46:23.206Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "HpBaseModel.cs",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\HpBaseModel.cs",
-              "RelativeDocumentMoniker": "OdooClient\\HpBaseModel.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\HpBaseModel.cs",
-              "RelativeToolTip": "OdooClient\\HpBaseModel.cs",
-              "ViewState": "AgIAAHUBAAAAAAAAAAAawJYBAAAMAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-11T19:40:10.28Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 8,
-              "Title": "ExtMethods.cs",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\ClientUtils\\ExtMethods.cs",
-              "RelativeDocumentMoniker": "ClientUtils\\ExtMethods.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\ClientUtils\\ExtMethods.cs",
-              "RelativeToolTip": "ClientUtils\\ExtMethods.cs",
-              "ViewState": "AgIAABUAAAAAAAAAAAAswE4AAAAtAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-10T17:02:28.666Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 7,
-              "Title": "SearchOdoo.cs",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Settings\\SearchOdoo.cs",
-              "RelativeDocumentMoniker": "Forms\\Settings\\SearchOdoo.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Settings\\SearchOdoo.cs",
-              "RelativeToolTip": "Forms\\Settings\\SearchOdoo.cs",
-              "ViewState": "AgIAABACAAAAAAAAAAD4vzgCAAADAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-11T15:51:08.42Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "OdooDefaults.cs",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\OdooDefaults.cs",
-              "RelativeDocumentMoniker": "OdooClient\\OdooDefaults.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\OdooDefaults.cs",
-              "RelativeToolTip": "OdooClient\\OdooDefaults.cs",
-              "ViewState": "AgIAAIACAAAAAAAAAAAewKICAAAFAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-10T16:43:00.919Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 9,
-              "Title": "OdooRpcCs.cs",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\OdooRpcCs.cs",
-              "RelativeDocumentMoniker": "OdooClient\\OdooRpcCs.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\OdooRpcCs.cs",
-              "RelativeToolTip": "OdooClient\\OdooRpcCs.cs",
-              "ViewState": "AgIAADsAAAAAAAAAAAAwwG4AAAA5AAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-11T17:03:45.613Z",
-              "EditorCaption": ""
-            },
-            {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "HackFileManager.cs",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Hack\\HackFileManager.cs",
-              "RelativeDocumentMoniker": "Forms\\Hack\\HackFileManager.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Hack\\HackFileManager.cs",
-              "RelativeToolTip": "Forms\\Hack\\HackFileManager.cs",
-              "ViewState": "AgIAABQHAAAAAAAAAAAEwDsHAAAAAAAAAAAAAA==",
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\HackClient\\Legacy\\Program.cs",
+              "RelativeDocumentMoniker": "HackClient\\Legacy\\Program.cs",
+              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\HackClient\\Legacy\\Program.cs",
+              "RelativeToolTip": "HackClient\\Legacy\\Program.cs",
+              "ViewState": "AgIAABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-10T17:30:44.129Z",
+              "WhenOpened": "2025-02-13T22:51:17.685Z",
               "EditorCaption": ""
             }
           ]

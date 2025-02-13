@@ -9,6 +9,8 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -206,6 +208,23 @@ namespace HackPDM
 		static HackFileManager() {}
         public HackFileManager()
 		{
+			while (OdooDefaults.OdooID == 0)
+			{
+				List<string> errors = new();
+				if (CorrectOdooAddress())
+				{
+					errors.Add("invalid odoo address or unreachable host");
+				} 
+				else if (CorrectOdooPort())
+				{
+					errors.Add("invalid odoo port or server is down");
+				}
+				else
+				{
+					errors.Add("invalid odoo credentials");
+				}
+				if (new ProfileManager(errors).ShowDialog() == DialogResult.OK) {}
+			}
             InitializeComponent();
 			previewImage = OdooEntryImage.Image;
 			OdooDirectoryTree.LostFocus += TreeView_LostFocus;
@@ -216,6 +235,34 @@ namespace HackPDM
 			this.Load += new EventHandler(FormLoaded);
 			this.root = HpBaseModel<HpDirectory>.GetRecordByID(1);
         }
+		public static bool CorrectOdooAddress()
+		{
+			using ( Ping pinger = new Ping() )
+			{
+				PingReply reply = pinger.Send(OdooDefaults.OdooAddress);
+				return reply.Status == IPStatus.Success;
+			}
+		}
+		public static bool CorrectOdooPort()
+		{
+			try
+			{
+				new TcpClient(OdooDefaults.OdooAddress, int.Parse(OdooDefaults.OdooPort));
+				return true;
+			}
+			catch 
+			{
+				return false;
+			}
+		}
+		#if SERVER
+		private HackFileManager(bool withShell = false)
+		{
+			this.root = HpBaseModel<HpDirectory>.GetRecordByID(1);
+		}
+		public static HackFileManager HackServerInitializer(bool withShell = false)
+			=> new HackFileManager(withShell);
+		#endif
 
 
 
