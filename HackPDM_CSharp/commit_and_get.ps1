@@ -1,4 +1,7 @@
-﻿# Change to the project directory
+﻿param (
+    [string]$projectDir
+)
+# Change to the project directory
 cd $env:ProjectDir
 cd ..
 
@@ -13,7 +16,7 @@ $commitHash = git log -1 --format="%H"
 $commitDate = git log -1 --format="%cd" --date=iso
 
 # go back into project folder
-cd $env:ProjectDir
+cd $projectDir
 
 # Write the commit hash to a file
 # $commitHash | Out-File -FilePath
@@ -23,7 +26,7 @@ using System.Reflection;
 
 [assembly: AssemblyInformationalVersion("Commit: $commitHash, Date: $commitDate")]
 "@
-$infoFilePath = Join-Path -Path $env:ProjectDir -ChildPath "GitInfo.cs"
+$infoFilePath = Join-Path -Path $projectDir -ChildPath "GitInfo.cs"
 Set-Content -Path $infoFilePath -Value $infoContent
 echo $infoFilePath
 echo $infoContent

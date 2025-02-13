@@ -8,7 +8,7 @@
   <Import Project="packages\EntityFramework.6.5.1\build\EntityFramework.props" Condition="Exists('packages\EntityFramework.6.5.1\build\EntityFramework.props')" />
   <Import Project="packages\SixLabors.ImageSharp.3.1.6\build\SixLabors.ImageSharp.props" Condition="Exists('packages\SixLabors.ImageSharp.3.1.6\build\SixLabors.ImageSharp.props')" />
 	<Target Name="GitExecution" BeforeTargets="BeforeBuild">
-		<Exec Command="powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1" />
+		<Exec Command="powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1 -projectDir $(ProjectDir)" />
 	</Target>
 	<ItemGroup>
 		<Compile Include="GitInfo.cs" />
