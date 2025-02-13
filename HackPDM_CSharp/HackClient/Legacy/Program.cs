@@ -27,6 +27,8 @@ using System.Reflection;
 using System.Windows.Forms;
 using HackPDM.Forms.Settings;
 
+using Microsoft.VisualStudio.TestPlatform.ObjectModel.Utilities;
+
 using NUnit.Framework;
 using SolidWorks.Interop.sldworks;
 
@@ -43,8 +45,9 @@ namespace HackPDM
 			// git log --format="%H | %cd" --date=iso
 			var assembly = Assembly.GetExecutingAssembly();
 			
-            //var commitHash = assembly.GetCustomAttribute<AssemblyMetadataAttribute>("CommitHash")?.Value;
-            //var commitDate = assembly.GetCustomAttribute<AssemblyMetadataAttribute>("CommitDate")?.Value;
+			var Test = assembly.GetCustomAttribute<AssemblyMetadataAttribute>()?.Value;
+            // var commitHash = assembly.GetCustomAttribute<AssemblyMetadataAttribute>("CommitHash")?.Value;
+            // var commitDate = assembly.GetCustomAttribute<AssemblyMetadataAttribute>("CommitDate")?.Value;
 			return "";
 		}		
 #endif
