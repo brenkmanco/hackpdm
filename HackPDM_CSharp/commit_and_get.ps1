@@ -18,9 +18,10 @@ cd $env:ProjectDir
 # Write the commit hash to a file
 # $commitHash | Out-File -FilePath
 
-$infoContent = @" 
-[assembly: System.Reflection.AssemblyMetadata("CommitHash", "$commitHash")]
-[assembly: System.Reflection.AssemblyMetadata("CommitDate", "$commitDate")]
+$infoContent = @"
+using System.Reflection;
+
+[assembly: AssemblyInformationalVersion("Commit: $commitHash, Date: $commitDate")]
 "@
 $infoFilePath = Join-Path -Path $env:ProjectDir -ChildPath "GitInfo.cs"
 Set-Content -Path $infoFilePath -Value $infoContent
