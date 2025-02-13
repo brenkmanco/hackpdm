@@ -25,3 +25,5 @@ using System.Reflection;
 "@
 $infoFilePath = Join-Path -Path $env:ProjectDir -ChildPath "GitInfo.cs"
 Set-Content -Path $infoFilePath -Value $infoContent
+echo $infoFilePath
+echo $infoContent
