@@ -597,12 +597,12 @@
     <Error Condition="!Exists('packages\NUnit3TestAdapter.5.0.0\build\net462\NUnit3TestAdapter.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\NUnit3TestAdapter.5.0.0\build\net462\NUnit3TestAdapter.props'))" />
     <Error Condition="!Exists('packages\NUnit3TestAdapter.5.0.0\build\net462\NUnit3TestAdapter.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\NUnit3TestAdapter.5.0.0\build\net462\NUnit3TestAdapter.targets'))" />
   </Target>
-	<Target Name="BeforeBuild">
-		<Exec Command="powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1" />
-		<ItemGroup>
-            <Compile Include="GitInfo.cs" />
-        </ItemGroup>
+	<Target Name="Building" BeforeTargets="BeforeBuild">
+		<Exec Command="powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1" />	
 	</Target>
+	<ItemGroup>
+		<Compile Include="GitInfo.cs" />
+	</ItemGroup>
   <Import Project="packages\EntityFramework.6.5.1\build\EntityFramework.targets" Condition="Exists('packages\EntityFramework.6.5.1\build\EntityFramework.targets')" />
   <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
   <Import Project="packages\Microsoft.Testing.Platform.MSBuild.1.5.3\build\Microsoft.Testing.Platform.MSBuild.targets" Condition="Exists('packages\Microsoft.Testing.Platform.MSBuild.1.5.3\build\Microsoft.Testing.Platform.MSBuild.targets')" />
