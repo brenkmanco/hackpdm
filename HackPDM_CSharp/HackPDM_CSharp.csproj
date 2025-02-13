@@ -599,7 +599,9 @@
   </Target>
 	<Target Name="BeforeBuild">
 		<Exec Command="powershell -ExecutionPolicy Bypass -File commit_and_get.ps1" />
-		<Compile Include="GitInfo.cs" />
+		<ItemGroup>
+            <Compile Include="GitInfo.cs" />
+        </ItemGroup>
 	</Target>
   <Import Project="packages\EntityFramework.6.5.1\build\EntityFramework.targets" Condition="Exists('packages\EntityFramework.6.5.1\build\EntityFramework.targets')" />
   <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
