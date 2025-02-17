@@ -77,7 +77,7 @@ namespace HackPDM
 		private async static Task<Branch> GetBranchRepo(long repositoryID, string repoBranchName)
 		{
 			var ghClient = new GitHubClient(new Octokit.ProductHeaderValue("hackpdm"));
-			return ghClient.Repository.Branch.Get(repositoryID, repoBranchName);
+			return await ghClient.Repository.Branch.Get(repositoryID, repoBranchName);
 		}
 		private static bool IsLatestVersion (Branch branch, string commitHash)
 		{
