@@ -23,7 +23,9 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Net.Http.Headers;
 using System.Reflection;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 using HackPDM.ClientUtils;
@@ -32,6 +34,9 @@ using HackPDM.Forms.Settings;
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.Utilities;
 
 using NUnit.Framework;
+
+using Octokit;
+
 using SolidWorks.Interop.sldworks;
 
 namespace HackPDM
@@ -42,7 +47,8 @@ namespace HackPDM
 	internal sealed class Program
 	{
 #if DEBUG
-		private static string CurrentVersion()
+		static const long repoID = 
+		private static (string, string) CurrentVersion()
 		{
 			// git log --format="%H | %cd" --date=iso
 			var assembly = Assembly.GetExecutingAssembly();
@@ -55,14 +61,20 @@ namespace HackPDM
                 var commitHash = parts[1];
                 var commitDate = $"{parts[4]} {parts[5]} {parts[6]}";
 
-                MessageBox.Show($"Commit Hash: {commitHash}");
-                MessageBox.Show($"Commit Date: {commitDate}");
+                //MessageBox.Show($"Commit Hash: {commitHash}");
+                //MessageBox.Show($"Commit Date: {commitDate}");
+				return (commitHash, commitDate);
             }
             else
             {
                 MessageBox.Show("Commit information not found.");
             }
-			return "";
+			return (null, null);
+		}
+		private async static Task<bool> IsLatestVersion (string commitHash)
+		{
+			var ghClient = new GitHubClient(new Octokit.ProductHeaderValue("hackpdm"));
+			var repo = await ghClient.Repository.Get(28426033L);
 		}
 #endif
 
