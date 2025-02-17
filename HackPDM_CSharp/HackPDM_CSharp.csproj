@@ -30,7 +30,7 @@
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
     <Nullable>enable</Nullable>
-    <PublishUrl>publish\</PublishUrl>
+    <PublishUrl>C:\Users\jnjohnson\Documents\TESTFOLDER\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
     <UpdateEnabled>false</UpdateEnabled>
@@ -40,9 +40,11 @@
     <UpdatePeriodically>false</UpdatePeriodically>
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
+    <AutorunEnabled>true</AutorunEnabled>
     <ApplicationRevision>0</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
+    <PublishWizardCompleted>true</PublishWizardCompleted>
     <BootstrapperEnabled>true</BootstrapperEnabled>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -192,6 +194,18 @@
     <DebugType>None</DebugType>
     <PlatformTarget>x64</PlatformTarget>
     <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ManifestCertificateThumbprint>41AEE6957F76F2423468AB696637486F72A75B8E</ManifestCertificateThumbprint>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ManifestKeyFile>HackPDM_CSharp_TemporaryKey.pfx</ManifestKeyFile>
+  </PropertyGroup>
+  <PropertyGroup>
+    <GenerateManifests>true</GenerateManifests>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignManifests>true</SignManifests>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="CredentialManagement, Version=1.0.2.0, Culture=neutral, processorArchitecture=MSIL">
@@ -551,6 +565,7 @@
     <None Include="app.config">
       <SubType>Designer</SubType>
     </None>
+    <None Include="HackPDM_CSharp_TemporaryKey.pfx" />
     <None Include="packages.config" />
     <None Include="Properties\AppSettings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>

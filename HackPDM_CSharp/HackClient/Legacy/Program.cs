@@ -56,34 +56,14 @@ namespace HackPDM
 		[STAThread]
 		private async static Task Main(string[] args)
 		{
-			StringBuilder config = new();
-			#if DEBUG
-				config.AppendLine("Debug");
-			#endif
-			#if RELEASE
-				config.AppendLine("Release");
-			#endif
-			#if GITRELEASE
-				config.AppendLine("GitRelease");
-			#endif
-			#if TRACE
-				config.AppendLine("Trace");
-			#endif
-			MessageBox.Show(config.ToString());
 			if (!await HackUpdater.EnsureUpdated()) return;
 			
 			Application.EnableVisualStyles();
 			Application.SetCompatibleTextRenderingDefault(false);
 			#if DEBUG
 				Application.Run(new DebugForm());
-			#elif RELEASE || GITRELEASE
-				Application.Run(new HackFileManager());
-			#elif SERVER
-				string printer = string.Join( "\n", args);
-				MessageBox.Show(printer);
-			// .\HackPDM.exe test this -s out --help with -h me "and" -wompwomp
 			#else
-				
+				Application.Run(new HackFileManager());				
 			#endif
 		}
 		
