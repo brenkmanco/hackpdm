@@ -44,10 +44,20 @@ namespace HackPDM
 
         public ProfileManager()
         {
+			this.FormClosing += this.ProfileManager_FormClosing;
             InitializeComponent();
             InitView();
         }
-        public ProfileManager(List<string> messages) : this()
+
+		private void ProfileManager_FormClosing( object sender, FormClosingEventArgs e ) 
+        {
+            if (e.CloseReason is CloseReason.UserClosing or CloseReason.FormOwnerClosing)
+            {
+                this.DialogResult = DialogResult.Cancel;
+            }
+        }
+
+		public ProfileManager(List<string> messages) : this()
         {
             foreach (string message in messages)
             {
@@ -247,6 +257,7 @@ namespace HackPDM
         private void OdooLoginBtn_Click(object sender, EventArgs e)
         {
             if (AbleToLogin()) new HackFileManager().Show();
+            else this.DialogResult = DialogResult.OK;
         }
 
 		private void HackSettingsBtn_Click( object sender, EventArgs e )
