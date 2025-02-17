@@ -598,8 +598,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="Icons\ExtensionIcons\" />
-    <Folder Include="Icons\StatusIcons\" />
     <Folder Include="Properties\DataSources\" />
   </ItemGroup>
   <ItemGroup>

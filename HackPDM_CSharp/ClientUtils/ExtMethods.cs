@@ -369,7 +369,8 @@ namespace HackPDM.ClientUtils
         // xmlrpc request
         public async static Task<XmlRpcResponse> SendAsync(this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null)
         {
-            HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
+            //HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
+            HttpWebRequest httpWebRequest = HttpWebRequest.CreateHttp(url);
             if (httpWebRequest == null)
             {
                 throw new XmlRpcException(-32300, "Transport Layer Error: Could not create request with " + url);
@@ -394,7 +395,7 @@ namespace HackPDM.ClientUtils
 
             StreamReader streamReader = new(httpWebResponse.GetResponseStream());
             
-            XmlRpcResponse result = (XmlRpcResponse)_deserializer.Deserialize(streamReader);
+            XmlRpcResponse result = _deserializer.DeserializeResponse(streamReader);
             streamReader.Close();
             httpWebResponse.Close();
             return result;

@@ -13,6 +13,8 @@ namespace XmlRpc.Goober
 		private static XmlRpcResponseDeserializer _singleton;
 
 		public override object Deserialize( TextReader xmlData )
+			=> DeserializeResponse( xmlData );
+		public XmlRpcResponse DeserializeResponse( TextReader xmlData )
 		{
 			XmlTextReader xmlTextReader = new XmlTextReader(xmlData);
 			XmlRpcResponse xmlRpcResponse = new XmlRpcResponse();
