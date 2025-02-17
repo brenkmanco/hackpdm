@@ -18,7 +18,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 3,
+          "SelectedChildIndex": 2,
           "Children": [
             {
               "$type": "Bookmark",
@@ -45,7 +45,7 @@
               "RelativeDocumentMoniker": "OdooClient\\OdooRpcCs.cs",
               "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\OdooRpcCs.cs",
               "RelativeToolTip": "OdooClient\\OdooRpcCs.cs",
-              "ViewState": "AgIAADkAAAAAAAAAAAAUwAwAAAAUAAAAAAAAAA==",
+              "ViewState": "AgIAADYAAAAAAAAAAAAUwAwAAAAUAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-02-17T23:31:45.89Z",
               "EditorCaption": ""
