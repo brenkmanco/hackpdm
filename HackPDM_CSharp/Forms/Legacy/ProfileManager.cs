@@ -45,6 +45,7 @@ namespace HackPDM
         public ProfileManager()
         {
 			this.FormClosing += this.ProfileManager_FormClosing;
+            this.
             InitializeComponent();
             InitView();
         }
