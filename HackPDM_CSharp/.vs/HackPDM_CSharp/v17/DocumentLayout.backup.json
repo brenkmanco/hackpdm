@@ -5,18 +5,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\clientutils\\extmethods.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:clientutils\\extmethods.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\odooclient\\xmlrpc\\xmlrpcrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:odooclient\\xmlrpc\\xmlrpcrequest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\odooclient\\odoorpccs.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:odooclient\\odoorpccs.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\odooclient\\xmlrpc\\xmlrpcresponse.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:odooclient\\xmlrpc\\xmlrpcresponse.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -26,24 +14,11 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 3,
+          "SelectedChildIndex": 2,
           "Children": [
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "OdooRpcCs.cs",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\OdooRpcCs.cs",
-              "RelativeDocumentMoniker": "OdooClient\\OdooRpcCs.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\OdooRpcCs.cs",
-              "RelativeToolTip": "OdooClient\\OdooRpcCs.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAACAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-17T20:36:29.477Z",
-              "EditorCaption": ""
             },
             {
               "$type": "Document",
@@ -53,56 +28,9 @@
               "RelativeDocumentMoniker": "ClientUtils\\ExtMethods.cs",
               "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\ClientUtils\\ExtMethods.cs",
               "RelativeToolTip": "ClientUtils\\ExtMethods.cs",
-              "ViewState": "AgIAAG0BAAAAAAAAAAAywAAAAAAUAAAAAAAAAA==",
+              "ViewState": "AgIAAHwBAAAAAAAAAAAUwAAAAAAUAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-02-17T22:10:08.715Z",
-              "EditorCaption": ""
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "Orientation": 0,
-      "VerticalTabListWidth": 256,
-      "FloatingWindowState": {
-        "Id": "4096e784-c777-4050-8515-52392214ff2d",
-        "Display": 2,
-        "X": 759,
-        "Y": 650,
-        "Width": 1492,
-        "Height": 965,
-        "WindowState": 2
-      },
-      "DocumentGroups": [
-        {
-          "DockedWidth": 200,
-          "SelectedChildIndex": 0,
-          "Children": [
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "XmlRpcRequest.cs",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\XmlRpc\\XmlRpcRequest.cs",
-              "RelativeDocumentMoniker": "OdooClient\\XmlRpc\\XmlRpcRequest.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\XmlRpc\\XmlRpcRequest.cs",
-              "RelativeToolTip": "OdooClient\\XmlRpc\\XmlRpcRequest.cs",
-              "ViewState": "AgIAAEYAAAAAAAAAAAAkwGkAAAADAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-17T22:34:44.567Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "XmlRpcResponse.cs",
-              "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\XmlRpc\\XmlRpcResponse.cs",
-              "RelativeDocumentMoniker": "OdooClient\\XmlRpc\\XmlRpcResponse.cs",
-              "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\OdooClient\\XmlRpc\\XmlRpcResponse.cs",
-              "RelativeToolTip": "OdooClient\\XmlRpc\\XmlRpcResponse.cs",
-              "ViewState": "AgIAACoAAAAAAAAAAAAUwEgAAAAXAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-17T22:55:33.21Z",
               "EditorCaption": ""
             }
           ]

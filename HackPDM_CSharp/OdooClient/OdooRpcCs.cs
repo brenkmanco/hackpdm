@@ -10,8 +10,7 @@ using System.Windows.Forms.PropertyGridInternal;
 using CredentialManagement;
 using HackPDM;
 using HackPDM.ClientUtils;
-using Nwc.XmlRpc;
-//using CookComputing.XmlRpc;
+using XmlRpc.Goober;
 
 
 namespace OdooRpcCs
