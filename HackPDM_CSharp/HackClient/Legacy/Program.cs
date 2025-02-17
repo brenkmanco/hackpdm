@@ -30,6 +30,7 @@ using System.Windows.Forms;
 
 using HackPDM.ClientUtils;
 using HackPDM.Forms.Settings;
+using HackPDM.HackClient;
 
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.Utilities;
 
@@ -48,70 +49,13 @@ namespace HackPDM
 	/// </summary>
 	internal sealed class Program
 	{
-#if DEBUG
-		const long repoID = 28426033L;
-		const string branchName = "justinOdooIntegration";
-		private static (string, string) CurrentVersion()
-		{
-			// git log --format="%H | %cd" --date=iso
-			var assembly = Assembly.GetExecutingAssembly();
-			
-			var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-
-            if (informationalVersion != null)
-            {
-                var parts = informationalVersion.Split([.. ", "]);
-                var commitHash = parts[1];
-                var commitDate = $"{parts[4]} {parts[5]} {parts[6]}";
-
-                //MessageBox.Show($"Commit Hash: {commitHash}");
-                //MessageBox.Show($"Commit Date: {commitDate}");
-				return (commitHash, commitDate);
-            }
-            else
-            {
-                MessageBox.Show("Commit information not found.");
-            }
-			return (null, null);
-		}
-		private async static Task<Branch> GetBranchRepo(long repositoryID, string repoBranchName)
-		{
-			var ghClient = new GitHubClient(new Octokit.ProductHeaderValue("hackpdm"));
-			return await ghClient.Repository.Branch.Get(repositoryID, repoBranchName);
-		}
-		private static bool IsLatestVersion (Branch branch, string commitHash)
-		{
-			var latestCommit = branch.Commit.Sha;
-			
-			MessageBox.Show(latestCommit);
-			return latestCommit == commitHash;
-		}
-#endif
-
-
-
-
-
-
 		/// <summary>
 		/// Program entry point.
 		/// </summary>
 		[STAThread]
 		private async static Task Main(string[] args)
 		{
-			#if DEBUG || GITRELEASE
-				
-			#endif
-			var info = CurrentVersion();
-			var ghBranch = await GetBranchRepo(repoID, branchName);
-			if (!IsLatestVersion(ghBranch, info.Item1))
-			{
-				MessageBox.Show($"Latest version: {ghBranch.Commit.Sha}, doesn't match newest version: {info.Item1}");
-			}
-			else
-			{
-				MessageBox.Show("Latest versions match");
-			}
+			if (!await HackUpdater.EnsureUpdated()) return;
 			
 			Application.EnableVisualStyles();
 			Application.SetCompatibleTextRenderingDefault(false);

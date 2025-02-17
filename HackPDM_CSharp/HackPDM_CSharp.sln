@@ -7,8 +7,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HackPDM_CSharp", "HackPDM_C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HackPDM_CSharpTests", "..\HackPDM_CSharpTests\HackPDM_CSharpTests.csproj", "{883A45CE-4789-464E-92A7-8F586031A1B1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HackPDM_Server", "..\HackPDM_Server\HackPDM_Server.csproj", "{11383CE5-C0A5-456F-88C4-1BA179156721}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|MCD = Debug|MCD
@@ -72,30 +70,6 @@ Global
 		{883A45CE-4789-464E-92A7-8F586031A1B1}.Release|x64.Build.0 = Release|Any CPU
 		{883A45CE-4789-464E-92A7-8F586031A1B1}.Release|x86.ActiveCfg = Release|Any CPU
 		{883A45CE-4789-464E-92A7-8F586031A1B1}.Release|x86.Build.0 = Release|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.Debug|MCD.ActiveCfg = Debug|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.Debug|MCD.Build.0 = Debug|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.Debug|x64.Build.0 = Debug|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.Debug|x86.Build.0 = Debug|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.GitRelease|MCD.ActiveCfg = GitRelease|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.GitRelease|MCD.Build.0 = GitRelease|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.GitRelease|x64.ActiveCfg = GitRelease|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.GitRelease|x64.Build.0 = GitRelease|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.GitRelease|x86.ActiveCfg = GitRelease|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.GitRelease|x86.Build.0 = GitRelease|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.HackServer|MCD.ActiveCfg = Debug|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.HackServer|MCD.Build.0 = Debug|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.HackServer|x64.ActiveCfg = Debug|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.HackServer|x64.Build.0 = Debug|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.HackServer|x86.ActiveCfg = Debug|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.HackServer|x86.Build.0 = Debug|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.Release|MCD.ActiveCfg = Release|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.Release|MCD.Build.0 = Release|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.Release|x64.ActiveCfg = Release|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.Release|x64.Build.0 = Release|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.Release|x86.ActiveCfg = Release|Any CPU
-		{11383CE5-C0A5-456F-88C4-1BA179156721}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

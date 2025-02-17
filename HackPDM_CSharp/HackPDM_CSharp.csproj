@@ -610,8 +610,62 @@
   <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
   <Import Project="packages\Microsoft.Testing.Platform.MSBuild.1.5.3\build\Microsoft.Testing.Platform.MSBuild.targets" Condition="Exists('packages\Microsoft.Testing.Platform.MSBuild.1.5.3\build\Microsoft.Testing.Platform.MSBuild.targets')" />
   <Import Project="packages\NUnit3TestAdapter.5.0.0\build\net462\NUnit3TestAdapter.targets" Condition="Exists('packages\NUnit3TestAdapter.5.0.0\build\net462\NUnit3TestAdapter.targets')" />
-  <PropertyGroup>
-    <PreBuildEvent>
-    </PreBuildEvent>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'GitRelease|AnyCPU'">
+	  <PreBuildEvent>
+		  param (
+
+		  [string]$projectDir
+
+		  )
+
+		  # Change to the project directory
+
+		  cd $projectDir
+
+		  cd ..
+
+
+		  # Stage all changes
+
+		  git add .
+
+
+		  # Commit the changes
+
+		  git commit -m "Automated commit from build"
+
+		  git push
+
+
+		  # Get the current commit hash and commit date
+
+		  $commitHash = git log -1 --format="%25H"
+
+		  $commitDate = git log -1 --format="%25cd" --date=iso
+
+
+		  # go back into project folder
+
+		  cd $projectDir
+
+
+		  # Write the commit hash to a file
+
+		  # $commitHash | Out-File -FilePath
+
+
+		  $infoContent = @"
+
+		  using System.Reflection;
+
+
+		  [assembly: AssemblyInformationalVersion("Commit: $commitHash, Date: $commitDate")]
+
+		  "@
+
+		  $infoFilePath = Join-Path -Path $projectDir -ChildPath "GitInfo.cs"
+
+		  Set-Content -Path $infoFilePath -Value $infoContent
+	  </PreBuildEvent>
   </PropertyGroup>
 </Project>

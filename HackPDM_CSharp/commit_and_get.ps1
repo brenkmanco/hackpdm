@@ -2,7 +2,7 @@
     [string]$projectDir
 )
 # Change to the project directory
-cd $env:ProjectDir
+cd $projectDir
 cd ..
 
 # Stage all changes
