@@ -52,18 +52,18 @@ namespace HackPDM
             if (informationalVersion != null)
             {
                 var parts = informationalVersion.Split([.. ", "]);
-                var commitHash = parts.Length > 0 ? parts[0].Replace("Commit: ", "") : "Unknown";
-                var commitDate = parts.Length > 1 ? parts[1].Replace("Date: ", "") : "Unknown";
+                var commitHash = parts[1];
+                var commitDate = $"{parts[4]} {parts[5]} {parts[6]}";
 
-                Console.WriteLine($"Commit Hash: {commitHash}");
-                Console.WriteLine($"Commit Date: {commitDate}");
+                MessageBox.Show($"Commit Hash: {commitHash}");
+                MessageBox.Show($"Commit Date: {commitDate}");
             }
             else
             {
-                Console.WriteLine("Commit information not found.");
+                MessageBox.Show("Commit information not found.");
             }
 			return "";
-		}		
+		}
 #endif
 
 

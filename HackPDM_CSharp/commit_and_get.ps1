@@ -10,6 +10,7 @@ git add .
 
 # Commit the changes
 git commit -m "Automated commit from build"
+git push
 
 # Get the current commit hash and commit date
 $commitHash = git log -1 --format="%H"
@@ -28,5 +29,3 @@ using System.Reflection;
 "@
 $infoFilePath = Join-Path -Path $projectDir -ChildPath "GitInfo.cs"
 Set-Content -Path $infoFilePath -Value $infoContent
-echo $infoFilePath
-echo $infoContent

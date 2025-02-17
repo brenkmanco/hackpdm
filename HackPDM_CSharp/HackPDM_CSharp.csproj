@@ -7,12 +7,12 @@
   <Import Project="packages\NUnit.4.3.2\build\NUnit.props" Condition="Exists('packages\NUnit.4.3.2\build\NUnit.props')" />
   <Import Project="packages\EntityFramework.6.5.1\build\EntityFramework.props" Condition="Exists('packages\EntityFramework.6.5.1\build\EntityFramework.props')" />
   <Import Project="packages\SixLabors.ImageSharp.3.1.6\build\SixLabors.ImageSharp.props" Condition="Exists('packages\SixLabors.ImageSharp.3.1.6\build\SixLabors.ImageSharp.props')" />
-	<Target Name="GitExecution" BeforeTargets="BeforeBuild">
-		<Exec Command="powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1 -projectDir $(ProjectDir)" />
-	</Target>
-	<ItemGroup>
-		<Compile Include="GitInfo.cs" />
-	</ItemGroup>
+  <Target Name="GitExecution" BeforeTargets="BeforeBuild">
+    <Exec Command="powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1 -projectDir $(ProjectDir)" />
+  </Target>
+  <ItemGroup>
+    <Compile Include="GitInfo.cs" />
+  </ItemGroup>
   <PropertyGroup>
     <ProjectGuid>{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}</ProjectGuid>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -263,6 +263,9 @@
     </Reference>
     <Reference Include="nunit.framework.legacy, Version=4.3.2.0, Culture=neutral, PublicKeyToken=2638cd05610744eb, processorArchitecture=MSIL">
       <HintPath>packages\NUnit.4.3.2\lib\net462\nunit.framework.legacy.dll</HintPath>
+    </Reference>
+    <Reference Include="Octokit, Version=14.0.0.0, Culture=neutral, PublicKeyToken=0be8860aee462442, processorArchitecture=MSIL">
+      <HintPath>packages\Octokit.14.0.0\lib\netstandard2.0\Octokit.dll</HintPath>
     </Reference>
     <Reference Include="OpenMcdf, Version=3.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>packages\OpenMcdf.3.0.0-preview.2\lib\netstandard2.0\OpenMcdf.dll</HintPath>
