@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -55,23 +56,24 @@ namespace HackPDM.HackClient
 			var ghBranch = await GetBranchRepo(repoID, branchName);
 			if (!IsLatestVersion(ghBranch, info.Item1))
 			{
-				 if (MessageBox.Show($"Latest version: {ghBranch.Commit.Sha}, doesn't match newest version: {info.Item1}", 
+				 if (MessageBox.Show($"Latest version: {ghBranch.Commit.Sha}, doesn't match newest version: {info.Item1}\n" +
+				 $"Would you like to navigate to {ghBranch.Commit.Url}?", 
 				 "Versions", 
 				 MessageBoxButtons.YesNoCancel) == DialogResult.Yes)
 				 {
-					return UpdaterProcess(ghBranch);
-				 }
-				 else
-				 {
+					UpdaterProcess(ghBranch);
 					return false;
 				 }
 			}
+			else
+			{
+				return true;
+			}
 			return false;
 		}
-		public static bool UpdaterProcess(Branch branch)
+		public static void UpdaterProcess(Branch branch)
 		{
-			var ghClient = new GitHubClient(new Octokit.ProductHeaderValue("hackpdm"));
-			return true;
+			Process.Start("explorer.exe", branch.Commit.Url);
 		}
 	}
 }
