@@ -42,6 +42,9 @@
 			this.deleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.logicalDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.perminentDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.unDeleteToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+			this.topDirectoryToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+			this.allDirectoriesToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
 			this.ilTreeIcons = new System.Windows.Forms.ImageList(this.components);
 			this.OdooEntryList = new System.Windows.Forms.ListView();
 			this.OdooCMSList = new System.Windows.Forms.ContextMenuStrip(this.components);
@@ -78,9 +81,6 @@
 			this.OdooRefreshDropdown = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooSearchDropdown = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooManageTypesDropdown = new System.Windows.Forms.ToolStripMenuItem();
-			this.unDeleteToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
-			this.topDirectoryToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
-			this.allDirectoriesToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooCMSTree.SuspendLayout();
 			this.OdooCMSList.SuspendLayout();
 			this.tabControl1.SuspendLayout();
@@ -119,7 +119,7 @@
             this.analyzeToolStripMenuItem,
             this.deleteToolStripMenuItem});
 			this.OdooCMSTree.Name = "contextMenuStrip1";
-			this.OdooCMSTree.Size = new System.Drawing.Size(181, 158);
+			this.OdooCMSTree.Size = new System.Drawing.Size(158, 136);
 			// 
 			// getLatestToolStripMenuItem
 			// 
@@ -179,7 +179,7 @@
             this.perminentDeleteToolStripMenuItem,
             this.unDeleteToolStripMenuItem1});
 			this.deleteToolStripMenuItem.Name = "deleteToolStripMenuItem";
-			this.deleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.deleteToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.deleteToolStripMenuItem.Text = "Delete";
 			// 
 			// logicalDeleteToolStripMenuItem
@@ -194,6 +194,30 @@
 			this.perminentDeleteToolStripMenuItem.Name = "perminentDeleteToolStripMenuItem";
 			this.perminentDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
 			this.perminentDeleteToolStripMenuItem.Text = "Permanent Delete";
+			// 
+			// unDeleteToolStripMenuItem1
+			// 
+			this.unDeleteToolStripMenuItem1.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.topDirectoryToolStripMenuItem1,
+            this.allDirectoriesToolStripMenuItem1});
+			this.unDeleteToolStripMenuItem1.Name = "unDeleteToolStripMenuItem1";
+			this.unDeleteToolStripMenuItem1.Size = new System.Drawing.Size(168, 22);
+			this.unDeleteToolStripMenuItem1.Text = "UnDelete";
+			this.unDeleteToolStripMenuItem1.Click += new System.EventHandler(this.unDeleteToolStripMenuItem1_Click);
+			// 
+			// topDirectoryToolStripMenuItem1
+			// 
+			this.topDirectoryToolStripMenuItem1.Name = "topDirectoryToolStripMenuItem1";
+			this.topDirectoryToolStripMenuItem1.Size = new System.Drawing.Size(147, 22);
+			this.topDirectoryToolStripMenuItem1.Text = "Top Directory";
+			this.topDirectoryToolStripMenuItem1.Click += new System.EventHandler(this.topDirectoryToolStripMenuItem1_Click);
+			// 
+			// allDirectoriesToolStripMenuItem1
+			// 
+			this.allDirectoriesToolStripMenuItem1.Name = "allDirectoriesToolStripMenuItem1";
+			this.allDirectoriesToolStripMenuItem1.Size = new System.Drawing.Size(147, 22);
+			this.allDirectoriesToolStripMenuItem1.Text = "All Directories";
+			this.allDirectoriesToolStripMenuItem1.Click += new System.EventHandler(this.allDirectoriesToolStripMenuItem1_Click);
 			// 
 			// ilTreeIcons
 			// 
@@ -275,13 +299,13 @@
             this.unDeleteToolStripMenuItem,
             this.permanentDeleteToolStripMenuItem});
 			this.toolStripMenuItem6.Name = "toolStripMenuItem6";
-			this.toolStripMenuItem6.Size = new System.Drawing.Size(180, 22);
+			this.toolStripMenuItem6.Size = new System.Drawing.Size(157, 22);
 			this.toolStripMenuItem6.Text = "Delete";
 			// 
 			// logicalDeleteToolStripMenuItem1
 			// 
 			this.logicalDeleteToolStripMenuItem1.Name = "logicalDeleteToolStripMenuItem1";
-			this.logicalDeleteToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
+			this.logicalDeleteToolStripMenuItem1.Size = new System.Drawing.Size(168, 22);
 			this.logicalDeleteToolStripMenuItem1.Text = "Logical Delete";
 			this.logicalDeleteToolStripMenuItem1.ToolTipText = "sets the Entry to inactive in Odoo";
 			this.logicalDeleteToolStripMenuItem1.Click += new System.EventHandler(this.LogicalDeleteEntryStrip_Click);
@@ -289,14 +313,14 @@
 			// unDeleteToolStripMenuItem
 			// 
 			this.unDeleteToolStripMenuItem.Name = "unDeleteToolStripMenuItem";
-			this.unDeleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.unDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
 			this.unDeleteToolStripMenuItem.Text = "UnDelete";
 			this.unDeleteToolStripMenuItem.Click += new System.EventHandler(this.unDeleteToolStripMenuItem_Click);
 			// 
 			// permanentDeleteToolStripMenuItem
 			// 
 			this.permanentDeleteToolStripMenuItem.Name = "permanentDeleteToolStripMenuItem";
-			this.permanentDeleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.permanentDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
 			this.permanentDeleteToolStripMenuItem.Text = "Permanent Delete";
 			// 
 			// OpenEntryStrip
@@ -350,6 +374,91 @@
 			this.ilListIcons.Images.SetKeyName(8, "if");
 			this.ilListIcons.Images.SetKeyName(9, "ds");
 			this.ilListIcons.Images.SetKeyName(10, "default");
+			this.ilListIcons.Images.SetKeyName(11, "3mf");
+			this.ilListIcons.Images.SetKeyName(12, "ai");
+			this.ilListIcons.Images.SetKeyName(13, "asmdot");
+			this.ilListIcons.Images.SetKeyName(14, "asmprp");
+			this.ilListIcons.Images.SetKeyName(15, "avi");
+			this.ilListIcons.Images.SetKeyName(16, "bas");
+			this.ilListIcons.Images.SetKeyName(17, "bat");
+			this.ilListIcons.Images.SetKeyName(18, "bmp");
+			this.ilListIcons.Images.SetKeyName(19, "btl");
+			this.ilListIcons.Images.SetKeyName(20, "cnc");
+			this.ilListIcons.Images.SetKeyName(21, "cs");
+			this.ilListIcons.Images.SetKeyName(22, "csproj");
+			this.ilListIcons.Images.SetKeyName(23, "csv");
+			this.ilListIcons.Images.SetKeyName(24, "cwr");
+			this.ilListIcons.Images.SetKeyName(25, "dat");
+			this.ilListIcons.Images.SetKeyName(26, "db");
+			this.ilListIcons.Images.SetKeyName(27, "dic");
+			this.ilListIcons.Images.SetKeyName(28, "doc");
+			this.ilListIcons.Images.SetKeyName(29, "docx");
+			this.ilListIcons.Images.SetKeyName(30, "dot");
+			this.ilListIcons.Images.SetKeyName(31, "drwdot");
+			this.ilListIcons.Images.SetKeyName(32, "dwg");
+			this.ilListIcons.Images.SetKeyName(33, "dxf");
+			this.ilListIcons.Images.SetKeyName(34, "edrw");
+			this.ilListIcons.Images.SetKeyName(35, "eps");
+			this.ilListIcons.Images.SetKeyName(36, "gcode");
+			this.ilListIcons.Images.SetKeyName(37, "gif");
+			this.ilListIcons.Images.SetKeyName(38, "gz");
+			this.ilListIcons.Images.SetKeyName(39, "htm");
+			this.ilListIcons.Images.SetKeyName(40, "igs");
+			this.ilListIcons.Images.SetKeyName(41, "indd");
+			this.ilListIcons.Images.SetKeyName(42, "index");
+			this.ilListIcons.Images.SetKeyName(43, "jpg");
+			this.ilListIcons.Images.SetKeyName(44, "ldb");
+			this.ilListIcons.Images.SetKeyName(45, "log");
+			this.ilListIcons.Images.SetKeyName(46, "m");
+			this.ilListIcons.Images.SetKeyName(47, "mdb");
+			this.ilListIcons.Images.SetKeyName(48, "ods");
+			this.ilListIcons.Images.SetKeyName(49, "odt");
+			this.ilListIcons.Images.SetKeyName(50, "pdf");
+			this.ilListIcons.Images.SetKeyName(51, "png");
+			this.ilListIcons.Images.SetKeyName(52, "propdesc");
+			this.ilListIcons.Images.SetKeyName(53, "prtdot");
+			this.ilListIcons.Images.SetKeyName(54, "prtprp");
+			this.ilListIcons.Images.SetKeyName(55, "ps");
+			this.ilListIcons.Images.SetKeyName(56, "resx");
+			this.ilListIcons.Images.SetKeyName(57, "rpt");
+			this.ilListIcons.Images.SetKeyName(58, "settings");
+			this.ilListIcons.Images.SetKeyName(59, "sla");
+			this.ilListIcons.Images.SetKeyName(60, "sldasm");
+			this.ilListIcons.Images.SetKeyName(61, "sldblk");
+			this.ilListIcons.Images.SetKeyName(62, "sldbomtbt");
+			this.ilListIcons.Images.SetKeyName(63, "slddrt");
+			this.ilListIcons.Images.SetKeyName(64, "slddrw");
+			this.ilListIcons.Images.SetKeyName(65, "sldedb");
+			this.ilListIcons.Images.SetKeyName(66, "sldedbold");
+			this.ilListIcons.Images.SetKeyName(67, "sldgtolfvt");
+			this.ilListIcons.Images.SetKeyName(68, "sldholtbt");
+			this.ilListIcons.Images.SetKeyName(69, "sldlfp");
+			this.ilListIcons.Images.SetKeyName(70, "sldmtnfvt");
+			this.ilListIcons.Images.SetKeyName(71, "sldprt");
+			this.ilListIcons.Images.SetKeyName(72, "sldpuntbt");
+			this.ilListIcons.Images.SetKeyName(73, "sldrevtbt");
+			this.ilListIcons.Images.SetKeyName(74, "sldsffvt");
+			this.ilListIcons.Images.SetKeyName(75, "sldtbt");
+			this.ilListIcons.Images.SetKeyName(76, "sldweldfvt");
+			this.ilListIcons.Images.SetKeyName(77, "sldwldtbt");
+			this.ilListIcons.Images.SetKeyName(78, "sln");
+			this.ilListIcons.Images.SetKeyName(79, "sqy");
+			this.ilListIcons.Images.SetKeyName(80, "suo");
+			this.ilListIcons.Images.SetKeyName(81, "svg");
+			this.ilListIcons.Images.SetKeyName(82, "swp");
+			this.ilListIcons.Images.SetKeyName(83, "sym");
+			this.ilListIcons.Images.SetKeyName(84, "tbox");
+			this.ilListIcons.Images.SetKeyName(85, "tif");
+			this.ilListIcons.Images.SetKeyName(86, "ttf");
+			this.ilListIcons.Images.SetKeyName(87, "txt");
+			this.ilListIcons.Images.SetKeyName(88, "wxm");
+			this.ilListIcons.Images.SetKeyName(89, "wxmx");
+			this.ilListIcons.Images.SetKeyName(90, "x_b");
+			this.ilListIcons.Images.SetKeyName(91, "x_t");
+			this.ilListIcons.Images.SetKeyName(92, "xls");
+			this.ilListIcons.Images.SetKeyName(93, "xlsx");
+			this.ilListIcons.Images.SetKeyName(94, "xml");
+			this.ilListIcons.Images.SetKeyName(95, "zip");
 			// 
 			// tabControl1
 			// 
@@ -574,30 +683,6 @@
 			this.OdooManageTypesDropdown.Size = new System.Drawing.Size(170, 22);
 			this.OdooManageTypesDropdown.Text = "Manage File Types";
 			this.OdooManageTypesDropdown.Click += new System.EventHandler(this.OdooManageTypesDropdown_Click);
-			// 
-			// unDeleteToolStripMenuItem1
-			// 
-			this.unDeleteToolStripMenuItem1.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.topDirectoryToolStripMenuItem1,
-            this.allDirectoriesToolStripMenuItem1});
-			this.unDeleteToolStripMenuItem1.Name = "unDeleteToolStripMenuItem1";
-			this.unDeleteToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
-			this.unDeleteToolStripMenuItem1.Text = "UnDelete";
-			this.unDeleteToolStripMenuItem1.Click += new System.EventHandler(this.unDeleteToolStripMenuItem1_Click);
-			// 
-			// topDirectoryToolStripMenuItem1
-			// 
-			this.topDirectoryToolStripMenuItem1.Name = "topDirectoryToolStripMenuItem1";
-			this.topDirectoryToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
-			this.topDirectoryToolStripMenuItem1.Text = "Top Directory";
-			this.topDirectoryToolStripMenuItem1.Click += new System.EventHandler(this.topDirectoryToolStripMenuItem1_Click);
-			// 
-			// allDirectoriesToolStripMenuItem1
-			// 
-			this.allDirectoriesToolStripMenuItem1.Name = "allDirectoriesToolStripMenuItem1";
-			this.allDirectoriesToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
-			this.allDirectoriesToolStripMenuItem1.Text = "All Directories";
-			this.allDirectoriesToolStripMenuItem1.Click += new System.EventHandler(this.allDirectoriesToolStripMenuItem1_Click);
 			// 
 			// HackFileManager
 			// 
