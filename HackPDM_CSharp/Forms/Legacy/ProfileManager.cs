@@ -54,7 +54,7 @@ namespace HackPDM
         {
             if (e.CloseReason is CloseReason.UserClosing or CloseReason.FormOwnerClosing or CloseReason.MdiFormClosing or CloseReason.ApplicationExitCall)
             {
-                Application.Exit();
+                this.DialogResult = DialogResult.Cancel;
             }
         }
 
