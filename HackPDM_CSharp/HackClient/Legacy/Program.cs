@@ -39,6 +39,8 @@ using Octokit;
 
 using SolidWorks.Interop.sldworks;
 
+using Application = System.Windows.Forms.Application;
+
 namespace HackPDM
 {
 	/// <summary>
@@ -47,7 +49,8 @@ namespace HackPDM
 	internal sealed class Program
 	{
 #if DEBUG
-		static const long repoID = 
+		const long repoID = 28426033L;
+		const string branchName = "justinOdooIntegration";
 		private static (string, string) CurrentVersion()
 		{
 			// git log --format="%H | %cd" --date=iso
@@ -71,10 +74,17 @@ namespace HackPDM
             }
 			return (null, null);
 		}
-		private async static Task<bool> IsLatestVersion (string commitHash)
+		private async static Task<Branch> GetBranchRepo(long repositoryID, string repoBranchName)
 		{
 			var ghClient = new GitHubClient(new Octokit.ProductHeaderValue("hackpdm"));
-			var repo = await ghClient.Repository.Get(28426033L);
+			return ghClient.Repository.Branch.Get(repositoryID, repoBranchName);
+		}
+		private static bool IsLatestVersion (Branch branch, string commitHash)
+		{
+			var latestCommit = branch.Commit.Sha;
+			
+			MessageBox.Show(latestCommit);
+			return latestCommit == commitHash;
 		}
 #endif
 
@@ -87,11 +97,22 @@ namespace HackPDM
 		/// Program entry point.
 		/// </summary>
 		[STAThread]
-		private static void Main(string[] args)
+		private async static void Main(string[] args)
 		{
-			#if DEBUG
-				CurrentVersion();
+			#if DEBUG || GITRELEASE
+				
 			#endif
+			var info = CurrentVersion();
+			var ghBranch = await GetBranchRepo(repoID, branchName);
+			if (!IsLatestVersion(ghBranch, info.Item1))
+			{
+				MessageBox.Show($"Latest version: {ghBranch.Commit.Sha}, doesn't match newest version: {info.Item1}");
+			}
+			else
+			{
+				MessageBox.Show("Latest versions match");
+			}
+			
 			Application.EnableVisualStyles();
 			Application.SetCompatibleTextRenderingDefault(false);
 			#if DEBUG
