@@ -471,6 +471,26 @@
       <DependentUpon>ProfileManager.cs</DependentUpon>
     </Compile>
     <Compile Include="HackClient\Legacy\Program.cs" />
+    <Compile Include="OdooClient\XmlRpc\Context.cs" />
+    <Compile Include="OdooClient\XmlRpc\Logger.cs" />
+    <Compile Include="OdooClient\XmlRpc\LogLevel.cs" />
+    <Compile Include="OdooClient\XmlRpc\SimpleHttpRequest.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcBoxcarRequest.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcDeserializer.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcErrorCodes.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcException.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcExposedAttribute.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcRequest.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcRequestDeserializer.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcRequestSerializer.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcResponder.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcResponse.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcResponseDeserializer.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcResponseSerializer.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcSerializer.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcServer.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcSystemObject.cs" />
+    <Compile Include="OdooClient\XmlRpc\XmlRpcXmlTokens.cs" />
     <Compile Include="Properties\AppSettings.cs" />
     <Compile Include="Properties\AppSettings.Designer.cs">
       <AutoGen>True</AutoGen>
