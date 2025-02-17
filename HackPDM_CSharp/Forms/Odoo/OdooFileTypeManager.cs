@@ -23,25 +23,27 @@ namespace HackPDM.Forms.Odoo
 	{
 		private HackFileManager hackman;
 		private readonly static Size closeImgSize = new Size(32, 32);
-		private static Image closeImg
+		private Image closeImg
 		{
 			get
 			{
 				if (field is null)
 				{
-					field = Image.FromFile(Path.Combine(HackFileManager.ResourcesPath, "delete_image_button.png"));
-					field = ImageUtils.ResizeImage( field, closeImgSize.Width, closeImgSize.Height );
+					field = TypeImageList.Images["delete_image_button.png"];
+					//field = Image.FromFile(Path.Combine(HackFileManager.ResourcesPath, "delete_image_button.png"));
+					//field = ImageUtils.ResizeImage( field, closeImgSize.Width, closeImgSize.Height );
 				}
 				return field;
 			}
 		}
-		private static Image emptyImg
+		private Image emptyImg
 		{
 			get
 			{
 				if ( field is null )
 				{
-					field = Image.FromFile( Path.Combine( HackFileManager.ResourcesPath, "square_empty.png" ) );
+					field = TypeImageList.Images["square_empty.png"];
+					//field = Image.FromFile( Path.Combine( HackFileManager.ResourcesPath, "square_empty.png" ) );
 					field = ImageUtils.ResizeImage( field, closeImgSize.Width, closeImgSize.Height );
 				}
 				return field;
@@ -217,17 +219,16 @@ namespace HackPDM.Forms.Odoo
 			if (!list.Images.ContainsKey(strKey))
 			{
 				// get local image
-				string path = Path.Combine(HackFileManager.ExtensionIconPath, $"{strKey}.png");
-				if (File.Exists(path))
-				{
-					list.Images.Add(strKey, Image.FromFile(path));
-				}
-				else
-				{
-					strKey = "default";
-				}
-
-				
+				//string path = Path.Combine(HackFileManager.ExtensionIconPath, $"{strKey}.png");
+				//if (File.Exists(path))
+				//{
+				//	list.Images.Add(strKey, Image.FromFile(path));
+				//}
+				//else
+				//{
+				strKey = "default";
+				//}
+								
 			}
 
 			return strKey;

@@ -89,7 +89,7 @@
       <Value Profile="(Default)">C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp</Value>
     </Setting>
     <Setting Name="OdooAddress" Type="System.String" Scope="User">
-      <Value Profile="(Default)">10.0.0.52</Value>
+      <Value Profile="(Default)">Odoo-Server</Value>
     </Setting>
     <Setting Name="OdooPort" Type="System.String" Scope="User">
       <Value Profile="(Default)">8069</Value>

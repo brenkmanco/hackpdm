@@ -100,6 +100,9 @@
 			this.TypeImageList.ImageStream = ((System.Windows.Forms.ImageListStreamer)(resources.GetObject("TypeImageList.ImageStream")));
 			this.TypeImageList.TransparentColor = System.Drawing.Color.Transparent;
 			this.TypeImageList.Images.SetKeyName(0, "default");
+			this.TypeImageList.Images.SetKeyName(1, "UnknownImage.png");
+			this.TypeImageList.Images.SetKeyName(2, "delete_image_button.png");
+			this.TypeImageList.Images.SetKeyName(3, "square_empty.png");
 			// 
 			// groupBox3
 			// 

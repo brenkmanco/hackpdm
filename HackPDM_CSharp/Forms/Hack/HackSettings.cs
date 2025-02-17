@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Windows.Forms;
 
 using HackPDM.Properties;
@@ -13,8 +14,10 @@ namespace HackPDM.Forms.Hack
 	{
 		UserSettings userSettings;
 		AppSettings appSettings;
+		Assembly assembly;
 		public HackSettings()
 		{
+			assembly = Assembly.GetExecutingAssembly();
 			userSettings = UserSettings.Default;
 			appSettings = AppSettings.Default;
 			InitializeComponent();
@@ -22,8 +25,27 @@ namespace HackPDM.Forms.Hack
 		}
 		private void GetInfoDefaults()
 		{
-			txtPwaInput.Text        = userSettings.PWAPathAbsolute;
-			txtProjectInput.Text    = userSettings.ProjectDirectory;
+			FileInfo hackExe = new FileInfo(assembly.Location);
+			string assemblyDir = hackExe.DirectoryName;
+
+			if (userSettings.PWAPathAbsolute is null or "")
+			{
+				txtPwaInput.Text	= Path.Combine(assemblyDir, "pwa");
+			}
+			else
+			{
+				txtPwaInput.Text        = userSettings.PWAPathAbsolute;
+			}
+
+			if (userSettings.ProjectDirectory is null or "")
+			{
+				txtProjectInput.Text	= assemblyDir;
+			}
+			else
+			{
+				txtProjectInput.Text    = userSettings.ProjectDirectory;
+			}
+			
 			txtByteInput.Text       = appSettings.MeasureByteSize.ToString();
 			txtFileInput.Text       = appSettings.MeasureFileSize;
 		}

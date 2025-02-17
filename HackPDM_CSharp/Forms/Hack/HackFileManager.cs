@@ -27,10 +27,10 @@ namespace HackPDM
 	public partial class HackFileManager : Form
     {
 		#region Declarations
-		internal static readonly DirectoryInfo directoryInfo = new(Properties.UserSettings.Default.ProjectDirectory);
-		internal static readonly string StatusIconPath = $"{directoryInfo.FullName}\\Icons\\StatusIcons";
-		internal static readonly string ExtensionIconPath = $"{directoryInfo.FullName}\\Icons\\ExtensionIcons";
-		internal static readonly string ResourcesPath = $"{directoryInfo.FullName}\\Resources";
+		//internal static readonly DirectoryInfo directoryInfo = new(Properties.UserSettings.Default.ProjectDirectory);
+		//internal static readonly string StatusIconPath = $"{directoryInfo.FullName}\\Icons\\StatusIcons";
+		//internal static readonly string ExtensionIconPath = $"{directoryInfo.FullName}\\Icons\\ExtensionIcons";
+		//internal static readonly string ResourcesPath = $"{directoryInfo.FullName}\\Resources";
 		private const string EmptyPlaceholder = "-";
 		// List Views Column Name and Widths
 		internal static readonly Dictionary<string, string> NameConfig = new Dictionary<string, string>()
@@ -711,14 +711,14 @@ namespace HackPDM
 							ms.Write( imgBytes, 0, imgBytes.Length );
 							imgExt = Image.FromStream( ms );
 						}
-						else
-						{
-							string path = Path.Combine(ExtensionIconPath, $"{type}.png");
-							if (File.Exists(path))
-							{
-								imgExt = Image.FromFile(path);
-							}
-						}
+						//else
+						//{
+						//	string path = Path.Combine(ExtensionIconPath, $"{type}.png");
+						//	if (File.Exists(path))
+						//	{
+						//		imgExt = Image.FromFile(path);
+						//	}
+						//}
 						if (imgExt == null)
 						{
 							imgExt = ilListIcons.Images [ "default" ];
@@ -731,15 +731,15 @@ namespace HackPDM
 
 					// get status image
 					Image imgStatus = ilListIcons.Images[status];
-					if ( imgStatus == null )
-					{
-						string path = Path.Combine(StatusIconPath, $"{status}.png");
-						if ( File.Exists( path ) )
-						{
-							imgStatus = Image.FromFile( path );
-							ilListIcons.Images.Add( status, imgStatus );
-						}
-					}
+					//if ( imgStatus == null )
+					//{
+					//	string path = Path.Combine(StatusIconPath, $"{status}.png");
+					//	if ( File.Exists( path ) )
+					//	{
+					//		imgStatus = Image.FromFile( path );
+					//		ilListIcons.Images.Add( status, imgStatus );
+					//	}
+					//}
 
 					// combine images
 					if (imgExt is not null && imgStatus is not null)
@@ -823,11 +823,11 @@ namespace HackPDM
 						}
 						
 
-						string extPath = Path.Combine(ExtensionIconPath, $"{type}.png");
-						if ( File.Exists( extPath ) )
-						{
-							imgExt = Image.FromFile( extPath );
-						}
+						//string extPath = Path.Combine(ExtensionIconPath, $"{type}.png");
+						//if ( File.Exists( extPath ) )
+						//{
+						//	imgExt = Image.FromFile( extPath );
+						//}
 						
 						if ( imgExt == null )
 						{
@@ -841,15 +841,15 @@ namespace HackPDM
 
 					// get status image
 					Image imgStatus = ilListIcons.Images[status];
-					if ( imgStatus == null )
-					{
-						string statusPath = Path.Combine(StatusIconPath, $"{status}.png");
-						if ( File.Exists( statusPath ) )
-						{
-							imgStatus = Image.FromFile( statusPath );
-							ilListIcons.Images.Add( status, imgStatus );
-						}
-					}
+					//if ( imgStatus == null )
+					//{
+					//	string statusPath = Path.Combine(StatusIconPath, $"{status}.png");
+					//	if ( File.Exists( statusPath ) )
+					//	{
+					//		imgStatus = Image.FromFile( statusPath );
+					//		ilListIcons.Images.Add( status, imgStatus );
+					//	}
+					//}
 
 					// combine images
 					if ( imgExt is not null && imgStatus is not null )

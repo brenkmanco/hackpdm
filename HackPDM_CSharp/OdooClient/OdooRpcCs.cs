@@ -11,6 +11,7 @@ using CredentialManagement;
 using HackPDM;
 using HackPDM.ClientUtils;
 using Nwc.XmlRpc;
+//using CookComputing.XmlRpc;
 
 
 namespace OdooRpcCs

@@ -282,7 +282,7 @@ namespace HackPDM.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("10.0.0.52")]
+        [global::System.Configuration.DefaultSettingValueAttribute("Odoo-Server")]
         public string OdooAddress {
             get {
                 return ((string)(this["OdooAddress"]));
