@@ -407,6 +407,7 @@
     </Compile>
     <Compile Include="HackClient\HackDefaults.cs" />
     <Compile Include="HackClient\HackBaseFile.cs" />
+    <Compile Include="HackClient\HackUpdater.cs" />
     <Compile Include="HackClient\Legacy\IconFromFile.cs" />
     <Compile Include="ClientUtils\HackInterfaces.cs" />
     <Compile Include="OdooClient\HpBaseModel.cs" />
@@ -611,7 +612,7 @@
   <Import Project="packages\Microsoft.Testing.Platform.MSBuild.1.5.3\build\Microsoft.Testing.Platform.MSBuild.targets" Condition="Exists('packages\Microsoft.Testing.Platform.MSBuild.1.5.3\build\Microsoft.Testing.Platform.MSBuild.targets')" />
   <Import Project="packages\NUnit3TestAdapter.5.0.0\build\net462\NUnit3TestAdapter.targets" Condition="Exists('packages\NUnit3TestAdapter.5.0.0\build\net462\NUnit3TestAdapter.targets')" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'GitRelease|AnyCPU'">
-	  <PreBuildEvent>
+    <PreBuildEvent>
 		  param (
 
 		  [string]$projectDir
