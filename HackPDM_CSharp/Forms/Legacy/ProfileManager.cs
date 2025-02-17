@@ -51,7 +51,7 @@ namespace HackPDM
 
 		private void ProfileManager_FormClosing( object sender, FormClosingEventArgs e ) 
         {
-            if (e.CloseReason is CloseReason.UserClosing or CloseReason.FormOwnerClosing)
+            if (e.CloseReason is CloseReason.UserClosing or CloseReason.FormOwnerClosing or CloseReason.MdiFormClosing or CloseReason.ApplicationExitCall)
             {
                 this.DialogResult = DialogResult.Cancel;
             }
