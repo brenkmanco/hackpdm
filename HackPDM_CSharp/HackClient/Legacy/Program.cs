@@ -25,6 +25,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Reflection;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -55,6 +56,20 @@ namespace HackPDM
 		[STAThread]
 		private async static Task Main(string[] args)
 		{
+			StringBuilder config = new();
+			#if DEBUG
+				config.AppendLine("Debug");
+			#endif
+			#if RELEASE
+				config.AppendLine("Release");
+			#endif
+			#if GITRELEASE
+				config.AppendLine("GitRelease");
+			#endif
+			#if TRACE
+				config.AppendLine("Trace");
+			#endif
+			MessageBox.Show(config.ToString());
 			if (!await HackUpdater.EnsureUpdated()) return;
 			
 			Application.EnableVisualStyles();
