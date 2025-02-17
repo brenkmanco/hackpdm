@@ -72,9 +72,8 @@
     <DefineConstants>TRACE</DefineConstants>
     <Nullable>enable</Nullable>
     <PreBuildEvent>
-			echo $(ProjectDir)commit_and_get.ps1
-			powershell.exe -File $(ProjectDir)commit_and_get.ps1 $(ProjectDir)
-		</PreBuildEvent>
+		powershell.exe -ExecutionPolicy Bypass -File $(SolutionDir)commit_and_get.ps1 $(SolutionDir)
+	</PreBuildEvent>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Platform)' == 'AnyCPU' ">
     <RegisterForComInterop>False</RegisterForComInterop>
@@ -621,9 +620,4 @@
   <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
   <Import Project="packages\Microsoft.Testing.Platform.MSBuild.1.5.3\build\Microsoft.Testing.Platform.MSBuild.targets" Condition="Exists('packages\Microsoft.Testing.Platform.MSBuild.1.5.3\build\Microsoft.Testing.Platform.MSBuild.targets')" />
   <Import Project="packages\NUnit3TestAdapter.5.0.0\build\net462\NUnit3TestAdapter.targets" Condition="Exists('packages\NUnit3TestAdapter.5.0.0\build\net462\NUnit3TestAdapter.targets')" />
-  <PropertyGroup>
-    <PreBuildEvent>echo $(SolutionDir)commit_and_get.ps1
-powershell.exe -File $(SolutionDir)commit_and_get.ps1 $(SolutionDir)
-</PreBuildEvent>
-  </PropertyGroup>
 </Project>
