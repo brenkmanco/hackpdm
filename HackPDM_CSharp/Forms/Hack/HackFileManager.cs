@@ -223,7 +223,12 @@ namespace HackPDM
 				{
 					errors.Add("invalid odoo credentials");
 				}
-				if (new ProfileManager(errors).ShowDialog() == DialogResult.OK) {}
+				var pm = new ProfileManager(errors);
+				var result = pm.ShowDialog();
+				if (result is DialogResult.None or DialogResult.Cancel or DialogResult.Abort or DialogResult.No) 
+				{
+					return;
+				}
 			}
             InitializeComponent();
 			previewImage = OdooEntryImage.Image;
