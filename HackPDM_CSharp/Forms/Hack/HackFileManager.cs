@@ -227,7 +227,6 @@ namespace HackPDM
 				var result = pm.ShowDialog();
 				if (result is DialogResult.None or DialogResult.Cancel or DialogResult.Abort or DialogResult.No) 
 				{
-					Application.Exit();
 					return;
 				}
 			}
