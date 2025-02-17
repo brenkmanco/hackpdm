@@ -97,7 +97,7 @@ namespace HackPDM
 		/// Program entry point.
 		/// </summary>
 		[STAThread]
-		private async static void Main(string[] args)
+		private async static Task Main(string[] args)
 		{
 			#if DEBUG || GITRELEASE
 				
