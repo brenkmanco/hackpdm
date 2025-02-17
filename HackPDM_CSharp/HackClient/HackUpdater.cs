@@ -70,7 +70,7 @@ namespace HackPDM.HackClient
 		}
 		public static bool UpdaterProcess(Branch branch)
 		{
-			
+			var ghClient = new GitHubClient(new Octokit.ProductHeaderValue("hackpdm"));
 			return true;
 		}
 	}

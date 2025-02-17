@@ -1,3 +1,3 @@
 using System.Reflection;
 
-[assembly: AssemblyInformationalVersion("Commit: 59a5e7d5edefc91636f7bbc058c9bf0f0eff6b37, Date: 2025-02-17 08:02:42 -0700")]
+[assembly: AssemblyInformationalVersion("Commit: 012cceef3e73004aee755e278dada49dd748f89f, Date: 2025-02-17 08:44:23 -0700")]
