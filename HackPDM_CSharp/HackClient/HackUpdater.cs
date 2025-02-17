@@ -67,6 +67,7 @@ namespace HackPDM.HackClient
 			}
 			else
 			{
+				MessageBox.Show("Up to date!");
 				return true;
 			}
 			return false;
