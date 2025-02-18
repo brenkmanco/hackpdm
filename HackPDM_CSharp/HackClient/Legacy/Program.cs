@@ -61,9 +61,9 @@ namespace HackPDM
 			Application.EnableVisualStyles();
 			Application.SetCompatibleTextRenderingDefault(false);
 			#if DEBUG
-				Application.Run(new DebugForm());
 			#else
-				Application.Run(new HackFileManager());				
+				Application.Run(new DebugForm());
+				//Application.Run(new HackFileManager());				
 			#endif
 		}
 		
