@@ -54,7 +54,8 @@ namespace HackPDM.Forms.Settings
 			FormSelection.LegacyFileTypeManager		=> new MainForm(ClientUtils.MainFormDirective.FileTypeManager),
 			FormSelection.LegacyMainForm			=> new MainForm(),
 			// ProfileManager is initiated by MainForm and then MainForm is pulled up
-			FormSelection.LegacyProfileManager		=> new MainForm(ClientUtils.MainFormDirective.ProfileManager),
+			//FormSelection.LegacyProfileManager		=> new MainForm(ClientUtils.MainFormDirective.ProfileManager),
+			FormSelection.LegacyProfileManager		=> new ProfileManager(),
 			_ => throw new ArgumentOutOfRangeException(nameof(form), $"Invalid Form Value: {form}"),
 		};
 	}

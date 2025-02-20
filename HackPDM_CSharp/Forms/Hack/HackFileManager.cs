@@ -211,11 +211,11 @@ namespace HackPDM
 			while (OdooDefaults.OdooID == 0)
 			{
 				List<string> errors = new();
-				if (CorrectOdooAddress())
+				if (!OClient.CorrectOdooAddress())
 				{
 					errors.Add("invalid odoo address or unreachable host");
 				} 
-				else if (CorrectOdooPort())
+				else if (!OClient.CorrectOdooPort())
 				{
 					errors.Add("invalid odoo port or server is down");
 				}
@@ -240,26 +240,7 @@ namespace HackPDM
 			this.Load += new EventHandler(FormLoaded);
 			this.root = HpBaseModel<HpDirectory>.GetRecordByID(1);
         }
-		public static bool CorrectOdooAddress()
-		{
-			using ( Ping pinger = new Ping() )
-			{
-				PingReply reply = pinger.Send(OdooDefaults.OdooAddress);
-				return reply.Status == IPStatus.Success;
-			}
-		}
-		public static bool CorrectOdooPort()
-		{
-			try
-			{
-				new TcpClient(OdooDefaults.OdooAddress, int.Parse(OdooDefaults.OdooPort));
-				return true;
-			}
-			catch 
-			{
-				return false;
-			}
-		}
+		
 		#if SERVER
 		private HackFileManager(bool withShell = false)
 		{
@@ -1604,7 +1585,7 @@ namespace HackPDM
 				Dialog.AddStatusLine( "INFO", $"Retrieving all entries within directory ({directory.ID})" );
 			}
 
-			ArrayList entryIDs = directory.GetDirectoryEntryIDs( withSubdirectories );
+			ArrayList entryIDs = directory.GetDirectoryEntryIDs( withSubdirectories, ShowInactive.Checked );
 			BackgroundWorker worker = new()
 			{
 				WorkerSupportsCancellation = true
@@ -2241,7 +2222,7 @@ namespace HackPDM
 			HpVersion version = HpEntry.GetRelatedRecordByIDS<HpVersion>(new ArrayList() { entryID }, latest_version, excludedFields: ["preview_image"]).First();
 			if ( version == null )
 				return;
-
+			
 			// download version data and place into temporary folder
 			version.DownloadFile( Path.GetTempPath() );
 			FileOperations.OpenFile( Path.Combine( version.winPathway, version.name ) );
@@ -2345,12 +2326,19 @@ namespace HackPDM
 
 		private void overwriteAndOpenToolStripMenuItem_Click( object sender, EventArgs e )
 		{
+			var version = DownloadHistory(false);
+			if (version == null) return;
 
+			OpenLocalFile(Path.Combine(version.winPathway, version.name));
 		}
 
 		private void temporaryAndOpenToolStripMenuItem_Click( object sender, EventArgs e )
 		{
+			var version = DownloadHistory(true);
+			if ( version == null )
+				return;
 
+			OpenLocalFile( Path.Combine( HackDefaults.PWAPathAbsolute, version.winPathway, version.name ) );
 		}
 
 		private void toCurrentToolStripMenuItem_Click( object sender, EventArgs e )
@@ -2362,15 +2350,17 @@ namespace HackPDM
 		{
 
 		}
-		private void DownloadHistory(bool toTemp = false)
+		private HpVersion DownloadHistory(bool toTemp = false)
 		{
 			var version = GetVersionFromHistory();
-			if (version is null) return;
+			if (version is null) return null;
 
 			if ( toTemp )
 				version.DownloadFile( Path.GetTempPath() );
 			else
 				version.DownloadFile();
+
+			return version;
 		}
 		private HpVersion GetVersionFromHistory()
 		{

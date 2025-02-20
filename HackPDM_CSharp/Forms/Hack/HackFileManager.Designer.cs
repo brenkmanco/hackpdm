@@ -243,6 +243,7 @@
 			// 
 			// OdooEntryList
 			// 
+			this.OdooEntryList.AllowColumnReorder = true;
 			this.OdooEntryList.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
@@ -703,7 +704,7 @@
             this.openToolStripMenuItem,
             this.moveToolStripMenuItem});
 			this.OdooVersionHistoryMenu.Name = "OdooVersionHistoryMenu";
-			this.OdooVersionHistoryMenu.Size = new System.Drawing.Size(181, 92);
+			this.OdooVersionHistoryMenu.Size = new System.Drawing.Size(129, 70);
 			// 
 			// downloadToolStripMenuItem
 			// 

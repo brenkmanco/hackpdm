@@ -10,7 +10,7 @@ git add .
 
 # Commit the changes
 git commit -m "Automated commit from build"
-git push
+git push -f
 
 # Get the current commit hash and commit date
 $commitHash = git log -1 --format="%H"

@@ -31,6 +31,7 @@ using System.Windows.Forms;
 using System.IO;
 using HackPDM.Forms.Hack;
 using System.Runtime.Remoting.Messaging;
+using OdooRpcCs;
 
 namespace HackPDM
 {
@@ -272,11 +273,13 @@ namespace HackPDM
         private bool AbleToLogin()
         {
 			List<string> errors = new();
-			if (HackFileManager.CorrectOdooAddress())
+            if (OdooDefaults.OdooID != 0) return true;
+
+			if (!OdooClient.CorrectOdooAddress())
 			{
 				errors.Add("invalid odoo address or unreachable host");
 			} 
-			else if (HackFileManager.CorrectOdooPort())
+			else if (!OdooClient.CorrectOdooPort())
 			{
 				errors.Add("invalid odoo port or server is down");
 			}

@@ -668,25 +668,13 @@ namespace HackPDM
             );
             
         
-        public ArrayList GetDirectoryEntryIDs(bool withSubEntries = false)
-            => GetDirectoryEntryIDs( this.ID, withSubEntries );
-		public static ArrayList GetDirectoryEntryIDs( int directoryID, bool withSubEntries = false )
+        public ArrayList GetDirectoryEntryIDs(bool withSubEntries = false, bool withDeleted = true)
+            => GetDirectoryEntryIDs( this.ID, withSubEntries, withDeleted );
+		public static ArrayList GetDirectoryEntryIDs( int directoryID, bool withSubEntries = false, bool withDeleted = true )
 		{
-			const string entry_ids = "entry_ids";
-			if ( directoryID != 0 )
-			{
-				if ( !withSubEntries )
-				{
-                    ArrayList l2 = OClient.Browse(GetHpModel(), [new ArrayList() {new ArrayList() {"deleted", "=", false}}, new ArrayList(){entry_ids}]);
-					ArrayList list = OClient.Read(GetHpModel(), [directoryID], [entry_ids]);
-					return (ArrayList)( (Hashtable)list [ 0 ] ) [ entry_ids ];
-				}
-				else
-				{
-					return OClient.Command<ArrayList>( GetHpModel(), "get_all_entry_ids", [ directoryID ], 10000 );
-				}
-			}
-			return null;
+			return  directoryID != 0 
+				?  OClient.Command<ArrayList>( GetHpModel(), "get_all_entry_ids", [ directoryID, withDeleted, withSubEntries ], 10000 ) 
+				:   null;
 		}
 		public static string ConvertToWindowsPath(string pathway, bool withAbsolutePath)
         {

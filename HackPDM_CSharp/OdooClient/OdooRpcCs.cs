@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -57,8 +59,27 @@ namespace OdooRpcCs
             }
             set;
         }
-
-        public static int Login(int? timeout = null)
+		public static bool CorrectOdooAddress()
+		{
+			using ( Ping pinger = new Ping() )
+			{
+				PingReply reply = pinger.Send(OdooDefaults.OdooAddress);
+				return reply.Status == IPStatus.Success;
+			}
+		}
+		public static bool CorrectOdooPort()
+		{
+			try
+			{
+				new TcpClient( OdooDefaults.OdooAddress, int.Parse( OdooDefaults.OdooPort ) );
+				return true;
+			}
+			catch
+			{
+				return false;
+			}
+		}
+		public static int Login(int? timeout = null)
         {
             latestException = "";
             int userTimeout = timeout == null ? commonTimeout : (int)timeout;
