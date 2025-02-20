@@ -677,6 +677,7 @@ namespace HackPDM
 			{
 				if ( !withSubEntries )
 				{
+                    ArrayList l2 = OClient.Browse(GetHpModel(), [new ArrayList() {new ArrayList() {"deleted", "=", false}}, new ArrayList(){entry_ids}]);
 					ArrayList list = OClient.Read(GetHpModel(), [directoryID], [entry_ids]);
 					return (ArrayList)( (Hashtable)list [ 0 ] ) [ entry_ids ];
 				}
