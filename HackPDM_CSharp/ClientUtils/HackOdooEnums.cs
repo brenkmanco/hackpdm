@@ -9,7 +9,9 @@ namespace HackPDM.ClientUtils
     public enum ChecksumType
     {
         SHA1,
-        MD5
+        MD5,
+        SHA256,
+        SHA512,
     }
     public enum MethodType : byte
     {

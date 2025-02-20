@@ -22,6 +22,7 @@
 
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Reflection;
@@ -56,6 +57,9 @@ namespace HackPDM
 		[STAThread]
 		private async static Task Main(string[] args)
 		{
+			string tempPath = Path.Combine(Path.GetTempPath(), Application.ProductName);
+			if (!Directory.Exists(tempPath)) Directory.CreateDirectory(tempPath);
+
 			if (!await HackUpdater.EnsureUpdated()) return;
 			
 			Application.EnableVisualStyles();

@@ -1051,6 +1051,14 @@ namespace HackPDM
 				return null;
 			return newVersion;
 		}
+        protected bool ExistsLocally()
+        {
+            FileInfo fileInfo = new(Path.Combine(this.winPathway, this.name));
+            
+            if (!fileInfo.Exists) return false;
+            
+            return true;
+        }
 		public override string ToString()
 		{
 			return name;

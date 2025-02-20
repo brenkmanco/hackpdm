@@ -303,5 +303,17 @@ namespace HackPDM.Properties {
                 this["OdooPort"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string TemporaryPath {
+            get {
+                return ((string)(this["TemporaryPath"]));
+            }
+            set {
+                this["TemporaryPath"] = value;
+            }
+        }
     }
 }

@@ -37,12 +37,14 @@
 			this.txtProjectInput = new System.Windows.Forms.TextBox();
 			this.txtPwaInput = new System.Windows.Forms.TextBox();
 			this.txtFileInput = new System.Windows.Forms.ComboBox();
+			this.label1 = new System.Windows.Forms.Label();
+			this.HackTempFolderPath = new System.Windows.Forms.TextBox();
 			this.SuspendLayout();
 			// 
 			// txtMeasureFile
 			// 
 			this.txtMeasureFile.AutoSize = true;
-			this.txtMeasureFile.Location = new System.Drawing.Point(13, 93);
+			this.txtMeasureFile.Location = new System.Drawing.Point(13, 128);
 			this.txtMeasureFile.Name = "txtMeasureFile";
 			this.txtMeasureFile.Size = new System.Drawing.Size(90, 13);
 			this.txtMeasureFile.TabIndex = 35;
@@ -51,7 +53,7 @@
 			// txtMeasureByte
 			// 
 			this.txtMeasureByte.AutoSize = true;
-			this.txtMeasureByte.Location = new System.Drawing.Point(13, 67);
+			this.txtMeasureByte.Location = new System.Drawing.Point(13, 102);
 			this.txtMeasureByte.Name = "txtMeasureByte";
 			this.txtMeasureByte.Size = new System.Drawing.Size(95, 13);
 			this.txtMeasureByte.TabIndex = 34;
@@ -61,7 +63,7 @@
 			// 
 			this.txtByteInput.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-			this.txtByteInput.Location = new System.Drawing.Point(137, 64);
+			this.txtByteInput.Location = new System.Drawing.Point(137, 99);
 			this.txtByteInput.Name = "txtByteInput";
 			this.txtByteInput.Size = new System.Drawing.Size(368, 20);
 			this.txtByteInput.TabIndex = 32;
@@ -70,7 +72,7 @@
 			// 
 			this.btnSubmit.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-			this.btnSubmit.Location = new System.Drawing.Point(16, 124);
+			this.btnSubmit.Location = new System.Drawing.Point(16, 174);
 			this.btnSubmit.Name = "btnSubmit";
 			this.btnSubmit.Size = new System.Drawing.Size(488, 22);
 			this.btnSubmit.TabIndex = 31;
@@ -125,16 +127,36 @@
             "MegaByte",
             "GigaByte",
             "TeraByte"});
-			this.txtFileInput.Location = new System.Drawing.Point(137, 90);
+			this.txtFileInput.Location = new System.Drawing.Point(137, 125);
 			this.txtFileInput.Name = "txtFileInput";
 			this.txtFileInput.Size = new System.Drawing.Size(368, 21);
 			this.txtFileInput.TabIndex = 40;
+			// 
+			// label1
+			// 
+			this.label1.AutoSize = true;
+			this.label1.Location = new System.Drawing.Point(13, 67);
+			this.label1.Name = "label1";
+			this.label1.Size = new System.Drawing.Size(114, 13);
+			this.label1.TabIndex = 42;
+			this.label1.Text = "Temporary Folder Path";
+			// 
+			// HackTempFolderPath
+			// 
+			this.HackTempFolderPath.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+			this.HackTempFolderPath.Location = new System.Drawing.Point(137, 64);
+			this.HackTempFolderPath.Name = "HackTempFolderPath";
+			this.HackTempFolderPath.Size = new System.Drawing.Size(368, 20);
+			this.HackTempFolderPath.TabIndex = 41;
 			// 
 			// HackSettings
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-			this.ClientSize = new System.Drawing.Size(516, 153);
+			this.ClientSize = new System.Drawing.Size(516, 203);
+			this.Controls.Add(this.label1);
+			this.Controls.Add(this.HackTempFolderPath);
 			this.Controls.Add(this.txtFileInput);
 			this.Controls.Add(this.txtMeasureFile);
 			this.Controls.Add(this.txtMeasureByte);
@@ -161,5 +183,7 @@
 		private System.Windows.Forms.TextBox txtProjectInput;
 		private System.Windows.Forms.TextBox txtPwaInput;
 		private System.Windows.Forms.ComboBox txtFileInput;
+		private System.Windows.Forms.Label label1;
+		private System.Windows.Forms.TextBox HackTempFolderPath;
 	}
 }

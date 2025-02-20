@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using System.Windows.Forms;
 
 using HackPDM.Properties;
@@ -46,29 +47,38 @@ namespace HackPDM.Forms.Hack
 				txtProjectInput.Text    = userSettings.ProjectDirectory;
 			}
 			
+			if (userSettings.TemporaryPath is null or "")
+			{
+				HackTempFolderPath.Text = Path.Combine(Path.GetTempPath(), assembly.GetName().Name);
+			}
+			else
+			{
+				HackTempFolderPath.Text = userSettings.TemporaryPath;
+			}
 			txtByteInput.Text       = appSettings.MeasureByteSize.ToString();
 			txtFileInput.Text       = appSettings.MeasureFileSize;
 		}
 
 		private void btnSubmit_Click( object sender, EventArgs e )
 		{
-			List<string> errors = new List<string>();
+			StringBuilder errors = new();
 
-			if ( !Directory.Exists( txtPwaInput.Text ) ) errors.Add( "invalid pwa directory path" );
-			else
+			if ( !Directory.Exists( txtPwaInput.Text ) ) errors.AppendLine( "invalid pwa directory path" );
+			if ( !Directory.Exists( txtProjectInput.Text ) ) errors.AppendLine( "invalid project directory path" );
+			if ( !Directory.Exists( txtProjectInput.Text ) ) errors.AppendLine( "invalid project directory path" );
+			if ( !double.TryParse( txtByteInput.Text, out double byteSize ) ) errors.AppendLine( "invalid byte size input" );
+
+			if (errors.Length > 0) 
 			{
-				var dirInfo = new DirectoryInfo(txtPwaInput.Text);
-				userSettings.PWAPathRelative = dirInfo.Name;
+				errors.AppendLine("changes were not saved");
+				MessageBox.Show(errors.ToString());
+				return;
 			}
-			
-			if ( !Directory.Exists( txtProjectInput.Text ) )
-				errors.Add( "invalid project directory path" );
-			if ( !double.TryParse( txtByteInput.Text, out double byteSize ) )
-				errors.Add( "invalid byte size input" );
-
-
+			var dirInfo = new DirectoryInfo(txtPwaInput.Text);
+			userSettings.PWAPathRelative = dirInfo.Name;
 			userSettings.PWAPathAbsolute = txtPwaInput.Text;
 			userSettings.ProjectDirectory = txtProjectInput.Text;
+			userSettings.TemporaryPath = HackTempFolderPath.Text;
 			appSettings.MeasureByteSize = byteSize;
 			appSettings.MeasureFileSize = txtFileInput.Text;
 			appSettings.FileSizeMult = FileSizeMultiplier( txtFileInput.Text );

@@ -2314,5 +2314,76 @@ namespace HackPDM
 		}
 
 		#endregion
+
+		private void downloadToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+			var version = GetVersionFromHistory();
+			FileInfo file = new(Path.Combine(HackDefaults.PWAPathAbsolute, version.winPathway, version.name));
+			if (FileOperations.SameChecksum( file, version.checksum ))
+			{
+				if (file.Exists)
+				{
+					var response = MessageBox.Show("File exists as a different version.\n" +
+					"Retry:\tDownload in the Temporary Folder\n" +
+					"Ignore:\tOverwrite the current version\n" +
+					"Abort:\tCancel download", "File Version Conflict", MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Warning);
+
+					if (response == DialogResult.Ignore) version.DownloadFile();
+					else if (response == DialogResult.Retry) version.DownloadFile(Path.GetTempPath());
+				}
+			}
+			else
+			{
+				version.DownloadFile();
+			}
+		}
+		private void toTemporaryToolStripMenuItem_Click( object sender, EventArgs e )
+			=> DownloadHistory(true);
+
+		private void overwriteCurrentToolStripMenuItem1_Click( object sender, EventArgs e )
+			=> DownloadHistory(false);
+
+		private void overwriteAndOpenToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+
+		}
+
+		private void temporaryAndOpenToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+
+		}
+
+		private void toCurrentToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+
+		}
+
+		private void toTemporaryToolStripMenuItem1_Click( object sender, EventArgs e )
+		{
+
+		}
+		private void DownloadHistory(bool toTemp = false)
+		{
+			var version = GetVersionFromHistory();
+			if (version is null) return;
+
+			if ( toTemp )
+				version.DownloadFile( Path.GetTempPath() );
+			else
+				version.DownloadFile();
+		}
+		private HpVersion GetVersionFromHistory()
+		{
+			if ( OdooHistory.SelectedItems.Count < 1 )
+				return null;
+
+			ListViewItem item = OdooHistory.SelectedItems[0];
+			string IDstr = item.SubItems[ NameConfig["HistoryVersion"] ].Text;
+			if ( int.TryParse( IDstr, out int ID ) )
+			{
+				return HpVersion.GetRecordByID(ID, HpVersion.UsualExcludedFields);
+			}
+			return null;
+		}
 	}
 }

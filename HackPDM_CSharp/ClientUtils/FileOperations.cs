@@ -86,37 +86,37 @@ namespace HackPDM
                 return false;
             }
         }
-        public static bool SameChecksum(HpVersion version, ChecksumType cType)
+        public static bool SameChecksum(HpVersion version, ChecksumType cType=ChecksumType.SHA1)
+            => SameChecksum(
+                Path.Combine(
+                    HackDefaults.PWAPathAbsolute, 
+                    version.winPathway, 
+                    version.name), 
+                version.checksum,
+                GetHashAlgorithm(cType));
+		public static bool SameChecksum( FileInfo file, string compareChecksum, ChecksumType cType = ChecksumType.SHA1 )
         {
-            HashAlgorithm alg;
-
-            switch (cType)
-            {
-                case ChecksumType.MD5:
-                    {
-                        alg = MD5.Create();
-                        break;
-                    }
-                case ChecksumType.SHA1:
-                default:
-                    {
-                        alg = SHA1.Create();
-                        break;
-                    }
-            }
-            string fileChecksum = FileChecksum(Path.Combine(HackDefaults.PWAPathAbsolute, version.winPathway, version.name), alg);
-
-            if (fileChecksum != null && fileChecksum != "" && version.checksum == fileChecksum)
-                return true;
-            return false;
+            return file.Exists && SameChecksum( file.FullName, compareChecksum, GetHashAlgorithm( cType ) );
         }
-        public static bool SameChecksum(string directoryPath, string compareChecksum, HashAlgorithm alg)
+		public static bool SameChecksum( string directoryPath, string compareChecksum, HashAlgorithm alg )
+		{
+			string fileChecksum = FileChecksum(directoryPath, alg);
+			if ( fileChecksum != null && fileChecksum != "" && fileChecksum == compareChecksum )
+				return true;
+			return false;
+		}
+
+		public static HashAlgorithm GetHashAlgorithm(ChecksumType cType) => cType switch
         {
-            string fileChecksum = FileChecksum(directoryPath, alg);
-            if (fileChecksum != null && fileChecksum != "" && fileChecksum == compareChecksum)
-                return true;
-            return false;
-        }
+            ChecksumType.MD5        => MD5.Create(),
+            ChecksumType.SHA256     => SHA256.Create(),
+            ChecksumType.SHA512     => SHA512.Create(),
+            // SHA1 or default
+            _                       => SHA1.Create(),
+		};
+        public static HashAlgorithm GetHashAlgorithm<T>() where T : HashAlgorithm
+            => HashAlgorithm.Create(nameof(T));
+		
         public static bool ContainsSameChecksum(string directoryPath, HashAlgorithm alg, params string[] checksums)
         {
             string fileChecksum = FileChecksum(directoryPath, alg);

@@ -94,5 +94,8 @@
     <Setting Name="OdooPort" Type="System.String" Scope="User">
       <Value Profile="(Default)">8069</Value>
     </Setting>
+    <Setting Name="TemporaryPath" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
   </Settings>
 </SettingsFile>

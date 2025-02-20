@@ -81,6 +81,16 @@
 			this.OdooRefreshDropdown = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooSearchDropdown = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooManageTypesDropdown = new System.Windows.Forms.ToolStripMenuItem();
+			this.OdooVersionHistoryMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
+			this.downloadToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.toTemporaryToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.overwriteCurrentToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+			this.openToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.overwriteAndOpenToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.temporaryAndOpenToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.moveToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.toCurrentToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.toTemporaryToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooCMSTree.SuspendLayout();
 			this.OdooCMSList.SuspendLayout();
 			this.tabControl1.SuspendLayout();
@@ -92,6 +102,7 @@
 			this.panel1.SuspendLayout();
 			((System.ComponentModel.ISupportInitialize)(this.OdooEntryImage)).BeginInit();
 			this.toolStrip1.SuspendLayout();
+			this.OdooVersionHistoryMenu.SuspendLayout();
 			this.SuspendLayout();
 			// 
 			// OdooDirectoryTree
@@ -488,6 +499,7 @@
 			// 
 			// OdooHistory
 			// 
+			this.OdooHistory.ContextMenuStrip = this.OdooVersionHistoryMenu;
 			this.OdooHistory.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.OdooHistory.FullRowSelect = true;
 			this.OdooHistory.HideSelection = false;
@@ -684,6 +696,85 @@
 			this.OdooManageTypesDropdown.Text = "Manage File Types";
 			this.OdooManageTypesDropdown.Click += new System.EventHandler(this.OdooManageTypesDropdown_Click);
 			// 
+			// OdooVersionHistoryMenu
+			// 
+			this.OdooVersionHistoryMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.downloadToolStripMenuItem,
+            this.openToolStripMenuItem,
+            this.moveToolStripMenuItem});
+			this.OdooVersionHistoryMenu.Name = "OdooVersionHistoryMenu";
+			this.OdooVersionHistoryMenu.Size = new System.Drawing.Size(181, 92);
+			// 
+			// downloadToolStripMenuItem
+			// 
+			this.downloadToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.toTemporaryToolStripMenuItem,
+            this.overwriteCurrentToolStripMenuItem1});
+			this.downloadToolStripMenuItem.Name = "downloadToolStripMenuItem";
+			this.downloadToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.downloadToolStripMenuItem.Text = "Download";
+			this.downloadToolStripMenuItem.Click += new System.EventHandler(this.downloadToolStripMenuItem_Click);
+			// 
+			// toTemporaryToolStripMenuItem
+			// 
+			this.toTemporaryToolStripMenuItem.Name = "toTemporaryToolStripMenuItem";
+			this.toTemporaryToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.toTemporaryToolStripMenuItem.Text = "To Temporary";
+			this.toTemporaryToolStripMenuItem.Click += new System.EventHandler(this.toTemporaryToolStripMenuItem_Click);
+			// 
+			// overwriteCurrentToolStripMenuItem1
+			// 
+			this.overwriteCurrentToolStripMenuItem1.Name = "overwriteCurrentToolStripMenuItem1";
+			this.overwriteCurrentToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
+			this.overwriteCurrentToolStripMenuItem1.Text = "Overwrite Current";
+			this.overwriteCurrentToolStripMenuItem1.Click += new System.EventHandler(this.overwriteCurrentToolStripMenuItem1_Click);
+			// 
+			// openToolStripMenuItem
+			// 
+			this.openToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.overwriteAndOpenToolStripMenuItem,
+            this.temporaryAndOpenToolStripMenuItem});
+			this.openToolStripMenuItem.Name = "openToolStripMenuItem";
+			this.openToolStripMenuItem.Size = new System.Drawing.Size(202, 22);
+			this.openToolStripMenuItem.Text = "Open";
+			// 
+			// overwriteAndOpenToolStripMenuItem
+			// 
+			this.overwriteAndOpenToolStripMenuItem.Name = "overwriteAndOpenToolStripMenuItem";
+			this.overwriteAndOpenToolStripMenuItem.Size = new System.Drawing.Size(183, 22);
+			this.overwriteAndOpenToolStripMenuItem.Text = "Overwrite and open";
+			this.overwriteAndOpenToolStripMenuItem.Click += new System.EventHandler(this.overwriteAndOpenToolStripMenuItem_Click);
+			// 
+			// temporaryAndOpenToolStripMenuItem
+			// 
+			this.temporaryAndOpenToolStripMenuItem.Name = "temporaryAndOpenToolStripMenuItem";
+			this.temporaryAndOpenToolStripMenuItem.Size = new System.Drawing.Size(183, 22);
+			this.temporaryAndOpenToolStripMenuItem.Text = "Temporary and open";
+			this.temporaryAndOpenToolStripMenuItem.Click += new System.EventHandler(this.temporaryAndOpenToolStripMenuItem_Click);
+			// 
+			// moveToolStripMenuItem
+			// 
+			this.moveToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.toCurrentToolStripMenuItem,
+            this.toTemporaryToolStripMenuItem1});
+			this.moveToolStripMenuItem.Name = "moveToolStripMenuItem";
+			this.moveToolStripMenuItem.Size = new System.Drawing.Size(202, 22);
+			this.moveToolStripMenuItem.Text = "Move";
+			// 
+			// toCurrentToolStripMenuItem
+			// 
+			this.toCurrentToolStripMenuItem.Name = "toCurrentToolStripMenuItem";
+			this.toCurrentToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.toCurrentToolStripMenuItem.Text = "To Current";
+			this.toCurrentToolStripMenuItem.Click += new System.EventHandler(this.toCurrentToolStripMenuItem_Click);
+			// 
+			// toTemporaryToolStripMenuItem1
+			// 
+			this.toTemporaryToolStripMenuItem1.Name = "toTemporaryToolStripMenuItem1";
+			this.toTemporaryToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
+			this.toTemporaryToolStripMenuItem1.Text = "To Temporary";
+			this.toTemporaryToolStripMenuItem1.Click += new System.EventHandler(this.toTemporaryToolStripMenuItem1_Click);
+			// 
 			// HackFileManager
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -710,6 +801,7 @@
 			((System.ComponentModel.ISupportInitialize)(this.OdooEntryImage)).EndInit();
 			this.toolStrip1.ResumeLayout(false);
 			this.toolStrip1.PerformLayout();
+			this.OdooVersionHistoryMenu.ResumeLayout(false);
 			this.ResumeLayout(false);
 			this.PerformLayout();
 
@@ -768,5 +860,15 @@
 		private System.Windows.Forms.ToolStripMenuItem unDeleteToolStripMenuItem1;
 		private System.Windows.Forms.ToolStripMenuItem topDirectoryToolStripMenuItem1;
 		private System.Windows.Forms.ToolStripMenuItem allDirectoriesToolStripMenuItem1;
+		private System.Windows.Forms.ContextMenuStrip OdooVersionHistoryMenu;
+		private System.Windows.Forms.ToolStripMenuItem downloadToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem toTemporaryToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem overwriteCurrentToolStripMenuItem1;
+		private System.Windows.Forms.ToolStripMenuItem openToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem overwriteAndOpenToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem temporaryAndOpenToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem moveToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem toCurrentToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem toTemporaryToolStripMenuItem1;
 	}
 }
