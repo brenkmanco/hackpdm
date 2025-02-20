@@ -47,7 +47,6 @@ namespace HackPDM.HackClient
 		{
 			var latestCommit = branch.Commit.Sha;
 			
-			MessageBox.Show(latestCommit);
 			return latestCommit == commitHash;
 		}
 		public async static Task<bool> EnsureUpdated()
@@ -62,12 +61,10 @@ namespace HackPDM.HackClient
 				 MessageBoxButtons.YesNoCancel) == DialogResult.Yes)
 				 {
 					UpdaterProcess(ghBranch);
-					return false;
 				 }
 			}
 			else
 			{
-				MessageBox.Show("Up to date!");
 				return true;
 			}
 			return false;
