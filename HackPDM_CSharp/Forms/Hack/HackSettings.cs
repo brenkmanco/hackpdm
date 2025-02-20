@@ -16,11 +16,14 @@ namespace HackPDM.Forms.Hack
 		UserSettings userSettings;
 		AppSettings appSettings;
 		Assembly assembly;
+		string documents;
 		public HackSettings()
 		{
-			assembly = Assembly.GetExecutingAssembly();
-			userSettings = UserSettings.Default;
-			appSettings = AppSettings.Default;
+			assembly		= Assembly.GetExecutingAssembly();
+			documents		= Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+			userSettings	= UserSettings.Default;
+			appSettings		= AppSettings.Default;
+
 			InitializeComponent();
 			GetInfoDefaults();
 		}
@@ -29,32 +32,17 @@ namespace HackPDM.Forms.Hack
 			FileInfo hackExe = new FileInfo(assembly.Location);
 			string assemblyDir = hackExe.DirectoryName;
 
-			if (userSettings.PWAPathAbsolute is null or "")
-			{
-				txtPwaInput.Text	= Path.Combine(assemblyDir, "pwa");
-			}
-			else
-			{
-				txtPwaInput.Text        = userSettings.PWAPathAbsolute;
-			}
-
-			if (userSettings.ProjectDirectory is null or "")
-			{
-				txtProjectInput.Text	= assemblyDir;
-			}
-			else
-			{
-				txtProjectInput.Text    = userSettings.ProjectDirectory;
-			}
+			if (userSettings.PWAPathAbsolute is null or "")	txtPwaInput.Text = Path.Combine(documents, Application.ProductName, "pwa");
+			else txtPwaInput.Text = userSettings.PWAPathAbsolute;
 			
-			if (userSettings.TemporaryPath is null or "")
-			{
-				HackTempFolderPath.Text = Path.Combine(Path.GetTempPath(), assembly.GetName().Name);
-			}
-			else
-			{
-				HackTempFolderPath.Text = userSettings.TemporaryPath;
-			}
+
+			if (userSettings.ProjectDirectory is null or "") txtProjectInput.Text = assemblyDir;
+			else txtProjectInput.Text = userSettings.ProjectDirectory;
+			
+			
+			if (userSettings.TemporaryPath is null or "") HackTempFolderPath.Text = Path.Combine(Path.GetTempPath(), Application.ProductName);
+			else HackTempFolderPath.Text = userSettings.TemporaryPath;
+
 			txtByteInput.Text       = appSettings.MeasureByteSize.ToString();
 			txtFileInput.Text       = appSettings.MeasureFileSize;
 		}
@@ -63,9 +51,10 @@ namespace HackPDM.Forms.Hack
 		{
 			StringBuilder errors = new();
 
-			if ( !Directory.Exists( txtPwaInput.Text ) ) errors.AppendLine( "invalid pwa directory path" );
-			if ( !Directory.Exists( txtProjectInput.Text ) ) errors.AppendLine( "invalid project directory path" );
-			if ( !Directory.Exists( txtProjectInput.Text ) ) errors.AppendLine( "invalid project directory path" );
+			if ( !TryCreateDirectory( txtPwaInput.Text )) errors.AppendLine( "invalid pwa directory path" );
+			if ( !TryCreateDirectory( txtProjectInput.Text )) errors.AppendLine( "invalid project directory path" );
+			if ( !TryCreateDirectory( HackTempFolderPath.Text )) errors.AppendLine( "invalid temporary directory path" );
+
 			if ( !double.TryParse( txtByteInput.Text, out double byteSize ) ) errors.AppendLine( "invalid byte size input" );
 
 			if (errors.Length > 0) 
@@ -104,6 +93,13 @@ namespace HackPDM.Forms.Hack
 				default:
 					return 0D;
 			}
+		}
+		private bool TryCreateDirectory( string path )
+		{
+			if (Directory.Exists(path)) return true;
+
+			try {Directory.CreateDirectory( path ); return true;}
+			catch {return false;}
 		}
 	}
 }
