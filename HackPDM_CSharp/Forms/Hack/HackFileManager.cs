@@ -2169,6 +2169,96 @@ namespace HackPDM
 			string fileName = item.SubItems[ NameConfig[ "ChildrenName" ] ].Text;
 			await FindSearchSelectionAsync(pwaPath, fileName);
 		}
+		private void downloadToolStripMenuItem_Click	( object sender, EventArgs e )
+		{
+			var version = GetVersionFromHistory();
+			FileInfo file = new(Path.Combine(version.winPathway, version.name));
+			if (FileOperations.SameChecksum( file, version.checksum ))
+			{
+				if (file.Exists)
+				{
+					var response = MessageBox.Show("File exists as a different version.\n" +
+					"Retry:\tDownload in the Temporary Folder\n" +
+					"Ignore:\tOverwrite the current version\n" +
+					"Abort:\tCancel download", "File Version Conflict", MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Warning);
+
+					if (response == DialogResult.Ignore) version.DownloadFile(version.winPathway);
+					else if (response == DialogResult.Retry) version.DownloadFile(Path.GetTempPath());
+				}
+			}
+			else
+			{
+				version.DownloadFile(version.winPathway);
+			}
+		}
+		private void toTemporaryToolStripMenuItem_Click	( object sender, EventArgs e )
+			=> DownloadHistory(true);
+		private void overwriteCurrentToolStripMenuItem1_Click	( object sender, EventArgs e )
+			=> DownloadHistory(false);
+		private void overwriteAndOpenToolStripMenuItem_Click	( object sender, EventArgs e )
+			=> DownloadOpen(false);
+		private void temporaryAndOpenToolStripMenuItem_Click	( object sender, EventArgs e )
+			=> DownloadOpen(true);
+		private void toCurrentToolStripMenuItem_Click	( object sender, EventArgs e )
+			=> LocalMoveEntry(false);
+		private void toTemporaryToolStripMenuItem1_Click( object sender, EventArgs e )
+			=> LocalMoveEntry(true);
+		private async void OdooEntryList_DragDrop				( object sender, DragEventArgs e )
+		{
+			if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+			string[] fileDrop = e.Data.GetData(DataFormats.FileDrop) as string[];
+			if (fileDrop is null or {Length: < 1}) return;
+			
+			Dialog = new StatusDialog();
+
+			var directory = lastSelectedNode.FullPath;
+			var winDirect = Path.Combine(HackDefaults.PWAPathAbsolute, directory.Substring(5));
+			List<HackFile> hackFiles = [];
+
+			foreach ( var path in fileDrop)
+			{
+				//if (!HackDefaults.PWAPathAbsolute.StartsWith(path)) continue;
+				FileInfo file = new FileInfo(path);
+				if (!file.Exists) continue;
+				file = file.CopyFile(winDirect);
+
+				HackFile hack = await HackFile.GetFromFileInfo(file);
+				string newDirectory = path.Substring(HackDefaults.PWAPathAbsolute.Length);
+				hack.RelativePath = newDirectory;
+				if ( hack != null )
+					hackFiles.Add( hack );	
+			}
+
+			if (hackFiles.Count < 1) return;
+			object arguments = (new HpEntry[0], hackFiles);
+
+			BackgroundWorker worker = new()
+			{
+				WorkerSupportsCancellation = true
+			};
+			//worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler((s, ev) => MessageBox.Show("Finished"));
+			worker.DoWork += new DoWorkEventHandler( worker_Commit );
+			worker.RunWorkerAsync( arguments );
+
+			bool blnWorkCanceled = Dialog.ShowStatusDialog("Commit Files");
+			if ( blnWorkCanceled )
+				worker.CancelAsync();
+		}
+		private void OdooEntryList_DragEnter( object sender, DragEventArgs e )
+		{
+			if (e.Data.GetDataPresent(DataFormats.FileDrop))
+			{
+				e.Effect = DragDropEffects.Copy;
+			}
+			else
+			{
+				e.Effect = DragDropEffects.None;
+			}
+		}
+		private void OdooEntryList_DragLeave( object sender, EventArgs e )
+		{
+
+		}
 
 		#endregion
 
@@ -2294,41 +2384,6 @@ namespace HackPDM
 			}
 		}
 
-		#endregion
-
-		private void downloadToolStripMenuItem_Click( object sender, EventArgs e )
-		{
-			var version = GetVersionFromHistory();
-			FileInfo file = new(Path.Combine(version.winPathway, version.name));
-			if (FileOperations.SameChecksum( file, version.checksum ))
-			{
-				if (file.Exists)
-				{
-					var response = MessageBox.Show("File exists as a different version.\n" +
-					"Retry:\tDownload in the Temporary Folder\n" +
-					"Ignore:\tOverwrite the current version\n" +
-					"Abort:\tCancel download", "File Version Conflict", MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Warning);
-
-					if (response == DialogResult.Ignore) version.DownloadFile(version.winPathway);
-					else if (response == DialogResult.Retry) version.DownloadFile(Path.GetTempPath());
-				}
-			}
-			else
-			{
-				version.DownloadFile(version.winPathway);
-			}
-		}
-		private void toTemporaryToolStripMenuItem_Click( object sender, EventArgs e )
-			=> DownloadHistory(true);
-
-		private void overwriteCurrentToolStripMenuItem1_Click( object sender, EventArgs e )
-			=> DownloadHistory(false);
-
-		private void overwriteAndOpenToolStripMenuItem_Click( object sender, EventArgs e )
-			=> DownloadOpen(false);
-
-		private void temporaryAndOpenToolStripMenuItem_Click( object sender, EventArgs e )
-			=> DownloadOpen(true);
 		private void DownloadOpen(bool toTemp = false)
 		{
 			var version = DownloadHistory(toTemp);
@@ -2337,12 +2392,6 @@ namespace HackPDM
 
 			OpenLocalFile( Path.Combine( version.winPathway, version.name ) );
 		}
-
-		private void toCurrentToolStripMenuItem_Click( object sender, EventArgs e )
-			=> LocalMoveEntry(false);
-		private void toTemporaryToolStripMenuItem1_Click( object sender, EventArgs e )
-			=> LocalMoveEntry(true);
-
 		private void LocalMoveEntry(bool toTemp=false)
 		{
 			var version = GetVersionFromHistory();
@@ -2431,26 +2480,28 @@ namespace HackPDM
 			return null;
 		}
 
-		private void OdooEntryList_DragDrop( object sender, DragEventArgs e )
+
+		#endregion
+
+		// need to delete pwa\
+		// .\GitInfo
+		// .\HackPDM_CSharp.csproj
+		// .\HackPDM_CSharp.sln
+
+		// list
+		private void permanentDeleteToolStripMenuItem_Click( object sender, EventArgs e )
 		{
-			Console.WriteLine();
+		#if DEBUG
+			
+		#endif
 		}
 
-		private void OdooEntryList_DragEnter( object sender, DragEventArgs e )
+		// tree
+		private void perminentDeleteToolStripMenuItem_Click( object sender, EventArgs e )
 		{
-			if (e.Data.GetDataPresent(DataFormats.FileDrop))
-			{
-				e.Effect = DragDropEffects.Copy;
-			}
-			else
-			{
-				e.Effect = DragDropEffects.None;
-			}
-		}
-
-		private void OdooEntryList_DragLeave( object sender, EventArgs e )
-		{
-
+		#if DEBUG
+			
+		#endif
 		}
 	}
 }

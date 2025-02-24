@@ -374,8 +374,9 @@ namespace HackPDM.ClientUtils
 
                 if (file.Exists)
                 {
-                    file.CopyTo(toFilePath, true);
+                    var newFile = file.CopyTo(toFilePath, true);
                     file.Delete();
+                    file = newFile;
                 }
                 else return false;
             }
@@ -384,6 +385,23 @@ namespace HackPDM.ClientUtils
                 return false;
             }
             return true;
+        }
+        public static FileInfo CopyFile(this FileInfo file, string toPath)
+        {
+            try
+            {
+                if (!Directory.Exists(toPath) && !Directory.CreateDirectory(toPath).Exists) return null;
+
+                string toFilePath = Path.Combine(toPath, file.Name);
+
+                if (file.Exists)
+                {
+                    return file.CopyTo(toFilePath, true);
+                }
+                else return null;
+            }
+            catch {}
+            return null;
         }
 
 

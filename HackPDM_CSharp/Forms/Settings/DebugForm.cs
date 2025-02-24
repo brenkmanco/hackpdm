@@ -10,6 +10,7 @@ using System.Windows.Forms;
 
 using HackPDM.Forms.Hack;
 using HackPDM.Forms.Odoo;
+using HackPDM.Verifier;
 
 namespace HackPDM.Forms.Settings
 {
@@ -17,6 +18,13 @@ namespace HackPDM.Forms.Settings
 	{
 		public DebugForm()
 		{
+			while (!Verify.VerifySettings())
+			{
+				if (new ProfileManager().ShowDialog() != DialogResult.OK)
+				{
+					return;
+				}
+			}
 			InitializeComponent();
 			LoadFormSelectionComboBox();
 			DebugChooseFormBtn.Focus();

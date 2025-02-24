@@ -468,6 +468,7 @@
       <DependentUpon>ProfileManager.cs</DependentUpon>
     </Compile>
     <Compile Include="HackClient\Legacy\Program.cs" />
+    <Compile Include="OdooClient\Verify.cs" />
     <Compile Include="OdooClient\XmlRpc\Context.cs" />
     <Compile Include="OdooClient\XmlRpc\Logger.cs" />
     <Compile Include="OdooClient\XmlRpc\LogLevel.cs" />

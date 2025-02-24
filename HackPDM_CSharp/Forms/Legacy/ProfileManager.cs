@@ -32,6 +32,7 @@ using System.IO;
 using HackPDM.Forms.Hack;
 using System.Runtime.Remoting.Messaging;
 using OdooRpcCs;
+using HackPDM.Verifier;
 
 namespace HackPDM
 {
@@ -260,8 +261,7 @@ namespace HackPDM
 
         private void OdooLoginBtn_Click(object sender, EventArgs e)
         {
-            if (AbleToLogin()) new HackFileManager().Show();
-            else this.DialogResult = DialogResult.OK;
+            this.DialogResult = DialogResult.OK;
         }
 
 		private void HackSettingsBtn_Click( object sender, EventArgs e )

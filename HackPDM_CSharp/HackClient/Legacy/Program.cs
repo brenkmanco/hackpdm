@@ -33,6 +33,7 @@ using System.Windows.Forms;
 using HackPDM.ClientUtils;
 using HackPDM.Forms.Settings;
 using HackPDM.HackClient;
+using HackPDM.Verifier;
 
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.Utilities;
 
@@ -73,6 +74,7 @@ namespace HackPDM
 			Application.SetCompatibleTextRenderingDefault(false);
 
 			Application.Run(new DebugForm());
+			
 			//Application.Run(new HackFileManager());				
 		
 		}
