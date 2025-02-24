@@ -95,7 +95,7 @@
       <Value Profile="(Default)">8069</Value>
     </Setting>
     <Setting Name="TemporaryPath" Type="System.String" Scope="User">
-      <Value Profile="(Default)" />
+      <Value Profile="(Default)">C:\Users\jnjohnson\AppData\Local\Temp\HackPDM</Value>
     </Setting>
   </Settings>
 </SettingsFile>

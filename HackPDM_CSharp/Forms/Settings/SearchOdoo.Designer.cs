@@ -238,8 +238,8 @@
 			// 
 			// OdooSearchProperty
 			// 
-			this.OdooSearchProperty.AutoCompleteMode = System.Windows.Forms.AutoCompleteMode.Suggest;
-			this.OdooSearchProperty.AutoCompleteSource = System.Windows.Forms.AutoCompleteSource.ListItems;
+			//this.OdooSearchProperty.AutoCompleteMode = System.Windows.Forms.AutoCompleteMode.Suggest;
+			//this.OdooSearchProperty.AutoCompleteSource = System.Windows.Forms.AutoCompleteSource.ListItems;
 			this.OdooSearchProperty.FormattingEnabled = true;
 			this.OdooSearchProperty.Location = new System.Drawing.Point(370, 24);
 			this.OdooSearchProperty.Name = "OdooSearchProperty";
@@ -311,8 +311,8 @@
 			// 
 			// OdooSearchPropEqual
 			// 
-			this.OdooSearchPropEqual.AutoCompleteMode = System.Windows.Forms.AutoCompleteMode.Suggest;
-			this.OdooSearchPropEqual.AutoCompleteSource = System.Windows.Forms.AutoCompleteSource.ListItems;
+			//this.OdooSearchPropEqual.AutoCompleteMode = System.Windows.Forms.AutoCompleteMode.Suggest;
+			//this.OdooSearchPropEqual.AutoCompleteSource = System.Windows.Forms.AutoCompleteSource.ListItems;
 			this.OdooSearchPropEqual.FormattingEnabled = true;
 			this.OdooSearchPropEqual.Location = new System.Drawing.Point(531, 24);
 			this.OdooSearchPropEqual.Name = "OdooSearchPropEqual";
@@ -351,8 +351,8 @@
 			// 
 			// OdooSearchComparer
 			// 
-			this.OdooSearchComparer.AutoCompleteMode = System.Windows.Forms.AutoCompleteMode.Suggest;
-			this.OdooSearchComparer.AutoCompleteSource = System.Windows.Forms.AutoCompleteSource.ListItems;
+			//this.OdooSearchComparer.AutoCompleteMode = System.Windows.Forms.AutoCompleteMode.Suggest;
+			//this.OdooSearchComparer.AutoCompleteSource = System.Windows.Forms.AutoCompleteSource.ListItems;
 			this.OdooSearchComparer.FormattingEnabled = true;
 			this.OdooSearchComparer.Location = new System.Drawing.Point(11, 24);
 			this.OdooSearchComparer.Name = "OdooSearchComparer";

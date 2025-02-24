@@ -2299,7 +2299,7 @@ namespace HackPDM
 		private void downloadToolStripMenuItem_Click( object sender, EventArgs e )
 		{
 			var version = GetVersionFromHistory();
-			FileInfo file = new(Path.Combine(HackDefaults.PWAPathAbsolute, version.winPathway, version.name));
+			FileInfo file = new(Path.Combine(version.winPathway, version.name));
 			if (FileOperations.SameChecksum( file, version.checksum ))
 			{
 				if (file.Exists)
@@ -2309,13 +2309,13 @@ namespace HackPDM
 					"Ignore:\tOverwrite the current version\n" +
 					"Abort:\tCancel download", "File Version Conflict", MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Warning);
 
-					if (response == DialogResult.Ignore) version.DownloadFile();
+					if (response == DialogResult.Ignore) version.DownloadFile(version.winPathway);
 					else if (response == DialogResult.Retry) version.DownloadFile(Path.GetTempPath());
 				}
 			}
 			else
 			{
-				version.DownloadFile();
+				version.DownloadFile(version.winPathway);
 			}
 		}
 		private void toTemporaryToolStripMenuItem_Click( object sender, EventArgs e )
@@ -2325,30 +2325,83 @@ namespace HackPDM
 			=> DownloadHistory(false);
 
 		private void overwriteAndOpenToolStripMenuItem_Click( object sender, EventArgs e )
-		{
-			var version = DownloadHistory(false);
-			if (version == null) return;
-
-			OpenLocalFile(Path.Combine(version.winPathway, version.name));
-		}
+			=> DownloadOpen(false);
 
 		private void temporaryAndOpenToolStripMenuItem_Click( object sender, EventArgs e )
+			=> DownloadOpen(true);
+		private void DownloadOpen(bool toTemp = false)
 		{
-			var version = DownloadHistory(true);
+			var version = DownloadHistory(toTemp);
 			if ( version == null )
 				return;
 
-			OpenLocalFile( Path.Combine( HackDefaults.PWAPathAbsolute, version.winPathway, version.name ) );
+			OpenLocalFile( Path.Combine( version.winPathway, version.name ) );
 		}
 
 		private void toCurrentToolStripMenuItem_Click( object sender, EventArgs e )
-		{
-
-		}
-
+			=> LocalMoveEntry(false);
 		private void toTemporaryToolStripMenuItem1_Click( object sender, EventArgs e )
-		{
+			=> LocalMoveEntry(true);
 
+		private void LocalMoveEntry(bool toTemp=false)
+		{
+			var version = GetVersionFromHistory();
+			if ( version == null ) return;
+
+			string tempFilePath = Path.Combine(Properties.UserSettings.Default.TemporaryPath, version.name);
+			string mainFilePath = Path.Combine(version.winPathway, version.name);
+
+			FileInfo fileFrom	= new FileInfo( !toTemp ? tempFilePath : mainFilePath );
+			FileInfo fileTo	= new FileInfo( toTemp ? tempFilePath : mainFilePath  );
+
+			string message = "";
+			string caption = "";
+			string boolReplace = toTemp ? "temporary" : "current";
+
+			var icon = MessageBoxIcon.None;
+			// if the file doesn't exist in temporary folder, download it an place it in current path.
+			if (fileFrom.Exists)
+			{
+				if (fileTo.Exists) 
+				{
+					message = $"Would you like to move this version to {boolReplace} and overwrite that version?";
+					caption = "Move & Overwrite";
+					icon	= MessageBoxIcon.Warning;
+				}
+				else
+				{
+					// temporary version file and current version file don't exist
+					message = $"Would you like to move this version to {boolReplace}?";
+					caption = "Move";
+					icon	= MessageBoxIcon.Question;
+				}
+				// temporary version file doesn't exist but does exist in current
+				if (DialogResult.Yes == MessageBox.Show(message, caption, MessageBoxButtons.YesNoCancel, icon: icon))
+				{
+					fileFrom.MoveFile(fileTo.DirectoryName);
+				}
+			}
+			else
+			{
+				if (fileTo.Exists) 
+				{
+					message = $"file doesn't exist in {fileFrom.DirectoryName}.\nWould you like to download this version to {boolReplace} and overwrite that version?";
+					caption = "Download & Overwrite";
+					icon	= MessageBoxIcon.Warning;
+				}
+				else
+				{
+					// temporary version file and current version file don't exist
+					message = $"file doesn't exist in {fileFrom.DirectoryName}.\nWould you like to download this version to {boolReplace}?";
+					caption = "Download";
+					icon	= MessageBoxIcon.Question;
+				}
+				// temporary version file doesn't exist but does exist in current
+				if (DialogResult.Yes == MessageBox.Show(message, caption, MessageBoxButtons.YesNoCancel, icon: icon))
+				{
+					version.DownloadFile(fileTo.DirectoryName);
+				}
+			}
 		}
 		private HpVersion DownloadHistory(bool toTemp = false)
 		{
@@ -2356,9 +2409,9 @@ namespace HackPDM
 			if (version is null) return null;
 
 			if ( toTemp )
-				version.DownloadFile( Path.GetTempPath() );
+				version.DownloadFile( Properties.UserSettings.Default.TemporaryPath );
 			else
-				version.DownloadFile();
+				version.DownloadFile( version.winPathway );
 
 			return version;
 		}
@@ -2371,7 +2424,9 @@ namespace HackPDM
 			string IDstr = item.SubItems[ NameConfig["HistoryVersion"] ].Text;
 			if ( int.TryParse( IDstr, out int ID ) )
 			{
-				return HpVersion.GetRecordByID(ID, HpVersion.UsualExcludedFields);
+				var version = HpVersion.GetRecordByID(ID, HpVersion.UsualExcludedFields);
+				version.winPathway = Path.Combine(HackDefaults.PWAPathAbsolute, version.winPathway);
+				return version;
 			}
 			return null;
 		}

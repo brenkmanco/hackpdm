@@ -306,7 +306,7 @@ namespace HackPDM.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        [global::System.Configuration.DefaultSettingValueAttribute("C:\\Users\\jnjohnson\\AppData\\Local\\Temp\\HackPDM")]
         public string TemporaryPath {
             get {
                 return ((string)(this["TemporaryPath"]));

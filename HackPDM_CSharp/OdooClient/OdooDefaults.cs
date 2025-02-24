@@ -767,7 +767,7 @@ namespace HackPDM
         public string file_contents;
 
         public string fileContentsBase64 { get; private set; }
-        public string winPathway { get; private set; }
+        public string winPathway { get; internal set; }
         
         static HpVersion()
         {
@@ -828,6 +828,27 @@ namespace HackPDM
         //    attachment_id = file.Create();
         //    return base.Create();
         //}
+        public bool MoveFile(string toPath)
+        {
+            try
+            {
+                if (!Directory.Exists(toPath) && !Directory.CreateDirectory(toPath).Exists) return false;
+
+                string fromFilePath = Path.Combine(this.winPathway, this.name);
+                string toFilePath = Path.Combine(toPath, this.name);
+
+                FileInfo file = new(fromFilePath);
+                if (file.Exists) file.MoveTo(toFilePath);
+                else return false;
+
+                this.winPathway = toPath;
+            }
+            catch
+            {
+                return false;
+            }
+            return true;
+        }
         public async static Task<int> BatchDownloadFiles(List<HpVersion> processVersions)
         {
             FileData[] datas = DownloadFilesData(processVersions);
@@ -845,10 +866,10 @@ namespace HackPDM
             await finish;
             return finish.Result[0];
         }
-        public bool DownloadFile() => DownloadFile(this.winPathway);
+        public bool DownloadFile() => DownloadFile(Path.Combine(HackDefaults.PWAPathAbsolute, this.winPathway));
         public bool DownloadFile(string toPath)
         {
-            if (!Directory.Exists(toPath)) return false;
+            if (!Directory.Exists(toPath) && !Directory.CreateDirectory(toPath).Exists) return false;
             FileData data = DownloadFileData();
 
             data.FilePath = toPath;

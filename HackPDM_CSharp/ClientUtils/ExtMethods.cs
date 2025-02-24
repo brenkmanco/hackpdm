@@ -364,6 +364,28 @@ namespace HackPDM.ClientUtils
             return hashtables;
         }
 
+        public static bool MoveFile(this FileInfo file, string toPath)
+        {
+            try
+            {
+                if (!Directory.Exists(toPath) && !Directory.CreateDirectory(toPath).Exists) return false;
+
+                string toFilePath = Path.Combine(toPath, file.Name);
+
+                if (file.Exists)
+                {
+                    file.CopyTo(toFilePath, true);
+                    file.Delete();
+                }
+                else return false;
+            }
+            catch
+            {
+                return false;
+            }
+            return true;
+        }
+
 
 
         // xmlrpc request

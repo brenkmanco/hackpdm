@@ -566,7 +566,7 @@ namespace HackPDM.Forms.Settings
 
 			// download version data and place into temporary folder
 			version.DownloadFile();
-			FileOperations.OpenFile( Path.Combine(HackDefaults.PWAPathAbsolute, version.winPathway, version.name));
+			FileOperations.OpenFile( Path.Combine(version.winPathway, version.name));
 		}
 		private void PreviewRemoteFile( int entryID )
 		{
@@ -577,7 +577,7 @@ namespace HackPDM.Forms.Settings
 				return;
 
 			// download version data and place into temporary folder
-			version.DownloadFile( Path.GetTempPath() );
+			version.DownloadFile(Properties.UserSettings.Default.TemporaryPath);
 			FileOperations.OpenFile( Path.Combine( version.winPathway, version.name ) );
 		}
 	}

@@ -42,7 +42,7 @@ namespace HackPDM
             }
             try
             {
-                string combinedPath = Path.Combine(HackDefaults.PWAPathAbsolute, file.FilePath);
+                string combinedPath = file.FilePath;//Path.Combine(HackDefaults.PWAPathAbsolute, file.FilePath);
                 if (!Directory.Exists(combinedPath))
                 {
                     Directory.CreateDirectory(combinedPath);
