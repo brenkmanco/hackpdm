@@ -3,8 +3,10 @@
   "WorkspaceRootPath": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\HackPDM_CSharp.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:HackPDM_CSharp.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}"
+      "AbsoluteMoniker": "D:0:0:{00000000-0000-0000-0000-000000000000}|\u003CSolution\u003E|HackPDM_CSharp||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\||{B270807C-D8C6-49EB-8EBE-8E8D566637A1}|1e78f8db-6c07-4d61-a18f-7514010abd56"
     }
   ],
   "DocumentGroupContainers": [
@@ -14,7 +16,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 2,
+          "SelectedChildIndex": 1,
           "Children": [
             {
               "$type": "Bookmark",
@@ -23,14 +25,13 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "HackPDM_CSharp.csproj",
+              "Title": "HackPDM_CSharp",
               "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\HackPDM_CSharp.csproj",
               "RelativeDocumentMoniker": "HackPDM_CSharp.csproj",
               "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\HackPDM_CSharp.csproj",
               "RelativeToolTip": "HackPDM_CSharp.csproj",
-              "ViewState": "AgIAAEgAAAAAAAAAAAAAAFwAAAAoAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
-              "WhenOpened": "2025-02-20T18:59:42.497Z",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-02-24T14:42:04.002Z",
               "EditorCaption": ""
             }
           ]

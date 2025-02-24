@@ -1,31 +1,37 @@
 ﻿param (
-    [string]$projectDir
+    [string]$projectDir,
+    [string]$config
 )
-# Change to the project directory
-cd $projectDir
-cd ..
 
-# Stage all changes
-git add .
+if ($config -eq "GitRelease")
+{
+    echo "--GitRelease--"
+    # Change to the project directory
+    cd $projectDir
+    cd ..
 
-# Commit the changes
-git commit -m "Automated commit from build"
-git push -f
+    # Stage all changes
+    git add .
 
-# Get the current commit hash and commit date
-$commitHash = git log -1 --format="%H"
-$commitDate = git log -1 --format="%cd" --date=iso
+    # Commit the changes
+    git commit -m "Automated commit from build"
+    git push -f
 
-# go back into project folder
-cd $projectDir
+    # Get the current commit hash and commit date
+    $commitHash = git log -1 --format="%H"
+    $commitDate = git log -1 --format="%cd" --date=iso
 
-# Write the commit hash to a file
-# $commitHash | Out-File -FilePath
+    # go back into project folder
+    cd $projectDir
 
-$infoContent = @"
+    # Write the commit hash to a file
+    # $commitHash | Out-File -FilePath
+
+    $infoContent = @"
 using System.Reflection;
 
 [assembly: AssemblyInformationalVersion("Commit: $commitHash, Date: $commitDate")]
 "@
-$infoFilePath = Join-Path -Path $projectDir -ChildPath "GitInfo.cs"
-Set-Content -Path $infoFilePath -Value $infoContent
+    $infoFilePath = Join-Path -Path $projectDir -ChildPath "GitInfo.cs"
+    Set-Content -Path $infoFilePath -Value $infoContent
+}
