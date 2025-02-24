@@ -2430,5 +2430,10 @@ namespace HackPDM
 			}
 			return null;
 		}
+
+		private void OdooEntryList_DragDrop( object sender, DragEventArgs e )
+		{
+			Console.WriteLine();
+		}
 	}
 }
