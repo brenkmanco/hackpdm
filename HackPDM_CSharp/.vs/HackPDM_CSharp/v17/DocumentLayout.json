@@ -15,16 +15,16 @@
       "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:hackclient\\hackupdater.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\forms\\hack\\hackfilemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:forms\\hack\\hackfilemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
+      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\clientutils\\fileoperations.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:clientutils\\fileoperations.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\odooclient\\odoodefaults.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:odooclient\\odoodefaults.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\clientutils\\fileoperations.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:clientutils\\fileoperations.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|c:\\users\\jnjohnson\\documents\\dev\\hackpdm\\hackpdm_csharp\\forms\\hack\\hackfilemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
+      "RelativeMoniker": "D:0:0:{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}|HackPDM_CSharp.csproj|solutionrelative:forms\\hack\\hackfilemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
     }
   ],
   "DocumentGroupContainers": [
@@ -48,7 +48,7 @@
               "RelativeDocumentMoniker": "Forms\\Hack\\HackFileManager.cs",
               "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Hack\\HackFileManager.cs",
               "RelativeToolTip": "Forms\\Hack\\HackFileManager.cs",
-              "ViewState": "AgIAAOMAAAAAAAAAAAAAAAABAAADAAAAAAAAAA==",
+              "ViewState": "AgIAAOwAAAAAAAAAAAAAAAABAAADAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-02-24T14:43:49.392Z",
               "EditorCaption": ""
@@ -74,14 +74,14 @@
               "RelativeDocumentMoniker": "HackClient\\Legacy\\Program.cs",
               "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\HackClient\\Legacy\\Program.cs",
               "RelativeToolTip": "HackClient\\Legacy\\Program.cs",
-              "ViewState": "AgIAAC4AAAAAAAAAAAAAAEEAAAAgAAAAAAAAAA==",
+              "ViewState": "AgIAAC4AAAAAAAAAAAAAADsAAAADAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-02-24T15:11:49.258Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 3,
               "Title": "FileOperations.cs",
               "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\ClientUtils\\FileOperations.cs",
               "RelativeDocumentMoniker": "ClientUtils\\FileOperations.cs",
@@ -100,7 +100,7 @@
               "RelativeDocumentMoniker": "HackClient\\HackUpdater.cs",
               "ToolTip": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\HackClient\\HackUpdater.cs",
               "RelativeToolTip": "HackClient\\HackUpdater.cs",
-              "ViewState": "AgIAAB8AAAAAAAAAAAAswEAAAAA1AAAAAAAAAA==",
+              "ViewState": "AgIAACIAAAAAAAAAAAAswEAAAAA1AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-02-24T18:36:36.437Z",
               "EditorCaption": ""
@@ -128,7 +128,7 @@
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 5,
               "Title": "HackFileManager.cs [Design]",
               "DocumentMoniker": "C:\\Users\\jnjohnson\\Documents\\dev\\hackpdm\\HackPDM_CSharp\\Forms\\Hack\\HackFileManager.cs",
               "RelativeDocumentMoniker": "Forms\\Hack\\HackFileManager.cs",

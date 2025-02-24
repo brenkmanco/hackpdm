@@ -57,10 +57,6 @@ namespace HackPDM
 		[STAThread]
 		private static void Main(string[] args)
 		{
-			string tempPath = Path.Combine(Path.GetTempPath(), Application.ProductName);
-			
-			if (!Directory.Exists(tempPath)) Directory.CreateDirectory(tempPath);
-
 			try
 			{
 				HackUpdater.EnsureUpdated();
@@ -69,6 +65,10 @@ namespace HackPDM
 			{
 				return;
 			}
+			string tempPath = Path.Combine(Path.GetTempPath(), Application.ProductName);
+			
+			if (!Directory.Exists(tempPath)) Directory.CreateDirectory(tempPath);
+
 			Application.EnableVisualStyles();
 			Application.SetCompatibleTextRenderingDefault(false);
 
