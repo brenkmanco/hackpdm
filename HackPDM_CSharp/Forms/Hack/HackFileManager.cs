@@ -254,6 +254,7 @@ namespace HackPDM
 
 		private void FormLoaded(object sender, EventArgs e)
 		{
+			OdooEntryList.AllowDrop = true;
 			CreateTreeViewBackground();
 			InitBackgroundWorker();
 		}

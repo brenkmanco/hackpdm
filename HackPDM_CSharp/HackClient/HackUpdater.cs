@@ -49,7 +49,7 @@ namespace HackPDM.HackClient
 			
 			return latestCommit == commitHash;
 		}
-		public async static Task<bool> EnsureUpdated()
+		public async static void EnsureUpdated()
 		{
 			var info = CurrentVersion();
 			var ghBranch = await GetBranchRepo(repoID, branchName);
@@ -62,12 +62,8 @@ namespace HackPDM.HackClient
 				 {
 					UpdaterProcess(ghBranch);
 				 }
+				 throw new Exception("Update to latest version");
 			}
-			else
-			{
-				return true;
-			}
-			return false;
 		}
 		public static void UpdaterProcess(Branch branch)
 		{
