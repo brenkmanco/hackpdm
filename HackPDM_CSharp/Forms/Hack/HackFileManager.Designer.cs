@@ -244,6 +244,7 @@
 			// OdooEntryList
 			// 
 			this.OdooEntryList.AllowColumnReorder = true;
+			this.OdooEntryList.AllowDrop = true;
 			this.OdooEntryList.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
