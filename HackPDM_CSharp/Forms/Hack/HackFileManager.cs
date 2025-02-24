@@ -2435,5 +2435,22 @@ namespace HackPDM
 		{
 			Console.WriteLine();
 		}
+
+		private void OdooEntryList_DragEnter( object sender, DragEventArgs e )
+		{
+			if (e.Data.GetDataPresent(DataFormats.FileDrop))
+			{
+				e.Effect = DragDropEffects.Copy;
+			}
+			else
+			{
+				e.Effect = DragDropEffects.None;
+			}
+		}
+
+		private void OdooEntryList_DragLeave( object sender, EventArgs e )
+		{
+
+		}
 	}
 }

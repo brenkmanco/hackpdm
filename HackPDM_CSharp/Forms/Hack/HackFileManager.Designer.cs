@@ -261,6 +261,8 @@
 			this.OdooEntryList.View = System.Windows.Forms.View.Details;
 			this.OdooEntryList.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.OdooEntryList_ItemSelectionChanged);
 			this.OdooEntryList.DragDrop += new System.Windows.Forms.DragEventHandler(this.OdooEntryList_DragDrop);
+			this.OdooEntryList.DragEnter += new System.Windows.Forms.DragEventHandler(this.OdooEntryList_DragEnter);
+			this.OdooEntryList.DragLeave += new System.EventHandler(this.OdooEntryList_DragLeave);
 			// 
 			// OdooCMSList
 			// 
