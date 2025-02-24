@@ -33,5 +33,13 @@ using System.Reflection;
 [assembly: AssemblyInformationalVersion("Commit: $commitHash, Date: $commitDate")]
 "@
     $infoFilePath = Join-Path -Path $projectDir -ChildPath "GitInfo.cs"
-    Set-Content -Path $infoFilePath -Value $infoContent
+    try
+    {
+        Set-Content -Path $infoFilePath -Value $infoContent -Force
+    } 
+    catch 
+    {
+        echo "Unable to write to file"
+    }
+    
 }
