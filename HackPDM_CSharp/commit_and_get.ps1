@@ -19,17 +19,9 @@ if ($config -eq "GitRelease")
     # Commit the changes
     git commit -m "Automated commit from build"
 
-    echo "DEBUG HASH POSTC: $(git log -1 --format="%H")"
-    echo "DEBUG DATE POSTC: $(git log -1 --format="%cd" --date=iso)"
-
-    git push -f
-
     # Get the current commit hash and commit date
     $commitHash = git log -1 --format="%H"
     $commitDate = git log -1 --format="%cd" --date=iso
-
-    echo "DEBUG HASH AFTER: $($commitHash)"
-    echo "DEBUG DATE AFTER: $($commitDate)"
 
     # go back into project folder
     cd $projectDir
@@ -51,5 +43,19 @@ using System.Reflection;
     {
         echo "Unable to write to file"
     }
+
+    cd ..
+
+    # want to add GitInfo.cs without doing an additional commit which changes the
+    # commit hash
+    git add .
+    git commit --amend --no-edit
+
+    git push -f
+
+    echo "DEBUG HASH AFTER: $($commitHash)"
+    echo "DEBUG DATE AFTER: $($commitDate)"
+
+    
     
 }
