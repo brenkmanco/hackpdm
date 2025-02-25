@@ -23,6 +23,9 @@ jobs:
         choco install microsoft-build-tools -y
         choco install netfx-4.8-devpack -y
 
+    - name: Restore NuGet packages
+      run: nuget restore ./HackPDM_CSharp/HackPDM_CSharp.sln
+
     - name: Change directory to project folder
       run: cd ./HackPDM_CSharp
 
