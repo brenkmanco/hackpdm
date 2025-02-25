@@ -19,10 +19,10 @@ jobs:
         dotnet-version: '6.x'
 
     - name: Build project
-      run: dotnet build --configuration GitRelease
+      run: dotnet build --configuration GitRelease --project ./HackPDM_CSharp/HackPDM_CSharp.csproj
 
     - name: Publish project
-      run: dotnet publish --configuration GitRelease --output ./publish
+      run: dotnet publish --configuration GitRelease --output ./publish --project ./HackPDM_CSharp/HackPDM_CSharp.csproj
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
