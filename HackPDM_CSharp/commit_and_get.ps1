@@ -23,6 +23,9 @@ if ($config -eq "GitRelease")
     $commitHash = git log -1 --format="%H"
     $commitDate = git log -1 --format="%cd" --date=iso
 
+    echo "DEBUG HASH POSTC: $($commitHash)"
+    echo "DEBUG DATE POSTC: $($commitDate)"
+
     # go back into project folder
     cd $projectDir
 
