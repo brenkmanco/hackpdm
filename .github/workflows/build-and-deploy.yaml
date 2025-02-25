@@ -1,0 +1,50 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - justinOdooIntegration
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up .NET
+      uses: actions/setup-dotnet@v2
+      with:
+        dotnet-version: '6.x'
+
+    - name: Build project
+      run: dotnet build --configuration GitRelease
+
+    - name: Publish project
+      run: dotnet publish --configuration GitRelease --output ./publish
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: published-app
+        path: ./publish
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Deploy to GitHub Pages
+      run: |
+        git config --global user.name 'github-actions'
+        git config --global user.email 'github-actions@github.com'
+        git clone --branch=gh-pages https://github.com/${{ github.repository }} gh-pages
+        cp -r ./publish/* gh-pages/
+        cd gh-pages
+        git add .
+        git commit -m "Deploy new version"
+        git push
