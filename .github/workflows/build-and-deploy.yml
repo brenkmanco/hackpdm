@@ -47,7 +47,7 @@ jobs:
         git config --global user.name 'github-actions'
         git config --global user.email 'github-actions@github.com'
         git clone --branch=gh-pages https://github.com/${{ github.repository }} gh-pages
-        cp -r ./publish/* gh-pages/
+        cp -r ./HackPDM_CSharp/publish/* gh-pages/
         cd gh-pages
         git add .
         git commit -m "Deploy new version"
