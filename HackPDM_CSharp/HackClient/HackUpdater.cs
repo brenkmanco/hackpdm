@@ -55,7 +55,7 @@ namespace HackPDM.HackClient
 			var ghBranch = await GetBranchRepo(repoID, branchName);
 			if (!IsLatestVersion(ghBranch, info.Item1))
 			{
-				 if (MessageBox.Show($"Latest version: {ghBranch.Commit.Sha}, doesn't match newest version: {info.Item1}\n" +
+				 if (MessageBox.Show($"Latest version: {ghBranch.Commit.Sha}, doesn't match your version: {info.Item1}\n" +
 				 $"Would you like to navigate to {ghBranch.Commit.Url}?", 
 				 "Versions", 
 				 MessageBoxButtons.YesNoCancel) == DialogResult.Yes)
