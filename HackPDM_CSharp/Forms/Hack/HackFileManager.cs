@@ -2268,16 +2268,17 @@ namespace HackPDM
 				UpdateOverlay(e);	
 			}
 		}
-
+		Point prevOverlayMousePos = new(0, 0);
 		private void StartOverlay(DragEventArgs e)
 		{
 			// start overlay graphic
+			
 			FileDragGraphics(OdooEntryList, e);
 		}
 		private void UpdateOverlay(DragEventArgs e)
 		{
 			// update overlay graphic
-			FileDragGraphics(OdooEntryList, e);
+			// FileDragGraphics(OdooEntryList, e);
 		}
 		private void EndOverlay()
 		{
@@ -2288,74 +2289,111 @@ namespace HackPDM
 		{
 			string[] files = e.Data.GetData(DataFormats.FileDrop) as string[] ?? new string[0];
 			if (files.Length < 1) return;
+			List<FileInfo> fileInfos = files.Select(f => new FileInfo(f)).ToList();
 
 			// get graphics reset
 			Graphics g = control.CreateGraphics();
 			g.Clear(OdooEntryList.BackColor);
 
 			// add the size of the radial gradient
-			Size size = new(100, 100);
-			Rectangle sizeBox = new(e.X - size.Width/2, e.Y - size.Height/2, 100, 100);
-			Rectangle controlSize = control.Bounds;
+			Rectangle controlSize = control.ClientRectangle;
+			float HYPOT = controlSize.Size.Width*2;
+			PointF midPoint = new((controlSize.Width/2) + controlSize.X, (controlSize.Height/2) + controlSize.Y);
+			Rectangle sizeBox = new(0, 0, controlSize.Width, controlSize.Height);
 			
 			// create graphics path for radial gradient
-			using (var gPath = new GraphicsPath())
+			PointF scalePoint = ScalePoint(new PointF(e.X, e.Y), midPoint, HYPOT);
+		
+			using (var gPathBrush = new LinearGradientBrush(midPoint, scalePoint, Color.AliceBlue, Color.Coral))
 			{
-				gPath.AddEllipse(sizeBox);
-				using (var gPathBrush = new PathGradientBrush(gPath))
-				{
-					gPathBrush.CenterPoint		= new(sizeBox.Width/2f, sizeBox.Height/2f);
-					gPathBrush.CenterColor		= Color.Coral;
-					gPathBrush.SurroundColors	= [Color.AliceBlue, Color.DarkBlue, Color.Azure, Color.DarkSlateBlue];
-					gPathBrush.FocusScales		= new(0, 0);
-					g.FillRectangle(gPathBrush, controlSize);
-				}
+				gPathBrush.LinearColors		= [Color.AliceBlue, Color.Azure, Color.DarkSlateBlue, Color.Coral];
+				g.FillRectangle(gPathBrush, controlSize);
 			}
+			
 
 			// create back color 
 			Font font = new(FontFamily.GenericSansSerif, 55f, GraphicsUnit.Pixel);
-			SizeF offSet = new(controlSize.Width / 10f, controlSize.Height / 10f);
-			
-			//	< _________________________________________________ >
-			//	|					|								|
-			//	|					v								|
-			//	|	< _________________________________________>	|
-			//	|	 |			 |							   |	|
-			//	|	 |	 image	 |							   |	|
-			//	|--> |			 |							   | <--|
-			//	|	 |			 |							   |	|
-			//	|	< ___________|_____________________________>	|
-			//	|					^								|
-			//	|					|								|
-			//	< _________________________________________________ >
+			Font fontValid = new(FontFamily.GenericSansSerif, 15f, GraphicsUnit.Pixel);
+			Font fontInvalid = new(FontFamily.GenericSansSerif, 15f, FontStyle.Strikeout, GraphicsUnit.Pixel);
 
+			SizeF offSet = new(controlSize.Width / 5f, controlSize.Height / 5f);
+			const float imgRadius = 25f;
+
+			RectangleF imageLayout = new(
+				midPoint.X - imgRadius,
+				midPoint.Y - imgRadius,
+				imgRadius*2,
+				imgRadius*2
+			);
 			RectangleF layout = new(
-				controlSize.X + offSet.Width, 
-				controlSize.Y + offSet.Height, 
-				controlSize.Width - offSet.Width,
-				controlSize.Height - offSet.Height);
-
+				imageLayout.X - 50, 
+				imageLayout.Y - 50,
+				400,
+				100
+			);
 			Rectangle layoutPixel = new(
 				(int)layout.X,
 				(int)layout.Y,
 				(int)layout.Width,
 				(int)layout.Height
 			);
+			//Rectangle dot = new(Convert.ToInt32(midPoint.X), Convert.ToInt32(midPoint.Y), 5, 5);
+			Pen pen = new Pen(new SolidBrush(Color.FromArgb(100, Color.Black)));
 
-			RectangleF imageLayout = new(
-				layout.X, 
-				layout.Y,
-				layout.Height,
-				layout.Height
-			);
 
-			g.DrawRectangle(new Pen(new SolidBrush(Color.FromArgb(10, Color.Black))), layoutPixel);
-			g.DrawImage(ilListIcons.Images["default"], imageLayout);
+			//g.DrawRectangle(pen, layoutPixel);
+			Image def = ilListIcons.Images["default"];
+			g.DrawImage(def, imageLayout);
+			RectangleF startRect = new(32, 50, controlSize.Width * 0.4f, 32f);
 			using ( var brush = new SolidBrush( Color.Black ) )
+			using ( var brushInvalid = new SolidBrush( Color.Crimson ) )
 			{
-				g.DrawString( $"{files.Length} Files", font, brush, layout);
+				g.DrawString( $"{files.Length} Files", font, brush, layout );
+
+				foreach ( var file in fileInfos )
+				{
+					if ( !file.Exists )
+						continue;
+
+					Image img = null; 
+
+					if ( !OdooDefaults.ExtToType.ContainsKey( file.Extension ) )
+					{
+						img = ilListIcons.Images["delete_image_button"];
+						
+						g.DrawString( file.FullName, fontInvalid, brushInvalid, startRect );
+					}
+					else
+					{
+						img = ilListIcons.Images[file.Extension.Substring(1)];
+						if ( img == null )
+							img = def;
+						
+						g.DrawString( file.FullName, fontValid, brush, startRect );
+					}
+					g.DrawImage(img, 0, startRect.Y, 32, 32 );
+					startRect.Y += 32;
+				}
 			}
 
+			//g.DrawEllipse(pen, dot);
+			//dot.X = Convert.ToInt32(scalePoint.X);
+			//dot.Y = Convert.ToInt32(scalePoint.Y);
+			//g.DrawEllipse(pen, dot);
+		}
+		private PointF ScalePoint(PointF p1, PointF p2, double desiredDistance )
+		{
+			PointF p3 = new(
+				p2.X - p1.X,
+				p2.Y - p1.Y
+			);
+
+			double currentDist = Math.Sqrt(p3.X * p3.X + p3.Y * p3.Y);
+			double scaleFactor = desiredDistance / currentDist;
+			p3.X = p2.X - Convert.ToSingle(scaleFactor) * p3.X;
+			p3.Y = p2.Y - Convert.ToSingle(scaleFactor) * p3.Y;
+
+			return p3;
 		}
 		#endregion
 
@@ -2624,21 +2662,31 @@ namespace HackPDM
 		private void worker_PermDelete( object sender, DoWorkEventArgs e ) 
 		{
 			HpEntry[] entries = e.Argument as HpEntry[];
-			foreach(HpEntry entry in entries)
+			ArrayList ids = entries.Select(e=>e.ID).ToArrayList();
+
+			// first delete all versions associated with entry
+			bool vDeleted = DeleteVersions(ids);
+			if (!vDeleted)
 			{
-				// first delete all versions associated with entry
-				DeleteVersions(entry.ID);
-				// second delete the entry
-				DeleteEntry(entry.ID);
+				MessageBox.Show("Was unable to delete versions", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
+				return;
+			}
+
+			// second delete the entry
+			bool eDeleted = DeleteEntry(ids);
+			if (!eDeleted)
+			{
+				MessageBox.Show("Able to delete versions but was unable to delete entries", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
+				return;
 			}
 		}
-		private void DeleteEntry( int hpEntryID )
+		private bool DeleteEntry( ArrayList ids )
+			=> OClient.Delete(HpEntry.GetHpModel(), new ArrayList() {new ArrayList(){"id", "in", ids}});
+		private bool DeleteVersions( ArrayList ids )
 		{
-
-		}
-		private void DeleteVersions( int hpEntryID )
-		{
-
+			HpVersion[] versions = HpEntry.GetRelatedRecordByIDS<HpVersion>(ids, "version_ids", includedFields:["ID"]);
+			ArrayList vIds = versions.Select(v => v.ID).ToArrayList();
+			return OClient.Delete(HpVersion.GetHpModel(), new ArrayList() {new ArrayList(){"id", "in", vIds}});
 		}
 
 		// tree

@@ -478,6 +478,7 @@
 			this.ilListIcons.Images.SetKeyName(93, "xlsx");
 			this.ilListIcons.Images.SetKeyName(94, "xml");
 			this.ilListIcons.Images.SetKeyName(95, "zip");
+			this.ilListIcons.Images.SetKeyName(96, "delete_image_button");
 			// 
 			// tabControl1
 			// 
