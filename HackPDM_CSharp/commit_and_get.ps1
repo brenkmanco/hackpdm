@@ -13,12 +13,15 @@ if ($config -eq "GitRelease")
     # Stage all changes
     git add .
 
-
-    echo "DEBUG HASH BEFORE: $(git log -1 --format="%H")"
-    echo "DEBUG DATE BEFORE: $(git log -1 --format="%cd" --date=iso)"
+    echo "DEBUG HASH PREC: $(git log -1 --format="%H")"
+    echo "DEBUG DATE PREC: $(git log -1 --format="%cd" --date=iso)"
 
     # Commit the changes
     git commit -m "Automated commit from build"
+
+    echo "DEBUG HASH POSTC: $(git log -1 --format="%H")"
+    echo "DEBUG DATE POSTC: $(git log -1 --format="%cd" --date=iso)"
+
     git push -f
 
     # Get the current commit hash and commit date
