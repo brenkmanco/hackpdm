@@ -7,6 +7,7 @@ using System.Data;
 using System.Data.Entity.Core.Common.CommandTrees.ExpressionBuilder;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Net.NetworkInformation;
@@ -2249,6 +2250,7 @@ namespace HackPDM
 			if (e.Data.GetDataPresent(DataFormats.FileDrop))
 			{
 				e.Effect = DragDropEffects.Copy;
+				StartOverlay(e);
 			}
 			else
 			{
@@ -2257,9 +2259,104 @@ namespace HackPDM
 		}
 		private void OdooEntryList_DragLeave( object sender, EventArgs e )
 		{
-
+			EndOverlay();	
+		}
+		private void OdooEntryList_DragOver( object sender, DragEventArgs e )
+		{
+			if (e.Data.GetDataPresent(DataFormats.FileDrop))
+			{
+				UpdateOverlay(e);	
+			}
 		}
 
+		private void StartOverlay(DragEventArgs e)
+		{
+			// start overlay graphic
+			FileDragGraphics(OdooEntryList, e);
+		}
+		private void UpdateOverlay(DragEventArgs e)
+		{
+			// update overlay graphic
+			FileDragGraphics(OdooEntryList, e);
+		}
+		private void EndOverlay()
+		{
+			// set back to normal graphics
+			OdooEntryList.Invalidate();
+		}
+		private void FileDragGraphics(Control control, DragEventArgs e)
+		{
+			string[] files = e.Data.GetData(DataFormats.FileDrop) as string[] ?? new string[0];
+			if (files.Length < 1) return;
+
+			// get graphics reset
+			Graphics g = control.CreateGraphics();
+			g.Clear(OdooEntryList.BackColor);
+
+			// add the size of the radial gradient
+			Size size = new(100, 100);
+			Rectangle sizeBox = new(e.X - size.Width/2, e.Y - size.Height/2, 100, 100);
+			Rectangle controlSize = control.Bounds;
+			
+			// create graphics path for radial gradient
+			using (var gPath = new GraphicsPath())
+			{
+				gPath.AddEllipse(sizeBox);
+				using (var gPathBrush = new PathGradientBrush(gPath))
+				{
+					gPathBrush.CenterPoint		= new(sizeBox.Width/2f, sizeBox.Height/2f);
+					gPathBrush.CenterColor		= Color.Coral;
+					gPathBrush.SurroundColors	= [Color.AliceBlue, Color.DarkBlue, Color.Azure, Color.DarkSlateBlue];
+					gPathBrush.FocusScales		= new(0, 0);
+					g.FillRectangle(gPathBrush, controlSize);
+				}
+			}
+
+			// create back color 
+			Font font = new(FontFamily.GenericSansSerif, 55f, GraphicsUnit.Pixel);
+			SizeF offSet = new(controlSize.Width / 10f, controlSize.Height / 10f);
+			
+			//	< _________________________________________________ >
+			//	|					|								|
+			//	|					v								|
+			//	|	< _________________________________________>	|
+			//	|	 |			 |							   |	|
+			//	|	 |	 image	 |							   |	|
+			//	|--> |			 |							   | <--|
+			//	|	 |			 |							   |	|
+			//	|	< ___________|_____________________________>	|
+			//	|					^								|
+			//	|					|								|
+			//	< _________________________________________________ >
+
+			RectangleF layout = new(
+				controlSize.X + offSet.Width, 
+				controlSize.Y + offSet.Height, 
+				controlSize.Width - offSet.Width,
+				controlSize.Height - offSet.Height);
+
+			Rectangle layoutPixel = new(
+				(int)layout.X,
+				(int)layout.Y,
+				(int)layout.Width,
+				(int)layout.Height
+			);
+
+			RectangleF imageLayout = new(
+				layout.X, 
+				layout.Y,
+				layout.Height,
+				layout.Height
+			);
+
+			g.DrawRectangle(new Pen(new SolidBrush(Color.FromArgb(10, Color.Black))), layoutPixel);
+			g.DrawImage(ilListIcons.Images["default"], imageLayout);
+			using ( var brush = new SolidBrush( Color.Black ) )
+			{
+				g.DrawString( $"{files.Length} Files", font, brush, layout);
+			}
+
+		}
 		#endregion
 
 		#region Form Helper Functions
@@ -2492,8 +2589,56 @@ namespace HackPDM
 		private void permanentDeleteToolStripMenuItem_Click( object sender, EventArgs e )
 		{
 		#if DEBUG
-			
+			Dialog = new StatusDialog();
+
+			var entryItem = OdooEntryList.SelectedItems;
+			var directory = lastSelectedNode.FullPath;
+
+			ArrayList entryIDs = new(entryItem.Count);
+
+			foreach ( ListViewItem item in entryItem )
+			{
+				if ( int.TryParse( item.Text, out int ID ) )
+				{
+					entryIDs.Add( ID );
+				}
+			}
+
+			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
+
+			object arguments = entries;
+			BackgroundWorker worker = new()
+			{
+				WorkerSupportsCancellation = true
+			};
+			//worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler((s, ev) => MessageBox.Show("Finished"));
+			worker.DoWork += new DoWorkEventHandler( worker_PermDelete );
+			worker.RunWorkerAsync( arguments );
+
+			bool blnWorkCanceled = Dialog.ShowStatusDialog("Permanently Delete Files");
+			if ( blnWorkCanceled )
+				worker.CancelAsync();
 		#endif
+		}
+
+		private void worker_PermDelete( object sender, DoWorkEventArgs e ) 
+		{
+			HpEntry[] entries = e.Argument as HpEntry[];
+			foreach(HpEntry entry in entries)
+			{
+				// first delete all versions associated with entry
+				DeleteVersions(entry.ID);
+				// second delete the entry
+				DeleteEntry(entry.ID);
+			}
+		}
+		private void DeleteEntry( int hpEntryID )
+		{
+
+		}
+		private void DeleteVersions( int hpEntryID )
+		{
+
 		}
 
 		// tree
@@ -2503,5 +2648,7 @@ namespace HackPDM
 			
 		#endif
 		}
+
+		
 	}
 }

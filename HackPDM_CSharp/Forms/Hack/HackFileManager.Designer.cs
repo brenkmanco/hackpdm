@@ -113,7 +113,7 @@
 			this.OdooDirectoryTree.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
 			this.OdooDirectoryTree.ImageIndex = 0;
 			this.OdooDirectoryTree.ImageList = this.ilTreeIcons;
-			this.OdooDirectoryTree.Location = new System.Drawing.Point(13, 13);
+			this.OdooDirectoryTree.Location = new System.Drawing.Point(12, 13);
 			this.OdooDirectoryTree.Name = "OdooDirectoryTree";
 			this.OdooDirectoryTree.SelectedImageIndex = 0;
 			this.OdooDirectoryTree.Size = new System.Drawing.Size(321, 479);
@@ -130,7 +130,7 @@
             this.analyzeToolStripMenuItem,
             this.deleteToolStripMenuItem});
 			this.OdooCMSTree.Name = "contextMenuStrip1";
-			this.OdooCMSTree.Size = new System.Drawing.Size(181, 158);
+			this.OdooCMSTree.Size = new System.Drawing.Size(158, 136);
 			// 
 			// getLatestToolStripMenuItem
 			// 
@@ -190,7 +190,7 @@
             this.perminentDeleteToolStripMenuItem,
             this.unDeleteToolStripMenuItem1});
 			this.deleteToolStripMenuItem.Name = "deleteToolStripMenuItem";
-			this.deleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.deleteToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.deleteToolStripMenuItem.Text = "Delete";
 			// 
 			// logicalDeleteToolStripMenuItem
@@ -203,7 +203,7 @@
 			// perminentDeleteToolStripMenuItem
 			// 
 			this.perminentDeleteToolStripMenuItem.Name = "perminentDeleteToolStripMenuItem";
-			this.perminentDeleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.perminentDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
 			this.perminentDeleteToolStripMenuItem.Text = "Permanent Delete";
 			this.perminentDeleteToolStripMenuItem.Click += new System.EventHandler(this.perminentDeleteToolStripMenuItem_Click);
 			// 
@@ -263,6 +263,7 @@
 			this.OdooEntryList.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.OdooEntryList_ItemSelectionChanged);
 			this.OdooEntryList.DragDrop += new System.Windows.Forms.DragEventHandler(this.OdooEntryList_DragDrop);
 			this.OdooEntryList.DragEnter += new System.Windows.Forms.DragEventHandler(this.OdooEntryList_DragEnter);
+			this.OdooEntryList.DragOver += new System.Windows.Forms.DragEventHandler(this.OdooEntryList_DragOver);
 			this.OdooEntryList.DragLeave += new System.EventHandler(this.OdooEntryList_DragLeave);
 			// 
 			// OdooCMSList
@@ -280,7 +281,7 @@
 			// toolStripMenuItem2
 			// 
 			this.toolStripMenuItem2.Name = "toolStripMenuItem2";
-			this.toolStripMenuItem2.Size = new System.Drawing.Size(180, 22);
+			this.toolStripMenuItem2.Size = new System.Drawing.Size(157, 22);
 			this.toolStripMenuItem2.Text = "Get Latest";
 			this.toolStripMenuItem2.ToolTipText = "Checks to see if you have the same checksum as any of the version records and if " +
     "not then it will try to download it to the specific local directory";
@@ -289,14 +290,14 @@
 			// CheckoutStripMenuItem
 			// 
 			this.CheckoutStripMenuItem.Name = "CheckoutStripMenuItem";
-			this.CheckoutStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.CheckoutStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.CheckoutStripMenuItem.Text = "Checkout";
 			this.CheckoutStripMenuItem.Click += new System.EventHandler(this.CheckoutEntryStrip_Click);
 			// 
 			// CommitEntryStrip
 			// 
 			this.CommitEntryStrip.Name = "CommitEntryStrip";
-			this.CommitEntryStrip.Size = new System.Drawing.Size(180, 22);
+			this.CommitEntryStrip.Size = new System.Drawing.Size(157, 22);
 			this.CommitEntryStrip.Text = "Commit";
 			this.CommitEntryStrip.ToolTipText = "Checks to see if the version has the same checksum in the versions records and if" +
     " not then it will try to commit the file to Odoo to store.";
@@ -305,7 +306,7 @@
 			// toolStripMenuItem5
 			// 
 			this.toolStripMenuItem5.Name = "toolStripMenuItem5";
-			this.toolStripMenuItem5.Size = new System.Drawing.Size(180, 22);
+			this.toolStripMenuItem5.Size = new System.Drawing.Size(157, 22);
 			this.toolStripMenuItem5.Text = "Undo Checkout";
 			this.toolStripMenuItem5.Click += new System.EventHandler(this.UnCheckoutEntryStrip_Click);
 			// 
@@ -316,13 +317,13 @@
             this.unDeleteToolStripMenuItem,
             this.permanentDeleteToolStripMenuItem});
 			this.toolStripMenuItem6.Name = "toolStripMenuItem6";
-			this.toolStripMenuItem6.Size = new System.Drawing.Size(180, 22);
+			this.toolStripMenuItem6.Size = new System.Drawing.Size(157, 22);
 			this.toolStripMenuItem6.Text = "Delete";
 			// 
 			// logicalDeleteToolStripMenuItem1
 			// 
 			this.logicalDeleteToolStripMenuItem1.Name = "logicalDeleteToolStripMenuItem1";
-			this.logicalDeleteToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
+			this.logicalDeleteToolStripMenuItem1.Size = new System.Drawing.Size(168, 22);
 			this.logicalDeleteToolStripMenuItem1.Text = "Logical Delete";
 			this.logicalDeleteToolStripMenuItem1.ToolTipText = "sets the Entry to inactive in Odoo";
 			this.logicalDeleteToolStripMenuItem1.Click += new System.EventHandler(this.LogicalDeleteEntryStrip_Click);
@@ -330,14 +331,14 @@
 			// unDeleteToolStripMenuItem
 			// 
 			this.unDeleteToolStripMenuItem.Name = "unDeleteToolStripMenuItem";
-			this.unDeleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.unDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
 			this.unDeleteToolStripMenuItem.Text = "UnDelete";
 			this.unDeleteToolStripMenuItem.Click += new System.EventHandler(this.unDeleteToolStripMenuItem_Click);
 			// 
 			// permanentDeleteToolStripMenuItem
 			// 
 			this.permanentDeleteToolStripMenuItem.Name = "permanentDeleteToolStripMenuItem";
-			this.permanentDeleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.permanentDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
 			this.permanentDeleteToolStripMenuItem.Text = "Permanent Delete";
 			this.permanentDeleteToolStripMenuItem.Click += new System.EventHandler(this.permanentDeleteToolStripMenuItem_Click);
 			// 
@@ -348,7 +349,7 @@
             this.OpenLatestLocalStrip,
             this.fileDirectoryToolStripMenuItem});
 			this.OpenEntryStrip.Name = "OpenEntryStrip";
-			this.OpenEntryStrip.Size = new System.Drawing.Size(180, 22);
+			this.OpenEntryStrip.Size = new System.Drawing.Size(157, 22);
 			this.OpenEntryStrip.Text = "Open";
 			this.OpenEntryStrip.Click += new System.EventHandler(this.OpenEntryStrip_Click);
 			// 
@@ -795,7 +796,6 @@
 			this.Controls.Add(this.OdooEntryList);
 			this.Controls.Add(this.OdooDirectoryTree);
 			this.Name = "HackFileManager";
-			this.Text = "Odoo File Directory";
 			this.OdooCMSTree.ResumeLayout(false);
 			this.OdooCMSList.ResumeLayout(false);
 			this.tabControl1.ResumeLayout(false);
