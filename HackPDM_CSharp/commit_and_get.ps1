@@ -56,6 +56,9 @@ using System.Reflection;
 
     git push -f
 
+    $commitHash = git log -1 --format="%H"
+    $commitDate = git log -1 --format="%cd" --date=iso
+
     echo "DEBUG HASH AFTER: $($commitHash)"
     echo "DEBUG DATE AFTER: $($commitDate)"
 
