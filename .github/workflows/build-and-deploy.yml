@@ -18,20 +18,21 @@ jobs:
       with:
         dotnet-version: '6.x'
     
-    - name: Change directory to project folder
-      run: cd ./HackPDM_CSharp
-
-    - name: Build project
-      run: dotnet build --configuration GitRelease
+    - name: Change directory to project folder and build project
+      run: |
+        cd ./HackPDM_CSharp
+        dotnet build --configuration GitRelease
 
     - name: Publish project
-      run: dotnet publish --configuration GitRelease --output ../publish
+      run: |
+        cd ./HackPDM_CSharp
+        dotnet publish --configuration GitRelease --output ../publish
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: published-app
-        path: ../publish
+        path: ./HackPDM_CSharp/publish
 
   deploy:
     needs: build
