@@ -1,33 +1,22 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using HackPDM;
-
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Collections;
 using OClient = OdooRpcCs.OdooClient;
-using System.Reflection;
 
-namespace HackPDM.Tests
+
+namespace HackPDMTests
 {
 	[TestClass()]
 	public class OdooDefaultsTests
 	{
 		private List<string> modelList = null;
 		[TestMethod()]
-		public void GetOdooUser()
-		{
-			Assert.IsFalse( OdooDefaults.OdooUser is null || OdooDefaults.OdooUser == "" );
-		}
+		public void GetOdooUser() => Assert.IsFalse( OdooDefaults.OdooUser is null || OdooDefaults.OdooUser == "" );
 		[TestMethod()]
-		public void GetOdooPass()
-		{
-			Assert.IsFalse( OdooDefaults.OdooPass is null || OdooDefaults.OdooPass == "" );
-		}
+		public void GetOdooPass() => Assert.IsFalse( OdooDefaults.OdooPass is null || OdooDefaults.OdooPass == "" );
 		[TestMethod()]
 		public void GetOdooID()
 		{
@@ -47,6 +36,7 @@ namespace HackPDM.Tests
 		{
 			new TcpClient(OdooDefaults.OdooAddress, int.Parse(OdooDefaults.OdooPort));
 		}
+
 		[TestMethod()]
 		public void GetOdooModelHpNode()					=> ContainsModelTest( OdooDefaults.HP_NODE );
 		[TestMethod()]

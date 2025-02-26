@@ -1,16 +1,11 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using HackPDM.ClientUtils;
-
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Collections;
-using static HackPDM.ClientUtils.Tests.TestInfo;
-using static System.Net.Mime.MediaTypeNames;
+using HackPDM.ClientUtils;
+using static HackPDMTests.TestInfo;
 
-namespace HackPDM.ClientUtils.Tests
+namespace HackPDMTests
 {
 	[TestClass()]
 	public class ExtMethodsTests
