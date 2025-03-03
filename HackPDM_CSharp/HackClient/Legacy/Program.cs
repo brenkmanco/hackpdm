@@ -34,11 +34,6 @@ using HackPDM.ClientUtils;
 using HackPDM.Forms.Settings;
 using HackPDM.HackClient;
 using HackPDM.Verifier;
-
-using Microsoft.VisualStudio.TestPlatform.ObjectModel.Utilities;
-
-using NUnit.Framework;
-
 using Octokit;
 
 using SolidWorks.Interop.sldworks;
