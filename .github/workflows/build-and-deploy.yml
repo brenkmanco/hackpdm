@@ -20,7 +20,7 @@ jobs:
 
     - name: Upgrade .NET SDK
       run: |
-        Invoke-WebRequest -Uri https://dotnet.microsoft.com/download/dotnet/9.0 -OutFile dotnet-install.ps1
+        Invoke-WebRequest -Uri https://builds.dotnet.microsoft.com/dotnet/scripts/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1
         .\dotnet-install.ps1 -Channel 9.0
     
     - name: Install .NET Framework Developer Pack
