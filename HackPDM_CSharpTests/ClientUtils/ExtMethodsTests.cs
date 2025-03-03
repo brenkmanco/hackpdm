@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Collections;
 using HackPDM.ClientUtils;
+using Assert = Microsoft.VisualStudio.TestTools.UnitTesting.Assert;
 using static HackPDMTests.TestInfo;
 
 namespace HackPDMTests
