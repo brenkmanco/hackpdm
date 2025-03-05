@@ -3,13 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 
 using System.Reflection;
-
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
 using Octokit;
-
-using Application = System.Windows.Forms.Application;
 
 namespace HackPDM.HackClient
 {
