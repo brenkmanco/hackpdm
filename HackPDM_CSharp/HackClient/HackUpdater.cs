@@ -1,15 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
+
 using System.Reflection;
-using System.Security.Policy;
-using System.Text;
+
 using System.Threading.Tasks;
 using System.Windows.Forms;
-
-using System;
-using System.Deployment;
 
 using Octokit;
 
@@ -23,7 +19,6 @@ namespace HackPDM.HackClient
 		const string branchName = "justinOdooIntegration";
 		private static Version CurrentVersion()
 		{
-			
 			return Assembly.GetExecutingAssembly().GetName().Version;
 		}
 		private async static Task<Branch> GetBranchRepo(long repositoryID, string repoBranchName)
@@ -31,27 +26,43 @@ namespace HackPDM.HackClient
 			var ghClient = new GitHubClient(new Octokit.ProductHeaderValue("hackpdm"));
 			return await ghClient.Repository.Branch.Get(repositoryID, repoBranchName);
 		}
+		private async static Task<IReadOnlyList<Release>> GetReleasesAsync(long repositoryID )
+		{
+			var ghClient = new GitHubClient(new Octokit.ProductHeaderValue("hackpdm"));
+			return await ghClient.Repository.Release.GetAll( repositoryID );
+		}
 		private static bool IsLatestVersion (Branch branch, Version version)
 		{
 			var latestCommit = branch.Commit.Sha;
 			return false;
 		}
+		private static bool IsLatestVersion (Release release, Version version)
+		{
+			Debug.WriteLine($"tagname: {release.TagName}\nname: {release.Name}");
+			return false;
+		}
 		public async static void EnsureUpdated()
 		{
 			var info = CurrentVersion();
-			var ghBranch = await GetBranchRepo(repoID, branchName);
+			//var ghBranch = await GetBranchRepo(repoID, branchName);
+			var taskSync = await GetReleasesAsync(repoID);
+			var ghReleases = taskSync;
 
-			if (!IsLatestVersion(ghBranch, info))
+			if (!IsLatestVersion(ghReleases[0], info))
 			{
-				 if (MessageBox.Show($"Latest version: {ghBranch.Commit.Sha}, doesn't match your version: {info}\n" +
-				 $"Would you like to navigate to {ghBranch.Commit.Url}?", 
+				 if (MessageBox.Show($"Latest version: {ghReleases[0].Name}, doesn't match your version: {info}\n" +
+				 $"Would you like to navigate to {ghReleases[0].HtmlUrl}?", 
 				 "Versions", 
 				 MessageBoxButtons.YesNoCancel) == DialogResult.Yes)
 				 {
-					UpdaterProcess(ghBranch);
+					UpdaterProcess(ghReleases[0]);
 				 }
 				 throw new Exception("Update to latest version");
 			}
+		}
+		public static void UpdaterProcess( Release release )
+		{
+			Process.Start( "explorer.exe", release.HtmlUrl );
 		}
 		public static void UpdaterProcess(Branch branch)
 		{

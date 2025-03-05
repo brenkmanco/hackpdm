@@ -56,19 +56,19 @@ namespace HackPDM
 			try
 			{
 				HackUpdater.EnsureUpdated();
+				string tempPath = Path.Combine(Path.GetTempPath(), Application.ProductName);
+			
+				if (!Directory.Exists(tempPath)) Directory.CreateDirectory(tempPath);
+
+				Application.EnableVisualStyles();
+				Application.SetCompatibleTextRenderingDefault(false);
+
+				Application.Run(new DebugForm());
 			}
 			catch
 			{
 				return;
 			}
-			string tempPath = Path.Combine(Path.GetTempPath(), Application.ProductName);
-			
-			if (!Directory.Exists(tempPath)) Directory.CreateDirectory(tempPath);
-
-			Application.EnableVisualStyles();
-			Application.SetCompatibleTextRenderingDefault(false);
-
-			Application.Run(new DebugForm());
 			
 			//Application.Run(new HackFileManager());				
 		

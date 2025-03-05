@@ -40,7 +40,7 @@
     <ProductName>hackpdm</ProductName>
     <PublisherName>Justin</PublisherName>
     <WebPage>publish.htm</WebPage>
-    <ApplicationRevision>11</ApplicationRevision>
+    <ApplicationRevision>12</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <CreateDesktopShortcut>true</CreateDesktopShortcut>
@@ -637,7 +637,7 @@
   </Target>
   <Import Project="packages\EntityFramework.6.5.1\build\EntityFramework.targets" Condition="Exists('packages\EntityFramework.6.5.1\build\EntityFramework.targets')" />
   <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
-  <Target Name="GitHubPublish" AfterTargets="Publish">
-    <Exec Command="powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1 -projectDir $(ProjectDir) -publishVersion $(ApplicationVersion) -revision $(PublishApplicationVersion)" />
-  </Target>
+  <PropertyGroup>
+    <PostBuildEvent>powershell -ExecutionPolicy Bypass -File $(SolutionDir)commit_and_get.ps1 -projectDir $(SolutionDir) -publishVersion "$(ApplicationVersion)" -revision "$(PublishApplicationVersion)" -config "$(Configuration)"</PostBuildEvent>
+  </PropertyGroup>
 </Project>
