@@ -689,6 +689,10 @@
   <Import Project="packages\EntityFramework.6.5.1\build\EntityFramework.targets" Condition="Exists('packages\EntityFramework.6.5.1\build\EntityFramework.targets')" />
   <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
   <PropertyGroup>
-    <PostBuildEvent>powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1 -projectDir $(ProjectDir) -publishVersion "$(ApplicationVersion)" -revision "$(PublishApplicationVersion)" -config "$(Configuration)"</PostBuildEvent>
+    <PostBuildEvent>
+    </PostBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PreBuildEvent>powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1 -projectDir $(ProjectDir) -publishVersion "$(ApplicationVersion)" -config "$(Configuration)"</PreBuildEvent>
   </PropertyGroup>
 </Project>
