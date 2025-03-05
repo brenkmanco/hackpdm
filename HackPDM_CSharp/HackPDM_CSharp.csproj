@@ -25,21 +25,22 @@
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
     <Nullable>enable</Nullable>
-    <PublishUrl>C:\Users\jnjohnson\Documents\TESTFOLDER\</PublishUrl>
+    <PublishUrl>\\freedom\Engineering\hackpdm\</PublishUrl>
     <Install>true</Install>
-    <InstallFrom>Disk</InstallFrom>
-    <UpdateEnabled>false</UpdateEnabled>
+    <InstallFrom>Unc</InstallFrom>
+    <UpdateEnabled>true</UpdateEnabled>
     <UpdateMode>Background</UpdateMode>
     <UpdateInterval>7</UpdateInterval>
     <UpdateIntervalUnits>Days</UpdateIntervalUnits>
     <UpdatePeriodically>false</UpdatePeriodically>
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>false</MapFileExtensions>
+    <InstallUrl>\\freedom\Engineering\hackpdm\</InstallUrl>
     <SupportUrl>https://github.com/brenkmanco/hackpdm/tree/justinOdooIntegration</SupportUrl>
     <ProductName>hackpdm</ProductName>
     <PublisherName>Justin</PublisherName>
-    <AutorunEnabled>true</AutorunEnabled>
-    <ApplicationRevision>7</ApplicationRevision>
+    <WebPage>publish.htm</WebPage>
+    <ApplicationRevision>10</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <CreateDesktopShortcut>true</CreateDesktopShortcut>
@@ -204,7 +205,13 @@
     <GenerateManifests>true</GenerateManifests>
   </PropertyGroup>
   <PropertyGroup>
-    <SignManifests>false</SignManifests>
+    <SignManifests>true</SignManifests>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignAssembly>true</SignAssembly>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyOriginatorKeyFile>HackPDM_CSharp_TemporaryKey.pfx</AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="CredentialManagement, Version=1.0.2.0, Culture=neutral, processorArchitecture=MSIL">
@@ -630,4 +637,7 @@
   </Target>
   <Import Project="packages\EntityFramework.6.5.1\build\EntityFramework.targets" Condition="Exists('packages\EntityFramework.6.5.1\build\EntityFramework.targets')" />
   <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
+  <Target Name="GitHubPublish" AfterTargets="Publish">
+    <Exec Command="powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1 -projectDir $(ProjectDir) -publishVersion $(ApplicationVersion) -revision $(PublishApplicationVersion)" />
+  </Target>
 </Project>

@@ -3,11 +3,17 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Security.Policy;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
+using System;
+using System.Deployment;
+
 using Octokit;
+
+using Application = System.Windows.Forms.Application;
 
 namespace HackPDM.HackClient
 {
@@ -15,47 +21,29 @@ namespace HackPDM.HackClient
 	{
 		const long repoID = 28426033L;
 		const string branchName = "justinOdooIntegration";
-		private static (string, string) CurrentVersion()
+		private static Version CurrentVersion()
 		{
-			// git log --format="%H | %cd" --date=iso
-			var assembly = Assembly.GetExecutingAssembly();
 			
-			var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-
-            if (informationalVersion != null)
-            {
-                var parts = informationalVersion.Split([.. ", "]);
-                var commitHash = parts[1];
-                var commitDate = $"{parts[4]} {parts[5]} {parts[6]}";
-
-                //MessageBox.Show($"Commit Hash: {commitHash}");
-                //MessageBox.Show($"Commit Date: {commitDate}");
-				return (commitHash, commitDate);
-            }
-            else
-            {
-                MessageBox.Show("Commit information not found.");
-            }
-			return (null, null);
+			return Assembly.GetExecutingAssembly().GetName().Version;
 		}
 		private async static Task<Branch> GetBranchRepo(long repositoryID, string repoBranchName)
 		{
 			var ghClient = new GitHubClient(new Octokit.ProductHeaderValue("hackpdm"));
 			return await ghClient.Repository.Branch.Get(repositoryID, repoBranchName);
 		}
-		private static bool IsLatestVersion (Branch branch, string commitHash)
+		private static bool IsLatestVersion (Branch branch, Version version)
 		{
 			var latestCommit = branch.Commit.Sha;
-			
-			return latestCommit == commitHash;
+			return false;
 		}
 		public async static void EnsureUpdated()
 		{
 			var info = CurrentVersion();
 			var ghBranch = await GetBranchRepo(repoID, branchName);
-			if (!IsLatestVersion(ghBranch, info.Item1))
+
+			if (!IsLatestVersion(ghBranch, info))
 			{
-				 if (MessageBox.Show($"Latest version: {ghBranch.Commit.Sha}, doesn't match your version: {info.Item1}\n" +
+				 if (MessageBox.Show($"Latest version: {ghBranch.Commit.Sha}, doesn't match your version: {info}\n" +
 				 $"Would you like to navigate to {ghBranch.Commit.Url}?", 
 				 "Versions", 
 				 MessageBoxButtons.YesNoCancel) == DialogResult.Yes)
