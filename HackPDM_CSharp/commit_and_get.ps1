@@ -1,7 +1,6 @@
 ﻿param (
     [string]$projectDir,
     [string]$publishVersion,
-    [string]$revision,
     [string]$config
 )
 
@@ -9,7 +8,6 @@ if ($config -eq "GitRelease")
 {
     echo dir: $projectDir
     echo publish: $publishVersion
-    echo reveision: $revision
     echo config: $config
     # Change to the project directory
     cd $projectDir
@@ -17,7 +15,6 @@ if ($config -eq "GitRelease")
 
     echo $projectDir
     echo $publishVersion
-    echo $revision
 
     # Stage all changes
     git add .

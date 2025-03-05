@@ -40,8 +40,8 @@
     <ProductName>hackpdm</ProductName>
     <PublisherName>Justin</PublisherName>
     <WebPage>publish.htm</WebPage>
-    <ApplicationRevision>12</ApplicationRevision>
-    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <ApplicationRevision>25</ApplicationRevision>
+    <ApplicationVersion>1.0.0.25</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <CreateDesktopShortcut>true</CreateDesktopShortcut>
     <PublishWizardCompleted>true</PublishWizardCompleted>
@@ -205,10 +205,10 @@
     <GenerateManifests>true</GenerateManifests>
   </PropertyGroup>
   <PropertyGroup>
-    <SignManifests>true</SignManifests>
+    <SignManifests>false</SignManifests>
   </PropertyGroup>
   <PropertyGroup>
-    <SignAssembly>true</SignAssembly>
+    <SignAssembly>false</SignAssembly>
   </PropertyGroup>
   <PropertyGroup>
     <AssemblyOriginatorKeyFile>HackPDM_CSharp_TemporaryKey.pfx</AssemblyOriginatorKeyFile>
@@ -689,6 +689,6 @@
   <Import Project="packages\EntityFramework.6.5.1\build\EntityFramework.targets" Condition="Exists('packages\EntityFramework.6.5.1\build\EntityFramework.targets')" />
   <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
   <PropertyGroup>
-    <PostBuildEvent>powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1 -projectDir $(ProjectDir) -publishVersion "$(ApplicationVersion)" -revision "$(ApplicationRevision)" -config "$(Configuration)"</PostBuildEvent>
+    <PostBuildEvent>powershell -ExecutionPolicy Bypass -File $(ProjectDir)commit_and_get.ps1 -projectDir $(ProjectDir) -publishVersion "$(ApplicationVersion)" -config "$(Configuration)"</PostBuildEvent>
   </PropertyGroup>
 </Project>

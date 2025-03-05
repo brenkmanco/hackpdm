@@ -55,9 +55,10 @@ namespace HackPDM
 		{
 			try
 			{
-				HackUpdater.EnsureUpdated();
+				#if GITRELEASE || RELEASE
+					HackUpdater.EnsureUpdated();
+				#endif
 				string tempPath = Path.Combine(Path.GetTempPath(), Application.ProductName);
-			
 				if (!Directory.Exists(tempPath)) Directory.CreateDirectory(tempPath);
 
 				Application.EnableVisualStyles();
@@ -69,7 +70,7 @@ namespace HackPDM
 			{
 				return;
 			}
-			
+
 			//Application.Run(new HackFileManager());				
 		
 		}
