@@ -2696,7 +2696,20 @@ namespace HackPDM
 			
 		#endif
 		}
+		private void openDirectoryToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			if (Directory.Exists( pathway ) )
+			{
+				Process.Start( "explorer.exe", pathway );
+			}
+		}
 
-		
+		private void OdooCMSTree_Opening( object sender, CancelEventArgs e )
+		{
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			if (Directory.Exists( pathway ) ) openDirectoryToolStripMenuItem.Enabled = true;
+			else openDirectoryToolStripMenuItem.Enabled = false;
+		}
 	}
 }

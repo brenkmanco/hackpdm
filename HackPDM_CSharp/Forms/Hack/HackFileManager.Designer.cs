@@ -91,6 +91,7 @@
 			this.OdooRefreshDropdown = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooSearchDropdown = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooManageTypesDropdown = new System.Windows.Forms.ToolStripMenuItem();
+			this.openDirectoryToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooCMSTree.SuspendLayout();
 			this.OdooCMSList.SuspendLayout();
 			this.tabControl1.SuspendLayout();
@@ -128,9 +129,11 @@
             this.commitToolStripMenuItem,
             this.undoToolStripMenuItem,
             this.analyzeToolStripMenuItem,
-            this.deleteToolStripMenuItem});
+            this.deleteToolStripMenuItem,
+            this.openDirectoryToolStripMenuItem});
 			this.OdooCMSTree.Name = "contextMenuStrip1";
-			this.OdooCMSTree.Size = new System.Drawing.Size(158, 136);
+			this.OdooCMSTree.Size = new System.Drawing.Size(181, 180);
+			this.OdooCMSTree.Opening += new System.ComponentModel.CancelEventHandler(this.OdooCMSTree_Opening);
 			// 
 			// getLatestToolStripMenuItem
 			// 
@@ -138,7 +141,7 @@
             this.topDirectoryToolStripMenuItem,
             this.allDirectoriesToolStripMenuItem});
 			this.getLatestToolStripMenuItem.Name = "getLatestToolStripMenuItem";
-			this.getLatestToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
+			this.getLatestToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
 			this.getLatestToolStripMenuItem.Text = "Get Latest";
 			this.getLatestToolStripMenuItem.Click += new System.EventHandler(this.GetLatestStrip_Click);
 			// 
@@ -159,28 +162,28 @@
 			// toolStripMenuItem1
 			// 
 			this.toolStripMenuItem1.Name = "toolStripMenuItem1";
-			this.toolStripMenuItem1.Size = new System.Drawing.Size(157, 22);
+			this.toolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
 			this.toolStripMenuItem1.Text = "Checkout";
 			this.toolStripMenuItem1.Click += new System.EventHandler(this.CheckoutTreeStrip_Click);
 			// 
 			// commitToolStripMenuItem
 			// 
 			this.commitToolStripMenuItem.Name = "commitToolStripMenuItem";
-			this.commitToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
+			this.commitToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
 			this.commitToolStripMenuItem.Text = "Commit";
 			this.commitToolStripMenuItem.Click += new System.EventHandler(this.CommitTreeStrip_Click);
 			// 
 			// undoToolStripMenuItem
 			// 
 			this.undoToolStripMenuItem.Name = "undoToolStripMenuItem";
-			this.undoToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
+			this.undoToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
 			this.undoToolStripMenuItem.Text = "Undo Checkout";
 			this.undoToolStripMenuItem.Click += new System.EventHandler(this.UnCheckoutTreeStrip_Click);
 			// 
 			// analyzeToolStripMenuItem
 			// 
 			this.analyzeToolStripMenuItem.Name = "analyzeToolStripMenuItem";
-			this.analyzeToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
+			this.analyzeToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
 			this.analyzeToolStripMenuItem.Text = "Analyze";
 			// 
 			// deleteToolStripMenuItem
@@ -190,7 +193,7 @@
             this.perminentDeleteToolStripMenuItem,
             this.unDeleteToolStripMenuItem1});
 			this.deleteToolStripMenuItem.Name = "deleteToolStripMenuItem";
-			this.deleteToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
+			this.deleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
 			this.deleteToolStripMenuItem.Text = "Delete";
 			// 
 			// logicalDeleteToolStripMenuItem
@@ -784,6 +787,13 @@
 			this.OdooManageTypesDropdown.Text = "Manage File Types";
 			this.OdooManageTypesDropdown.Click += new System.EventHandler(this.OdooManageTypesDropdown_Click);
 			// 
+			// openDirectoryToolStripMenuItem
+			// 
+			this.openDirectoryToolStripMenuItem.Name = "openDirectoryToolStripMenuItem";
+			this.openDirectoryToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.openDirectoryToolStripMenuItem.Text = "Open Directory";
+			this.openDirectoryToolStripMenuItem.Click += new System.EventHandler(this.openDirectoryToolStripMenuItem_Click);
+			// 
 			// HackFileManager
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -878,5 +888,6 @@
 		private System.Windows.Forms.ToolStripMenuItem moveToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem toCurrentToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem toTemporaryToolStripMenuItem1;
+		private System.Windows.Forms.ToolStripMenuItem openDirectoryToolStripMenuItem;
 	}
 }

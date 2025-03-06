@@ -39,9 +39,10 @@
     <SupportUrl>https://github.com/brenkmanco/hackpdm/tree/justinOdooIntegration</SupportUrl>
     <ProductName>hackpdm</ProductName>
     <PublisherName>Justin</PublisherName>
+    <CreateWebPageOnPublish>true</CreateWebPageOnPublish>
     <WebPage>publish.htm</WebPage>
-    <ApplicationRevision>25</ApplicationRevision>
-    <ApplicationVersion>1.0.0.25</ApplicationVersion>
+    <ApplicationRevision>27</ApplicationRevision>
+    <ApplicationVersion>1.0.0.27</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <CreateDesktopShortcut>true</CreateDesktopShortcut>
     <PublishWizardCompleted>true</PublishWizardCompleted>

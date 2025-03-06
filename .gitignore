@@ -192,3 +192,4 @@ FakesAssemblies/
 /HackPDM_CSharp/.vs/HackPDM_CSharp/*
 /.vs
 /update_publish.ps1
+/HackPDM_CSharp/commit_and_get.ps1
