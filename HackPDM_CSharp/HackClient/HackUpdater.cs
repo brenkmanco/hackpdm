@@ -16,7 +16,6 @@ namespace HackPDM.HackClient
 		const string branchName = "justinOdooIntegration";
 		private static Version CurrentVersion()
 		{
-			Debug.WriteLine(System.Windows.Forms.Application.ProductVersion);
 			return Assembly.GetExecutingAssembly().GetName().Version;
 		}
 		private async static Task<Branch> GetBranchRepo(long repositoryID, string repoBranchName)
