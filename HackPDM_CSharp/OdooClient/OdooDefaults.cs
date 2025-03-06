@@ -248,6 +248,16 @@ namespace HackPDM
 			}
 			set => field = value;
 		}
+        public static HpUser[] HpUsers
+        {
+            get
+			{
+				if ( field == null )
+					field = HpUser.GetAllRecords();
+				return field;
+			}
+			set => field = value;
+        }
 
         // dictionary mapping some field type to the HpModel
         // like extension to Type or Category
@@ -293,9 +303,32 @@ namespace HackPDM
             }
             set => field = value;
         }
-        #endregion
+        public static Dictionary<int, HpUser> IDToUser
+		{
+			get
+			{
+				if ( field == null )
+				{
+					field = IDMapUser( HpUsers );
+				}
+				return field;
+			}
+			set => field = value;
+		}
 
-        public static string OdooDateFormat(DateTime dt)
+		private static Dictionary<int, HpUser> IDMapUser( in HpUser[] hpUsers )
+        {
+            Dictionary<int, HpUser> dict = [];
+
+			foreach ( HpUser user in hpUsers )
+			{
+				dict.Add( user.ID, user );
+			}
+			return dict;
+        }
+		#endregion
+
+		public static string OdooDateFormat(DateTime dt)
         {
             return dt.ToString("yyyy-MM-dd HH:mm:ss");
         }

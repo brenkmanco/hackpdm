@@ -616,7 +616,7 @@ namespace HackPDM
                 HackFile hack = hackFileMap[fullName].Result;
 
 				item.SubItems [ NameConfig [ "RowRemoteDate" ] ].Text = DateTime.TryParse((string)table["latest_date"], out DateTime remoteDate) && remoteDate != default ? remoteDate.ToShortDateString() : EmptyPlaceholder;
-				item.SubItems [ NameConfig [ "RowLocalDate" ] ].Text = hack.ModifiedDate != null ? hack.ModifiedDate.ToShortDateString() : EmptyPlaceholder;
+				item.SubItems [ NameConfig [ "RowLocalDate" ] ].Text = hack.ModifiedDate.Year != 1 ? hack.ModifiedDate.ToShortDateString() : EmptyPlaceholder;
 
 				// remote only
 				// local only
@@ -2708,8 +2708,63 @@ namespace HackPDM
 		private void OdooCMSTree_Opening( object sender, CancelEventArgs e )
 		{
 			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
-			if (Directory.Exists( pathway ) ) openDirectoryToolStripMenuItem.Enabled = true;
-			else openDirectoryToolStripMenuItem.Enabled = false;
+			if (Directory.Exists( pathway ) ) 
+			{
+				openDirectoryToolStripMenuItem.Enabled = true;
+				localDeleteToolStripMenuItem.Enabled = true;
+			}
+			else 
+			{
+				openDirectoryToolStripMenuItem.Enabled = false;
+				localDeleteToolStripMenuItem.Enabled = false;
+			}
+		}
+		// tree
+		private void localDeleteToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			DirectoryInfo directory = new( pathway );
+			if ( directory.Exists ) 
+			{
+				if (MessageBox.Show( $"Are you sure you want to delete this directory and ({directory.EnumerateFiles().Count()}) files inside?", 
+					"Delete Directory", 
+					MessageBoxButtons.YesNoCancel, 
+					MessageBoxIcon.Warning ) == DialogResult.Yes)
+				{
+					directory.Delete( true );
+				}
+			}
+		}
+		// entry
+		private void localDeleteToolStripMenuItem1_Click( object sender, EventArgs e )
+		{
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			DirectoryInfo directory = new( pathway );
+			if ( !directory.Exists ) return;
+
+			var sb = new StringBuilder();
+			var files = new List<FileInfo>();
+
+			OdooEntryList.SelectedItems.Cast<ListViewItem>().ToList().ForEach( item =>
+			{
+				string filepath = Path.Combine(pathway, item.SubItems[ NameConfig["RowName"] ].Text);
+				FileInfo file = new( filepath );
+				if ( file.Exists )
+				{
+					sb.AppendLine( file.FullName );
+					files.Add( file );
+				}
+			} );
+			bool tooMany = files.Count > 10;
+			string message = tooMany ? $"Are you sure you want to delete ({files.Count}) files?" : $"Are you sure you want to delete these files?\nfiles:\n{sb.ToString()}";
+			if (MessageBox.Show( message , 
+					"Delete Directory", 
+					MessageBoxButtons.YesNoCancel, 
+					MessageBoxIcon.Warning ) == DialogResult.Yes)
+			{
+				files.ForEach( f => f.Delete() );
+			}
+
 		}
 	}
 }

@@ -46,7 +46,7 @@ namespace HackPDM.HackClient
 
 			if (!IsLatestVersion(ghReleases[0], info))
 			{
-				 if (MessageBox.Show($"Latest version: {ghReleases[0].Name}, doesn't match your version: {info}\n" +
+				 if (MessageBox.Show($"Latest version: {ghReleases[0].TagName}, doesn't match your version: {info}\n" +
 				 $"Would you like to download the latest version?", 
 				 "Versions", 
 				 MessageBoxButtons.YesNoCancel) == DialogResult.Yes)
