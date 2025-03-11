@@ -45,6 +45,7 @@
 			this.unDeleteToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
 			this.topDirectoryToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
 			this.allDirectoriesToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+			this.localDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.openDirectoryToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.ilTreeIcons = new System.Windows.Forms.ImageList(this.components);
 			this.OdooEntryList = new System.Windows.Forms.ListView();
@@ -57,6 +58,7 @@
 			this.logicalDeleteToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
 			this.unDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.permanentDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.localDeleteToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
 			this.OpenEntryStrip = new System.Windows.Forms.ToolStripMenuItem();
 			this.OpenLatestRemoteStrip = new System.Windows.Forms.ToolStripMenuItem();
 			this.OpenLatestLocalStrip = new System.Windows.Forms.ToolStripMenuItem();
@@ -92,8 +94,6 @@
 			this.OdooRefreshDropdown = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooSearchDropdown = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooManageTypesDropdown = new System.Windows.Forms.ToolStripMenuItem();
-			this.localDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-			this.localDeleteToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
 			this.OdooCMSTree.SuspendLayout();
 			this.OdooCMSList.SuspendLayout();
 			this.tabControl1.SuspendLayout();
@@ -143,7 +143,7 @@
             this.topDirectoryToolStripMenuItem,
             this.allDirectoriesToolStripMenuItem});
 			this.getLatestToolStripMenuItem.Name = "getLatestToolStripMenuItem";
-			this.getLatestToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.getLatestToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.getLatestToolStripMenuItem.Text = "Get Latest";
 			this.getLatestToolStripMenuItem.Click += new System.EventHandler(this.GetLatestStrip_Click);
 			// 
@@ -164,28 +164,28 @@
 			// toolStripMenuItem1
 			// 
 			this.toolStripMenuItem1.Name = "toolStripMenuItem1";
-			this.toolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
+			this.toolStripMenuItem1.Size = new System.Drawing.Size(157, 22);
 			this.toolStripMenuItem1.Text = "Checkout";
 			this.toolStripMenuItem1.Click += new System.EventHandler(this.CheckoutTreeStrip_Click);
 			// 
 			// commitToolStripMenuItem
 			// 
 			this.commitToolStripMenuItem.Name = "commitToolStripMenuItem";
-			this.commitToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.commitToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.commitToolStripMenuItem.Text = "Commit";
 			this.commitToolStripMenuItem.Click += new System.EventHandler(this.CommitTreeStrip_Click);
 			// 
 			// undoToolStripMenuItem
 			// 
 			this.undoToolStripMenuItem.Name = "undoToolStripMenuItem";
-			this.undoToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.undoToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.undoToolStripMenuItem.Text = "Undo Checkout";
 			this.undoToolStripMenuItem.Click += new System.EventHandler(this.UnCheckoutTreeStrip_Click);
 			// 
 			// analyzeToolStripMenuItem
 			// 
 			this.analyzeToolStripMenuItem.Name = "analyzeToolStripMenuItem";
-			this.analyzeToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.analyzeToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.analyzeToolStripMenuItem.Text = "Analyze";
 			// 
 			// deleteToolStripMenuItem
@@ -196,20 +196,20 @@
             this.unDeleteToolStripMenuItem1,
             this.localDeleteToolStripMenuItem});
 			this.deleteToolStripMenuItem.Name = "deleteToolStripMenuItem";
-			this.deleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.deleteToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.deleteToolStripMenuItem.Text = "Delete";
 			// 
 			// logicalDeleteToolStripMenuItem
 			// 
 			this.logicalDeleteToolStripMenuItem.Name = "logicalDeleteToolStripMenuItem";
-			this.logicalDeleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.logicalDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
 			this.logicalDeleteToolStripMenuItem.Text = "Logical Delete";
 			this.logicalDeleteToolStripMenuItem.Click += new System.EventHandler(this.LogicalDeleteTreeStrip_Click);
 			// 
 			// perminentDeleteToolStripMenuItem
 			// 
 			this.perminentDeleteToolStripMenuItem.Name = "perminentDeleteToolStripMenuItem";
-			this.perminentDeleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.perminentDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
 			this.perminentDeleteToolStripMenuItem.Text = "Permanent Delete";
 			this.perminentDeleteToolStripMenuItem.Click += new System.EventHandler(this.perminentDeleteToolStripMenuItem_Click);
 			// 
@@ -219,7 +219,7 @@
             this.topDirectoryToolStripMenuItem1,
             this.allDirectoriesToolStripMenuItem1});
 			this.unDeleteToolStripMenuItem1.Name = "unDeleteToolStripMenuItem1";
-			this.unDeleteToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
+			this.unDeleteToolStripMenuItem1.Size = new System.Drawing.Size(168, 22);
 			this.unDeleteToolStripMenuItem1.Text = "UnDelete";
 			this.unDeleteToolStripMenuItem1.Click += new System.EventHandler(this.unDeleteToolStripMenuItem1_Click);
 			// 
@@ -237,10 +237,17 @@
 			this.allDirectoriesToolStripMenuItem1.Text = "All Directories";
 			this.allDirectoriesToolStripMenuItem1.Click += new System.EventHandler(this.allDirectoriesToolStripMenuItem1_Click);
 			// 
+			// localDeleteToolStripMenuItem
+			// 
+			this.localDeleteToolStripMenuItem.Name = "localDeleteToolStripMenuItem";
+			this.localDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
+			this.localDeleteToolStripMenuItem.Text = "Local Delete";
+			this.localDeleteToolStripMenuItem.Click += new System.EventHandler(this.localDeleteToolStripMenuItem_Click);
+			// 
 			// openDirectoryToolStripMenuItem
 			// 
 			this.openDirectoryToolStripMenuItem.Name = "openDirectoryToolStripMenuItem";
-			this.openDirectoryToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.openDirectoryToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
 			this.openDirectoryToolStripMenuItem.Text = "Open Directory";
 			this.openDirectoryToolStripMenuItem.Click += new System.EventHandler(this.openDirectoryToolStripMenuItem_Click);
 			// 
@@ -264,6 +271,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
 			this.OdooEntryList.ContextMenuStrip = this.OdooCMSList;
 			this.OdooEntryList.FullRowSelect = true;
+			this.OdooEntryList.GridLines = true;
 			this.OdooEntryList.HideSelection = false;
 			this.OdooEntryList.Location = new System.Drawing.Point(350, 13);
 			this.OdooEntryList.Name = "OdooEntryList";
@@ -289,7 +297,7 @@
             this.toolStripMenuItem6,
             this.OpenEntryStrip});
 			this.OdooCMSList.Name = "contextMenuStrip1";
-			this.OdooCMSList.Size = new System.Drawing.Size(181, 158);
+			this.OdooCMSList.Size = new System.Drawing.Size(158, 136);
 			// 
 			// toolStripMenuItem2
 			// 
@@ -331,13 +339,13 @@
             this.permanentDeleteToolStripMenuItem,
             this.localDeleteToolStripMenuItem1});
 			this.toolStripMenuItem6.Name = "toolStripMenuItem6";
-			this.toolStripMenuItem6.Size = new System.Drawing.Size(180, 22);
+			this.toolStripMenuItem6.Size = new System.Drawing.Size(157, 22);
 			this.toolStripMenuItem6.Text = "Delete";
 			// 
 			// logicalDeleteToolStripMenuItem1
 			// 
 			this.logicalDeleteToolStripMenuItem1.Name = "logicalDeleteToolStripMenuItem1";
-			this.logicalDeleteToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
+			this.logicalDeleteToolStripMenuItem1.Size = new System.Drawing.Size(168, 22);
 			this.logicalDeleteToolStripMenuItem1.Text = "Logical Delete";
 			this.logicalDeleteToolStripMenuItem1.ToolTipText = "sets the Entry to inactive in Odoo";
 			this.logicalDeleteToolStripMenuItem1.Click += new System.EventHandler(this.LogicalDeleteEntryStrip_Click);
@@ -345,16 +353,23 @@
 			// unDeleteToolStripMenuItem
 			// 
 			this.unDeleteToolStripMenuItem.Name = "unDeleteToolStripMenuItem";
-			this.unDeleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.unDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
 			this.unDeleteToolStripMenuItem.Text = "UnDelete";
 			this.unDeleteToolStripMenuItem.Click += new System.EventHandler(this.unDeleteToolStripMenuItem_Click);
 			// 
 			// permanentDeleteToolStripMenuItem
 			// 
 			this.permanentDeleteToolStripMenuItem.Name = "permanentDeleteToolStripMenuItem";
-			this.permanentDeleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.permanentDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
 			this.permanentDeleteToolStripMenuItem.Text = "Permanent Delete";
 			this.permanentDeleteToolStripMenuItem.Click += new System.EventHandler(this.permanentDeleteToolStripMenuItem_Click);
+			// 
+			// localDeleteToolStripMenuItem1
+			// 
+			this.localDeleteToolStripMenuItem1.Name = "localDeleteToolStripMenuItem1";
+			this.localDeleteToolStripMenuItem1.Size = new System.Drawing.Size(168, 22);
+			this.localDeleteToolStripMenuItem1.Text = "Local Delete";
+			this.localDeleteToolStripMenuItem1.Click += new System.EventHandler(this.localDeleteToolStripMenuItem1_Click);
 			// 
 			// OpenEntryStrip
 			// 
@@ -780,37 +795,23 @@
 			// OdooRefreshDropdown
 			// 
 			this.OdooRefreshDropdown.Name = "OdooRefreshDropdown";
-			this.OdooRefreshDropdown.Size = new System.Drawing.Size(170, 22);
+			this.OdooRefreshDropdown.Size = new System.Drawing.Size(180, 22);
 			this.OdooRefreshDropdown.Text = "Refresh View";
 			this.OdooRefreshDropdown.Click += new System.EventHandler(this.OdooRefreshDropdown_Click);
 			// 
 			// OdooSearchDropdown
 			// 
 			this.OdooSearchDropdown.Name = "OdooSearchDropdown";
-			this.OdooSearchDropdown.Size = new System.Drawing.Size(170, 22);
+			this.OdooSearchDropdown.Size = new System.Drawing.Size(180, 22);
 			this.OdooSearchDropdown.Text = "Search";
 			this.OdooSearchDropdown.Click += new System.EventHandler(this.OdooSearchDropdown_Click);
 			// 
 			// OdooManageTypesDropdown
 			// 
 			this.OdooManageTypesDropdown.Name = "OdooManageTypesDropdown";
-			this.OdooManageTypesDropdown.Size = new System.Drawing.Size(170, 22);
+			this.OdooManageTypesDropdown.Size = new System.Drawing.Size(180, 22);
 			this.OdooManageTypesDropdown.Text = "Manage File Types";
 			this.OdooManageTypesDropdown.Click += new System.EventHandler(this.OdooManageTypesDropdown_Click);
-			// 
-			// localDeleteToolStripMenuItem
-			// 
-			this.localDeleteToolStripMenuItem.Name = "localDeleteToolStripMenuItem";
-			this.localDeleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
-			this.localDeleteToolStripMenuItem.Text = "Local Delete";
-			this.localDeleteToolStripMenuItem.Click += new System.EventHandler(this.localDeleteToolStripMenuItem_Click);
-			// 
-			// localDeleteToolStripMenuItem1
-			// 
-			this.localDeleteToolStripMenuItem1.Name = "localDeleteToolStripMenuItem1";
-			this.localDeleteToolStripMenuItem1.Size = new System.Drawing.Size(180, 22);
-			this.localDeleteToolStripMenuItem1.Text = "Local Delete";
-			this.localDeleteToolStripMenuItem1.Click += new System.EventHandler(this.localDeleteToolStripMenuItem1_Click);
 			// 
 			// HackFileManager
 			// 

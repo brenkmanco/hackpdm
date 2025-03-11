@@ -368,7 +368,7 @@ namespace HackPDM
 			}
 			return dict;
         }
-		public async static Task<Hashtable> ConvertHackFile(HackFile hackFile)
+		public async static Task ConvertHackFile(HackFile hackFile)
         {
             Hashtable ht = [];
             
@@ -384,20 +384,22 @@ namespace HackPDM
             HpEntry entry = await HpEntry.CreateNew(hackFile, lastDirectory.ID);
             if (entry == null) throw new Exception($"{HpEntry.GetHpModel()} was unable to create record");
 
-
-			// create an HpVersion that doesn't exist in odoo
-            HpVersion version = await HpVersion.CreateNew(hackFile, entry);
-            if (version == null) throw new Exception( $"{HpVersion.GetHpModel()} was unable to create record" );
-
-            entry.latest_version_id = version.ID;
-            
-			return ht;
+            await CreateNewVersion(hackFile, entry);
         }
         public static string ConvertToOdooFormat(DateTime dt)
         {
             return dt.ToString( "yyyy-MM-dd HH:mm:ss" );
 		}
-    }
+
+		public async static Task CreateNewVersion( HackFile hack, HpEntry entry )
+        {
+            // create an HpVersion that doesn't exist in odoo
+            HpVersion version = await HpVersion.CreateNew(hack, entry);
+            if (version == null) throw new Exception( $"{HpVersion.GetHpModel()} was unable to create record" );
+
+            entry.latest_version_id = version.ID;
+        }
+	}
 
     //
     // All the fields in the classes below correspond to a field name in the odoo module

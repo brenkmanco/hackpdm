@@ -238,6 +238,7 @@ namespace HackPDM
 
 			this.WindowState = FormWindowState.Maximized;
             this.FormClosing += (s, e) => isClosing = true;
+			
 			this.Load += new EventHandler(FormLoaded);
 			this.root = HpBaseModel<HpDirectory>.GetRecordByID(1);
         }
@@ -581,7 +582,7 @@ namespace HackPDM
             SafeInvoke(OdooDirectoryTree, () => OdooDirectoryTree.Refresh());
         }
 		public void RestartTree() => CreateTreeViewBackground();
-		public async void RestartEntries() => await TreeSelectItem(lastSelectedNode);
+		public async void RestartEntries() => SafeInvoke(OdooDirectoryTree, async () => await TreeSelectItem(lastSelectedNode));
 		#endregion
 
 		#region Tree Item Selection
@@ -1285,7 +1286,7 @@ namespace HackPDM
 			Task.WaitAll( tasks.ToArray() );
 			MessageBox.Show( "Completed" );
 			RestartTree();
-			//RestartEntries();
+			RestartEntries();
 		}
 
         /// <summary>background worker to create records within odoo that won't conflict with existing records</summary>
@@ -1301,7 +1302,8 @@ namespace HackPDM
             ValueTuple<HpEntry[], List<HackFile>> Arguments = (ValueTuple<HpEntry[], List<HackFile>>)e.Argument;
             // section for checking if the existing remote file already has a version with the same checksum 
             // or possibly an entry that has a newer version from that which is downloaded locally
-            ConcurrentBag<HpEntry> entries = Arguments.Item1.ConvertToBag();
+            
+			ConcurrentBag<HpEntry> entries = Arguments.Item1.ConvertToBag();
 			ConcurrentSet<HackFile> hackFiles = Arguments.Item2;
             
             
@@ -1316,9 +1318,14 @@ namespace HackPDM
             {
                 OdooDefaults.ConvertHackFile(result).Wait();
             }
-			
+			while (entries.TryTake(out HpEntry entry))
+			{
+				string entry_dir = HpDirectory.ConvertToWindowsPath(entry.HashedValues["directory_complete_name"] as string, false);
+				HackFile hack = HackFile.GetFromPath(Path.Combine(HackDefaults.PWAPathAbsolute, entry_dir, entry.name));
+				OdooDefaults.CreateNewVersion(hack, entry).Wait();
+			}
 			RestartTree();
-			//RestartEntries();
+			RestartEntries();
         }
 
 		// checkout file
@@ -1334,6 +1341,7 @@ namespace HackPDM
 				}
 				await CheckOutEntry( entry );
 			}
+			RestartEntries();
 		}
 
 		// uncheckout file
@@ -1349,6 +1357,7 @@ namespace HackPDM
 				}
 				await UnCheckOutEntry( entry );
 			}
+			RestartEntries();
 		}
 
 		private async void worker_LogicalDelete( object sender, DoWorkEventArgs e )
@@ -1454,16 +1463,27 @@ namespace HackPDM
 
 
                     // check if any of the versions checksums are local
+					HpVersion temp = entryVersions.First();
                     if (HackFile.GetLocalVersion(entryVersions, out HackFile _))
                     {
                         lock (lockObject)
                         {
-                            HpVersion temp = entryVersions.First();
-                            Dialog.AddStatusLine("INFO", $"Remote {temp.name} has local version");
+                            Dialog.AddStatusLine("INFO", $"Remote {temp.name} has matching local version");
                         }
                         
                         return null;
                     }
+					FileInfo file = new(Path.Combine(HackDefaults.PWAPathAbsolute, temp.winPathway, temp.name));
+					if (!file.Exists)
+					{
+						lock (lockObject)
+                        {
+                            Dialog.AddStatusLine("INFO", $"Remote {temp.name} has no local version");
+                        }
+                        
+                        return null;
+					}
+
                     lock (lockObject)
                     {
                         Dialog.AddStatusLine("INFO", $"Able to commit {entryVersions.First().name}");
@@ -1683,7 +1703,8 @@ namespace HackPDM
 			var directory = lastSelectedNode.FullPath;
 
 			List<HackFile> hackFiles = [];
-			IEnumerable<string> files = Directory.EnumerateFiles(Path.Combine(HackDefaults.PWAPathAbsolute, directory.Substring(5)), "*", SearchOption.AllDirectories);
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			IEnumerable<string> files = Directory.EnumerateFiles(pathway, "*", SearchOption.AllDirectories);
 			foreach ( string item in files )
 			{
 				HackFile hack = HackFile.GetFromPath(item, FileOperations.GetRelativePath(item));
@@ -1691,7 +1712,7 @@ namespace HackPDM
 					hackFiles.Add( hack );
 			}
 
-			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
+			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"], insertFields:["directory_complete_name"]);
 
 			object arguments = (entries, hackFiles);
 
@@ -1736,7 +1757,7 @@ namespace HackPDM
 				}
 			}
 
-			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
+			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"], insertFields:["directory_complete_name"]);
 
 			object arguments = (entries, hackFiles);
 
@@ -2268,6 +2289,119 @@ namespace HackPDM
 				UpdateOverlay(e);	
 			}
 		}
+
+		private void permanentDeleteToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+		#if DEBUG
+			Dialog = new StatusDialog();
+
+			var entryItem = OdooEntryList.SelectedItems;
+			var directory = lastSelectedNode.FullPath;
+
+			ArrayList entryIDs = new(entryItem.Count);
+
+			foreach ( ListViewItem item in entryItem )
+			{
+				if ( int.TryParse( item.Text, out int ID ) )
+				{
+					entryIDs.Add( ID );
+				}
+			}
+
+			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
+
+			object arguments = entries;
+			BackgroundWorker worker = new()
+			{
+				WorkerSupportsCancellation = true
+			};
+			//worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler((s, ev) => MessageBox.Show("Finished"));
+			worker.DoWork += new DoWorkEventHandler( worker_PermDelete );
+			worker.RunWorkerAsync( arguments );
+
+			bool blnWorkCanceled = Dialog.ShowStatusDialog("Permanently Delete Files");
+			if ( blnWorkCanceled )
+				worker.CancelAsync();
+		#endif
+		}
+		// tree
+		private void perminentDeleteToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+		#if DEBUG
+			
+		#endif
+		}
+		private void openDirectoryToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			if (Directory.Exists( pathway ) )
+			{
+				Process.Start( "explorer.exe", pathway );
+			}
+		}
+
+		private void OdooCMSTree_Opening( object sender, CancelEventArgs e )
+		{
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			if (Directory.Exists( pathway ) ) 
+			{
+				openDirectoryToolStripMenuItem.Enabled = true;
+				localDeleteToolStripMenuItem.Enabled = true;
+			}
+			else 
+			{
+				openDirectoryToolStripMenuItem.Enabled = false;
+				localDeleteToolStripMenuItem.Enabled = false;
+			}
+		}
+		// tree
+		private void localDeleteToolStripMenuItem_Click( object sender, EventArgs e )
+		{
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			DirectoryInfo directory = new( pathway );
+			if ( directory.Exists ) 
+			{
+				if (MessageBox.Show( $"Are you sure you want to delete this directory and ({directory.EnumerateFiles().Count()}) files inside?", 
+					"Delete Directory", 
+					MessageBoxButtons.YesNoCancel, 
+					MessageBoxIcon.Warning ) == DialogResult.Yes)
+				{
+					directory.Delete( true );
+				}
+			}
+		}
+		// entry
+		private void localDeleteToolStripMenuItem1_Click( object sender, EventArgs e )
+		{
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			DirectoryInfo directory = new( pathway );
+			if ( !directory.Exists ) return;
+
+			var sb = new StringBuilder();
+			var files = new List<FileInfo>();
+
+			OdooEntryList.SelectedItems.Cast<ListViewItem>().ToList().ForEach( item =>
+			{
+				string filepath = Path.Combine(pathway, item.SubItems[ NameConfig["RowName"] ].Text);
+				FileInfo file = new( filepath );
+				if ( file.Exists )
+				{
+					sb.AppendLine( file.FullName );
+					files.Add( file );
+				}
+			} );
+			bool tooMany = files.Count > 10;
+			string message = tooMany ? $"Are you sure you want to delete ({files.Count}) files?" : $"Are you sure you want to delete these files?\nfiles:\n{sb.ToString()}";
+			if (MessageBox.Show( message , 
+					"Delete Directory", 
+					MessageBoxButtons.YesNoCancel, 
+					MessageBoxIcon.Warning ) == DialogResult.Yes)
+			{
+				files.ForEach( f => f.Delete() );
+			}
+			RestartEntries();
+		}
+
 		Point prevOverlayMousePos = new(0, 0);
 		private void StartOverlay(DragEventArgs e)
 		{
@@ -2586,6 +2720,7 @@ namespace HackPDM
 					version.DownloadFile(fileTo.DirectoryName);
 				}
 			}
+			RestartEntries();
 		}
 		private HpVersion DownloadHistory(bool toTemp = false)
 		{
@@ -2624,40 +2759,7 @@ namespace HackPDM
 		// .\HackPDM_CSharp.sln
 
 		// list
-		private void permanentDeleteToolStripMenuItem_Click( object sender, EventArgs e )
-		{
-		#if DEBUG
-			Dialog = new StatusDialog();
 
-			var entryItem = OdooEntryList.SelectedItems;
-			var directory = lastSelectedNode.FullPath;
-
-			ArrayList entryIDs = new(entryItem.Count);
-
-			foreach ( ListViewItem item in entryItem )
-			{
-				if ( int.TryParse( item.Text, out int ID ) )
-				{
-					entryIDs.Add( ID );
-				}
-			}
-
-			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
-
-			object arguments = entries;
-			BackgroundWorker worker = new()
-			{
-				WorkerSupportsCancellation = true
-			};
-			//worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler((s, ev) => MessageBox.Show("Finished"));
-			worker.DoWork += new DoWorkEventHandler( worker_PermDelete );
-			worker.RunWorkerAsync( arguments );
-
-			bool blnWorkCanceled = Dialog.ShowStatusDialog("Permanently Delete Files");
-			if ( blnWorkCanceled )
-				worker.CancelAsync();
-		#endif
-		}
 
 		private void worker_PermDelete( object sender, DoWorkEventArgs e ) 
 		{
@@ -2689,82 +2791,5 @@ namespace HackPDM
 			return OClient.Delete(HpVersion.GetHpModel(), new ArrayList() {new ArrayList(){"id", "in", vIds}});
 		}
 
-		// tree
-		private void perminentDeleteToolStripMenuItem_Click( object sender, EventArgs e )
-		{
-		#if DEBUG
-			
-		#endif
-		}
-		private void openDirectoryToolStripMenuItem_Click( object sender, EventArgs e )
-		{
-			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
-			if (Directory.Exists( pathway ) )
-			{
-				Process.Start( "explorer.exe", pathway );
-			}
-		}
-
-		private void OdooCMSTree_Opening( object sender, CancelEventArgs e )
-		{
-			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
-			if (Directory.Exists( pathway ) ) 
-			{
-				openDirectoryToolStripMenuItem.Enabled = true;
-				localDeleteToolStripMenuItem.Enabled = true;
-			}
-			else 
-			{
-				openDirectoryToolStripMenuItem.Enabled = false;
-				localDeleteToolStripMenuItem.Enabled = false;
-			}
-		}
-		// tree
-		private void localDeleteToolStripMenuItem_Click( object sender, EventArgs e )
-		{
-			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
-			DirectoryInfo directory = new( pathway );
-			if ( directory.Exists ) 
-			{
-				if (MessageBox.Show( $"Are you sure you want to delete this directory and ({directory.EnumerateFiles().Count()}) files inside?", 
-					"Delete Directory", 
-					MessageBoxButtons.YesNoCancel, 
-					MessageBoxIcon.Warning ) == DialogResult.Yes)
-				{
-					directory.Delete( true );
-				}
-			}
-		}
-		// entry
-		private void localDeleteToolStripMenuItem1_Click( object sender, EventArgs e )
-		{
-			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
-			DirectoryInfo directory = new( pathway );
-			if ( !directory.Exists ) return;
-
-			var sb = new StringBuilder();
-			var files = new List<FileInfo>();
-
-			OdooEntryList.SelectedItems.Cast<ListViewItem>().ToList().ForEach( item =>
-			{
-				string filepath = Path.Combine(pathway, item.SubItems[ NameConfig["RowName"] ].Text);
-				FileInfo file = new( filepath );
-				if ( file.Exists )
-				{
-					sb.AppendLine( file.FullName );
-					files.Add( file );
-				}
-			} );
-			bool tooMany = files.Count > 10;
-			string message = tooMany ? $"Are you sure you want to delete ({files.Count}) files?" : $"Are you sure you want to delete these files?\nfiles:\n{sb.ToString()}";
-			if (MessageBox.Show( message , 
-					"Delete Directory", 
-					MessageBoxButtons.YesNoCancel, 
-					MessageBoxIcon.Warning ) == DialogResult.Yes)
-			{
-				files.ForEach( f => f.Delete() );
-			}
-
-		}
 	}
 }

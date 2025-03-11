@@ -233,13 +233,14 @@ namespace HackPDM
         public static HackFile GetFromPath(string path, string directory)
         {
             HackFile hack = GetFromPath(path);
+            if (hack == null) return null;
+
             hack.RelativePath = directory;
             return hack;
         }
         public static HackFile GetFromVersion(HpVersion version)
         {
             if (version.winPathway == null) return null;
-
             HackFile hack = GetFromPath(Path.Combine(HackDefaults.PWAPathAbsolute, version.winPathway, version.name), Path.Combine(HackDefaults.PWAPathRelative, version.winPathway));
             if (hack != null && hack.SHA1Checksum == version.checksum)
             {
@@ -251,7 +252,9 @@ namespace HackPDM
         public static bool GetLocalVersion(in HpVersion version, out HackFile hackFile)
         {
             hackFile = GetFromVersion(version);
-            return IsLocalVersion(version, hackFile);
+            if ( hackFile == null ) return false;
+
+			return IsLocalVersion(version, hackFile);
         }
         public static bool HasLocalVersion(in HackFile hackFile, out HpVersion version)
         {

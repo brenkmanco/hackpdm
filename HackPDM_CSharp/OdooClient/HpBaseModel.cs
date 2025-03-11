@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Data.Entity.Infrastructure;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -17,13 +18,11 @@ using OClient = OdooRpcCs.OdooClient;
 
 namespace HackPDM
 {
-    
-    public abstract class HpBaseModel<T> where T : HpBaseModel<T>, new()
+    public abstract class HpBaseModel
     {
-        // ID of the record in the database
         internal static string[] UsualExcludedFields { get; set; } = [];
 
-        private static readonly Dictionary<Type, string> HpModelDictionary = new()
+        protected static readonly Dictionary<Type, string> HpModelDictionary = new()
         {
             {typeof(HpNode), OdooDefaults.HP_NODE},
             {typeof(HpEntry), OdooDefaults.HP_ENTRY},
@@ -42,20 +41,7 @@ namespace HackPDM
             {typeof(HpUser), OdooDefaults.RES_USERS},
         };
         public int ID { get; internal set; }
-        public readonly static Hashtable EmptyHashtable = new Hashtable();
-        public Hashtable HashedValues { get; internal set; } = EmptyHashtable;
-        public bool IsModifiedRecord
-        {
-            get
-            {
-                if (!IsRecord) return false;
-                bool wasModified = true;
-                if (wasModified) IsRecord = false;
-                return wasModified;
-            }
-        }
-        public bool IsRecord { get; internal set; }
-        public string[] ExcludedFields { get; private set; }
+        // ID of the record in the database
         public string HpModel
         {
             get
@@ -69,18 +55,31 @@ namespace HackPDM
                 HpModelDictionary[type] = value;
             }
         }
-
-
+        public readonly static Hashtable EmptyHashtable = new Hashtable();
+        public bool IsModifiedRecord
+        {
+            get
+            {
+                if (!IsRecord) return false;
+                bool wasModified = true;
+                if (wasModified) IsRecord = false;
+                return wasModified;
+            }
+        }
+        public bool IsRecord { get; internal set; }
+        public Hashtable HashedValues { get; internal set; } = EmptyHashtable;
+        public string[] ExcludedFields { get; internal set; }
+        public string[] InsertFields { get; internal set; }
         public virtual int Create() => Create(false);
         public virtual int Create(bool withEmpty = false)
         {
-            Hashtable ht = ComputeHashtable(true);
+			Hashtable ht = ComputeHashtable(true);
             int tempID = OClient.Create(HpModel, ht, 10000);
 
             if (tempID != 0)
             {
                 ID = tempID;
-                //HashedValues = ht;
+				//HashedValues = ht;
                 if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
                 {
                     HashedValues = new Hashtable();
@@ -99,7 +98,7 @@ namespace HackPDM
             if (tempID != 0)
             {
                 ID = tempID;
-                //HashedValues = ht;
+				//HashedValues = ht;
                 
                 if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
                 {
@@ -110,47 +109,48 @@ namespace HackPDM
             }
             return tempID;
         }
-        public virtual T GetRecord()
+        protected Hashtable ComputeHashtable(bool includeEmpty = true, in string[] excludedFieldNames = null, bool isNew = false)
         {
-            ArrayList list = ComputeArrayList(false);
-            int recordID = (int)OClient.Search(HpModel, list)[0];
-            return GetRecord(recordID);
-        }
-        public virtual T GetRecord(int recordID)
-        {
-            Hashtable ht = (Hashtable)OClient.Read(HpModel, [recordID], GetFields())[0];
-            T model = HashConverter.ConvertToClass<T>(ht);
+            Hashtable ht = [];
+            Type type = GetType();
+            List<string> excludeFields = [];
+            FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
 
-            if (ht != null)
+            foreach (FieldInfo field in fields)
             {
-                model.ID = recordID;
-                //model.HashedValues = ht;
-                if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
+                if (excludedFieldNames != null && excludedFieldNames.Contains(field.Name))
                 {
-                    HashedValues = new Hashtable();
-                    HashedValues.Add("dir_id", value);
+                    excludeFields.Add(field.Name);
+                    continue;
                 }
-                model.IsRecord = true;
-                model.CompleteConstruction();
-            }
+                if (!includeEmpty)
+                {
+                    Type fType = field.FieldType;
+                    bool valueType = fType.IsValueType;
 
-            return model;
+                    object fVal = field.GetValue(this);
+                    if (valueType && Activator.CreateInstance(fType) == fVal) continue;
+                    else if (!valueType && fVal == null) continue;
+                }
+
+                string fieldName = field.Name;
+                object fieldValue = field.GetValue(this);
+
+                if (isNew && fieldValue is DateTime dt)
+                {
+                    string date = OdooDefaults.ConvertToOdooFormat(dt);
+                    fieldValue = date;
+                }
+				ht.Add(fieldName, fieldValue);
+			}
+            if (excludeFields.Count > 0 ) ExcludedFields = excludeFields.ToArray();
+
+            if (!isNew)
+                ht.Add("id", ID);
+
+            return ht;
         }
-        //public virtual ArrayList GetAllFields()
-        //{
-        //    Type type = GetType();
-        //    MethodInfo method = typeof(HpBaseModel<T>).GetMethod("GetFields");
-        //    MethodInfo genericMethod = method.MakeGenericMethod(type);
-        //    return (ArrayList)genericMethod.Invoke(this, parameters: [null, null]);
-        //}
-        public virtual T GetThisRecordsField<T2>(string fieldName) => GetThisRecordsField<T>(fieldName, null);
-        public virtual T2 GetThisRecordsField<T2>(string fieldName, in string[] excludedFieldNames = null)
-        {
-            ArrayList list = ComputeArrayList(false, in excludedFieldNames);
-            T2 fieldValue = (T2)OClient.Browse(HpModel, list)[0];
-            return fieldValue;
-        }
-        public virtual bool WriteAll()
+                public virtual bool WriteAll()
         {
             Type type = GetType();
 
@@ -200,25 +200,7 @@ namespace HackPDM
 
 			return await OClient.UpdateAsync( HpModel, ID, ht );
 		}
-        public void Refresh()
-        {
-            Hashtable ht = (Hashtable)OClient.Read(HpModel, [ID], GetFields())?[0];
-
-            if (ht != null)
-            {
-                HashConverter.AssignToClass(ht, this);
-
-                // set record settings
-                //HashedValues = ht;
-                if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
-                {
-                    HashedValues = new Hashtable();
-                    HashedValues.Add("dir_id", value);
-                }
-                IsRecord = true;
-                CompleteConstruction();
-            }
-        }
+        
 
         /// <summary>
         /// To compute any remaining fields that are based off of other field initializations
@@ -249,7 +231,7 @@ namespace HackPDM
             bool wasWritten = OClient.Update(HpModel, ID, ht);
             if (wasWritten)
             {
-                Refresh();
+                //Refresh();
                 Console.WriteLine("record was modified");
             }
             else
@@ -258,7 +240,7 @@ namespace HackPDM
             }
             return wasWritten;
         }
-        private bool WriteInternal(params FieldInfo[] fields)
+        protected bool WriteInternal(params FieldInfo[] fields)
         {
 			Hashtable ht = [];
 			foreach ( FieldInfo field in fields )
@@ -268,48 +250,8 @@ namespace HackPDM
 			return WriteInternal( ht );
 		}
 
-        private Hashtable ComputeHashtable(bool includeEmpty = true, in string[] excludedFieldNames = null, bool isNew = false)
-        {
-            Hashtable ht = [];
-            Type type = GetType();
-            List<string> excludeFields = [];
-            FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
 
-            foreach (FieldInfo field in fields)
-            {
-                if (excludedFieldNames != null && excludedFieldNames.Contains(field.Name))
-                {
-                    excludeFields.Add(field.Name);
-                    continue;
-                }
-                if (!includeEmpty)
-                {
-                    Type fType = field.FieldType;
-                    bool valueType = fType.IsValueType;
-
-                    object fVal = field.GetValue(this);
-                    if (valueType && Activator.CreateInstance(fType) == fVal) continue;
-                    else if (!valueType && fVal == null) continue;
-                }
-
-                string fieldName = field.Name;
-                object fieldValue = field.GetValue(this);
-
-                if (isNew && fieldValue is DateTime dt)
-                {
-                    string date = OdooDefaults.ConvertToOdooFormat(dt);
-                    fieldValue = date;
-                }
-				ht.Add(fieldName, fieldValue);
-			}
-            if (excludeFields.Count > 0 ) ExcludedFields = excludeFields.ToArray();
-
-            if (!isNew)
-                ht.Add("id", ID);
-
-            return ht;
-        }
-        private ArrayList ComputeArrayList(bool includeEmpty, in string[] excludedFieldNames = null)
+        protected ArrayList ComputeArrayList(bool includeEmpty, in string[] excludedFieldNames = null)
         {
             ArrayList al = [];
             Hashtable ht = ComputeHashtable(includeEmpty, in excludedFieldNames);
@@ -320,48 +262,67 @@ namespace HackPDM
 
             return al;
         }
+    }
+    public abstract class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
+    {
+        
+        public virtual T GetRecord()
+        {
+            ArrayList list = ComputeArrayList(false);
+            int recordID = (int)OClient.Search(HpModel, list)[0];
+            return GetRecord(recordID);
+        }
+        public virtual T GetRecord(int recordID)
+        {
+            Hashtable ht = (Hashtable)OClient.Read(HpModel, [recordID], GetFields())[0];
+            T model = HashConverter.ConvertToClass<T>(ht);
+
+            if (ht != null)
+            {
+                model.ID = recordID;
+                //model.HashedValues = ht;
+                if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
+                {
+                    HashedValues = new Hashtable();
+                    HashedValues.Add("dir_id", value);
+                }
+                model.IsRecord = true;
+                model.CompleteConstruction();
+            }
+
+            return model;
+        }
+        //public virtual ArrayList GetAllFields()
+        //{
+        //    Type type = GetType();
+        //    MethodInfo method = typeof(HpBaseModel<T>).GetMethod("GetFields");
+        //    MethodInfo genericMethod = method.MakeGenericMethod(type);
+        //    return (ArrayList)genericMethod.Invoke(this, parameters: [null, null]);
+        //}
+        public virtual T GetThisRecordsField<T2>(string fieldName) => GetThisRecordsField<T>(fieldName, null);
+        public virtual T2 GetThisRecordsField<T2>(string fieldName, in string[] excludedFieldNames = null)
+        {
+            ArrayList list = ComputeArrayList(false, in excludedFieldNames);
+            T2 fieldValue = (T2)OClient.Browse(HpModel, list)[0];
+            return fieldValue;
+        }
+
         // static methods
         // if includedFieldNames is null then automatically add it if it isn't excluded
         // if excludedFieldNames is null then don't exclude unless includedFieldNames is not null and doesn't contain field name
 
-        public static ArrayList GetAllFields() => GetFields();
-        public static ArrayList GetFields(string[] excludedFieldNames = null, string[] includedFieldNames = null)
-        {
-            ArrayList fieldNames = [];
-            Type type = typeof(T);
-            FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
 
-            foreach (FieldInfo field in fields)
-            {
-                bool isExcluded = false, isIncluded = true;
-                if (excludedFieldNames != null) isExcluded = excludedFieldNames.Contains(field.Name);
-                if (includedFieldNames != null) isIncluded = includedFieldNames.Contains(field.Name);
-
-                if (!isExcluded && isIncluded) fieldNames.Add(field.Name);
-            }
-            return fieldNames;
-        }
-        public static object GetFieldValue(int ID, string fieldName)
-        {
-            if (ID == 0) return null;
-
-            ArrayList result = OClient.Read(GetHpModel(), [ID], [fieldName], 10000);
-            Hashtable ht = (Hashtable)result[0];
-
-            if (ht[fieldName] is ArrayList list) return list[0];
-            else return null;
-        }
         internal static T GetRecordByID(int recordID, string[] excludedFields = null)
         {
             T[] records = GetRecordsByIDS([recordID], excludedFields: excludedFields);
-            return records != null && records.Length > 0 ? records[0] : null;
+            return records != null && records.Length > 0 ? records[0] : default;
         }
-        internal static Tother[] GetRelatedRecordByIDS<Tother>(ArrayList recordIDS, string relatedFieldName, string[] excludedFields = null, string[] includedFields = null) where Tother : HpBaseModel<Tother>, new()
+        internal static Tother[] GetRelatedRecordByIDS<Tother>(ArrayList recordIDS, string relatedFieldName, string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null) where Tother : HpBaseModel<Tother>, new()
         {
             string modelName = HpModelDictionary[typeof(T)];
 
             List<Tother> records = [];
-            ArrayList fields = HpBaseModel<Tother>.GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields);
+            ArrayList fields = HpBaseModel<Tother>.GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
             ArrayList result;
 
             result = OClient.RelatedBrowse(modelName, [recordIDS, relatedFieldName, fields], 60000);
@@ -389,12 +350,12 @@ namespace HackPDM
             }
             return [.. records];
         }
-        internal static T[] GetRecordsByIDS(ArrayList recordIDS, ArrayList searchFilters = null, string[] excludedFields = null, string[] includedFields = null)
+        internal static T[] GetRecordsByIDS(ArrayList recordIDS, ArrayList searchFilters = null, string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null)
         {
             string modelName = HpModelDictionary[typeof(T)];
 
             List<T> records = [];
-            ArrayList fields = GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields);
+            ArrayList fields = GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
             ArrayList result;
 
             if (searchFilters == null)
@@ -428,12 +389,12 @@ namespace HackPDM
             }
             return [.. records];
         }
-        internal static T[] GetRecordsBySearch(ArrayList searchFilter = null, string[] excludedFields = null)
+        internal static T[] GetRecordsBySearch(ArrayList searchFilter = null, string[] excludedFields = null, string[] insertFields = null)
         {
             string modelName = HpModelDictionary[typeof(T)];
 
             List<T> records = [];
-            ArrayList fields = GetFields(excludedFieldNames: excludedFields);
+            ArrayList fields = GetFields(excludedFieldNames: excludedFields, insertFieldNames: insertFields);
             ArrayList result;
 
             if (searchFilter == null)
@@ -466,12 +427,12 @@ namespace HackPDM
             }
             return [.. records];
         }
-        internal static T[] GetAllRecords(string[] excludedFields = null)
+        internal static T[] GetAllRecords(string[] excludedFields = null, string[] insertFields = null)
         {
             string modelName = HpModelDictionary[typeof(T)];
 
             List<T> records = [];
-            ArrayList fields = GetFields(excludedFieldNames: excludedFields);
+            ArrayList fields = GetFields(excludedFieldNames: excludedFields, insertFieldNames: insertFields);
             
             ArrayList result = OClient.Browse(modelName, [new ArrayList(), fields], 10000);
             
@@ -498,7 +459,16 @@ namespace HackPDM
             }
             return [.. records];
         }
+        public static object GetFieldValue(int ID, string fieldName)
+        {
+            if (ID == 0) return null;
 
+            ArrayList result = OClient.Read(GetHpModel(), [ID], [fieldName], 10000);
+            Hashtable ht = (Hashtable)result[0];
+
+            if (ht[fieldName] is ArrayList list) return list[0];
+            else return null;
+        }
         private static ArrayList SearchParams(ArrayList values, string fieldName)
         {
             ArrayList arr = [];
@@ -527,12 +497,56 @@ namespace HackPDM
 			return new T();
 		}
         
+        public static ArrayList GetAllFields() => GetFields();
+        public static ArrayList GetFields(string[] excludedFieldNames = null, string[] includedFieldNames = null, string[] insertFieldNames = null)
+        {
+            ArrayList fieldNames = [];
+            Type type = typeof(T);
+            FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+
+            foreach (FieldInfo field in fields)
+            {
+                bool isExcluded = false, isIncluded = true;
+                if (excludedFieldNames != null) isExcluded = excludedFieldNames.Contains(field.Name);
+                if (includedFieldNames != null) isIncluded = includedFieldNames.Contains(field.Name);
+                if (!isExcluded && isIncluded) fieldNames.Add(field.Name);
+            }
+            if (insertFieldNames != null )
+			{
+				foreach ( string field in insertFieldNames )
+				{
+					if ( !fieldNames.Contains( field ) )
+						fieldNames.Add( field );
+				}
+			}
+			return fieldNames;
+        }
+        public void Refresh()
+        {
+            Hashtable ht = (Hashtable)OClient.Read(HpModel, [ID], GetFields())?[0];
+
+            if (ht != null)
+            {
+                HashConverter.AssignToClass(ht, this);
+
+                // set record settings
+                //HashedValues = ht;
+                if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
+                {
+                    HashedValues = new Hashtable
+					{
+						{ "dir_id", value }
+					};
+                }
+                IsRecord = true;
+                CompleteConstruction();
+            }
+        }
         // getter setter
         internal static void SetHpModel(string value)
             => HpModelDictionary[typeof(T)] = value;
         internal static string GetHpModel()
             => HpModelDictionary.TryGetValue(typeof(T), out string value) ? value : null;
-
         public override string ToString()
         {
             return ID.ToString();

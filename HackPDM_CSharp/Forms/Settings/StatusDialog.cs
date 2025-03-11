@@ -86,8 +86,7 @@ namespace HackPDM
             InitializeComponent();
         }
         
-        private StatusDialog(string TitleText) {
-            InitializeComponent();
+        private StatusDialog(string TitleText) : this() {
             this.Text = TitleText;
         }
         

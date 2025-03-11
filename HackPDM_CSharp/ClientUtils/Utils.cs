@@ -479,7 +479,8 @@ namespace HackPDM
     }
     public class HashConverter
     {
-        public static T ConvertToClass<T>(in Hashtable ht, MethodType mType = MethodType.FieldOnly) where T : new()
+        public static T ConvertToClass<T>(in Hashtable ht, MethodType mType = MethodType.FieldOnly) 
+            where T : HpBaseModel, new()
         {
             T obj = new();
             AssignToClass(ht, ref obj, mType);
@@ -487,6 +488,7 @@ namespace HackPDM
         }
         
         public static T AssignToClass<T>(in Hashtable ht, T obj, MethodType mType = MethodType.FieldOnly)
+            where T : HpBaseModel
         {
             Type type = typeof(T);
 
@@ -500,6 +502,10 @@ namespace HackPDM
                         object value = ConvertValue(entry.Value, prop.PropertyType);
                         prop.SetValue(obj, value);
                     }
+                    else
+                    {
+                        obj.HashedValues[entry.Key.ToString()] = entry.Value;
+					}
                 }
                 if (mType == MethodType.FieldOnly || mType == MethodType.PropertyAndField)
                 {
@@ -509,11 +515,16 @@ namespace HackPDM
                         object value = ConvertValue(entry.Value, field.FieldType);
                         field.SetValue(obj, value);
                     }
+                    else
+                    {
+                        obj.HashedValues[entry.Key.ToString()] = entry.Value;
+					}
                 }
             }
             return obj;
         }
         public static void AssignToClass<T>( in Hashtable ht, ref T obj, MethodType mType = MethodType.FieldOnly )
+            where T : HpBaseModel, new()
             => AssignToClass( ht, obj, mType );
         public static Hashtable ConvertToHashtable<T>(T obj, MethodType mType = MethodType.PropertyAndField, bool includeEmpty = true, in string[] excludedFieldNames = null)
         {
