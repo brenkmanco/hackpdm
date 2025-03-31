@@ -306,7 +306,8 @@ namespace HackPDM
             Dictionary<string, string> checkFiles = new(hackFiles.Count());
             foreach (HackFile filePath in hackFiles)
             {
-                if (OdooDefaults.ExtToType.ContainsKey(filePath.TypeExt))
+                //if (OdooDefaults.ExtToType.ContainsKey(filePath.TypeExt))
+                if (!OdooDefaults.ExtToFilter.ContainsKey(filePath.TypeExt))
                 {
                     checkFiles.Add(filePath.FullPath, FileChecksum(filePath.FullPath, SHA1.Create()));
                 }

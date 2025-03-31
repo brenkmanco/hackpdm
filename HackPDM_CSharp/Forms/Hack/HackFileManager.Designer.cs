@@ -795,21 +795,21 @@
 			// OdooRefreshDropdown
 			// 
 			this.OdooRefreshDropdown.Name = "OdooRefreshDropdown";
-			this.OdooRefreshDropdown.Size = new System.Drawing.Size(180, 22);
+			this.OdooRefreshDropdown.Size = new System.Drawing.Size(170, 22);
 			this.OdooRefreshDropdown.Text = "Refresh View";
 			this.OdooRefreshDropdown.Click += new System.EventHandler(this.OdooRefreshDropdown_Click);
 			// 
 			// OdooSearchDropdown
 			// 
 			this.OdooSearchDropdown.Name = "OdooSearchDropdown";
-			this.OdooSearchDropdown.Size = new System.Drawing.Size(180, 22);
+			this.OdooSearchDropdown.Size = new System.Drawing.Size(170, 22);
 			this.OdooSearchDropdown.Text = "Search";
 			this.OdooSearchDropdown.Click += new System.EventHandler(this.OdooSearchDropdown_Click);
 			// 
 			// OdooManageTypesDropdown
 			// 
 			this.OdooManageTypesDropdown.Name = "OdooManageTypesDropdown";
-			this.OdooManageTypesDropdown.Size = new System.Drawing.Size(180, 22);
+			this.OdooManageTypesDropdown.Size = new System.Drawing.Size(170, 22);
 			this.OdooManageTypesDropdown.Text = "Manage File Types";
 			this.OdooManageTypesDropdown.Click += new System.EventHandler(this.OdooManageTypesDropdown_Click);
 			// 

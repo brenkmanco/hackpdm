@@ -315,6 +315,29 @@ namespace HackPDM
 			}
 			set => field = value;
 		}
+        public static Dictionary<string, HpEntryNameFilter> ExtToFilter
+		{
+			get
+			{
+				if ( field == null )
+				{
+					field = ExtensionMapFilter( HpEntryNameFilters );
+				}
+				return field;
+			}
+			set => field = value;
+		}
+
+		private static Dictionary<string, HpEntryNameFilter> ExtensionMapFilter( HpEntryNameFilter [] hpEntryNameFilters )
+        {
+            Dictionary<string, HpEntryNameFilter> dict = [];
+
+            foreach ( HpEntryNameFilter filter in hpEntryNameFilters )
+			{
+				dict.Add( $".{filter.name_proto}", filter );
+			}
+            return dict;
+		}
 
 		private static Dictionary<int, HpUser> IDMapUser( in HpUser[] hpUsers )
         {

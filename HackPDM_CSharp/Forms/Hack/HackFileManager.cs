@@ -650,7 +650,7 @@ namespace HackPDM
 							case string latestChecksum:
 							{
 								if (hack.SHA1Checksum == null) status = "ro";
-								else if (hack.SHA1Checksum == latestChecksum) status = "lm";
+								else if (hack.SHA1Checksum == latestChecksum) status = "ok";
 								else
 								{
 									// either the local version is newer or the remote version is newer
@@ -678,7 +678,10 @@ namespace HackPDM
 				
 				
 				// get or add image key
-				string strKey = $"{type}.{status}";
+
+				string strKey;
+				if (status != "ok")	strKey = $"{type}.{status}";
+				else strKey = type;
 				
 				if ( ilListIcons.Images [ strKey ] == null)
 				{
@@ -694,14 +697,7 @@ namespace HackPDM
 							ms.Write( imgBytes, 0, imgBytes.Length );
 							imgExt = Image.FromStream( ms );
 						}
-						//else
-						//{
-						//	string path = Path.Combine(ExtensionIconPath, $"{type}.png");
-						//	if (File.Exists(path))
-						//	{
-						//		imgExt = Image.FromFile(path);
-						//	}
-						//}
+
 						if (imgExt == null)
 						{
 							imgExt = ilListIcons.Images [ "default" ];
@@ -713,25 +709,24 @@ namespace HackPDM
 					}
 
 					// get status image
-					Image imgStatus = ilListIcons.Images[status];
-					//if ( imgStatus == null )
-					//{
-					//	string path = Path.Combine(StatusIconPath, $"{status}.png");
-					//	if ( File.Exists( path ) )
-					//	{
-					//		imgStatus = Image.FromFile( path );
-					//		ilListIcons.Images.Add( status, imgStatus );
-					//	}
-					//}
 
-					// combine images
-					if (imgExt is not null && imgStatus is not null)
+					if (status == "ok")
 					{
-						ilListIcons.Images.Add(strKey, ImageUtils.ImageOverlay( imgExt, imgStatus ));
+						if (imgExt is null)	strKey = "default";
 					}
 					else
 					{
-						strKey = "default";
+						Image imgStatus = ilListIcons.Images[status];
+
+						// combine images
+						if (imgExt is not null && imgStatus is not null)
+						{
+							ilListIcons.Images.Add(strKey, ImageUtils.ImageOverlay( imgExt, imgStatus ));
+						}
+						else
+						{
+							strKey = "default";
+						}
 					}
 				}
 
@@ -2045,6 +2040,7 @@ namespace HackPDM
 					}
 
 					case "lm":
+					case "ok":
 					case "co":
 					case "ft":
 					case "if":
@@ -2079,6 +2075,7 @@ namespace HackPDM
 					case "ro":
 					case "nv":
 					case "lm":
+					case "ok":
 					case "co":
 					case "ft":
 					case "if":
@@ -2120,6 +2117,7 @@ namespace HackPDM
 				{
 					case "nv":
 					case "lm":
+					case "ok":
 					case "co":
 					case "ft":
 					case "if":
