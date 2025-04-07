@@ -193,3 +193,5 @@ FakesAssemblies/
 /.vs
 /update_publish.ps1
 /HackPDM_CSharp/commit_and_get.ps1
+/HackPDM_CSharp/.vs/HackPDM_CSharp/v17/DocumentLayout.backup.json
+/HackPDM_CSharp/.vs/HackPDM_CSharp/v17/DocumentLayout.json
