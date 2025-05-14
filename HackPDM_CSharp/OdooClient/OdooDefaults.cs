@@ -1090,7 +1090,16 @@ namespace HackPDM
             }
             return false;
         }
+		//public static int []? GetChildren( int id ) => GetRelatedIdsById( [ id ], "child_ids" );
+        public static HpVersion [] GetChildren ( int id )
+        {
+            HpVersionRelationship[] versionRelationships = GetRelatedRecordByIDS<HpVersionRelationship>( [id], "child_ids", includedFields: ["child_id"] );
+            if (versionRelationships is null || versionRelationships.Length == 0) return null;
 
+            ArrayList ids = versionRelationships.Select(vRel => vRel.child_id).ToArrayList();
+            HpVersion[] versions = GetRecordsByIDS(ids, includedFields: ["entry_id"]);
+            return versions;
+        }
 		internal static async Task<HpVersion> CreateNew( HackFile hackFile, HpEntry entry )
         {
 			if ( !OdooDefaults.ExtToType.ContainsKey(hackFile.TypeExt) )

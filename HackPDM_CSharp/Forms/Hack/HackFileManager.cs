@@ -911,11 +911,13 @@ namespace HackPDM
 				if ( versionsRelation.Item1 != null && versionsRelation.Item1.Length > 0 )
 				{
 					// Populating Where Used
+					// HpVersion.SortReverseById(versionsRelation.Item1);
 					PopulateParent( in versionsRelation.Item1 );
 				}
 				if ( versionsRelation.Item2 != null && versionsRelation.Item2.Length > 0 )
 				{
 					// Populating Dependency
+				 	// HpVersion.SortReverseById(versionsRelation.Item2);
 					PopulateChildren( in versionsRelation.Item2 );
 				}
 				if ( versions.Length == 1 )
@@ -1578,7 +1580,7 @@ namespace HackPDM
                     return 0;
                 });
         }
-		private void GetLatestFromTreeNode(bool withSubdirectories = false)
+		private async void GetLatestFromTreeNode(bool withSubdirectories = false)
 		{
 			Dialog = new StatusDialog();
 			object lockObject = new();
@@ -1602,13 +1604,23 @@ namespace HackPDM
 			}
 
 			ArrayList entryIDs = directory.GetDirectoryEntryIDs( withSubdirectories, ShowInactive.Checked );
-			BackgroundWorker worker = new()
+
+
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+            ArrayList newIds = await GetEntryList(entries.Select(e=>e.latest_version_id).ToArray());
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+
+
+
+            BackgroundWorker worker = new()
 			{
 				WorkerSupportsCancellation = true
 			};
 			//worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler((s, ev) => MessageBox.Show("Finished"));
 			worker.DoWork += new DoWorkEventHandler( worker_GetLatestAsync );
-			worker.RunWorkerAsync( entryIDs );
+			worker.RunWorkerAsync( newIds );
 
 			bool blnWorkCanceled = Dialog.ShowStatusDialog("Get Latest");
 			if ( blnWorkCanceled )
@@ -1664,33 +1676,70 @@ namespace HackPDM
 			=> GetLatestStrip_Click(sender, e);
 		private void topDirectoryToolStripMenuItem_Click( object sender, EventArgs e )
 			=> GetLatestFromTreeNode(false);
-		private void GetLatestEntryStrip_Click			( object sender, EventArgs e )
+		private async void GetLatestEntryStrip_Click			( object sender, EventArgs e )
 		{
 			Dialog = new StatusDialog();
 			var entryItem = OdooEntryList.SelectedItems;
 			
-			ArrayList entryIDs = new();
+			//ArrayList entryIDs = new();
+			//HashSet<int> entryIDs = new HashSet<int>();
+			
+			ArrayList entryIDs = new ArrayList();
+			List<HpEntry> entries = new List<HpEntry>();
 
 			foreach ( ListViewItem item in entryItem )
 			{
 				if ( int.TryParse( item.Text, out int ID ) )
 				{
-					entryIDs.Add( ID );
+					//Hashtable ht = await GetEntryList(ID);
+					entryIDs.Add(ID);
+					entries.Add(HpEntry.GetRecordsByIDS([ID], includedFields:["latest_version_id"]).First());
 				}
-				
 			}
+			
+			
+			ArrayList newIds = await GetEntryList(entries.Select(e=>e.latest_version_id).ToArray());
+
+			newIds.AddRange(entryIDs);
+			newIds = newIds.ToHashSet<int>().ToArrayList();
+			
 
 			BackgroundWorker worker = new()
 			{
 				WorkerSupportsCancellation = true
 			};
 			worker.DoWork += new DoWorkEventHandler( worker_GetLatestAsync );
-			worker.RunWorkerAsync( entryIDs );
+			worker.RunWorkerAsync( newIds );
 
 			bool blnWorkCanceled = Dialog.ShowStatusDialog("Get Latest");
 			if ( blnWorkCanceled )
 				worker.CancelAsync();
 		}
+		
+		private async Task RecurseAddDependentIds( HpVersion version, ConcurrentSet<int> entryIDs )
+		{
+			//entryIDs.Add( (int)version.entry_id  );
+			//await Task.Run(async ()=>
+			//{
+			//	HpVersion[] childVersions = HpVersion.GetChildren(version.ID);
+
+			//	if (childVersions is not null) 
+			//	{
+			//		foreach( HpVersion v in childVersions)
+			//		{
+			//			await RecurseAddDependentIds(v, entryIDs);
+			//		}
+			//	}
+			//} );
+
+		}
+
+		private async Task<ArrayList> GetEntryList(int[] entry_ids)
+		{
+			ArrayList arr = await OClient.CommandAsync<ArrayList>(HpVersion.GetHpModel(), "get_recursive_dependency_entries", entry_ids.ToArrayList(), 50000);
+			return arr;
+		}
+
 		private void CommitTreeStrip_Click				( object sender, EventArgs e )
 		{
 			Dialog = new StatusDialog();
@@ -1894,9 +1943,6 @@ namespace HackPDM
 
 		}
 
-		//
-		// TODO: Implement UnDeleting from Entry List
-		//
 		private void unDeleteToolStripMenuItem_Click( object sender, EventArgs e )
 		{
 			

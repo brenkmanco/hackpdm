@@ -350,6 +350,22 @@ namespace HackPDM
             }
             return [.. records];
         }
+        internal static int[]? GetRelatedIdsById(ArrayList recordIDS, string relatedFieldName)
+        {
+            string modelName = HpModelDictionary[typeof(T)];
+
+            ArrayList relatedIds;
+            relatedIds = OClient.RelatedBrowse(modelName, [recordIDS, relatedFieldName, new ArrayList {"id"}], 60000);
+
+            if (relatedIds.Count == 0) return null;
+
+            List<int> ids = new List<int>();
+            foreach (Hashtable ht in relatedIds)
+            {
+                ids.Add((int)ht["id"]);
+            }
+            return ids.ToArray();
+        }
         internal static T[] GetRecordsByIDS(ArrayList recordIDS, ArrayList searchFilters = null, string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null)
         {
             string modelName = HpModelDictionary[typeof(T)];
@@ -426,6 +442,31 @@ namespace HackPDM
                 records.Add(record);
             }
             return [.. records];
+        }
+        internal static void SortById(T[] arr)
+        {
+            Array.Sort(arr, CompareIds);
+        }
+        internal static void SortReverseById(T[] arr)
+        {
+            SortById(arr);
+            arr.Reverse();
+        }
+        private static int CompareIds(T a, T b)
+        {
+            if (a is null)
+            {
+                if (b is null) return 0;
+                else return -1;
+            }
+            else
+            {
+                if (a is null) return 0;
+                else
+                {
+                    return a.ID.CompareTo(b.ID);
+                }
+            }
         }
         internal static T[] GetAllRecords(string[] excludedFields = null, string[] insertFields = null)
         {
@@ -521,6 +562,7 @@ namespace HackPDM
 			}
 			return fieldNames;
         }
+        
         public void Refresh()
         {
             Hashtable ht = (Hashtable)OClient.Read(HpModel, [ID], GetFields())?[0];
@@ -530,7 +572,7 @@ namespace HackPDM
                 HashConverter.AssignToClass(ht, this);
 
                 // set record settings
-                //HashedValues = ht;
+                // HashedValues = ht;
                 if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
                 {
                     HashedValues = new Hashtable
