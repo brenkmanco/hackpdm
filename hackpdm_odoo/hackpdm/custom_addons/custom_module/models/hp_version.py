@@ -7,6 +7,7 @@ import base64
 import logging
 import urllib.parse
 import magic
+import pdb
 
 import sqlalchemy
 from sqlalchemy import MetaData, Table, create_engine, select, update
@@ -182,6 +183,71 @@ class hp_version(models.Model):
                 record.md5sum = attachment.checksum
             else:
                 record.md5sum = False
+
+    @api.model
+    def get_recursive_dependency_entries(self, version_ids):
+        if not version_ids:
+            return []
+        if isinstance(version_ids, int):
+            version_ids = [version_ids]
+        elif not isinstance(version_ids, list):
+            version_ids = list(version_ids)
+
+        # using raw sql for efficient recursive dependency traversal
+        # this query finds all version IDs (initial + children + grandchildren, etc.)
+        query_versions = """
+            WITH RECURSIVE dependency_versions (version_id) AS (
+                SELECT id FROM hp_version WHERE id = ANY(%s) -- start with initial versions
+            UNION -- Use UNION ALL if cycles are impossible or handled; UNION removes duplicates earlier
+                SELECT c.child_id
+                FROM dependency_versions p, hp_version_relationship c
+                JOIN hp_version vc ON vc.id = c.child_id
+                JOIN hp_entry ec ON ec.id = vc.entry_id
+                WHERE c.parent_id = p.version_id AND ec.deleted = false -- Recursively find children of non-deleted entries
+            )
+            SELECT DISTINCT version_id FROM dependency_versions;
+        """
+        try:
+            self.env.cr.execute(query_versions, (version_ids,))
+            version_results = self.env.cr.fetchall()
+            all_dep_version_ids = {row[0] for row in version_results}
+
+            if not all_dep_version_ids:
+                return []
+            # Now get unique entry_ids for these versions using the ORM for simplicity
+            versions = self.env['hp.version'].browse(list(all_dep_version_ids))
+            # '.ids' gives a list of unique IDs
+            entry_ids = versions.mapped('entry_id').ids
+            return entry_ids
+
+        except Exception as e:
+            _logger.error(f"Error fetching recursive dependencies for versions {version_ids}: {e}")
+            return []
+
+    @api.model
+    def get_entries_from_children(self, entryID):
+        entry_ids = set()
+        entry = self.env["hp.entry"].search([('id', '=', entryID)])[0]
+        if entry:
+            return self._iterative_add_entries(entry.latest_version_id)
+        return None
+
+    def _iterative_add_entries(self, version):
+        stack = [version]
+        entry_ids = set()
+
+        while stack:
+            current_version = stack.pop()
+            if current_version.entry_id.id in entry_ids:
+                continue
+
+            entry_ids.add(version.entry_id.id)
+
+            if current_version.child_ids:
+                stack.extend(v.child_id for v in current_version.child_ids)
+        if len(entry_ids) > 0:
+            return entry_ids
+        return None
 
     @api.model
     def _create_attachment(self, file_contents:bytes, field_name:str):
