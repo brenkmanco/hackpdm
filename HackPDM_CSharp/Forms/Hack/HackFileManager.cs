@@ -164,10 +164,13 @@ namespace HackPDM
         private static CancellationTokenSource cSource;
 		private static Image previewImage = null;
 
+		static SWDocMgr docMgr;
+		static SWHelper swHelper;
+		private string swkey;
 
-        // Download Static Variables
-        // set status lines in a queue for StatusDialog.AddStatusLines method
-        private static ConcurrentQueue<string[]> queueAsyncStatus = new();
+		// Download Static Variables
+		// set status lines in a queue for StatusDialog.AddStatusLines method
+		private static ConcurrentQueue<string[]> queueAsyncStatus = new();
 
 		public static int DownloadBatchSize 
         { 
@@ -193,7 +196,7 @@ namespace HackPDM
 		internal bool IsTreeLoaded{ get; set; } = false;
 		internal bool IsListLoaded{ get; set; } = false;
         private bool isClosing = false;
-
+		
 		private static bool IsActive { get; set; } = false;
 		public TreeNode lastSelectedNode { get; set; } = null;
 		public string lastSelectedNodePath {get; set;} = null;
@@ -209,6 +212,10 @@ namespace HackPDM
 		static HackFileManager() {}
         public HackFileManager()
 		{
+			swkey = OdooDefaults.HpSettings.Where( s => s.name == OdooDefaults.SWKeyName ).First().char_value;
+			docMgr = new SWDocMgr( swkey );
+			var arr = docMgr.GetProperties( @"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Designed\Haggis\Frame\Base Weldment\Haggis Frame Jig Battery Plate.SLDPRT" );
+
 			while (OdooDefaults.OdooID == 0)
 			{
 				List<string> errors = new();
@@ -231,7 +238,9 @@ namespace HackPDM
 					return;
 				}
 			}
-            InitializeComponent();
+
+
+			InitializeComponent();
 			previewImage = OdooEntryImage.Image;
 			OdooDirectoryTree.LostFocus += TreeView_LostFocus;
 			ResetListViews();

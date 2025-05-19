@@ -47,5 +47,10 @@ namespace HackPDM
             StatusErrorMessage.ForeColor = Color.Green;
             StatusErrorMessage.Text = "Successfully saved\nnew settings";
         }
-    }
+
+		private void button2_Click( object sender, EventArgs e )
+		{
+
+		}
+	}
 }

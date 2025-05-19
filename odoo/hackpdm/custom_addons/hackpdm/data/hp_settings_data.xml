@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="hp_settings_restrict_properties" model="hp.settings">
+            <field name="name">restrict_properties</field>
+            <field name="description">don't allow unknown properties</field>
+            <field name="type">bool</field>
+            <field name="bool_value" eval="True"/>
+        </record>
+        <record id="hp_settings_restrict_types" model="hp.settings">
+            <field name="name">restrict_types</field>
+            <field name="description">only known file types</field>
+            <field name="type">bool</field>
+            <field name="bool_value" eval="True"/>
+        </record>
+        <record id="hp_settings_client_version" model="hp.settings">
+            <field name="name">client_version</field>
+            <field name="description">hackpdm client version</field>
+            <field name="type">char</field>
+            <field name="char_value">1.0.0.27</field>
+        </record>
+    </data>
+</odoo>

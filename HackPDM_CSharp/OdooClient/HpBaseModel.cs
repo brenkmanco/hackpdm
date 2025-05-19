@@ -37,6 +37,7 @@ namespace HackPDM
             {typeof(HpReleaseVersionRel), OdooDefaults.HP_RELEASE_VERSION_REL},
             {typeof(HpType), OdooDefaults.HP_TYPE},
             {typeof(HpProperty), OdooDefaults.HP_PROPERTY},
+            {typeof(HpSetting), OdooDefaults.HP_SETTINGS},
             {typeof(IrAttachment), OdooDefaults.IR_ATTACHMENT},
             {typeof(HpUser), OdooDefaults.RES_USERS},
         };
