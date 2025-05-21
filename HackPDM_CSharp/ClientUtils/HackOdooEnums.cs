@@ -24,20 +24,5 @@ namespace HackPDM.ClientUtils
         Parent,
         Child,
         Both,
-    }
-    public enum FileSize : byte
-    {
-        B,
-        KB,
-        MB,
-        GB,
-        TB,
-    }
-    public enum CatType : byte
-    {
-        CAD,
-        DOCUMENT,
-    }
-
-    
+    }  
 }

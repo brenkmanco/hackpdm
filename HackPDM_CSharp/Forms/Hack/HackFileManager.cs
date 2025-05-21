@@ -10,8 +10,6 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -252,17 +250,6 @@ namespace HackPDM
 			this.root = HpBaseModel<HpDirectory>.GetRecordByID(1);
         }
 		
-		#if SERVER
-		private HackFileManager(bool withShell = false)
-		{
-			this.root = HpBaseModel<HpDirectory>.GetRecordByID(1);
-		}
-		public static HackFileManager HackServerInitializer(bool withShell = false)
-			=> new HackFileManager(withShell);
-		#endif
-
-
-
 		private void FormLoaded(object sender, EventArgs e)
 		{
 			CreateTreeViewBackground();
@@ -2049,10 +2036,6 @@ namespace HackPDM
 			bool blnWorkCanceled = Dialog.ShowStatusDialog("UnCheckout Files");
 			if ( blnWorkCanceled )
 				worker.CancelAsync();
-		}
-		private void OdooModelViewer_Click				( object sender, EventArgs e )
-		{
-			new OdooViewer().Show();
 		}
 		private void OdooSearchDropdown_Click			( object sender, EventArgs e )
 		{

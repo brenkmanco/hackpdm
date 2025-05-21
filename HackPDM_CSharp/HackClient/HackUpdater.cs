@@ -97,15 +97,5 @@ namespace HackPDM.HackClient
 				}
 			}
 		}
-		private async static Task<Branch> GetBranchRepo(long repositoryID, string repoBranchName)
-		{
-			var ghClient = new GitHubClient(new Octokit.ProductHeaderValue("hackpdm"));
-			return await ghClient.Repository.Branch.Get(repositoryID, repoBranchName);
-		}
-		private static bool IsLatestVersion (Branch branch, Version version)
-		{
-			var latestCommit = branch.Commit.Sha;
-			return false;
-		}
 	}
 }

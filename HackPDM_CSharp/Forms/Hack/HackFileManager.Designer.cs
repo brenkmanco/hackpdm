@@ -744,17 +744,6 @@
 			this.OdooEntryImage.TabIndex = 2;
 			this.OdooEntryImage.TabStop = false;
 			// 
-			// OdooModelViewer
-			// 
-			this.OdooModelViewer.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-			this.OdooModelViewer.Location = new System.Drawing.Point(976, 494);
-			this.OdooModelViewer.Name = "OdooModelViewer";
-			this.OdooModelViewer.Size = new System.Drawing.Size(221, 23);
-			this.OdooModelViewer.TabIndex = 4;
-			this.OdooModelViewer.Text = "Odoo Model Viewer";
-			this.OdooModelViewer.UseVisualStyleBackColor = true;
-			this.OdooModelViewer.Click += new System.EventHandler(this.OdooModelViewer_Click);
-			// 
 			// ShowInactive
 			// 
 			this.ShowInactive.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));

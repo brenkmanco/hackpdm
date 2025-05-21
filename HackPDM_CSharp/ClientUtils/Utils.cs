@@ -98,121 +98,6 @@ namespace HackPDM
                 return ("");
             }
         }
-        public static string GetAbsolutePath(string strLocalFileRoot, string stringPath)
-        {
-            //Get Full path
- //           if (stringPath.Substring(0, 3) == "pwa")
-            if (!System.IO.Path.IsPathRooted(stringPath))
-            {
-                return (strLocalFileRoot + stringPath.Substring(3));
-            }
-            else
-            {
-                // NOTE 1:  This will occur if:
-                //  a) stringPath starts with a drive identifier (e.g., "C:/"), or
-                //  b) stringPath starts with a root folder slash (e.g., "\\").
-                //
-                // NOTE 2:  System.IO.Path.IsPathRooted() does not check if stringPath is an actual path.
-                return(stringPath);
-            }
-        }
-        public static string GetRelativePath(string strLocalFileRoot, string stringPath)
-        {
-            // terminate paths to prevent matching with paths that begin the same as strLocalFileRoot
-            string strRootTest = strLocalFileRoot.ToUpper() + "\\";
-            string strPathTest = (stringPath.EndsWith("\\") ? stringPath + "\\" : stringPath + "\\");
-
-            // only return a value if this path is in strLocalFileRoot
-            if (strPathTest.Length < strRootTest.Length) return "";
-            if (!strPathTest.ToUpper().StartsWith(strRootTest))
-            {
-                return "";
-            }
-
-            // if we get here, this path is in the pwa
-            // get relative tree path
-            string stringParse = "";
-            // replace actual root path with pwa
-            if (stringPath.IndexOf(strLocalFileRoot, 0, StringComparison.CurrentCultureIgnoreCase) != -1)
-            {
-                stringParse = "pwa" + stringPath.Substring(strLocalFileRoot.Length);
-            }
-            return stringParse;
-        }
-        public static string GetShortName(string FullName)
-        {
-            //    return FullName.Substring(FullName.LastIndexOf("\\") + 1);
-            return Utils.GetBaseName(FullName);
-        }
-        //protected string GetFileExt(string strFileName) {
-        //    //Get Name of folder
-        //    string[] strSplit = strFileName.Split('.');
-        //    int _maxIndex = strSplit.Length-1;
-        //    return strSplit[_maxIndex];
-        //}
-        public static string FormatDate(DateTime dtDate)
-        {
-
-            // if file not in local current day light saving time, then add an hour?
-            //if (TimeZone.CurrentTimeZone.IsDaylightSavingTime(dtDate) == false)
-            //{
-            //    dtDate = dtDate.AddHours(1);
-            //}
-
-            // get date and time in short format and return it
-            string stringDate = "";
-            //stringDate = dtDate.ToShortDateString().ToString() + " " + dtDate.ToShortTimeString().ToString();
-            stringDate = dtDate.ToString("yyyy-MM-dd HH:mm:ss");
-            return stringDate;
-
-        }
-        public static string FormatSize(Int64 lSize)
-        {
-            //Format number to KB
-            string stringSize = "";
-            NumberFormatInfo myNfi = new();
-
-            Int64 lKBSize = 0;
-
-            if (lSize < 1024)
-            {
-                if (lSize == 0)
-                {
-                    //zero byte
-                    stringSize = "0";
-                }
-                else
-                {
-                    //less than 1K but not zero byte
-                    stringSize = "1";
-                }
-            }
-            else
-            {
-                //convert to KB
-                lKBSize = lSize / 1024;
-                //format number with default format
-                stringSize = lKBSize.ToString("n", myNfi);
-                //remove decimal
-                stringSize = stringSize.Replace(".00", "");
-            }
-
-            return stringSize + " KB";
-
-        }
-        public static string StringMD5(string FileName)
-        {
-            if (!File.Exists(FileName)) return null;
-            // get local file checksum
-            using (var md5 = MD5.Create())
-            {
-                //using (var stream = File.OpenRead(FileName))
-                using (var stream = File.Open(FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                {
-                    return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
-                }
-            }
-        }
         public static void GetAllFilesInDir(string dirpath, ref List<string> filesfound)
         {
 			try
@@ -261,18 +146,6 @@ namespace HackPDM
             }
             return batchList;
         }
-        public static void MapValues<T, T2>(PropertyInfo property, List<T> source, IEnumerable<T2> mapValues)
-        {
-            int sourceCount = source.Count(), valuesCount = mapValues.Count();
-            List<T2> values = new(mapValues);
-
-            if (sourceCount != valuesCount) return;
-
-            for (int i = 0; i < sourceCount; i++)
-            {
-                property.SetValue(source[i], values[i]);
-            }
-        }
         // give the ArrayList class an extension method that selects
         public static IEnumerable<string> FastSlice(IEnumerable<string> source, int startIndex, string prependText = null, string appendText = null)
         {
@@ -289,25 +162,6 @@ namespace HackPDM
 
                 yield return sb.ToString();
             }
-        }
-        public static string[] FastSlice(string[] source, int startIndex, string prependText = null, string appendText = null)
-        {
-            string[] replace = new string[source.Length];
-            for (int i = 0; i < source.Length; i++)
-            {
-                StringBuilder sb = new();
-
-                // add prepended text
-                if (prependText != null) sb.Append(prependText);
-                // slice
-                sb.Append(source[i].AsSpan().Slice(startIndex).ToString());
-                // add appended text
-                if (appendText != null) sb.Append(appendText);
-
-                replace[i] = sb.ToString();
-            }
-
-            return replace;
         }
         public static ArrayList GetResults(in ArrayList source, string hashKeyName, bool singleValue=false)
         {
@@ -327,31 +181,6 @@ namespace HackPDM
             }
             return results;
         }
-        public static IEnumerable<T> GetResults<T>(ArrayList source, string hashKeyName, bool singleValue = false)
-        {
-            foreach (Hashtable ht in source)
-            {
-                if (ht.ContainsKey(hashKeyName))
-                {
-                    //if (ht[hashKeyName] is ArrayList al)
-                    if (singleValue)
-                        yield return (T)(((ArrayList)ht[hashKeyName])[0]);
-                    else
-                    {
-                        ArrayList result = ((ArrayList)ht[hashKeyName]);
-                        foreach (T item in result)
-                        {
-                            yield return item;
-                        }
-                    }
-                        
-                }
-            }
-        }
-        public static (int, TreeNode) LastValidTreeIndex(in string[] paths, in TreeView treeView)
-        {
-            return RecurseNodePath(treeView.Nodes[0], paths, 0);
-        }
         public static (int, TreeNode) LastValidTreeIndex(in string combinedPath, in string[] paths, in Dictionary<string, TreeNode> nodeMap)
         {
             ReadOnlySpan<char> strArray = combinedPath.AsSpan();
@@ -367,8 +196,6 @@ namespace HackPDM
             }
             return (-1, null);
         }
-
-
 		private static (int, TreeNode) RecurseNodePath(in TreeNode currentNode, string[] nodes, int index)
         {
             if (currentNode == null)
@@ -613,19 +440,6 @@ namespace HackPDM
             if (isEqual) return value;
             
             return Convert.ChangeType(value, targetType);
-        }
-        private static bool IsDerivedFromGenericBase(Type type, Type genericBaseType)
-        {
-            while (type != null && type != typeof(object))
-            {
-                var currentType = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
-                if (currentType == genericBaseType)
-                {
-                    return true;
-                }
-                type = type.BaseType;
-            }
-            return false;
         }
     }
 }

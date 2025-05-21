@@ -2,9 +2,6 @@
 <Project ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <Import Project="packages\EntityFramework.6.5.1\build\EntityFramework.props" Condition="Exists('packages\EntityFramework.6.5.1\build\EntityFramework.props')" />
   <Import Project="packages\SixLabors.ImageSharp.3.1.6\build\SixLabors.ImageSharp.props" Condition="Exists('packages\SixLabors.ImageSharp.3.1.6\build\SixLabors.ImageSharp.props')" />
-  <ItemGroup>
-    <Compile Include="GitInfo.cs" />
-  </ItemGroup>
   <PropertyGroup>
     <ProjectGuid>{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}</ProjectGuid>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -158,7 +155,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'HackServer|x64'">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\x64\HackServer\</OutputPath>
-    <DefineConstants>TRACE;SERVER</DefineConstants>
+    <DefineConstants>TRACE</DefineConstants>
     <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
     <FileAlignment>4096</FileAlignment>
     <DebugType>Full</DebugType>
@@ -189,7 +186,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'GitRelease|x64'">
     <OutputPath>bin\x64\GitRelease\</OutputPath>
-    <DefineConstants>TRACE;GITRELEASE;RELEASE</DefineConstants>
+    <DefineConstants>TRACE</DefineConstants>
     <Optimize>true</Optimize>
     <FileAlignment>4096</FileAlignment>
     <DebugType>None</DebugType>
@@ -212,7 +209,8 @@
     <SignAssembly>false</SignAssembly>
   </PropertyGroup>
   <PropertyGroup>
-    <AssemblyOriginatorKeyFile>HackPDM_CSharp_TemporaryKey.pfx</AssemblyOriginatorKeyFile>
+    <AssemblyOriginatorKeyFile>
+    </AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="CredentialManagement, Version=1.0.2.0, Culture=neutral, processorArchitecture=MSIL">
@@ -433,7 +431,6 @@
     <Compile Include="ClientUtils\ExtMethods.cs" />
     <Compile Include="ClientUtils\ConcurrentSet.cs" />
     <Compile Include="ClientUtils\FileOperations.cs" />
-    <Compile Include="ClientUtils\HackEnums.cs" />
     <Compile Include="ClientUtils\HackOdooEnums.cs" />
     <Compile Include="ClientUtils\ImageUtils.cs" />
     <Compile Include="Forms\Hack\HackSettings.cs">
@@ -442,23 +439,11 @@
     <Compile Include="Forms\Hack\HackSettings.Designer.cs">
       <DependentUpon>HackSettings.cs</DependentUpon>
     </Compile>
-    <Compile Include="Forms\Legacy\FileTypeManager.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Forms\Legacy\FileTypeManager.Designer.cs">
-      <DependentUpon>FileTypeManager.cs</DependentUpon>
-    </Compile>
     <Compile Include="Forms\Odoo\OdooFileTypeManager.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\Odoo\OdooFileTypeManager.Designer.cs">
       <DependentUpon>OdooFileTypeManager.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Forms\Settings\DebugForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Forms\Settings\DebugForm.Designer.cs">
-      <DependentUpon>DebugForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Forms\Settings\SearchOdoo.cs">
       <SubType>Form</SubType>
@@ -469,16 +454,8 @@
     <Compile Include="HackClient\HackDefaults.cs" />
     <Compile Include="HackClient\HackBaseFile.cs" />
     <Compile Include="HackClient\HackUpdater.cs" />
-    <Compile Include="HackClient\Legacy\IconFromFile.cs" />
     <Compile Include="ClientUtils\HackInterfaces.cs" />
     <Compile Include="OdooClient\HpBaseModel.cs" />
-    <Compile Include="HackClient\Legacy\ListViewColumnSorter.cs" />
-    <Compile Include="Forms\Legacy\MainForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Forms\Legacy\MainForm.Designer.cs">
-      <DependentUpon>MainForm.cs</DependentUpon>
-    </Compile>
     <Compile Include="OdooClient\OdooDefaults.cs" />
     <Compile Include="Forms\Hack\HackFileManager.cs">
       <SubType>Form</SubType>
@@ -486,7 +463,6 @@
     <Compile Include="Forms\Hack\HackFileManager.Designer.cs">
       <DependentUpon>HackFileManager.cs</DependentUpon>
     </Compile>
-    <Compile Include="OdooClient\OdooObjects.cs" />
     <Compile Include="OdooClient\OdooRpcCs.cs" />
     <Compile Include="Forms\Odoo\OdooSettings.cs">
       <SubType>Form</SubType>
@@ -494,20 +470,14 @@
     <Compile Include="Forms\Odoo\OdooSettings.Designer.cs">
       <DependentUpon>OdooSettings.cs</DependentUpon>
     </Compile>
-    <Compile Include="Forms\Odoo\OdooViewer.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Forms\Odoo\OdooViewer.Designer.cs">
-      <DependentUpon>OdooViewer.cs</DependentUpon>
-    </Compile>
     <Compile Include="OdooClient\ParameterHelper.cs" />
-    <Compile Include="Forms\Legacy\ProfileManager.cs">
+    <Compile Include="Forms\Settings\ProfileManager.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="Forms\Legacy\ProfileManager.Designer.cs">
+    <Compile Include="Forms\Settings\ProfileManager.Designer.cs">
       <DependentUpon>ProfileManager.cs</DependentUpon>
     </Compile>
-    <Compile Include="HackClient\Legacy\Program.cs" />
+    <Compile Include="Program.cs" />
     <Compile Include="OdooClient\Verify.cs" />
     <Compile Include="OdooClient\XmlRpc\Context.cs" />
     <Compile Include="OdooClient\XmlRpc\Logger.cs" />
@@ -547,41 +517,31 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
       <DependentUpon>UserSettings.settings</DependentUpon>
     </Compile>
-    <Compile Include="HackClient\Legacy\PropertyDataScaffold.cs" />
     <Compile Include="Forms\Legacy\SearchDialog.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\Legacy\SearchDialog.Designer.cs">
       <DependentUpon>SearchDialog.cs</DependentUpon>
     </Compile>
-    <Compile Include="HackClient\Legacy\Settings.cs" />
     <Compile Include="Forms\Settings\StatusSettings.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\Settings\StatusSettings.Designer.cs">
       <DependentUpon>StatusSettings.cs</DependentUpon>
     </Compile>
-    <Compile Include="HackClient\Legacy\SWDocMgr.cs" />
+    <Compile Include="HackClient\SWDocMgr.cs" />
     <Compile Include="Forms\Settings\StatusDialog.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\Settings\StatusDialog.Designer.cs">
       <DependentUpon>StatusDialog.cs</DependentUpon>
     </Compile>
-    <Compile Include="HackClient\Legacy\SWHelper.cs" />
+    <Compile Include="HackClient\SWHelper.cs" />
     <Compile Include="ClientUtils\Utils.cs" />
-    <Compile Include="HackClient\Legacy\WebDAVClient.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Forms\Hack\HackSettings.resx">
       <DependentUpon>HackSettings.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Forms\Legacy\FileTypeManager.resx">
-      <DependentUpon>FileTypeManager.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Forms\Legacy\MainForm.resx">
-      <DependentUpon>MainForm.cs</DependentUpon>
-      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="Forms\Hack\HackFileManager.resx">
       <DependentUpon>HackFileManager.cs</DependentUpon>
@@ -594,14 +554,8 @@
     <EmbeddedResource Include="Forms\Odoo\OdooSettings.resx">
       <DependentUpon>OdooSettings.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Forms\Odoo\OdooViewer.resx">
-      <DependentUpon>OdooViewer.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Forms\Legacy\ProfileManager.resx">
+    <EmbeddedResource Include="Forms\Settings\ProfileManager.resx">
       <DependentUpon>ProfileManager.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Forms\Settings\DebugForm.resx">
-      <DependentUpon>DebugForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Forms\Settings\SearchOdoo.resx">
       <DependentUpon>SearchOdoo.cs</DependentUpon>
@@ -625,7 +579,6 @@
     <None Include="app.config">
       <SubType>Designer</SubType>
     </None>
-    <None Include="HackPDM_CSharp_TemporaryKey.pfx" />
     <None Include="packages.config" />
     <None Include="Properties\AppSettings.settings">
       <Generator>PublicSettingsSingleFileGenerator</Generator>
@@ -657,7 +610,7 @@
     </BootstrapperPackage>
     <BootstrapperPackage Include="Microsoft.NetCore.CoreRuntime.9.0.x86">
       <Visible>False</Visible>
-      <ProductName>.NET Runtime 9.0.2 %28x86%29</ProductName>
+      <ProductName>.NET Runtime 9.0.5 %28x86%29</ProductName>
       <Install>true</Install>
     </BootstrapperPackage>
     <BootstrapperPackage Include="Microsoft.Windows.Installer.3.1">
@@ -669,9 +622,7 @@
   <ItemGroup>
     <Content Include="Resources\delete_image_button.png" />
     <Content Include="hackpdm-icon.ico" />
-    <Content Include="ILLink\ILLink.Descriptors.LibraryBuild.xml" />
     <None Include="Resources\UnknownImage.png" />
-    <Content Include="test.xml" />
   </ItemGroup>
   <ItemGroup>
     <Analyzer Include="packages\MSTest.Analyzers.3.8.2\analyzers\dotnet\cs\MSTest.Analyzers.CodeFixes.dll" />

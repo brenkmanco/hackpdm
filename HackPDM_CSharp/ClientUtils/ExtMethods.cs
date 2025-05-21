@@ -178,64 +178,6 @@ namespace HackPDM.ClientUtils
                 }
             }
         }
-        //public static IEnumerable<string> Split(this string str, string delimiter = " ", StringSplitOptions options = StringSplitOptions.RemoveEmptyEntries)
-        //{
-        //    // "split/this/string"
-        //    if (str.Length < 0)
-        //    {
-        //        throw new ArgumentOutOfRangeException(nameof(str));
-        //    }
-
-        //    if (options < StringSplitOptions.None || options > StringSplitOptions.RemoveEmptyEntries)
-        //    {
-        //        throw new ArgumentException(nameof(options));
-        //    }
-
-        //    ReadOnlyMemory<char> newMem = str.AsMemory();
-
-        //    bool isRunning = true;
-
-        //    while (isRunning)
-        //    {
-        //        string newString;
-        //        string returnString;
-
-        //        for (int i = 0; i < newMem.Length; i++)
-        //        {
-        //            int indexDelimLength = delimiter.Length + i + 1;
-        //            if (indexDelimLength - 1 >= newMem.Length)
-        //            {
-        //                returnString = newMem.ToString();
-        //                if (returnString.HasEndingDelimiter(delimiter))
-        //                {
-        //                    returnString = newMem.Slice(0, newMem.Length - delimiter.Length).ToString();
-        //                }
-                    
-        //                if (options == StringSplitOptions.RemoveEmptyEntries && returnString.IsEmptySpace())
-        //                    break;
-
-        //                yield return returnString;
-                        
-        //                isRunning = false;
-        //                break;
-        //            }
-
-        //            if (delimiter == newMem.Slice(i, delimiter.Length).ToString())
-        //            {
-        //                returnString = newMem.Slice(0, i).ToString();
-        //                newString = newMem.Slice(indexDelimLength - 1, newMem.Length - indexDelimLength + 1).ToString();
-
-        //                newMem = newString.AsMemory();
-
-        //                if (options == StringSplitOptions.RemoveEmptyEntries && returnString.IsEmptySpace())
-        //                    break;
-
-        //                yield return returnString;
-        //                break;
-        //            }
-        //        }
-        //    }
-        //}
         public static Tarray Split<Tarray>(this string str, string delimiter = " ", StringSplitOptions options = StringSplitOptions.RemoveEmptyEntries)
             where Tarray : IList, new()
         {
@@ -246,17 +188,6 @@ namespace HackPDM.ClientUtils
                 tarray.Add(s);
             }
             return tarray;
-        }
-        private static bool HasEndingDelimiter(this string str, in string delimiter)
-        {
-            if (delimiter.Length > str.Length) return false;
-
-            int strOffset = str.Length - delimiter.Length;
-            for (int i = delimiter.Length - 1; i >= 0; i--)
-            {
-                if (str[i + strOffset] != delimiter[i]) return false;
-            }
-            return true;
         }
         public static bool GetFileEndType(this string str, out string extension)
         {
@@ -295,75 +226,6 @@ namespace HackPDM.ClientUtils
             }
             return true;
         }
-        public static List<Hashtable> ScalpWhere(this Hashtable ht, bool fromLeftOver, params Predicate<DictionaryEntry>[] predicates)
-        {
-            List<Hashtable> hashtables = [];
-            foreach (Predicate<DictionaryEntry> predicate in predicates)
-            {
-                Hashtable newHT = [];
-                foreach (DictionaryEntry de in ht)
-                {
-                    if (predicate(de))
-                    {
-                        newHT.Add(de.Key, de.Value);
-                    }
-                }
-                if (fromLeftOver)
-                {
-                    foreach (DictionaryEntry de in newHT)
-                    {
-                        ht.Remove(de.Key);
-                    }
-                }
-                hashtables.Add(newHT);
-            }
-            if (!fromLeftOver)
-            {
-                foreach (Hashtable hash in hashtables)
-                {
-                    foreach (DictionaryEntry de in hash)
-                    {
-                        ht.Remove(de.Key);
-                    }
-                }
-            }
-            return hashtables;
-        }
-        public static Dictionary<string, Hashtable> ScalpWhere(this Hashtable ht, bool fromLeftOver, params (string, Predicate<DictionaryEntry>)[] keyPredicates)
-        {
-            Dictionary<string, Hashtable> hashtables = [];
-            foreach ((string, Predicate<DictionaryEntry>) keyPredicate in keyPredicates)
-            {
-                Hashtable newHT = [];
-                foreach (DictionaryEntry de in ht)
-                {
-                    if (keyPredicate.Item2(de))
-                    {
-                        newHT.Add(de.Key, de.Value);
-                    }
-                }
-                if (fromLeftOver)
-                {
-                    foreach (DictionaryEntry de in newHT)
-                    {
-                        ht.Remove(de.Key);
-                    }
-                }
-                hashtables.Add(keyPredicate.Item1, newHT);
-            }
-            if (!fromLeftOver)
-            {
-                foreach (Hashtable hash in hashtables.Values)
-                {
-                    foreach (DictionaryEntry de in hash)
-                    {
-                        ht.Remove(de.Key);
-                    }
-                }
-            }
-            return hashtables;
-        }
-
         public static bool MoveFile(this FileInfo file, string toPath)
         {
             try

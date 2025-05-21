@@ -22,15 +22,6 @@ namespace HackPDM
     {
         public static string ConvertToBase64(string filePath)
             => Convert.ToBase64String(ReadFileInChunks(filePath));
-        public static string[] ConvertToBase64(params string[] filePaths)
-        {
-            string[] base64Array = new string[filePaths.Length];
-            for (int i = 0; i < filePaths.Length; i++)
-            {
-                base64Array[i] = ConvertToBase64(filePaths[i]);
-            }
-            return base64Array;
-        }
         public static byte[] ConvertFromBase64(string base64String )
 			=> Convert.FromBase64String( base64String );
 		public static bool WriteAllBytes(FileData file)
@@ -114,20 +105,6 @@ namespace HackPDM
             // SHA1 or default
             _                       => SHA1.Create(),
 		};
-        public static HashAlgorithm GetHashAlgorithm<T>() where T : HashAlgorithm
-            => HashAlgorithm.Create(nameof(T));
-		
-        public static bool ContainsSameChecksum(string directoryPath, HashAlgorithm alg, params string[] checksums)
-        {
-            string fileChecksum = FileChecksum(directoryPath, alg);
-            return checksums.Contains(fileChecksum);
-        }
-
-        public static bool ContainsSameChecksum(string directoryPath, HashAlgorithm alg, IEnumerable<string> checksums)
-        {
-            string fileChecksum = FileChecksum(directoryPath, alg);
-            return checksums.Contains(fileChecksum);
-        }
         public static string FileChecksum(string filePath, HashAlgorithm alg)
         {
             string fileChecksum = "";
@@ -204,43 +181,7 @@ namespace HackPDM
 
             return fileInfo.ToHackArray();
         }
-       // public static FileInfo[] FilesInDirectory(
-       //     string path, 
-       //     Hashtable entries, 
-       //     //out Dictionary<string, Hashtable> dividedEntries, 
-       //     SearchOption searchOption = SearchOption.TopDirectoryOnly)
-       // {
-       //     if (!Directory.Exists(path))
-       //     {
-       //         //dividedEntries = null;
-       //         return null;
-       //     }
-       //     string[] filePaths = Directory.EnumerateFiles(path, "*", searchOption).ToArray();
 
-       //     IEnumerable<string> checksums = entries.Select<DictionaryEntry, string>((entry) =>
-       //     {
-       //         Hashtable ht = (Hashtable)entry.Value;
-			    //if (ht["latest_checksum"] is bool) return "";
-       //         return (string)ht["latest_checksum"];
-       //     });
-
-       //     IEnumerable<string> paths = filePaths.Where(filePath => !ContainsSameChecksum(filePath, SHA1.Create(), checksums));
-            
-
-       //     List<FileInfo> fileInfo = new(paths.Count());
-
-       //     foreach (string filePath in paths)
-       //     {
-       //         FileInfo file = new(filePath);
-
-       //         if (file.Exists)
-       //         {
-       //             fileInfo.Add(file);
-       //         }
-       //     }
-
-       //     return fileInfo.ToArray();
-       // }
        public static HackFile[] FilesInDirectory(
             string path, 
             Dictionary<string, Task<HackFile>> hackFileMap, 
@@ -265,22 +206,6 @@ namespace HackPDM
                 }
                 return false;
             }, filePath => new HackFile(filePath)).ToArray();
-            //IEnumerable<string> paths = filePaths.Where(filePath => !ContainsSameChecksum(filePath, SHA1.Create(), checksums));
-            
-
-            //List<FileInfo> fileInfo = new(paths2.Count());
-
-            //foreach (string filePath in paths2)
-            //{
-            //    FileInfo file = new(filePath);
-
-            //    if (file.Exists)
-            //    {
-            //        fileInfo.Add(file);
-            //    }
-            //}
-
-            //return fileInfo.ToArray();
         }
         public static ArrayList FilesNotInOdoo(string[] filePaths)
         {
@@ -367,20 +292,6 @@ namespace HackPDM
 		    string directoryPath = Path.GetDirectoryName(fullPath);
 		    return directoryPath.Substring(HackDefaults.PWAPathAbsolute.Length - HackDefaults.PWAPathRelative.Length);
 	    }
-		public async static IAsyncEnumerable<string> ChecksumsInDirectory(string path)
-        {
-            if (Directory.Exists(path))
-            {
-                IEnumerable<string> filePaths = Directory.EnumerateFiles(path);
-                foreach (string filePath in filePaths)
-                {
-                    Task<string> checksumTask = FileChecksumAsync(filePath, SHA1.Create());
-                    await checksumTask;
-                    yield return checksumTask.Result;
-                }
-            }
-            yield return null;
-        }
 
         public static bool IsFileLocked(FileInfo file)
         {
@@ -409,13 +320,6 @@ namespace HackPDM
             //file is not locked
             return false;
 
-        }
-        public static string GetRelativePath(string basePath, string absolutePath)
-        {
-            Uri baseUri = new(basePath); 
-            Uri absoluteUri = new(absolutePath); 
-            Uri relativeUri = baseUri.MakeRelativeUri(absoluteUri);
-            return Uri.UnescapeDataString(relativeUri.ToString().Replace('/', '\\'));
         }
         public static void OpenFile(string fullpath)
         {
