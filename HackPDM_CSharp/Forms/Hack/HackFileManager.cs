@@ -242,16 +242,6 @@ namespace HackPDM
 			//{
 			//    return;
 			//}
-			List<Tuple<string, string, string, object>> arr = null;
-			try
-			{
-				swkey = OdooDefaults.HpSettings.Where(s => s.name == OdooDefaults.SWKeyName).First().char_value;
-				docMgr = new SWDocMgr(swkey);
-				arr = docMgr.GetProperties(@"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM");
-				var test1 = docMgr.GetDependencies(@"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM");
-				var test2 = test1.Select(item => (item[0], HpDirectory.WindowsToOdooPath(item[1], true)));
-			}
-			catch { }
 
             InitializeComponent();
 			previewImage = OdooEntryImage.Image;
@@ -1286,12 +1276,13 @@ namespace HackPDM
 			processCounter = 0;
 			List<Task> tasks = [];
 
-			foreach ( List<HpVersion> batch in versionBatches )
-				tasks.Add( ProcessVersionBatchAsync( batch ) );
+			foreach (List<HpVersion> batch in versionBatches)
+				await ProcessVersionBatchAsync(batch);
+				//tasks.Add( ProcessVersionBatchAsync( batch ) );
 
-			await Task.WhenAll( tasks );
+			//await Task.WhenAll( tasks );
 			// ensure that it does not move on until all files requested are downloaded
-			Task.WaitAll( tasks.ToArray() );
+			//Task.WaitAll( tasks.ToArray() );
 			MessageBox.Show( "Completed" );
 			RestartTree();
 			RestartEntries();
@@ -1747,7 +1738,7 @@ namespace HackPDM
 		
 		private async Task<ArrayList> GetEntryList(int[] entry_ids)
 		{
-			ArrayList arr = await OClient.CommandAsync<ArrayList>(HpVersion.GetHpModel(), "get_recursive_dependency_entries", entry_ids.ToArrayList(), 50000);
+			ArrayList arr = await OClient.CommandAsync<ArrayList>(HpVersion.GetHpModel(), "get_recursive_dependency_entries", [entry_ids.ToArrayList()], 50000);
 			return arr;
 		}
 
