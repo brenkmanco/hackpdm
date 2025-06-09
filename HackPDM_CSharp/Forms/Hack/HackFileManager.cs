@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Data;
 using System.Data.Entity.Core.Common.CommandTrees.ExpressionBuilder;
@@ -18,6 +19,7 @@ using System.Windows.Forms;
 using HackPDM.ClientUtils;
 using HackPDM.Forms.Odoo;
 using HackPDM.Forms.Settings;
+using HackPDM.HackClient;
 
 using OClient = OdooRpcCs.OdooClient;
 
@@ -210,10 +212,6 @@ namespace HackPDM
 		static HackFileManager() {}
         public HackFileManager()
 		{
-			swkey = OdooDefaults.HpSettings.Where( s => s.name == OdooDefaults.SWKeyName ).First().char_value;
-			docMgr = new SWDocMgr( swkey );
-			var arr = docMgr.GetProperties( @"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Designed\Haggis\Frame\Base Weldment\Haggis Frame Jig Battery Plate.SLDPRT" );
-
 			while (OdooDefaults.OdooID == 0)
 			{
 				List<string> errors = new();
@@ -236,9 +234,26 @@ namespace HackPDM
 					return;
 				}
 			}
+			//try
+			//{
+			//    HackUpdater.EnsureUpdated();
+			//}
+			//catch
+			//{
+			//    return;
+			//}
+			List<Tuple<string, string, string, object>> arr = null;
+			try
+			{
+				swkey = OdooDefaults.HpSettings.Where(s => s.name == OdooDefaults.SWKeyName).First().char_value;
+				docMgr = new SWDocMgr(swkey);
+				arr = docMgr.GetProperties(@"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM");
+				var test1 = docMgr.GetDependencies(@"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM");
+				var test2 = test1.Select(item => (item[0], HpDirectory.WindowsToOdooPath(item[1], true)));
+			}
+			catch { }
 
-
-			InitializeComponent();
+            InitializeComponent();
 			previewImage = OdooEntryImage.Image;
 			OdooDirectoryTree.LostFocus += TreeView_LostFocus;
 			ResetListViews();
@@ -1306,17 +1321,22 @@ namespace HackPDM
             // section for checking if hack files have a checksum that matches the fullpath
             hackFiles = await FilterCommitHackFiles(hackFiles);
 
-
+			List<HpVersion> versions = new(entries.Count() + hackFiles.Count());
             while (hackFiles.TryTake(out HackFile result))
             {
-                OdooDefaults.ConvertHackFile(result).Wait();
+				HpVersion newVersion = await OdooDefaults.ConvertHackFile(result);
+				versions.Add(newVersion);
             }
 			while (entries.TryTake(out HpEntry entry))
 			{
 				string entry_dir = HpDirectory.ConvertToWindowsPath(entry.HashedValues["directory_complete_name"] as string, false);
 				HackFile hack = HackFile.GetFromPath(Path.Combine(HackDefaults.PWAPathAbsolute, entry_dir, entry.name));
-				OdooDefaults.CreateNewVersion(hack, entry).Wait();
+				HpVersion newVersion = await OdooDefaults.CreateNewVersion(hack, entry);
+				versions.Add(newVersion);
 			}
+
+			// create new parent, child hp_version_relationship's for versions
+
 			RestartTree();
 			RestartEntries();
         }
@@ -1352,8 +1372,28 @@ namespace HackPDM
 			}
 			RestartEntries();
 		}
+        private void worker_PermDelete(object sender, DoWorkEventArgs e)
+        {
+            HpEntry[] entries = e.Argument as HpEntry[];
+            ArrayList ids = entries.Select(e => e.ID).ToArrayList();
 
-		private async void worker_LogicalDelete( object sender, DoWorkEventArgs e )
+            // first delete all versions associated with entry
+            bool vDeleted = DeleteVersions(ids);
+            if (!vDeleted)
+            {
+                MessageBox.Show("Was unable to delete versions", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
+                return;
+            }
+
+            // second delete the entry
+            bool eDeleted = DeleteEntry(ids);
+            if (!eDeleted)
+            {
+                MessageBox.Show("Able to delete versions but was unable to delete entries", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
+                return;
+            }
+        }
+        private async void worker_LogicalDelete( object sender, DoWorkEventArgs e )
 		{
 			HpEntry[] entries = (HpEntry[])e.Argument;
 			object lockObject = new();
@@ -1379,8 +1419,6 @@ namespace HackPDM
 				await entry.LogicalUnDelete();
 			}
 		}
-
-		// list item select
 		private async void worker_ListItemChange(object sender, DoWorkEventArgs e)
         {
 			try
@@ -1601,14 +1639,11 @@ namespace HackPDM
 
 			ArrayList entryIDs = directory.GetDirectoryEntryIDs( withSubdirectories, ShowInactive.Checked );
 
-
             HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
             ArrayList newIds = await GetEntryList(entries.Select(e=>e.latest_version_id).ToArray());
 
             newIds.AddRange(entryIDs);
             newIds = newIds.ToHashSet<int>().ToArrayList();
-
-
 
             BackgroundWorker worker = new()
 			{
@@ -1681,7 +1716,6 @@ namespace HackPDM
 			//HashSet<int> entryIDs = new HashSet<int>();
 			
 			ArrayList entryIDs = new ArrayList();
-			List<HpEntry> entries = new List<HpEntry>();
 
 			foreach ( ListViewItem item in entryItem )
 			{
@@ -1689,16 +1723,15 @@ namespace HackPDM
 				{
 					//Hashtable ht = await GetEntryList(ID);
 					entryIDs.Add(ID);
-					entries.Add(HpEntry.GetRecordsByIDS([ID], includedFields:["latest_version_id"]).First());
 				}
 			}
-			
-			
-			ArrayList newIds = await GetEntryList(entries.Select(e=>e.latest_version_id).ToArray());
+
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+
+            ArrayList newIds = await GetEntryList(entries.Select(e=>e.latest_version_id).ToArray());
 
 			newIds.AddRange(entryIDs);
 			newIds = newIds.ToHashSet<int>().ToArrayList();
-			
 
 			BackgroundWorker worker = new()
 			{
@@ -1712,31 +1745,13 @@ namespace HackPDM
 				worker.CancelAsync();
 		}
 		
-		private async Task RecurseAddDependentIds( HpVersion version, ConcurrentSet<int> entryIDs )
-		{
-			//entryIDs.Add( (int)version.entry_id  );
-			//await Task.Run(async ()=>
-			//{
-			//	HpVersion[] childVersions = HpVersion.GetChildren(version.ID);
-
-			//	if (childVersions is not null) 
-			//	{
-			//		foreach( HpVersion v in childVersions)
-			//		{
-			//			await RecurseAddDependentIds(v, entryIDs);
-			//		}
-			//	}
-			//} );
-
-		}
-
 		private async Task<ArrayList> GetEntryList(int[] entry_ids)
 		{
 			ArrayList arr = await OClient.CommandAsync<ArrayList>(HpVersion.GetHpModel(), "get_recursive_dependency_entries", entry_ids.ToArrayList(), 50000);
 			return arr;
 		}
 
-		private void CommitTreeStrip_Click				( object sender, EventArgs e )
+		private async void CommitTreeStrip_Click				( object sender, EventArgs e )
 		{
 			Dialog = new StatusDialog();
 			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)lastSelectedNode.Tag, true);
@@ -1744,7 +1759,32 @@ namespace HackPDM
 
 			List<HackFile> hackFiles = [];
 			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
-			IEnumerable<string> files = Directory.EnumerateFiles(pathway, "*", SearchOption.AllDirectories);
+
+			// get all files in folder path to commit.
+			string[] files = Directory.EnumerateFiles(pathway, "*", SearchOption.AllDirectories).ToArray();
+			List<string> newFiles = [.. files];
+			
+			
+			foreach ( string file in files )
+			{
+				var fInfo = new FileInfo(file);
+				if (OdooDefaults.dependentExt.Contains(fInfo.Extension))
+				{
+					var dependencies = docMgr.GetDependencies(file);
+					if (dependencies is not null && dependencies.Count > 0)
+					{
+                        foreach (string[] deps in dependencies)
+						{
+							string path = deps[1];
+							var splitPath = path.Split(["\\pwa\\"], StringSplitOptions.RemoveEmptyEntries);
+							if (splitPath.Length == 2)
+							{
+								newFiles.Add(string.Join("\\", [HackDefaults.PWAPathAbsolute, splitPath[1]]));
+							}
+						}
+					}
+				}
+			}
 			foreach ( string item in files )
 			{
 				HackFile hack = HackFile.GetFromPath(item, FileOperations.GetRelativePath(item));
@@ -1752,9 +1792,15 @@ namespace HackPDM
 					hackFiles.Add( hack );
 			}
 
-			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"], insertFields:["directory_complete_name"]);
+			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
 
-			object arguments = (entries, hackFiles);
+            ArrayList newIds = await GetEntryList(entries.Select(e => e.latest_version_id).ToArray());
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+            HpEntry[] allEntries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"], insertFields: ["directory_complete_name"]);
+
+            object arguments = (allEntries, hackFiles);
 
 			BackgroundWorker worker = new()
 			{
@@ -1768,7 +1814,7 @@ namespace HackPDM
 			if ( blnWorkCanceled )
 				worker.CancelAsync();
 		}
-		private void CommitEntryStrip_Click				( object sender, EventArgs e )
+		private async void CommitEntryStrip_Click				( object sender, EventArgs e )
 		{
 			Dialog = new StatusDialog();
 
@@ -1789,17 +1835,48 @@ namespace HackPDM
 				{
 					if ( item.Text == "-" )
 					{
-						//hackFile.Add()
-						HackFile hack = HackFile.GetFromPath(item.SubItems[FullNameColumnIndex].Text, directory);
-						if ( hack != null )
-							hackFiles.Add( hack );
+
+						string file = item.SubItems[FullNameColumnIndex].Text;
+                        List<string> newFiles = [file];
+
+                        var fInfo = new FileInfo(file);
+
+                        if (OdooDefaults.dependentExt.Contains(fInfo.Extension))
+                        {
+                            var dependencies = docMgr.GetDependencies(file);
+                            if (dependencies is not null && dependencies.Count > 0)
+                            {
+                                foreach (string[] deps in dependencies)
+                                {
+                                    string path = deps[1];
+                                    var splitPath = path.Split(["\\pwa\\"], StringSplitOptions.RemoveEmptyEntries);
+                                    if (splitPath.Length == 2)
+                                    {
+                                        newFiles.Add(string.Join("\\", [HackDefaults.PWAPathAbsolute, splitPath[1]]));
+                                    }
+                                }
+                            }
+                        }
+                        
+                        foreach (string f in newFiles)
+						{
+							HackFile hack = HackFile.GetFromPath(f, directory);
+							if ( hack != null )
+								hackFiles.Add( hack );
+						}
 					}
 				}
 			}
 
-			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"], insertFields:["directory_complete_name"]);
+			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
 
-			object arguments = (entries, hackFiles);
+            ArrayList newIds = await GetEntryList(entries.Select(e => e.latest_version_id).ToArray());
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+			HpEntry[] allEntries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"], insertFields: ["directory_complete_name"]);
+
+            object arguments = (allEntries, hackFiles);
 
 			BackgroundWorker worker = new()
 			{
@@ -1813,16 +1890,22 @@ namespace HackPDM
 			if ( blnWorkCanceled )
 				worker.CancelAsync();
 		}
-		private void CheckoutTreeStrip_Click			( object sender, EventArgs e )
+		private async void CheckoutTreeStrip_Click			( object sender, EventArgs e )
 		{
 			Dialog = new StatusDialog();
 			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)lastSelectedNode.Tag, true);
+            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
 
-			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
+            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields:["type_id", "cat_id", "checkout_node"]);
 
 
 			// filter out entries that are already checked out
-			entries = FilterCheckoutEntries(entries).ToArray();
+			entries = [.. FilterCheckoutEntries(entries)];
 
 			object arguments = entries;
 
@@ -1838,7 +1921,7 @@ namespace HackPDM
 			if ( blnWorkCanceled )
 				worker.CancelAsync();
 		}
-		private void CheckoutEntryStrip_Click			( object sender, EventArgs e )
+		private async void CheckoutEntryStrip_Click			( object sender, EventArgs e )
 		{
 			var entryItem = OdooEntryList.SelectedItems;
 			var directory = lastSelectedNode.FullPath;
@@ -1860,7 +1943,15 @@ namespace HackPDM
 			}
 
 			if (entryIDs.Count < 1) return;
-			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
+
+            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+
+            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields:["type_id", "cat_id", "checkout_node"]);
 
 			if (entries is null || entries.Length < 1) return;
 			Dialog = new StatusDialog();
@@ -1884,7 +1975,7 @@ namespace HackPDM
 			IsActive = ShowInactive.Checked;
 			await TreeSelectItem( lastSelectedNode );
 		}
-		private void LogicalDeleteEntryStrip_Click		( object sender, EventArgs e )
+		private async void LogicalDeleteEntryStrip_Click		( object sender, EventArgs e )
 		{
 			Dialog = new StatusDialog();
 
@@ -1899,7 +1990,15 @@ namespace HackPDM
 					entryIDs.Add(ID);
 				}
 			}
-			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
+
+            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+
+            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"]);
 
 			object arguments = entries;
 
@@ -1915,13 +2014,20 @@ namespace HackPDM
 			if ( blnWorkCanceled )
 				worker.CancelAsync();
 		}
-		private void LogicalDeleteTreeStrip_Click		( object sender, EventArgs e )
+		private async void LogicalDeleteTreeStrip_Click		( object sender, EventArgs e )
 		{
 			Dialog = new StatusDialog();
 			
 			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)lastSelectedNode.Tag, true);
 
-			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
+            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+
+            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"]);
 
 			object arguments = entries;
 
@@ -1969,12 +2075,19 @@ namespace HackPDM
 				worker.CancelAsync();
 		}
 
-		private void UnCheckoutTreeStrip_Click			( object sender, EventArgs e )
+		private async void UnCheckoutTreeStrip_Click			( object sender, EventArgs e )
 		{
 			Dialog = new StatusDialog();
 			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)lastSelectedNode.Tag, true);
 
-			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
+            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+
+            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"]);
 
 
 			// filter out entries that are already checked out
@@ -1994,7 +2107,7 @@ namespace HackPDM
 			if ( blnWorkCanceled )
 				worker.CancelAsync();
 		}
-		private void UnCheckoutEntryStrip_Click			( object sender, EventArgs e )
+		private async void UnCheckoutEntryStrip_Click			( object sender, EventArgs e )
 		{
 			var entryItem = OdooEntryList.SelectedItems;
 			var directory = lastSelectedNode.FullPath;
@@ -2017,7 +2130,15 @@ namespace HackPDM
 
 			if ( entryIDs.Count < 1 )
 				return;
-			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
+
+            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+
+            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"]);
 
 			if ( entries is null || entries.Length < 1 )
 				return;
@@ -2797,27 +2918,7 @@ namespace HackPDM
 		// list
 
 
-		private void worker_PermDelete( object sender, DoWorkEventArgs e ) 
-		{
-			HpEntry[] entries = e.Argument as HpEntry[];
-			ArrayList ids = entries.Select(e=>e.ID).ToArrayList();
-
-			// first delete all versions associated with entry
-			bool vDeleted = DeleteVersions(ids);
-			if (!vDeleted)
-			{
-				MessageBox.Show("Was unable to delete versions", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
-				return;
-			}
-
-			// second delete the entry
-			bool eDeleted = DeleteEntry(ids);
-			if (!eDeleted)
-			{
-				MessageBox.Show("Able to delete versions but was unable to delete entries", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
-				return;
-			}
-		}
+		
 		private bool DeleteEntry( ArrayList ids )
 			=> OClient.Delete(HpEntry.GetHpModel(), new ArrayList() {new ArrayList(){"id", "in", ids}});
 		private bool DeleteVersions( ArrayList ids )

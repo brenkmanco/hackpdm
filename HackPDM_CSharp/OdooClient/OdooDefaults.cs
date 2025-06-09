@@ -44,6 +44,7 @@ namespace HackPDM
 
         public const string OdooVersionKeyName = "client_version";
         public const string SWKeyName = "swdocmgr_key";
+        public static readonly string[] dependentExt = [".SLDPRT", ".SLDASM", ".SLDDRW"];
         // lock asynchonous operations
         private static readonly object m_lockObject = new();
         public static string OdooDb 
@@ -404,7 +405,7 @@ namespace HackPDM
 			}
 			return dict;
         }
-		public async static Task ConvertHackFile(HackFile hackFile)
+		public async static Task<HpVersion> ConvertHackFile(HackFile hackFile)
         {
             Hashtable ht = [];
             
@@ -412,28 +413,28 @@ namespace HackPDM
             
             // create directories that don't exist in odoo
             HpDirectory[] directories = await HpDirectory.CreateNew(paths);
-            HpDirectory lastDirectory = directories.Last();
-            if (lastDirectory == null) throw new Exception($"{HpDirectory.GetHpModel()} was unable to create record");
 
-            
+
+            HpDirectory lastDirectory = directories.Last() ?? throw new Exception($"{HpDirectory.GetHpModel()} was unable to create record");
             // create an HpEntry that doesn't exist in odoo
-            HpEntry entry = await HpEntry.CreateNew(hackFile, lastDirectory.ID);
-            if (entry == null) throw new Exception($"{HpEntry.GetHpModel()} was unable to create record");
-
-            await CreateNewVersion(hackFile, entry);
+            HpEntry entry = await HpEntry.CreateNew(hackFile, lastDirectory.ID) ?? throw new Exception($"{HpEntry.GetHpModel()} was unable to create record");
+            // create an HpVersion that doesn't exist in odoo
+            HpVersion version = await CreateNewVersion(hackFile, entry) ?? throw new Exception($"{HpVersion.GetHpModel()} was unable to create record");
+            return version;
         }
         public static string ConvertToOdooFormat(DateTime dt)
         {
             return dt.ToString( "yyyy-MM-dd HH:mm:ss" );
 		}
 
-		public async static Task CreateNewVersion( HackFile hack, HpEntry entry )
+		public async static Task<HpVersion> CreateNewVersion( HackFile hack, HpEntry entry )
         {
             // create an HpVersion that doesn't exist in odoo
             HpVersion version = await HpVersion.CreateNew(hack, entry);
             if (version == null) throw new Exception( $"{HpVersion.GetHpModel()} was unable to create record" );
 
             entry.latest_version_id = version.ID;
+            return version;
         }
 	}
 

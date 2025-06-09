@@ -6,7 +6,7 @@
       <Value Profile="(Default)">False</Value>
     </Setting>
     <Setting Name="OdooUrl" Type="System.String" Scope="User">
-      <Value Profile="(Default)">http://10.0.0.52:8069</Value>
+      <Value Profile="(Default)">http://10.0.0.68:8069</Value>
     </Setting>
     <Setting Name="OdooDb" Type="System.String" Scope="User">
       <Value Profile="(Default)">odoopdm</Value>
@@ -89,7 +89,7 @@
       <Value Profile="(Default)">C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp</Value>
     </Setting>
     <Setting Name="OdooAddress" Type="System.String" Scope="User">
-      <Value Profile="(Default)">10.0.0.52</Value>
+      <Value Profile="(Default)">10.0.0.68</Value>
     </Setting>
     <Setting Name="OdooPort" Type="System.String" Scope="User">
       <Value Profile="(Default)">8069</Value>
