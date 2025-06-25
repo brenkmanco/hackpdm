@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -200,7 +201,6 @@ namespace HackPDM
 
             set => field = value;
         }
-
         // low enough number of records to get before
         public static HpSetting [] HpSettings
         {
@@ -212,6 +212,8 @@ namespace HackPDM
             }
             set => field = value;
         }
+        public static string SWApi = HpSettings.First(sett => sett.name == SWKeyName).char_value;
+
         public static HpEntryNameFilter[] HpEntryNameFilters
         {
             get
@@ -410,32 +412,43 @@ namespace HackPDM
             Hashtable ht = [];
             
             ArrayList paths = hackFile.RelativePath.Split<ArrayList>("\\", StringSplitOptions.RemoveEmptyEntries);
-            
-            // create directories that don't exist in odoo
-            HpDirectory[] directories = await HpDirectory.CreateNew(paths);
 
+            try
+            {
+                // create directories that don't exist in odoo
+                HpDirectory[] directories = await HpDirectory.CreateNew(paths);
+                HpDirectory lastDirectory = directories.Last() ?? throw new Exception($"{HpDirectory.GetHpModel()} didn't create any records");
+                // create an HpEntry that doesn't exist in odoo
+                HpEntry entry = await HpEntry.CreateNew(hackFile, lastDirectory.ID) ?? throw new Exception($"{HpEntry.GetHpModel()} was unable to create record");
+                // create an HpVersion that doesn't exist in odoo
+                HpVersion version = await CreateNewVersion(hackFile, entry) ?? throw new Exception($"{HpVersion.GetHpModel()} was unable to create record");
+                return version;
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine($"{e.Message}\n{e.StackTrace}");
+            }
+            return null;
+        }
 
-            HpDirectory lastDirectory = directories.Last() ?? throw new Exception($"{HpDirectory.GetHpModel()} was unable to create record");
-            // create an HpEntry that doesn't exist in odoo
-            HpEntry entry = await HpEntry.CreateNew(hackFile, lastDirectory.ID) ?? throw new Exception($"{HpEntry.GetHpModel()} was unable to create record");
-            // create an HpVersion that doesn't exist in odoo
-            HpVersion version = await CreateNewVersion(hackFile, entry) ?? throw new Exception($"{HpVersion.GetHpModel()} was unable to create record");
-            return version;
+		public async static Task<HpVersion> CreateNewVersion( HackFile hack, HpEntry entry )
+        {
+            try { 
+                // create an HpVersion that doesn't exist in odoo
+                HpVersion version = await HpVersion.CreateNew(hack, entry) ?? throw new Exception( $"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}" );
+                entry.latest_version_id = version.ID;
+                return version;
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine($"{e.Message}\n{e.StackTrace}");
+            }
+            return null;
         }
         public static string ConvertToOdooFormat(DateTime dt)
         {
             return dt.ToString( "yyyy-MM-dd HH:mm:ss" );
 		}
-
-		public async static Task<HpVersion> CreateNewVersion( HackFile hack, HpEntry entry )
-        {
-            // create an HpVersion that doesn't exist in odoo
-            HpVersion version = await HpVersion.CreateNew(hack, entry);
-            if (version == null) throw new Exception( $"{HpVersion.GetHpModel()} was unable to create record" );
-
-            entry.latest_version_id = version.ID;
-            return version;
-        }
 	}
 
     //
@@ -869,9 +882,9 @@ namespace HackPDM
         public DateTime? file_modify_stamp;
         public int? attachment_id;
         public int? file_size;
+        public string file_ext;
         public string checksum;
         public string file_contents;
-
         public string fileContentsBase64 { get; private set; }
         public string winPathway { get; internal set; }
         
@@ -890,6 +903,7 @@ namespace HackPDM
             DateTime? file_modify_stamp = null,
             int? attachment_id = null,
             int? file_size = null,
+            string file_ext = null,
             string fileContentsBase64 = null,
             string checksum = null)
         {
@@ -899,6 +913,7 @@ namespace HackPDM
             this.node_id = node_id;
             this.dir_id = dir_id;
             this.file_size = file_size;
+            this.file_ext = file_ext;
             this.attachment_id = attachment_id;
 
             //if (create_stamp == null) this.create_stamp = OdooDefaults.OdooDateFormat(DateTime.Now);
@@ -910,6 +925,7 @@ namespace HackPDM
 
             this.fileContentsBase64 = fileContentsBase64;
             this.checksum = checksum;
+            
             this.winPathway = null;
         }
         internal override void CompleteConstruction()
@@ -1148,34 +1164,45 @@ namespace HackPDM
             HpVersion[] versions = GetRecordsByIDS(ids, includedFields: ["entry_id"]);
             return versions;
         }
-		internal static async Task<HpVersion> CreateNew( HackFile hackFile, HpEntry entry )
+        internal static HpVersion PrepareCreation(HackFile hackFile, HpEntry entry, HashedValueStoring hashStoreType = HashedValueStoring.None)
         {
-			if ( !OdooDefaults.ExtToType.ContainsKey(hackFile.TypeExt) )
-				return null;
+            if (!OdooDefaults.ExtToType.ContainsKey(hackFile.TypeExt))
+                return null;
 
-            string fileBase64 = hackFile.fileContents != null 
-            ? Convert.ToBase64String(hackFile.fileContents)            
+            string fileBase64 = hackFile.fileContents != null
+            ? Convert.ToBase64String(hackFile.fileContents)
             : FileOperations.ConvertToBase64(hackFile.FullPath);
 
-			HpVersion newVersion = new()
-			{
+            HpVersion newVersion = new()
+            {
                 name = $"{entry.ID}.{hackFile.Name}",
-				dir_id = entry.dir_id,
-				entry_id = entry.ID,
-			};
-            if (fileBase64 != null && fileBase64 != "")
+                dir_id = entry.dir_id,
+                entry_id = entry.ID,
+                winPathway = hackFile.FullPath,
+            };
+            if (fileBase64 is not null and not "")
             {
                 newVersion.file_contents = fileBase64;
             }
-
-
-
+            return newVersion;
+        }
+		internal static async Task<HpVersion> CreateNew( HackFile hackFile, HpEntry entry, HashedValueStoring hashStoreType = HashedValueStoring.None )
+        {
+            HpVersion newVersion = PrepareCreation(hackFile, entry, hashStoreType);
 			await newVersion.CreateAsync( false );
 
-			if ( newVersion.ID == 0 )
-				return null;
-			return newVersion;
-		}
+            if (newVersion.ID == 0) return null;
+
+
+            return newVersion;
+        }
+        internal static async Task<HpVersion[]> CreateAllNew( params (HackFile hackFile, HpEntry entry, HashedValueStoring hashStoreType)[] data)
+        {
+            ArrayList versions = data.Select(d => PrepareCreation(d.hackFile, d.entry, d.hashStoreType)).ToArrayList();
+
+            List<int> ids = await MultiCreateAsync<HpVersion>(versions, false);
+            return null;
+        }
         protected bool ExistsLocally()
         {
             FileInfo fileInfo = new(Path.Combine(this.winPathway, this.name));
@@ -1428,6 +1455,18 @@ namespace HackPDM
         {
             this.parent_id = parent_id;
             this.child_id = child_id;
+        }
+        public static bool Create(params HpVersion[] versions)
+        {
+            ArrayList ids = versions.Select(v => v.ID).ToArrayList();
+            ArrayList versionFields = OClient.Read(HpVersion.GetHpModel(), ids, ["id", "file_ext"]);
+            // HpVersionRelationship
+            foreach (HpVersion version in versions)
+            {
+                List<string[]> dependencies = HackDefaults.docMgr.GetDependencies(version.winPathway);
+
+            }
+            return false;
         }
     }
     public class HpRelease : HpBaseModel<HpRelease>

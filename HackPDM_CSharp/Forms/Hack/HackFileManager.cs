@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Data;
-using System.Data.Entity.Core.Common.CommandTrees.ExpressionBuilder;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -20,6 +19,8 @@ using HackPDM.ClientUtils;
 using HackPDM.Forms.Odoo;
 using HackPDM.Forms.Settings;
 using HackPDM.HackClient;
+
+using OpenMcdf;
 
 using OClient = OdooRpcCs.OdooClient;
 
@@ -164,13 +165,12 @@ namespace HackPDM
         private static CancellationTokenSource cSource;
 		private static Image previewImage = null;
 
-		static SWDocMgr docMgr;
-		static SWHelper swHelper;
+
 		private string swkey;
 
 		// Download Static Variables
 		// set status lines in a queue for StatusDialog.AddStatusLines method
-		private static ConcurrentQueue<string[]> queueAsyncStatus = new();
+		internal static ConcurrentQueue<string[]> queueAsyncStatus = new();
 
 		public static int DownloadBatchSize 
         { 
@@ -192,6 +192,7 @@ namespace HackPDM
         private static int skipCounter = 0;
 		public static int SkipCounter => skipCounter;
 		private static int processCounter = 0;
+		private static int totalProcessed = 0;
         private static int maxCount = 0;
 		internal bool IsTreeLoaded{ get; set; } = false;
 		internal bool IsListLoaded{ get; set; } = false;
@@ -214,7 +215,7 @@ namespace HackPDM
 		{
 			while (OdooDefaults.OdooID == 0)
 			{
-				List<string> errors = new();
+				List<string> errors = [];
 				if (!OClient.CorrectOdooAddress())
 				{
 					errors.Add("invalid odoo address or unreachable host");
@@ -248,6 +249,27 @@ namespace HackPDM
 			OdooDirectoryTree.LostFocus += TreeView_LostFocus;
 			ResetListViews();
 
+			// --------------------------------------
+			// Testing Dependencies
+			// --------------------------------------
+
+			string testingFile = @"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM";
+			ArrayList ids = [190730, 190729, 190728, 190727, 190726, 190725, 190724, 190723, 190722, 190721];
+			HpVersion[] versions = HpVersion.GetRecordsByIDS(ids, excludedFields: ["preview_image", "file_contents"]);
+            
+            // HpVersionRelationship
+            foreach (HpVersion version in versions)
+			{
+				List<string[]> dependencies = HackDefaults.docMgr.GetDependencies(version.winPathway);
+
+			}
+
+			//var depends = docMgr.GetDependencies(testingFile);
+			//Debug.Write(string.Join("\n", depends.Select(d => d[1])));
+
+			// --------------------------------------
+			// 
+			// --------------------------------------
 			this.WindowState = FormWindowState.Maximized;
             this.FormClosing += (s, e) => isClosing = true;
 			
@@ -962,7 +984,7 @@ namespace HackPDM
             }
             return versions;
         }
-        private (ArrayList, ArrayList) GetRelFromVersions(ArrayList versionIDs, relationType relation = relationType.Both)
+        private (ArrayList, ArrayList) GetRelFromVersions(ArrayList versionIDs, RelationType relation = RelationType.Both)
         {
             const string parent = "parent_ids", child = "child_ids";
 
@@ -972,8 +994,8 @@ namespace HackPDM
             ArrayList fields = [];
             switch (relation)
             {
-                case relationType.Parent: fields.Add(parent); break;
-                case relationType.Child: fields.Add(child); break;
+                case RelationType.Parent: fields.Add(parent); break;
+                case RelationType.Child: fields.Add(child); break;
                 default: fields.AddRange(new string[] { parent, child }); break;
             }
 
@@ -984,13 +1006,13 @@ namespace HackPDM
             ArrayList child_ids = Utils.GetResults(in al, child);
             
             // get the HpVersionparent
-            if (relation == relationType.Parent || relation == relationType.Both)
+            if (relation == RelationType.Parent || relation == RelationType.Both)
             {
                 ArrayList temp = OClient.Read(HpVersionRelationship.GetHpModel(), parent_ids, ["parent_id"], 10000);
 
                 versionRel.Item1 = Utils.GetResults(in temp, "parent_id", true);
             }
-            if (relation == relationType.Child || relation == relationType.Both)
+            if (relation == RelationType.Child || relation == RelationType.Both)
             {
                 ArrayList temp = OClient.Read(HpVersionRelationship.GetHpModel(), child_ids, ["child_id"], 10000);
                 versionRel.Item2 = Utils.GetResults(in temp, "child_id", true);
@@ -1269,21 +1291,23 @@ namespace HackPDM
 
 			versions = GetLatestVersions( entryIDs, [ "preview_image", "entry_id", "node_id", "file_modify_stamp", "attachment_id", "file_contents" ] );
 
-			IEnumerable<IEnumerable<HpVersion>> versionBatches = Utils.BatchList(versions, DownloadBatchSize);
+			IEnumerable<List<HpVersion>> versionBatches = Utils.BatchList(versions, DownloadBatchSize);
 
 			maxCount = versions.Length;
 			skipCounter = 0;
 			processCounter = 0;
-			List<Task> tasks = [];
+            //ConcurrentQueue<Task> tasks = new(versionBatches.Select(ProcessVersionBatchAsync));
+            //ConcurrentSet<Task> tasksProcessing = [];
 
-			foreach (List<HpVersion> batch in versionBatches)
-				await ProcessVersionBatchAsync(batch);
-				//tasks.Add( ProcessVersionBatchAsync( batch ) );
+            //while (tasks.TryDequeue(out Task task))
+            //{
+            //	await task;
+            //}
+            foreach (List<HpVersion> batch in versionBatches)
+                await ProcessVersionBatchAsync(batch);
+            //tasks.Add( ProcessVersionBatchAsync( batch ) );
 
-			//await Task.WhenAll( tasks );
-			// ensure that it does not move on until all files requested are downloaded
-			//Task.WaitAll( tasks.ToArray() );
-			MessageBox.Show( "Completed" );
+            MessageBox.Show( "Completed" );
 			RestartTree();
 			RestartEntries();
 		}
@@ -1307,26 +1331,40 @@ namespace HackPDM
             
             
             // testing filter hacks..
-            entries = await FilterCommitEntries(entries);
+			if (entries.Count > 0) 
+				entries = await FilterCommitEntries(entries);
 
             // section for checking if hack files have a checksum that matches the fullpath
-            hackFiles = await FilterCommitHackFiles(hackFiles);
+            if (hackFiles.Count > 0)
+				hackFiles = await FilterCommitHackFiles(hackFiles);
 
 			List<HpVersion> versions = new(entries.Count() + hackFiles.Count());
-            while (hackFiles.TryTake(out HackFile result))
-            {
-				HpVersion newVersion = await OdooDefaults.ConvertHackFile(result);
-				versions.Add(newVersion);
-            }
-			while (entries.TryTake(out HpEntry entry))
+
+			while (hackFiles.TryTake(out HackFile result))
 			{
-				string entry_dir = HpDirectory.ConvertToWindowsPath(entry.HashedValues["directory_complete_name"] as string, false);
-				HackFile hack = HackFile.GetFromPath(Path.Combine(HackDefaults.PWAPathAbsolute, entry_dir, entry.name));
-				HpVersion newVersion = await OdooDefaults.CreateNewVersion(hack, entry);
+				HpVersion newVersion = await OdooDefaults.ConvertHackFile(result);
 				versions.Add(newVersion);
 			}
 
+			var datas = new List<(HackFile, HpEntry, HashedValueStoring)>(entries.Count);
+
+            while (entries.TryTake(out HpEntry entry))
+			{
+				string entry_dir = HpDirectory.ConvertToWindowsPath(entry.HashedValues["directory_complete_name"] as string, false);
+				HackFile hack = HackFile.GetFromPath(Path.Combine(HackDefaults.PWAPathAbsolute, entry_dir, entry.name));
+				datas.Add((hack, entry, HashedValueStoring.None));
+				//HpVersion newVersion = await OdooDefaults.CreateNewVersion(hack, entry);
+				//versions.Add(newVersion);
+			}
+            var versionBatches = Utils.BatchList(datas, DownloadBatchSize);
+
+			foreach (var batch in versionBatches)
+			{
+				versions.AddRange(await HpVersion.CreateAllNew([.. batch]));
+			}
 			// create new parent, child hp_version_relationship's for versions
+			HpVersionRelationship.Create([.. versions]);
+
 
 			RestartTree();
 			RestartEntries();
@@ -1548,62 +1586,113 @@ namespace HackPDM
             ConcurrentBag<HpVersion> processVersions = [];
             ConcurrentBag<int> unprocessedVersions = [];
             List<Task> tasks = [];
+			
 
             foreach (HpVersion version in batchVersions)
             {
-                tasks.Add(
-                    Task.Run(() =>
-                    {
-                        if (version.checksum == null || version.checksum.Length == 0 || version.checksum == "False") 
-						{
-							Interlocked.Increment(ref skipCounter);
-							return null;
-						}
-                        if (FileOperations.SameChecksum(version, ChecksumType.SHA1))
-                        {
-                            //unprocessedVersions.Add(version.ID);
-                            queueAsyncStatus.Enqueue(["INFO", $"Skipping download (Found): {version.name}"]);
-                            Interlocked.Increment(ref skipCounter);
-                            return null;
-                        }
-                        return version;
-                    })
-                    .ContinueWith((task) =>
-                    {
-                        if (task.Result == null) return;
-
-                        string fileName = Path.Combine(task.Result.winPathway, task.Result.name);
-                        processVersions.Add(task.Result);
-
-                        queueAsyncStatus.Enqueue(["INFO", $"Downloading missing latest file: {fileName}"]);
-                        Interlocked.Increment(ref processCounter);
-                    })
-                    .ContinueWith((task2) =>
-                    {
-                        lock (lockObject)
-                        {
-                            if (SkipCounter % 100 == 0 || SkipCounter == maxCount)
-                            {
-                                Dialog.AddStatusLines(queueAsyncStatus);
-                            }
-                            Dialog.SetProgressBar(skipCounter + processCounter, maxCount);
-                        }
-                    })
-                );
-            }
-            // when all the tasks are completed for checking checksums start another task 
-            // that then batch downloads those files to the correct folders.
-            await Task.WhenAll(tasks)
-                .ContinueWith(async (task) =>
+                bool willProcess = true;
+                
+                // ==============================================================
+				// check to see if the version has a checksum and if it is the
+				// same as the one locally; if not don't download
+                // ==============================================================
+                if (version.checksum == null || version.checksum.Length == 0 || version.checksum == "False")
                 {
-                    if (processVersions.Count > 0)
-                    {
-                        Task<int[]> finishSuccesses = Task.WhenAll(HpVersion.BatchDownloadFiles(processVersions.ToList()));
-                        await finishSuccesses;
-                        return finishSuccesses.Result[0];
-                    }
-                    return 0;
-                });
+                    skipCounter++;
+					willProcess = false;
+                }
+                if (willProcess && FileOperations.SameChecksum(version, ChecksumType.SHA1))
+                {
+
+                    //unprocessedVersions.Add(version.ID);
+                    queueAsyncStatus.Enqueue(["INFO", $"Skipping download (Found): {version.name}"]);
+					skipCounter++;
+					willProcess = false;
+                }
+                // ==============================================================
+				
+                // ==============================================================
+                if (willProcess)
+				{
+					string fileName = Path.Combine(version.winPathway, version.name);
+					processVersions.Add(version);
+
+					queueAsyncStatus.Enqueue(["INFO", $"Downloading missing latest file: {fileName}"]);
+					processCounter++;
+				}
+				totalProcessed = SkipCounter + processCounter;
+                if (totalProcessed % 25 == 0 || totalProcessed >= maxCount)
+                {
+                    Dialog.AddStatusLines(queueAsyncStatus);
+                }
+                Dialog.SetProgressBar(skipCounter + processCounter, maxCount);
+
+
+      //          tasks.Add(
+      //              Task.Run(() =>
+      //              {
+      //                  if (version.checksum == null || version.checksum.Length == 0 || version.checksum == "False") 
+						//{
+						//	Interlocked.Increment(ref skipCounter);
+						//	return null;
+						//}
+      //                  if (FileOperations.SameChecksum(version, ChecksumType.SHA1))
+      //                  {
+      //                      //unprocessedVersions.Add(version.ID);
+      //                      queueAsyncStatus.Enqueue(["INFO", $"Skipping download (Found): {version.name}"]);
+      //                      Interlocked.Increment(ref skipCounter);
+      //                      return null;
+      //                  }
+      //                  return version;
+      //              })
+      //              .ContinueWith((task) =>
+      //              {
+      //                  if (task.Result == null) return;
+
+      //                  string fileName = Path.Combine(task.Result.winPathway, task.Result.name);
+      //                  processVersions.Add(task.Result);
+
+      //                  queueAsyncStatus.Enqueue(["INFO", $"Downloading missing latest file: {fileName}"]);
+      //                  Interlocked.Increment(ref processCounter);
+      //              })
+      //              .ContinueWith((task2) =>
+      //              {
+      //                  lock (lockObject)
+      //                  {
+      //                      if (SkipCounter % 100 == 0 || SkipCounter == maxCount)
+      //                      {
+      //                          Dialog.AddStatusLines(queueAsyncStatus);
+      //                      }
+      //                      Dialog.SetProgressBar(skipCounter + processCounter, maxCount);
+      //                  }
+      //              })
+      //          );
+			}
+			
+            await Task.Run(async () =>
+			{
+                if (processVersions.Count > 0)
+                {
+                    Task<int[]> finishSuccesses = Task.WhenAll(HpVersion.BatchDownloadFiles([.. processVersions]));
+                    await finishSuccesses;
+                    return finishSuccesses.Result[0];
+                }
+                return 0;
+            });
+
+			//      // when all the tasks are completed for checking checksums start another task 
+			//      // that then batch downloads those files to the correct folders.
+			//      await Task.WhenAll(tasks)
+			//.ContinueWith(async (task) =>
+			//{
+			//    if (processVersions.Count > 0)
+			//    {
+			//        Task<int[]> finishSuccesses = Task.WhenAll(HpVersion.BatchDownloadFiles(processVersions.ToList()));
+			//        await finishSuccesses;
+			//        return finishSuccesses.Result[0];
+			//    }
+			//    return 0;
+			//});
         }
 		private async void GetLatestFromTreeNode(bool withSubdirectories = false)
 		{
@@ -1706,7 +1795,7 @@ namespace HackPDM
 			//ArrayList entryIDs = new();
 			//HashSet<int> entryIDs = new HashSet<int>();
 			
-			ArrayList entryIDs = new ArrayList();
+			ArrayList entryIDs = new();
 
 			foreach ( ListViewItem item in entryItem )
 			{
@@ -1719,7 +1808,7 @@ namespace HackPDM
 
             HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
 
-            ArrayList newIds = await GetEntryList(entries.Select(e=>e.latest_version_id).ToArray());
+            ArrayList newIds = await GetEntryList([.. entries.Select(e=>e.latest_version_id)]);
 
 			newIds.AddRange(entryIDs);
 			newIds = newIds.ToHashSet<int>().ToArrayList();
@@ -1745,6 +1834,7 @@ namespace HackPDM
 		private async void CommitTreeStrip_Click				( object sender, EventArgs e )
 		{
 			Dialog = new StatusDialog();
+			
 			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)lastSelectedNode.Tag, true);
 			var directory = lastSelectedNode.FullPath;
 
@@ -1761,7 +1851,7 @@ namespace HackPDM
 				var fInfo = new FileInfo(file);
 				if (OdooDefaults.dependentExt.Contains(fInfo.Extension))
 				{
-					var dependencies = docMgr.GetDependencies(file);
+					var dependencies = HackDefaults.docMgr.GetDependencies(file);
 					if (dependencies is not null && dependencies.Count > 0)
 					{
                         foreach (string[] deps in dependencies)
@@ -1770,7 +1860,7 @@ namespace HackPDM
 							var splitPath = path.Split(["\\pwa\\"], StringSplitOptions.RemoveEmptyEntries);
 							if (splitPath.Length == 2)
 							{
-								newFiles.Add(string.Join("\\", [HackDefaults.PWAPathAbsolute, splitPath[1]]));
+								newFiles.Add(Path.Combine([HackDefaults.PWAPathAbsolute, splitPath[1]]));
 							}
 						}
 					}
@@ -1785,7 +1875,7 @@ namespace HackPDM
 
 			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
 
-            ArrayList newIds = await GetEntryList(entries.Select(e => e.latest_version_id).ToArray());
+            ArrayList newIds = await GetEntryList([.. entries.Select(e => e.latest_version_id)]);
 
             newIds.AddRange(entryIDs);
             newIds = newIds.ToHashSet<int>().ToArrayList();
@@ -1834,7 +1924,7 @@ namespace HackPDM
 
                         if (OdooDefaults.dependentExt.Contains(fInfo.Extension))
                         {
-                            var dependencies = docMgr.GetDependencies(file);
+                            var dependencies = HackDefaults.docMgr.GetDependencies(file);
                             if (dependencies is not null && dependencies.Count > 0)
                             {
                                 foreach (string[] deps in dependencies)
@@ -1843,7 +1933,7 @@ namespace HackPDM
                                     var splitPath = path.Split(["\\pwa\\"], StringSplitOptions.RemoveEmptyEntries);
                                     if (splitPath.Length == 2)
                                     {
-                                        newFiles.Add(string.Join("\\", [HackDefaults.PWAPathAbsolute, splitPath[1]]));
+                                        newFiles.Add(Path.Combine([HackDefaults.PWAPathAbsolute, splitPath[1]]));
                                     }
                                 }
                             }
@@ -1861,18 +1951,25 @@ namespace HackPDM
 
 			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
 
-            ArrayList newIds = await GetEntryList(entries.Select(e => e.latest_version_id).ToArray());
+			object arguments = null;
+			HpEntry[] allEntries = [];
+            if (entries is not null && entries.Length > 0)
+			{
+				ArrayList newIds = await GetEntryList([.. entries.Select(e => e.latest_version_id)]);
+				newIds.AddRange(entryIDs);
+				newIds = newIds.ToHashSet<int>().ToArrayList();
+				allEntries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"], insertFields: ["directory_complete_name"]);
+			}
+			else
+			{
 
-            newIds.AddRange(entryIDs);
-            newIds = newIds.ToHashSet<int>().ToArrayList();
-			HpEntry[] allEntries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"], insertFields: ["directory_complete_name"]);
-
-            object arguments = (allEntries, hackFiles);
+			}
+			arguments = (allEntries, hackFiles);
 
 			BackgroundWorker worker = new()
-			{
-				WorkerSupportsCancellation = true
-			};
+				{
+					WorkerSupportsCancellation = true
+				};
 			//worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler((s, ev) => MessageBox.Show("Finished"));
 			worker.DoWork += new DoWorkEventHandler( worker_Commit );
 			worker.RunWorkerAsync( arguments );

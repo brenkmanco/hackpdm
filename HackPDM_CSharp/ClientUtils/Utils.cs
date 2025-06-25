@@ -126,7 +126,6 @@ namespace HackPDM
         // [0, 1], [2, 3], [4]
         public static List<List<T>> BatchList<T>(T[] list, int batchSize)
         {
-            
             List<List<T>> batchList = [];
             int listSize = list.Count();
             Span<T> spanList = list.AsSpan();
@@ -146,6 +145,9 @@ namespace HackPDM
             }
             return batchList;
         }
+        public static List<List<T>> BatchList<T>(IEnumerable<T> list, int batchSize)
+            => BatchList<T>(list.ToArray(), batchSize);
+        
         // give the ArrayList class an extension method that selects
         public static IEnumerable<string> FastSlice(IEnumerable<string> source, int startIndex, string prependText = null, string appendText = null)
         {
@@ -242,7 +244,21 @@ namespace HackPDM
                 RecurseNodesConvert(in child, in nodeMap);
             }
         }
-        
+        public static Hashtable OdooIdBecomesKey(ArrayList arr)
+        {
+            Hashtable newHT = [];
+            foreach (Hashtable ht in arr)
+            {
+                Hashtable entryDict = [];
+
+                foreach (DictionaryEntry de in ht)
+                {
+                    if ((string)de.Key != "id") entryDict.Add(de.Key, de.Value);
+                }
+                newHT.Add(ht["id"], entryDict);
+            }
+            return newHT;
+        }
     }
 
     public class Kwargs<T>(T obj)

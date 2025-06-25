@@ -272,6 +272,8 @@ namespace OdooRpcCs
         // crud operations
         public static async Task<int> CreateAsync(string model, Hashtable values, int? timeout = null)
             => await CommandAsync<int>(model, "create", [values], timeout); //
+        public static async Task<List<int>> CreateAsync(string model, ArrayList arrayValues, int? timeout = null)
+            => await CommandAsync<List<int>>(model, "create", [arrayValues], timeout); //
         public static async Task<ArrayList> ReadAsync(string model, ArrayList ids, ArrayList fields, int? timeout = null)
             => await CommandAsync<ArrayList>(model, "read", [ids, fields], timeout); //
         public static async Task<bool> UpdateAsync(string model, int id, Hashtable values, int? timeout = null) 

@@ -71,6 +71,20 @@ namespace HackPDM
         } = null;
         public static string CurrentPath { get; set; }
 
+        public static SWDocMgr docMgr
+        {
+            get
+            {
+                return field ??= new(OdooDefaults.SWApi);
+            }
+            set;
+        }
+        public static SWHelper swHelper
+        {
+            get;
+            set;
+        }
+
         public static bool GetFiles(string relativePath, out IEnumerable<string> files)
         {
             CurrentPath = Path.Combine(PWAPathAbsolute, relativePath);
@@ -279,7 +293,8 @@ namespace HackPDM
         }
         public static bool IsLocalVersion(in HpVersion version, in HackFile hackFile)
         {
-            if (HasLocalVersion(hackFile) && hackFile?.HpVersionID == version.ID) return true;
+            //if (HasLocalVersion(hackFile) && hackFile?.HpVersionID == version.ID) return true;
+            if (hackFile.SHA1Checksum == version.checksum) return true;
             return false;
         }
         public static bool GetLocalVersion(in HpVersion[] versions, out HackFile hackFile)

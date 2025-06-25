@@ -83,10 +83,12 @@ namespace HackPDM
         }
         
         public StatusDialog() {
+            HackFileManager.queueAsyncStatus = new();
             InitializeComponent();
         }
         
         private StatusDialog(string TitleText) : this() {
+            HackFileManager.queueAsyncStatus = new();
             this.Text = TitleText;
         }
         
