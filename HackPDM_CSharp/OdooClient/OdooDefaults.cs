@@ -46,6 +46,7 @@ namespace HackPDM
         public const string OdooVersionKeyName = "client_version";
         public const string SWKeyName = "swdocmgr_key";
         public static readonly string[] dependentExt = [".SLDPRT", ".SLDASM", ".SLDDRW"];
+        public static string[] EntryFilterPatterns = [.. HpEntryNameFilters.Select(eFilter => eFilter.name_regex)];
         // lock asynchonous operations
         private static readonly object m_lockObject = new();
         public static string OdooDb 
@@ -307,14 +308,28 @@ namespace HackPDM
 				field = value;
 			}
 		}
+        public static Dictionary<string, HpProperty> ExtToProp
+        {
+            get 
+            {
+                if (field is null)
+                {
+                    field = [];
+
+                    foreach (HpProperty prop in HpProperties)
+                    {
+                        field.Add(prop.name, prop);
+                    }
+                }
+                return field;
+            }
+            set => field = value;
+        }
 		public static Dictionary<int, HpProperty> IDToProp
         {
             get
             {
-                if ( field == null )
-                {
-                    field = IDMapProperty(HpProperties);
-                }
+                field ??= IDMapProperty(HpProperties);
                 return field;
             }
             set => field = value;
@@ -1020,20 +1035,18 @@ namespace HackPDM
         public static List<HpVersion> DownloadContentsAll(List<HpVersion> versions)
         {
             string[] fileContents = ["file_contents", "dir_id", "name"];
-            List<HpVersion> processVersions = versions.TakeAndRemove(version =>
+            List<HpVersion> processVersions = [.. versions.TakeAndRemove(version =>
             {
                 if (version.file_contents is not null and not "") return false;
                 return true;
-            }).ToList();
+            })];
             
-            ArrayList ids = new(processVersions.Select(v => 
-            {
-                return v.ID;
-            }).ToArray());
+            ArrayList ids = new(processVersions.Select(v => v.ID).ToArray());
             //string[] fileContentsBase64 = 
             //ArrayList results = OClient.Read(GetHpModel(), ids, [fileContents], 60000);
             HpVersion[] readyVersions = HpVersion.GetRecordsByIDS(ids, includedFields: fileContents);
-            versions.AddRange(readyVersions);
+            if (readyVersions is not null && readyVersions.Length > 0)
+                versions.AddRange(readyVersions);
 
             //IEnumerable<string> fileContentsBase64 = results.Select<object, string>(obj => {
             //    Hashtable ht = ((Hashtable)obj);
@@ -1061,6 +1074,8 @@ namespace HackPDM
             versions = DownloadContentsAll(versions);
             //string[] fileContentsBase64 = DownloadContentsAll(versions).ToArray();
             //if (versions.Count() != fileContentsBase64.Length) return null;
+            if (versions is null) return null;
+            
             int vLen = versions.Count();
             FileData[] fileData = new FileData[vLen];
 
@@ -1166,7 +1181,7 @@ namespace HackPDM
         }
         internal static HpVersion PrepareCreation(HackFile hackFile, HpEntry entry, HashedValueStoring hashStoreType = HashedValueStoring.None)
         {
-            if (!OdooDefaults.ExtToType.ContainsKey(hackFile.TypeExt))
+            if (!OdooDefaults.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
                 return null;
 
             string fileBase64 = hackFile.fileContents != null
@@ -1191,17 +1206,36 @@ namespace HackPDM
             HpVersion newVersion = PrepareCreation(hackFile, entry, hashStoreType);
 			await newVersion.CreateAsync( false );
 
-            if (newVersion.ID == 0) return null;
-
-
-            return newVersion;
+            return newVersion.ID == 0 ? null : newVersion;
         }
         internal static async Task<HpVersion[]> CreateAllNew( params (HackFile hackFile, HpEntry entry, HashedValueStoring hashStoreType)[] data)
         {
             ArrayList versions = data.Select(d => PrepareCreation(d.hackFile, d.entry, d.hashStoreType)).ToArrayList();
 
-            List<int> ids = await MultiCreateAsync<HpVersion>(versions, false);
-            return null;
+            ArrayList ids = await MultiCreateAsync<HpVersion>(versions, false);
+            return GetRecordsByIDS(ids, excludedFields: UsualExcludedFields);
+        }
+        public static HpVersion[] GetFromPaths(params string[] fullPaths)
+        {
+            var paths = Utils.FastSlice(fullPaths, HackDefaults.PWAPathAbsolute.Length+1, "root\\").ToArrayList();
+
+            ArrayList searchParams = new() 
+            {
+                new ArrayList { "windows_complete_name", "in", paths }
+            };
+            
+            return HpEntry.GetRelatedRecordsBySearch<HpVersion>(searchParams, "latest_version_id", excludedFields: ["preview_image", "file_contents"]);
+        }
+        public static HpVersion[] GetFromPaths(string[] excludedFields = null, string[] includedFields = null, params string[] fullPaths)
+        {
+            var paths = Utils.FastSlice(fullPaths, HackDefaults.PWAPathAbsolute.Length + 1, "root\\").ToArrayList();
+
+            ArrayList searchParams = new()
+            {
+                new ArrayList { "windows_complete_name", "in", paths }
+            };
+
+            return HpEntry.GetRelatedRecordsBySearch<HpVersion>(searchParams, "latest_version_id", includedFields: includedFields, excludedFields: excludedFields);
         }
         protected bool ExistsLocally()
         {
@@ -1366,17 +1400,17 @@ namespace HackPDM
         }
         public PropertyType GetValueType()
         {
-            if (text_value != null && text_value != "" && text_value != "False") return PropertyType.Text;
-            if (date_value != null && date_value != "" && date_value != "False") return PropertyType.Date;
-            if (number_value != default) return PropertyType.Number;
-            if (yesno_value != default) return PropertyType.YesNo;
-            return PropertyType.None;
+            if (text_value != null && text_value != "" && text_value != "False") return PropertyType.text;
+            if (date_value != null && date_value != "" && date_value != "False") return PropertyType.date;
+            if (number_value != default) return PropertyType.number;
+            if (yesno_value != default) return PropertyType.yesno;
+            return PropertyType.none;
         }
         public bool IsText( out string text )
         {
             PropertyType pType = GetValueType();
             text = null;
-            if (pType == PropertyType.Text)
+            if (pType == PropertyType.text)
             {
                 text = text_value;
                 return true;
@@ -1387,7 +1421,7 @@ namespace HackPDM
         {
             PropertyType pType = GetValueType();
             number = default;
-            if (pType == PropertyType.Number)
+            if (pType == PropertyType.number)
             {
                 number = number_value;
                 return true;
@@ -1398,7 +1432,7 @@ namespace HackPDM
         {
             PropertyType pType = GetValueType();
             yesNo = default;
-            if (pType == PropertyType.YesNo)
+            if (pType == PropertyType.yesno)
             {
                 yesNo = yesno_value;
                 return true;
@@ -1409,7 +1443,7 @@ namespace HackPDM
         {
             PropertyType pType = GetValueType();
             date = null;
-            if (pType == PropertyType.Date)
+            if (pType == PropertyType.date)
             {
                 date = text_value;
                 return true;
@@ -1434,13 +1468,62 @@ namespace HackPDM
 
             return true;
         }
+        public static async void Create(params HpVersion[] versions)
+        {
+            HpVersionProperty[] versionProperties = [];
+            foreach (HpVersion version in versions)
+            {
+                try
+                {
+                    if (!OdooDefaults.dependentExt.Contains($".{version.file_ext.ToUpper()}")) continue;
+                    string pathway = Path.Combine(HackDefaults.PWAPathAbsolute, version.winPathway, version.name);
+                    List<string> paths = [];
+                    List<Tuple<string, string, string, object>> props = HackDefaults.docMgr.GetProperties(pathway);
+                    HpVersionProperty[] properties = [.. props.Select(prop =>
+                    {
+                        bool isSuccessful = false;
+                        if (OdooDefaults.ExtToProp.TryGetValue(prop.Item2, out HpProperty hpProperty))
+                        {
+                            HpVersionProperty vProp = new()
+                            {
+                                sw_config_name = prop.Item1 == "" ? null : prop.Item1,
+                                prop_id = hpProperty.ID != 0 ? hpProperty.ID : throw new Exception("property id not defined"),
+                                version_id = version.ID != 0 ? version.ID : throw new Exception("version id not defined"),
+                            };
+                            switch (prop.Item3)
+                            {
+                                case "text": vProp.text_value        = (string)prop.Item4; break;
+                                case "date": vProp.date_value        = (string)prop.Item4; break;
+                                case "yesno": vProp.yesno_value      = (bool)prop.Item4; break;
+                                case "number": vProp.number_value    = (float)prop.Item4; break;
+                            }
+                            isSuccessful = true;
+                            Debug.WriteLine($"prop: {prop.Item2} | {isSuccessful}");
+                            return vProp;
+                        }
+                        Debug.WriteLine($"prop: {prop.Item2} | {isSuccessful}");
+                        return null;
+                    })];
+                    versionProperties = [.. versionProperties, .. properties];
+                }
+                catch (Exception e)
+                {
+                    Debug.WriteLine($"unable to create properties for {version.ID}\n{e}");
+                    return;
+                }
+            }
+            if (versionProperties.Length > 0)
+            {
+                await MultiCreateAsync<HpVersionProperty>(versionProperties.ToArrayList());
+            }
+        }
         public enum PropertyType
         {
-            Text,
-            Number,
-            YesNo,
-            Date,
-            None,
+            text,
+            number,
+            yesno,
+            date,
+            none,
         }
     }
     public class HpVersionRelationship : HpBaseModel<HpVersionRelationship>
@@ -1456,17 +1539,43 @@ namespace HackPDM
             this.parent_id = parent_id;
             this.child_id = child_id;
         }
-        public static bool Create(params HpVersion[] versions)
+        public async static void Create(params HpVersion[] versions)
         {
-            ArrayList ids = versions.Select(v => v.ID).ToArrayList();
-            ArrayList versionFields = OClient.Read(HpVersion.GetHpModel(), ids, ["id", "file_ext"]);
-            // HpVersionRelationship
+            //ArrayList ids = versions.Select(v => v.ID).ToArrayList();
+            //ArrayList versionFields = OClient.Read(HpVersion.GetHpModel(), ids, ["id", "file_ext"]);
+            HpVersionRelationship[] hvrCreate = [];
             foreach (HpVersion version in versions)
             {
-                List<string[]> dependencies = HackDefaults.docMgr.GetDependencies(version.winPathway);
-
+                if (version is not null && !OdooDefaults.dependentExt.Contains($".{version.file_ext.ToUpper()}")) continue;
+                string pathway = Path.Combine(HackDefaults.PWAPathAbsolute, version.winPathway, version.name);
+                List<string> paths = [];
+                List<string[]> dependencies = HackDefaults.docMgr.GetDependencies(pathway);
+                if (dependencies is not null && dependencies.Count > 0)
+                {
+                    foreach (string[] deps in dependencies)
+                    {
+                        string path = deps[1];
+                        string absolute = "";
+                        var splitPath = path.Split(["\\pwa\\"], StringSplitOptions.RemoveEmptyEntries);
+                        if (splitPath.Length == 2)
+                            absolute = Path.Combine([HackDefaults.PWAPathAbsolute, splitPath[1]]);
+                        else continue;
+                        paths.Add(absolute);
+                    }
+                    HpVersion[] getVersions = HpVersion.GetFromPaths(includedFields: ["name", "entry_id"], fullPaths: [.. paths]);
+                    hvrCreate = [.. hvrCreate, .. 
+                        getVersions.Select(v => new HpVersionRelationship()
+                        {
+                            parent_id = version.ID,
+                            child_id = v.ID,
+                        })
+                    ];
+                }
             }
-            return false;
+            if (hvrCreate.Length > 0)
+            {
+                await MultiCreateAsync<HpVersionRelationship>(hvrCreate.ToArrayList());
+            }
         }
     }
     public class HpRelease : HpBaseModel<HpRelease>

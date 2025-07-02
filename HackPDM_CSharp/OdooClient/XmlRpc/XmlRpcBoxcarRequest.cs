@@ -18,12 +18,14 @@ namespace XmlRpc.Goober
 			get
 			{
 				_params.Clear();
-				ArrayList arrayList = new ArrayList();
+				ArrayList arrayList = [];
 				foreach ( XmlRpcRequest request in Requests )
 				{
-					Hashtable hashtable = new Hashtable();
-					hashtable.Add( "methodName", request.MethodName );
-					hashtable.Add( "params", request.Params );
+					Hashtable hashtable = new Hashtable
+                    {
+                        { "methodName", request.MethodName },
+                        { "params", request.Params }
+                    };
 					arrayList.Add( hashtable );
 				}
 

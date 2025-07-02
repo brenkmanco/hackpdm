@@ -17,7 +17,7 @@ namespace HackPDM.Verifier
 
 		public static bool VerifySettings()
 		{
-			List<string> errors = new List<string>();
+			List<string> errors = [];
 
 			bool odooLogin = AbleToLogin(ref errors);
 			bool hackSettings = CorrectHackSettings(ref errors);

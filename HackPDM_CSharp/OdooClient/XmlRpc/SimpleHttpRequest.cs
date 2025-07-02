@@ -153,7 +153,7 @@ namespace XmlRpc.Goober
 
 		private void GetRequestHeaders()
 		{
-			_headers = new Hashtable();
+			_headers = [];
 			string text;
 			while ( ( text = Input.ReadLine() ) != "" && text != null )
 			{

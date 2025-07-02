@@ -236,22 +236,25 @@ namespace HackPDM
             };
 			return hack;
 		}
-		public static HackFile GetFromPath(string path)
+		public static HackFile GetFromPath(string path, string directory = null)
         {
             FileInfo file = new(path);
             if (!file.Exists) return null;
 
-            return new HackFile(file);
-        }
-        
-        public static HackFile GetFromPath(string path, string directory)
-        {
-            HackFile hack = GetFromPath(path);
-            if (hack == null) return null;
+            HackFile hack = new(file);
 
-            hack.RelativePath = directory;
+            hack.RelativePath = Path.Combine("root", hack.BasePath[(HackDefaults.PWAPathAbsolute.Length+1)..]);
             return hack;
         }
+        
+        //public static HackFile GetFromPath(string path, string directory)
+        //{
+        //    HackFile hack = GetFromPath(path);
+        //    if (hack == null) return null;
+            
+        //    hack.RelativePath = directory;
+        //    return hack;
+        //}
         public static HackFile GetFromVersion(HpVersion version)
         {
             if (version.winPathway == null) return null;

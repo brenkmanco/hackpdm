@@ -4,16 +4,22 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.ComponentModel;
+using System.ComponentModel.Design;
 using System.Data;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Xml.Linq;
+
+using EnvDTE;
 
 using HackPDM.ClientUtils;
 using HackPDM.Forms.Odoo;
@@ -22,6 +28,11 @@ using HackPDM.HackClient;
 
 using OpenMcdf;
 
+using SolidWorks.Interop.sldworks;
+
+using static System.Net.Mime.MediaTypeNames;
+
+using Image = System.Drawing.Image;
 using OClient = OdooRpcCs.OdooClient;
 
 namespace HackPDM
@@ -35,124 +46,144 @@ namespace HackPDM
 		//internal static readonly string ResourcesPath = $"{directoryInfo.FullName}\\Resources";
 		private const string EmptyPlaceholder = "-";
 		// List Views Column Name and Widths
-		internal static readonly Dictionary<string, string> NameConfig = new Dictionary<string, string>()
+		internal static readonly Dictionary<string, string> NameConfig = new()
 		{
-			{"RowID", "ID"},
-			{"RowName", "Name"},
-			{"RowType", "Type"},
-			{"RowSize", $"Size ({HackDefaults.MeasureFileSize})"},
-			{"RowStatus", "Status"},
-			{"RowCheckOut", "CheckOut"},
-			{"RowCategory", "Category"},
-			{"RowLocalDate", "Local Date"},
-			{"RowRemoteDate", "Remote Date"},
-			{"RowFullName", "FullName"},
-			{"HistoryVersion", "Version"},
-			{"HistoryModUser", "ModUser"},
-			{"HistoryModDate", "ModDate"},
-			{"HistorySize", "Size"},
-			{"HistoryRelDate", "RelDate"},
-			{"ParentVersion", "Version"},
-			{"ParentName", "Name"},
-			{"ParentBasePath", "Base Path"},
-			{"ChildrenVersion", "Version"},
-			{"ChildrenName", "Name"},
-			{"ChildrenBasePath", "Base Path"},
-			{"PropertiesVersion", "Version"},
-			{"PropertiesConfiguration", "Configuration"},
-			{"PropertiesName", "Name"},
-			{"PropertiesProperty", "Property"},
-			{"PropertiesType", "Type"},
-			{"PropertiesValue", "Value"},
-			{"VersionID", "ID"},
-			{"VersionName", "Name"},
-			{"VersionFileSize", "File Size"},
-			{"VersionDirectoryID", "Directory ID"},
-			{"VersionNodeID", "Node ID"},
-			{"VersionEntryID", "Entry ID"},
-			{"VersionAttachmentID", "Attachment ID"},
-			{"VersionModifyDate", "Modify Date"},
-			{"VersionChecksum", "Checksum"},
-			{"VersionOdooCompletePath", "Odoo Complete Path"},
-			{"SearchID", "ID"},
-			{"SearchName", "Name"},
-			{"SearchDirectory", "Directory"},
-			{"SearchPropName", "Name"},
-			{"SearchPropEqual", "Comparer"},
-			{"SearchPropValue", "Value"},
-			{"FileTypeExtension", "Extension"},
-			{"FileTypeCategory", "Category"},
-			{"FileTypeRegEx", "RegEx"},
-			{"FileTypeDescription", "Description"},
-			{"FileTypeEntryFilterID", "ID"},
-			{"FileTypeEntryFilterProto", "Proto"},
-			{"FileTypeEntryFilterRegEx", "RegEx"},
-			{"FileTypeEntryFilterDescription", "Description"},
-			{"FileTypeLocExt", "Extension"},
-			{"FileTypeLocStatus", "Status"},
-			{"FileTypeLocExample", "Example"},
-			{"FileTypeLocDatExt", "Extension"},
-			{"FileTypeLocDatReg", "RegEx"},
-			{"FileTypeLocDatCat", "Category"},
-			{"FileTypeLocDatDes", "Description"},
-			{"FileTypeLocDatIco", "Icon"},
-			{"FileTypeLocDatIcoCancel", "Remove Icon?"},
+			{"RowID",							"ID"},
+			{"RowName",							"Name"},
+			{"RowType",							"Type"},
+			{"RowSize",							"Size"},
+			{"RowStatus",						"Status"},
+			{"RowCheckOut",						"CheckOut"},
+			{"RowCategory",						"Category"},
+			{"RowLocalDate",					"Local Date"},
+			{"RowRemoteDate",					"Remote Date"},
+			{"RowFullName",						"FullName"},
+			{"HistoryVersion",					"Version"},
+			{"HistoryModUser",					"ModUser"},
+			{"HistoryModDate",					"ModDate"},
+			{"HistorySize",						"Size"},
+			{"HistoryRelDate",					"RelDate"},
+			{"ParentVersion",					"Version"},
+			{"ParentName",						"Name"},
+			{"ParentBasePath",					"Base Path"},
+			{"ChildrenVersion",					"Version"},
+			{"ChildrenName",					"Name"},
+			{"ChildrenBasePath",				"Base Path"},
+			{"PropertiesVersion",				"Version"},
+			{"PropertiesConfiguration",			"Configuration"},
+			{"PropertiesName",					"Name"},
+			{"PropertiesProperty",				"Property"},
+			{"PropertiesType",					"Type"},
+			{"PropertiesValue",					"Value"},
+			{"VersionID",						"ID"},
+			{"VersionName",						"Name"},
+			{"VersionFileSize",					"File Size"},
+			{"VersionDirectoryID",				"Directory ID"},
+			{"VersionNodeID",					"Node ID"},
+			{"VersionEntryID",					"Entry ID"},
+			{"VersionAttachmentID",				"Attachment ID"},
+			{"VersionModifyDate",				"Modify Date"},
+			{"VersionChecksum",					"Checksum"},
+			{"VersionOdooCompletePath",			"Odoo Complete Path"},
+			{"SearchID",						"ID"},
+			{"SearchName",						"Name"},
+			{"SearchDirectory",					"Directory"},
+			{"SearchPropName",					"Name"},
+			{"SearchPropEqual",					"Comparer"},
+			{"SearchPropValue",					"Value"},
+			{"FileTypeExtension",				"Extension"},
+			{"FileTypeCategory",				"Category"},
+			{"FileTypeRegEx",					"RegEx"},
+			{"FileTypeDescription",				"Description"},
+			{"FileTypeEntryFilterID",			"ID"},
+			{"FileTypeEntryFilterProto",		"Proto"},
+			{"FileTypeEntryFilterRegEx",		"RegEx"},
+			{"FileTypeEntryFilterDescription",	"Description"},
+			{"FileTypeLocExt",					"Extension"},
+			{"FileTypeLocStatus",				"Status"},
+			{"FileTypeLocExample",				"Example"},
+			{"FileTypeLocDatExt",				"Extension"},
+			{"FileTypeLocDatReg",				"RegEx"},
+			{"FileTypeLocDatCat",				"Category"},
+			{"FileTypeLocDatDes",				"Description"},
+			{"FileTypeLocDatIco",				"Icon"},
+			{"FileTypeLocDatIcoCancel",			"Remove Icon?"},
 		};
-		readonly Dictionary<string, int> RowWidths = new()
-		{
-			{NameConfig["RowID"], 75},
-			{NameConfig["RowName"], 300},
-			{NameConfig["RowType"], 120},
-			{NameConfig["RowSize"], 100},
-			{NameConfig["RowStatus"], 75},
-			{NameConfig["RowCheckOut"], 120},
-			{NameConfig["RowCategory"], 110},
-			{NameConfig["RowLocalDate"], 150},
-			{NameConfig["RowRemoteDate"], 150},
-			{NameConfig["RowFullName"], 100}
-		};
-		readonly Dictionary<string, int> HistoryRows = new()
-		{
-			{NameConfig["HistoryVersion"], 50},
-			{NameConfig["HistoryModUser"], 140},
-			{NameConfig["HistoryModDate"], 140},
-			{NameConfig["HistorySize"], 75},
-			{NameConfig["HistoryRelDate"], 75},
-		};
-		readonly Dictionary<string, int> ParentRows = new()
-		{
-			{NameConfig["ParentVersion"], 50},
-			{NameConfig["ParentName"], 400},
-			{NameConfig["ParentBasePath"], 600},
-		};
-		readonly Dictionary<string, int> ChildrenRows = new()
-		{
-			{NameConfig["ChildrenVersion"], 50},
-			{NameConfig["ChildrenName"], 400},
-			{NameConfig["ChildrenBasePath"], 600},
-		};
-		readonly Dictionary<string, int> PropertiesRows = new()
-		{
-			{NameConfig["PropertiesVersion"], 50},
-			{NameConfig["PropertiesConfiguration"], 100},
-			{NameConfig["PropertiesName"], 100},
-			{NameConfig["PropertiesProperty"], 50},
-			{NameConfig["PropertiesType"], 75},
-			{NameConfig["PropertiesValue"], 400},
-		};
-		readonly Dictionary<string, int> VersionInfoRows = new()
-		{
-			{NameConfig["VersionID"], 75},
-			{NameConfig["VersionName"], 300},
-			{NameConfig["VersionFileSize"], 100},
-			{NameConfig["VersionDirectoryID"], 75},
-			{NameConfig["VersionNodeID"], 75},
-			{NameConfig["VersionEntryID"], 75},
-			{NameConfig["VersionAttachmentID"], 75},
-			{NameConfig["VersionModifyDate"], 120},
-			{NameConfig["VersionChecksum"], 300},
-			{NameConfig["VersionOdooCompletePath"], 300},
-		};
+		readonly Dictionary<string, ColumnHeader> RowWidths = DictExtAdd
+        (
+			(NameConfig["RowID"],						75),
+			(NameConfig["RowName"],						300),
+			(NameConfig["RowType"],						120),
+			(NameConfig["RowSize"],						new Tuple<int, HorizontalAlignment>(100, HorizontalAlignment.Right)),
+			(NameConfig["RowStatus"],					75),
+			(NameConfig["RowCheckOut"],					120),
+			(NameConfig["RowCategory"],					110),
+			(NameConfig["RowLocalDate"],				150),
+			(NameConfig["RowRemoteDate"],				150),
+			(NameConfig["RowFullName"],					100)
+		);
+		readonly Dictionary<string, ColumnHeader> HistoryRows = DictExtAdd
+        (
+			(NameConfig["HistoryVersion"],				50),
+			(NameConfig["HistoryModUser"],				140),
+			(NameConfig["HistoryModDate"],				140),
+			(NameConfig["HistorySize"],					75),
+			(NameConfig["HistoryRelDate"],				75)
+		);
+		readonly Dictionary<string, ColumnHeader> ParentRows = DictExtAdd
+        (
+			(NameConfig["ParentVersion"],				50),
+			(NameConfig["ParentName"],					400),
+			(NameConfig["ParentBasePath"],				600)
+		);
+		readonly Dictionary<string, ColumnHeader> ChildrenRows = DictExtAdd
+        (
+			(NameConfig["ChildrenVersion"],				50),
+			(NameConfig["ChildrenName"],				400),
+			(NameConfig["ChildrenBasePath"],			600)
+		);
+		readonly Dictionary<string, ColumnHeader> PropertiesRows = DictExtAdd
+		(
+			(NameConfig["PropertiesVersion"],			50),
+			(NameConfig["PropertiesConfiguration"],		100),
+			(NameConfig["PropertiesName"],				100),
+			(NameConfig["PropertiesProperty"],			50),
+			(NameConfig["PropertiesType"],				75),
+			(NameConfig["PropertiesValue"],				400)
+		);
+		readonly Dictionary<string, ColumnHeader> VersionInfoRows = DictExtAdd
+		(
+            (NameConfig["VersionID"],					75),
+			(NameConfig["VersionName"],					300),
+			(NameConfig["VersionFileSize"],				100),
+			(NameConfig["VersionDirectoryID"],			75),
+			(NameConfig["VersionNodeID"],				75),
+			(NameConfig["VersionEntryID"],				75),
+			(NameConfig["VersionAttachmentID"],			75),
+			(NameConfig["VersionModifyDate"],			120),
+			(NameConfig["VersionChecksum"],				300),
+			(NameConfig["VersionOdooCompletePath"],		300)
+		);
+        public static Dictionary<string, ColumnHeader> DictExtAdd(params (string key, object value)[] pairs) 
+			=> pairs.ToDictionary(p => p.key, p =>
+				p.value switch
+				{
+					ColumnHeader column
+						=> column,
+					Tuple<int, HorizontalAlignment> values
+                        => new ColumnHeader { Name = p.key, Text = p.key, Width = values.Item1, TextAlign = values.Item2 },
+                    Tuple<string, int, HorizontalAlignment> values
+						=> new ColumnHeader { Name = p.key, Text = values.Item1, Width = values.Item2, TextAlign = values.Item3 },
+					Tuple<string, int> values
+						=> new ColumnHeader { Name = p.key, Text = values.Item1, Width = values.Item2, TextAlign = HorizontalAlignment.Left },
+					int width
+						=> new ColumnHeader { Name = p.key, Text = p.key, Width = width, TextAlign = HorizontalAlignment.Left },
+					string text
+						=> new ColumnHeader { Name = p.key, Text = text, Width = 75, TextAlign = HorizontalAlignment.Left },
+					_ => null,
+                }
+            );
+
         HpDirectory root;
         public static StatusDialog Dialog { get; set; }
         
@@ -163,7 +194,7 @@ namespace HackPDM
 			WorkerSupportsCancellation = true
 		};
         private static CancellationTokenSource cSource;
-		private static Image previewImage = null;
+		private static System.Drawing.Image previewImage = null;
 
 
 		private string swkey;
@@ -254,23 +285,26 @@ namespace HackPDM
 			// --------------------------------------
 
 			string testingFile = @"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM";
-			ArrayList ids = [190730, 190729, 190728, 190727, 190726, 190725, 190724, 190723, 190722, 190721];
-			HpVersion[] versions = HpVersion.GetRecordsByIDS(ids, excludedFields: ["preview_image", "file_contents"]);
-            
-            // HpVersionRelationship
-            foreach (HpVersion version in versions)
-			{
-				List<string[]> dependencies = HackDefaults.docMgr.GetDependencies(version.winPathway);
+			string testingFile2 = @"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Catalog\Toolbox\Browser\ansi inch\nuts\Stover Nut_AI.sldprt";
 
-			}
+            ArrayList ids = [190730, 190729, 190728, 190727, 190726, 190725, 190724, 190723, 190722, 190721];
+			HpVersion[] versions = HpVersion.GetRecordsByIDS(ids, excludedFields: ["preview_image", "file_contents"], insertFields: ["windows_complete_name", "windows_complete_path"]);
+			HpVersion version = HpEntry.GetRelatedRecordByIDS<HpVersion>([41801], "latest_version_id", ["preview_image", "file_contents"]).First();
+			string[] fullPaths = [.. Directory.EnumerateFiles(@"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Designed\Haggis\Frame\Base Weldment")];
+			// HpVersionRelationship
+			//var props = HackDefaults.docMgr.GetProperties(testingFile2);
+			//var vProperties = HpVersionProperty.Create(version);
+            //HpVersionRelationship.Create([version]);
+			//HpVersion[] versions_from_paths = HpVersion.GetFromPaths(fullPaths);
+            //HpVersionRelationship.Create(versions);
 
-			//var depends = docMgr.GetDependencies(testingFile);
-			//Debug.Write(string.Join("\n", depends.Select(d => d[1])));
+            //var depends = docMgr.GetDependencies(testingFile);
+            //Debug.Write(string.Join("\n", depends.Select(d => d[1])));
 
-			// --------------------------------------
-			// 
-			// --------------------------------------
-			this.WindowState = FormWindowState.Maximized;
+            // --------------------------------------
+            // 
+            // --------------------------------------
+            this.WindowState = FormWindowState.Maximized;
             this.FormClosing += (s, e) => isClosing = true;
 			
 			this.Load += new EventHandler(FormLoaded);
@@ -349,16 +383,16 @@ namespace HackPDM
 
         // list controls
         // reset list items and columns
-        private void InitListViewInternal(ListView list, Dictionary<string, int> rows)
+        private void InitListViewInternal(ListView list, Dictionary<string, ColumnHeader> rows)
 			=> InitListView( list, rows );
-		internal static void InitListView( ListView list, Dictionary<string, int> rows )
+		internal static void InitListView( ListView list, Dictionary<string, ColumnHeader> rows )
 		{
             SafeInvokeGen(list, rows, (row) =>
             {
                 list.Clear();
-                foreach (KeyValuePair<string, int> item in row)
+                foreach (KeyValuePair<string, ColumnHeader> item in row)
                 {
-                    list.Columns.Add(item.Key, item.Key, item.Value);
+                    list.Columns.Add(item.Value);
                 }
 			});
 		}
@@ -375,7 +409,7 @@ namespace HackPDM
 			SafeInvokeGen(list, rows, (row) =>
             {
                 list.Clear();
-				List<ColumnHeader> offsets = new();
+				List<ColumnHeader> offsets = [];
 				int unUsedPercentage = 100;
                 foreach (KeyValuePair<string, int> item in row)
                 {
@@ -626,11 +660,11 @@ namespace HackPDM
 				string type = (string)table["type"];
 				item.SubItems [ NameConfig [ "RowType" ] ].Text             = type;
 
-				double size = (double)( Convert.ToDouble(table["size"]) * HackDefaults.ByteSizeMultiplier );
-				item.SubItems [ NameConfig [ "RowSize" ] ].Text				= size.ToString("0.00");
-				
+				//double size = (double)( Convert.ToDouble(table["size"]) * HackDefaults.ByteSizeMultiplier );
+				item.SubItems [ NameConfig [ "RowSize" ] ].Text				= FileOperations.FileSizeReformat(Convert.ToInt64(table["size"]));
 
-				string checkout = (string)table["checkout"];
+
+                string checkout = (string)table["checkout"];
                 checkout = checkout == "False:False" ? EmptyPlaceholder : checkout;
                 item.SubItems [ NameConfig [ "RowCheckOut" ] ].Text         = checkout;
 
@@ -796,8 +830,8 @@ namespace HackPDM
 				string status = "lo";
 				item.SubItems[ NameConfig["RowType"] ].Text = type;
 
-                double size =  (double)( file.FileSize * HackDefaults.ByteSizeMultiplier );
-				item.SubItems[ NameConfig["RowSize"] ].Text = size.ToString("0.00");
+                //double size =  (double)( file.FileSize * HackDefaults.ByteSizeMultiplier );
+				item.SubItems[ NameConfig["RowSize"] ].Text = FileOperations.FileSizeReformat(file.FileSize);
 
 				item.SubItems [ NameConfig [ "RowLocalDate" ] ].Text = file.ModifiedDate.ToShortDateString();
 				item.SubItems [ NameConfig [ "RowRemoteDate" ] ].Text = EmptyPlaceholder;
@@ -909,18 +943,37 @@ namespace HackPDM
 				}
 			});
 
-
-			Task parentAndChild = Task.Run(() =>
+            int? versionID = (int?)HpEntry.GetFieldValue(ID, "latest_version_id");
+            Task ParentTask = Task.Run(() =>
 			{
-				int? entryID = (int?)HpEntry.GetFieldValue(ID, "latest_version_id");
-				if (entryID != null)
+				if (versionID != null)
 				{
-					versionRels = GetRelFromVersions([entryID]);
+					versionRels = GetRelFromVersions([versionID]);
 					versionsRelation = GetVersionsFromRelationship(versionRels);
+					versionsRelation.Item1 = 
+                        HpVersionRelationship.GetRelatedRecordsBySearch<HpVersion>([new ArrayList()
+                            {
+                                "child_id", "=", versionID
+                            }], "parent_id",
+                            excludedFields: ["preview_image", "node_id", "entry_id", "file_modify_stamp", "checksum", "file_contents"]
+                        );
 				}
 			});
+			Task ChildTask = Task.Run(() =>
+            {
+                if (versionID != null)
+                {
+                    versionsRelation.Item2 = 
+						HpVersionRelationship.GetRelatedRecordsBySearch<HpVersion>([new ArrayList()
+                            {
+                                "parent_id", "=", versionID
+                            }], "child_id",
+                            excludedFields: ["preview_image", "node_id", "entry_id", "file_modify_stamp", "checksum", "file_contents"]
+                        );
+                }
+            });
 
-			await Task.WhenAll( historyAndProperties, parentAndChild );
+            await Task.WhenAll( historyAndProperties, ParentTask, ChildTask );
             token.ThrowIfCancellationRequested();
 			object lockObject = new();
 			lock ( lockObject )
@@ -1218,7 +1271,7 @@ namespace HackPDM
                 item.SubItems[NameConfig["VersionID"]].Text                     = version.ID.ToString();
 				item.SubItems[NameConfig["VersionName"]].Text                   = version.name;
 				item.SubItems[NameConfig["VersionChecksum"]].Text               = version.checksum;
-				item.SubItems[NameConfig["VersionFileSize"]].Text               = version.file_size?.ToString();
+				item.SubItems[NameConfig["VersionFileSize"]].Text               = FileOperations.FileSizeReformat(version.file_size);
 				item.SubItems[NameConfig["VersionDirectoryID"]].Text            = version.dir_id?.ToString();
 				item.SubItems[NameConfig["VersionNodeID"]].Text                 = version.node_id?.ToString();
 				item.SubItems[NameConfig["VersionEntryID"]].Text                = version.entry_id?.ToString();
@@ -1360,11 +1413,12 @@ namespace HackPDM
 
 			foreach (var batch in versionBatches)
 			{
-				versions.AddRange(await HpVersion.CreateAllNew([.. batch]));
+				HpVersion[] vbatch = await HpVersion.CreateAllNew([.. batch]);
+                versions.AddRange(vbatch);
 			}
 			// create new parent, child hp_version_relationship's for versions
 			HpVersionRelationship.Create([.. versions]);
-
+			HpVersionProperty.Create([.. versions]);
 
 			RestartTree();
 			RestartEntries();
@@ -1566,10 +1620,11 @@ namespace HackPDM
 		{
 			List<Task<HackFile>> tasks = [];
 			object lockObject = new();
-
+			string combinedPattern = string.Join("|", OdooDefaults.EntryFilterPatterns);
+			var regex = new Regex(combinedPattern, RegexOptions.IgnoreCase);
 			//string[] filePaths = hackFiles.Select(hack => hack.FullPath).ToArray();
-
-			HackFile[] files = await FileOperations.FilesNotInOdoo(hackFiles);
+			IEnumerable<HackFile> regexHack = hackFiles.TakeWhile(hack => !regex.IsMatch($".{hack.TypeExt}"));
+			HackFile[] files = await FileOperations.FilesNotInOdoo(regexHack);
 			return files;
 		}
 		#endregion
@@ -1708,11 +1763,13 @@ namespace HackPDM
 				return;
 			}
 
-			// directory only needs ID set to find that record's entries
-			HpDirectory directory = new("temp");
-			directory.ID = (int)tnCurrent.Tag;
+            // directory only needs ID set to find that record's entries
+            HpDirectory directory = new("temp")
+            {
+                ID = (int)tnCurrent.Tag
+            };
 
-			lock ( lockObject )
+            lock ( lockObject )
 			{
 				Dialog.AddStatusLine( "INFO", $"Retrieving all entries within directory ({directory.ID})" );
 			}
@@ -1720,7 +1777,7 @@ namespace HackPDM
 			ArrayList entryIDs = directory.GetDirectoryEntryIDs( withSubdirectories, ShowInactive.Checked );
 
             HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
-            ArrayList newIds = await GetEntryList(entries.Select(e=>e.latest_version_id).ToArray());
+            ArrayList newIds = await GetEntryList([.. entries.Select(e=>e.latest_version_id)]);
 
             newIds.AddRange(entryIDs);
             newIds = newIds.ToHashSet<int>().ToArrayList();
@@ -1795,7 +1852,7 @@ namespace HackPDM
 			//ArrayList entryIDs = new();
 			//HashSet<int> entryIDs = new HashSet<int>();
 			
-			ArrayList entryIDs = new();
+			ArrayList entryIDs = [];
 
 			foreach ( ListViewItem item in entryItem )
 			{
@@ -2581,7 +2638,7 @@ namespace HackPDM
 			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
 			if (Directory.Exists( pathway ) )
 			{
-				Process.Start( "explorer.exe", pathway );
+				System.Diagnostics.Process.Start( "explorer.exe", pathway );
 			}
 		}
 
@@ -2823,7 +2880,7 @@ namespace HackPDM
 		private void OpenRemoteFile( int entryID )
 		{
 			const string latest_version = "latest_version_id";
-			HpVersion version = HpEntry.GetRelatedRecordByIDS<HpVersion>(new ArrayList() { entryID }, latest_version, excludedFields: ["preview_image"]).First();
+			HpVersion version = HpEntry.GetRelatedRecordByIDS<HpVersion>([entryID], latest_version, excludedFields: ["preview_image"]).First();
 			if ( version == null )
 				return;
 			
@@ -3006,14 +3063,14 @@ namespace HackPDM
 		// list
 
 
-		
+
 		private bool DeleteEntry( ArrayList ids )
-			=> OClient.Delete(HpEntry.GetHpModel(), new ArrayList() {new ArrayList(){"id", "in", ids}});
+			=> OClient.Delete(HpEntry.GetHpModel(), [new ArrayList(){"id", "in", ids}]);
 		private bool DeleteVersions( ArrayList ids )
 		{
 			HpVersion[] versions = HpEntry.GetRelatedRecordByIDS<HpVersion>(ids, "version_ids", includedFields:["ID"]);
 			ArrayList vIds = versions.Select(v => v.ID).ToArrayList();
-			return OClient.Delete(HpVersion.GetHpModel(), new ArrayList() {new ArrayList(){"id", "in", vIds}});
+			return OClient.Delete(HpVersion.GetHpModel(), [new ArrayList(){"id", "in", vIds}]);
 		}
 
 	}

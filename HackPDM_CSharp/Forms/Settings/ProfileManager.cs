@@ -92,7 +92,7 @@ namespace HackPDM
 
         private bool AbleToLogin()
         {
-			List<string> errors = new();
+			List<string> errors = [];
             if (OdooDefaults.OdooID != 0) return true;
 
 			if (!OdooClient.CorrectOdooAddress())

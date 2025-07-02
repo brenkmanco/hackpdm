@@ -139,8 +139,10 @@ namespace XmlRpc.Goober
 				return list;
 			}
 
-			IList list2 = new ArrayList();
-			list2.Add( methodInfo.ReturnType.Name );
+			IList list2 = new ArrayList
+            {
+                methodInfo.ReturnType.Name
+            };
 			ParameterInfo[] parameters = methodInfo.GetParameters();
 			foreach ( ParameterInfo parameterInfo in parameters )
 			{
@@ -186,8 +188,10 @@ namespace XmlRpc.Goober
 				{
 					XmlRpcRequest req = new XmlRpcRequest((string)call["methodName"], (ArrayList)call["params"]);
 					object value = _server.Invoke(req);
-					IList list2 = new ArrayList();
-					list2.Add( value );
+					IList list2 = new ArrayList
+                    {
+                        value
+                    };
 					list.Add( list2 );
 				}
 				catch ( XmlRpcException ex )

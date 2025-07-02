@@ -61,9 +61,11 @@ namespace XmlRpc.Goober
 
 		public void SetFault( int code, string message )
 		{
-			Hashtable hashtable = new Hashtable();
-			hashtable.Add( "faultCode", code );
-			hashtable.Add( "faultString", message );
+			Hashtable hashtable = new Hashtable
+            {
+                { "faultCode", code },
+                { "faultString", message }
+            };
 			Value = hashtable;
 			IsFault = true;
 		}
