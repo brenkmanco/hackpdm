@@ -21,6 +21,7 @@ namespace HackPDM
     public abstract class HpBaseModel
     {
         internal static string[] UsualExcludedFields { get; set; } = [];
+        internal static string[] UsualIncludedFields { get; set; } = [];
 
         protected static readonly Dictionary<Type, string> HpModelDictionary = new()
         {
@@ -56,7 +57,7 @@ namespace HackPDM
                 HpModelDictionary[type] = value;
             }
         }
-        public readonly static Hashtable EmptyHashtable = new Hashtable();
+        //public readonly Hashtable EmptyHashtable = new Hashtable();
         public bool IsModifiedRecord
         {
             get
@@ -68,7 +69,7 @@ namespace HackPDM
             }
         }
         public bool IsRecord { get; internal set; }
-        public Hashtable HashedValues { get; internal set; } = EmptyHashtable;
+        public Hashtable HashedValues { get; internal set; } = [];
         public string[] ExcludedFields { get; internal set; }
         public string[] InsertFields { get; internal set; }
         public virtual int Create() => Create(false);
@@ -83,8 +84,10 @@ namespace HackPDM
 				//HashedValues = ht;
                 if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
                 {
-                    HashedValues = new Hashtable();
-                    HashedValues.Add("dir_id", value);
+                    HashedValues = new Hashtable
+                    {
+                        { "dir_id", value }
+                    };
                 }
                 IsRecord = true;
             }
@@ -103,11 +106,21 @@ namespace HackPDM
                 
                 if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
                 {
-                    HashedValues = new Hashtable();
-                    HashedValues.Add("dir_id", value);
+                    HashedValues = new Hashtable
+                    {
+                        { "dir_id", value }
+                    };
                 }
                 IsRecord = true;
             }
+            return tempID;
+        }
+        public static async Task<ArrayList> MultiCreateAsync<T>(ArrayList records, bool withEmpty = false) where T : HpBaseModel
+        {
+            ArrayList hts = records.Select((HpBaseModel v) => v.ComputeHashtable(withEmpty, isNew: true)).ToArrayList();
+            var type = typeof(T);
+            string hpmodel = HpModelDictionary.TryGetValue(type, out hpmodel) ? hpmodel : null;
+            ArrayList tempID = await OClient.CreateAsync(hpmodel, hts);
             return tempID;
         }
         protected Hashtable ComputeHashtable(bool includeEmpty = true, in string[] excludedFieldNames = null, bool isNew = false)
@@ -276,22 +289,7 @@ namespace HackPDM
         public virtual T GetRecord(int recordID)
         {
             Hashtable ht = (Hashtable)OClient.Read(HpModel, [recordID], GetFields())[0];
-            T model = HashConverter.ConvertToClass<T>(ht);
-
-            if (ht != null)
-            {
-                model.ID = recordID;
-                //model.HashedValues = ht;
-                if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
-                {
-                    HashedValues = new Hashtable();
-                    HashedValues.Add("dir_id", value);
-                }
-                model.IsRecord = true;
-                model.CompleteConstruction();
-            }
-
-            return model;
+            return RecordPopulation(ht);
         }
         //public virtual ArrayList GetAllFields()
         //{
@@ -340,8 +338,10 @@ namespace HackPDM
                 //record.HashedValues = ht;
                 if (record.HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
                 {
-                    record.HashedValues = new Hashtable();
-                    record.HashedValues.Add("dir_id", value);
+                    record.HashedValues = new Hashtable
+                    {
+                        { "dir_id", value }
+                    };
                 }
                 record.IsRecord = true;
                 record.ExcludedFields = excludedFields;
@@ -360,12 +360,12 @@ namespace HackPDM
 
             if (relatedIds.Count == 0) return null;
 
-            List<int> ids = new List<int>();
+            List<int> ids = [];
             foreach (Hashtable ht in relatedIds)
             {
                 ids.Add((int)ht["id"]);
             }
-            return ids.ToArray();
+            return [.. ids];
         }
         internal static T[] GetRecordsByIDS(ArrayList recordIDS, ArrayList searchFilters = null, string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null)
         {
@@ -377,26 +377,112 @@ namespace HackPDM
 
             if (searchFilters == null)
             {
-                result = OClient.Read(modelName, recordIDS, fields, 10000);
+                result = OClient.Read(modelName, recordIDS, fields, 90000);
             }
             else
             {
-                result = OClient.Browse(modelName, [searchFilters, fields], 10000);
+                result = OClient.Browse(modelName, [searchFilters, fields], 90000);
             }
 
             if (result.Count == 0) return null;
 
             foreach (Hashtable ht in result)
             {
-                T record = HashConverter.ConvertToClass<T>(ht);
+                records.Add(RecordPopulation(ht, excludedFields));
+            }
+            return [.. records];
+        }
+        private static T RecordPopulation(Hashtable ht, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
+        {
+            if (ht is null) return null;
+
+            T record = HashConverter.ConvertToClass<T>(ht);
+
+            // set record settings
+            record.ID = (int)ht["id"];
+            
+            record.IsRecord = true;
+            record.ExcludedFields = excludedFields;
+
+            //record.HashedValues = [];
+            switch (hashStoreType)
+            {
+                case HashedValueStoring.None: break;
+                
+                case HashedValueStoring.ExistingFields:
+                case HashedValueStoring.NonExistingFields:
+                {
+                    record.HashedValues = ScalpFields(ht, hashStoreType);
+                    break;
+                }
+
+                case HashedValueStoring.All:
+                {
+                    record.HashedValues = ht;
+                    break;
+                }
+            }
+            if (record.HpModel == OdooDefaults.HP_VERSION 
+                    && ht.TryGetValue("dir_id", out object value))
+            {
+                record.HashedValues.Add("dir_id", value);
+            }
+            
+
+            record.CompleteConstruction();
+            return record;
+        }
+        private static Hashtable ScalpFields(Hashtable ht, HashedValueStoring hashStoreType)
+        {
+            if (hashStoreType is HashedValueStoring.None) return null;
+            bool IsExisting = true;
+            switch (hashStoreType)
+            {
+                case HashedValueStoring.ExistingFields:
+                {
+                    IsExisting = true;
+                    break;
+                }
+                case HashedValueStoring.NonExistingFields:
+                {
+                    IsExisting = false;
+                    break;
+                }
+            }
+            Type type = typeof(T);
+            IEnumerable<string> fieldInfo = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Select(fi => fi.Name);
+            // if All then take all                                                                     true            = true
+            // if ExistingFields then IsExisting is true so if it does contain the key then             true    ^ !true = true
+            // if NotExistingFields then IsExisting is false so if it does not contain the key then     false   ^ !true = false
+            Hashtable newHT = ht.TakeWhere(de => hashStoreType == HashedValueStoring.All || (IsExisting ^ !fieldInfo.Contains(de.Key)));
+            return newHT;
+        }
+        internal static Tother[] GetRelatedRecordsBySearch<Tother>(ArrayList searchFilter, string relatedFieldName, string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null) where Tother : HpBaseModel<Tother>, new()
+        {
+            string modelName = HpModelDictionary[typeof(T)];
+
+            List<Tother> records = [];
+            ArrayList fields = HpBaseModel<Tother>.GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+            ArrayList result;
+
+            result = OClient.RelatedSearch(modelName, [searchFilter, relatedFieldName, fields], 60000);
+
+
+            if (result.Count == 0) return null;
+
+            foreach (Hashtable ht in result)
+            {
+                Tother record = HashConverter.ConvertToClass<Tother>(ht);
 
                 // set record settings
                 record.ID = (int)ht["id"];
                 //record.HashedValues = ht;
-                if (record.HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
+                if (record.HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value))
                 {
-                    record.HashedValues = new Hashtable();
-                    record.HashedValues.Add("dir_id", value);
+                    record.HashedValues = new Hashtable
+                    {
+                        { "dir_id", value }
+                    };
                 }
                 record.IsRecord = true;
                 record.ExcludedFields = excludedFields;
@@ -426,21 +512,7 @@ namespace HackPDM
 
             foreach (Hashtable ht in result)
             {
-                T record = HashConverter.ConvertToClass<T>(ht);
-
-                // set record settings
-                record.ID = (int)ht["id"];
-                //record.HashedValues = ht;
-                if (record.HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
-                {
-                    record.HashedValues = new Hashtable();
-                    record.HashedValues.Add("dir_id", value);
-                }
-                record.IsRecord = true;
-                record.ExcludedFields = excludedFields;
-                record.CompleteConstruction();
-
-                records.Add(record);
+                records.Add(RecordPopulation(ht, excludedFields));
             }
             return [.. records];
         }
@@ -483,24 +555,11 @@ namespace HackPDM
 
             foreach (Hashtable ht in result)
             {
-                T record = HashConverter.ConvertToClass<T>(ht);
-
-                // set record settings
-                record.ID = (int)ht["id"];
-                //record.HashedValues = ht;
-                if (record.HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
-                {
-                    record.HashedValues = new Hashtable();
-                    record.HashedValues.Add("dir_id", value);
-                }
-                record.IsRecord = true;
-                record.ExcludedFields = excludedFields;
-                record.CompleteConstruction();
-
-                records.Add(record);
+                records.Add(RecordPopulation(ht, excludedFields));
             }
             return [.. records];
         }
+
         public static object GetFieldValue(int ID, string fieldName)
         {
             if (ID == 0) return null;

@@ -5,8 +5,6 @@ VisualStudioVersion = 17.12.35521.163
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HackPDM_CSharp", "HackPDM_CSharp.csproj", "{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HackPDM_CSharpTests", "..\HackPDM_CSharpTests\HackPDM_CSharpTests.csproj", "{883A45CE-4789-464E-92A7-8F586031A1B1}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|MCD = Debug|MCD
@@ -46,32 +44,11 @@ Global
 		{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}.Release|x64.Build.0 = Release|x64
 		{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}.Release|x86.ActiveCfg = Release|x86
 		{DB86D9D5-C225-4B7E-A209-8BA02AA40B8D}.Release|x86.Build.0 = Release|x86
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.Debug|MCD.ActiveCfg = Debug|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.Debug|MCD.Build.0 = Debug|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.Debug|x64.Build.0 = Debug|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.Debug|x86.Build.0 = Debug|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.GitRelease|MCD.ActiveCfg = GitRelease|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.GitRelease|MCD.Build.0 = GitRelease|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.GitRelease|x64.ActiveCfg = GitRelease|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.GitRelease|x64.Build.0 = GitRelease|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.GitRelease|x86.ActiveCfg = GitRelease|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.GitRelease|x86.Build.0 = GitRelease|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.HackServer|MCD.ActiveCfg = HackServer|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.HackServer|MCD.Build.0 = HackServer|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.HackServer|x64.ActiveCfg = HackServer|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.HackServer|x64.Build.0 = HackServer|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.HackServer|x86.ActiveCfg = HackServer|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.HackServer|x86.Build.0 = HackServer|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.Release|MCD.ActiveCfg = Release|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.Release|MCD.Build.0 = Release|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.Release|x64.ActiveCfg = Release|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.Release|x64.Build.0 = Release|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.Release|x86.ActiveCfg = Release|Any CPU
-		{883A45CE-4789-464E-92A7-8F586031A1B1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A694C792-B1CB-4848-BC07-9C0186D2A11B}
 	EndGlobalSection
 EndGlobal

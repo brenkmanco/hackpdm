@@ -11,7 +11,7 @@ using System.Windows.Forms;
 
 namespace HackPDM
 {
-    class SWDocMgr
+    public class SWDocMgr
     {
 
         private SwDMApplication swDocMgr = default(SwDMApplication);

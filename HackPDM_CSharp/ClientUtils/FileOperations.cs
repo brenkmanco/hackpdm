@@ -250,14 +250,14 @@ namespace HackPDM
                 if (!OdooDefaults.ExtToType.ContainsKey(hackArr[i].TypeExt.ToLower())) continue;
 
                 string filePath = HpDirectory.WindowsToOdooPath(hackArr[i].RelativePath);
-                ArrayList arrList = new ArrayList
-                {
+                ArrayList arrList =
+                [
 
                     new ArrayList() { "name", "=", hackArr[i].Name },
                     // new ArrayList() { "checksum", "=", hackArr[i].SHA1Checksum },
                     new ArrayList() { "directory_complete_name", "=", filePath },
                 
-                };
+                ];
 
                 //ArrayList execParam = [arrList, fields];
                 //int resultTest = await OClient.CommandAsync<int>(HpVersion.GetHpModel(), "search_count", arrList, 10000);
@@ -292,6 +292,16 @@ namespace HackPDM
 		    string directoryPath = Path.GetDirectoryName(fullPath);
 		    return directoryPath.Substring(HackDefaults.PWAPathAbsolute.Length - HackDefaults.PWAPathRelative.Length);
 	    }
+        public static string FileSizeReformat(int? bytesize)
+            => FileSizeReformat((long?)bytesize);
+        public static string FileSizeReformat(long? bytesize)
+            => bytesize switch
+            {
+                < 1024 => $"{bytesize}     B",
+                < 1048576 => $"{bytesize / 1024f:.##}   KB",
+                <= 1073741824 => $"{bytesize / 1048576f:.##}   MB",
+                _ => $"{bytesize}     B",
+            };
 
         public static bool IsFileLocked(FileInfo file)
         {

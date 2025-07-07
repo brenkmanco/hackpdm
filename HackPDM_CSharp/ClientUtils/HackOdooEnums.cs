@@ -19,10 +19,17 @@ namespace HackPDM.ClientUtils
         FieldOnly,
         PropertyAndField,
     }
-    public enum relationType
+    public enum RelationType
     {
         Parent,
         Child,
         Both,
     }  
+    public enum HashedValueStoring : byte
+    {
+        None,
+        ExistingFields,
+        NonExistingFields,
+        All
+    }
 }

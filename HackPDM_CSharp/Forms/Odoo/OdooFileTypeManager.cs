@@ -276,7 +276,7 @@ namespace HackPDM.Forms.Odoo
 		{
 			HackFileManager.InitListViewPercentage(OdooLocTypes, LocalRows);
 			IEnumerable<string> filePaths = Directory.EnumerateFiles(HackDefaults.PWAPathAbsolute, "*", SearchOption.AllDirectories);
-			HashSet<string> uniqFiles = new();
+			HashSet<string> uniqFiles = [];
 
 			int pathsCount = filePaths.Count();
 			HackFileManager.SafeInvoker(LocalFileCount, () => LocalFileCount.Text = $"files found: {pathsCount.ToString()}");
@@ -473,7 +473,7 @@ namespace HackPDM.Forms.Odoo
 		// reset, delete, add selected, commit filters
 		private async void btnAddSel_Click( object sender, EventArgs e )
 		{
-			List<HpType> types = new();
+			List<HpType> types = [];
 			foreach (ListViewItem item in OdooLocTypes.SelectedItems)
 			{
 				if (item.SubItems[HackFileManager.NameConfig["FileTypeLocStatus"]].Text != "New Type") continue;
@@ -486,7 +486,7 @@ namespace HackPDM.Forms.Odoo
 		}
 		private async void AddAllNewTypesBtn_Click( object sender, EventArgs e )
 		{
-			List<HpType> types = new();
+			List<HpType> types = [];
 			foreach ( ListViewItem item in OdooLocTypes.Items )
 			{
 				if ( item.SubItems [ HackFileManager.NameConfig [ "FileTypeLocStatus" ] ].Text != "New Type" )
@@ -737,7 +737,7 @@ namespace HackPDM.Forms.Odoo
 		}
 		public DataColumnSettings(params (string, object)[] fieldPropertyValues)
 		{
-			this.fieldPropValues = new();
+			this.fieldPropValues = [];
 			foreach(var tup in fieldPropertyValues)
 				this.fieldPropValues.Add(tup.Item1, tup.Item2);
 		}

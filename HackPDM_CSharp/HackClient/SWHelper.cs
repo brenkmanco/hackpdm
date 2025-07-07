@@ -14,7 +14,7 @@ using SolidWorks.Interop.swdocumentmgr;
 
 namespace HackPDM
 {
-    class SWHelper
+    public class SWHelper
     {
 
         private SolidWorks.Interop.sldworks.SldWorks swApp;

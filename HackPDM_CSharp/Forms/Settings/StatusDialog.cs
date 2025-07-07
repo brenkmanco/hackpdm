@@ -34,8 +34,6 @@ namespace HackPDM
     /// </summary>
     public partial class StatusDialog : Form
     {
-        
-        private bool blnCanceled = false;
         int ErrorCount = 0;
 
         public static bool SkipText
@@ -47,20 +45,20 @@ namespace HackPDM
                 Properties.UserSettings.Default.Save();
             }
         }
-        private static int historyLength;
+
         public static int HistoryLength
         {
             get
             {
-                if (historyLength == 0)
+                if (field == 0)
                 {
-                    historyLength = Properties.UserSettings.Default.HistoryLengthSize;
+                    field = Properties.UserSettings.Default.HistoryLengthSize;
                 }
-                return historyLength;
+                return field;
             }
             set
             {
-                historyLength = value;
+                field = value;
                 Properties.UserSettings.Default.HistoryLengthSize = value;
                 Properties.UserSettings.Default.Save();
             }
@@ -70,11 +68,8 @@ namespace HackPDM
             get => this.DoubleBuffered;
             set => this.DoubleBuffered = value;
         }
-        public bool Canceled {
-            get { return blnCanceled; }
-            private set { blnCanceled = value; }
-        }
-        
+        public bool Canceled { get; private set; } = false;
+
         public bool ShowStatusDialog(string TitleText) {
             //var dlg = new StatusDialog(TitleText);
             this.Text = TitleText;
@@ -83,17 +78,21 @@ namespace HackPDM
         }
         
         public StatusDialog() {
+            HackFileManager.queueAsyncStatus = new();
             InitializeComponent();
+            ClearStatus();
         }
         
         private StatusDialog(string TitleText) : this() {
+            HackFileManager.queueAsyncStatus = new();
             this.Text = TitleText;
+            ClearStatus();
         }
         
         public void ClearStatus() {
             lvMessages.Clear();
             lvMessages.Columns.Add("Action",120,System.Windows.Forms.HorizontalAlignment.Left);
-            lvMessages.Columns.Add("Description",460, System.Windows.Forms.HorizontalAlignment.Left);
+            lvMessages.Columns.Add("Description",1000, System.Windows.Forms.HorizontalAlignment.Left);
         }
         
         public void AddStatusLine(string Action, string Description) {
@@ -224,7 +223,7 @@ namespace HackPDM
         }
         
         private void CmdCancelClick(object sender, EventArgs e) {
-            blnCanceled = true;
+            Canceled = true;
             this.Close();
         }
         

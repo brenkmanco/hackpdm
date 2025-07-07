@@ -71,6 +71,20 @@ namespace HackPDM
         } = null;
         public static string CurrentPath { get; set; }
 
+        public static SWDocMgr docMgr
+        {
+            get
+            {
+                return field ??= new(OdooDefaults.SWApi);
+            }
+            set;
+        }
+        public static SWHelper swHelper
+        {
+            get;
+            set;
+        }
+
         public static bool GetFiles(string relativePath, out IEnumerable<string> files)
         {
             CurrentPath = Path.Combine(PWAPathAbsolute, relativePath);
@@ -222,22 +236,25 @@ namespace HackPDM
             };
 			return hack;
 		}
-		public static HackFile GetFromPath(string path)
+		public static HackFile GetFromPath(string path, string directory = null)
         {
             FileInfo file = new(path);
             if (!file.Exists) return null;
 
-            return new HackFile(file);
-        }
-        
-        public static HackFile GetFromPath(string path, string directory)
-        {
-            HackFile hack = GetFromPath(path);
-            if (hack == null) return null;
+            HackFile hack = new(file);
 
-            hack.RelativePath = directory;
+            hack.RelativePath = Path.Combine("root", hack.BasePath[(HackDefaults.PWAPathAbsolute.Length+1)..]);
             return hack;
         }
+        
+        //public static HackFile GetFromPath(string path, string directory)
+        //{
+        //    HackFile hack = GetFromPath(path);
+        //    if (hack == null) return null;
+            
+        //    hack.RelativePath = directory;
+        //    return hack;
+        //}
         public static HackFile GetFromVersion(HpVersion version)
         {
             if (version.winPathway == null) return null;
@@ -279,7 +296,8 @@ namespace HackPDM
         }
         public static bool IsLocalVersion(in HpVersion version, in HackFile hackFile)
         {
-            if (HasLocalVersion(hackFile) && hackFile?.HpVersionID == version.ID) return true;
+            //if (HasLocalVersion(hackFile) && hackFile?.HpVersionID == version.ID) return true;
+            if (hackFile.SHA1Checksum == version.checksum) return true;
             return false;
         }
         public static bool GetLocalVersion(in HpVersion[] versions, out HackFile hackFile)

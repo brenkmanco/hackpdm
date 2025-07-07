@@ -125,11 +125,11 @@ namespace HackPDM.Forms.Settings
 				searchDomain.Add(new ArrayList {"id", "in", candidates.ToArrayList()});
 			}
 			
-			execParams = new()
-			{ 
-				searchDomain,
+			execParams =
+            [
+                searchDomain,
 				fields,				
-			};
+			];
 
 			results = await OdooClient.BrowseAsync(HpEntry.GetHpModel(), execParams, 10000);
 			
@@ -231,7 +231,7 @@ namespace HackPDM.Forms.Settings
 		}
 		private async Task<ArrayList[]> CompilePropertyParams()
 		{
-			List<Task<ArrayList>> tasks = new();
+			List<Task<ArrayList>> tasks = [];
 			if (OdooSearchPropList.Items?.Count > 0)
 			{
 				ArrayList fields = ["entry_id"]; 
@@ -239,7 +239,7 @@ namespace HackPDM.Forms.Settings
 				{
 					Task<ArrayList> newTask = Task.Run( async ()=>
 					{
-						ArrayList arr1 = new ArrayList();
+						ArrayList arr1 = [];
 						ListViewItem item = null;
 					
 						hackman.SafeInvoke(OdooSearchPropList, () =>
@@ -268,7 +268,7 @@ namespace HackPDM.Forms.Settings
 		}
 		private ConcurrentSet<int> FilterCandidates(ArrayList[] lists)
 		{
-			ConcurrentSet<int> candidates = new();
+			ConcurrentSet<int> candidates = [];
 			
 			for (int i = 0; i < lists.Length; i++) 
 			{
@@ -506,7 +506,7 @@ namespace HackPDM.Forms.Settings
 		}
 		private async Task CheckOutItems(IEnumerable items, bool willCheckout = true)
 		{
-			ArrayList ids = new();
+			ArrayList ids = [];
 			foreach (ListViewItem item in items)
 			{
 				ids.Add(int.Parse(item.SubItems[HackFileManager.NameConfig [ "SearchID" ]].Text));
@@ -559,7 +559,7 @@ namespace HackPDM.Forms.Settings
 		private void DownloadRemoteFile( int entryID )
 		{
 			const string latest_version = "latest_version_id";
-			HpVersion version = HpEntry.GetRelatedRecordByIDS<HpVersion>(new ArrayList() { entryID }, latest_version, excludedFields: ["preview_image"]).First();
+			HpVersion version = HpEntry.GetRelatedRecordByIDS<HpVersion>([entryID], latest_version, excludedFields: ["preview_image"]).First();
 
 			if ( version == null )
 				return;
@@ -571,7 +571,7 @@ namespace HackPDM.Forms.Settings
 		private void PreviewRemoteFile( int entryID )
 		{
 			const string latest_version = "latest_version_id";
-			HpVersion version = HpEntry.GetRelatedRecordByIDS<HpVersion>(new ArrayList() { entryID }, latest_version, excludedFields: ["preview_image"]).First();
+			HpVersion version = HpEntry.GetRelatedRecordByIDS<HpVersion>([entryID], latest_version, excludedFields: ["preview_image"]).First();
 
 			if ( version == null )
 				return;

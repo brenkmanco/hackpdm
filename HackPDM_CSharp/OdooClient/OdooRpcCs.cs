@@ -197,6 +197,10 @@ namespace OdooRpcCs
         public static ArrayList RelatedBrowse(string model, ArrayList execParams, int? timeout = null)
             => Command<ArrayList>(model, "related_browse", execParams, timeout); // read-only
 
+        // takes domain search, related field name, and return fields
+        public static ArrayList RelatedSearch(string model, ArrayList execParams, int? timeout = null)
+            => Command<ArrayList>(model, "related_search_browse", execParams, timeout); // read-only
+
         // field functions
         public static Hashtable GetFields(string model, ArrayList execParams, int? timeout = null) 
             => Command<Hashtable>(model, "fields_get", execParams, timeout); //
@@ -272,6 +276,8 @@ namespace OdooRpcCs
         // crud operations
         public static async Task<int> CreateAsync(string model, Hashtable values, int? timeout = null)
             => await CommandAsync<int>(model, "create", [values], timeout); //
+        public static async Task<ArrayList> CreateAsync(string model, ArrayList arrayValues, int? timeout = null)
+            => await CommandAsync<ArrayList>(model, "create", [arrayValues], timeout); //
         public static async Task<ArrayList> ReadAsync(string model, ArrayList ids, ArrayList fields, int? timeout = null)
             => await CommandAsync<ArrayList>(model, "read", [ids, fields], timeout); //
         public static async Task<bool> UpdateAsync(string model, int id, Hashtable values, int? timeout = null) 
