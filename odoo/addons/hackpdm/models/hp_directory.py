@@ -39,8 +39,8 @@ class hp_directory(models.Model):
     #relational fields
     parent_id = fields.Many2one(
         comodel_name='hp.directory',
-        string='parent directory', 
-        #default=None, 
+        string='parent directory',
+        #default=None,
     )
     default_cat = fields.Many2one(
         comodel_name='hp.category',
@@ -57,7 +57,7 @@ class hp_directory(models.Model):
         string='entries',
     )
 
-    
+
     # @api.depends('parent_id')
     # def _compute_parent_path(self):
     #     for directory in self:
@@ -109,7 +109,7 @@ class hp_directory(models.Model):
                 split_directories = value.split(' / ')
                 if split_directories[0] == "0" or split_directories[0] == "":
                     split_directories = split_directories[1:]
-                
+
                 # should look like '1/5/10/
                 value = "/".join(split_directories) + "/"
             record = self.env['hp.directory'].search([('parent_path', '=', value)])[0]
@@ -122,7 +122,7 @@ class hp_directory(models.Model):
         """
         record = self._get_record_for_filepath(value, False)
         return record.id
-    
+
     @api.model
     def get_dir_id_for_parentpath(self, value):
         """ the client will pass a filepath here and then search for the filepath
@@ -130,7 +130,7 @@ class hp_directory(models.Model):
         """
         record = self._get_record_for_filepath(value, True)
         return record.id
-    
+
     @api.model
     def get_directories(self, value=None):
         pass
@@ -142,11 +142,11 @@ class hp_directory(models.Model):
         child_entries = {}
         entry_dict = {}
         for entry in directory.entry_ids:
-            if not(showInactive) and entry["deleted"] == True: 
+            if not(showInactive) and entry["deleted"] == True:
                 continue
 
             entry_dict = {}
-            entry_dict["id"] = entry.id                    
+            entry_dict["id"] = entry.id
             if withDetails:
                 entry_dict["type"] = entry.type_id.file_ext
                 entry_dict["checkout"] = f'{entry.checkout_user.login}:{entry.checkout_user.id}'
@@ -171,12 +171,12 @@ class hp_directory(models.Model):
         directory_dict["id"] = directory.id
         directory_dict["name"] = directory.name
 
-        # get all children directories within directory 
+        # get all children directories within directory
 
         child_directories = {}
         for child_id in directory.child_ids:
             child_directories[child_id.name] = self._recurse_directories(child_id, withEntries)
-        
+
         directory_dict["directories"] = child_directories
 
         # get all entries within directory
@@ -210,9 +210,9 @@ class hp_directory(models.Model):
         if record:
             directory_dict = self._recurse_directories(record, withEntries)
             #print(dict_ids)
-        
+
         return directory_dict
-    
+
     @api.model
     def get_dir_ids_for_filepaths(self, values):
         list_ids = []
@@ -222,21 +222,21 @@ class hp_directory(models.Model):
 
     @api.model
     def get_entries(self, value):
-        
+
         showInactive = value[1]
         value = value[0]
 
         entry_dict = {}
         try:
             record = self.env["hp.directory"].search([('id', '=', value)])[0]
-            
+
             if record:
                 entry_dict = self._get_entry_dict(record, True, showInactive)
                 #print(dict_ids)
         except Exception as e:
             logging.error(e)
         return entry_dict
-    
+
     def _get_all_entry_ids(self, directory, root_entry_list, withDeleted=True):
         for entry in directory.entry_ids:
             if withDeleted or not(entry.deleted):
@@ -268,7 +268,7 @@ class hp_directory(models.Model):
             for dir in directory.child_ids:
                 if (paths[index + 1] == dir.name):
                     return self._recurse_directories_finding(dir, paths, index + 1, forClient)
-                
+
         # if there are no children inside of directory equal to the name
         # in paths[index] then the previous index
         # or index is greater than or equal to the count of paths in paths
@@ -282,8 +282,8 @@ class hp_directory(models.Model):
                 'index': index,
                 'directory': directory,
             }
-            
-        
+
+
 
     # pathway will have a path that needs to be parsed to find the last available directory
     # and then return a dictionary with the index of the path where it was last available
@@ -291,7 +291,7 @@ class hp_directory(models.Model):
     @api.model
     def last_available_directory(self, paths):
         last_dir = {}
-        # if the first array element is pwa change it to root and 
+        # if the first array element is pwa change it to root and
         # then if the first array element doesn't equal root then
         # the beginning of the path isn't going to be found
         paths[0] == "root"
@@ -300,12 +300,12 @@ class hp_directory(models.Model):
         root = records[0]
         last_dir = self._recurse_directories_finding(root, paths, 0, True)
         return last_dir
-    
+
     @api.model
     def create_new_details(self, paths):
         details = {}
         paths[0] = "root"
-        
+
         records = self.env["hp.directory"].search([("id", "=", 1)])
         root = records[0]
         details = self._recurse_directories_finding(root, paths, 0, False)

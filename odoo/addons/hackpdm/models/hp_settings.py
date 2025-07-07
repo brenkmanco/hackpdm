@@ -12,11 +12,11 @@ class hp_settings(models.Model):
     description = fields.Text(string="Description")
     type = fields.Selection(
         selection=[
-            ("bool", "Boolean"), 
-            ("int", "Integer"), 
-            ("char", "Char"), 
+            ("bool", "Boolean"),
+            ("int", "Integer"),
+            ("char", "Char"),
             ("float", "Float"),
-            ("date", "DateTime"),
+            ("date", "Datetime"),
         ],
         required=True,
     )
@@ -24,5 +24,4 @@ class hp_settings(models.Model):
     int_value = fields.Integer()
     char_value = fields.Char()
     float_value = fields.Float()
-    date_value = fields.DateTime()
-    
+    date_value = fields.Datetime()

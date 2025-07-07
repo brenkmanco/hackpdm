@@ -12,3 +12,4 @@ access_hp_release,access_hp_release,model_hp_release,base.group_user,1,1,1,1
 access_hp_release_version_rel,access_hp_release_version_rel,model_hp_release_version_rel,base.group_user,1,1,1,1
 access_hp_type,access_hp_type,model_hp_type,base.group_user,1,1,1,1
 access_hp_version_relationship,access_hp_version_relationship,model_hp_version_relationship,base.group_user,1,1,1,1
+access_hp_settings,access_hp_settings,model_hp_settings,base.group_user,1,1,1,1

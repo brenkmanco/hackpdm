@@ -61,7 +61,7 @@ class WebDav():
         except:
             logging.error(f"entry '{entry_id}' doesn't exist")
             return []
-    
+
     def get_file_from_webdav(self, entry_id:int, version_id:int, file_extension:str):
         file_path = urllib.parse.quote(f"/{entry_id}/{version_id}.{file_extension}")
         file_info = {}
@@ -80,7 +80,7 @@ class WebDav():
             else:
                 logging.error(f"file version '{version_id}' doesn't exist")
         return b''
-        
+
         #print(f"File information: {file_info}")
 
 class hp_common_model(models.AbstractModel):
@@ -93,7 +93,7 @@ class hp_common_model(models.AbstractModel):
         #logging.info(f"ids {ids}\n\nfields: {fields}\n")
         if not ids or not fields:
             return []
-        
+
         # sql query
         model_fields = [field for field in fields if field in self._fields]
         compute_field = [field for field in fields if field in self._fields[field].compute]
@@ -104,7 +104,7 @@ class hp_common_model(models.AbstractModel):
         query = f"SELECT id, {fields_str} FROM {self._table} WHERE id = ANY(%s)"
 
         logging.info(f"\nquery: {query}")
-        
+
         self.env.cr.execute(query, (ids,))
         results = self.env.cr.fetchall()
         #logging.info(f"results: {results}")
@@ -126,18 +126,25 @@ class hp_common_model(models.AbstractModel):
 
         #logging.info(dict_ids)
         return dict_ids
-    
+
     @api.model
     def related_browse(self, ids, field_name, fields):
         if not ids:
             return []
-        
+
         recordset = self.browse(ids)
         related_records = recordset.mapped(field_name)
         return related_records.read(fields)
 
+    @api.model
+    def related_search_browse(self, search, field_name, fields):
+        if not search:
+            return []
 
-     
+        recordset = self.search(search)
+        related_records = recordset.mapped(field_name)
+        return related_records.read(fields)
+
     @api.model
     def _create_attachment(self, file_contents:bytes, field_name:str):
         file_name = f"{self.id}.{self.name}"
@@ -154,7 +161,7 @@ class hp_common_model(models.AbstractModel):
             'mimetype': mime_type,
         }
         try:
-            attachment = self.env['ir.attachment'].create(values) 
+            attachment = self.env['ir.attachment'].create(values)
             return attachment
         except Exception as e:
             logging.error(e)
@@ -169,7 +176,7 @@ class hp_common_model(models.AbstractModel):
             ('res_field', '=', field_name)
         ])
         return attachments
-    
+
 
     def _import_versions(self, web_dav:WebDav):
         all_records = self.env["hp.version"].search([])
@@ -191,21 +198,21 @@ class hp_common_model(models.AbstractModel):
             else:
                 logging.warning(f"didn't create attachment {record.id}.{record.name}")
             self.env.cr.commit()
-        
+
     def _import_records(self, database1:Database, table_name:str):
         all_records = self.env[table_name.replace("_", ".")].search([])
         table1 = database1.get_table(table_name)
 
-        for record in all_records:        
+        for record in all_records:
             try:
                 stmt = table1.select().where(table1.c.id == record.id)
                 results = database1.execute(stmt)
-                
-                
+
+
             except Exception as e:
                 logging.error(e)
-                  
-            
+
+
             if record.name and len(attachment)>0:
                 logging.info(f"version record {attachment[0].res_id} has attachment id {attachment[0].id} named: {attachment[0].name}")
                 continue
@@ -251,8 +258,8 @@ class hp_common_model(models.AbstractModel):
             except Exception as e:
                 logging.error(e)
             self.env.cr.commit()
-            
-    
+
+
     @api.model
     @api.depends('entry_id', 'file_ext', 'name')
     def migrate_webdav_files_to_records(self):

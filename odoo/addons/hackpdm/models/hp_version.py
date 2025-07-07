@@ -59,7 +59,7 @@ class WebDav():
         except:
             logging.error(f"entry '{entry_id}' doesn't exist")
             return []
-    
+
     def get_file_from_webdav(self, entry_id:int, version_id:int, file_extension:str):
         file_path = urllib.parse.quote(f"/{entry_id}/{version_id}.{file_extension}")
         file_info = {}
@@ -78,7 +78,7 @@ class WebDav():
             else:
                 logging.error(f"file version '{version_id}' doesn't exist")
         return b''
-        
+
         #print(f"File information: {file_info}")
 
 
@@ -93,7 +93,7 @@ class hp_version(models.Model):
         string='file contents',
         attachment=True,
     )
-    preview_image = fields.Image('preview image') 
+    preview_image = fields.Image('preview image')
     file_modify_stamp = fields.Datetime(
         string='modified date',
         default=lambda self:fields.Datetime.now(),
@@ -123,6 +123,14 @@ class hp_version(models.Model):
     )
 
     #relational fields
+    windows_complete_name = fields.Char(
+        related='entry_id.windows_complete_name',
+        string='windows directory path name',
+    )
+    windows_complete_path = fields.Char(
+        related='entry_id.windows_complete_path',
+        string='windows directory path',
+    )
     dir_id = fields.Many2one(
         comodel_name='hp.directory',
         related='entry_id.dir_id',
@@ -163,7 +171,8 @@ class hp_version(models.Model):
     node_id = fields.Many2one(
         comodel_name='hp.node',
         string='node'
-    )   
+    )
+
 
     @api.depends('file_contents')
     def _compute_attachment(self):
@@ -185,7 +194,7 @@ class hp_version(models.Model):
                 record.md5sum = False
 
     @api.model
-    def get_recursive_dependency_entries(self, version_ids):
+    def get_recursive_dependency(self, version_ids):
         if not version_ids:
             return []
         if isinstance(version_ids, int):
@@ -215,11 +224,28 @@ class hp_version(models.Model):
             if not all_dep_version_ids:
                 return []
             # Now get unique entry_ids for these versions using the ORM for simplicity
-            versions = self.env['hp.version'].browse(list(all_dep_version_ids))
+            return all_dep_version_ids
+
+        except Exception as e:
+            _logger.error(f"Error fetching recursive dependencies for versions {version_ids}: {e}")
+            return []
+
+    @api.model
+    def get_recursive_dependency_entries(self, version_ids):
+        try:
+            if not version_ids:
+                return []
+            if isinstance(version_ids, int):
+                version_ids = [version_ids]
+            elif not isinstance(version_ids, list):
+                version_ids = list(version_ids)
+
+            complete_version_ids = self.get_recursive_dependency(version_ids)
             # '.ids' gives a list of unique IDs
+            # Now get unique entry_ids for these versions using the ORM for simplicity
+            versions = self.env['hp.version'].browse(list(complete_version_ids))
             entry_ids = versions.mapped('entry_id').ids
             return entry_ids
-
         except Exception as e:
             _logger.error(f"Error fetching recursive dependencies for versions {version_ids}: {e}")
             return []
@@ -265,7 +291,7 @@ class hp_version(models.Model):
             'mimetype': mime_type,
         }
         try:
-            attachment = self.env['ir.attachment'].create(values) 
+            attachment = self.env['ir.attachment'].create(values)
             return attachment
         except Exception as e:
             logging.error(e)
@@ -313,7 +339,6 @@ class hp_version(models.Model):
     @api.depends('name')
     def migrate_image_from_database(self):
         hackpdm = Database("hackpdm", "hackpdm", "hackpdm", "alderaan", 5432)
-        #odoopdm = Database("moony", "moony", "odoopdm", "10.0.0.52", 5432)
         hackpdm.start_session()
         all_records = self.env[self._name].search([])
 
@@ -343,7 +368,7 @@ class hp_version(models.Model):
         logging.info(f"deleting {len(all_records)} records linked to hp.version")
         all_records.unlink()
         logging.info(f"attachments deleted successfully")
-            
+
     @api.model
     def display_all_fnames(self):
         all_records = self.env["ir.attachment"].search([("res_model", "=", "hp.version")])
@@ -367,7 +392,7 @@ class hp_version_property(models.Model):
     number_value = fields.Float(string='number value')
     yesno_value = fields.Boolean(string='yes or no')
     date_value = fields.Datetime(
-        string='time stamp', 
+        string='time stamp',
     )
     prop_name = fields.Char(
         related='prop_id.name',
@@ -395,7 +420,7 @@ class hp_version_relationship(models.Model):
     _name = 'hp.version.relationship'
     _description = 'hp version relationship'
     _inherit = 'hp.common.model'
-    
+
     #fields
 
     #relational fields
@@ -407,6 +432,3 @@ class hp_version_relationship(models.Model):
         comodel_name='hp.version',
         string='version child',
     )
-
-
-
