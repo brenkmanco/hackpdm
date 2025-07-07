@@ -35,16 +35,8 @@ namespace HackPDM.Forms.Hack
 			if (userSettings.PWAPathAbsolute is null or "")	txtPwaInput.Text = Path.Combine(documents, Application.ProductName, "pwa");
 			else txtPwaInput.Text = userSettings.PWAPathAbsolute;
 			
-
-			if (userSettings.ProjectDirectory is null or "") txtProjectInput.Text = assemblyDir;
-			else txtProjectInput.Text = userSettings.ProjectDirectory;
-			
-			
 			if (userSettings.TemporaryPath is null or "") HackTempFolderPath.Text = Path.Combine(Path.GetTempPath(), Application.ProductName);
 			else HackTempFolderPath.Text = userSettings.TemporaryPath;
-
-			txtByteInput.Text       = appSettings.MeasureByteSize.ToString();
-			txtFileInput.Text       = appSettings.MeasureFileSize;
 		}
 
 		private void btnSubmit_Click( object sender, EventArgs e )
@@ -52,10 +44,7 @@ namespace HackPDM.Forms.Hack
 			StringBuilder errors = new();
 
 			if ( !TryCreateDirectory( txtPwaInput.Text )) errors.AppendLine( "invalid pwa directory path" );
-			if ( !TryCreateDirectory( txtProjectInput.Text )) errors.AppendLine( "invalid project directory path" );
 			if ( !TryCreateDirectory( HackTempFolderPath.Text )) errors.AppendLine( "invalid temporary directory path" );
-
-			if ( !double.TryParse( txtByteInput.Text, out double byteSize ) ) errors.AppendLine( "invalid byte size input" );
 
 			if (errors.Length > 0) 
 			{
@@ -66,34 +55,14 @@ namespace HackPDM.Forms.Hack
 			var dirInfo = new DirectoryInfo(txtPwaInput.Text);
 			userSettings.PWAPathRelative = dirInfo.Name;
 			userSettings.PWAPathAbsolute = txtPwaInput.Text;
-			userSettings.ProjectDirectory = txtProjectInput.Text;
 			userSettings.TemporaryPath = HackTempFolderPath.Text;
-			appSettings.MeasureByteSize = byteSize;
-			appSettings.MeasureFileSize = txtFileInput.Text;
-			appSettings.FileSizeMult = FileSizeMultiplier( txtFileInput.Text );
 
 			userSettings.Save();
 			appSettings.Save();
 
 			this.Close();
 		}
-		private double FileSizeMultiplier( string fileSize )
-		{
-			switch ( fileSize )
-			{
-				case "KiloByte":
-					return 1D;
-				case "MegaByte":
-					return 2D;
-				case "GigaByte":
-					return 3D;
-				case "TeraByte":
-					return 4D;
-				case "Byte":
-				default:
-					return 0D;
-			}
-		}
+
 		private bool TryCreateDirectory( string path )
 		{
 			if (Directory.Exists(path)) return true;

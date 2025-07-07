@@ -81,6 +81,11 @@ namespace HackPDM
 
         private void OdooLoginBtn_Click(object sender, EventArgs e)
         {
+            if (AbleToLogin())
+            {
+                var HFM = new HackFileManager();
+                HFM.Show();
+            }
             this.DialogResult = DialogResult.OK;
         }
 

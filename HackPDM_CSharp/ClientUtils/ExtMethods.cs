@@ -24,7 +24,8 @@ namespace HackPDM.ClientUtils
 		private static readonly XmlRpcResponseDeserializer _deserializer = new();
 
         // useful extension methods
-        
+        public static ArrayList GetIDs(this HpBaseModel[] models)
+            => models.Select(model=>model.ID).ToArrayList();
         public static IEnumerable<Tout> Select<Tin, Tout>(this ArrayList list, Func<Tin, Tout> selector)
         {
             foreach (Tin obj in list.OfType<Tin>())

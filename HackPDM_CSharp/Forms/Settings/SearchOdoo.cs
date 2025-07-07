@@ -93,10 +93,7 @@ namespace HackPDM.Forms.Settings
 			ArrayList searchDomain = [];
 			string comparer = "";
 			
-			hackman.SafeInvoke(OdooSearchComparer, ()=>
-			{
-				comparer = (string)OdooSearchComparer.SelectedItem;
-			});
+			hackman.SafeInvoke(OdooSearchComparer, () => comparer = (string)OdooSearchComparer.SelectedItem);
 
 			if (fileName.Length > 0)
 			{

@@ -51,7 +51,6 @@ namespace HackPDM.Verifier
 		public static bool CorrectHackSettings(ref List<string> errors)
 		{
 			if ( !Directory.Exists( Properties.UserSettings.Default.PWAPathAbsolute )) errors.Add( "HACK: invalid pwa directory path" );
-			if ( !Directory.Exists( Properties.UserSettings.Default.ProjectDirectory )) errors.Add( "HACK: invalid project directory path" );
 			if ( !Directory.Exists( Properties.UserSettings.Default.TemporaryPath )) errors.Add( "HACK: invalid temporary directory path" );
 
 			return errors.Count < 1;

@@ -26,6 +26,8 @@ using HackPDM.Forms.Odoo;
 using HackPDM.Forms.Settings;
 using HackPDM.HackClient;
 
+using Microsoft.VisualStudio.OLE.Interop;
+
 using OpenMcdf;
 
 using SolidWorks.Interop.sldworks;
@@ -266,44 +268,12 @@ namespace HackPDM
 					return;
 				}
 			}
-			//try
-			//{
-			//    HackUpdater.EnsureUpdated();
-			//}
-			//catch
-			//{
-			//    return;
-			//}
 
-            InitializeComponent();
+			InitializeComponent();
 			previewImage = OdooEntryImage.Image;
 			OdooDirectoryTree.LostFocus += TreeView_LostFocus;
 			ResetListViews();
 
-			// --------------------------------------
-			// Testing Dependencies
-			// --------------------------------------
-
-			string testingFile = @"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM";
-			string testingFile2 = @"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Catalog\Toolbox\Browser\ansi inch\nuts\Stover Nut_AI.sldprt";
-
-            ArrayList ids = [190730, 190729, 190728, 190727, 190726, 190725, 190724, 190723, 190722, 190721];
-			HpVersion[] versions = HpVersion.GetRecordsByIDS(ids, excludedFields: ["preview_image", "file_contents"], insertFields: ["windows_complete_name", "windows_complete_path"]);
-			HpVersion version = HpEntry.GetRelatedRecordByIDS<HpVersion>([41801], "latest_version_id", ["preview_image", "file_contents"]).First();
-			string[] fullPaths = [.. Directory.EnumerateFiles(@"C:\Users\jnjohnson\Documents\dev\hackpdm\HackPDM_CSharp\pwa\Designed\Haggis\Frame\Base Weldment")];
-			// HpVersionRelationship
-			//var props = HackDefaults.docMgr.GetProperties(testingFile2);
-			//var vProperties = HpVersionProperty.Create(version);
-            //HpVersionRelationship.Create([version]);
-			//HpVersion[] versions_from_paths = HpVersion.GetFromPaths(fullPaths);
-            //HpVersionRelationship.Create(versions);
-
-            //var depends = docMgr.GetDependencies(testingFile);
-            //Debug.Write(string.Join("\n", depends.Select(d => d[1])));
-
-            // --------------------------------------
-            // 
-            // --------------------------------------
             this.WindowState = FormWindowState.Maximized;
             this.FormClosing += (s, e) => isClosing = true;
 			
@@ -657,7 +627,8 @@ namespace HackPDM
                 //item.SubItems.Add(((int)table["id"]).ToString());
                 item.SubItems [ NameConfig [ "RowName" ] ].Text             = pair.Key.ToString();
 
-				string type = (string)table["type"];
+				object ttype = table["type"];
+				string type = ttype is string ttypeString ? ttypeString : EmptyPlaceholder;
 				item.SubItems [ NameConfig [ "RowType" ] ].Text             = type;
 
 				//double size = (double)( Convert.ToDouble(table["size"]) * HackDefaults.ByteSizeMultiplier );
@@ -673,7 +644,12 @@ namespace HackPDM
                 string fullName = (string)table["fullname"];
                 HackFile hack = hackFileMap[fullName].Result;
 
-				item.SubItems [ NameConfig [ "RowRemoteDate" ] ].Text = DateTime.TryParse((string)table["latest_date"], out DateTime remoteDate) && remoteDate != default ? remoteDate.ToShortDateString() : EmptyPlaceholder;
+				bool isDate = table["latest_date"] is string latest;
+				string datePlace = EmptyPlaceholder;
+
+				datePlace = DateTime.TryParse(datePlace, out DateTime remoteDate) && remoteDate != default ? remoteDate.ToShortDateString() : EmptyPlaceholder;
+				
+				item.SubItems[NameConfig["RowRemoteDate"]].Text = datePlace; 
 				item.SubItems [ NameConfig [ "RowLocalDate" ] ].Text = hack.ModifiedDate.Year != 1 ? hack.ModifiedDate.ToShortDateString() : EmptyPlaceholder;
 
 				// remote only
@@ -712,15 +688,8 @@ namespace HackPDM
 								{
 									// either the local version is newer or the remote version is newer
 									// because the checksums don't match
-									if (remoteDate > hack.ModifiedDate)
-									{
-										status = "nv";
-									}
-									else
-									{
-										status = "lm";
-									}
-								}
+									status = remoteDate > hack.ModifiedDate ? "nv" : "lm";
+                                }
 								break;
 							}
 							default: status = "lo"; break;
@@ -788,7 +757,8 @@ namespace HackPDM
 
 
 				item.SubItems[ NameConfig [ "RowStatus" ] ].Text            = status;
-                item.SubItems [ NameConfig [ "RowCategory" ] ].Text         = (string)table["category"];
+				string category = table["category"] is string cat ? cat : EmptyPlaceholder;
+                item.SubItems [ NameConfig [ "RowCategory" ] ].Text         = category;
                 item.SubItems [ NameConfig [ "RowFullName" ] ].Text         = fullName;
 
 				SafeInvoke(OdooEntryList, ()=> OdooEntryList.Items.Add(item));
@@ -816,8 +786,8 @@ namespace HackPDM
             foreach (HackFile file in files)
             {
 				string type = file.TypeExt.ToLower();
-				if (!OdooDefaults.ExtToType.TryGetValue(type, out var hpType)) continue;
-				type = type.Substring(1);
+				if (OdooDefaults.RestrictTypes & !OdooDefaults.ExtToType.TryGetValue(type, out var hpType)) continue;
+				type = type[1..];
 
                 ListViewItem item = EmptyListItemInternal(OdooEntryList);
 				item.SubItems[ NameConfig["RowID"] ].Text = EmptyPlaceholder;
@@ -846,7 +816,7 @@ namespace HackPDM
 					{
 
 						// get remote image
-						if (hpType.icon != null)
+						if (hpType?.icon != null)
 						{
 							byte[] imgBytes = FileOperations.ConvertFromBase64(hpType.icon);
 							MemoryStream ms = new();
@@ -889,7 +859,8 @@ namespace HackPDM
 
 
 				item.SubItems[ NameConfig [ "RowCheckOut" ] ].Text = EmptyPlaceholder;
-                item.SubItems[ NameConfig [ "RowCategory" ] ].Text = OdooDefaults.ExtToCat[$".{type}"].name;
+				string nameCategory = OdooDefaults.ExtToCat.TryGetValue($".{type}", out var cat) ? cat.name : EmptyPlaceholder;
+                item.SubItems[ NameConfig [ "RowCategory" ] ].Text = nameCategory;
                 item.SubItems[ NameConfig [ "RowFullName" ] ].Text = file.FullPath;
 
                 //OdooEntryList.Items.Add(item);
@@ -921,7 +892,7 @@ namespace HackPDM
 			Task historyAndProperties = Task.Run(() =>
 			{
                 // get history list
-                versions = GetVersionsForEntry(ID, ["preview_image", "file_contents"]);
+                versions = GetVersionsForEntry(ID, ["preview_image", "file_contents"], insertedFields: ["create_uid"]);
 			})
 			.ContinueWith(task1 =>
 			{
@@ -936,8 +907,8 @@ namespace HackPDM
 			{
 				if (versionID != null)
 				{
-					versionRels = GetRelFromVersions([versionID]);
-					versionsRelation = GetVersionsFromRelationship(versionRels);
+					//versionRels = GetRelFromVersions([versionID]);
+					//versionsRelation = GetVersionsFromRelationship(versionRels);
 					versionsRelation.Item1 = 
                         HpVersionRelationship.GetRelatedRecordsBySearch<HpVersion>([new ArrayList()
                             {
@@ -984,11 +955,11 @@ namespace HackPDM
 				 	// HpVersion.SortReverseById(versionsRelation.Item2);
 					PopulateChildren( in versionsRelation.Item2 );
 				}
-				if ( versions.Length == 1 )
+				if ( versions?.Length == 1 )
 				{
 					PopulateVersionInfo( versions [ 0 ] );
 				}
-				else if ( versions.Length > 1 )
+				else if ( versions?.Length > 1 )
 				{
 					HpVersion latest = null;
 					foreach ( HpVersion version in versions )
@@ -1011,7 +982,7 @@ namespace HackPDM
             await Task.Yield();
             SafeInvoke(list, () => list.Items.Add(item));
         }
-        private HpVersion[] GetVersionsForEntry(int EntryID, string[] excludedFields = null)
+        private HpVersion[] GetVersionsForEntry(int EntryID, string[] excludedFields = null, string[] insertedFields = null)
         {
             HpVersion[] versions = [];
             ArrayList ids = [EntryID];
@@ -1020,8 +991,8 @@ namespace HackPDM
             {
                 Hashtable ht = (Hashtable)al[0];
                 ArrayList result = (ArrayList)ht["version_ids"];
-                if (excludedFields == null) excludedFields = ["preview_image", "file_contents"];
-                versions = HpVersion.GetRecordsByIDS(result, excludedFields:excludedFields);
+                excludedFields ??= ["preview_image", "file_contents"];
+                versions = HpVersion.GetRecordsByIDS(result, excludedFields:excludedFields, insertFields: insertedFields);
             }
             return versions;
         }
@@ -1234,7 +1205,15 @@ namespace HackPDM
                         ListViewItem item = EmptyListItemInternal(OdooHistory);
 
 					    item.SubItems[ NameConfig [ "HistoryVersion" ] ].Text = version.ID.ToString();
-                        item.SubItems[ NameConfig [ "HistoryModUser" ] ].Text = EmptyPlaceholder;
+						string moduser = EmptyPlaceholder;
+						if (version.HashedValues.TryGetValue("create_uid", out object obj))
+						{
+							if (obj is ArrayList al && al is not null)
+							{
+								moduser = $"{al[1]} : {al[0]}";
+							}
+						}
+                        item.SubItems[ NameConfig [ "HistoryModUser" ] ].Text = moduser;
                         item.SubItems[ NameConfig [ "HistoryModDate" ] ].Text = version.file_modify_stamp?.ToShortDateString();
                         item.SubItems[ NameConfig [ "HistorySize" ] ].Text = version.file_size?.ToString();
                         item.SubItems[ NameConfig [ "HistoryRelDate" ] ].Text = EmptyPlaceholder;
@@ -1599,8 +1578,7 @@ namespace HackPDM
             return tasks.SkipSelect(
                 taskPredicate =>
                 {
-                    if (taskPredicate.Result == null) return true;
-                    return false;
+                    return taskPredicate.Result == null;
                 },
                 taskSelect => taskSelect.Result).ConvertToBag();
         }
@@ -3057,8 +3035,45 @@ namespace HackPDM
 		private bool DeleteVersions( ArrayList ids )
 		{
 			HpVersion[] versions = HpEntry.GetRelatedRecordByIDS<HpVersion>(ids, "version_ids", includedFields:["ID"]);
-			ArrayList vIds = versions.Select(v => v.ID).ToArrayList();
-			return OClient.Delete(HpVersion.GetHpModel(), [new ArrayList(){"id", "in", vIds}]);
+			HpVersionProperty[] vProps = null;
+			HpVersionRelationship[] vRelationsParent = null;
+			HpVersionRelationship[] vRelationsChild = null;
+			IrAttachment[] irAttachments = null;
+
+            ArrayList vIds = versions?.Select(v => v.ID).ToArrayList();
+			bool deletedVersionProps = false;
+			bool deletedVersionRelParent = false;
+			bool deletedVersionRelChild = false;
+			bool deletedIrAttachments = false;
+			bool deletedVersions = false;
+			bool deletedEntries = false;
+
+
+            if (vIds is not null && vIds.Count > 0)
+			{
+				vProps = HpVersionProperty.GetRecordsBySearch([new ArrayList() { "version_id", "in", vIds }]);
+                vRelationsParent = HpVersionRelationship.GetRecordsBySearch([new ArrayList() { "parent_id", "in", vIds }]);
+                vRelationsChild = HpVersionRelationship.GetRecordsBySearch([new ArrayList() { "child_id", "in", vIds }]);
+				irAttachments = IrAttachment.GetRecordsBySearch(
+				[
+					new ArrayList() { "res_id", "in", vIds }, 
+					new ArrayList() { "res_model", "=", HpVersion.GetHpModel()},
+					new ArrayList() { "res_field", "=", "file_contents"},	
+				]);
+            }
+
+			
+			deletedVersionProps = vProps is null || vProps.Count() <= 0 || OClient.Delete(HpVersionProperty.GetHpModel(), vProps.GetIDs());
+			deletedVersionRelParent = vRelationsParent is null || vRelationsParent.Count() <= 0 || OClient.Delete(HpVersionRelationship.GetHpModel(), vRelationsParent.GetIDs());
+            deletedVersionRelChild = vRelationsChild is null || vRelationsChild.Count() <= 0 || OClient.Delete(HpVersionRelationship.GetHpModel(), vRelationsChild.GetIDs());
+			deletedIrAttachments = irAttachments is null || irAttachments.Count() <= 0 || OClient.Delete(IrAttachment.GetHpModel(), irAttachments.GetIDs());
+			deletedVersions = vIds is null || vIds.Count <= 0 || OClient.Delete(HpVersion.GetHpModel(), vIds);
+			
+            if (deletedVersions)
+			{
+				deletedEntries = deletedVersions && OClient.Delete(HpEntry.GetHpModel(), ids);
+			}
+			return true;
 		}
 
 	}

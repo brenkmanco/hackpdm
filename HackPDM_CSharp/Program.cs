@@ -39,13 +39,24 @@ namespace HackPDM
 		[STAThread]
 		private static void Main(string[] args)
 		{
-			string tempPath = Path.Combine(Path.GetTempPath(), Application.ProductName);
+            try
+            {
+                if (!HackUpdater.EnsureUpdated())
+				{
+					return;
+				}
+            }
+            catch
+            {
+                return;
+            }
+            string tempPath = Path.Combine(Path.GetTempPath(), Application.ProductName);
 			if (!Directory.Exists(tempPath)) Directory.CreateDirectory(tempPath);
 
 			Application.EnableVisualStyles();
 			Application.SetCompatibleTextRenderingDefault(false);
 
-			Application.Run(new HackFileManager());		
+			Application.Run(new ProfileManager());		
 		}
 		
 	}

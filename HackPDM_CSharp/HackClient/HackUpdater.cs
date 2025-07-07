@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -47,54 +48,49 @@ namespace HackPDM.HackClient
 				"Versions",
 				MessageBoxButtons.YesNoCancel ) == DialogResult.Yes )
 			{
-				UpdaterProcess( null );
+				UpdaterProcess( );
 			}
-			throw new Exception( "Update to latest version" );
+
+			return false;
 		}
-		public static void EnsureUpdated()
+		public static bool EnsureUpdated()
 		{
 			var info = CurrentVersion();
 			//var ghBranch = await GetBranchRepo(repoID, branchName);
-			var taskSync = GetReleasesAsync(repoID);
-			taskSync.Wait();
-			var ghReleases = taskSync.Result;
+			//var taskSync = GetReleasesAsync(repoID);
+			//taskSync.Wait();
+			//var ghReleases = taskSync.Result;
 
-			if ( ghReleases.Count == 0 )
-			{
-				MessageBox.Show( "No releases found on GitHub" );
-				return;
-			}
+			//if ( ghReleases.Count == 0 )
+			//{
+			//	MessageBox.Show( "No releases found on GitHub" );
+			//	return;
+			//}
 
-			IsCorrectOdooVersion( info );
-			if (!IsLatestVersion(ghReleases[0], info))
-			{
-				if (MessageBox.Show($"Latest version: {ghReleases[0].TagName}, doesn't match your version: {info}\n" +
-				 $"Would you like to download the latest version?", 
-				 "Versions", 
-				 MessageBoxButtons.YesNoCancel) == DialogResult.Yes)
-				 {
-					UpdaterProcess(ghReleases[0]);
-				 }
-				 throw new Exception("Update to latest version");
-			}
+			//if (!IsLatestVersion(ghReleases[0], info))
+			//{
+			//	if (MessageBox.Show($"Latest version: {ghReleases[0].TagName}, doesn't match your version: {info}\n" +
+			//	 $"Would you like to download the latest version?",
+			//	 "Versions",
+			//	 MessageBoxButtons.YesNoCancel) == DialogResult.Yes)
+			//	{
+			//		UpdaterProcess(ghReleases[0]);
+			//	}
+			//	throw new Exception("Update to latest version");
+			//}
+
+			return IsCorrectOdooVersion(info);
 		}
-		public static void UpdaterProcess( Release release )
+		public static void UpdaterProcess( )
 		{
 			try
 			{
-				Process.Start( publishURL );
+				MessageBox.Show($"Opening {publishURL}");
+				Process proc = Process.Start( publishURL );
 			}
 			catch
 			{
-				if ( release is null )
-				{
-					Debug.WriteLine( "Failed to open download link.." );
-				}
-				else
-				{
-					Debug.WriteLine("Failed to open download link..\nDownloading from github..");
-					Process.Start( "explorer.exe", release.ZipballUrl );
-				}
+				Debug.WriteLine( "Failed to open download link.." );
 			}
 		}
 	}

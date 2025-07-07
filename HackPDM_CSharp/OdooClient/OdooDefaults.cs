@@ -42,9 +42,12 @@ namespace HackPDM
         public const string RES_USERS = "res.users";
         public const string IR_ATTACHMENT = "ir.attachment";
         public const string IR_MODEL = "ir.model";
-
+        // odoo name identifiers
         public const string OdooVersionKeyName = "client_version";
         public const string SWKeyName = "swdocmgr_key";
+        public const string RestrictPropName = "restrict_properties";
+        public const string RestrictTypesName = "restrict_types";
+
         public static readonly string[] dependentExt = [".SLDPRT", ".SLDASM", ".SLDDRW"];
         public static string[] EntryFilterPatterns = [.. HpEntryNameFilters.Select(eFilter => eFilter.name_regex)];
         // lock asynchonous operations
@@ -207,14 +210,14 @@ namespace HackPDM
         {
             get
             {
-                if ( field == null )
-                    field = HpSetting.GetAllRecords();
+                field ??= HpSetting.GetAllRecords();
                 return field;
             }
             set => field = value;
         }
         public static string SWApi = HpSettings.First(sett => sett.name == SWKeyName).char_value;
-
+        public static bool RestrictProperties = HpSettings.First(sett => sett.name == RestrictPropName).bool_value;
+        public static bool RestrictTypes = HpSettings.First(sett => sett.name == RestrictTypesName).bool_value;
         public static HpEntryNameFilter[] HpEntryNameFilters
         {
             get
@@ -596,7 +599,7 @@ namespace HackPDM
 		}
         internal static async Task<HpEntry> CreateNew( HackFile hackFile, int dir_id )
         {
-			if ( !OdooDefaults.ExtToType.TryGetValue( hackFile.TypeExt, out HpType type ) )
+			if (OdooDefaults.RestrictTypes & !OdooDefaults.ExtToType.TryGetValue( hackFile.TypeExt, out HpType type ) )
 				return null;
 
 			HpEntry newEntry = new()
@@ -604,16 +607,18 @@ namespace HackPDM
 				name = hackFile.Name,
 				deleted = false,
 				dir_id = dir_id,
-				cat_id = type.cat_id,
-				type_id = type.ID,
 			};
+            if (type is not null)
+            {
+                newEntry.cat_id = type.cat_id;
+                newEntry.type_id = type.ID;
+            }
             await newEntry.CreateAsync( false );
-            
-            if ( newEntry.ID == 0 ) return null;
-            return newEntry;
-		}
 
-		internal async Task LogicalDelete() 
+            return newEntry.ID == 0 ? null : newEntry;
+        }
+
+        internal async Task LogicalDelete() 
         {
             deleted = true;
             await WriteChangedValuesAsync( "deleted" );
@@ -1179,7 +1184,7 @@ namespace HackPDM
         }
         internal static HpVersion PrepareCreation(HackFile hackFile, HpEntry entry, HashedValueStoring hashStoreType = HashedValueStoring.None)
         {
-            if (!OdooDefaults.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
+            if (OdooDefaults.RestrictTypes & !OdooDefaults.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
                 return null;
 
             string fileBase64 = hackFile.fileContents != null
@@ -1480,14 +1485,14 @@ namespace HackPDM
                     HpVersionProperty[] properties = [.. props.Select(prop =>
                     {
                         bool isSuccessful = false;
-                        if (OdooDefaults.ExtToProp.TryGetValue(prop.Item2, out HpProperty hpProperty))
+                        if (!OdooDefaults.RestrictProperties | OdooDefaults.ExtToProp.TryGetValue(prop.Item2, out HpProperty hpProperty))
                         {
                             HpVersionProperty vProp = new()
                             {
                                 sw_config_name = prop.Item1 == "" ? null : prop.Item1,
-                                prop_id = hpProperty.ID != 0 ? hpProperty.ID : throw new Exception("property id not defined"),
                                 version_id = version.ID != 0 ? version.ID : throw new Exception("version id not defined"),
                             };
+                            if (hpProperty is not null) vProp.prop_id = hpProperty.ID; 
                             switch (prop.Item3)
                             {
                                 case "text": vProp.text_value        = (string)prop.Item4; break;

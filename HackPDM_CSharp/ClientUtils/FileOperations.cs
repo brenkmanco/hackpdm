@@ -228,15 +228,15 @@ namespace HackPDM
         public async static Task<HackFile[]> FilesNotInOdoo(IEnumerable<HackFile> hackFiles)
         {
             // key: checksum, value: filepath
-            Dictionary<string, string> checkFiles = new(hackFiles.Count());
-            foreach (HackFile filePath in hackFiles)
-            {
-                //if (OdooDefaults.ExtToType.ContainsKey(filePath.TypeExt))
-                if (!OdooDefaults.ExtToFilter.ContainsKey(filePath.TypeExt))
-                {
-                    checkFiles.Add(filePath.FullPath, FileChecksum(filePath.FullPath, SHA1.Create()));
-                }
-            }
+            //Dictionary<string, string> checkFiles = new(hackFiles.Count());
+            //foreach (HackFile filePath in hackFiles)
+            //{
+            //    //if (OdooDefaults.ExtToType.ContainsKey(filePath.TypeExt))
+            //    if (!OdooDefaults.ExtToFilter.ContainsKey(filePath.TypeExt))
+            //    {
+            //        checkFiles.Add(filePath.FullPath, FileChecksum(filePath.FullPath, SHA1.Create()));
+            //    }
+            //}
          
             HackFile[] hackArr = [.. hackFiles];
             List<HackFile> hacks = [];
@@ -247,14 +247,14 @@ namespace HackPDM
 
             for (int i = 0; i < hackArr.Length; i++)
             {
-                if (!OdooDefaults.ExtToType.ContainsKey(hackArr[i].TypeExt.ToLower())) continue;
+                string filepath = hackArr[i].TypeExt.ToLower();
+                if (OdooDefaults.RestrictTypes && !OdooDefaults.ExtToType.ContainsKey(filepath)) continue;
 
                 string filePath = HpDirectory.WindowsToOdooPath(hackArr[i].RelativePath);
                 ArrayList arrList =
                 [
 
                     new ArrayList() { "name", "=", hackArr[i].Name },
-                    // new ArrayList() { "checksum", "=", hackArr[i].SHA1Checksum },
                     new ArrayList() { "directory_complete_name", "=", filePath },
                 
                 ];

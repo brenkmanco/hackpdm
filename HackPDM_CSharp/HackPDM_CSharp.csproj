@@ -517,12 +517,6 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
       <DependentUpon>UserSettings.settings</DependentUpon>
     </Compile>
-    <Compile Include="Forms\Legacy\SearchDialog.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Forms\Legacy\SearchDialog.Designer.cs">
-      <DependentUpon>SearchDialog.cs</DependentUpon>
-    </Compile>
     <Compile Include="Forms\Settings\StatusSettings.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -564,9 +558,6 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Forms\Legacy\SearchDialog.resx">
-      <DependentUpon>SearchDialog.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Forms\Settings\StatusDialog.resx">
       <DependentUpon>StatusDialog.cs</DependentUpon>
