@@ -482,7 +482,7 @@ namespace HackPDM.Forms.Odoo
 				HpType type = new(null, ext, null, $"\\.({ext})$", 0);
 				types.Add(type);
 			}		
-			await AddLocalTypes(types.ToArray());
+			await AddLocalTypes([.. types]);
 		}
 		private async void AddAllNewTypesBtn_Click( object sender, EventArgs e )
 		{
@@ -496,7 +496,7 @@ namespace HackPDM.Forms.Odoo
 				HpType type = new(null, ext, null, $"\\.({ext})$", 0);
 				types.Add( type );
 			}
-			await AddLocalTypes(types.ToArray());
+			await AddLocalTypes([.. types]);
 		}
 		private void LocalDataTypeGrid_CellClick( object sender, DataGridViewCellEventArgs e )
 		{
@@ -587,7 +587,7 @@ namespace HackPDM.Forms.Odoo
 						description: descriptionVal,
 						icon: iconVal));
 			}
-			await CommitTypes(types.ToArray());
+			await CommitTypes([.. types]);
 		}
 
 		private async void btnFiltersCommit_Click( object sender, EventArgs e )
@@ -635,8 +635,8 @@ namespace HackPDM.Forms.Odoo
 					updateFilters.Add(filter);
 				}
 			}
-			await CommitFilters(commitFilters.ToArray());
-			await UpdateFilters(updateFilters.ToArray());
+			await CommitFilters([.. commitFilters]);
+			await UpdateFilters([.. updateFilters]);
 		}
 
 		private async Task UpdateFilters(params HpEntryNameFilter[] filters )

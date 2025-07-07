@@ -736,11 +736,8 @@ namespace HackPDM
 				
 				// get or add image key
 
-				string strKey;
-				if (status != "ok")	strKey = $"{type}.{status}";
-				else strKey = type;
-				
-				if ( ilListIcons.Images [ strKey ] == null)
+				string strKey = status != "ok" ? $"{type}.{status}" : type;
+                if ( ilListIcons.Images [ strKey ] == null)
 				{
 					// image key not present in ilListIcons
 					Image imgExt = ilListIcons.Images[type];
@@ -835,7 +832,7 @@ namespace HackPDM
 
 				item.SubItems [ NameConfig [ "RowLocalDate" ] ].Text = file.ModifiedDate.ToShortDateString();
 				item.SubItems [ NameConfig [ "RowRemoteDate" ] ].Text = EmptyPlaceholder;
-				item.SubItems[ NameConfig["RowStatus"] ].Text = "lo";
+				item.SubItems[ NameConfig [ "RowStatus" ] ].Text = "lo";
 
 
 				// get or add image key
@@ -876,15 +873,6 @@ namespace HackPDM
 
 					// get status image
 					Image imgStatus = ilListIcons.Images[status];
-					//if ( imgStatus == null )
-					//{
-					//	string statusPath = Path.Combine(StatusIconPath, $"{status}.png");
-					//	if ( File.Exists( statusPath ) )
-					//	{
-					//		imgStatus = Image.FromFile( statusPath );
-					//		ilListIcons.Images.Add( status, imgStatus );
-					//	}
-					//}
 
 					// combine images
 					if ( imgExt is not null && imgStatus is not null )
@@ -900,9 +888,9 @@ namespace HackPDM
 				item.ImageKey = strKey;
 
 
-				item.SubItems[ NameConfig["RowCheckOut"] ].Text = EmptyPlaceholder;
-                item.SubItems[ NameConfig["RowCategory"] ].Text = OdooDefaults.ExtToCat[$".{type}"].name;
-                item.SubItems[ NameConfig["RowFullName"] ].Text = file.FullPath;
+				item.SubItems[ NameConfig [ "RowCheckOut" ] ].Text = EmptyPlaceholder;
+                item.SubItems[ NameConfig [ "RowCategory" ] ].Text = OdooDefaults.ExtToCat[$".{type}"].name;
+                item.SubItems[ NameConfig [ "RowFullName" ] ].Text = file.FullPath;
 
                 //OdooEntryList.Items.Add(item);
                 UpdateListAsync(OdooEntryList, item);
@@ -1896,10 +1884,10 @@ namespace HackPDM
 			var directory = lastSelectedNode.FullPath;
 
 			List<HackFile> hackFiles = [];
-			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath[5..]);
 
 			// get all files in folder path to commit.
-			string[] files = Directory.EnumerateFiles(pathway, "*", SearchOption.AllDirectories).ToArray();
+			string[] files = [.. Directory.EnumerateFiles(pathway, "*", SearchOption.AllDirectories)];
 			List<string> newFiles = [.. files];
 			
 			
@@ -1914,7 +1902,7 @@ namespace HackPDM
                         foreach (string[] deps in dependencies)
 						{
 							string path = deps[1];
-							var splitPath = path.Split(["\\pwa\\"], StringSplitOptions.RemoveEmptyEntries);
+							var splitPath = path.Split([$"\\{HackDefaults.PWAPathRelative}\\"], StringSplitOptions.RemoveEmptyEntries);
 							if (splitPath.Length == 2)
 							{
 								newFiles.Add(Path.Combine([HackDefaults.PWAPathAbsolute, splitPath[1]]));
@@ -1987,7 +1975,7 @@ namespace HackPDM
                                 foreach (string[] deps in dependencies)
                                 {
                                     string path = deps[1];
-                                    var splitPath = path.Split(["\\pwa\\"], StringSplitOptions.RemoveEmptyEntries);
+                                    var splitPath = path.Split([$"\\{HackDefaults.PWAPathRelative}\\"], StringSplitOptions.RemoveEmptyEntries);
                                     if (splitPath.Length == 2)
                                     {
                                         newFiles.Add(Path.Combine([HackDefaults.PWAPathAbsolute, splitPath[1]]));
@@ -2236,7 +2224,7 @@ namespace HackPDM
 
 
 			// filter out entries that are already checked out
-			entries = FilterUnCheckoutEntries( entries ).ToArray();
+			entries = [.. FilterUnCheckoutEntries( entries )];
 
 			object arguments = entries;
 
@@ -2536,18 +2524,18 @@ namespace HackPDM
 			Dialog = new StatusDialog();
 
 			var directory = lastSelectedNode.FullPath;
-			var winDirect = Path.Combine(HackDefaults.PWAPathAbsolute, directory.Substring(5));
+			var winDirect = Path.Combine(HackDefaults.PWAPathAbsolute, directory[5..]);
 			List<HackFile> hackFiles = [];
 
 			foreach ( var path in fileDrop)
 			{
 				//if (!HackDefaults.PWAPathAbsolute.StartsWith(path)) continue;
-				FileInfo file = new FileInfo(path);
+				FileInfo file = new(path);
 				if (!file.Exists) continue;
 				file = file.CopyFile(winDirect);
 
 				HackFile hack = await HackFile.GetFromFileInfo(file);
-				string newDirectory = path.Substring(HackDefaults.PWAPathAbsolute.Length);
+				string newDirectory = path[HackDefaults.PWAPathAbsolute.Length..];
 				hack.RelativePath = newDirectory;
 				if ( hack != null )
 					hackFiles.Add( hack );	
@@ -2635,7 +2623,7 @@ namespace HackPDM
 		}
 		private void openDirectoryToolStripMenuItem_Click( object sender, EventArgs e )
 		{
-			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath[5..]);
 			if (Directory.Exists( pathway ) )
 			{
 				System.Diagnostics.Process.Start( "explorer.exe", pathway );
@@ -2644,7 +2632,7 @@ namespace HackPDM
 
 		private void OdooCMSTree_Opening( object sender, CancelEventArgs e )
 		{
-			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath[5..]);
 			if (Directory.Exists( pathway ) ) 
 			{
 				openDirectoryToolStripMenuItem.Enabled = true;
@@ -2659,7 +2647,7 @@ namespace HackPDM
 		// tree
 		private void localDeleteToolStripMenuItem_Click( object sender, EventArgs e )
 		{
-			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath[5..]);
 			DirectoryInfo directory = new( pathway );
 			if ( directory.Exists ) 
 			{
@@ -2675,7 +2663,7 @@ namespace HackPDM
 		// entry
 		private void localDeleteToolStripMenuItem1_Click( object sender, EventArgs e )
 		{
-			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath.Substring(5));
+			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath[5..]);
 			DirectoryInfo directory = new( pathway );
 			if ( !directory.Exists ) return;
 
@@ -2693,7 +2681,7 @@ namespace HackPDM
 				}
 			} );
 			bool tooMany = files.Count > 10;
-			string message = tooMany ? $"Are you sure you want to delete ({files.Count}) files?" : $"Are you sure you want to delete these files?\nfiles:\n{sb.ToString()}";
+			string message = tooMany ? $"Are you sure you want to delete ({files.Count}) files?" : $"Are you sure you want to delete these files?\nfiles:\n{sb}";
 			if (MessageBox.Show( message , 
 					"Delete Directory", 
 					MessageBoxButtons.YesNoCancel, 
@@ -2725,7 +2713,7 @@ namespace HackPDM
 		{
 			string[] files = e.Data.GetData(DataFormats.FileDrop) as string[] ?? new string[0];
 			if (files.Length < 1) return;
-			List<FileInfo> fileInfos = files.Select(f => new FileInfo(f)).ToList();
+			List<FileInfo> fileInfos = [.. files.Select(f => new FileInfo(f))];
 
 			// get graphics reset
 			Graphics g = control.CreateGraphics();

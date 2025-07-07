@@ -359,8 +359,8 @@ namespace HackPDM.ClientUtils
         {
             return items.Cast<object>().ConvertToBag<T>();
         }
-		public static T [] ToArray<T>( this ArrayList list ) => list.Cast<T>().ToArray();
-        public static HashSet<T> ToHashSet<T>( this ArrayList list ) => list.Cast<T>().ToHashSet();
+		public static T [] ToArray<T>( this ArrayList list ) => [.. list.Cast<T>()];
+        public static HashSet<T> ToHashSet<T>( this ArrayList list ) => [.. list.Cast<T>()];
         public static ConcurrentSet<T> ToConcurrentSet<T>( this IEnumerable list )
             => list.Cast<T>().ToConcurrentSet();
         public static ConcurrentSet<T> ToConcurrentSet<T>( this IEnumerable<T> list )
@@ -383,7 +383,7 @@ namespace HackPDM.ClientUtils
 			return [ .. source ];
 		}
 		public static HackFile [] ToHackArray( this IEnumerable<FileInfo> fileInfos )
-			=> fileInfos.Select( file => new HackFile( file ) ).ToArray();
+			=> [.. fileInfos.Select( file => new HackFile( file ) )];
         public static byte[] ToBytes(this Image image) => ImageToByteArray(image);
         public static string ToBase64String(this Image image) => Convert.ToBase64String(image.ToBytes());
 	}

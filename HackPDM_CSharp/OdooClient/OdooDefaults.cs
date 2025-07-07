@@ -781,19 +781,17 @@ namespace HackPDM
             string[] pathwaySegmented = pathway.Split([" / "], StringSplitOptions.RemoveEmptyEntries);
             if (pathwaySegmented[0] == "root" || pathwaySegmented[0] == HackDefaults.PWAPathRelative)
             {
-                pathwaySegmented = pathwaySegmented.Skip(1).ToArray();
+                pathwaySegmented = [.. pathwaySegmented.Skip(1)];
             }
             string relativePath = string.Join(@"\", pathwaySegmented);
 
-            if (withAbsolutePath) 
-                return Path.Combine(HackDefaults.PWAPathAbsolute, relativePath);
-            return relativePath;
+            return withAbsolutePath ? Path.Combine(HackDefaults.PWAPathAbsolute, relativePath) : relativePath;
         }
         public static string WindowsToOdooPath(string pathway, bool fromFullPath = false)
         {
             if (fromFullPath)
             {
-                pathway = pathway.Substring(HackDefaults.PWAPathAbsolute.Length - HackDefaults.PWAPathRelative.Length);
+                pathway = pathway[(HackDefaults.PWAPathAbsolute.Length - HackDefaults.PWAPathRelative.Length)..];
             }
             string[] pathwaySegmented = pathway.Split('\\');
             if (pathwaySegmented[0] == HackDefaults.PWAPathRelative)
@@ -802,7 +800,7 @@ namespace HackPDM
             }
             if (pathwaySegmented[0] != "root")
             {
-                pathwaySegmented = pathwaySegmented.Prepend("root").ToArray();
+                pathwaySegmented = [.. pathwaySegmented.Prepend("root")];
             }
             string relativePath = string.Join(@" / ", pathwaySegmented);
             return relativePath;
@@ -1556,7 +1554,7 @@ namespace HackPDM
                     {
                         string path = deps[1];
                         string absolute = "";
-                        var splitPath = path.Split(["\\pwa\\"], StringSplitOptions.RemoveEmptyEntries);
+                        var splitPath = path.Split([$"\\{HackDefaults.PWAPathRelative}\\"], StringSplitOptions.RemoveEmptyEntries);
                         if (splitPath.Length == 2)
                             absolute = Path.Combine([HackDefaults.PWAPathAbsolute, splitPath[1]]);
                         else continue;

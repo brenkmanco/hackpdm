@@ -24,11 +24,14 @@ namespace HackPDM
         }
         public static string PWAPathRelative
         {
-            get => Properties.UserSettings.Default.PWAPathRelative;
+            get
+            {
+                field ??= Path.GetFileName(PWAPathAbsolute);
+                return field;
+            }
             set
             {
-                Properties.UserSettings.Default.PWAPathRelative = value;
-                Properties.UserSettings.Default.Save();
+                field = value;
             }
         }
         public static string MeasureFileSize 
@@ -116,7 +119,7 @@ namespace HackPDM
         public static string DefaultPath(string pathway, bool withAbsolute = false)
         {
             string[] paths = pathway.Split('\\');
-            paths = paths.Skip(1).ToArray();
+            paths = [.. paths.Skip(1)];
 
             string relativePath = string.Join(@"\", paths);
 
@@ -132,7 +135,7 @@ namespace HackPDM
                 T model = new();
                 models.Add(model.ConvertFromHT(ht));
             }
-            return models.ToArray();
+            return [.. models];
         }
         private static void RecurseTravel(DirectoryDict directory, string directoryFullPath)
         {
@@ -243,7 +246,7 @@ namespace HackPDM
 
             HackFile hack = new(file);
 
-            hack.RelativePath = Path.Combine("root", hack.BasePath[(HackDefaults.PWAPathAbsolute.Length+1)..]);
+            hack.RelativePath = Path.Combine("root", hack.BasePath[Math.Min(HackDefaults.PWAPathAbsolute.Length+1, hack.BasePath.Length)..]);
             return hack;
         }
         
@@ -456,8 +459,8 @@ namespace HackPDM
 
             return new DirectoryDict
             {
-                directories = directories.ToArray(),
-                entries = entries.ToArray(),
+                directories = [.. directories],
+                entries = [.. entries],
                 id = (int)ht["id"],
                 name = (string)ht["name"],
             };

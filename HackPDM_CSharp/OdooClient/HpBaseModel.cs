@@ -157,7 +157,7 @@ namespace HackPDM
                 }
 				ht.Add(fieldName, fieldValue);
 			}
-            if (excludeFields.Count > 0 ) ExcludedFields = excludeFields.ToArray();
+            if (excludeFields.Count > 0 ) ExcludedFields = [.. excludeFields];
 
             if (!isNew)
                 ht.Add("id", ID);

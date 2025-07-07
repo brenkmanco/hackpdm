@@ -193,9 +193,9 @@ namespace HackPDM
                 //dividedEntries = null;
                 return null;
             }
-            string[] filePaths = Directory.EnumerateFiles(path, "*", searchOption).ToArray();
+            string[] filePaths = [.. Directory.EnumerateFiles(path, "*", searchOption)];
 
-            return filePaths.SkipSelect(filePath => 
+            return [.. filePaths.SkipSelect(filePath => 
             {
                 if (hackFileMap.TryGetValue(HpDirectory.WindowsToOdooPath(filePath, true), out Task<HackFile> hackTask))
                 {
@@ -205,7 +205,7 @@ namespace HackPDM
                     }
                 }
                 return false;
-            }, filePath => new HackFile(filePath)).ToArray();
+            }, filePath => new HackFile(filePath))];
         }
         public static ArrayList FilesNotInOdoo(string[] filePaths)
         {
@@ -238,7 +238,7 @@ namespace HackPDM
                 }
             }
          
-            HackFile[] hackArr = hackFiles.ToArray();
+            HackFile[] hackArr = [.. hackFiles];
             List<HackFile> hacks = [];
 
 
@@ -290,7 +290,7 @@ namespace HackPDM
 	    {
 		    // Get the directory of the full path
 		    string directoryPath = Path.GetDirectoryName(fullPath);
-		    return directoryPath.Substring(HackDefaults.PWAPathAbsolute.Length - HackDefaults.PWAPathRelative.Length);
+		    return directoryPath[(HackDefaults.PWAPathAbsolute.Length - HackDefaults.PWAPathRelative.Length)..];
 	    }
         public static string FileSizeReformat(int? bytesize)
             => FileSizeReformat((long?)bytesize);

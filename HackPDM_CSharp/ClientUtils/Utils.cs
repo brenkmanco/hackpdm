@@ -146,7 +146,7 @@ namespace HackPDM
             return batchList;
         }
         public static List<List<T>> BatchList<T>(IEnumerable<T> list, int batchSize)
-            => BatchList<T>(list.ToArray(), batchSize);
+            => BatchList<T>([.. list], batchSize);
         
         // give the ArrayList class an extension method that selects
         public static IEnumerable<string> FastSlice(IEnumerable<string> source, int startIndex, string prependText = null, string appendText = null)
@@ -158,7 +158,7 @@ namespace HackPDM
                 // add prepended text
                 if (prependText != null) sb.Append(prependText);
                 // slice
-                sb.Append(str.AsSpan().Slice(startIndex).ToString());
+                sb.Append(str.AsSpan()[startIndex..].ToString());
                 // add appended text
                 if (appendText != null) sb.Append(appendText);
 
@@ -277,7 +277,7 @@ namespace HackPDM
             FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
             PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
 
-            string[] memberNames = fields.Select(x => x.Name).Concat(properties.Select(x => x.Name)).ToArray();
+            string[] memberNames = [.. fields.Select(x => x.Name), .. properties.Select(x => x.Name)];
 
             foreach (KeyValuePair<string, object> entry in kwargs)
             {

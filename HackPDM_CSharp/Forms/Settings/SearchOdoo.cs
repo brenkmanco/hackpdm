@@ -164,7 +164,7 @@ namespace HackPDM.Forms.Settings
 			const string Empty = "-";
 			HackFileManager.InitListViewPercentage( OdooSearchResults, SearchWidths );
 			DirectoryInfo directoryInfo = new DirectoryInfo(HackDefaults.PWAPathAbsolute);
-			FileInfo[] files = directoryInfo.EnumerateFiles($"*{filename}*", SearchOption.AllDirectories).ToArray();
+			FileInfo[] files = [.. directoryInfo.EnumerateFiles($"*{filename}*", SearchOption.AllDirectories)];
 			ListViewItem item;
 
 			Dictionary<string, List<string>> hts = GetNamePathwaysDict(results);
@@ -176,7 +176,7 @@ namespace HackPDM.Forms.Settings
 				if ( counter >= limit )
 					break;
 
-				string odooPath = HpDirectory.WindowsToOdooPath(file.DirectoryName.Substring(HackDefaults.PWAPathAbsolute.Length - HackDefaults.PWAPathRelative.Length));
+				string odooPath = HpDirectory.WindowsToOdooPath(file.DirectoryName[(HackDefaults.PWAPathAbsolute.Length - HackDefaults.PWAPathRelative.Length)..]);
 
 				if (isNotOnlyLocal ^ !(hts.TryGetValue( file.Name.ToLower(), out List<string> paths) && paths.Contains(odooPath)))
 				{
