@@ -7,7 +7,7 @@ class hp_entry_name_filter(models.Model):
     _description = 'hp entry name filter'
     _inherit = 'hp.common.model'
 
-    #fields 
+    #fields
     name_proto = fields.Char(string='name prototype')
     name_regex = fields.Char(string='name regex')
     description = fields.Char(string='description')
@@ -21,7 +21,7 @@ class hp_entry(models.Model):
     #fields
     name = fields.Char(string='file name', required=True)
     checkout_date = fields.Datetime(
-        string='checkout date', 
+        string='checkout date',
     )
     #active = fields.Boolean(string='active')
     deleted = fields.Boolean(
@@ -51,7 +51,7 @@ class hp_entry(models.Model):
         string='latest version',
     )
     dir_id = fields.Many2one(
-        comodel_name='hp.directory', 
+        comodel_name='hp.directory',
         string='directory id',
     )
     type_id = fields.Many2one(
@@ -59,7 +59,7 @@ class hp_entry(models.Model):
         string='type',
     )
     cat_id = fields.Many2one(
-        comodel_name='hp.category', 
+        comodel_name='hp.category',
         related='type_id.cat_id',
         string='category id',
     )
@@ -84,6 +84,25 @@ class hp_entry(models.Model):
         compute='_compute_map_properties',
         string='mapped properties',
     )
+    windows_complete_name = fields.Char(
+        compute='_compute_windows_path',
+        store=True,
+        string='windows directory path name',
+    )
+    windows_complete_path = fields.Char(
+        compute='_compute_windows_path',
+        string='windows directory path',
+    )
+
+    @api.depends('directory_complete_name', 'name')
+    def _compute_windows_path(self):
+        for rec in self:
+            if rec.directory_complete_name:
+                paths = str(rec.directory_complete_name).split(" / ")
+                windows_path = "\\".join(paths)
+                windows_path_name = "\\".join([windows_path, rec.name])
+                rec.windows_complete_path = windows_path
+                rec.windows_complete_name = windows_path_name
 
     def _compute_map_properties(self):
         for record in self:
@@ -98,7 +117,7 @@ class hp_entry(models.Model):
                 record.version_property_ids = recordmap
             else:
                 record.version_property_ids = False
-            
+
 
     #@api.depends('version_ids')
     def _compute_latest_version(self):
@@ -107,12 +126,12 @@ class hp_entry(models.Model):
                 record.latest_version_id = record.version_ids.sorted(key=lambda x: x.create_date, reverse=True)[0]
             else:
                 record.latest_version_id = False
-        
+
     # def _search_latest_version(self, operator, value):
 
     #     # version id = value
     #     entry = self.env["hp.version"].search([('entry_id', '=', value)])[0]
-        
+
 
 
     @api.model

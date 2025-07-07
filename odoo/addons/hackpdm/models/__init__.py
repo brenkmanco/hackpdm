@@ -7,3 +7,4 @@ from . import hp_type
 from . import hp_version
 from . import hp_node
 from . import hp_directory
+from . import hp_settings
