@@ -26,6 +26,8 @@ using HackPDM.Forms.Odoo;
 using HackPDM.Forms.Settings;
 using HackPDM.HackClient;
 
+using Microsoft.Build.Execution;
+
 using Microsoft.VisualStudio.OLE.Interop;
 
 using OpenMcdf;
@@ -34,8 +36,10 @@ using SolidWorks.Interop.sldworks;
 
 using static System.Net.Mime.MediaTypeNames;
 
+using Directory = System.IO.Directory;
 using Image = System.Drawing.Image;
 using OClient = OdooRpcCs.OdooClient;
+using Path = System.IO.Path;
 
 namespace HackPDM
 {
@@ -272,11 +276,11 @@ namespace HackPDM
 			// --
 			//string filepath = @"C:\Users\jnjohnson\Documents\dev\testing\wigwam\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM";
 			//string temppath = @"C:\Users\jnjohnson\Documents\dev\testing\temp\";
-   //         string temppath2 = @"C:\Users\jnjohnson\Documents\dev\testing\temp\X010166.Frame Base Weldment, Haggis.SLDASM";
-   //         var dependencies = HackDefaults.docMgr.GetDependencies(temppath2).Select(path => path[1]);
-            // --
+			string temppath2 = @"C:\Users\jnjohnson\Documents\dev\testing\wigwam\temp\X010166.Frame Base Weldment, Haggis.SLDASM";
+			var dependencies = HackDefaults.docMgr.GetDependencies(temppath2).Select(path => path[1]);
+			// --
 
-            InitializeComponent();
+			InitializeComponent();
 			previewImage = OdooEntryImage.Image;
 			OdooDirectoryTree.LostFocus += TreeView_LostFocus;
 			ResetListViews();
@@ -1355,15 +1359,17 @@ namespace HackPDM
             
 			ConcurrentBag<HpEntry> entries = Arguments.Item1.ConvertToBag();
 			ConcurrentSet<HackFile> hackFiles = Arguments.Item2;
-            
-            
-            // testing filter hacks..
-			if (entries.Count > 0) 
-				entries = await FilterCommitEntries(entries);
 
-            // section for checking if hack files have a checksum that matches the fullpath
-            if (hackFiles.Count > 0)
+
+			// testing filter hacks..
+			if (entries is not null && entries.Count > 0)
+				entries = await FilterCommitEntries(entries);
+			else entries = new();
+
+			// section for checking if hack files have a checksum that matches the fullpath
+			if (hackFiles is not null && hackFiles.Count > 0)
 				hackFiles = await FilterCommitHackFiles(hackFiles);
+			else hackFiles = [];
 
 			List<HpVersion> versions = new(entries.Count() + hackFiles.Count());
 
@@ -1432,6 +1438,7 @@ namespace HackPDM
         private void worker_PermDelete(object sender, DoWorkEventArgs e)
         {
             HpEntry[] entries = e.Argument as HpEntry[];
+
             ArrayList ids = entries.Select(e => e.ID).ToArrayList();
 			bool vDeleted = false;
 
@@ -1443,9 +1450,13 @@ namespace HackPDM
 
 			vDeleted = DeleteEntry(ids);
 
-			if (!vDeleted)
+			if (vDeleted)
 			{
-				MessageBox.Show("Was unable to delete versions", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
+                Dialog.AddStatusLine("INFO", $"Completed permanent delete");
+            }
+			else
+			{
+				MessageBox.Show("Was unable to delete entries", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
 				return;
 			}
 			
@@ -1549,7 +1560,7 @@ namespace HackPDM
                     // can eventually just change this to get the list of id's available instead
                     HpVersion[] entryVersions = GetVersionsForEntry(entry.ID, excludedFields);
 
-
+					if (entryVersions is null || entryVersions.Length == 0) return null;
                     // check if any of the versions checksums are local
 					HpVersion temp = entryVersions.First();
                     if (HackFile.GetLocalVersion(entryVersions, out HackFile _))
@@ -1596,8 +1607,17 @@ namespace HackPDM
 			string combinedPattern = string.Join("|", OdooDefaults.EntryFilterPatterns);
 			var regex = new Regex(combinedPattern, RegexOptions.IgnoreCase);
 			//string[] filePaths = hackFiles.Select(hack => hack.FullPath).ToArray();
-			IEnumerable<HackFile> regexHack = hackFiles.TakeWhile(hack => !regex.IsMatch($".{hack.TypeExt}"));
-			HackFile[] files = await FileOperations.FilesNotInOdoo(regexHack);
+			
+			List<HackFile> hacks = new();
+			foreach (HackFile hack in hackFiles)
+			{
+                regex = new Regex(combinedPattern, RegexOptions.IgnoreCase);
+                if (!regex.IsMatch($".{hack.TypeExt.ToLower()}"))
+				{
+					hacks.Add(hack);
+				}
+			}
+			HackFile[] files = await FileOperations.FilesNotInOdoo(hacks);
 			return files;
 		}
 		#endregion
@@ -1866,16 +1886,29 @@ namespace HackPDM
 			Dialog = new StatusDialog();
 
 			int dir_id = (int)lastSelectedNode.Tag;
-			if (dir_id == 0)
-			{
-				string[] paths = Directory.GetDirectories(HpDirectory.ConvertToWindowsPath(lastSelectedNode.FullPath, true)); 
-
-			}
-			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)lastSelectedNode.Tag, true);
-			var directory = lastSelectedNode.FullPath;
 
 			List<HackFile> hackFiles = [];
 			string pathway = lastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, lastSelectedNodePath[5..]);
+			HpDirectory HpDirectory = null;
+
+            if (dir_id == 0)
+			{
+				List<string> paths = new();
+				EndNodePaths(lastSelectedNode, paths);
+				
+                ArrayList splitPaths = lastSelectedNodePath.Split<ArrayList>("\\", StringSplitOptions.RemoveEmptyEntries);
+                HpDirectory = (await HpDirectory.CreateNew(splitPaths)).Last();
+
+                foreach (string path in paths)
+				{
+					splitPaths = path.Split<ArrayList>("\\", StringSplitOptions.RemoveEmptyEntries);
+					await HpDirectory.CreateNew(splitPaths);
+				}
+			}
+			else HpDirectory = new() { ID =  dir_id };
+
+			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs(HpDirectory.ID, true);
+			var directory = lastSelectedNode.FullPath;
 
 			// get all files in folder path to commit.
 			string[] files = [.. Directory.EnumerateFiles(pathway, "*", SearchOption.AllDirectories)];
@@ -1911,11 +1944,17 @@ namespace HackPDM
 
 			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
 
-            ArrayList newIds = await GetEntryList([.. entries.Select(e => e.latest_version_id)]);
+			ArrayList newIds = null;
+			HpEntry[] allEntries = null;
 
-            newIds.AddRange(entryIDs);
-            newIds = newIds.ToHashSet<int>().ToArrayList();
-            HpEntry[] allEntries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"], insertFields: ["directory_complete_name"]);
+            if (entries is not null && entries.Length > 0)
+			{
+				newIds = await GetEntryList([.. entries.Select(e => e.latest_version_id)]);
+
+				newIds.AddRange(entryIDs);
+				newIds = newIds.ToHashSet<int>().ToArrayList();
+				allEntries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"], insertFields: ["directory_complete_name"]);
+			}
 
             object arguments = (allEntries, hackFiles);
 
@@ -1930,6 +1969,20 @@ namespace HackPDM
 			bool blnWorkCanceled = Dialog.ShowStatusDialog("Commit Files");
 			if ( blnWorkCanceled )
 				worker.CancelAsync();
+		}
+		private void EndNodePaths (TreeNode node, in List<string> paths)
+		{
+			if (node.Nodes.Count == 0)
+			{
+				paths.Add(node.FullPath);
+			}
+			else
+			{
+				foreach (TreeNode cNode in node.Nodes)
+				{
+					EndNodePaths(cNode, paths);
+				}
+			}
 		}
 		private async void CommitEntryStrip_Click				( object sender, EventArgs e )
 		{
@@ -2590,7 +2643,12 @@ namespace HackPDM
 			}
 
 			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
-
+			if (entries is null || entries.Length == 0)
+			{
+                MessageBox.Show("No entries to delete");
+				return;
+            }
+			
 			object arguments = entries;
 			BackgroundWorker worker = new()
 			{
@@ -3043,13 +3101,24 @@ namespace HackPDM
 
             vProps = HpVersionProperty.GetRecordsBySearch([new ArrayList() { "version_id", "in", ids }]);
 			if (vProps is not null
-                && vProps.Count() > 0)
+				&& vProps.Count() > 0)
 			{
 				ArrayList newIds = vProps.GetIDs();
-                Dialog.AddStatusLine("INFO", $"Attempting to delete hp version properties {string.Join(", ", newIds)}");
-				deletedVersionProps = OClient.Delete(HpVersionProperty.GetHpModel(), newIds);
+				deletedVersionProps = OClient.Delete(HpVersionProperty.GetHpModel(), [newIds], 100000);
+                if (deletedVersionProps)
+                {
+                    Dialog.AddStatusLine("INFO", $"successfully deleted version properties: {string.Join(", ", newIds.ToArray())}");
+                }
+                else
+                {
+                    Dialog.AddStatusLine("INFO", $"unable to delete version properties");
+                }
+            }
+			else
+			{
+				deletedVersionProps = true; 
+				Dialog.AddStatusLine("INFO", $"No version properties to delete");
 			}
-			else Dialog.AddStatusLine("INFO", $"No version properties to delete");
 #if DEBUG
             Debug.WriteLine($"version properties deleted = {deletedVersionProps}");
 #endif
@@ -3068,23 +3137,45 @@ namespace HackPDM
             vRelationsParent = HpVersionRelationship.GetRecordsBySearch([new ArrayList() { "parent_id", "in", ids }]);
             vRelationsChild = HpVersionRelationship.GetRecordsBySearch([new ArrayList() { "child_id", "in", ids }]);
 
-            if (vRelationsParent is not null 
+			if (vRelationsParent is not null
 				&& vRelationsParent.Count() > 0)
-            {
-                ArrayList newIds = vRelationsParent.GetIDs();
-                Dialog.AddStatusLine("INFO", $"Attempting to delete hp version relationship parents {string.Join(", ", newIds)}");
-                deletedVersionRelParent = OClient.Delete(HpVersionRelationship.GetHpModel(), newIds);
-            }
-            else Dialog.AddStatusLine("INFO", $"No version relationship parents to delete");
+			{
+				ArrayList newIds = vRelationsParent.GetIDs();
+				deletedVersionRelParent = OClient.Delete(HpVersionRelationship.GetHpModel(), [newIds], 100000);
+				if (deletedVersionRelParent)
+				{
+					Dialog.AddStatusLine("INFO", $"successfully deleted parent version relationships: {string.Join(", ", newIds.ToArray())}");
+				}
+				else
+				{
+					Dialog.AddStatusLine("INFO", $"unable to delete parent version relationships");
+				}
+			}
+			else
+			{
+				deletedVersionRelParent = true; 
+				Dialog.AddStatusLine("INFO", $"No version relationship parents to delete");
+			}
 
-            if (vRelationsChild is not null
-                && vRelationsChild.Count() > 0)
-            {
-                ArrayList newIds = vRelationsChild.GetIDs();
-                Dialog.AddStatusLine("INFO", $"Attempting to delete hp version relationship children {string.Join(", ", newIds)}");
-                deletedVersionRelChild = OClient.Delete(HpVersionRelationship.GetHpModel(), newIds);
-            }
-            else Dialog.AddStatusLine("INFO", $"No version relationship children to delete");
+			if (vRelationsChild is not null
+				&& vRelationsChild.Count() > 0)
+			{
+				ArrayList newIds = vRelationsChild.GetIDs();
+				deletedVersionRelChild = OClient.Delete(HpVersionRelationship.GetHpModel(), [newIds], 100000);
+				if (deletedVersionRelChild)
+				{
+					Dialog.AddStatusLine("INFO", $"successfully deleted child version relationships: {string.Join(", ", newIds.ToArray())}");
+				}
+				else
+				{
+					Dialog.AddStatusLine("INFO", $"unable to delete child version relationships");
+				}
+			}
+			else
+			{
+				deletedVersionRelChild = true; 
+				Dialog.AddStatusLine("INFO", $"No version relationship children to delete");
+			}
 
 #if DEBUG
             Debug.WriteLine($"version parents deleted = {deletedVersionRelParent}");
@@ -3098,7 +3189,15 @@ namespace HackPDM
 			if (ids is null || ids.Count < 1) return false;
 
 			bool deletedVersions = DeleteVersions( ids );
-			bool deletedEntries = OClient.Delete(HpEntry.GetHpModel(), ids);
+			bool deletedEntries = deletedVersions && OClient.Delete(HpEntry.GetHpModel(), [ids]);
+            if (deletedEntries)
+            {
+                Dialog.AddStatusLine("INFO", $"successfully deleted entries");
+            }
+            else
+            {
+                Dialog.AddStatusLine("INFO", $"unable to delete entries");
+            }
 #if DEBUG
             Debug.WriteLine($"Entries deleted = {deletedEntries}");
 #endif
@@ -3134,14 +3233,33 @@ namespace HackPDM
 				&& deletedVersionsRel 
 				&& (irAttachments is null 
 					|| irAttachments.Count() <= 0 
-					|| OClient.Delete(IrAttachment.GetHpModel(), irAttachments.GetIDs()));
-			deletedVersions = deletedIrAttachments 
-				&& (vIds is null 
-					|| vIds.Count <= 0 
-					|| OClient.Delete(HpVersion.GetHpModel(), vIds));
+					|| OClient.Delete(IrAttachment.GetHpModel(), [irAttachments.GetIDs()], 100000));
+
+			if (deletedIrAttachments)
+			{
+                Dialog.AddStatusLine("INFO", $"successfully deleted IR Attachments");
+            }
+			else
+			{
+                Dialog.AddStatusLine("INFO", $"unable to delete IR Attachments");
+            }
+
+				deletedVersions = deletedIrAttachments
+					&& (vIds is null
+						|| vIds.Count <= 0
+						|| OClient.Delete(HpVersion.GetHpModel(), [vIds], 100000));
+
+            if (deletedVersions)
+            {
+                Dialog.AddStatusLine("INFO", $"successfully deleted versions");
+            }
+            else
+            {
+                Dialog.AddStatusLine("INFO", $"unable to delete versions");
+            }
 
 #if DEBUG
-			Debug.WriteLine($"ir attachments deleted = {deletedIrAttachments}");
+            Debug.WriteLine($"ir attachments deleted = {deletedIrAttachments}");
             Debug.WriteLine($"versions deleted = {deletedVersions}");
 #endif
             return deletedIrAttachments && deletedVersions;

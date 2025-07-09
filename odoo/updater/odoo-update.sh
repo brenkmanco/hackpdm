@@ -66,6 +66,7 @@ EOL
     sed -i -e 'N;$!P;$!D; s/\(.*\),/\1 on conflict (id) do nothing;/' entry.sql
     sed -i "s/'NULL'/NULL/g" entry.sql
     psql -U moony -d odoopdm -a -f entry.sql
+	
 }
 
 release(){
@@ -89,6 +90,7 @@ EOL
     sed -i -e 'N;$!P;$!D; s/\(.*\),/\1 on conflict (id) do nothing;/' release.sql
     sed -i "s/'NULL'/NULL/g" release.sql
     psql -U moony -d odoopdm -a -f release.sql
+	
 }
 
 version(){
@@ -249,3 +251,20 @@ release
 #doesn't have a corresponding id so the table would need to be erased and then insert the values
 vers_relationship
 vers_rel
+
+psql -U moony -d odoopdm << EOL 
+SELECT setval('public.hp_category_id_seq', COALESCE((SELECT MAX(id) FROM hp_category), 1), true);
+SELECT setval('public.hp_category_property_id_seq', COALESCE((SELECT MAX(id) FROM hp_category_property), 1), true);
+SELECT setval('public.hp_directory_id_seq', COALESCE((SELECT MAX(id) FROM hp_directory), 1), true);
+SELECT setval('public.hp_entry_id_seq', COALESCE((SELECT MAX(id) FROM hp_entry), 1), true);
+SELECT setval('public.hp_entry_name_filter_id_seq', COALESCE((SELECT MAX(id) FROM hp_entry_name_filter), 1), true);
+SELECT setval('public.hp_node_id_seq', COALESCE((SELECT MAX(id) FROM hp_node), 1), true);
+SELECT setval('public.hp_type_id_seq', COALESCE((SELECT MAX(id) FROM hp_type), 1), true);
+SELECT setval('public.hp_version_id_seq', COALESCE((SELECT MAX(id) FROM hp_version), 1), true);
+SELECT setval('public.hp_version_property_id_seq', COALESCE((SELECT MAX(id) FROM hp_version_property), 1), true);
+SELECT setval('public.hp_version_relationship_id_seq', COALESCE((SELECT MAX(id) FROM hp_version_relationship), 1), true);
+SELECT setval('public.hp_release_version_rel_id_seq', COALESCE((SELECT MAX(id) FROM hp_release_version_rel), 1), true);
+SELECT setval('public.hp_release_id_seq', COALESCE((SELECT MAX(id) FROM hp_release), 1), true);
+SELECT setval('public.hp_property_id_seq', COALESCE((SELECT MAX(id) FROM hp_property), 1), true);
+SELECT setval('public.hp_release_id_seq', COALESCE((SELECT MAX(id) FROM hp_release), 1), true);
+EOL

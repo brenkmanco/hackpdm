@@ -84,7 +84,10 @@ namespace HackPDM
         }
         public static SWHelper swHelper
         {
-            get;
+            get
+            {
+                return field ??= new();
+            }
             set;
         }
 

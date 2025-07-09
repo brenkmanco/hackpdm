@@ -320,7 +320,7 @@ namespace HackPDM
         }
 
     }
-    public class HashConverter
+    public static class HashConverter
     {
         public static T ConvertToClass<T>(in Hashtable ht, MethodType mType = MethodType.FieldOnly) 
             where T : HpBaseModel, new()
@@ -366,6 +366,8 @@ namespace HackPDM
             }
             return obj;
         }
+        public static void PopulateSelf<T>(this T hprecord, in Hashtable ht, MethodType mType = MethodType.FieldOnly) where T : HpBaseModel
+            => AssignToClass(ht, hprecord, mType);
         public static void AssignToClass<T>( in Hashtable ht, ref T obj, MethodType mType = MethodType.FieldOnly )
             where T : HpBaseModel, new()
             => AssignToClass( ht, obj, mType );

@@ -94,16 +94,15 @@ namespace HackPDM
             return tempID;
         }
         public virtual async Task<int> CreateAsync() => await CreateAsync(false);
-        public virtual async Task<int> CreateAsync(bool withEmpty = false)
+        public virtual async Task<int> CreateAsync(bool withEmpty = false, string[] excludedFields = null)
         {
-            Hashtable ht = ComputeHashtable(withEmpty, isNew:true);
+            Hashtable ht = ComputeHashtable(withEmpty, excludedFields, isNew:true);
             int tempID = await OClient.CreateAsync(HpModel, ht, 10000);
 
             if (tempID != 0)
             {
                 ID = tempID;
-				//HashedValues = ht;
-                
+				
                 if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
                 {
                     HashedValues = new Hashtable
@@ -114,6 +113,27 @@ namespace HackPDM
                 IsRecord = true;
             }
             return tempID;
+        }
+        private void PopSelf(string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null)
+        {
+            Type type = GetType();
+            string modelName = HpModelDictionary[type];
+
+            ArrayList fields = GetFields(type, includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+            ArrayList result;
+
+            result = OClient.Read(modelName, [ID], fields, 90000);
+            
+            if (result.Count == 0) return;
+
+            Hashtable ht = result[0] as Hashtable;
+            
+            if (ht is not null)
+            {
+                this.PopulateSelf(ht, MethodType.FieldOnly);
+                
+            }
+            
         }
         public static async Task<ArrayList> MultiCreateAsync<T>(ArrayList records, bool withEmpty = false) where T : HpBaseModel
         {
@@ -276,10 +296,31 @@ namespace HackPDM
 
             return al;
         }
+        public static ArrayList GetFields(Type type, string[] excludedFieldNames = null, string[] includedFieldNames = null, string[] insertFieldNames = null)
+        {
+            ArrayList fieldNames = [];
+            FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+
+            foreach (FieldInfo field in fields)
+            {
+                bool isExcluded = false, isIncluded = true;
+                if (excludedFieldNames != null) isExcluded = excludedFieldNames.Contains(field.Name);
+                if (includedFieldNames != null) isIncluded = includedFieldNames.Contains(field.Name);
+                if (!isExcluded && isIncluded) fieldNames.Add(field.Name);
+            }
+            if (insertFieldNames != null)
+            {
+                foreach (string field in insertFieldNames)
+                {
+                    if (!fieldNames.Contains(field))
+                        fieldNames.Add(field);
+                }
+            }
+            return fieldNames;
+        }
     }
     public abstract class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
     {
-        
         public virtual T GetRecord()
         {
             ArrayList list = ComputeArrayList(false);
@@ -397,10 +438,16 @@ namespace HackPDM
             if (ht is null) return null;
 
             T record = HashConverter.ConvertToClass<T>(ht);
-
+            
+            FinalizePopulation(record, ht, excludedFields, hashStoreType);
+            return record;
+        }
+        
+        public static void FinalizePopulation(T record, Hashtable ht, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
+        {
             // set record settings
             record.ID = (int)ht["id"];
-            
+
             record.IsRecord = true;
             record.ExcludedFields = excludedFields;
 
@@ -408,29 +455,28 @@ namespace HackPDM
             switch (hashStoreType)
             {
                 case HashedValueStoring.None: break;
-                
+
                 case HashedValueStoring.ExistingFields:
                 case HashedValueStoring.NonExistingFields:
-                {
-                    record.HashedValues = ScalpFields(ht, hashStoreType);
-                    break;
-                }
+                    {
+                        record.HashedValues = ScalpFields(ht, hashStoreType);
+                        break;
+                    }
 
                 case HashedValueStoring.All:
-                {
-                    record.HashedValues = ht;
-                    break;
-                }
+                    {
+                        record.HashedValues = ht;
+                        break;
+                    }
             }
-            if (record.HpModel == OdooDefaults.HP_VERSION 
+            if (record.HpModel == OdooDefaults.HP_VERSION
                     && ht.TryGetValue("dir_id", out object value))
             {
                 record.HashedValues.Add("dir_id", value);
             }
-            
+
 
             record.CompleteConstruction();
-            return record;
         }
         private static Hashtable ScalpFields(Hashtable ht, HashedValueStoring hashStoreType)
         {
@@ -600,28 +646,9 @@ namespace HackPDM
         
         public static ArrayList GetAllFields() => GetFields();
         public static ArrayList GetFields(string[] excludedFieldNames = null, string[] includedFieldNames = null, string[] insertFieldNames = null)
-        {
-            ArrayList fieldNames = [];
-            Type type = typeof(T);
-            FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            => GetFields(typeof(T), excludedFieldNames, includedFieldNames, insertFieldNames);
 
-            foreach (FieldInfo field in fields)
-            {
-                bool isExcluded = false, isIncluded = true;
-                if (excludedFieldNames != null) isExcluded = excludedFieldNames.Contains(field.Name);
-                if (includedFieldNames != null) isIncluded = includedFieldNames.Contains(field.Name);
-                if (!isExcluded && isIncluded) fieldNames.Add(field.Name);
-            }
-            if (insertFieldNames != null )
-			{
-				foreach ( string field in insertFieldNames )
-				{
-					if ( !fieldNames.Contains( field ) )
-						fieldNames.Add( field );
-				}
-			}
-			return fieldNames;
-        }
+        
         
         public void Refresh()
         {

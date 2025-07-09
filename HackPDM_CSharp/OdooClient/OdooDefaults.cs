@@ -599,7 +599,7 @@ namespace HackPDM
 		}
         internal static async Task<HpEntry> CreateNew( HackFile hackFile, int dir_id )
         {
-			if (OdooDefaults.RestrictTypes & !OdooDefaults.ExtToType.TryGetValue( hackFile.TypeExt, out HpType type ) )
+			if (OdooDefaults.RestrictTypes & !OdooDefaults.ExtToType.TryGetValue( hackFile.TypeExt.ToLower(), out HpType type ) )
 				return null;
 
 			HpEntry newEntry = new()
@@ -1196,6 +1196,7 @@ namespace HackPDM
                 name = $"{entry.ID}.{hackFile.Name}",
                 dir_id = entry.dir_id,
                 entry_id = entry.ID,
+                file_ext = hackFile.TypeExt[1..].ToLower(),
                 winPathway = hackFile.FullPath,
             };
             if (fileBase64 is not null and not "")
@@ -1207,7 +1208,7 @@ namespace HackPDM
 		internal static async Task<HpVersion> CreateNew( HackFile hackFile, HpEntry entry, HashedValueStoring hashStoreType = HashedValueStoring.None )
         {
             HpVersion newVersion = PrepareCreation(hackFile, entry, hashStoreType);
-			await newVersion.CreateAsync( false );
+			await newVersion.CreateAsync( false, ["file_ext"] );
 
             return newVersion.ID == 0 ? null : newVersion;
         }
@@ -1479,7 +1480,7 @@ namespace HackPDM
                 try
                 {
                     if (!OdooDefaults.dependentExt.Contains($".{version.file_ext.ToUpper()}")) continue;
-                    string pathway = Path.Combine(HackDefaults.PWAPathAbsolute, version.winPathway, version.name);
+                    string pathway = version.winPathway;
                     List<string> paths = [];
                     List<Tuple<string, string, string, object>> props = HackDefaults.docMgr.GetProperties(pathway);
                     HpVersionProperty[] properties = [.. props.Select(prop =>
@@ -1550,9 +1551,9 @@ namespace HackPDM
             foreach (HpVersion version in versions)
             {
                 if (version is not null && !OdooDefaults.dependentExt.Contains($".{version.file_ext.ToUpper()}")) continue;
-                string pathway = Path.Combine(HackDefaults.PWAPathAbsolute, version.winPathway, version.name);
+                string pathway = version.winPathway;
                 List<string> paths = [];
-                List<string[]> dependencies = HackDefaults.docMgr.GetDependencies(pathway);
+                List<string[]> dependencies = HackDefaults.docMgr.GetDependencies(pathway); // NoInterrupt: true
                 if (dependencies is not null && dependencies.Count > 0)
                 {
                     foreach (string[] deps in dependencies)
@@ -1575,6 +1576,7 @@ namespace HackPDM
                     ];
                 }
             }
+            
             if (hvrCreate.Length > 0)
             {
                 await MultiCreateAsync<HpVersionRelationship>(hvrCreate.ToArrayList());

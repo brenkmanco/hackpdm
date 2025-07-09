@@ -38,7 +38,7 @@ namespace HackPDM
 
         }
 
-        public List<string[]> GetDependencies(string FileName, bool Deep=false)
+        public List<string[]> GetDependencies(string FileName, bool Deep=false, bool NoInterrupt=false)
         {
             // external references for assembly files (GetAllExternalReferences4)
             // external references for part files (GetExternalFeatureReferences)
@@ -62,11 +62,14 @@ namespace HackPDM
             swDoc = (SwDMDocument19)swDocMgr.GetDocument(FileName, swDocType, true, out nRetVal);
             if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
             {
-                DialogResult dr = MessageBox.Show("Failed to open solidworks file: " + FileName,
-                    "Loading SW File",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Exclamation,
-                    MessageBoxDefaultButton.Button1);
+                if (!NoInterrupt)
+                {
+                    DialogResult dr = MessageBox.Show("Failed to open solidworks file: " + FileName,
+                        "Loading SW File",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Exclamation,
+                        MessageBoxDefaultButton.Button1);
+                }
                 return null;
             }
 
