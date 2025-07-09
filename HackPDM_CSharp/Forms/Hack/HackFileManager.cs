@@ -269,7 +269,14 @@ namespace HackPDM
 				}
 			}
 
-			InitializeComponent();
+			// --
+			//string filepath = @"C:\Users\jnjohnson\Documents\dev\testing\wigwam\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM";
+			//string temppath = @"C:\Users\jnjohnson\Documents\dev\testing\temp\";
+   //         string temppath2 = @"C:\Users\jnjohnson\Documents\dev\testing\temp\X010166.Frame Base Weldment, Haggis.SLDASM";
+   //         var dependencies = HackDefaults.docMgr.GetDependencies(temppath2).Select(path => path[1]);
+            // --
+
+            InitializeComponent();
 			previewImage = OdooEntryImage.Image;
 			OdooDirectoryTree.LostFocus += TreeView_LostFocus;
 			ResetListViews();
@@ -1426,22 +1433,22 @@ namespace HackPDM
         {
             HpEntry[] entries = e.Argument as HpEntry[];
             ArrayList ids = entries.Select(e => e.ID).ToArrayList();
+			bool vDeleted = false;
 
-            // first delete all versions associated with entry
-            bool vDeleted = DeleteVersions(ids);
-            if (!vDeleted)
-            {
-                MessageBox.Show("Was unable to delete versions", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
-                return;
-            }
+			// using DeleteEntry also deletes entries, versions, version props, version relationships, and ir attachment records
+			DialogResult result = MessageBox.Show($"Are you sure you want to permanently delete {ids.Count} entries from the database?\n" +
+				$"This will also permanently delete all associative versions, version properties, and version relationships", "Delete Entries and Other Records?", MessageBoxButtons.YesNoCancel);
 
-            // second delete the entry
-            bool eDeleted = DeleteEntry(ids);
-            if (!eDeleted)
-            {
-                MessageBox.Show("Able to delete versions but was unable to delete entries", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
-                return;
-            }
+			if (result is not DialogResult.Yes and not DialogResult.OK) return;
+
+			vDeleted = DeleteEntry(ids);
+
+			if (!vDeleted)
+			{
+				MessageBox.Show("Was unable to delete versions", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
+				return;
+			}
+			
         }
         private async void worker_LogicalDelete( object sender, DoWorkEventArgs e )
 		{
@@ -1857,7 +1864,13 @@ namespace HackPDM
 		private async void CommitTreeStrip_Click				( object sender, EventArgs e )
 		{
 			Dialog = new StatusDialog();
-			
+
+			int dir_id = (int)lastSelectedNode.Tag;
+			if (dir_id == 0)
+			{
+				string[] paths = Directory.GetDirectories(HpDirectory.ConvertToWindowsPath(lastSelectedNode.FullPath, true)); 
+
+			}
 			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)lastSelectedNode.Tag, true);
 			var directory = lastSelectedNode.FullPath;
 
@@ -3019,41 +3032,96 @@ namespace HackPDM
 		}
 
 
-		#endregion
+        #endregion
 
-		// need to delete pwa\
-		// .\GitInfo
-		// .\HackPDM_CSharp.csproj
-		// .\HackPDM_CSharp.sln
+        private bool DeleteVersionProperty(ArrayList ids)
+        {
+            if (ids is null || ids.Count < 1) return false;
 
-		// list
+            HpVersionProperty[] vProps = null;
+			bool deletedVersionProps = false;
 
+            vProps = HpVersionProperty.GetRecordsBySearch([new ArrayList() { "version_id", "in", ids }]);
+			if (vProps is not null
+                && vProps.Count() > 0)
+			{
+				ArrayList newIds = vProps.GetIDs();
+                Dialog.AddStatusLine("INFO", $"Attempting to delete hp version properties {string.Join(", ", newIds)}");
+				deletedVersionProps = OClient.Delete(HpVersionProperty.GetHpModel(), newIds);
+			}
+			else Dialog.AddStatusLine("INFO", $"No version properties to delete");
+#if DEBUG
+            Debug.WriteLine($"version properties deleted = {deletedVersionProps}");
+#endif
+			return deletedVersionProps;
+        }
+        private bool DeletedVersionRelationships(ArrayList ids)
+        {
+            if (ids is null || ids.Count < 1) return false;
 
+            HpVersionRelationship[] vRelationsParent = null;
+            HpVersionRelationship[] vRelationsChild = null;
 
-		private bool DeleteEntry( ArrayList ids )
-			=> OClient.Delete(HpEntry.GetHpModel(), [new ArrayList(){"id", "in", ids}]);
-		private bool DeleteVersions( ArrayList ids )
+            bool deletedVersionRelParent = false;
+            bool deletedVersionRelChild = false;
+
+            vRelationsParent = HpVersionRelationship.GetRecordsBySearch([new ArrayList() { "parent_id", "in", ids }]);
+            vRelationsChild = HpVersionRelationship.GetRecordsBySearch([new ArrayList() { "child_id", "in", ids }]);
+
+            if (vRelationsParent is not null 
+				&& vRelationsParent.Count() > 0)
+            {
+                ArrayList newIds = vRelationsParent.GetIDs();
+                Dialog.AddStatusLine("INFO", $"Attempting to delete hp version relationship parents {string.Join(", ", newIds)}");
+                deletedVersionRelParent = OClient.Delete(HpVersionRelationship.GetHpModel(), newIds);
+            }
+            else Dialog.AddStatusLine("INFO", $"No version relationship parents to delete");
+
+            if (vRelationsChild is not null
+                && vRelationsChild.Count() > 0)
+            {
+                ArrayList newIds = vRelationsChild.GetIDs();
+                Dialog.AddStatusLine("INFO", $"Attempting to delete hp version relationship children {string.Join(", ", newIds)}");
+                deletedVersionRelChild = OClient.Delete(HpVersionRelationship.GetHpModel(), newIds);
+            }
+            else Dialog.AddStatusLine("INFO", $"No version relationship children to delete");
+
+#if DEBUG
+            Debug.WriteLine($"version parents deleted = {deletedVersionRelParent}");
+            Debug.WriteLine($"version child deleted = {deletedVersionRelChild}");
+#endif
+
+            return deletedVersionRelChild && deletedVersionRelParent;
+        }
+        private bool DeleteEntry( ArrayList ids )
 		{
-			HpVersion[] versions = HpEntry.GetRelatedRecordByIDS<HpVersion>(ids, "version_ids", includedFields:["ID"]);
-			HpVersionProperty[] vProps = null;
-			HpVersionRelationship[] vRelationsParent = null;
-			HpVersionRelationship[] vRelationsChild = null;
+			if (ids is null || ids.Count < 1) return false;
+
+			bool deletedVersions = DeleteVersions( ids );
+			bool deletedEntries = OClient.Delete(HpEntry.GetHpModel(), ids);
+#if DEBUG
+            Debug.WriteLine($"Entries deleted = {deletedEntries}");
+#endif
+            return deletedVersions && deletedEntries;
+        }
+        private bool DeleteVersions( ArrayList ids )
+		{
+            if (ids is null || ids.Count < 1) return false;
+
+            HpVersion[] versions = HpEntry.GetRelatedRecordByIDS<HpVersion>(ids, "version_ids", includedFields:["ID"]);
 			IrAttachment[] irAttachments = null;
 
             ArrayList vIds = versions?.Select(v => v.ID).ToArrayList();
-			bool deletedVersionProps = false;
-			bool deletedVersionRelParent = false;
-			bool deletedVersionRelChild = false;
+			
 			bool deletedIrAttachments = false;
 			bool deletedVersions = false;
-			bool deletedEntries = false;
-
+			bool deletedVersionsProps = false;
+			bool deletedVersionsRel = false;
 
             if (vIds is not null && vIds.Count > 0)
 			{
-				vProps = HpVersionProperty.GetRecordsBySearch([new ArrayList() { "version_id", "in", vIds }]);
-                vRelationsParent = HpVersionRelationship.GetRecordsBySearch([new ArrayList() { "parent_id", "in", vIds }]);
-                vRelationsChild = HpVersionRelationship.GetRecordsBySearch([new ArrayList() { "child_id", "in", vIds }]);
+				deletedVersionsProps = DeleteVersionProperty(vIds);
+				deletedVersionsRel = DeletedVersionRelationships(vIds);
 				irAttachments = IrAttachment.GetRecordsBySearch(
 				[
 					new ArrayList() { "res_id", "in", vIds }, 
@@ -3062,18 +3130,21 @@ namespace HackPDM
 				]);
             }
 
-			
-			deletedVersionProps = vProps is null || vProps.Count() <= 0 || OClient.Delete(HpVersionProperty.GetHpModel(), vProps.GetIDs());
-			deletedVersionRelParent = vRelationsParent is null || vRelationsParent.Count() <= 0 || OClient.Delete(HpVersionRelationship.GetHpModel(), vRelationsParent.GetIDs());
-            deletedVersionRelChild = vRelationsChild is null || vRelationsChild.Count() <= 0 || OClient.Delete(HpVersionRelationship.GetHpModel(), vRelationsChild.GetIDs());
-			deletedIrAttachments = irAttachments is null || irAttachments.Count() <= 0 || OClient.Delete(IrAttachment.GetHpModel(), irAttachments.GetIDs());
-			deletedVersions = vIds is null || vIds.Count <= 0 || OClient.Delete(HpVersion.GetHpModel(), vIds);
-			
-            if (deletedVersions)
-			{
-				deletedEntries = deletedVersions && OClient.Delete(HpEntry.GetHpModel(), ids);
-			}
-			return true;
+			deletedIrAttachments = deletedVersionsProps 
+				&& deletedVersionsRel 
+				&& (irAttachments is null 
+					|| irAttachments.Count() <= 0 
+					|| OClient.Delete(IrAttachment.GetHpModel(), irAttachments.GetIDs()));
+			deletedVersions = deletedIrAttachments 
+				&& (vIds is null 
+					|| vIds.Count <= 0 
+					|| OClient.Delete(HpVersion.GetHpModel(), vIds));
+
+#if DEBUG
+			Debug.WriteLine($"ir attachments deleted = {deletedIrAttachments}");
+            Debug.WriteLine($"versions deleted = {deletedVersions}");
+#endif
+            return deletedIrAttachments && deletedVersions;
 		}
 
 	}
