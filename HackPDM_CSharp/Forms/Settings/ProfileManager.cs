@@ -25,14 +25,17 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.IO;
 using System.Linq;
+using System.Runtime.Remoting.Messaging;
 using System.Text;
 using System.Windows.Forms;
-using System.IO;
+
 using HackPDM.Forms.Hack;
-using System.Runtime.Remoting.Messaging;
-using OdooRpcCs;
+using HackPDM.HackClient;
 using HackPDM.Verifier;
+
+using OdooRpcCs;
 
 namespace HackPDM
 {
@@ -83,12 +86,26 @@ namespace HackPDM
         {
             if (AbleToLogin())
             {
-                var HFM = new HackFileManager();
-                HFM.Show();
+                try
+                {
+                    if (HackUpdater.EnsureUpdated())
+                    {
+                        var HFM = new HackFileManager();
+                        HFM.Show();
+                    }
+                    else
+                    {
+                        MessageBox.Show("local version is different than server version");
+                    }
+                }
+                catch
+                {
+                    MessageBox.Show("local version is different than server version");
+                }
             }
             this.DialogResult = DialogResult.OK;
         }
-
+        
 		private void HackSettingsBtn_Click( object sender, EventArgs e )
 		{
             hackSettings = new HackSettings();
@@ -97,35 +114,56 @@ namespace HackPDM
 
         private bool AbleToLogin()
         {
-			List<string> errors = [];
-            if (OdooDefaults.OdooID != 0) return true;
-
-			if (!OdooClient.CorrectOdooAddress())
-			{
-				errors.Add("invalid odoo address or unreachable host");
-			} 
-			else if (!OdooClient.CorrectOdooPort())
-			{
-				errors.Add("invalid odoo port or server is down");
-			}
-			else
-			{
-				errors.Add("invalid odoo credentials");
-			}
-			if (errors.Count > 0)
-			{
-                foreach (string message in errors)
+            try
+            {
+			    List<string> errors = [];
+                int status = OdooClient.CorrectUserID();
+                switch (status)
                 {
-                    var listItem = HackFileManager.EmptyListItem(ProfileManStatusList);
-
-                    listItem.SubItems["Status"].Text = "ERROR";
-                    listItem.SubItems["Message"].Text = message;
-
-                    ProfileManStatusList.Items.Add(listItem);
+                    case 1: return true;
+                    case 0:
+                    {
+                        errors.Add("invalid odoo credentials");
+                        break;
+                    }
+                    default:
+                    {
+                        errors.Add("odoo server isn't running");
+                        break;
+                    }
                 }
+
+			    if (!OdooClient.CorrectOdooAddress())
+			    {
+				    errors.Add("invalid odoo address or unreachable host");
+			    } 
+			    else if (!OdooClient.CorrectOdooPort())
+			    {
+				    errors.Add("invalid odoo port or server is down");
+			    }
+			    else
+			    {
+				    errors.Add("invalid odoo credentials");
+			    }
+			    if (errors.Count > 0)
+			    {
+                    foreach (string message in errors)
+                    {
+                        var listItem = HackFileManager.EmptyListItem(ProfileManStatusList);
+
+                        listItem.SubItems["Status"].Text = "ERROR";
+                        listItem.SubItems["Message"].Text = message;
+
+                        ProfileManStatusList.Items.Add(listItem);
+                    }
+                    return false;
+                }
+                return true;
+            }
+            catch
+            {
                 return false;
             }
-            return true;
 		}
 	}
 }

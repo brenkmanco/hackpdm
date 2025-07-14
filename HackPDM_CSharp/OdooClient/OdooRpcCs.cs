@@ -59,6 +59,25 @@ namespace OdooRpcCs
             }
             set;
         }
+        public static int CorrectUserID()
+        {
+            try
+            {
+                if (OdooDefaults.OdooID != 0)
+                {
+                    return 1;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+        
 		public static bool CorrectOdooAddress()
 		{
 			using ( Ping pinger = new Ping() )

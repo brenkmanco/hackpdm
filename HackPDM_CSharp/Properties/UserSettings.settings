@@ -71,7 +71,7 @@
       <Value Profile="(Default)">Ascending</Value>
     </Setting>
     <Setting Name="DownloadBatchSize" Type="System.Int32" Scope="User">
-      <Value Profile="(Default)">10</Value>
+      <Value Profile="(Default)">15</Value>
     </Setting>
     <Setting Name="HistoryLengthSize" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">1000</Value>

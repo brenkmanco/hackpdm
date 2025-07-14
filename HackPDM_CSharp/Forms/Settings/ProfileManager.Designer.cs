@@ -77,7 +77,7 @@
             this.ProfileManStatusList.HideSelection = false;
             this.ProfileManStatusList.Location = new System.Drawing.Point(192, 13);
             this.ProfileManStatusList.Name = "ProfileManStatusList";
-            this.ProfileManStatusList.Size = new System.Drawing.Size(145, 150);
+            this.ProfileManStatusList.Size = new System.Drawing.Size(383, 147);
             this.ProfileManStatusList.TabIndex = 152;
             this.ProfileManStatusList.UseCompatibleStateImageBehavior = false;
             this.ProfileManStatusList.View = System.Windows.Forms.View.Details;
@@ -89,13 +89,13 @@
             // ProfileManMessageHead
             // 
             this.ProfileManMessageHead.Text = "Message";
-            this.ProfileManMessageHead.Width = 174;
+            this.ProfileManMessageHead.Width = 313;
             // 
             // ProfileManager
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(349, 175);
+            this.ClientSize = new System.Drawing.Size(587, 172);
             this.Controls.Add(this.ProfileManStatusList);
             this.Controls.Add(this.HackSettingsBtn);
             this.Controls.Add(this.odooSettingsBtn);

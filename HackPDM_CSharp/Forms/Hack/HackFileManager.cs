@@ -250,34 +250,34 @@ namespace HackPDM
 		static HackFileManager() {}
         public HackFileManager()
 		{
-			while (OdooDefaults.OdooID == 0)
-			{
-				List<string> errors = [];
-				if (!OClient.CorrectOdooAddress())
-				{
-					errors.Add("invalid odoo address or unreachable host");
-				} 
-				else if (!OClient.CorrectOdooPort())
-				{
-					errors.Add("invalid odoo port or server is down");
-				}
-				else
-				{
-					errors.Add("invalid odoo credentials");
-				}
-				var pm = new ProfileManager(errors);
-				var result = pm.ShowDialog();
-				if (result is DialogResult.None or DialogResult.Cancel or DialogResult.Abort or DialogResult.No) 
-				{
-					return;
-				}
-			}
+			//while (OdooDefaults.OdooID == 0)
+			//{
+			//	List<string> errors = [];
+			//	if (!OClient.CorrectOdooAddress())
+			//	{
+			//		errors.Add("invalid odoo address or unreachable host");
+			//	} 
+			//	else if (!OClient.CorrectOdooPort())
+			//	{
+			//		errors.Add("invalid odoo port or server is down");
+			//	}
+			//	else
+			//	{
+			//		errors.Add("invalid odoo credentials");
+			//	}
+			//	var pm = new ProfileManager(errors);
+			//	var result = pm.ShowDialog();
+			//	if (result is DialogResult.None or DialogResult.Cancel or DialogResult.Abort or DialogResult.No) 
+			//	{
+			//		return;
+			//	}
+			//}
 
 			// --
 			//string filepath = @"C:\Users\jnjohnson\Documents\dev\testing\wigwam\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM";
 			//string temppath = @"C:\Users\jnjohnson\Documents\dev\testing\temp\";
-			string temppath2 = @"C:\Users\jnjohnson\Documents\dev\testing\wigwam\temp\X010166.Frame Base Weldment, Haggis.SLDASM";
-			var dependencies = HackDefaults.docMgr.GetDependencies(temppath2).Select(path => path[1]);
+			//string temppath2 = @"C:\Users\jnjohnson\Documents\dev\testing\wigwam\temp\X010166.Frame Base Weldment, Haggis.SLDASM";
+			//var dependencies = HackDefaults.docMgr.GetDependencies(temppath2).Select(path => path[1]);
 			// --
 
 			InitializeComponent();
@@ -660,7 +660,8 @@ namespace HackPDM
 
 				datePlace = DateTime.TryParse(datePlace, out DateTime remoteDate) && remoteDate != default ? remoteDate.ToShortDateString() : EmptyPlaceholder;
 				
-				item.SubItems[NameConfig["RowRemoteDate"]].Text = datePlace; 
+                // 2006-12-15 01:43:49.623
+                item.SubItems[NameConfig["RowRemoteDate"]].Text = datePlace; 
 				item.SubItems [ NameConfig [ "RowLocalDate" ] ].Text = hack.ModifiedDate.Year != 1 ? hack.ModifiedDate.ToShortDateString() : EmptyPlaceholder;
 
 				// remote only
@@ -1310,7 +1311,8 @@ namespace HackPDM
 			BackgroundWorker myWorker = sender as BackgroundWorker;
 
 			object lockObject = new();
-			ArrayList entryIDs = (ArrayList)e.Argument;
+			(ArrayList, CancellationToken) arguements = ((ArrayList, CancellationToken))e.Argument;
+			ArrayList entryIDs = arguements.Item1;
 			HpVersion[] versions;
 
 			// add status lines for entry id and upcoming versions
@@ -1327,22 +1329,57 @@ namespace HackPDM
 			maxCount = versions.Length;
 			skipCounter = 0;
 			processCounter = 0;
-            //ConcurrentQueue<Task> tasks = new(versionBatches.Select(ProcessVersionBatchAsync));
-            //ConcurrentSet<Task> tasksProcessing = [];
+			//ConcurrentQueue<Task> tasks = new(versionBatches.Select(ProcessVersionBatchAsync));
+			//ConcurrentSet<Task> tasksProcessing = [];
 
-            //while (tasks.TryDequeue(out Task task))
-            //{
-            //	await task;
-            //}
-            foreach (List<HpVersion> batch in versionBatches)
-                await ProcessVersionBatchAsync(batch);
+			//while (tasks.TryDequeue(out Task task))
+			//{
+			//	await task;
+			//}
+			try
+			{
+				await ProcessDownloadsAsync(versionBatches, arguements.Item2, 5);
+			}
+			catch
+			{
+				MessageBox.Show("Cancelled Download");
+			}
+
+            //foreach (List<HpVersion> batch in versionBatches)
+            //    await ProcessVersionBatchAsync(batch);
             //tasks.Add( ProcessVersionBatchAsync( batch ) );
 
-            MessageBox.Show( "Completed" );
+            MessageBox.Show( $"Completed!" );
 			RestartTree();
 			RestartEntries();
 		}
+		public async Task ProcessDownloadsAsync(IEnumerable<List<HpVersion>> versionBatches, CancellationToken cToken, int maxConcurrency = 3)
+		{
+            SemaphoreSlim throttler = new(maxConcurrency);
+            List<Task> allTasks = [];
 
+            foreach (var batch in versionBatches)
+            {
+                await throttler.WaitAsync();
+
+                Task task = Task.Run(async () =>
+                {
+					cToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        await ProcessVersionBatchAsync(batch);
+                    }
+                    finally
+                    {
+                        throttler.Release();
+                    }
+                });
+
+                allTasks.Add(task);
+            }
+
+            await Task.WhenAll(allTasks);
+        }
         /// <summary>background worker to create records within odoo that won't conflict with existing records</summary>
         /// <param name="sender">
         ///   <para>background worker</para>
@@ -1744,11 +1781,10 @@ namespace HackPDM
         }
 		private async void GetLatestFromTreeNode(bool withSubdirectories = false)
 		{
-			Dialog = new StatusDialog();
+            Dialog = new StatusDialog();
 			object lockObject = new();
 
-
-			TreeNode tnCurrent = lastSelectedNode;
+            TreeNode tnCurrent = lastSelectedNode;
 
 			if ( tnCurrent == null )
 			{
@@ -1768,24 +1804,25 @@ namespace HackPDM
 			}
 
 			ArrayList entryIDs = directory.GetDirectoryEntryIDs( withSubdirectories, ShowInactive.Checked );
-
             HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
             ArrayList newIds = await GetEntryList([.. entries.Select(e=>e.latest_version_id)]);
-
             newIds.AddRange(entryIDs);
             newIds = newIds.ToHashSet<int>().ToArrayList();
-
+            CancellationTokenSource tokenSource = new();
+            (ArrayList, CancellationToken) arguments = (newIds, tokenSource.Token);
             BackgroundWorker worker = new()
 			{
 				WorkerSupportsCancellation = true
 			};
 			//worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler((s, ev) => MessageBox.Show("Finished"));
 			worker.DoWork += new DoWorkEventHandler( worker_GetLatestAsync );
-			worker.RunWorkerAsync( newIds );
-
-			bool blnWorkCanceled = Dialog.ShowStatusDialog("Get Latest");
+			worker.RunWorkerAsync(arguments);
+            bool blnWorkCanceled = Dialog.ShowStatusDialog("Get Latest");
 			if ( blnWorkCanceled )
-				worker.CancelAsync();
+			{
+                tokenSource.Cancel();
+                worker.CancelAsync();
+            }
 		}
 		#endregion
 
@@ -1862,17 +1899,22 @@ namespace HackPDM
 
 			newIds.AddRange(entryIDs);
 			newIds = newIds.ToHashSet<int>().ToArrayList();
-
+			CancellationTokenSource tokenSource = new();
+			(ArrayList, CancellationToken) arguments = (newIds, tokenSource.Token);
+			
 			BackgroundWorker worker = new()
 			{
 				WorkerSupportsCancellation = true
 			};
 			worker.DoWork += new DoWorkEventHandler( worker_GetLatestAsync );
-			worker.RunWorkerAsync( newIds );
+			worker.RunWorkerAsync( arguments );
 
 			bool blnWorkCanceled = Dialog.ShowStatusDialog("Get Latest");
 			if ( blnWorkCanceled )
+			{
+				tokenSource.Cancel();
 				worker.CancelAsync();
+			}
 		}
 		
 		private async Task<ArrayList> GetEntryList(int[] entry_ids)
