@@ -497,13 +497,8 @@ namespace HackPDM
 		private async Task TreeSelectItem( TreeNode node )
 		{
 			IsListLoaded = false;
-			await Task.Run(()=>
-			{
-				while (!IsTreeLoaded)
-				{
-					Task.Delay(100);
-				}
-			});
+
+			await AsyncHelper.WaitUntil(() => IsTreeLoaded, 100, -1, default);
 			node.EnsureVisible();
 			InitListViewInternal( OdooEntryList, RowWidths );
 
@@ -515,14 +510,28 @@ namespace HackPDM
 					AddLocalEntries( node );
 					return;
 				}
-				Hashtable entries = HpDirectory.GetEntries(directoryID, IsActive);
+				Hashtable entries = await Task.Run(()=>HpDirectory.GetEntries(directoryID, IsActive));
 
 				Dictionary<string, Task<HackFile>> hackFileMap = await GetFileMap(entries);
 				AddRemoteEntries( entries, hackFileMap );
 				AddLocalEntries( lastSelectedNode, hackFileMap );
-				SafeInvoke(OdooEntryList, () => OdooEntryList.Sort());
+				SafeInvoke(OdooEntryList, OdooEntryList.Sort);
 			}
 			IsListLoaded = true;
+		}
+		private async Task<bool> TreeItemsChangedPolling( TreeNode node, int pollingMs = 5000, int timeout = -1, CancellationToken token = default )
+		{
+			while (!token.IsCancellationRequested)
+			{
+				bool isLoaded = await AsyncHelper.WaitUntil(() => IsTreeLoaded && IsListLoaded, 1000, -1, token);
+				if (isLoaded)
+				{
+
+				}
+				await Task.Delay(pollingMs, token);
+                await AsyncHelper.WaitUntil(() => token.IsCancellationRequested, pollingMs, timeout, token);
+            }
+			await AsyncHelper.WaitUntil(())
 		}
 		private void CreateTreeHash( HpDirectory directory )
 		{
@@ -620,7 +629,18 @@ namespace HackPDM
             SafeInvoke(OdooDirectoryTree, () => OdooDirectoryTree.Refresh());
         }
 		public void RestartTree() => CreateTreeViewBackground();
-		public async void RestartEntries() => SafeInvoke(OdooDirectoryTree, async () => await TreeSelectItem(lastSelectedNode));
+		public void RestartEntries()
+		{
+			SafeInvoke(OdooDirectoryTree, async () => await TreeSelectItem(lastSelectedNode));
+			SafeInvoke(OdooEntryList, async () =>
+			{
+				await AsyncHelper.WaitUntil(() => IsListLoaded);
+				if (OdooEntryList.SelectedItems.Count > 0)
+				{
+					OdooEntryList.SelectedItems[0].EnsureVisible();
+				}
+			});
+		}
 		#endregion
 
 		#region Tree Item Selection
@@ -655,8 +675,9 @@ namespace HackPDM
                 string fullName = (string)table["fullname"];
                 HackFile hack = hackFileMap[fullName].Result;
 
-				bool isDate = table["latest_date"] is string latest;
-				string datePlace = EmptyPlaceholder;
+				//string latest = EmptyPlaceholder;
+				string latest = table["latest_date"] as string;
+				string datePlace = latest is null ? EmptyPlaceholder : latest;
 
 				datePlace = DateTime.TryParse(datePlace, out DateTime remoteDate) && remoteDate != default ? remoteDate.ToShortDateString() : EmptyPlaceholder;
 				
@@ -713,7 +734,6 @@ namespace HackPDM
 					status = "dt";
 				}
 
-				
 				
 				// get or add image key
 

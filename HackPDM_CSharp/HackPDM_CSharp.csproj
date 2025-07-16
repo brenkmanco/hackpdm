@@ -428,6 +428,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ClientUtils\AsyncHelper.cs" />
     <Compile Include="ClientUtils\ExtMethods.cs" />
     <Compile Include="ClientUtils\ConcurrentSet.cs" />
     <Compile Include="ClientUtils\FileOperations.cs" />

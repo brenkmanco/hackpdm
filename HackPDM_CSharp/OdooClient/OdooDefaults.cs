@@ -448,7 +448,6 @@ namespace HackPDM
             }
             return null;
         }
-
 		public async static Task<HpVersion> CreateNewVersion( HackFile hack, HpEntry entry )
         {
             try { 
@@ -775,7 +774,7 @@ namespace HackPDM
         
         public ArrayList GetDirectoryEntryIDs(bool withSubEntries = false, bool withDeleted = true)
             => GetDirectoryEntryIDs( this.ID, withSubEntries, withDeleted );
-		public static ArrayList GetDirectoryEntryIDs( int directoryID, bool withSubEntries = false, bool withDeleted = true )
+		public static ArrayList GetDirectoryEntryIDs( int directoryID, bool withSubEntries = false, bool withDeleted = false )
 		{
 			return  directoryID != 0 
 				?  OClient.Command<ArrayList>( GetHpModel(), "get_all_entry_ids", [ directoryID, withDeleted, withSubEntries ], 10000 ) 
