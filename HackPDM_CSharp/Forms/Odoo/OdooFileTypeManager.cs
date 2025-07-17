@@ -53,26 +53,26 @@ namespace HackPDM.Forms.Odoo
 
 		readonly Dictionary<string, int> TypeRows = new()
 		{
-			{HackFileManager.NameConfig["FileTypeExtension"], 15},
-			{HackFileManager.NameConfig["FileTypeCategory"], 10},
-			{HackFileManager.NameConfig["FileTypeRegEx"], 18},
-			{HackFileManager.NameConfig["FileTypeDescription"], 0},
+			{NameConfig.FileTypeExtension.Name,	15},
+			{NameConfig.FileTypeCategory.Name,	10},
+			{NameConfig.FileTypeRegEx.Name,		18},
+			{NameConfig.FileTypeDescription.Name, 0},
 		};
 		readonly Dictionary<string, int> LocalRows = new()
 		{
-			{HackFileManager.NameConfig["FileTypeLocExt"], 15},
-			{HackFileManager.NameConfig["FileTypeLocStatus"], 21},
-			{HackFileManager.NameConfig["FileTypeLocExample"], 0},
+			{NameConfig.FileTypeLocExt.Name,		15},
+			{NameConfig.FileTypeLocStatus.Name,	21},
+			{NameConfig.FileTypeLocExample.Name,	0},
 		};
 		readonly Dictionary<string, DataColumnSettings> EntryFilterRows = SetEntryFilterRows();
 		readonly Dictionary<string, DataColumnSettings> LocalDataRows = SetLocalDataRows();
 		private static Dictionary<string, DataColumnSettings> SetLocalDataRows()
 		{
-			string ftExt = HackFileManager.NameConfig["FileTypeLocDatExt"];
-			string ftCat = HackFileManager.NameConfig["FileTypeLocDatCat"];
-			string ftReg = HackFileManager.NameConfig["FileTypeLocDatReg"];
-			string ftDes = HackFileManager.NameConfig["FileTypeLocDatDes"];
-			string ftIco = HackFileManager.NameConfig["FileTypeLocDatIco"];
+			string ftExt = NameConfig.FileTypeLocDatExt.Name;
+			string ftCat = NameConfig.FileTypeLocDatCat.Name;
+			string ftReg = NameConfig.FileTypeLocDatReg.Name;
+			string ftDes = NameConfig.FileTypeLocDatDes.Name;
+			string ftIco = NameConfig.FileTypeLocDatIco.Name;
 
 			DataColumnSettings Ext = new ([("ColumnName", ftExt), ("DataType", typeof(string))]);
 			DataColumnSettings Cat = new ([("ColumnName", ftCat), ("DataType", typeof(string))]);
@@ -117,7 +117,7 @@ namespace HackPDM.Forms.Odoo
 
 		private void OdooLocTypes_ItemSelectionChanged( object sender, ListViewItemSelectionChangedEventArgs e )
 		{
-			if ( e.Item.SubItems [ HackFileManager.NameConfig [ "FileTypeLocStatus" ] ].Text != "New Type" )
+			if ( e.Item.SubItems [ NameConfig.FileTypeLocStatus.Name ].Text != "New Type" )
 			{
 				e.Item.Selected = false;
 			}
@@ -129,7 +129,7 @@ namespace HackPDM.Forms.Odoo
 		}
 		private void ListView_DrawSubItem( object sender, DrawListViewSubItemEventArgs e )
 		{
-			if (e.Item.SubItems[HackFileManager.NameConfig["FileTypeLocStatus"]].Text != "New Type" )
+			if (e.Item.SubItems[NameConfig.FileTypeLocStatus.Name].Text != "New Type" )
 			{
 				e.DrawDefault = false;
 				e.Graphics.FillRectangle( Brushes.DarkGray, e.Bounds );
@@ -142,10 +142,10 @@ namespace HackPDM.Forms.Odoo
 		}
 		private static Dictionary<string, DataColumnSettings> SetEntryFilterRows()
 		{
-			string ftID = HackFileManager.NameConfig["FileTypeEntryFilterID"];
-			string ftProto = HackFileManager.NameConfig["FileTypeEntryFilterProto"];
-			string ftRegEx = HackFileManager.NameConfig["FileTypeEntryFilterRegEx"];
-			string ftDescription = HackFileManager.NameConfig["FileTypeEntryFilterDescription"];
+			string ftID = NameConfig.FileTypeEntryFilterID.Name;
+			string ftProto = NameConfig.FileTypeEntryFilterProto.Name;
+			string ftRegEx = NameConfig.FileTypeEntryFilterRegEx.Name;
+			string ftDescription = NameConfig.FileTypeEntryFilterDescription.Name;
 			
 			DataColumnSettings ID = new ([("ColumnName", ftID), ("DataType", typeof(int)), ("ReadOnly", true)]);
 			DataColumnSettings Proto = new ([("ColumnName", ftProto), ("DataType", typeof(string))]);
@@ -176,16 +176,16 @@ namespace HackPDM.Forms.Odoo
 		}
 		private void btnRefreshRemote_Click( object sender, EventArgs e )
 		{
-			HackFileManager.InitListViewPercentage(OdooRemTypes, TypeRows);
+			HackFileManager.InitListViewPercentage(OdooRemTypes, ColumnMap.FileTypeRows);
 			foreach ( KeyValuePair<string, HpType> item in OdooDefaults.ExtToType)
 			{
 				HpType type = item.Value;
 				ListViewItem listItem = HackFileManager.EmptyListItem(OdooRemTypes);
 				
-				listItem.SubItems[HackFileManager.NameConfig["FileTypeExtension"]].Text = type.file_ext;
-				listItem.SubItems[HackFileManager.NameConfig["FileTypeCategory"]].Text = type.cat_id.ToString();
-				listItem.SubItems[HackFileManager.NameConfig["FileTypeRegEx"]].Text = type.type_regex;
-				listItem.SubItems[HackFileManager.NameConfig["FileTypeDescription"]].Text = type.description;
+				listItem.SubItems[NameConfig.FileTypeExtension.Name].Text = type.file_ext;
+				listItem.SubItems[NameConfig.FileTypeCategory.Name].Text = type.cat_id.ToString();
+				listItem.SubItems[NameConfig.FileTypeRegEx.Name].Text = type.type_regex;
+				listItem.SubItems[NameConfig.FileTypeDescription.Name].Text = type.description;
 		
 				listItem.ImageKey = AddOrGetImageKeyRemote(TypeImageList, type);
 
@@ -238,10 +238,10 @@ namespace HackPDM.Forms.Odoo
 			HackFileManager.InitGridView(OdooEntryFilters);
 			DataTable table = HackFileManager.EmptyGridTable(OdooEntryFilters, EntryFilterRows);
 
-			string id			= HackFileManager.NameConfig["FileTypeEntryFilterID"];
-			string proto		= HackFileManager.NameConfig["FileTypeEntryFilterProto"];
-			string regex		= HackFileManager.NameConfig["FileTypeEntryFilterRegEx"];
-			string description	= HackFileManager.NameConfig["FileTypeEntryFilterDescription"];
+			string id			= NameConfig.FileTypeEntryFilterID.Name;
+			string proto		= NameConfig.FileTypeEntryFilterProto.Name;
+			string regex		= NameConfig.FileTypeEntryFilterRegEx.Name;
+			string description	= NameConfig.FileTypeEntryFilterDescription.Name;
 
 			foreach (HpEntryNameFilter entryFilter in OdooDefaults.HpEntryNameFilters)
 			{
@@ -274,7 +274,7 @@ namespace HackPDM.Forms.Odoo
 		private async void worker_RefreshLocal(object sender, DoWorkEventArgs e) => RefreshLocal();
 		private async void RefreshLocal()
 		{
-			HackFileManager.InitListViewPercentage(OdooLocTypes, LocalRows);
+			HackFileManager.InitListViewPercentage(OdooLocTypes, ColumnMap.FileTypeLocRows);
 			IEnumerable<string> filePaths = Directory.EnumerateFiles(HackDefaults.PWAPathAbsolute, "*", SearchOption.AllDirectories);
 			HashSet<string> uniqFiles = [];
 
@@ -290,14 +290,14 @@ namespace HackPDM.Forms.Odoo
 					ListViewItem item = HackFileManager.EmptyListItem(OdooLocTypes);
 					string status = "New Type";
 
-					item.SubItems [ HackFileManager.NameConfig [ "FileTypeLocExt" ] ].Text = extension;
+					item.SubItems [ NameConfig.FileTypeLocExt.Name ].Text = extension;
 					if ( OdooDefaults.ExtToType.ContainsKey( $".{extension}" ) )
 					{
 						status = "Exists Remotely";
 					}
 
-					item.SubItems [ HackFileManager.NameConfig [ "FileTypeLocStatus" ] ].Text = status;
-					item.SubItems [ HackFileManager.NameConfig [ "FileTypeLocExample" ] ].Text = file.FullName;
+					item.SubItems [ NameConfig.FileTypeLocStatus.Name ].Text = status;
+					item.SubItems [ NameConfig.FileTypeLocExample.Name ].Text = file.FullName;
 
 					item.ImageKey = AddOrGetImageKeyLocal( TypeImageList, file );
 
@@ -421,11 +421,11 @@ namespace HackPDM.Forms.Odoo
 			HackFileManager.InitGridView( LocalDataTypeGrid );
 			DataTable table = HackFileManager.EmptyGridTable( LocalDataTypeGrid, LocalDataRows );
 
-			string extension    = HackFileManager.NameConfig [ "FileTypeLocDatExt" ];
-			string regex        = HackFileManager.NameConfig [ "FileTypeLocDatReg" ];
-			string category     = HackFileManager.NameConfig [ "FileTypeLocDatCat" ];
-			string description  = HackFileManager.NameConfig [ "FileTypeLocDatDes" ];
-			string icon         = HackFileManager.NameConfig [ "FileTypeLocDatIco" ];
+			string extension    = NameConfig.FileTypeLocDatExt.Name;
+			string regex        = NameConfig.FileTypeLocDatReg.Name;
+			string category     = NameConfig.FileTypeLocDatCat.Name;
+			string description  = NameConfig.FileTypeLocDatDes.Name;
+			string icon         = NameConfig.FileTypeLocDatIco.Name;
 
 			foreach ( var type in types )
 			{
@@ -438,7 +438,7 @@ namespace HackPDM.Forms.Odoo
 			}
 			LocalDataTypeGrid.DataSource = table;
 			LocalDataTypeGrid.AutoResizeRows( DataGridViewAutoSizeRowsMode.DisplayedCellsExceptHeaders );
-			string iconCancel   = HackFileManager.NameConfig [ "FileTypeLocDatIcoCancel" ];
+			string iconCancel   = NameConfig.FileTypeLocDatIcoCancel.Name;
 
 			DataGridViewColumn tempColumn;
 			// extension column settings
@@ -476,9 +476,9 @@ namespace HackPDM.Forms.Odoo
 			List<HpType> types = [];
 			foreach (ListViewItem item in OdooLocTypes.SelectedItems)
 			{
-				if (item.SubItems[HackFileManager.NameConfig["FileTypeLocStatus"]].Text != "New Type") continue;
+				if (item.SubItems[NameConfig.FileTypeLocStatus.Name].Text != "New Type") continue;
 
-				string ext = item.SubItems[HackFileManager.NameConfig["FileTypeLocExt"]].Text;
+				string ext = item.SubItems[NameConfig.FileTypeLocExt.Name].Text;
 				HpType type = new(null, ext, null, $"\\.({ext})$", 0);
 				types.Add(type);
 			}		
@@ -489,10 +489,10 @@ namespace HackPDM.Forms.Odoo
 			List<HpType> types = [];
 			foreach ( ListViewItem item in OdooLocTypes.Items )
 			{
-				if ( item.SubItems [ HackFileManager.NameConfig [ "FileTypeLocStatus" ] ].Text != "New Type" )
+				if ( item.SubItems [ NameConfig.FileTypeLocStatus.Name ].Text != "New Type" )
 					continue;
 
-				string ext = item.SubItems[HackFileManager.NameConfig["FileTypeLocExt"]].Text;
+				string ext = item.SubItems[NameConfig.FileTypeLocExt.Name].Text;
 				HpType type = new(null, ext, null, $"\\.({ext})$", 0);
 				types.Add( type );
 			}
@@ -501,8 +501,8 @@ namespace HackPDM.Forms.Odoo
 		private void LocalDataTypeGrid_CellClick( object sender, DataGridViewCellEventArgs e )
 		{
 			DataGridViewColumn column = LocalDataTypeGrid.Columns[e.ColumnIndex];
-			string iconStr = HackFileManager.NameConfig [ "FileTypeLocDatIco" ];
-			string cancelStr = HackFileManager.NameConfig [ "FileTypeLocDatIcoCancel" ];
+			string iconStr = NameConfig.FileTypeLocDatIco.Name;
+			string cancelStr = NameConfig.FileTypeLocDatIcoCancel.Name;
 
 			if (column.Name == iconStr)
 			{
@@ -529,7 +529,7 @@ namespace HackPDM.Forms.Odoo
 						MessageBox.Show("Image ratio isn't 1:1");
 						return;
 					}
-					img.ImageFormater( HackFileManager.NameConfig [ "FileTypeLocDatExt" ], ImageFormat.Png );
+					img.ImageFormater( NameConfig.FileTypeLocDatExt.Name, ImageFormat.Png );
 					img = ImageUtils.ResizeImage( img, 32, 32 );
 					cell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
 					cell.Value = img;
@@ -552,11 +552,11 @@ namespace HackPDM.Forms.Odoo
 		private async void button3_Click( object sender, EventArgs e )
 		{
 			List<HpType> types = [];
-			string extension    = HackFileManager.NameConfig [ "FileTypeLocDatExt" ];
-			string regex        = HackFileManager.NameConfig [ "FileTypeLocDatReg" ];
-			string category     = HackFileManager.NameConfig [ "FileTypeLocDatCat" ];
-			string description  = HackFileManager.NameConfig [ "FileTypeLocDatDes" ];
-			string icon         = HackFileManager.NameConfig [ "FileTypeLocDatIco" ];
+			string extension    = NameConfig.FileTypeLocDatExt.Name;
+			string regex        = NameConfig.FileTypeLocDatReg.Name;
+			string category     = NameConfig.FileTypeLocDatCat.Name;
+			string description  = NameConfig.FileTypeLocDatDes.Name;
+			string icon         = NameConfig.FileTypeLocDatIco.Name;
 
 			foreach ( DataGridViewRow row in LocalDataTypeGrid.Rows )
 			{
@@ -594,10 +594,10 @@ namespace HackPDM.Forms.Odoo
 		{
 			List<HpEntryNameFilter> commitFilters = [];
 			List<HpEntryNameFilter> updateFilters = [];
-			string id           = HackFileManager.NameConfig["FileTypeEntryFilterID"];
-			string proto        = HackFileManager.NameConfig["FileTypeEntryFilterProto"];
-			string regex        = HackFileManager.NameConfig["FileTypeEntryFilterRegEx"];
-			string description  = HackFileManager.NameConfig["FileTypeEntryFilterDescription"];
+			string id           = NameConfig.FileTypeEntryFilterID.Name;
+			string proto        = NameConfig.FileTypeEntryFilterProto.Name;
+			string regex        = NameConfig.FileTypeEntryFilterRegEx.Name;
+			string description  = NameConfig.FileTypeEntryFilterDescription.Name;
 
 
 			foreach (DataGridViewRow row in OdooEntryFilters.Rows)
@@ -677,7 +677,7 @@ namespace HackPDM.Forms.Odoo
 		{
 			// \.(msi)$
 			DataGridViewColumn entryGridColumn = OdooEntryFilters.Columns[e.ColumnIndex];
-			string protoStr = HackFileManager.NameConfig [ "FileTypeEntryFilterProto" ];
+			string protoStr = NameConfig.FileTypeEntryFilterProto.Name;
 			if (entryGridColumn.Name == protoStr)
 			{
 				DataGridViewCell cell = OdooEntryFilters[e.ColumnIndex, e.RowIndex];
@@ -707,7 +707,7 @@ namespace HackPDM.Forms.Odoo
 							sb.Append(cv[i]);
 						}
 					}
-					string regexStr = HackFileManager.NameConfig [ "FileTypeEntryFilterRegEx" ];
+					string regexStr = NameConfig.FileTypeEntryFilterRegEx.Name;
 					OdooEntryFilters[regexStr, e.RowIndex].Value = sb.ToString();
 				}
 			}

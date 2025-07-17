@@ -339,6 +339,25 @@ namespace HackPDM
             }
             return val.CompareTo(max) > 0 ? max : val;
         }
+        public static Dictionary<string, ColumnHeader> DictExtAdd(params (string key, object value)[] pairs)
+            => pairs.ToDictionary(p => p.key, p =>
+                p.value switch
+                {
+                    ColumnHeader column
+                        => column,
+                    Tuple<int, HorizontalAlignment> values
+                        => new ColumnHeader { Name = p.key, Text = p.key, Width = values.Item1, TextAlign = values.Item2 },
+                    Tuple<string, int, HorizontalAlignment> values
+                        => new ColumnHeader { Name = p.key, Text = values.Item1, Width = values.Item2, TextAlign = values.Item3 },
+                    Tuple<string, int> values
+                        => new ColumnHeader { Name = p.key, Text = values.Item1, Width = values.Item2, TextAlign = HorizontalAlignment.Left },
+                    int width
+                        => new ColumnHeader { Name = p.key, Text = p.key, Width = width, TextAlign = HorizontalAlignment.Left },
+                    string text
+                        => new ColumnHeader { Name = p.key, Text = text, Width = 75, TextAlign = HorizontalAlignment.Left },
+                    _ => null,
+                }
+            );
     }
 
     public class Kwargs<T>(T obj)

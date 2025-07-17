@@ -51,145 +51,8 @@ namespace HackPDM
 		//internal static readonly string ExtensionIconPath = $"{directoryInfo.FullName}\\Icons\\ExtensionIcons";
 		//internal static readonly string ResourcesPath = $"{directoryInfo.FullName}\\Resources";
 		private const string EmptyPlaceholder = "-";
-		// List Views Column Name and Widths
-		internal static readonly Dictionary<string, string> NameConfig = new()
-		{
-			{"RowID",							"ID"},
-			{"RowName",							"Name"},
-			{"RowType",							"Type"},
-			{"RowSize",							"Size"},
-			{"RowStatus",						"Status"},
-			{"RowCheckOut",						"CheckOut"},
-			{"RowCategory",						"Category"},
-			{"RowLocalDate",					"Local Date"},
-			{"RowRemoteDate",					"Remote Date"},
-			{"RowFullName",						"FullName"},
-			{"HistoryVersion",					"Version"},
-			{"HistoryModUser",					"ModUser"},
-			{"HistoryModDate",					"ModDate"},
-			{"HistorySize",						"Size"},
-			{"HistoryRelDate",					"RelDate"},
-			{"ParentVersion",					"Version"},
-			{"ParentName",						"Name"},
-			{"ParentBasePath",					"Base Path"},
-			{"ChildrenVersion",					"Version"},
-			{"ChildrenName",					"Name"},
-			{"ChildrenBasePath",				"Base Path"},
-			{"PropertiesVersion",				"Version"},
-			{"PropertiesConfiguration",			"Configuration"},
-			{"PropertiesName",					"Name"},
-			{"PropertiesProperty",				"Property"},
-			{"PropertiesType",					"Type"},
-			{"PropertiesValue",					"Value"},
-			{"VersionID",						"ID"},
-			{"VersionName",						"Name"},
-			{"VersionFileSize",					"File Size"},
-			{"VersionDirectoryID",				"Directory ID"},
-			{"VersionNodeID",					"Node ID"},
-			{"VersionEntryID",					"Entry ID"},
-			{"VersionAttachmentID",				"Attachment ID"},
-			{"VersionModifyDate",				"Modify Date"},
-			{"VersionChecksum",					"Checksum"},
-			{"VersionOdooCompletePath",			"Odoo Complete Path"},
-			{"SearchID",						"ID"},
-			{"SearchName",						"Name"},
-			{"SearchDirectory",					"Directory"},
-			{"SearchPropName",					"Name"},
-			{"SearchPropEqual",					"Comparer"},
-			{"SearchPropValue",					"Value"},
-			{"FileTypeExtension",				"Extension"},
-			{"FileTypeCategory",				"Category"},
-			{"FileTypeRegEx",					"RegEx"},
-			{"FileTypeDescription",				"Description"},
-			{"FileTypeEntryFilterID",			"ID"},
-			{"FileTypeEntryFilterProto",		"Proto"},
-			{"FileTypeEntryFilterRegEx",		"RegEx"},
-			{"FileTypeEntryFilterDescription",	"Description"},
-			{"FileTypeLocExt",					"Extension"},
-			{"FileTypeLocStatus",				"Status"},
-			{"FileTypeLocExample",				"Example"},
-			{"FileTypeLocDatExt",				"Extension"},
-			{"FileTypeLocDatReg",				"RegEx"},
-			{"FileTypeLocDatCat",				"Category"},
-			{"FileTypeLocDatDes",				"Description"},
-			{"FileTypeLocDatIco",				"Icon"},
-			{"FileTypeLocDatIcoCancel",			"Remove Icon?"},
-		};
-		readonly Dictionary<string, ColumnHeader> RowWidths = DictExtAdd
-        (
-			(NameConfig["RowID"],						75),
-			(NameConfig["RowName"],						300),
-			(NameConfig["RowType"],						120),
-			(NameConfig["RowSize"],						new Tuple<int, HorizontalAlignment>(100, HorizontalAlignment.Right)),
-			(NameConfig["RowStatus"],					75),
-			(NameConfig["RowCheckOut"],					120),
-			(NameConfig["RowCategory"],					110),
-			(NameConfig["RowLocalDate"],				150),
-			(NameConfig["RowRemoteDate"],				150),
-			(NameConfig["RowFullName"],					100)
-		);
-		readonly Dictionary<string, ColumnHeader> HistoryRows = DictExtAdd
-        (
-			(NameConfig["HistoryVersion"],				50),
-			(NameConfig["HistoryModUser"],				140),
-			(NameConfig["HistoryModDate"],				140),
-			(NameConfig["HistorySize"],					75),
-			(NameConfig["HistoryRelDate"],				75)
-		);
-		readonly Dictionary<string, ColumnHeader> ParentRows = DictExtAdd
-        (
-			(NameConfig["ParentVersion"],				50),
-			(NameConfig["ParentName"],					400),
-			(NameConfig["ParentBasePath"],				600)
-		);
-		readonly Dictionary<string, ColumnHeader> ChildrenRows = DictExtAdd
-        (
-			(NameConfig["ChildrenVersion"],				50),
-			(NameConfig["ChildrenName"],				400),
-			(NameConfig["ChildrenBasePath"],			600)
-		);
-		readonly Dictionary<string, ColumnHeader> PropertiesRows = DictExtAdd
-		(
-			(NameConfig["PropertiesVersion"],			50),
-			(NameConfig["PropertiesConfiguration"],		100),
-			(NameConfig["PropertiesName"],				100),
-			(NameConfig["PropertiesProperty"],			50),
-			(NameConfig["PropertiesType"],				75),
-			(NameConfig["PropertiesValue"],				400)
-		);
-		readonly Dictionary<string, ColumnHeader> VersionInfoRows = DictExtAdd
-		(
-            (NameConfig["VersionID"],					75),
-			(NameConfig["VersionName"],					300),
-			(NameConfig["VersionFileSize"],				100),
-			(NameConfig["VersionDirectoryID"],			75),
-			(NameConfig["VersionNodeID"],				75),
-			(NameConfig["VersionEntryID"],				75),
-			(NameConfig["VersionAttachmentID"],			75),
-			(NameConfig["VersionModifyDate"],			120),
-			(NameConfig["VersionChecksum"],				300),
-			(NameConfig["VersionOdooCompletePath"],		300)
-		);
-        public static Dictionary<string, ColumnHeader> DictExtAdd(params (string key, object value)[] pairs) 
-			=> pairs.ToDictionary(p => p.key, p =>
-				p.value switch
-				{
-					ColumnHeader column
-						=> column,
-					Tuple<int, HorizontalAlignment> values
-                        => new ColumnHeader { Name = p.key, Text = p.key, Width = values.Item1, TextAlign = values.Item2 },
-                    Tuple<string, int, HorizontalAlignment> values
-						=> new ColumnHeader { Name = p.key, Text = values.Item1, Width = values.Item2, TextAlign = values.Item3 },
-					Tuple<string, int> values
-						=> new ColumnHeader { Name = p.key, Text = values.Item1, Width = values.Item2, TextAlign = HorizontalAlignment.Left },
-					int width
-						=> new ColumnHeader { Name = p.key, Text = p.key, Width = width, TextAlign = HorizontalAlignment.Left },
-					string text
-						=> new ColumnHeader { Name = p.key, Text = text, Width = 75, TextAlign = HorizontalAlignment.Left },
-					_ => null,
-                }
-            );
-
+		
+		
         HpDirectory root;
         public static StatusDialog Dialog { get; set; }
         
@@ -213,6 +76,11 @@ namespace HackPDM
         { 
             get
             {
+                var myObject = new
+                {
+                    id = "hi"
+                };
+
                 if (field == 0)
                 {
                     field = Properties.UserSettings.Default.DownloadBatchSize;
@@ -238,11 +106,14 @@ namespace HackPDM
 		private static bool IsActive { get; set; } = false;
 		public TreeNode lastSelectedNode { get; set; } = null;
 		public string lastSelectedNodePath {get; set;} = null;
-		#endregion
 
-		#region TEST_VARIABLES
-		#if DEBUG
-			Stopwatch stopwatch;
+        // if EntryPollingMs is set to less than or equal to 0 then it will not poll for changes
+        public int EntryPollingMs { get; set; } = 5000;
+        #endregion
+
+        #region TEST_VARIABLES
+#if DEBUG
+        Stopwatch stopwatch;
 		#endif
 		#endregion
 
@@ -364,16 +235,16 @@ namespace HackPDM
 
         // list controls
         // reset list items and columns
-        private void InitListViewInternal(ListView list, Dictionary<string, ColumnHeader> rows)
+        private void InitListViewInternal(ListView list, ColumnInfo[] rows)
 			=> InitListView( list, rows );
-		internal static void InitListView( ListView list, Dictionary<string, ColumnHeader> rows )
+		internal static void InitListView( ListView list, ColumnInfo[] rows )
 		{
             SafeInvokeGen(list, rows, (row) =>
             {
                 list.Clear();
-                foreach (KeyValuePair<string, ColumnHeader> item in row)
+                foreach (ColumnInfo item in row)
                 {
-                    list.Columns.Add(item.Value);
+                    list.Columns.Add(item.Header);
                 }
 			});
 		}
@@ -385,24 +256,24 @@ namespace HackPDM
                 gridView.DataSource = null;
 			});
 		}
-		internal static void InitListViewPercentage( ListView list, Dictionary<string, int> rows )
+		internal static void InitListViewPercentage( ListView list, ColumnInfo[] rows )
 		{
 			SafeInvokeGen(list, rows, (row) =>
             {
                 list.Clear();
 				List<ColumnHeader> offsets = [];
 				int unUsedPercentage = 100;
-                foreach (KeyValuePair<string, int> item in row)
+                foreach (ColumnInfo item in row)
                 {
-					if (item.Value == 0)
+					if (item.Width == 0)
 					{
-						offsets.Add(list.Columns.Add(item.Key, item.Key));
+						offsets.Add(list.Columns.Add(item.Name, item.Name));
 					}
 					else
 					{
-						int use = (int)( list.Size.Width * (item.Value / 100f) );
-						list.Columns.Add(item.Key, item.Key, use );
-						unUsedPercentage -= item.Value;
+						int use = (int)( list.Size.Width * (item.Width / 100f) );
+						list.Columns.Add(item.Name, item.Name, use );
+						unUsedPercentage -= item.Width;
 					}
                 }
 				int totalItems = offsets.Count;
@@ -454,21 +325,21 @@ namespace HackPDM
 
 		private void ResetSubListViews()
 		{
-			InitListViewInternal( OdooHistory, HistoryRows );
-			InitListViewInternal( OdooParents, ParentRows );
-			InitListViewInternal( OdooChildren, ChildrenRows );
-			InitListViewInternal( OdooProperties, PropertiesRows );
-			InitListViewInternal( OdooVersionInfoList, VersionInfoRows );
+			InitListViewInternal( OdooHistory,			ColumnMap.HistoryRows );
+			InitListViewInternal( OdooParents,			ColumnMap.ParentRows );
+			InitListViewInternal( OdooChildren,			ColumnMap.ChildrenRows );
+			InitListViewInternal( OdooProperties,		ColumnMap.PropertiesRows );
+			InitListViewInternal( OdooVersionInfoList,	ColumnMap.VersionInfoRows );
 		}
 
 		private void ResetListViews()
 		{
-			InitListViewInternal( OdooEntryList, RowWidths );
-			InitListViewInternal( OdooHistory, HistoryRows );
-			InitListViewInternal( OdooParents, ParentRows );
-			InitListViewInternal( OdooChildren, ChildrenRows );
-			InitListViewInternal( OdooProperties, PropertiesRows );
-			InitListViewInternal( OdooVersionInfoList, VersionInfoRows );
+			InitListViewInternal( OdooEntryList,		ColumnMap.RowWidths );
+			InitListViewInternal( OdooHistory,			ColumnMap.HistoryRows );
+			InitListViewInternal( OdooParents,			ColumnMap.ParentRows );
+			InitListViewInternal( OdooChildren,			ColumnMap.ChildrenRows );
+			InitListViewInternal( OdooProperties,		ColumnMap.PropertiesRows );
+			InitListViewInternal( OdooVersionInfoList,	ColumnMap.VersionInfoRows );
 		}
 		private void ClearEntryLists()
         {
@@ -500,7 +371,7 @@ namespace HackPDM
 
 			await AsyncHelper.WaitUntil(() => IsTreeLoaded, 100, -1, default);
 			node.EnsureVisible();
-			InitListViewInternal( OdooEntryList, RowWidths );
+			InitListViewInternal( OdooEntryList, ColumnMap.RowWidths );
 
 			if ( node?.Tag is int directoryID )
 			{
@@ -510,28 +381,32 @@ namespace HackPDM
 					AddLocalEntries( node );
 					return;
 				}
-				Hashtable entries = await Task.Run(()=>HpDirectory.GetEntries(directoryID, IsActive));
 
-				Dictionary<string, Task<HackFile>> hackFileMap = await GetFileMap(entries);
-				AddRemoteEntries( entries, hackFileMap );
-				AddLocalEntries( lastSelectedNode, hackFileMap );
+				var (entries, hackmap) = await GetHackAndEntry(directoryID);
+				AddRemoteEntries( entries, hackmap );
+				AddLocalEntries( lastSelectedNode, hackmap );
+				
 				SafeInvoke(OdooEntryList, OdooEntryList.Sort);
 			}
 			IsListLoaded = true;
 		}
-		private async Task<bool> TreeItemsChangedPolling( TreeNode node, int pollingMs = 5000, int timeout = -1, CancellationToken token = default )
+		private async Task<(Hashtable entries, Dictionary<string, Task<HackFile>> hackmap)> GetHackAndEntry(int directoryID)
 		{
-			while (!token.IsCancellationRequested)
+			Hashtable entries = await Task.Run(() => HpDirectory.GetEntries(directoryID, IsActive));
+			Dictionary<string, Task<HackFile>> hackFileMap = await GetFileMap(entries);
+			return (entries, hackFileMap);
+        }
+        private async Task<bool> TreeItemsChangedPolling( int timeout = -1, CancellationToken token = default )
+		{
+			while (!token.IsCancellationRequested && EntryPollingMs > 0)
 			{
 				bool isLoaded = await AsyncHelper.WaitUntil(() => IsTreeLoaded && IsListLoaded, 1000, -1, token);
-				if (isLoaded)
-				{
+				
+				if (!isLoaded || lastSelectedNode is null) continue;
 
-				}
-				await Task.Delay(pollingMs, token);
-                await AsyncHelper.WaitUntil(() => token.IsCancellationRequested, pollingMs, timeout, token);
+				await Task.Delay(EntryPollingMs, token);
             }
-			await AsyncHelper.WaitUntil(())
+			return false;
 		}
 		private void CreateTreeHash( HpDirectory directory )
 		{
@@ -644,6 +519,46 @@ namespace HackPDM
 		#endregion
 
 		#region Tree Item Selection
+		private void FindUpdatedEntries(TreeNode node, Hashtable entries, Dictionary<string, Task<HackFile>> hackFileMap)
+		{
+            // things to check for:
+            // 1. if the entry is in the entries hashtable
+            // 2. if the entry is in the hackFileMap
+            // 3. if the entry is not in the entries hashtable but is in the hackFileMap
+            // 4. if the entry is not in the hackFileMap but is in the entries hashtable
+            // 5. if the entry is not in either the entries hashtable or the hackFileMap
+            // 6. if the entry is in both the entries hashtable and the hackFileMap but has been modified locally
+            // 7. if the entry is in both the entries hashtable and the hackFileMap but has been modified remotely
+
+            HackFile[] files = GetHackNonEntries(node, hackFileMap);
+
+			foreach (ListViewItem item in OdooEntryList.Items)
+			{
+				// this means that the item is not in the entries hashtable
+				string id = item.SubItems[NameConfig.RowID.Name].Text;
+                if ( id == EmptyPlaceholder )
+				{
+					Hashtable entry = entries.TakeWhere( e => e.Value is Hashtable ht && ht["id"].ToString() == id);
+                }
+				else
+				{
+
+				}
+            }
+			
+        }
+		private HackFile[] GetHackNonEntries(TreeNode node, Dictionary<string, Task<HackFile>> hackFileMap)
+		{
+            string path = HackDefaults.DefaultPath(node.FullPath, true);
+            if (!Directory.Exists(path)) return null;
+
+            HackFile[] files;
+
+            bool hasEntries = hackFileMap != null;
+            if (hasEntries) files = FileOperations.FilesInDirectory(path, hackFileMap); //, out Dictionary<string, Hashtable> conflictPaths);
+            else files = FileOperations.FilesInDirectory(path);
+			return files;
+        }
         private void AddRemoteEntries(Hashtable entries, Dictionary<string, Task<HackFile>> hackFileMap)
         {
 			#if DEBUG
@@ -651,154 +566,242 @@ namespace HackPDM
 			#endif
             foreach (DictionaryEntry pair in entries)
             {
-                Hashtable table = (Hashtable)pair.Value;
-                ListViewItem item = EmptyListItemInternal(OdooEntryList);
-                item.SubItems[ NameConfig["RowID"] ].Text                   = ((int)table["id"]).ToString();
-
-                //item.SubItems.Add(((int)table["id"]).ToString());
-                item.SubItems [ NameConfig [ "RowName" ] ].Text             = pair.Key.ToString();
-
-				object ttype = table["type"];
-				string type = ttype is string ttypeString ? ttypeString : EmptyPlaceholder;
-				item.SubItems [ NameConfig [ "RowType" ] ].Text             = type;
-
-				//double size = (double)( Convert.ToDouble(table["size"]) * HackDefaults.ByteSizeMultiplier );
-				item.SubItems [ NameConfig [ "RowSize" ] ].Text				= FileOperations.FileSizeReformat(Convert.ToInt64(table["size"]));
-
-
-                string checkout = (string)table["checkout"];
-                checkout = checkout == "False:False" ? EmptyPlaceholder : checkout;
-                item.SubItems [ NameConfig [ "RowCheckOut" ] ].Text         = checkout;
-
-                // check if latest checksum
-                string status = "";
-                string fullName = (string)table["fullname"];
-                HackFile hack = hackFileMap[fullName].Result;
-
-				//string latest = EmptyPlaceholder;
-				string latest = table["latest_date"] as string;
-				string datePlace = latest is null ? EmptyPlaceholder : latest;
-
-				datePlace = DateTime.TryParse(datePlace, out DateTime remoteDate) && remoteDate != default ? remoteDate.ToShortDateString() : EmptyPlaceholder;
-				
-                // 2006-12-15 01:43:49.623
-                item.SubItems[NameConfig["RowRemoteDate"]].Text = datePlace; 
-				item.SubItems [ NameConfig [ "RowLocalDate" ] ].Text = hack.ModifiedDate.Year != 1 ? hack.ModifiedDate.ToShortDateString() : EmptyPlaceholder;
-
-				// remote only
-				// local only
-				// new remote version
-				// checked out to me
-				// checked out to other
-				// ignore filter
-				// no remote file type
-				// local modification
-				// deleted
-				// destroyed
-
-				if (table["deleted"] is bool deleted && !deleted)
-				{
-					if (checkout != EmptyPlaceholder)
-					{
-						// cm = checked out to me
-						// co = checked out to other
-						status = checkout == $"{OdooDefaults.OdooUser}:{OdooDefaults.OdooID}" ? "cm" : "co";
-					}
-					else
-					{
-						switch(table["latest_checksum"])
-						{
-							case bool:
-							{
-								status = "lo";
-								break;
-							}
-							case string latestChecksum:
-							{
-								if (hack.SHA1Checksum == null) status = "ro";
-								else if (hack.SHA1Checksum == latestChecksum) status = "ok";
-								else
-								{
-									// either the local version is newer or the remote version is newer
-									// because the checksums don't match
-									status = remoteDate > hack.ModifiedDate ? "nv" : "lm";
-                                }
-								break;
-							}
-							default: status = "lo"; break;
-						}
-					}
-				}
-				else
-				{
-					status = "dt";
-				}
-
-				
-				// get or add image key
-
-				string strKey = status != "ok" ? $"{type}.{status}" : type;
-                if ( ilListIcons.Images [ strKey ] == null)
-				{
-					// image key not present in ilListIcons
-					Image imgExt = ilListIcons.Images[type];
-					if (imgExt == null)
-					{
-						if (OdooDefaults.ExtToType.TryGetValue( $".{type}", out var hpType ))
-						{
-							// get remote image
-							byte[] imgBytes = FileOperations.ConvertFromBase64(hpType.icon);
-							MemoryStream ms = new();
-							ms.Write( imgBytes, 0, imgBytes.Length );
-							imgExt = Image.FromStream( ms );
-						}
-
-						if (imgExt == null)
-						{
-							imgExt = ilListIcons.Images [ "default" ];
-						}
-						else
-						{
-							ilListIcons.Images.Add(type, imgExt);
-						}
-					}
-
-					// get status image
-
-					if (status == "ok")
-					{
-						if (imgExt is null)	strKey = "default";
-					}
-					else
-					{
-						Image imgStatus = ilListIcons.Images[status];
-
-						// combine images
-						if (imgExt is not null && imgStatus is not null)
-						{
-							ilListIcons.Images.Add(strKey, ImageUtils.ImageOverlay( imgExt, imgStatus ));
-						}
-						else
-						{
-							strKey = "default";
-						}
-					}
-				}
-
-				item.ImageKey = strKey;
-
-
-				item.SubItems[ NameConfig [ "RowStatus" ] ].Text            = status;
-				string category = table["category"] is string cat ? cat : EmptyPlaceholder;
-                item.SubItems [ NameConfig [ "RowCategory" ] ].Text         = category;
-                item.SubItems [ NameConfig [ "RowFullName" ] ].Text         = fullName;
-
-				SafeInvoke(OdooEntryList, ()=> OdooEntryList.Items.Add(item));
+                AddRemoteEntry(pair, hackFileMap);
             }
 			#if DEBUG
 			stopwatch.Stop();
 			Console.WriteLine($"remote entries time: {stopwatch.Elapsed}");
 			#endif
+        }
+		private void AddRemoteEntry(DictionaryEntry pair, Dictionary<string, Task<HackFile>> hackFileMap)
+		{
+            if (pair.Value is not Hashtable table) return;
+
+            ListViewItem item = EmptyListItemInternal(OdooEntryList);
+            item.SubItems[NameConfig.RowID.Name].Text = ((int)table["id"]).ToString();
+
+            //item.SubItems.Add(((int)table["id"]).ToString());
+            item.SubItems[NameConfig.RowName.Name].Text = pair.Key.ToString();
+
+            object ttype = table["type"];
+            string type = ttype is string ttypeString ? ttypeString : EmptyPlaceholder;
+            item.SubItems[NameConfig.RowType.Name].Text = type;
+
+            //double size = (double)( Convert.ToDouble(table["size"]) * HackDefaults.ByteSizeMultiplier );
+            item.SubItems[NameConfig.RowSize.Name].Text = FileOperations.FileSizeReformat(Convert.ToInt64(table["size"]));
+
+
+            string checkout = (string)table["checkout"];
+            checkout = checkout == "False:False" ? EmptyPlaceholder : checkout;
+            item.SubItems[NameConfig.RowCheckOut.Name].Text = checkout;
+
+            // check if latest checksum
+            string status = "";
+            string fullName = (string)table["fullname"];
+            HackFile hack = hackFileMap[fullName].Result;
+
+            //string latest = EmptyPlaceholder;
+            string latest = table["latest_date"] as string;
+            string datePlace = latest is null ? EmptyPlaceholder : latest;
+
+            datePlace = DateTime.TryParse(datePlace, out DateTime remoteDate) && remoteDate != default ? remoteDate.ToShortDateString() : EmptyPlaceholder;
+
+            // 2006-12-15 01:43:49.623
+            item.SubItems[NameConfig.RowRemoteDate.Name].Text = datePlace;
+            item.SubItems[NameConfig.RowLocalDate.Name].Text = hack.ModifiedDate.Year != 1 ? hack.ModifiedDate.ToShortDateString() : EmptyPlaceholder;
+
+            // remote only
+            // local only
+            // new remote version
+            // checked out to me
+            // checked out to other
+            // ignore filter
+            // no remote file type
+            // local modification
+            // deleted
+            // destroyed
+
+            if (table["deleted"] is bool deleted && !deleted)
+            {
+                if (checkout != EmptyPlaceholder)
+                {
+                    // cm = checked out to me
+                    // co = checked out to other
+                    status = checkout == $"{OdooDefaults.OdooUser}:{OdooDefaults.OdooID}" ? "cm" : "co";
+                }
+                else
+                {
+                    switch (table["latest_checksum"])
+                    {
+                        case bool:
+                            {
+                                status = "lo";
+                                break;
+                            }
+                        case string latestChecksum:
+                            {
+                                if (hack.SHA1Checksum == null) status = "ro";
+                                else if (hack.SHA1Checksum == latestChecksum) status = "ok";
+                                else
+                                {
+                                    // either the local version is newer or the remote version is newer
+                                    // because the checksums don't match
+                                    status = remoteDate > hack.ModifiedDate ? "nv" : "lm";
+                                }
+                                break;
+                            }
+                        default: status = "lo"; break;
+                    }
+                }
+            }
+            else
+            {
+                status = "dt";
+            }
+
+
+            // get or add image key
+
+            string strKey = status != "ok" ? $"{type}.{status}" : type;
+            if (ilListIcons.Images[strKey] == null)
+            {
+                // image key not present in ilListIcons
+                Image imgExt = ilListIcons.Images[type];
+                if (imgExt == null)
+                {
+                    if (OdooDefaults.ExtToType.TryGetValue($".{type}", out var hpType))
+                    {
+                        // get remote image
+                        byte[] imgBytes = FileOperations.ConvertFromBase64(hpType.icon);
+                        MemoryStream ms = new();
+                        ms.Write(imgBytes, 0, imgBytes.Length);
+                        imgExt = Image.FromStream(ms);
+                    }
+
+                    if (imgExt == null)
+                    {
+                        imgExt = ilListIcons.Images["default"];
+                    }
+                    else
+                    {
+                        ilListIcons.Images.Add(type, imgExt);
+                    }
+                }
+
+                // get status image
+
+                if (status == "ok")
+                {
+                    if (imgExt is null) strKey = "default";
+                }
+                else
+                {
+                    Image imgStatus = ilListIcons.Images[status];
+
+                    // combine images
+                    if (imgExt is not null && imgStatus is not null)
+                    {
+                        ilListIcons.Images.Add(strKey, ImageUtils.ImageOverlay(imgExt, imgStatus));
+                    }
+                    else
+                    {
+                        strKey = "default";
+                    }
+                }
+            }
+
+            item.ImageKey = strKey;
+
+
+            item.SubItems[NameConfig.RowStatus.Name].Text = status;
+            string category = table["category"] is string cat ? cat : EmptyPlaceholder;
+            item.SubItems[NameConfig.RowCategory.Name].Text = category;
+            item.SubItems[NameConfig.RowFullName.Name].Text = fullName;
+
+            SafeInvoke(OdooEntryList, () => OdooEntryList.Items.Add(item));
+        }
+		private void AddLocalEntry(TreeNode node, HackFile file)
+		{
+            string type = file.TypeExt.ToLower();
+            if (OdooDefaults.RestrictTypes & !OdooDefaults.ExtToType.TryGetValue(type, out var hpType)) return;
+            type = type[1..];
+
+            ListViewItem item = EmptyListItemInternal(OdooEntryList);
+            item.SubItems[NameConfig.RowID.Name].Text = EmptyPlaceholder;
+            item.SubItems[NameConfig.RowName.Name].Text = file.Name;
+
+
+            string status = "lo";
+            item.SubItems[NameConfig.RowType.Name].Text = type;
+
+            //double size =  (double)( file.FileSize * HackDefaults.ByteSizeMultiplier );
+            item.SubItems[NameConfig.RowSize.Name].Text = FileOperations.FileSizeReformat(file.FileSize);
+
+            item.SubItems[NameConfig.RowLocalDate.Name].Text = file.ModifiedDate.ToShortDateString();
+            item.SubItems[NameConfig.RowRemoteDate.Name].Text = EmptyPlaceholder;
+            item.SubItems[NameConfig.RowStatus.Name].Text = "lo";
+
+
+            // get or add image key
+            string strKey = $"{type}.lo";
+
+            if (ilListIcons.Images[strKey] == null)
+            {
+                // image key not present in ilListIcons
+                Image imgExt = ilListIcons.Images[type];
+                if (imgExt == null)
+                {
+
+                    // get remote image
+                    if (hpType?.icon != null)
+                    {
+                        byte[] imgBytes = FileOperations.ConvertFromBase64(hpType.icon);
+                        MemoryStream ms = new();
+                        ms.Write(imgBytes, 0, imgBytes.Length);
+                        imgExt = Image.FromStream(ms);
+                    }
+
+
+                    //string extPath = Path.Combine(ExtensionIconPath, $"{type}.png");
+                    //if ( File.Exists( extPath ) )
+                    //{
+                    //	imgExt = Image.FromFile( extPath );
+                    //}
+
+                    if (imgExt == null)
+                    {
+                        imgExt = ilListIcons.Images["default"];
+                    }
+                    else
+                    {
+                        ilListIcons.Images.Add(type, imgExt);
+                    }
+                }
+
+                // get status image
+                Image imgStatus = ilListIcons.Images[status];
+
+                // combine images
+                if (imgExt is not null && imgStatus is not null)
+                {
+                    ilListIcons.Images.Add(strKey, ImageUtils.ImageOverlay(imgExt, imgStatus));
+                }
+                else
+                {
+                    strKey = "default";
+                }
+            }
+
+            item.ImageKey = strKey;
+
+
+            item.SubItems[NameConfig.RowCheckOut.Name].Text = EmptyPlaceholder;
+            string nameCategory = OdooDefaults.ExtToCat.TryGetValue($".{type}", out var cat) ? cat.name : EmptyPlaceholder;
+            item.SubItems[NameConfig.RowCategory.Name].Text = nameCategory;
+            item.SubItems[NameConfig.RowFullName.Name].Text = file.FullPath;
+
+            //OdooEntryList.Items.Add(item);
+            UpdateListAsync(OdooEntryList, item);
         }
         private void AddLocalEntries(TreeNode node, Dictionary<string, Task<HackFile>> hackFileMap = null)
         {
@@ -806,97 +809,11 @@ namespace HackPDM
 			stopwatch = Stopwatch.StartNew();
 			#endif
 
-			string path = HackDefaults.DefaultPath(node.FullPath, true);
-            if (!Directory.Exists(path)) return;
-
-            HackFile[] files;
-
-            bool hasEntries = hackFileMap != null;
-            if (hasEntries) files = FileOperations.FilesInDirectory(path, hackFileMap); //, out Dictionary<string, Hashtable> conflictPaths);
-            else files = FileOperations.FilesInDirectory(path);
+			HackFile[] files = GetHackNonEntries(node, hackFileMap);
 
             foreach (HackFile file in files)
             {
-				string type = file.TypeExt.ToLower();
-				if (OdooDefaults.RestrictTypes & !OdooDefaults.ExtToType.TryGetValue(type, out var hpType)) continue;
-				type = type[1..];
-
-                ListViewItem item = EmptyListItemInternal(OdooEntryList);
-				item.SubItems[ NameConfig["RowID"] ].Text = EmptyPlaceholder;
-                item.SubItems[ NameConfig["RowName"] ].Text = file.Name;
-
-				
-				string status = "lo";
-				item.SubItems[ NameConfig["RowType"] ].Text = type;
-
-                //double size =  (double)( file.FileSize * HackDefaults.ByteSizeMultiplier );
-				item.SubItems[ NameConfig["RowSize"] ].Text = FileOperations.FileSizeReformat(file.FileSize);
-
-				item.SubItems [ NameConfig [ "RowLocalDate" ] ].Text = file.ModifiedDate.ToShortDateString();
-				item.SubItems [ NameConfig [ "RowRemoteDate" ] ].Text = EmptyPlaceholder;
-				item.SubItems[ NameConfig [ "RowStatus" ] ].Text = "lo";
-
-
-				// get or add image key
-				string strKey = $"{type}.lo";
-
-				if ( ilListIcons.Images [ strKey ] == null )
-				{
-					// image key not present in ilListIcons
-					Image imgExt = ilListIcons.Images[type];
-					if ( imgExt == null )
-					{
-
-						// get remote image
-						if (hpType?.icon != null)
-						{
-							byte[] imgBytes = FileOperations.ConvertFromBase64(hpType.icon);
-							MemoryStream ms = new();
-							ms.Write( imgBytes, 0, imgBytes.Length );
-							imgExt = Image.FromStream( ms );
-						}
-						
-
-						//string extPath = Path.Combine(ExtensionIconPath, $"{type}.png");
-						//if ( File.Exists( extPath ) )
-						//{
-						//	imgExt = Image.FromFile( extPath );
-						//}
-						
-						if ( imgExt == null )
-						{
-							imgExt = ilListIcons.Images [ "default" ];
-						}
-						else
-						{
-							ilListIcons.Images.Add( type, imgExt );
-						}
-					}
-
-					// get status image
-					Image imgStatus = ilListIcons.Images[status];
-
-					// combine images
-					if ( imgExt is not null && imgStatus is not null )
-					{
-						ilListIcons.Images.Add( strKey, ImageUtils.ImageOverlay( imgExt, imgStatus ) );
-					}
-					else
-					{
-						strKey = "default";
-					}
-				}
-
-				item.ImageKey = strKey;
-
-
-				item.SubItems[ NameConfig [ "RowCheckOut" ] ].Text = EmptyPlaceholder;
-				string nameCategory = OdooDefaults.ExtToCat.TryGetValue($".{type}", out var cat) ? cat.name : EmptyPlaceholder;
-                item.SubItems[ NameConfig [ "RowCategory" ] ].Text = nameCategory;
-                item.SubItems[ NameConfig [ "RowFullName" ] ].Text = file.FullPath;
-
-                //OdooEntryList.Items.Add(item);
-                UpdateListAsync(OdooEntryList, item);
+				AddLocalEntry(node, file);
             }
 			
 			#if DEBUG
@@ -1117,7 +1034,7 @@ namespace HackPDM
 			object lockObject = new();
 			lock ( lockObject )
 			{
-				InitListViewInternal(OdooProperties, PropertiesRows);
+				InitListViewInternal(OdooProperties, ColumnMap.PropertiesRows);
 
                 if (allProperties == null) return;
                 SafeInvokeGeneric(OdooProperties, allProperties, (allp) =>
@@ -1132,10 +1049,10 @@ namespace HackPDM
 
 						    ListViewItem item = EmptyListItemInternal(OdooProperties);
 
-                            item.SubItems[ NameConfig [ "PropertiesVersion" ]].Text         = versionProp.version_id.ToString();
-                            item.SubItems[ NameConfig [ "PropertiesConfiguration"] ].Text   = versionProp.sw_config_name ?? EmptyPlaceholder;
-							item.SubItems[ NameConfig [ "PropertiesName" ] ].Text			= versionProp.prop_name ?? EmptyPlaceholder;
-                            item.SubItems[ NameConfig [ "PropertiesProperty"] ].Text        = versionProp.prop_id.ToString();
+                            item.SubItems[ NameConfig.PropertiesVersion.Name].Text         = versionProp.version_id.ToString();
+                            item.SubItems[ NameConfig.PropertiesConfiguration.Name ].Text   = versionProp.sw_config_name ?? EmptyPlaceholder;
+							item.SubItems[ NameConfig.PropertiesName.Name ].Text			= versionProp.prop_name ?? EmptyPlaceholder;
+                            item.SubItems[ NameConfig.PropertiesProperty.Name ].Text        = versionProp.prop_id.ToString();
 
                             string type = null;
                             string value = null;
@@ -1161,8 +1078,8 @@ namespace HackPDM
                                 versionProp.IsYesNo(out bool yesNo);
                                 value = yesNo ? "Yes" : "No";
                             }
-                            item.SubItems[ NameConfig [ "PropertiesValue" ] ].Text          = value;
-                            item.SubItems[ NameConfig [ "PropertiesType" ] ].Text           = type;
+                            item.SubItems[ NameConfig.PropertiesValue.Name ].Text          = value;
+                            item.SubItems[ NameConfig.PropertiesType.Name ].Text           = type;
 
                             OdooProperties.Items.Add(item);
                         }
@@ -1177,7 +1094,7 @@ namespace HackPDM
 			object lockObject = new();
 			lock ( lockObject )
 			{
-				InitListViewInternal(OdooChildren, ChildrenRows);
+				InitListViewInternal(OdooChildren, ColumnMap.ChildrenRows);
 
                 if (versions == null) return;
                 SafeInvokeGeneric(OdooChildren, versions, (v) =>
@@ -1185,9 +1102,9 @@ namespace HackPDM
                     foreach (HpVersion version in v)
                     {
                         ListViewItem item = EmptyListItemInternal(OdooChildren);
-                        item.SubItems[ NameConfig [ "ChildrenVersion" ] ].Text      = version.ID.ToString();
-                        item.SubItems[ NameConfig [ "ChildrenName" ] ].Text         = version.name;
-						item.SubItems[ NameConfig [ "ChildrenBasePath" ] ].Text		= Path.Combine(/*HackDefaults.PWAPathAbsolute,*/ version.winPathway);
+                        item.SubItems[ NameConfig.ChildrenVersion.Name ].Text      = version.ID.ToString();
+                        item.SubItems[ NameConfig.ChildrenName.Name ].Text         = version.name;
+						item.SubItems[ NameConfig.ChildrenBasePath.Name ].Text		= Path.Combine(/*HackDefaults.PWAPathAbsolute,*/ version.winPathway);
                         OdooChildren.Items.Add(item);
                     }
                 });
@@ -1200,7 +1117,7 @@ namespace HackPDM
 			object lockObject = new();
 			lock ( lockObject )
 			{
-				InitListViewInternal( OdooParents, ParentRows);
+				InitListViewInternal( OdooParents, ColumnMap.ParentRows);
 
                 if (versions == null) return;
                 SafeInvokeGeneric(OdooParents, versions, (v) =>
@@ -1208,9 +1125,9 @@ namespace HackPDM
                     foreach (HpVersion version in v)
                     {
 					    ListViewItem item = EmptyListItemInternal(OdooParents);
-					    item.SubItems [ NameConfig [ "ParentVersion" ] ].Text       = version.ID.ToString();
-					    item.SubItems [ NameConfig [ "ParentName" ] ].Text          = version.name;
-						item.SubItems [ NameConfig [ "ParentBasePath" ] ].Text		= version.winPathway;
+					    item.SubItems [ NameConfig.ParentVersion.Name ].Text       = version.ID.ToString();
+					    item.SubItems [ NameConfig.ParentName.Name ].Text          = version.name;
+						item.SubItems [ NameConfig.ParentBasePath.Name ].Text		= version.winPathway;
 
 					    OdooParents.Items.Add( item );
 				    }
@@ -1227,7 +1144,7 @@ namespace HackPDM
             object lockObject = new();
 			lock (lockObject)
             {
-                InitListViewInternal(OdooHistory, HistoryRows);
+                InitListViewInternal(OdooHistory, ColumnMap.HistoryRows);
 
                 if (versions == null) return;
                 SafeInvokeGeneric(OdooHistory, versions, (v) =>
@@ -1236,7 +1153,7 @@ namespace HackPDM
                     {
                         ListViewItem item = EmptyListItemInternal(OdooHistory);
 
-					    item.SubItems[ NameConfig [ "HistoryVersion" ] ].Text = version.ID.ToString();
+					    item.SubItems[ NameConfig.HistoryVersion.Name ].Text = version.ID.ToString();
 						string moduser = EmptyPlaceholder;
 						if (version.HashedValues.TryGetValue("create_uid", out object obj))
 						{
@@ -1245,10 +1162,10 @@ namespace HackPDM
 								moduser = $"{al[1]} : {al[0]}";
 							}
 						}
-                        item.SubItems[ NameConfig [ "HistoryModUser" ] ].Text = moduser;
-                        item.SubItems[ NameConfig [ "HistoryModDate" ] ].Text = version.file_modify_stamp?.ToShortDateString();
-                        item.SubItems[ NameConfig [ "HistorySize" ] ].Text = version.file_size?.ToString();
-                        item.SubItems[ NameConfig [ "HistoryRelDate" ] ].Text = EmptyPlaceholder;
+                        item.SubItems[ NameConfig.HistoryModUser.Name ].Text = moduser;
+                        item.SubItems[ NameConfig.HistoryModDate.Name ].Text = version.file_modify_stamp?.ToShortDateString();
+                        item.SubItems[ NameConfig.HistorySize.Name ].Text = version.file_size?.ToString();
+                        item.SubItems[ NameConfig.HistoryRelDate.Name ].Text = EmptyPlaceholder;
 
                         OdooHistory.Items.Add(item);
                     }
@@ -1260,22 +1177,22 @@ namespace HackPDM
 			// int CheckoutColumnIndex = OdooEntryList.Columns["Checkout"].Index;
 			// item.SubItems [ CheckoutColumnIndex ].Text == ""
 
-			InitListViewInternal(OdooVersionInfoList, VersionInfoRows);
+			InitListViewInternal(OdooVersionInfoList, ColumnMap.VersionInfoRows);
             
             if (version == null) return;
             SafeInvokeGeneric( OdooVersionInfoList, version, ( v ) =>
 			{
 				ListViewItem item = EmptyListItemInternal(OdooVersionInfoList);
 
-                item.SubItems[NameConfig["VersionID"]].Text                     = version.ID.ToString();
-				item.SubItems[NameConfig["VersionName"]].Text                   = version.name;
-				item.SubItems[NameConfig["VersionChecksum"]].Text               = version.checksum;
-				item.SubItems[NameConfig["VersionFileSize"]].Text               = FileOperations.FileSizeReformat(version.file_size);
-				item.SubItems[NameConfig["VersionDirectoryID"]].Text            = version.dir_id?.ToString();
-				item.SubItems[NameConfig["VersionNodeID"]].Text                 = version.node_id?.ToString();
-				item.SubItems[NameConfig["VersionEntryID"]].Text                = version.entry_id?.ToString();
-				item.SubItems[NameConfig["VersionAttachmentID"]].Text           = version.attachment_id?.ToString();
-				item.SubItems[NameConfig["VersionModifyDate"]].Text             = version.file_modify_stamp?.ToShortDateString();
+                item.SubItems[NameConfig.VersionID.Name].Text                     = version.ID.ToString();
+				item.SubItems[NameConfig.VersionName.Name].Text                   = version.name;
+				item.SubItems[NameConfig.VersionChecksum.Name].Text               = version.checksum;
+				item.SubItems[NameConfig.VersionFileSize.Name].Text               = FileOperations.FileSizeReformat(version.file_size);
+				item.SubItems[NameConfig.VersionDirectoryID.Name].Text            = version.dir_id?.ToString();
+				item.SubItems[NameConfig.VersionNodeID.Name].Text                 = version.node_id?.ToString();
+				item.SubItems[NameConfig.VersionEntryID.Name].Text                = version.entry_id?.ToString();
+				item.SubItems[NameConfig.VersionAttachmentID.Name].Text           = version.attachment_id?.ToString();
+				item.SubItems[NameConfig.VersionModifyDate.Name].Text             = version.file_modify_stamp?.ToShortDateString();
                 string path;
                 if (version.HashedValues != null && version.HashedValues.ContainsKey( "dir_id" ) )
 				{
@@ -1285,7 +1202,7 @@ namespace HackPDM
 				{
 					path = "Not Found";
 				}
-				item.SubItems [ NameConfig [ "VersionOdooCompletePath" ]].Text  = path;
+				item.SubItems [ NameConfig.VersionOdooCompletePath.Name].Text  = path;
 
 				OdooVersionInfoList.Items.Add( item );
 			} );
@@ -2417,14 +2334,14 @@ namespace HackPDM
 			// open remote if ro, dt
 			foreach (ListViewItem viewItem in OdooEntryList.SelectedItems)
 			{
-				string path = viewItem.SubItems[NameConfig["RowFullName"]].Text;
-				string IDStr = viewItem.SubItems[NameConfig["RowID"]].Text;
+				string path = viewItem.SubItems[NameConfig.RowFullName.Name].Text;
+				string IDStr = viewItem.SubItems[NameConfig.RowID.Name].Text;
 				if (IDStr == EmptyPlaceholder)
 				{
 					OpenLocalFile(path);
 					continue;
 				}
-				string status = viewItem.SubItems[NameConfig["RowStatus"]].Text;
+				string status = viewItem.SubItems[NameConfig.RowStatus.Name].Text;
 				switch (status) 
 				{
 					case "ro":
@@ -2459,14 +2376,14 @@ namespace HackPDM
 			StringBuilder errors = new();
 			foreach (ListViewItem viewItem in OdooEntryList.SelectedItems)
 			{
-				if (viewItem.SubItems[NameConfig["RowID"]].Text == EmptyPlaceholder)
+				if (viewItem.SubItems[NameConfig.RowID.Name].Text == EmptyPlaceholder)
 				{
-					errors.AppendLine($"can't open local only file remotely {viewItem.SubItems[NameConfig["RowName"]].Text}");
+					errors.AppendLine($"can't open local only file remotely {viewItem.SubItems[NameConfig.RowName.Name].Text}");
 					continue;
 				}
-				string path = viewItem.SubItems[NameConfig["RowFullName"]].Text;
-				string IDStr = viewItem.SubItems[NameConfig["RowID"]].Text;
-				string status = viewItem.SubItems[NameConfig["RowStatus"]].Text;
+				string path = viewItem.SubItems[NameConfig.RowFullName.Name].Text;
+				string IDStr = viewItem.SubItems[NameConfig.RowID.Name].Text;
+				string status = viewItem.SubItems[NameConfig.RowStatus.Name].Text;
 				
 				switch (status) 
 				{
@@ -2488,7 +2405,7 @@ namespace HackPDM
 
 					default:
 					{
-						errors.AppendLine($"can't open local only file remotely {viewItem.SubItems[NameConfig["RowName"]].Text}");
+						errors.AppendLine($"can't open local only file remotely {viewItem.SubItems[NameConfig.RowName.Name].Text}");
 						continue;
 					}
 				}
@@ -2500,8 +2417,8 @@ namespace HackPDM
 			StringBuilder errors = new();
 			foreach (ListViewItem viewItem in OdooEntryList.SelectedItems)
 			{
-				string path = viewItem.SubItems[NameConfig["RowFullName"]].Text;
-				string IDStr = viewItem.SubItems[NameConfig["RowID"]].Text;
+				string path = viewItem.SubItems[NameConfig.RowFullName.Name].Text;
+				string IDStr = viewItem.SubItems[NameConfig.RowID.Name].Text;
 
 				if (IDStr == EmptyPlaceholder)
 				{
@@ -2509,7 +2426,7 @@ namespace HackPDM
 					continue;
 				}
 
-				string status = viewItem.SubItems[NameConfig["RowStatus"]].Text;
+				string status = viewItem.SubItems[NameConfig.RowStatus.Name].Text;
 				
 				switch (status) 
 				{
@@ -2528,7 +2445,7 @@ namespace HackPDM
 					case "ro":
 					default:
 					{
-						errors.AppendLine($"can't open remote only file locally {viewItem.SubItems[NameConfig["RowName"]].Text}");
+						errors.AppendLine($"can't open remote only file locally {viewItem.SubItems[NameConfig.RowName.Name].Text}");
 						continue;
 					}
 				}
@@ -2539,8 +2456,8 @@ namespace HackPDM
 		{
 			foreach(ListViewItem item in OdooEntryList.SelectedItems) 
 			{
-				string path = item.SubItems[ NameConfig [ "RowFullName" ] ].Text;
-				string id = item.SubItems[ NameConfig [ "RowID" ] ].Text;
+				string path = item.SubItems[ NameConfig.RowFullName.Name ].Text;
+				string id = item.SubItems[ NameConfig.RowID.Name ].Text;
 
 				try
 				{
@@ -2564,18 +2481,18 @@ namespace HackPDM
 		private void OdooManageTypesDropdown_Click		( object sender, EventArgs e )
 			=> new OdooFileTypeManager( this ).Show();
 		private void OdooHistory_ItemSelectionChanged	( object sender, ListViewItemSelectionChangedEventArgs e )
-			=> PreviewImageSelection( e.Item, "HistoryVersion" );
+			=> PreviewImageSelection( e.Item, NameConfig.HistoryVersion.Name );
 		private void OdooParents_ItemSelectionChanged	( object sender, ListViewItemSelectionChangedEventArgs e )
-			=> PreviewImageSelection( e.Item, "ParentVersion" );
+			=> PreviewImageSelection( e.Item, NameConfig.ParentVersion.Name );
 		private void OdooChildren_ItemSelectionChanged	( object sender, ListViewItemSelectionChangedEventArgs e )
-			=> PreviewImageSelection( e.Item, "ChildrenVersion" );
+			=> PreviewImageSelection( e.Item, NameConfig.ChildrenVersion.Name );
 		private async void OdooParents_DoubleClick		( object sender, EventArgs e )
 		{
 			ListViewItem item = OdooParents.SelectedItems?[0];
 			if (item == null) return;
 
-			string pwaPath = item.SubItems[ NameConfig[ "ParentBasePath" ] ].Text;
-			string fileName = item.SubItems[ NameConfig[ "ParentName" ] ].Text;
+			string pwaPath = item.SubItems[ NameConfig.ParentBasePath.Name ].Text;
+			string fileName = item.SubItems[ NameConfig.ParentName.Name ].Text;
 			await FindSearchSelectionAsync(pwaPath, fileName);
 		}
 		private async void OdooChildren_DoubleClick		( object sender, EventArgs e )
@@ -2583,8 +2500,8 @@ namespace HackPDM
 			ListViewItem item = OdooChildren.SelectedItems?[0];
 			if (item == null) return;
 
-			string pwaPath = item.SubItems[ NameConfig[ "ChildrenBasePath" ] ].Text;
-			string fileName = item.SubItems[ NameConfig[ "ChildrenName" ] ].Text;
+			string pwaPath = item.SubItems[ NameConfig.ChildrenBasePath.Name ].Text;
+			string fileName = item.SubItems[ NameConfig.ChildrenName.Name ].Text;
 			await FindSearchSelectionAsync(pwaPath, fileName);
 		}
 		private void downloadToolStripMenuItem_Click	( object sender, EventArgs e )
@@ -2783,7 +2700,7 @@ namespace HackPDM
 
 			OdooEntryList.SelectedItems.Cast<ListViewItem>().ToList().ForEach( item =>
 			{
-				string filepath = Path.Combine(pathway, item.SubItems[ NameConfig["RowName"] ].Text);
+				string filepath = Path.Combine(pathway, item.SubItems[ NameConfig.RowName.Name ].Text);
 				FileInfo file = new( filepath );
 				if ( file.Exists )
 				{
@@ -2989,7 +2906,7 @@ namespace HackPDM
 		}
 		private void PreviewImageSelection(ListViewItem item, string nameConfigID)
 		{
-			string textID = item.SubItems[NameConfig[nameConfigID]].Text;
+			string textID = item.SubItems[nameConfigID].Text;
 			if ( int.TryParse( textID, out int result ) )
 			{
 				PreviewImage( result );
@@ -3032,7 +2949,7 @@ namespace HackPDM
 					await Task.Delay(100);
 				}
 				ListViewItem listItem = null;
-				string index = NameConfig [ "SearchName" ];
+				string index = NameConfig.SearchName.Name;
 				foreach (ListViewItem lv in OdooEntryList.Items)
 				{
 					if (lv.SubItems[ index ].Text == fileName)
@@ -3141,7 +3058,7 @@ namespace HackPDM
 				return null;
 
 			ListViewItem item = OdooHistory.SelectedItems[0];
-			string IDstr = item.SubItems[ NameConfig["HistoryVersion"] ].Text;
+			string IDstr = item.SubItems[ NameConfig.HistoryVersion.Name ].Text;
 			if ( int.TryParse( IDstr, out int ID ) )
 			{
 				var version = HpVersion.GetRecordByID(ID, HpVersion.UsualExcludedFields);

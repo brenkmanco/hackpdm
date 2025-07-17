@@ -139,19 +139,25 @@ namespace HackPDM.ClientUtils
         public static async Task<bool> WaitForMilliseconds(int milliseconds, CancellationToken token = default)
             => await WaitTimeInternal(milliseconds, token);
 
-        public static async Task<bool> DoWhileWaitUntil(Func<bool> eval, Action action, int pollingMsEval = 1000, int msTimeout = -1, CancellationToken token = default)
-            => await WaitInternal(eval, true, msTimeout, pollingMs, token);
-        public static async Task<bool> DoWhileWaitWhile(Func<bool> eval, Action action, int pollingMsEval = 1000, int msTimeout = -1, CancellationToken token = default)
+        public static async Task<bool> DoWhileWaitUntil(Func<bool> eval, Action action, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
+            => await DoWhileWaitInternal(eval, action, true, pollingMs, msTimeout, token);
+        public static async Task<bool> DoWhileWaitWhile(Func<bool> eval, Action action, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
+            => await DoWhileWaitInternal(eval, action, false, pollingMs, msTimeout, token);
+
+
+        private static async Task<bool> DoWhileWaitInternal(Func<bool> eval, Action action, bool wantTrue = true, int pollingMsEval = 1000, int msTimeout = -1, CancellationToken token = default)
         {
             var wait = new AsyncHelper(eval, msTimeout, pollingMsEval, token);
-            AsyncHelper helper = await wait.InitializeAsync(false);
-            do
+            var iterableReturn = wait.InitializeAsync(() => action, wantTrue);
+            await foreach (var item in iterableReturn)
             {
-
+                if (item.Item1 is not null)
+                {
+                    return !item.Item1._timedOut && !item.Item1._wasCancelled && item.Item1._signal;
+                }
             }
-            while (!eval())
+            return false;
         }
-
         private static async Task<bool> WaitInternal(Func<bool> eval, bool wantTrue = true, int msTimeout = -1, int pollingMs = 1000, CancellationToken token = default)
         {
             var wait = new AsyncHelper(eval, msTimeout, pollingMs, token);

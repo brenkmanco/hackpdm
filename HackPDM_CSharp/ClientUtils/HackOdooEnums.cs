@@ -32,4 +32,19 @@ namespace HackPDM.ClientUtils
         NonExistingFields,
         All
     }
+    public enum ColumnGroup
+    { 
+        Row,
+        History,
+        Parent,
+        Child,
+        Property,
+        Version,
+        Search,
+        SearchProp,
+        FileType,
+        FileTypeEntryFilter,
+        FileTypeLoc
+    }
+
 }

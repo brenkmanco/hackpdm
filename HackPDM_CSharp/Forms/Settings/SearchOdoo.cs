@@ -19,17 +19,17 @@ namespace HackPDM.Forms.Settings
 	{
 		readonly Dictionary<string, int> SearchWidths = new()
 		{
-			{HackFileManager.NameConfig["SearchID"], 10},
-			{HackFileManager.NameConfig["SearchName"], 25},
-			{HackFileManager.NameConfig["SearchDirectory"], 0},
+			{NameConfig.SearchID.Name,		10},
+			{NameConfig.SearchName.Name,		25},
+			{NameConfig.SearchDirectory.Name, 0},
 		};
 		// will do percentages instead of px length
 		// 0 means it'll use the left over percentage
 		readonly Dictionary<string, int> SearchPropWidths = new()
 		{
-			{HackFileManager.NameConfig["SearchPropName"], 30},
-			{HackFileManager.NameConfig["SearchPropEqual"], 15},
-			{HackFileManager.NameConfig["SearchPropValue"], 0},
+			{NameConfig.SearchPropName.Name,	30},
+			{NameConfig.SearchPropEqual.Name, 15},
+			{NameConfig.SearchPropValue.Name, 0},
 		};
 
 		private HackFileManager hackman;
@@ -159,7 +159,7 @@ namespace HackPDM.Forms.Settings
 		private void DisplayLocal( ArrayList results, string filename, int limit=100, bool isNotOnlyLocal=false)
 		{
 			const string Empty = "-";
-			HackFileManager.InitListViewPercentage( OdooSearchResults, SearchWidths );
+			HackFileManager.InitListViewPercentage( OdooSearchResults, ColumnMap.SearchRows );
 			DirectoryInfo directoryInfo = new DirectoryInfo(HackDefaults.PWAPathAbsolute);
 			FileInfo[] files = [.. directoryInfo.EnumerateFiles($"*{filename}*", SearchOption.AllDirectories)];
 			ListViewItem item;
@@ -179,9 +179,9 @@ namespace HackPDM.Forms.Settings
 				{
 					counter++;
 					item = HackFileManager.EmptyListItem( OdooSearchResults );
-					item.SubItems [ HackFileManager.NameConfig [ "SearchID" ] ].Text     = Empty;
-					item.SubItems [ HackFileManager.NameConfig [ "SearchName" ] ].Text   = file.Name;
-					item.SubItems [ HackFileManager.NameConfig [ "SearchDirectory" ] ].Text = file.DirectoryName;
+					item.SubItems [ NameConfig.SearchID.Name ].Text     = Empty;
+					item.SubItems [ NameConfig.SearchName.Name ].Text   = file.Name;
+					item.SubItems [ NameConfig.SearchDirectory.Name ].Text = file.DirectoryName;
 
 					hackman.SafeInvoke(OdooSearchResults, ()=> OdooSearchResults.Items.Add( item ));
 				}
@@ -189,7 +189,7 @@ namespace HackPDM.Forms.Settings
 		}
 		private void DisplaySearch(ArrayList list, int limit)
 		{
-			HackFileManager.InitListViewPercentage(OdooSearchResults, SearchWidths);
+			HackFileManager.InitListViewPercentage(OdooSearchResults, ColumnMap.SearchRows);
 			ListViewItem item;
 
 			Hashtable ht;
@@ -198,9 +198,9 @@ namespace HackPDM.Forms.Settings
 			{
 				item = HackFileManager.EmptyListItem( OdooSearchResults );
 				ht = (Hashtable)list [ i ];
-				item.SubItems [ HackFileManager.NameConfig [ "SearchID" ] ].Text     = ht [ "id" ].ToString();
-				item.SubItems [ HackFileManager.NameConfig [ "SearchName" ] ].Text   = ht [ "name" ].ToString();
-				item.SubItems [ HackFileManager.NameConfig [ "SearchDirectory" ] ].Text = ht [ "directory_complete_name" ].ToString();
+				item.SubItems [ NameConfig.SearchID.Name ].Text     = ht [ "id" ].ToString();
+				item.SubItems [ NameConfig.SearchName.Name ].Text   = ht [ "name" ].ToString();
+				item.SubItems [ NameConfig.SearchDirectory.Name ].Text = ht [ "directory_complete_name" ].ToString();
 
 				hackman.SafeInvoke(OdooSearchResults, ()=>
 				{
@@ -243,14 +243,14 @@ namespace HackPDM.Forms.Settings
 						{
 							item = OdooSearchPropList.Items[i];
 						});
-						ListViewItem.ListViewSubItem subItem = item.SubItems[HackFileManager.NameConfig [ "SearchPropName" ]];
+						ListViewItem.ListViewSubItem subItem = item.SubItems[NameConfig.SearchPropName.Name];
 						LItem lItem = subItem.Tag as LItem;
 
 						arr1.Add(new ArrayList{ "prop_id", "=", lItem.ID });
 						arr1.Add(new ArrayList{ 
 								"text_value", 
-								item.SubItems[HackFileManager.NameConfig [ "SearchPropEqual" ]].Text, 
-								item.SubItems[HackFileManager.NameConfig [ "SearchPropValue" ] ].Text});
+								item.SubItems[NameConfig.SearchPropEqual.Name].Text, 
+								item.SubItems[NameConfig.SearchPropValue.Name ].Text});
 						return await OdooClient.BrowseAsync(HpVersionProperty.GetHpModel(), [arr1, fields], 10000);
 					});
 					await newTask;
@@ -337,17 +337,17 @@ namespace HackPDM.Forms.Settings
 			}
 		
 			if (OdooSearchPropList.Columns.Count < 1) 
-				HackFileManager.InitListViewPercentage(OdooSearchPropList, SearchPropWidths);
+				HackFileManager.InitListViewPercentage(OdooSearchPropList, ColumnMap.SearchPropRows);
 
 			ListViewItem item = HackFileManager.EmptyListItem( OdooSearchPropList );
 
 			LItem listItem = (LItem)OdooSearchProperty.SelectedItem;
-			ListViewItem.ListViewSubItem subItem = item.SubItems[HackFileManager.NameConfig [ "SearchPropName" ] ];
+			ListViewItem.ListViewSubItem subItem = item.SubItems[NameConfig.SearchPropName.Name ];
 			subItem.Tag = listItem;
 			subItem.Text = listItem.Name;
 
-			item.SubItems[HackFileManager.NameConfig [ "SearchPropEqual" ] ].Text = (string)OdooSearchPropEqual.SelectedItem;
-			item.SubItems[HackFileManager.NameConfig [ "SearchPropValue" ] ].Text = OdooSearchPropValue.Text;
+			item.SubItems[NameConfig.SearchPropEqual.Name].Text = (string)OdooSearchPropEqual.SelectedItem;
+			item.SubItems[NameConfig.SearchPropValue.Name].Text = OdooSearchPropValue.Text;
 			
 			OdooSearchPropList.Items.Add(item);
 		}
@@ -377,8 +377,8 @@ namespace HackPDM.Forms.Settings
 
 			// first select the treeview node
 			// then select the listview item
-			string directory = item.SubItems [ HackFileManager.NameConfig [ "SearchDirectory" ] ].Text;
-			string fileName = item.SubItems [ HackFileManager.NameConfig [ "SearchName" ] ].Text;
+			string directory = item.SubItems [ NameConfig.SearchDirectory.Name ].Text;
+			string fileName = item.SubItems [ NameConfig.SearchName.Name ].Text;
 
 			string[] paths = directory.Split(new[] { " / " }, StringSplitOptions.None);
 			
@@ -414,7 +414,7 @@ namespace HackPDM.Forms.Settings
 					await Task.Delay(100);
 				}
 				ListViewItem listItem = null;
-				string index = HackFileManager.NameConfig [ "SearchName" ];
+				string index = NameConfig.SearchName.Name;
 				foreach (ListViewItem lv in OdooEntryList.Items)
 				{
 					if (lv.SubItems[ index ].Text == fileName )
@@ -506,7 +506,7 @@ namespace HackPDM.Forms.Settings
 			ArrayList ids = [];
 			foreach (ListViewItem item in items)
 			{
-				ids.Add(int.Parse(item.SubItems[HackFileManager.NameConfig [ "SearchID" ]].Text));
+				ids.Add(int.Parse(item.SubItems[NameConfig.SearchID.Name].Text));
 			}
 			HpEntry[] entries = HpEntry.GetRecordsByIDS(ids);
 			foreach (HpEntry entry in entries)
@@ -528,7 +528,7 @@ namespace HackPDM.Forms.Settings
 			{
 				foreach (ListViewItem item in OdooSearchResults.SelectedItems)
 				{
-					string path = item.SubItems[HackFileManager.NameConfig [ "SearchName" ]].Text;
+					string path = item.SubItems[NameConfig.SearchName.Name].Text;
 					OpenLocalFile(path);
 				}
 			}
@@ -536,7 +536,7 @@ namespace HackPDM.Forms.Settings
 			{
 				foreach (ListViewItem item in OdooSearchResults.SelectedItems)
 				{
-					int id = int.Parse(item.SubItems[HackFileManager.NameConfig [ "SearchID" ]].Text);
+					int id = int.Parse(item.SubItems[NameConfig.SearchID.Name].Text);
 					DownloadRemoteFile(id);
 				}
 			}
@@ -587,8 +587,8 @@ namespace HackPDM.Forms.Settings
 
 		public int Compare( ListViewItem x, ListViewItem y ) 
 		{
-			var xText = x.SubItems [ HackFileManager.NameConfig [ "SearchName" ] ].Text;
-			var yText = y.SubItems [ HackFileManager.NameConfig [ "SearchName" ] ].Text;
+			var xText = x.SubItems [ NameConfig.SearchName.Name ].Text;
+			var yText = y.SubItems [ NameConfig.SearchName.Name ].Text;
 			return String.CompareOrdinal(xText, yText);
 		}
 	}
