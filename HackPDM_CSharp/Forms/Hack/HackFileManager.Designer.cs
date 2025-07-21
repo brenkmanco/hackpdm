@@ -897,5 +897,5 @@
 		private System.Windows.Forms.ToolStripMenuItem openDirectoryToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem localDeleteToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem localDeleteToolStripMenuItem1;
-	}
+    }
 }

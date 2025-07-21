@@ -271,7 +271,7 @@ namespace HackPDM
 				        // this means that this hackFile is in the database so it can be skipped
                         if (checksum == hackArr[i].SHA1Checksum)
 				        {
-					        HackFileManager.Dialog.AddStatusLine( "INFO", $"checksum found remotely ({hackArr [ i ].SHA1Checksum}) for: {filePath}" );
+					        HackFileManager.Dialog.AddStatusLine("FOUND", $"checksum found remotely ({hackArr [ i ].SHA1Checksum}) for: {filePath}" );
                             isFound = true;
                             break;
 				        }
@@ -279,7 +279,7 @@ namespace HackPDM
 			    }
                 if ( !isFound )
                 {
-				    HackFileManager.Dialog.AddStatusLine( "INFO", $"unable to find checksum remotely ({hackArr [ i ].SHA1Checksum}) for: {filePath}" );
+				    HackFileManager.Dialog.AddStatusLine( "INFO", $"Queued commit for {hackArr[i].Name} (Checksum: {hackArr [ i ].SHA1Checksum}) for: {filePath}" );
 				    hacks.Add( hackArr [ i ] );
                 }
 

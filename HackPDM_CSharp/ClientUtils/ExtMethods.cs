@@ -26,6 +26,15 @@ namespace HackPDM.ClientUtils
         // useful extension methods
         public static ArrayList GetIDs(this HpBaseModel[] models)
             => models.Select(model=>model.ID).ToArrayList();
+
+        public static T[] Populate<T>(this T[] values, Func<T> func)
+        {
+            for (int i = 0; i < values.Length; i++)
+            {
+                values[i] = func();
+            }
+            return values;
+        }
         public static IEnumerable<Tout> Select<Tin, Tout>(this ArrayList list, Func<Tin, Tout> selector)
         {
             foreach (Tin obj in list.OfType<Tin>())

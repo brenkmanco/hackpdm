@@ -88,7 +88,7 @@ namespace HackPDM
             {
                 try
                 {
-                    if (HackUpdater.EnsureUpdated())
+                    if (HackUpdater.EnsureUpdated() && OdooDefaults.MyNode is not null)
                     {
                         var HFM = new HackFileManager();
                         HFM.Show();

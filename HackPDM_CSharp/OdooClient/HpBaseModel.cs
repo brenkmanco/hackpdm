@@ -427,10 +427,12 @@ namespace HackPDM
 
             if (result.Count == 0) return null;
 
+            //records = RecordsPopulation([.. result.Select<Hashtable, Hashtable>(h=>h)], excludedFields);
             foreach (Hashtable ht in result)
             {
                 records.Add(RecordPopulation(ht, excludedFields));
             }
+            //return records;
             return [.. records];
         }
         private static T RecordPopulation(Hashtable ht, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
@@ -442,7 +444,16 @@ namespace HackPDM
             FinalizePopulation(record, ht, excludedFields, hashStoreType);
             return record;
         }
-        
+        private static T[] RecordsPopulation(Hashtable[] hts, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
+        {
+            if (hts is null) return null;
+
+            T[] records = HashConverter.ConvertToClasses<T>(hts);
+
+            FinalizePopulations(records, hts, excludedFields, hashStoreType);
+            return records;
+        }
+
         public static void FinalizePopulation(T record, Hashtable ht, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
         {
             // set record settings
@@ -477,6 +488,14 @@ namespace HackPDM
 
 
             record.CompleteConstruction();
+        }
+        public static void FinalizePopulations(T[] records, Hashtable[] hts, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
+        {
+            if (records.Length != hts.Length) return;
+            for (int i = 0; i < records.Length; i++)
+            {
+                FinalizePopulation(records[i], hts[i], excludedFields, hashStoreType);
+            }
         }
         private static Hashtable ScalpFields(Hashtable ht, HashedValueStoring hashStoreType)
         {

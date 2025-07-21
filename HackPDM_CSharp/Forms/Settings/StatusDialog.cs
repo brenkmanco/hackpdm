@@ -34,6 +34,15 @@ namespace HackPDM
     /// </summary>
     public partial class StatusDialog : Form
     {
+        public static Color ColorProcessing     { get; set; } = Color.Navy;
+        public static Color ColorSkip           { get; set; } = Color.DarkGray;
+        public static Color ColorFound          { get; set; } = Color.DarkGray;
+        public static Color ColorSuccess        { get; set; } = Color.DarkOliveGreen;
+        public static Color ColorWarning        { get; set; } = Color.Yellow;
+        public static Color ColorError          { get; set; } = Color.Red;
+        public static Color ColorDefaultFore    { get; set; } = Color.Black;
+        public static Color ColorDefaultBack    { get; set; } = Color.White;
+        
         int ErrorCount = 0;
 
         public static bool SkipText
@@ -174,19 +183,17 @@ namespace HackPDM
                     ListViewItem lvItem = new(item);
 
                     // set background color, based on status action
-                    if (item[0] == "WARNING")
-                        lvItem.BackColor = Color.Yellow;
-                    else if (item[0] == "ERROR")
+                    switch (item[0])
                     {
-                        lvItem.BackColor = Color.Red;
-                        ErrorCount++;
+                        case "PROCESSING": lvItem.ForeColor = ColorProcessing; break;
+                        case "SKIP": lvItem.ForeColor = ColorSkip; break;
+                        case "FOUND": lvItem.ForeColor = ColorFound; break;
+                        case "SUCCESS": lvItem.ForeColor = ColorSuccess; break;
+                        case "WARNING": lvItem.BackColor = ColorWarning; break;
+                        case "ERROR": lvItem.BackColor = ColorError; ErrorCount++; break;
+                        default: break;
                     }
-                    
-                    if (item[1][0] == 'S')
-                    {
-                        lvItem.ForeColor = Color.DarkGray;
-                    }
-                    
+
                     lvMessages.Items.Add(lvItem);
                     lvMessages.EnsureVisible(lvMessages.Items.Count - 1);
                 }
@@ -208,12 +215,15 @@ namespace HackPDM
                 ListViewItem lvItem = new(Params);
 
                 // set background color, based on status action
-                if (Params[0] == "WARNING")
-                    lvItem.BackColor = Color.Yellow;
-                else if (Params[0] == "ERROR")
+                switch (Params[0])
                 {
-                    lvItem.BackColor = Color.Red;
-                    ErrorCount++;
+                    case "PROCESSING": lvItem.ForeColor = ColorProcessing; break;
+                    case "SKIP": lvItem.ForeColor = ColorSkip; break;
+                    case "FOUND": lvItem.ForeColor = ColorFound; break;
+                    case "SUCCESS": lvItem.ForeColor = ColorSuccess; break;
+                    case "WARNING": lvItem.BackColor = ColorWarning; break;
+                    case "ERROR": lvItem.BackColor = ColorError; ErrorCount++; break;
+                    default: break;
                 }
                 lvMessages.Items.Add(lvItem);
                 lvMessages.EnsureVisible(lvMessages.Items.Count - 1);

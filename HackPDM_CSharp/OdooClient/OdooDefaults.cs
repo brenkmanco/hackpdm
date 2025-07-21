@@ -205,6 +205,18 @@ namespace HackPDM
 
             set => field = value;
         }
+        public static HpNode MyNode
+        {
+            get
+            {
+                field ??= HpNodes.First(node => node.name == System.Environment.MachineName.ToLower());
+                return field;
+            }
+            set
+            {
+                field = value;
+            }
+        }
         // low enough number of records to get before
         public static HpSetting [] HpSettings
         {
@@ -493,26 +505,16 @@ namespace HackPDM
     public class HpNode : HpBaseModel<HpNode>
     {
         public string name;
-        public string parent_path;
-        public int parent_id;
-        public int default_cat;
-        public bool active;
-        public bool sandboxed;
+
         public HpNode() { }
         public HpNode(
-            string name,
-            string parent_path = null,
-            int parent_id = 0,
-            int default_cat = 0,
-            bool active = true,
-            bool sandboxed = false)
+            string name)
         {
             this.name = name;
-            this.parent_path = parent_path;
-            this.parent_id = parent_id;
-            this.default_cat = default_cat;
-            this.active = active;
-            this.sandboxed = sandboxed;
+        }
+        internal void UpdateNodeLatestVersions(int[] version_ids)
+        {
+            OClient.Command<ArrayList>(GetHpModel(), "update_node_latest_versions", [version_ids.ToArrayList()], 1000000);
         }
 		public override string ToString() 
         {

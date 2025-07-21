@@ -1,16 +1,23 @@
 ﻿using System;
-using System.IO;
-using System.Windows.Forms;
-using System.Globalization;
-using System.Security.Cryptography;
-using System.Collections.Generic;
 using System.Collections;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
+using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
 using HackPDM.ClientUtils;
-using System.ComponentModel;
+
+using Newtonsoft.Json.Linq;
+
+using Octokit;
+
+using SolidWorks.Interop.sldworks;
 
 namespace HackPDM
 {
@@ -124,6 +131,7 @@ namespace HackPDM
         // [0, 1], [2, 3], [4]
         public static List<List<T>> BatchList<T>(T[] list, int batchSize)
         {
+            if (list is null) return null;
             List<List<T>> batchList = [];
             int listSize = list.Count();
             Span<T> spanList = list.AsSpan();
@@ -428,7 +436,12 @@ namespace HackPDM
             AssignToClass(ht, ref obj, mType);
             return obj;
         }
-        
+        public static T[] ConvertToClasses<T>(in Hashtable[] hts, MethodType mType = MethodType.FieldOnly) where T : HpBaseModel, new()
+        {
+            T[] objs = new T[hts.Length].Populate(() => new());
+            AssignToClasses(hts, ref objs, mType);
+            return objs;
+        }
         public static T AssignToClass<T>(in Hashtable ht, T obj, MethodType mType = MethodType.FieldOnly)
             where T : HpBaseModel
         {
@@ -436,7 +449,7 @@ namespace HackPDM
 
             foreach (DictionaryEntry entry in ht)
             {
-                if (mType == MethodType.PropertyOnly || mType == MethodType.PropertyAndField)
+                if (mType is MethodType.PropertyOnly or MethodType.PropertyAndField)
                 {
                     PropertyInfo prop = type.GetProperty(entry.Key.ToString(), BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
                     if (prop != null && prop.CanWrite)
@@ -449,7 +462,7 @@ namespace HackPDM
                         obj.HashedValues[entry.Key.ToString()] = entry.Value;
 					}
                 }
-                if (mType == MethodType.FieldOnly || mType == MethodType.PropertyAndField)
+                if (mType is MethodType.FieldOnly or MethodType.PropertyAndField)
                 {
                     FieldInfo field = type.GetField(entry.Key.ToString(), BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
                     if (field != null)
@@ -464,6 +477,94 @@ namespace HackPDM
                 }
             }
             return obj;
+        }
+        public static T[] AssignToClasses<T>(in Hashtable[] hts, ref T[] objs, MethodType mType = MethodType.FieldOnly)
+            where T : HpBaseModel
+        {
+            if (hts is null) return null;
+
+            Type type = typeof(T);
+            string[] firstKeys = [.. hts.First().Keys.Cast<string>()];
+
+            (PropertyInfo, ValueConversion)[] propInfos
+                = mType == MethodType.PropertyOnly
+                    ? new (PropertyInfo, ValueConversion)[firstKeys.Length]
+                    : null;
+            (FieldInfo, ValueConversion)[] fieldInfos
+                = mType == MethodType.FieldOnly
+                    ? new (FieldInfo, ValueConversion)[firstKeys.Length]
+                    : null;
+
+            string[] pkeys = propInfos is null ? null : firstKeys;
+            string[] fkeys = fieldInfos is null ? null : firstKeys;
+
+            for (int i = 0; i < hts.Length; i++)
+            {
+                if (hts[i] is null) continue;
+
+                if (mType is MethodType.PropertyOnly or MethodType.PropertyAndField)
+                {
+                    for (int j = 0; j < propInfos.Length; j++)
+                    {
+                        (PropertyInfo, ValueConversion) prop = i == 0
+                            ? (type.GetProperty(firstKeys[j], BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly), ValueConversion.NULL)
+                            : propInfos[j];
+
+
+                        object value;
+                        var cMethod = prop.Item2;
+                        var isDE = hts[i][j] is DictionaryEntry entry;
+
+                        if (isDE && prop.Item1 is not null && prop.Item1.CanWrite)
+                        {
+                            if (cMethod == ValueConversion.NULL && entry.Value != null)
+                            {
+                                cMethod = ConvertValueMethod(entry.Value, prop.Item1.PropertyType);
+                                prop.Item2 = cMethod;
+                                propInfos[j] = prop;
+                            }
+                            value = ConvertValue(entry.Value, prop.Item1.PropertyType, cMethod);
+                            prop.Item1.SetValue(objs[i], value);
+                        }
+                        else
+                        {
+                            objs[i].HashedValues[pkeys[j]] = entry.Value;
+                        }
+                    }
+
+                }
+                if (mType is MethodType.FieldOnly or MethodType.PropertyAndField)
+                {
+                    for (int j = 0; j < fieldInfos.Length; j++)
+                    {
+                        (FieldInfo, ValueConversion) field = i == 0
+                            ? (type.GetField(firstKeys[j], BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly), ValueConversion.NULL)
+                            : fieldInfos[j];
+
+                        object value;
+                        var cMethod = field.Item2;
+                        var isDE = hts[i][j] is DictionaryEntry entry;
+                        hts[i][fkeys[j]] = cMethod;
+                        if (isDE && field.Item1 is not null)
+                        {
+                            if (cMethod == ValueConversion.NULL && entry.Value != null)
+                            {
+                                cMethod = ConvertValueMethod(entry.Value, field.Item1.FieldType);
+                                field.Item2 = cMethod;
+                                fieldInfos[j] = field;
+                            }
+                            value = ConvertValue(entry.Value, field.Item1.FieldType, cMethod);
+                            field.Item1.SetValue(objs[i], value);
+                        }
+                        else
+                        {
+                            objs[i].HashedValues[fkeys[j]] = entry.Value;
+                        }
+                    }
+                }
+            }
+
+            return objs;
         }
         public static void PopulateSelf<T>(this T hprecord, in Hashtable ht, MethodType mType = MethodType.FieldOnly) where T : HpBaseModel
             => AssignToClass(ht, hprecord, mType);
@@ -553,10 +654,45 @@ namespace HackPDM
 			Type underType = Nullable.GetUnderlyingType( targetType );
             bool isEqual = underType == valueOfType;
 
-			if ( valueOfType == typeof( bool ) && !isEqual ) return null;
-            if (isEqual) return value;
-            
-            return Convert.ChangeType(value, targetType);
+            return valueOfType == typeof( bool ) && !isEqual ? null : isEqual ? value : Convert.ChangeType(value, targetType);
+        }
+        internal static ValueConversion ConvertValueMethod(object value, Type targetType)
+        {
+            if (value == null) return ValueConversion.NULL;
+
+            Type valueOfType = value.GetType();
+
+            if (targetType.IsAssignableFrom(valueOfType)) return ValueConversion.Assignable;
+            if (targetType.IsEnum) return ValueConversion.Enum;
+            if (DateTime.TryParse(value.ToString(), out _)) return ValueConversion.DateTime;
+            if (value is ArrayList list && list.Count > 0) return ConvertValueMethod(list[0], targetType);
+
+            Type underType = Nullable.GetUnderlyingType(targetType);
+            bool isEqual = underType == valueOfType;
+
+            return valueOfType == typeof(bool) && !isEqual ? ValueConversion.NULL : isEqual ? ValueConversion.Nullable : ValueConversion.OtherConvert;
+        }
+        internal static object ConvertValue(object value, Type targetType, ValueConversion conversion)
+        {
+            return conversion switch
+            {
+                ValueConversion.NULL => null,
+                ValueConversion.Assignable => value,
+                ValueConversion.Enum => Enum.Parse(targetType, value.ToString()),
+                ValueConversion.DateTime => DateTime.TryParse(value.ToString(), out DateTime dt) ? dt : null,
+                ValueConversion.Nullable => value,
+                ValueConversion.OtherConvert => Convert.ChangeType(value, targetType),
+                _ => null,
+            };
+        }
+        public enum ValueConversion
+        {
+            NULL,
+            Assignable,
+            Enum,
+            DateTime,
+            Nullable,
+            OtherConvert,
         }
     }
 }
