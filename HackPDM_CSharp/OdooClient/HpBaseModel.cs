@@ -143,6 +143,7 @@ namespace HackPDM
             ArrayList tempID = await OClient.CreateAsync(hpmodel, hts);
             return tempID;
         }
+
         protected Hashtable ComputeHashtable(bool includeEmpty = true, in string[] excludedFieldNames = null, bool isNew = false)
         {
             Hashtable ht = [];
@@ -422,6 +423,7 @@ namespace HackPDM
             }
             else
             {
+                if (recordIDS is not null and { Count: > 0 }) searchFilters.Add(new ArrayList { "id", "in", recordIDS });
                 result = OClient.Browse(modelName, [searchFilters, fields], 90000);
             }
 
@@ -435,6 +437,35 @@ namespace HackPDM
             //return records;
             return [.. records];
         }
+        internal async static Task<T[]> GetRecordsByIDSAsync(ArrayList recordIDS, ArrayList searchFilters = null, string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null)
+        {
+            string modelName = HpModelDictionary[typeof(T)];
+
+            List<T> records = [];
+            ArrayList fields = GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+            ArrayList result;
+
+            if (searchFilters == null)
+            {
+                result = await OClient.ReadAsync(modelName, recordIDS, fields, 90000);
+            }
+            else
+            {
+                if (recordIDS is not null and { Count: > 0 }) searchFilters.Add(new ArrayList { "id", "in", recordIDS });
+                result = await OClient.BrowseAsync(modelName, [searchFilters, fields], 90000);
+            }
+
+            if (result.Count == 0) return null;
+
+            //records = RecordsPopulation([.. result.Select<Hashtable, Hashtable>(h=>h)], excludedFields);
+            foreach (Hashtable ht in result)
+            {
+                records.Add(RecordPopulation(ht, excludedFields));
+            }
+            //return records;
+            return [.. records];
+        }
+
         private static T RecordPopulation(Hashtable ht, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
         {
             if (ht is null) return null;

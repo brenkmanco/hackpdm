@@ -547,6 +547,7 @@
             this.OdooHistory.UseCompatibleStateImageBehavior = false;
             this.OdooHistory.View = System.Windows.Forms.View.Details;
             this.OdooHistory.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.OdooHistory_ItemSelectionChanged);
+            this.OdooHistory.DoubleClick += new System.EventHandler(this.OdooHistory_DoubleClick);
             // 
             // OdooVersionHistoryMenu
             // 

@@ -371,6 +371,14 @@ namespace HackPDM.ClientUtils
         }
 		public static T [] ToArray<T>( this ArrayList list ) => [.. list.Cast<T>()];
         public static HashSet<T> ToHashSet<T>( this ArrayList list ) => [.. list.Cast<T>()];
+        public static HashSet<T> AddAll<T>(this HashSet<T> hashset, IEnumerable<T> values)
+        {
+            foreach( T value in values )
+            {
+                hashset.Add(value);
+            }
+            return hashset;
+        }
         public static ConcurrentSet<T> ToConcurrentSet<T>( this IEnumerable list )
             => list.Cast<T>().ToConcurrentSet();
         public static ConcurrentSet<T> ToConcurrentSet<T>( this IEnumerable<T> list )

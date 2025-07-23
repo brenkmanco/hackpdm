@@ -404,9 +404,9 @@ namespace HackPDM.Forms.Settings
 					if (!wasFound) throw new ArgumentException();
 				}
 				OdooDirectoryTree.CollapseAll();
-				hackman.lastSelectedNode = node;
+				hackman.LastSelectedNode = node;
 				//hackman.lastSelectedNode.Expand();
-				hackman.lastSelectedNode.EnsureVisible();
+				hackman.LastSelectedNode.EnsureVisible();
 				OdooDirectoryTree.Select();
 				
 				while (!hackman.IsListLoaded)

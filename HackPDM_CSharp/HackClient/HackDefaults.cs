@@ -252,15 +252,45 @@ namespace HackPDM
             hack.RelativePath = Path.Combine("root", hack.BasePath[Math.Min(HackDefaults.PWAPathAbsolute.Length+1, hack.BasePath.Length)..]);
             return hack;
         }
-        
-        //public static HackFile GetFromPath(string path, string directory)
-        //{
-        //    HackFile hack = GetFromPath(path);
-        //    if (hack == null) return null;
-            
-        //    hack.RelativePath = directory;
-        //    return hack;
-        //}
+        public static List<HackFile> FolderPathToHackWithDependencies(string pathway, SearchOption options = SearchOption.AllDirectories)
+        {
+            // get all files in folder path to commit.
+            string[] files = [.. Directory.EnumerateFiles(pathway, "*", options)];
+            return FilePathsToHackWithDependencies(files);
+        }
+        public static List<HackFile> FilePathsToHackWithDependencies(params string[] filePaths)
+        {
+            HashSet<string> newFiles = [.. filePaths];
+            List<HackFile> hackFiles = [];
+            // find all dependencies
+            foreach (string file in filePaths)
+            {
+                var fInfo = new FileInfo(file);
+                if (OdooDefaults.dependentExt.Contains(fInfo.Extension))
+                {
+                    var dependencies = HackDefaults.docMgr.GetDependencies(file);
+                    if (dependencies is not null && dependencies.Count > 0)
+                    {
+                        foreach (string[] deps in dependencies)
+                        {
+                            string path = deps[1];
+                            var splitPath = path.Split([$"\\{HackDefaults.PWAPathRelative}\\"], StringSplitOptions.RemoveEmptyEntries);
+                            if (splitPath.Length == 2)
+                            {
+                                newFiles.Add(Path.Combine([HackDefaults.PWAPathAbsolute, splitPath[1]]));
+                            }
+                        }
+                    }
+                }
+            }
+            foreach (string item in newFiles)
+            {
+                HackFile hack = GetFromPath(item, FileOperations.GetRelativePath(item));
+                if (hack != null)
+                    hackFiles.Add(hack);
+            }
+            return hackFiles;
+        }
         public static HackFile GetFromVersion(HpVersion version)
         {
             if (version.winPathway == null) return null;

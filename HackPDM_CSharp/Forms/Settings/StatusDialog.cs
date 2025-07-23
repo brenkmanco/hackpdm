@@ -25,7 +25,10 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
+
+using HackPDM.ClientUtils;
 
 namespace HackPDM
 {
@@ -78,32 +81,47 @@ namespace HackPDM
             set => this.DoubleBuffered = value;
         }
         public bool Canceled { get; private set; } = false;
-
+        public bool IsLoaded { get; set; } = false;
+        
         public bool ShowStatusDialog(string TitleText) {
             //var dlg = new StatusDialog(TitleText);
             this.Text = TitleText;
             this.ShowDialog();
             return this.Canceled;
         }
-        
+        public async Task<bool> ShowWait(string titleText)
+        {
+            this.Text = titleText;
+            this.Show();
+            return await AsyncHelper.WaitUntil(() => this.Visible, 100, 10000);
+        }
+
         public StatusDialog() {
-            HackFileManager.queueAsyncStatus = new();
+            HackFileManager.QueueAsyncStatus = new();
             InitializeComponent();
             ClearStatus();
+            this.Load += new EventHandler(FormLoaded);
+        }
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            Canceled = true;
+            base.OnFormClosing(e);
         }
         
         private StatusDialog(string TitleText) : this() {
-            HackFileManager.queueAsyncStatus = new();
+            HackFileManager.QueueAsyncStatus = new();
             this.Text = TitleText;
             ClearStatus();
         }
-        
+        private void FormLoaded(object sender, EventArgs e)
+        {
+            IsLoaded = true;
+        }
         public void ClearStatus() {
             lvMessages.Clear();
             lvMessages.Columns.Add("Action",120,System.Windows.Forms.HorizontalAlignment.Left);
             lvMessages.Columns.Add("Description",1000, System.Windows.Forms.HorizontalAlignment.Left);
         }
-        
         public void AddStatusLine(string Action, string Description) {
             string[] strStatusParams = [Action, Description];
             AddStatusLine(strStatusParams);

@@ -530,8 +530,8 @@ namespace HackPDM
         public int dir_id;
         public int type_id;
         public int cat_id;
-        public int checkout_user;
-        public int checkout_node;
+        public int? checkout_user;
+        public int? checkout_node;
 
         public HpEntry() {  }
         public HpEntry(
@@ -570,31 +570,26 @@ namespace HackPDM
 
             return list;
         }
-        public bool CanCheckOut()
-        {
-            if (checkout_user != 0) return false;
-            if (deleted) return false;
-
-            return true;
-        }
-        public bool CanUnCheckOut()
-        {
-            if (checkout_user == OdooDefaults.OdooID) return true;
-            return false;
-        }
+        public bool CanCheckOut() => checkout_user == 0 && !deleted;
+        public bool CanUnCheckOut() => checkout_user == OdooDefaults.OdooID;
         public async Task CheckOut()
         {
+            if (!CanCheckOut()) return;
             checkout_user = OdooDefaults.OdooID;
 			checkout_date = OdooDefaults.OdooDateFormat( DateTime.Now );
-            checkout_node = 0;
+            checkout_node = OdooDefaults.MyNode.ID;
 
             await WriteChangedValuesAsync("checkout_user", "checkout_date", "checkout_node");
+            HpVersion version = new(node_id: checkout_node);
+            version.ID = latest_version_id;
+            await version.WriteChangedValuesAsync("node_id");
 		}
         public async Task UnCheckOut()
         {
-			checkout_user = 0;
-			checkout_date = "";
-			checkout_node = 0;
+            if (!CanUnCheckOut()) return;
+			checkout_user = null;
+			checkout_date = null;
+			checkout_node = null;
 
 			await WriteChangedValuesAsync( "checkout_user", "checkout_date", "checkout_node" );
 		}
