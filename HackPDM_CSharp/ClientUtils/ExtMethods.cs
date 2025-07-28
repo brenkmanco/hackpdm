@@ -24,7 +24,7 @@ namespace HackPDM.ClientUtils
 		private static readonly XmlRpcResponseDeserializer _deserializer = new();
 
         // useful extension methods
-        public static ArrayList GetIDs(this HpBaseModel[] models)
+        public static ArrayList GetIDs(this IEnumerable<HpBaseModel> models)
             => models.Select(model=>model.ID).ToArrayList();
 
         public static T[] Populate<T>(this T[] values, Func<T> func)
@@ -276,7 +276,20 @@ namespace HackPDM.ClientUtils
             catch {}
             return null;
         }
-
+        public static bool DownloadAll(this HpVersion[] versions, out List<HpVersion> failedDownloads)
+        {
+            failedDownloads = [];
+            bool IsSuccess = true;
+            foreach (var version in versions)
+            {
+                if (!version.DownloadFile())
+                {
+                    IsSuccess = false;
+                    failedDownloads.Add(version);
+                }
+            }
+            return IsSuccess;
+        }
 
 
         // xmlrpc request

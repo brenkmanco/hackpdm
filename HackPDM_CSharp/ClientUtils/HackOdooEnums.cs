@@ -44,7 +44,14 @@ namespace HackPDM.ClientUtils
         SearchProp,
         FileType,
         FileTypeEntryFilter,
-        FileTypeLoc
+        FileTypeLoc,
+        FileTypeLocDat,
     }
-
+    public enum SortPredefined
+    {
+        String,
+        Int,
+        Date,
+        Unknown,
+    }
 }

@@ -280,6 +280,7 @@
             this.OdooEntryList.TabIndex = 1;
             this.OdooEntryList.UseCompatibleStateImageBehavior = false;
             this.OdooEntryList.View = System.Windows.Forms.View.Details;
+            this.OdooEntryList.ColumnClick += new System.Windows.Forms.ColumnClickEventHandler(this.OdooEntryList_ColumnClick);
             this.OdooEntryList.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.OdooEntryList_ItemSelectionChanged);
             this.OdooEntryList.DragDrop += new System.Windows.Forms.DragEventHandler(this.OdooEntryList_DragDrop);
             this.OdooEntryList.DragEnter += new System.Windows.Forms.DragEventHandler(this.OdooEntryList_DragEnter);

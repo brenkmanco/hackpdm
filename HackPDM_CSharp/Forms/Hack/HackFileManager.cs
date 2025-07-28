@@ -51,6 +51,7 @@ namespace HackPDM
 	#region Declarations
         public static		StatusDialog				Dialog { get; set; }
 		public static		ConcurrentQueue<string[]>	QueueAsyncStatus = new();
+		public static		ListDetail					ActiveList { get; set; }
 		public static		int							DownloadBatchSize 
         { 
             get
@@ -101,7 +102,7 @@ namespace HackPDM
         private delegate	void						BackgroundMethodDel		(object sender, DoWorkEventArgs e);
         private delegate	void						BackgroundCompleteDel	(object sender, RunWorkerCompletedEventArgs e);
 		
-		private const		string						EmptyPlaceholder = "-";
+		public	const		string						EmptyPlaceholder = "-";
     #endregion
 
     #region TEST_VARIABLES
@@ -236,17 +237,18 @@ namespace HackPDM
             keyValues["directories"] = children;
             return keyValues;
         }
-        private void					InitListViewInternal		(ListView list, ColumnInfo[] rows)
+        private void					InitListViewInternal		(ListView list, ListDetail rows)
 			=> InitListView( list, rows );
-		internal static void			InitListView				(ListView list, ColumnInfo[] rows)
+		internal static void			InitListView				(ListView list, ListDetail rows)
 		{
             SafeInvokeGen(list, rows, (row) =>
             {
                 list.Clear();
-                foreach (ColumnInfo item in row)
+                foreach (ColumnInfo item in row.SortColumnOrder)
                 {
                     list.Columns.Add(item.Header);
                 }
+				list.ListViewItemSorter = row.SortRowOrder.Sort;
 			});
 		}
 		internal static void			InitGridView				(DataGridView gridView)
@@ -257,14 +259,14 @@ namespace HackPDM
                 gridView.DataSource = null;
 			});
 		}
-		internal static void			InitListViewPercentage		(ListView list, ColumnInfo[] rows)
+		internal static void			InitListViewPercentage		(ListView list, ListDetail rows)
 		{
 			SafeInvokeGen(list, rows, (row) =>
             {
                 list.Clear();
 				List<ColumnHeader> offsets = [];
 				int unUsedPercentage = 100;
-                foreach (ColumnInfo item in row)
+                foreach (ColumnInfo item in row.SortColumnOrder)
                 {
 					if (item.Width == 0)
 					{
@@ -292,6 +294,7 @@ namespace HackPDM
 						unUsedPercentage = 0;
 					}
 				}
+				list.ListViewItemSorter = row.SortRowOrder.Sort;
 			});
 		}
 		internal ListViewItem			EmptyListItemInternal		(ListView list)
@@ -1883,8 +1886,30 @@ namespace HackPDM
 				localDeleteToolStripMenuItem.Enabled = false;
 			}
 		}
-		// click events
-		private void					allDirectoriesToolStripMenuItem_Click	(object sender, EventArgs e) 
+        // click events
+        private void OdooEntryList_ColumnClick(object sender, ColumnClickEventArgs e)
+        {
+			ColumnInfo col = ColumnMap.RowWidths.SortRowOrder;
+			if (col.Sort is null) return;
+			
+			if (col.Rank == e.Column)
+			{
+				col.Sort.IsAscending ^= true;
+				ColumnMap.RowWidths.SetActiveColumn(col);
+				OdooEntryList.ListViewItemSorter = col.Sort;
+			}
+			else
+			{
+				ColumnInfo newCol = ColumnMap.RowWidths.SortColumnOrder[e.Column];
+				ColumnMap.RowWidths.SetActiveColumn(newCol);
+				ColumnMap.RowWidths.SortRowOrder = newCol;
+				OdooEntryList.ListViewItemSorter = newCol.Sort;
+			}
+			
+			
+			OdooEntryList.Sort();
+        }
+        private void					allDirectoriesToolStripMenuItem_Click	(object sender, EventArgs e) 
 			=> GetLatestStrip_Click(sender, e);
 		private void					topDirectoryToolStripMenuItem_Click		(object sender, EventArgs e)
 			=> GetLatestFromTreeNode(false);
@@ -2497,7 +2522,7 @@ namespace HackPDM
 			{
 				HpVersion version = (await HpVersion.GetRecordsByIDSAsync([id])).First();
 				HpEntry entry = (await HpEntry.GetRecordsByIDSAsync([version.entry_id])).First();
-				ArrayList versions = await GetVersionList(entry.ID);
+				ArrayList versions = await GetVersionList(id);
 				HashSet<int> vIDS = versions.ToHashSet<int>();
 				vIDS.Add(version.ID);
 				string vIDSText = string.Join(", ", vIDS);
@@ -2515,7 +2540,12 @@ namespace HackPDM
 				var response = MessageBox.Show($"{eText}\n this will download version ids: {vIDSText}\n{vText}", "Version Download", MessageBoxButtons.YesNoCancel);
 				if (response == DialogResult.Yes)
 				{
-					version.DownloadFile();
+					HpVersion[] downVersions = await HpVersion.GetRecordsByIDSAsync(versions);
+					if (!downVersions.DownloadAll(out List<HpVersion> failed))
+					{
+						ArrayList fIDs = failed.GetIDs();
+                        MessageBox.Show($"failed to download version ids: {string.Join(", ", fIDs.ToArray<int>())}");
+					}
 				}
 			}
         }
@@ -3203,5 +3233,7 @@ namespace HackPDM
         }
 
         #endregion
+
+
     }
 }
