@@ -435,6 +435,7 @@
     <Compile Include="ClientUtils\HackOdooEnums.cs" />
     <Compile Include="ClientUtils\HackStructs.cs" />
     <Compile Include="ClientUtils\ImageUtils.cs" />
+    <Compile Include="ClientUtils\ThemePreset.cs" />
     <Compile Include="Forms\Hack\HackSettings.cs">
       <SubType>Form</SubType>
     </Compile>

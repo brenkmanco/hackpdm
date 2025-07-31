@@ -40,7 +40,7 @@
             // 
             this.OdooLoginBtn.Location = new System.Drawing.Point(12, 83);
             this.OdooLoginBtn.Name = "OdooLoginBtn";
-            this.OdooLoginBtn.Size = new System.Drawing.Size(173, 80);
+            this.OdooLoginBtn.Size = new System.Drawing.Size(173, 77);
             this.OdooLoginBtn.TabIndex = 149;
             this.OdooLoginBtn.Text = "Odoo Login";
             this.OdooLoginBtn.UseVisualStyleBackColor = true;
@@ -100,8 +100,11 @@
             this.Controls.Add(this.HackSettingsBtn);
             this.Controls.Add(this.odooSettingsBtn);
             this.Controls.Add(this.OdooLoginBtn);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Name = "ProfileManager";
+            this.RightToLeft = System.Windows.Forms.RightToLeft.No;
             this.Text = "ProfileManager";
+            this.Load += new System.EventHandler(this.ProfileManager_Load);
             this.ResumeLayout(false);
 
         }

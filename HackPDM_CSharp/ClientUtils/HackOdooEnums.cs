@@ -54,4 +54,12 @@ namespace HackPDM.ClientUtils
         Date,
         Unknown,
     }
+    [Serializable]
+    public enum ThemeType
+    {
+        Default,
+        Dark,
+        Light,
+        Preset1,
+    }
 }

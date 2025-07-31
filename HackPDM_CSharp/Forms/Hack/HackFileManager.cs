@@ -171,7 +171,6 @@ namespace HackPDM
 		private void					FormLoaded					(object sender, EventArgs e)
 		{
 			CreateTreeViewBackground();
-			InitBackgroundWorker();
 		}
 		private void					CreateTreeViewBackground	()
         {
@@ -210,11 +209,6 @@ namespace HackPDM
 				OdooEntryImage.Image = null;
 			});
         }
-        private void					InitBackgroundWorker		()
-        {
-            cSource = new();
-			backgroundWorker.DoWork += new DoWorkEventHandler( worker_ListItemChange );
-		}
         private Dictionary<string, object>	ConvertSubDirectories	(Hashtable ht)
         {
             Dictionary<string, object> keyValues = new()
@@ -663,10 +657,10 @@ namespace HackPDM
             // get or add image key
 
             string strKey = status != "ok" ? $"{type}.{status}" : type;
-            if (ilListIcons.Images[strKey] == null)
+            if (ListIcons.Images[strKey] == null)
             {
                 // image key not present in ilListIcons
-                Image imgExt = ilListIcons.Images[type];
+                Image imgExt = ListIcons.Images[type];
                 if (imgExt == null)
                 {
                     if (OdooDefaults.ExtToType.TryGetValue($".{type}", out var hpType))
@@ -680,11 +674,11 @@ namespace HackPDM
 
                     if (imgExt == null)
                     {
-                        imgExt = ilListIcons.Images["default"];
+                        imgExt = ListIcons.Images["default"];
                     }
                     else
                     {
-                        ilListIcons.Images.Add(type, imgExt);
+                        ListIcons.Images.Add(type, imgExt);
                     }
                 }
 
@@ -696,12 +690,12 @@ namespace HackPDM
                 }
                 else
                 {
-                    Image imgStatus = ilListIcons.Images[status];
+                    Image imgStatus = ListIcons.Images[status];
 
                     // combine images
                     if (imgExt is not null && imgStatus is not null)
                     {
-                        ilListIcons.Images.Add(strKey, ImageUtils.ImageOverlay(imgExt, imgStatus));
+                        ListIcons.Images.Add(strKey, ImageUtils.ImageOverlay(imgExt, imgStatus));
                     }
                     else
                     {
@@ -765,10 +759,10 @@ namespace HackPDM
             // get or add image key
             string strKey = $"{type}.lo";
 
-            if (ilListIcons.Images[strKey] == null)
+            if (ListIcons.Images[strKey] == null)
             {
                 // image key not present in ilListIcons
-                Image imgExt = ilListIcons.Images[type];
+                Image imgExt = ListIcons.Images[type];
                 if (imgExt == null)
                 {
 
@@ -790,21 +784,21 @@ namespace HackPDM
 
                     if (imgExt == null)
                     {
-                        imgExt = ilListIcons.Images["default"];
+                        imgExt = ListIcons.Images["default"];
                     }
                     else
                     {
-                        ilListIcons.Images.Add(type, imgExt);
+                        ListIcons.Images.Add(type, imgExt);
                     }
                 }
 
                 // get status image
-                Image imgStatus = ilListIcons.Images[status];
+                Image imgStatus = ListIcons.Images[status];
 
                 // combine images
                 if (imgExt is not null && imgStatus is not null)
                 {
-                    ilListIcons.Images.Add(strKey, ImageUtils.ImageOverlay(imgExt, imgStatus));
+                    ListIcons.Images.Add(strKey, ImageUtils.ImageOverlay(imgExt, imgStatus));
                 }
                 else
                 {
@@ -1243,10 +1237,7 @@ namespace HackPDM
 	#endregion
 
 	#region Background Worker functions
-		/// <summary>Handles the GetLatestAsync event of the worker control.</summary>
-		/// <param name="sender">The source of the event.</param>
-		/// <param name="e">The <see cref="DoWorkEventArgs" /> instance containing the event data.</param>
-		private async Task				worker_GetLatestAsync		((ArrayList, CancellationToken) arguements)
+		private async Task				Async_GetLatest				((ArrayList, CancellationToken) arguements)
 		{
 			object lockObject = new();
 			ArrayList entryIDs = arguements.Item1;
@@ -1266,13 +1257,7 @@ namespace HackPDM
 			MaxCount = versions.Length;
 			SkipCounter = 0;
 			ProcessCounter = 0;
-			//ConcurrentQueue<Task> tasks = new(versionBatches.Select(ProcessVersionBatchAsync));
-			//ConcurrentSet<Task> tasksProcessing = [];
 
-			//while (tasks.TryDequeue(out Task task))
-			//{
-			//	await task;
-			//}
 			try
 			{
 				await ProcessDownloadsAsync(versionBatches, arguements.Item2, 5);
@@ -1282,22 +1267,13 @@ namespace HackPDM
 				MessageBox.Show("Cancelled Download");
 			}
 
-            //foreach (List<HpVersion> batch in versionBatches)
-            //    await ProcessVersionBatchAsync(batch);
-            //tasks.Add( ProcessVersionBatchAsync( batch ) );
-
             Dialog.SetProgressBar(versions.Length, versions.Length);
 
 			
             MessageBox.Show( $"Completed!" );
 			RestartEntries();
 		}
-        /// <summary>background worker to create records within odoo that won't conflict with existing records</summary>
-        /// <param name="sender">
-        ///   <para>background worker</para>
-        /// </param>
-        /// <param name="e"></param>
-        private async Task				worker_Commit				(ValueTuple<HpEntry[], List<HackFile>> Arguments)
+        private async Task				Async_Commit				(ValueTuple<HpEntry[], List<HackFile>> Arguments)
         {
 			object lockObject = new();
             // section for checking if the existing remote file already has a version with the same checksum 
@@ -1366,7 +1342,7 @@ namespace HackPDM
             MessageBox.Show($"Completed!");
             RestartEntries();
         }
-		private async Task				worker_CheckOut				(HpEntry[] entries)
+		private async Task				Async_CheckOut				(HpEntry[] entries)
 		{
 			object lockObject = new();
 
@@ -1395,7 +1371,7 @@ namespace HackPDM
             MessageBox.Show($"Completed!");
             RestartEntries();
 		}
-		private async Task				worker_UnCheckOut			(HpEntry[] entries)
+		private async Task				Async_UnCheckOut			(HpEntry[] entries)
 		{
 			object lockObject = new();
 
@@ -1424,7 +1400,7 @@ namespace HackPDM
             MessageBox.Show($"Completed!");
             RestartEntries();
 		}
-        private async Task				worker_PermDelete			(HpEntry[] entries)
+        private async Task				Async_PermDelete			(HpEntry[] entries)
         {
             ArrayList ids = entries.Select(e => e.ID).ToArrayList();
 			bool vDeleted = false;
@@ -1450,9 +1426,8 @@ namespace HackPDM
             MessageBox.Show($"Completed!");
             RestartEntries();
         }
-        private async void				worker_LogicalDelete		(object sender, DoWorkEventArgs e)
+        private async Task				Async_LogicalDelete			(HpEntry[] entries)
 		{
-			HpEntry[] entries = (HpEntry[])e.Argument;
 			object lockObject = new();
 			foreach ( var entry in entries )
 			{
@@ -1467,9 +1442,8 @@ namespace HackPDM
             MessageBox.Show($"Completed!");
             RestartEntries();
         }
-		private async void				worker_LogicalUnDelete		(object sender, DoWorkEventArgs e) 
+		private async Task				Async_LogicalUnDelete		(HpEntry[] entries) 
 		{
-			HpEntry[] entries = (HpEntry[])e.Argument;
 			object lockObject = new();
 			foreach ( var entry in entries )
 			{
@@ -1484,7 +1458,7 @@ namespace HackPDM
             MessageBox.Show($"Completed!");
             RestartEntries();
         }
-		private async void				worker_ListItemChange		(object sender, DoWorkEventArgs e)
+		private async Task				Async_ListItemChange		(object sender, DoWorkEventArgs e)
         {
 			try
             {
@@ -1493,13 +1467,51 @@ namespace HackPDM
 			}
 			catch ( Exception ) { }
 		}
+
+        private bool					WorkerRunner				(Action<object, DoWorkEventArgs> function, string statusHeader = "Status", object arguments = null, CancellationTokenSource tokenSource = default)
+        {
+            BackgroundWorker worker = new()
+            {
+                WorkerSupportsCancellation = true
+            };
+            worker.DoWork += new DoWorkEventHandler(function);
+            worker.RunWorkerAsync(arguments);
+
+            bool blnWorkCanceled = Dialog.ShowStatusDialog(statusHeader);
+            if (blnWorkCanceled)
+            {
+                tokenSource.Cancel();
+                worker.CancelAsync();
+                return false;
+            }
+            return true;
+        }
+        private async Task<bool>		AsyncRunner			(Func<Task> function, string statusHeader = "Status", CancellationTokenSource tokenSource = default)
+        {
+            var task = Task.Run(() => function(), tokenSource.Token);
+            bool blnWorkCanceled = await AsyncHelper.WaitUntil(() => Dialog.Canceled || task.IsCompleted || task.IsCanceled, 500);
+
+            if (blnWorkCanceled)
+            {
+                if (Dialog.Canceled || task.IsCanceled)
+                {
+                    tokenSource.Cancel();
+                    try
+                    {
+                        await task; // Await to observe cancellation
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // handles cancellation feedback
+                    }
+                    return false;
+                }
+            }
+            await task;
+            return true;
+        }
     #endregion
 
-
-
-
-
-        
     #region CheckOut Functions
         private IEnumerable<HpEntry>	FilterCheckoutEntries		(HpEntry[] entries)
 		{
@@ -1812,8 +1824,7 @@ namespace HackPDM
             GetLatestInternal(entryIDs);
         }
     #endregion
-        
-
+       
     #region Form Event Handlers
         // lost focus events
 		private void					TreeView_LostFocus						(object sender, EventArgs e)
@@ -1877,17 +1888,17 @@ namespace HackPDM
 			string pathway = LastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, LastSelectedNodePath[5..]);
 			if (Directory.Exists( pathway ) ) 
 			{
-				openDirectoryToolStripMenuItem.Enabled = true;
-				localDeleteToolStripMenuItem.Enabled = true;
+				TreeOpenDirectory.Enabled = true;
+				TreeLocalDelete.Enabled = true;
 			}
 			else 
 			{
-				openDirectoryToolStripMenuItem.Enabled = false;
-				localDeleteToolStripMenuItem.Enabled = false;
+				TreeOpenDirectory.Enabled = false;
+				TreeLocalDelete.Enabled = false;
 			}
 		}
         // click events
-        private void OdooEntryList_ColumnClick(object sender, ColumnClickEventArgs e)
+        private void					List_ColumnClick						(object sender, ColumnClickEventArgs e)
         {
 			ColumnInfo col = ColumnMap.RowWidths.SortRowOrder;
 			if (col.Sort is null) return;
@@ -1909,47 +1920,15 @@ namespace HackPDM
 			
 			OdooEntryList.Sort();
         }
-        private void					allDirectoriesToolStripMenuItem_Click	(object sender, EventArgs e) 
-			=> GetLatestStrip_Click(sender, e);
-		private void					topDirectoryToolStripMenuItem_Click		(object sender, EventArgs e)
-			=> GetLatestFromTreeNode(false);
+
 		//
-		private void					GetLatestStrip_Click					(object sender, EventArgs e)
+		private void					Tree_Click_GetLatest					(object sender, EventArgs e)
 			=> GetLatestFromTreeNode(true);
-		private async void				GetLatestEntryStrip_Click				(object sender, EventArgs e)
-		{
-			Dialog = new StatusDialog();
-			await Dialog.ShowWait("Get Latest");
-			var entryItem = OdooEntryList.SelectedItems;
-						
-			ArrayList entryIDs = [];
-
-			foreach ( ListViewItem item in entryItem )
-			{
-				if ( int.TryParse( item.Text, out int ID ) )
-				{
-					entryIDs.Add(ID);
-				}
-			}
-
-			GetLatestInternal(entryIDs);
-        }
-		private async void				GetLatestInternal						(ArrayList entryIDs)
-		{
-			Dialog.AddStatusLine("INFO", "Finding Entry Dependencies...");
-            HpEntry[] entries = await HpEntry.GetRecordsByIDSAsync(entryIDs, includedFields: ["latest_version_id"]);
-            //HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
-
-            ArrayList newIds = await GetEntryList([.. entries.Select(entry => entry.latest_version_id)]);
-
-            newIds.AddRange(entryIDs);
-            newIds = newIds.ToHashSet<int>().ToArrayList();
-            CancellationTokenSource tokenSource = new();
-            (ArrayList, CancellationToken) arguments = (newIds, tokenSource.Token);
-            await WorkerRunnerAsync(()=>worker_GetLatestAsync(arguments), "Get Latest", tokenSource);
-        }
-		//
-        private async void				CommitTreeStrip_Click					(object sender, EventArgs e)
+        private void					Tree_Click_GetLatestAll					(object sender, EventArgs e) 
+			=> Tree_Click_GetLatest(sender, e);
+		private void					Tree_Click_GetLatestTop					(object sender, EventArgs e)
+			=> GetLatestFromTreeNode(false);
+        private async void				Tree_Click_Commit						(object sender, EventArgs e)
 		{
 			Dialog = new StatusDialog();
 
@@ -1978,7 +1957,82 @@ namespace HackPDM
 			// get all files in folder path to commit.
 			await CommitInternal(entryIDs, HackFile.FolderPathToHackWithDependencies(pathway));
 		}
-		private async void				CommitEntryStrip_Click					(object sender, EventArgs e)
+		private async void				Tree_Click_Checkout						(object sender, EventArgs e)
+		{
+			GetLatestFromTreeNode(true);
+            ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)LastSelectedNode.Tag, true);
+			await CheckoutInternal(entryIDs);
+		}
+        private async void				Tree_Click_UndoCheckout					(object sender, EventArgs e)
+		{
+			Dialog = new StatusDialog();
+			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)LastSelectedNode.Tag, true);
+
+			await UnCheckoutInternal(entryIDs);
+		}
+		private void					Tree_Click_OpenDirectory				(object sender, EventArgs e)
+		{
+			string pathway = LastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, LastSelectedNodePath[5..]);
+			if (Directory.Exists( pathway ) )
+			{
+				System.Diagnostics.Process.Start( "explorer.exe", pathway );
+			}
+		}
+        private void					Tree_Click_Restore						(object sender, EventArgs e) 
+			=> UnDeleteInternal(false);
+		private void					Tree_Click_RestoreTop					(object sender, EventArgs e) 
+			=> UnDeleteInternal(false);
+		private void					Tree_Click_RestoreAll					(object sender, EventArgs e) 
+			=> MessageBox.Show("Not Implemented Yet");
+		private void					Tree_Click_LocalDelete					(object sender, EventArgs e)
+		{
+			string pathway = LastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, LastSelectedNodePath[5..]);
+			DirectoryInfo directory = new( pathway );
+			if ( directory.Exists ) 
+			{
+				if (MessageBox.Show( $"Are you sure you want to delete this directory and ({directory.EnumerateFiles().Count()}) files inside?", 
+					"Delete Directory", 
+					MessageBoxButtons.YesNoCancel, 
+					MessageBoxIcon.Warning ) == DialogResult.Yes)
+				{
+					directory.Delete( true );
+				}
+			}
+		}
+		private async void				Tree_Click_LogicalDelete				(object sender, EventArgs e)
+		{
+			Dialog = new StatusDialog();
+			
+			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)LastSelectedNode.Tag, true);
+
+			await LogicalDeleteInternal(entryIDs);
+		}
+		private void					Tree_Click_PermanentDelete				(object sender, EventArgs e)
+		{
+		#if DEBUG
+			
+		#endif
+		}
+		//
+		private async void				List_Click_GetLatest					(object sender, EventArgs e)
+		{
+			Dialog = new StatusDialog();
+			await Dialog.ShowWait("Get Latest");
+			var entryItem = OdooEntryList.SelectedItems;
+						
+			ArrayList entryIDs = [];
+
+			foreach ( ListViewItem item in entryItem )
+			{
+				if ( int.TryParse( item.Text, out int ID ) )
+				{
+					entryIDs.Add(ID);
+				}
+			}
+
+			GetLatestInternal(entryIDs);
+        }
+		private async void				List_Click_Commit						(object sender, EventArgs e)
 		{
 			Dialog = new StatusDialog();
 
@@ -2005,33 +2059,9 @@ namespace HackPDM
 
             await CommitInternal(entryIDs, hackFiles);
         }
-		private async Task				CommitInternal							(ArrayList entryIDs, IEnumerable<HackFile> hackFiles)
+		private async void				List_Click_Checkout						(object sender, EventArgs e)
 		{
-            HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
-
-            object arguments = null;
-            HpEntry[] allEntries = null;
-
-            if (entries is not null && entries.Length > 0)
-            {
-                ArrayList newIds = await GetEntryList([.. entries.Select(e => e.latest_version_id)]);
-                newIds.AddRange(entryIDs);
-                newIds = newIds.ToHashSet<int>().ToArrayList();
-                allEntries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"], insertFields: ["directory_complete_name"]);
-            }
-            
-            await WorkerRunnerAsync(()=> worker_Commit((allEntries, hackFiles.ToList())), "Commit Files");
-        }
-		//
-		private async void				CheckoutTreeStrip_Click					(object sender, EventArgs e)
-		{
-			GetLatestFromTreeNode(true);
-            ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)LastSelectedNode.Tag, true);
-			await CheckoutInternal(entryIDs);
-		}
-		private async void				CheckoutEntryStrip_Click				(object sender, EventArgs e)
-		{
-			GetLatestEntryStrip_Click(null, null);
+			List_Click_GetLatest(null, null);
 			var entryItem = OdooEntryList.SelectedItems;
 			var directory = LastSelectedNode.FullPath;
 
@@ -2055,32 +2085,7 @@ namespace HackPDM
 
 			await CheckoutInternal(entryIDs);
         }
-        private async Task				CheckoutInternal						(ArrayList entryIDs)
-		{
-            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
-
-            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
-
-            newIds.AddRange(entryIDs);
-            newIds = newIds.ToHashSet<int>().ToArrayList();
-
-            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id"]);
-
-            if (entries is null || entries.Length < 1) return;
-            Dialog = new StatusDialog();
-
-            entries = [.. FilterCheckoutEntries(entries)];
-            await WorkerRunnerAsync(()=>worker_CheckOut(entries), "Checkout Files");
-        }
-		//
-        private async void				UnCheckoutTreeStrip_Click				(object sender, EventArgs e)
-		{
-			Dialog = new StatusDialog();
-			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)LastSelectedNode.Tag, true);
-
-			await UnCheckoutInternal(entryIDs);
-		}
-		private async void				UnCheckoutEntryStrip_Click				(object sender, EventArgs e)
+		private async void				List_Click_UndoCheckout					(object sender, EventArgs e)
 		{
 			var entryItem = OdooEntryList.SelectedItems;
 
@@ -2096,122 +2101,7 @@ namespace HackPDM
 
 			await UnCheckoutInternal(entryIDs);
 		}
-		private async Task				UnCheckoutInternal						(ArrayList entryIDs)
-		{
-			if (entryIDs is null or { Count: < 1 }) return;
-
-            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
-            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
-
-            newIds.AddRange(entryIDs);
-            newIds = newIds.ToHashSet<int>().ToArrayList();
-
-            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"]);
-
-            if (entries is null || entries.Length < 1)
-                return;
-            Dialog = new StatusDialog();
-
-            // filter out entries that are already checked out
-            entries = [.. FilterUnCheckoutEntries(entries)];
-
-            await WorkerRunnerAsync(()=>worker_UnCheckOut(entries), "UnCheckout Files");
-        }
-
-		private async void				LogicalDeleteEntryStrip_Click			(object sender, EventArgs e)
-		{
-			Dialog = new StatusDialog();
-
-			var entryItem = OdooEntryList.SelectedItems;
-			//var directory = HackDefaults.DefaultPath(lastSelectedNode.FullPath, true);
-
-			ArrayList entryIDs = [];
-			foreach ( ListViewItem item in entryItem )
-			{
-				if ( int.TryParse( item.Text, out int ID ) )
-				{
-					entryIDs.Add(ID);
-				}
-			}
-
-            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
-
-            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
-
-            newIds.AddRange(entryIDs);
-            newIds = newIds.ToHashSet<int>().ToArrayList();
-
-            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"]);
-
-			object arguments = entries;
-
-			BackgroundWorker worker = new()
-			{
-				WorkerSupportsCancellation = true
-			};
-			//worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler((s, ev) => MessageBox.Show("Finished"));
-			worker.DoWork += new DoWorkEventHandler( worker_LogicalDelete );
-			worker.RunWorkerAsync( arguments );
-
-			bool blnWorkCanceled = Dialog.ShowStatusDialog("Logically Delete Files");
-			if ( blnWorkCanceled )
-				worker.CancelAsync();
-		}
-		private async void				LogicalDeleteTreeStrip_Click			(object sender, EventArgs e)
-		{
-			Dialog = new StatusDialog();
-			
-			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)LastSelectedNode.Tag, true);
-
-            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
-
-            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
-
-            newIds.AddRange(entryIDs);
-            newIds = newIds.ToHashSet<int>().ToArrayList();
-
-            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"]);
-
-			object arguments = entries;
-
-			BackgroundWorker worker = new()
-			{
-				WorkerSupportsCancellation = true
-			};
-			//worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler((s, ev) => MessageBox.Show("Finished"));
-			worker.DoWork += new DoWorkEventHandler( worker_LogicalDelete );
-			worker.RunWorkerAsync( arguments );
-
-			bool blnWorkCanceled = Dialog.ShowStatusDialog("Logically Delete Files");
-			if ( blnWorkCanceled )
-				worker.CancelAsync();
-
-		}
-		private void					unDeleteToolStripMenuItem_Click			(object sender, EventArgs e)
-		{
-			
-		}
-		private void					unDeleteToolStripMenuItem1_Click		(object sender, EventArgs e) 
-			=> UnDelete(false);
-		private void					allDirectoriesToolStripMenuItem1_Click	(object sender, EventArgs e) 
-			=> MessageBox.Show("Not Implemented Yet");
-		private void					topDirectoryToolStripMenuItem1_Click	(object sender, EventArgs e) 
-			=> UnDelete(false);
-		private void					OdooSearchDropdown_Click				(object sender, EventArgs e)
-		{
-			SearchOdoo searchForm = new(this);
-			searchForm.Show();
-		}
-		private void					OdooRefreshDropdown_Click				(object sender, EventArgs e)
-		{
-			SafeInvoke(OdooEntryImage, () => 
-			{
-				OdooEntryImage.Image = previewImage;
-			});
-			RestartTree();
-			RestartEntries();
-		}
-		private void					OpenEntryStrip_Click					(object sender, EventArgs e)
+		private void					List_Click_Open							(object sender, EventArgs e)
 		{
 			// open local if lm, co
 			// open remote if ro, dt
@@ -2254,7 +2144,7 @@ namespace HackPDM
 
 			}
 		}
-		private void					OpenLatestRemoteStrip_Click				(object sender, EventArgs e)
+		private void					List_Click_OpenLatestRemote				(object sender, EventArgs e)
 		{
 			StringBuilder errors = new();
 			foreach (ListViewItem viewItem in OdooEntryList.SelectedItems)
@@ -2295,7 +2185,7 @@ namespace HackPDM
 			}
 			if (errors.Length > 0) MessageBox.Show(errors.ToString());
 		}
-		private void					OpenLatestLocalStrip_Click				(object sender, EventArgs e)
+		private void					List_Click_OpenLatestLocal				(object sender, EventArgs e)
 		{
 			StringBuilder errors = new();
 			foreach (ListViewItem viewItem in OdooEntryList.SelectedItems)
@@ -2335,7 +2225,7 @@ namespace HackPDM
 			}
 			if (errors.Length > 0) MessageBox.Show(errors.ToString());
 		}
-		private void					fileDirectoryToolStripMenuItem_Click	(object sender, EventArgs e)
+		private void					List_Click_OpenDirectory				(object sender, EventArgs e)
 		{
 			foreach(ListViewItem item in OdooEntryList.SelectedItems) 
 			{
@@ -2361,100 +2251,11 @@ namespace HackPDM
 				//FileOperations.OpenFile(  );
 			}
 		}
-		private void					OdooManageTypesDropdown_Click			(object sender, EventArgs e)
-			=> new OdooFileTypeManager( this ).Show();
-		private void					downloadToolStripMenuItem_Click			(object sender, EventArgs e)
+        private void					List_Click_Restore						(object sender, EventArgs e)
 		{
-			var version = GetVersionFromHistory();
-			FileInfo file = new(Path.Combine(version.winPathway, version.name));
-			if (FileOperations.SameChecksum( file, version.checksum ))
-			{
-				if (file.Exists)
-				{
-					var response = MessageBox.Show("File exists as a different version.\n" +
-					"Retry:\tDownload in the Temporary Folder\n" +
-					"Ignore:\tOverwrite the current version\n" +
-					"Abort:\tCancel download", "File Version Conflict", MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Warning);
-
-					if (response == DialogResult.Ignore) version.DownloadFile(version.winPathway);
-					else if (response == DialogResult.Retry) version.DownloadFile(Path.GetTempPath());
-				}
-			}
-			else
-			{
-				version.DownloadFile(version.winPathway);
-			}
-		}
-		private void					toTemporaryToolStripMenuItem_Click		(object sender, EventArgs e)
-			=> DownloadHistory(true);
-		private void					overwriteCurrentToolStripMenuItem1_Click(object sender, EventArgs e)
-			=> DownloadHistory(false);
-		private void					overwriteAndOpenToolStripMenuItem_Click	(object sender, EventArgs e)
-			=> DownloadOpen(false);
-		private void					temporaryAndOpenToolStripMenuItem_Click	(object sender, EventArgs e)
-			=> DownloadOpen(true);
-		private void					toCurrentToolStripMenuItem_Click		(object sender, EventArgs e)
-			=> LocalMoveEntry(false);
-		private void					toTemporaryToolStripMenuItem1_Click		(object sender, EventArgs e)
-			=> LocalMoveEntry(true);
-		private async void				permanentDeleteToolStripMenuItem_Click	(object sender, EventArgs e)
-		{
-		#if DEBUG
-			Dialog = new StatusDialog();
-
-			var entryItem = OdooEntryList.SelectedItems;
-			var directory = LastSelectedNode.FullPath;
-
-			ArrayList entryIDs = new(entryItem.Count);
-
-			foreach ( ListViewItem item in entryItem )
-			{
-				if ( int.TryParse( item.Text, out int ID ) )
-				{
-					entryIDs.Add( ID );
-				}
-			}
-
-			HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields:["type_id", "cat_id", "checkout_node"]);
-			if (entries is null || entries.Length == 0)
-			{
-                MessageBox.Show("No entries to delete");
-				return;
-            }
-
-			await WorkerRunnerAsync(() => worker_PermDelete(entries), "Permanently Delete Files");
-		#endif
-		}
-		private void					perminentDeleteToolStripMenuItem_Click	(object sender, EventArgs e)
-		{
-		#if DEBUG
 			
-		#endif
 		}
-		private void					openDirectoryToolStripMenuItem_Click	(object sender, EventArgs e)
-		{
-			string pathway = LastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, LastSelectedNodePath[5..]);
-			if (Directory.Exists( pathway ) )
-			{
-				System.Diagnostics.Process.Start( "explorer.exe", pathway );
-			}
-		}
-		private void					localDeleteToolStripMenuItem_Click		(object sender, EventArgs e)
-		{
-			string pathway = LastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, LastSelectedNodePath[5..]);
-			DirectoryInfo directory = new( pathway );
-			if ( directory.Exists ) 
-			{
-				if (MessageBox.Show( $"Are you sure you want to delete this directory and ({directory.EnumerateFiles().Count()}) files inside?", 
-					"Delete Directory", 
-					MessageBoxButtons.YesNoCancel, 
-					MessageBoxIcon.Warning ) == DialogResult.Yes)
-				{
-					directory.Delete( true );
-				}
-			}
-		}
-		private void					localDeleteToolStripMenuItem1_Click		(object sender, EventArgs e)
+		private void					List_Click_LocalDelete					(object sender, EventArgs e)
 		{
 			string pathway = LastSelectedNodePath.Length < 5 ? HackDefaults.PWAPathAbsolute : Path.Combine(HackDefaults.PWAPathAbsolute, LastSelectedNodePath[5..]);
 			DirectoryInfo directory = new( pathway );
@@ -2484,37 +2285,109 @@ namespace HackPDM
 			}
 			RestartEntries();
 		}		
-        // double click events
-        private async void				OdooParents_DoubleClick					(object sender, EventArgs e)
-        {
-            ListViewItem item = OdooParents.SelectedItems?[0];
-            if (item == null) return;
+		private async void				List_Click_LogicalDelete				(object sender, EventArgs e)
+		{
+			Dialog = new StatusDialog();
 
-            string pwaPath = item.SubItems[NameConfig.ParentBasePath.Name].Text;
-            string fileName = item.SubItems[NameConfig.ParentName.Name].Text;
-            await FindSearchSelectionAsync(pwaPath, fileName);
+			var entryItem = OdooEntryList.SelectedItems;
+			//var directory = HackDefaults.DefaultPath(lastSelectedNode.FullPath, true);
+
+			ArrayList entryIDs = [];
+			foreach ( ListViewItem item in entryItem )
+			{
+				if ( int.TryParse( item.Text, out int ID ) )
+				{
+					entryIDs.Add(ID);
+				}
+			}
+
+            await LogicalDeleteInternal(entryIDs);
         }
-        private async void				OdooChildren_DoubleClick				(object sender, EventArgs e)
+        private async void				List_Click_PermanentDelete				(object sender, EventArgs e)
         {
-            ListViewItem item = OdooChildren.SelectedItems?[0];
-            if (item == null) return;
+#if DEBUG
+            Dialog = new StatusDialog();
 
-            string pwaPath = item.SubItems[NameConfig.ChildrenBasePath.Name].Text;
-            string fileName = item.SubItems[NameConfig.ChildrenName.Name].Text;
-            await FindSearchSelectionAsync(pwaPath, fileName);
+            var entryItem = OdooEntryList.SelectedItems;
+            var directory = LastSelectedNode.FullPath;
+
+            ArrayList entryIDs = new(entryItem.Count);
+
+            foreach (ListViewItem item in entryItem)
+            {
+                if (int.TryParse(item.Text, out int ID))
+                {
+                    entryIDs.Add(ID);
+                }
+            }
+
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, excludedFields: ["type_id", "cat_id", "checkout_node"]);
+            if (entries is null || entries.Length == 0)
+            {
+                MessageBox.Show("No entries to delete");
+                return;
+            }
+
+            await AsyncRunner(() => Async_PermDelete(entries), "Permanently Delete Files");
+#endif
         }
+		//
+		private void					AdditionalTools_Click_Refresh			(object sender, EventArgs e)
+		{
+			SafeInvoke(OdooEntryImage, () => 
+			{
+				OdooEntryImage.Image = previewImage;
+			});
+			RestartTree();
+			RestartEntries();
+		}
+		private void					AdditionalTools_Click_Search			(object sender, EventArgs e)
+		{
+			SearchOdoo searchForm = new(this);
+			searchForm.Show();
+		}
+		private void					AdditionalTools_Click_ManageTypes		(object sender, EventArgs e)
+			=> new OdooFileTypeManager( this ).Show();
+		//
+		private void					History_Click_Download					(object sender, EventArgs e)
+		{
+			var version = GetVersionFromHistory();
+			FileInfo file = new(Path.Combine(version.winPathway, version.name));
+			if (FileOperations.SameChecksum( file, version.checksum ))
+			{
+				if (file.Exists)
+				{
+					var response = MessageBox.Show("File exists as a different version.\n" +
+					"Retry:\tDownload in the Temporary Folder\n" +
+					"Ignore:\tOverwrite the current version\n" +
+					"Abort:\tCancel download", "File Version Conflict", MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Warning);
 
+					if (response == DialogResult.Ignore) version.DownloadFile(version.winPathway);
+					else if (response == DialogResult.Retry) version.DownloadFile(Path.GetTempPath());
+				}
+			}
+			else
+			{
+				version.DownloadFile(version.winPathway);
+			}
+		}
+		private void					History_Click_TemporaryDownload			(object sender, EventArgs e)
+			=> DownloadHistory(true);
+		private void					History_Click_OverwriteDownload			(object sender, EventArgs e)
+			=> DownloadHistory(false);
+        private void					History_Click_Open						(object sender, EventArgs e)
+        {
 
-
-
-		//
-		//
-		//
-		//
-		//
-		//
-		//
-        private async void OdooHistory_DoubleClick(object sender, EventArgs e)
+        }
+        private void					History_Click_OverwriteOpen				(object sender, EventArgs e)
+			=> DownloadOpen(false);
+		private void					History_Click_TemporaryOpen				(object sender, EventArgs e)
+			=> DownloadOpen(true);
+		private void					History_Click_OverwriteMove				(object sender, EventArgs e)
+			=> LocalMoveEntry(false);
+		private void					History_Click_TemporaryMove				(object sender, EventArgs e)
+			=> LocalMoveEntry(true);
+        private async void				History_DoubleClick						(object sender, EventArgs e)
         {
             ListViewItem item = OdooHistory.SelectedItems?[0];
             if (item == null) return;
@@ -2549,15 +2422,24 @@ namespace HackPDM
 				}
 			}
         }
-		//
-		//
-		//
-		//
-		//
-		//
-		//
+        private async void				OdooParents_DoubleClick					(object sender, EventArgs e)
+        {
+            ListViewItem item = OdooParents.SelectedItems?[0];
+            if (item == null) return;
 
+            string pwaPath = item.SubItems[NameConfig.ParentBasePath.Name].Text;
+            string fileName = item.SubItems[NameConfig.ParentName.Name].Text;
+            await FindSearchSelectionAsync(pwaPath, fileName);
+        }
+        private async void				OdooChildren_DoubleClick				(object sender, EventArgs e)
+        {
+            ListViewItem item = OdooChildren.SelectedItems?[0];
+            if (item == null) return;
 
+            string pwaPath = item.SubItems[NameConfig.ChildrenBasePath.Name].Text;
+            string fileName = item.SubItems[NameConfig.ChildrenName.Name].Text;
+            await FindSearchSelectionAsync(pwaPath, fileName);
+        }
 
 
         // drag events
@@ -2634,7 +2516,7 @@ namespace HackPDM
 
 
 			//g.DrawRectangle(pen, layoutPixel);
-			Image def = ilListIcons.Images["default"];
+			Image def = ListIcons.Images["default"];
 			g.DrawImage(def, imageLayout);
 			RectangleF startRect = new(32, 50, controlSize.Width * 0.4f, 32f);
 			using ( var brush = new SolidBrush( Color.Black ) )
@@ -2651,13 +2533,13 @@ namespace HackPDM
 
 					if ( !OdooDefaults.ExtToType.ContainsKey( file.Extension ) )
 					{
-						img = ilListIcons.Images["delete_image_button"];
+						img = ListIcons.Images["delete_image_button"];
 						
 						g.DrawString( file.FullName, fontInvalid, brushInvalid, startRect );
 					}
 					else
 					{
-						img = ilListIcons.Images[file.Extension.Substring(1)];
+						img = ListIcons.Images[file.Extension.Substring(1)];
 						if ( img == null )
 							img = def;
 						
@@ -2673,48 +2555,41 @@ namespace HackPDM
 			//dot.Y = Convert.ToInt32(scalePoint.Y);
 			//g.DrawEllipse(pen, dot);
 		}
-        private async void				OdooEntryList_DragDrop					(object sender, DragEventArgs e)
+        private async void				List_DragDrop					(object sender, DragEventArgs e)
         {
-            //if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
-            //string[] fileDrop = e.Data.GetData(DataFormats.FileDrop) as string[];
-            //if (fileDrop is null or { Length: < 1 }) return;
+			if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+			string[] fileDrop = e.Data.GetData(DataFormats.FileDrop) as string[];
+			if (fileDrop is null or { Length: < 1 }) return;
 
-            //Dialog = new StatusDialog();
+			Dialog = new StatusDialog();
 
-            //var directory = LastSelectedNode.FullPath;
-            //var winDirect = Path.Combine(HackDefaults.PWAPathAbsolute, directory[5..]);
-            //List<HackFile> hackFiles = [];
+			var directory = LastSelectedNode.FullPath;
+			var winDirect = Path.Combine(HackDefaults.PWAPathAbsolute, directory[5..]);
+			List<HackFile> hackFiles = [];
 
-            //foreach (var path in fileDrop)
-            //{
-            //    //if (!HackDefaults.PWAPathAbsolute.StartsWith(path)) continue;
-            //    FileInfo file = new(path);
-            //    if (!file.Exists) continue;
-            //    file = file.CopyFile(winDirect);
+			foreach (var path in fileDrop)
+			{
+				//if (!HackDefaults.PWAPathAbsolute.StartsWith(path)) continue;
+				FileInfo file = new(path);
+				if (!file.Exists) continue;
+				file = file.CopyFile(winDirect);
 
-            //    HackFile hack = await HackFile.GetFromFileInfo(file);
-            //    string newDirectory = path[HackDefaults.PWAPathAbsolute.Length..];
-            //    hack.RelativePath = newDirectory;
-            //    if (hack != null)
-            //        hackFiles.Add(hack);
-            //}
+				HackFile hack = await HackFile.GetFromFileInfo(file);
+				string newDirectory = path[HackDefaults.PWAPathAbsolute.Length..];
+				hack.RelativePath = newDirectory;
+				if (hack != null)
+					hackFiles.Add(hack);
+			}
 
-            //if (hackFiles.Count < 1) return;
-            //object arguments = (new HpEntry[0], hackFiles);
-
-            //BackgroundWorker worker = new()
-            //{
-            //    WorkerSupportsCancellation = true
-            //};
-            ////worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler((s, ev) => MessageBox.Show("Finished"));
-            //worker.DoWork += new DoWorkEventHandler(worker_Commit);
-            //worker.RunWorkerAsync(arguments);
-
-            //bool blnWorkCanceled = Dialog.ShowStatusDialog("Commit Files");
-            //if (blnWorkCanceled)
-            //    worker.CancelAsync();
-        }
-        private void					OdooEntryList_DragEnter					(object sender, DragEventArgs e)
+			if (hackFiles.Count < 1) return;
+			var response = MessageBox.Show($"Are you sure you want to commit ({hackFiles.Count}) files?\n" +
+				$"files:\n{string.Join("\n", hackFiles.Select(f => $"{f.RelativePath}\\{f.Name}"))}", "Commit Files", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+            if (response == DialogResult.Yes)
+			{
+				await AsyncRunner(() => Async_Commit((new HpEntry[0], hackFiles)), "Commit Files");
+			}
+		}
+        private void					List_DragEnter					(object sender, DragEventArgs e)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
@@ -2726,11 +2601,11 @@ namespace HackPDM
                 e.Effect = DragDropEffects.None;
             }
         }
-        private void					OdooEntryList_DragLeave					(object sender, EventArgs e)
+        private void					List_DragLeave					(object sender, EventArgs e)
         {
             EndOverlay();
         }
-        private void					OdooEntryList_DragOver					(object sender, DragEventArgs e)
+        private void					List_DragOver					(object sender, DragEventArgs e)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
@@ -2778,7 +2653,7 @@ namespace HackPDM
                 action.Invoke();
 		}
 		internal ImageList				GetImageList							() 
-			=> ilListIcons;
+			=> ListIcons;
 		private void					OpenLocalFile							(string path)
 		{
 			FileOperations.OpenFile( path );
@@ -2969,48 +2844,6 @@ namespace HackPDM
                     EndNodePaths(cNode, paths);
                 }
             }
-        }
-        private bool					WorkerRunner							(Action<object, DoWorkEventArgs> function, string statusHeader = "Status", object arguments = null, CancellationTokenSource tokenSource = default)
-        {
-            BackgroundWorker worker = new()
-            {
-                WorkerSupportsCancellation = true
-            };
-            worker.DoWork += new DoWorkEventHandler(function);
-            worker.RunWorkerAsync(arguments);
-
-            bool blnWorkCanceled = Dialog.ShowStatusDialog(statusHeader);
-            if (blnWorkCanceled)
-            {
-                tokenSource.Cancel();
-                worker.CancelAsync();
-                return false;
-            }
-            return true;
-        }
-        private async Task<bool>		WorkerRunnerAsync						(Func<Task> function, string statusHeader = "Status", CancellationTokenSource tokenSource = default)
-        {
-            var task = Task.Run(() =>  function(), tokenSource.Token);
-			bool blnWorkCanceled = await AsyncHelper.WaitUntil(() => Dialog.Canceled || task.IsCompleted || task.IsCanceled, 500);
-			
-            if (blnWorkCanceled)
-			{
-				if (Dialog.Canceled || task.IsCanceled)
-				{
-					tokenSource.Cancel();
-					try
-					{
-						await task; // Await to observe cancellation
-					}
-					catch (OperationCanceledException)
-					{
-						// handles cancellation feedback
-					}
-					return false;
-				}
-			}
-            await task;
-            return true;
         }
         private async Task<ArrayList>	GetEntryList							(int[] entry_ids, bool update = false)
         {
@@ -3212,28 +3045,98 @@ namespace HackPDM
 #endif
             return deletedIrAttachments && deletedVersions;
 		}
-        private void					UnDelete								(bool withSubdirectories = false)
+        //
+        private async void				GetLatestInternal						(ArrayList entryIDs)
+        {
+            Dialog.AddStatusLine("INFO", "Finding Entry Dependencies...");
+            HpEntry[] entries = await HpEntry.GetRecordsByIDSAsync(entryIDs, includedFields: ["latest_version_id"]);
+            //HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+
+            ArrayList newIds = await GetEntryList([.. entries.Select(entry => entry.latest_version_id)]);
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+            CancellationTokenSource tokenSource = new();
+            (ArrayList, CancellationToken) arguments = (newIds, tokenSource.Token);
+            await AsyncRunner(() => Async_GetLatest(arguments), "Get Latest", tokenSource);
+        }
+        private async Task				CommitInternal							(ArrayList entryIDs, IEnumerable<HackFile> hackFiles)
+        {
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+
+            object arguments = null;
+            HpEntry[] allEntries = null;
+
+            if (entries is not null && entries.Length > 0)
+            {
+                ArrayList newIds = await GetEntryList([.. entries.Select(e => e.latest_version_id)]);
+                newIds.AddRange(entryIDs);
+                newIds = newIds.ToHashSet<int>().ToArrayList();
+                allEntries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"], insertFields: ["directory_complete_name"]);
+            }
+
+            await AsyncRunner(() => Async_Commit((allEntries, hackFiles.ToList())), "Commit Files");
+        }
+        private async Task				CheckoutInternal						(ArrayList entryIDs)
+        {
+            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+
+            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id"]);
+
+            if (entries is null || entries.Length < 1) return;
+            Dialog = new StatusDialog();
+
+            entries = [.. FilterCheckoutEntries(entries)];
+            await AsyncRunner(() => Async_CheckOut(entries), "Checkout Files");
+        }
+        private async Task				UnCheckoutInternal						(ArrayList entryIDs)
+        {
+            if (entryIDs is null or { Count: < 1 }) return;
+
+            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"]);
+
+            if (entries is null || entries.Length < 1)
+                return;
+            Dialog = new StatusDialog();
+
+            // filter out entries that are already checked out
+            entries = [.. FilterUnCheckoutEntries(entries)];
+
+            await AsyncRunner(() => Async_UnCheckOut(entries), "UnCheckout Files");
+        }
+        private async Task				LogicalDeleteInternal					(ArrayList entryIDs)
+        {
+            HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+
+            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
+
+            newIds.AddRange(entryIDs);
+            newIds = newIds.ToHashSet<int>().ToArrayList();
+
+            HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"]);
+
+            await AsyncRunner(() => Async_LogicalDelete(entries), "Logically Delete Files");
+        }
+        private async Task				UnDeleteInternal						(bool withSubdirectories = false)
         {
             Dialog = new StatusDialog();
 
             HpEntry[] entries = HpEntry.GetRecordsByIDS(null, searchFilters: [new ArrayList() { "deleted", "=", true }, new ArrayList() { "dir_id", "=", (int)LastSelectedNode.Tag }], excludedFields: ["type_id", "cat_id", "checkout_node"]);
-            object arguments = entries;
-
-            BackgroundWorker worker = new()
-            {
-                WorkerSupportsCancellation = true
-            };
-            worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler((s, ev) => MessageBox.Show("Finished"));
-            worker.DoWork += new DoWorkEventHandler(worker_LogicalUnDelete);
-            worker.RunWorkerAsync(arguments);
-
-            bool blnWorkCanceled = Dialog.ShowStatusDialog("Logically UnDelete Files");
-            if (blnWorkCanceled)
-                worker.CancelAsync();
+            await AsyncRunner(() => Async_LogicalUnDelete(entries), "Logically UnDelete Files");
         }
+        
 
         #endregion
-
-
     }
 }

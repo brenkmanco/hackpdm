@@ -31,29 +31,29 @@
             this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(HackFileManager));
             this.OdooDirectoryTree = new System.Windows.Forms.TreeView();
-            this.OdooCMSTree = new System.Windows.Forms.ContextMenuStrip(this.components);
-            this.getLatestToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.topDirectoryToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.allDirectoriesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.toolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
-            this.commitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.undoToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.analyzeToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.deleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.logicalDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.perminentDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.unDeleteToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
-            this.topDirectoryToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
-            this.allDirectoriesToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
-            this.localDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.openDirectoryToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.ilTreeIcons = new System.Windows.Forms.ImageList(this.components);
+            this.TreeContextDirectory = new System.Windows.Forms.ContextMenuStrip(this.components);
+            this.TreeGetLatest = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeGetLatestTop = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeGetLatestAll = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeCheckout = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeCommit = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeUndoCheckout = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeAnalyze = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeDelete = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeLogicalDelete = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreePermanentDelete = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeRestore = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeRestoreTop = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeRestoreAll = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeLocalDelete = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeOpenDirectory = new System.Windows.Forms.ToolStripMenuItem();
+            this.TreeIcons = new System.Windows.Forms.ImageList(this.components);
             this.OdooEntryList = new System.Windows.Forms.ListView();
-            this.OdooCMSList = new System.Windows.Forms.ContextMenuStrip(this.components);
-            this.toolStripMenuItem2 = new System.Windows.Forms.ToolStripMenuItem();
-            this.CheckoutStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.CommitEntryStrip = new System.Windows.Forms.ToolStripMenuItem();
-            this.toolStripMenuItem5 = new System.Windows.Forms.ToolStripMenuItem();
+            this.ListContextEntry = new System.Windows.Forms.ContextMenuStrip(this.components);
+            this.ListGetLatest = new System.Windows.Forms.ToolStripMenuItem();
+            this.ListCheckout = new System.Windows.Forms.ToolStripMenuItem();
+            this.ListCommit = new System.Windows.Forms.ToolStripMenuItem();
+            this.ListUndoCheckout = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem6 = new System.Windows.Forms.ToolStripMenuItem();
             this.logicalDeleteToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
             this.unDeleteToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -63,8 +63,8 @@
             this.OpenLatestRemoteStrip = new System.Windows.Forms.ToolStripMenuItem();
             this.OpenLatestLocalStrip = new System.Windows.Forms.ToolStripMenuItem();
             this.fileDirectoryToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.ilListIcons = new System.Windows.Forms.ImageList(this.components);
-            this.tabControl1 = new System.Windows.Forms.TabControl();
+            this.ListIcons = new System.Windows.Forms.ImageList(this.components);
+            this.VersionTabs = new System.Windows.Forms.TabControl();
             this.OdooHistoryPage = new System.Windows.Forms.TabPage();
             this.OdooHistory = new System.Windows.Forms.ListView();
             this.OdooVersionHistoryMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
@@ -88,14 +88,14 @@
             this.panel1 = new System.Windows.Forms.Panel();
             this.OdooEntryImage = new System.Windows.Forms.PictureBox();
             this.ShowInactive = new System.Windows.Forms.CheckBox();
-            this.toolStrip1 = new System.Windows.Forms.ToolStrip();
-            this.toolStripDropDownButton1 = new System.Windows.Forms.ToolStripDropDownButton();
+            this.MoreTools = new System.Windows.Forms.ToolStrip();
+            this.AdditionalTools = new System.Windows.Forms.ToolStripDropDownButton();
             this.OdooRefreshDropdown = new System.Windows.Forms.ToolStripMenuItem();
             this.OdooSearchDropdown = new System.Windows.Forms.ToolStripMenuItem();
             this.OdooManageTypesDropdown = new System.Windows.Forms.ToolStripMenuItem();
-            this.OdooCMSTree.SuspendLayout();
-            this.OdooCMSList.SuspendLayout();
-            this.tabControl1.SuspendLayout();
+            this.TreeContextDirectory.SuspendLayout();
+            this.ListContextEntry.SuspendLayout();
+            this.VersionTabs.SuspendLayout();
             this.OdooHistoryPage.SuspendLayout();
             this.OdooVersionHistoryMenu.SuspendLayout();
             this.OdooParentsPage.SuspendLayout();
@@ -104,17 +104,17 @@
             this.OdooVersionPage.SuspendLayout();
             this.panel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.OdooEntryImage)).BeginInit();
-            this.toolStrip1.SuspendLayout();
+            this.MoreTools.SuspendLayout();
             this.SuspendLayout();
             // 
             // OdooDirectoryTree
             // 
             this.OdooDirectoryTree.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left)));
-            this.OdooDirectoryTree.ContextMenuStrip = this.OdooCMSTree;
+            this.OdooDirectoryTree.ContextMenuStrip = this.TreeContextDirectory;
             this.OdooDirectoryTree.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.OdooDirectoryTree.ImageIndex = 0;
-            this.OdooDirectoryTree.ImageList = this.ilTreeIcons;
+            this.OdooDirectoryTree.ImageList = this.TreeIcons;
             this.OdooDirectoryTree.Location = new System.Drawing.Point(12, 13);
             this.OdooDirectoryTree.Name = "OdooDirectoryTree";
             this.OdooDirectoryTree.SelectedImageIndex = 0;
@@ -122,144 +122,144 @@
             this.OdooDirectoryTree.TabIndex = 0;
             this.OdooDirectoryTree.AfterSelect += new System.Windows.Forms.TreeViewEventHandler(this.OdooDirectoryTree_AfterSelect);
             // 
-            // OdooCMSTree
+            // TreeContextDirectory
             // 
-            this.OdooCMSTree.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.getLatestToolStripMenuItem,
-            this.toolStripMenuItem1,
-            this.commitToolStripMenuItem,
-            this.undoToolStripMenuItem,
-            this.analyzeToolStripMenuItem,
-            this.deleteToolStripMenuItem,
-            this.openDirectoryToolStripMenuItem});
-            this.OdooCMSTree.Name = "contextMenuStrip1";
-            this.OdooCMSTree.Size = new System.Drawing.Size(158, 158);
-            this.OdooCMSTree.Opening += new System.ComponentModel.CancelEventHandler(this.OdooCMSTree_Opening);
+            this.TreeContextDirectory.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.TreeGetLatest,
+            this.TreeCheckout,
+            this.TreeCommit,
+            this.TreeUndoCheckout,
+            this.TreeAnalyze,
+            this.TreeDelete,
+            this.TreeOpenDirectory});
+            this.TreeContextDirectory.Name = "contextMenuStrip1";
+            this.TreeContextDirectory.Size = new System.Drawing.Size(158, 158);
+            this.TreeContextDirectory.Opening += new System.ComponentModel.CancelEventHandler(this.OdooCMSTree_Opening);
             // 
-            // getLatestToolStripMenuItem
+            // TreeGetLatest
             // 
-            this.getLatestToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.topDirectoryToolStripMenuItem,
-            this.allDirectoriesToolStripMenuItem});
-            this.getLatestToolStripMenuItem.Name = "getLatestToolStripMenuItem";
-            this.getLatestToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
-            this.getLatestToolStripMenuItem.Text = "Get Latest";
-            this.getLatestToolStripMenuItem.Click += new System.EventHandler(this.GetLatestStrip_Click);
+            this.TreeGetLatest.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.TreeGetLatestTop,
+            this.TreeGetLatestAll});
+            this.TreeGetLatest.Name = "TreeGetLatest";
+            this.TreeGetLatest.Size = new System.Drawing.Size(180, 22);
+            this.TreeGetLatest.Text = "Get Latest";
+            this.TreeGetLatest.Click += new System.EventHandler(this.Tree_Click_GetLatest);
             // 
-            // topDirectoryToolStripMenuItem
+            // TreeGetLatestTop
             // 
-            this.topDirectoryToolStripMenuItem.Name = "topDirectoryToolStripMenuItem";
-            this.topDirectoryToolStripMenuItem.Size = new System.Drawing.Size(147, 22);
-            this.topDirectoryToolStripMenuItem.Text = "Top Directory";
-            this.topDirectoryToolStripMenuItem.Click += new System.EventHandler(this.topDirectoryToolStripMenuItem_Click);
+            this.TreeGetLatestTop.Name = "TreeGetLatestTop";
+            this.TreeGetLatestTop.Size = new System.Drawing.Size(147, 22);
+            this.TreeGetLatestTop.Text = "Top Directory";
+            this.TreeGetLatestTop.Click += new System.EventHandler(this.Tree_Click_GetLatestTop);
             // 
-            // allDirectoriesToolStripMenuItem
+            // TreeGetLatestAll
             // 
-            this.allDirectoriesToolStripMenuItem.Name = "allDirectoriesToolStripMenuItem";
-            this.allDirectoriesToolStripMenuItem.Size = new System.Drawing.Size(147, 22);
-            this.allDirectoriesToolStripMenuItem.Text = "All Directories";
-            this.allDirectoriesToolStripMenuItem.Click += new System.EventHandler(this.allDirectoriesToolStripMenuItem_Click);
+            this.TreeGetLatestAll.Name = "TreeGetLatestAll";
+            this.TreeGetLatestAll.Size = new System.Drawing.Size(147, 22);
+            this.TreeGetLatestAll.Text = "All Directories";
+            this.TreeGetLatestAll.Click += new System.EventHandler(this.Tree_Click_GetLatestAll);
             // 
-            // toolStripMenuItem1
+            // TreeCheckout
             // 
-            this.toolStripMenuItem1.Name = "toolStripMenuItem1";
-            this.toolStripMenuItem1.Size = new System.Drawing.Size(157, 22);
-            this.toolStripMenuItem1.Text = "Checkout";
-            this.toolStripMenuItem1.Click += new System.EventHandler(this.CheckoutTreeStrip_Click);
+            this.TreeCheckout.Name = "TreeCheckout";
+            this.TreeCheckout.Size = new System.Drawing.Size(180, 22);
+            this.TreeCheckout.Text = "Checkout";
+            this.TreeCheckout.Click += new System.EventHandler(this.Tree_Click_Checkout);
             // 
-            // commitToolStripMenuItem
+            // TreeCommit
             // 
-            this.commitToolStripMenuItem.Name = "commitToolStripMenuItem";
-            this.commitToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
-            this.commitToolStripMenuItem.Text = "Commit";
-            this.commitToolStripMenuItem.Click += new System.EventHandler(this.CommitTreeStrip_Click);
+            this.TreeCommit.Name = "TreeCommit";
+            this.TreeCommit.Size = new System.Drawing.Size(180, 22);
+            this.TreeCommit.Text = "Commit";
+            this.TreeCommit.Click += new System.EventHandler(this.Tree_Click_Commit);
             // 
-            // undoToolStripMenuItem
+            // TreeUndoCheckout
             // 
-            this.undoToolStripMenuItem.Name = "undoToolStripMenuItem";
-            this.undoToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
-            this.undoToolStripMenuItem.Text = "Undo Checkout";
-            this.undoToolStripMenuItem.Click += new System.EventHandler(this.UnCheckoutTreeStrip_Click);
+            this.TreeUndoCheckout.Name = "TreeUndoCheckout";
+            this.TreeUndoCheckout.Size = new System.Drawing.Size(180, 22);
+            this.TreeUndoCheckout.Text = "Undo Checkout";
+            this.TreeUndoCheckout.Click += new System.EventHandler(this.Tree_Click_UndoCheckout);
             // 
-            // analyzeToolStripMenuItem
+            // TreeAnalyze
             // 
-            this.analyzeToolStripMenuItem.Name = "analyzeToolStripMenuItem";
-            this.analyzeToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
-            this.analyzeToolStripMenuItem.Text = "Analyze";
+            this.TreeAnalyze.Name = "TreeAnalyze";
+            this.TreeAnalyze.Size = new System.Drawing.Size(180, 22);
+            this.TreeAnalyze.Text = "Analyze";
             // 
-            // deleteToolStripMenuItem
+            // TreeDelete
             // 
-            this.deleteToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.logicalDeleteToolStripMenuItem,
-            this.perminentDeleteToolStripMenuItem,
-            this.unDeleteToolStripMenuItem1,
-            this.localDeleteToolStripMenuItem});
-            this.deleteToolStripMenuItem.Name = "deleteToolStripMenuItem";
-            this.deleteToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
-            this.deleteToolStripMenuItem.Text = "Delete";
+            this.TreeDelete.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.TreeLogicalDelete,
+            this.TreePermanentDelete,
+            this.TreeRestore,
+            this.TreeLocalDelete});
+            this.TreeDelete.Name = "TreeDelete";
+            this.TreeDelete.Size = new System.Drawing.Size(180, 22);
+            this.TreeDelete.Text = "Delete";
             // 
-            // logicalDeleteToolStripMenuItem
+            // TreeLogicalDelete
             // 
-            this.logicalDeleteToolStripMenuItem.Name = "logicalDeleteToolStripMenuItem";
-            this.logicalDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
-            this.logicalDeleteToolStripMenuItem.Text = "Logical Delete";
-            this.logicalDeleteToolStripMenuItem.Click += new System.EventHandler(this.LogicalDeleteTreeStrip_Click);
+            this.TreeLogicalDelete.Name = "TreeLogicalDelete";
+            this.TreeLogicalDelete.Size = new System.Drawing.Size(168, 22);
+            this.TreeLogicalDelete.Text = "Logical Delete";
+            this.TreeLogicalDelete.Click += new System.EventHandler(this.Tree_Click_LogicalDelete);
             // 
-            // perminentDeleteToolStripMenuItem
+            // TreePermanentDelete
             // 
-            this.perminentDeleteToolStripMenuItem.Name = "perminentDeleteToolStripMenuItem";
-            this.perminentDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
-            this.perminentDeleteToolStripMenuItem.Text = "Permanent Delete";
-            this.perminentDeleteToolStripMenuItem.Click += new System.EventHandler(this.perminentDeleteToolStripMenuItem_Click);
+            this.TreePermanentDelete.Name = "TreePermanentDelete";
+            this.TreePermanentDelete.Size = new System.Drawing.Size(168, 22);
+            this.TreePermanentDelete.Text = "Permanent Delete";
+            this.TreePermanentDelete.Click += new System.EventHandler(this.Tree_Click_PermanentDelete);
             // 
-            // unDeleteToolStripMenuItem1
+            // TreeRestore
             // 
-            this.unDeleteToolStripMenuItem1.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.topDirectoryToolStripMenuItem1,
-            this.allDirectoriesToolStripMenuItem1});
-            this.unDeleteToolStripMenuItem1.Name = "unDeleteToolStripMenuItem1";
-            this.unDeleteToolStripMenuItem1.Size = new System.Drawing.Size(168, 22);
-            this.unDeleteToolStripMenuItem1.Text = "UnDelete";
-            this.unDeleteToolStripMenuItem1.Click += new System.EventHandler(this.unDeleteToolStripMenuItem1_Click);
+            this.TreeRestore.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.TreeRestoreTop,
+            this.TreeRestoreAll});
+            this.TreeRestore.Name = "TreeRestore";
+            this.TreeRestore.Size = new System.Drawing.Size(168, 22);
+            this.TreeRestore.Text = "UnDelete";
+            this.TreeRestore.Click += new System.EventHandler(this.Tree_Click_Restore);
             // 
-            // topDirectoryToolStripMenuItem1
+            // TreeRestoreTop
             // 
-            this.topDirectoryToolStripMenuItem1.Name = "topDirectoryToolStripMenuItem1";
-            this.topDirectoryToolStripMenuItem1.Size = new System.Drawing.Size(147, 22);
-            this.topDirectoryToolStripMenuItem1.Text = "Top Directory";
-            this.topDirectoryToolStripMenuItem1.Click += new System.EventHandler(this.topDirectoryToolStripMenuItem1_Click);
+            this.TreeRestoreTop.Name = "TreeRestoreTop";
+            this.TreeRestoreTop.Size = new System.Drawing.Size(147, 22);
+            this.TreeRestoreTop.Text = "Top Directory";
+            this.TreeRestoreTop.Click += new System.EventHandler(this.Tree_Click_RestoreTop);
             // 
-            // allDirectoriesToolStripMenuItem1
+            // TreeRestoreAll
             // 
-            this.allDirectoriesToolStripMenuItem1.Name = "allDirectoriesToolStripMenuItem1";
-            this.allDirectoriesToolStripMenuItem1.Size = new System.Drawing.Size(147, 22);
-            this.allDirectoriesToolStripMenuItem1.Text = "All Directories";
-            this.allDirectoriesToolStripMenuItem1.Click += new System.EventHandler(this.allDirectoriesToolStripMenuItem1_Click);
+            this.TreeRestoreAll.Name = "TreeRestoreAll";
+            this.TreeRestoreAll.Size = new System.Drawing.Size(147, 22);
+            this.TreeRestoreAll.Text = "All Directories";
+            this.TreeRestoreAll.Click += new System.EventHandler(this.Tree_Click_RestoreAll);
             // 
-            // localDeleteToolStripMenuItem
+            // TreeLocalDelete
             // 
-            this.localDeleteToolStripMenuItem.Name = "localDeleteToolStripMenuItem";
-            this.localDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
-            this.localDeleteToolStripMenuItem.Text = "Local Delete";
-            this.localDeleteToolStripMenuItem.Click += new System.EventHandler(this.localDeleteToolStripMenuItem_Click);
+            this.TreeLocalDelete.Name = "TreeLocalDelete";
+            this.TreeLocalDelete.Size = new System.Drawing.Size(168, 22);
+            this.TreeLocalDelete.Text = "Local Delete";
+            this.TreeLocalDelete.Click += new System.EventHandler(this.Tree_Click_LocalDelete);
             // 
-            // openDirectoryToolStripMenuItem
+            // TreeOpenDirectory
             // 
-            this.openDirectoryToolStripMenuItem.Name = "openDirectoryToolStripMenuItem";
-            this.openDirectoryToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
-            this.openDirectoryToolStripMenuItem.Text = "Open Directory";
-            this.openDirectoryToolStripMenuItem.Click += new System.EventHandler(this.openDirectoryToolStripMenuItem_Click);
+            this.TreeOpenDirectory.Name = "TreeOpenDirectory";
+            this.TreeOpenDirectory.Size = new System.Drawing.Size(180, 22);
+            this.TreeOpenDirectory.Text = "Open Directory";
+            this.TreeOpenDirectory.Click += new System.EventHandler(this.Tree_Click_OpenDirectory);
             // 
-            // ilTreeIcons
+            // TreeIcons
             // 
-            this.ilTreeIcons.ImageStream = ((System.Windows.Forms.ImageListStreamer)(resources.GetObject("ilTreeIcons.ImageStream")));
-            this.ilTreeIcons.TransparentColor = System.Drawing.Color.Transparent;
-            this.ilTreeIcons.Images.SetKeyName(0, "simple-folder-icon_32.gif");
-            this.ilTreeIcons.Images.SetKeyName(1, "folder-icon_localonly_32.gif");
-            this.ilTreeIcons.Images.SetKeyName(2, "folder-icon_remoteonly_32.gif");
-            this.ilTreeIcons.Images.SetKeyName(3, "folder-icon_checkedme_32.gif");
-            this.ilTreeIcons.Images.SetKeyName(4, "folder-icon_checkedother_32.gif");
-            this.ilTreeIcons.Images.SetKeyName(5, "folder-icon_deleted_32.gif");
+            this.TreeIcons.ImageStream = ((System.Windows.Forms.ImageListStreamer)(resources.GetObject("TreeIcons.ImageStream")));
+            this.TreeIcons.TransparentColor = System.Drawing.Color.Transparent;
+            this.TreeIcons.Images.SetKeyName(0, "simple-folder-icon_32.gif");
+            this.TreeIcons.Images.SetKeyName(1, "folder-icon_localonly_32.gif");
+            this.TreeIcons.Images.SetKeyName(2, "folder-icon_remoteonly_32.gif");
+            this.TreeIcons.Images.SetKeyName(3, "folder-icon_checkedme_32.gif");
+            this.TreeIcons.Images.SetKeyName(4, "folder-icon_checkedother_32.gif");
+            this.TreeIcons.Images.SetKeyName(5, "folder-icon_deleted_32.gif");
             // 
             // OdooEntryList
             // 
@@ -268,68 +268,68 @@
             this.OdooEntryList.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.OdooEntryList.ContextMenuStrip = this.OdooCMSList;
+            this.OdooEntryList.ContextMenuStrip = this.ListContextEntry;
             this.OdooEntryList.FullRowSelect = true;
             this.OdooEntryList.GridLines = true;
             this.OdooEntryList.HideSelection = false;
             this.OdooEntryList.Location = new System.Drawing.Point(350, 13);
             this.OdooEntryList.Name = "OdooEntryList";
             this.OdooEntryList.Size = new System.Drawing.Size(1116, 479);
-            this.OdooEntryList.SmallImageList = this.ilListIcons;
+            this.OdooEntryList.SmallImageList = this.ListIcons;
             this.OdooEntryList.Sorting = System.Windows.Forms.SortOrder.Ascending;
             this.OdooEntryList.TabIndex = 1;
             this.OdooEntryList.UseCompatibleStateImageBehavior = false;
             this.OdooEntryList.View = System.Windows.Forms.View.Details;
-            this.OdooEntryList.ColumnClick += new System.Windows.Forms.ColumnClickEventHandler(this.OdooEntryList_ColumnClick);
+            this.OdooEntryList.ColumnClick += new System.Windows.Forms.ColumnClickEventHandler(this.List_ColumnClick);
             this.OdooEntryList.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.OdooEntryList_ItemSelectionChanged);
-            this.OdooEntryList.DragDrop += new System.Windows.Forms.DragEventHandler(this.OdooEntryList_DragDrop);
-            this.OdooEntryList.DragEnter += new System.Windows.Forms.DragEventHandler(this.OdooEntryList_DragEnter);
-            this.OdooEntryList.DragOver += new System.Windows.Forms.DragEventHandler(this.OdooEntryList_DragOver);
-            this.OdooEntryList.DragLeave += new System.EventHandler(this.OdooEntryList_DragLeave);
+            this.OdooEntryList.DragDrop += new System.Windows.Forms.DragEventHandler(this.List_DragDrop);
+            this.OdooEntryList.DragEnter += new System.Windows.Forms.DragEventHandler(this.List_DragEnter);
+            this.OdooEntryList.DragOver += new System.Windows.Forms.DragEventHandler(this.List_DragOver);
+            this.OdooEntryList.DragLeave += new System.EventHandler(this.List_DragLeave);
             // 
-            // OdooCMSList
+            // ListContextEntry
             // 
-            this.OdooCMSList.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.toolStripMenuItem2,
-            this.CheckoutStripMenuItem,
-            this.CommitEntryStrip,
-            this.toolStripMenuItem5,
+            this.ListContextEntry.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.ListGetLatest,
+            this.ListCheckout,
+            this.ListCommit,
+            this.ListUndoCheckout,
             this.toolStripMenuItem6,
             this.OpenEntryStrip});
-            this.OdooCMSList.Name = "contextMenuStrip1";
-            this.OdooCMSList.Size = new System.Drawing.Size(158, 136);
+            this.ListContextEntry.Name = "OdooCMSList";
+            this.ListContextEntry.Size = new System.Drawing.Size(158, 136);
             // 
-            // toolStripMenuItem2
+            // ListGetLatest
             // 
-            this.toolStripMenuItem2.Name = "toolStripMenuItem2";
-            this.toolStripMenuItem2.Size = new System.Drawing.Size(157, 22);
-            this.toolStripMenuItem2.Text = "Get Latest";
-            this.toolStripMenuItem2.ToolTipText = "Checks to see if you have the same checksum as any of the version records and if " +
+            this.ListGetLatest.Name = "ListGetLatest";
+            this.ListGetLatest.Size = new System.Drawing.Size(157, 22);
+            this.ListGetLatest.Text = "Get Latest";
+            this.ListGetLatest.ToolTipText = "Checks to see if you have the same checksum as any of the version records and if " +
     "not then it will try to download it to the specific local directory";
-            this.toolStripMenuItem2.Click += new System.EventHandler(this.GetLatestEntryStrip_Click);
+            this.ListGetLatest.Click += new System.EventHandler(this.List_Click_GetLatest);
             // 
-            // CheckoutStripMenuItem
+            // ListCheckout
             // 
-            this.CheckoutStripMenuItem.Name = "CheckoutStripMenuItem";
-            this.CheckoutStripMenuItem.Size = new System.Drawing.Size(157, 22);
-            this.CheckoutStripMenuItem.Text = "Checkout";
-            this.CheckoutStripMenuItem.Click += new System.EventHandler(this.CheckoutEntryStrip_Click);
+            this.ListCheckout.Name = "ListCheckout";
+            this.ListCheckout.Size = new System.Drawing.Size(157, 22);
+            this.ListCheckout.Text = "Checkout";
+            this.ListCheckout.Click += new System.EventHandler(this.List_Click_Checkout);
             // 
-            // CommitEntryStrip
+            // ListCommit
             // 
-            this.CommitEntryStrip.Name = "CommitEntryStrip";
-            this.CommitEntryStrip.Size = new System.Drawing.Size(157, 22);
-            this.CommitEntryStrip.Text = "Commit";
-            this.CommitEntryStrip.ToolTipText = "Checks to see if the version has the same checksum in the versions records and if" +
+            this.ListCommit.Name = "ListCommit";
+            this.ListCommit.Size = new System.Drawing.Size(157, 22);
+            this.ListCommit.Text = "Commit";
+            this.ListCommit.ToolTipText = "Checks to see if the version has the same checksum in the versions records and if" +
     " not then it will try to commit the file to Odoo to store.";
-            this.CommitEntryStrip.Click += new System.EventHandler(this.CommitEntryStrip_Click);
+            this.ListCommit.Click += new System.EventHandler(this.List_Click_Commit);
             // 
-            // toolStripMenuItem5
+            // ListUndoCheckout
             // 
-            this.toolStripMenuItem5.Name = "toolStripMenuItem5";
-            this.toolStripMenuItem5.Size = new System.Drawing.Size(157, 22);
-            this.toolStripMenuItem5.Text = "Undo Checkout";
-            this.toolStripMenuItem5.Click += new System.EventHandler(this.UnCheckoutEntryStrip_Click);
+            this.ListUndoCheckout.Name = "ListUndoCheckout";
+            this.ListUndoCheckout.Size = new System.Drawing.Size(157, 22);
+            this.ListUndoCheckout.Text = "Undo Checkout";
+            this.ListUndoCheckout.Click += new System.EventHandler(this.List_Click_UndoCheckout);
             // 
             // toolStripMenuItem6
             // 
@@ -348,28 +348,28 @@
             this.logicalDeleteToolStripMenuItem1.Size = new System.Drawing.Size(168, 22);
             this.logicalDeleteToolStripMenuItem1.Text = "Logical Delete";
             this.logicalDeleteToolStripMenuItem1.ToolTipText = "sets the Entry to inactive in Odoo";
-            this.logicalDeleteToolStripMenuItem1.Click += new System.EventHandler(this.LogicalDeleteEntryStrip_Click);
+            this.logicalDeleteToolStripMenuItem1.Click += new System.EventHandler(this.List_Click_LogicalDelete);
             // 
             // unDeleteToolStripMenuItem
             // 
             this.unDeleteToolStripMenuItem.Name = "unDeleteToolStripMenuItem";
             this.unDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
             this.unDeleteToolStripMenuItem.Text = "UnDelete";
-            this.unDeleteToolStripMenuItem.Click += new System.EventHandler(this.unDeleteToolStripMenuItem_Click);
+            this.unDeleteToolStripMenuItem.Click += new System.EventHandler(this.List_Click_Restore);
             // 
             // permanentDeleteToolStripMenuItem
             // 
             this.permanentDeleteToolStripMenuItem.Name = "permanentDeleteToolStripMenuItem";
             this.permanentDeleteToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
             this.permanentDeleteToolStripMenuItem.Text = "Permanent Delete";
-            this.permanentDeleteToolStripMenuItem.Click += new System.EventHandler(this.permanentDeleteToolStripMenuItem_Click);
+            this.permanentDeleteToolStripMenuItem.Click += new System.EventHandler(this.List_Click_PermanentDelete);
             // 
             // localDeleteToolStripMenuItem1
             // 
             this.localDeleteToolStripMenuItem1.Name = "localDeleteToolStripMenuItem1";
             this.localDeleteToolStripMenuItem1.Size = new System.Drawing.Size(168, 22);
             this.localDeleteToolStripMenuItem1.Text = "Local Delete";
-            this.localDeleteToolStripMenuItem1.Click += new System.EventHandler(this.localDeleteToolStripMenuItem1_Click);
+            this.localDeleteToolStripMenuItem1.Click += new System.EventHandler(this.List_Click_LocalDelete);
             // 
             // OpenEntryStrip
             // 
@@ -380,7 +380,7 @@
             this.OpenEntryStrip.Name = "OpenEntryStrip";
             this.OpenEntryStrip.Size = new System.Drawing.Size(157, 22);
             this.OpenEntryStrip.Text = "Open";
-            this.OpenEntryStrip.Click += new System.EventHandler(this.OpenEntryStrip_Click);
+            this.OpenEntryStrip.Click += new System.EventHandler(this.List_Click_Open);
             // 
             // OpenLatestRemoteStrip
             // 
@@ -389,7 +389,7 @@
             this.OpenLatestRemoteStrip.Size = new System.Drawing.Size(193, 22);
             this.OpenLatestRemoteStrip.Text = "Preview Latest Remote";
             this.OpenLatestRemoteStrip.ToolTipText = "Downloads the version file and puts it in the temporary folder path";
-            this.OpenLatestRemoteStrip.Click += new System.EventHandler(this.OpenLatestRemoteStrip_Click);
+            this.OpenLatestRemoteStrip.Click += new System.EventHandler(this.List_Click_OpenLatestRemote);
             // 
             // OpenLatestLocalStrip
             // 
@@ -397,7 +397,7 @@
             this.OpenLatestLocalStrip.Size = new System.Drawing.Size(193, 22);
             this.OpenLatestLocalStrip.Text = "Latest Local";
             this.OpenLatestLocalStrip.ToolTipText = "Opens the latest local file";
-            this.OpenLatestLocalStrip.Click += new System.EventHandler(this.OpenLatestLocalStrip_Click);
+            this.OpenLatestLocalStrip.Click += new System.EventHandler(this.List_Click_OpenLatestLocal);
             // 
             // fileDirectoryToolStripMenuItem
             // 
@@ -405,124 +405,124 @@
             this.fileDirectoryToolStripMenuItem.Size = new System.Drawing.Size(193, 22);
             this.fileDirectoryToolStripMenuItem.Text = "File Directory";
             this.fileDirectoryToolStripMenuItem.ToolTipText = "Open file explorer to the parent folder";
-            this.fileDirectoryToolStripMenuItem.Click += new System.EventHandler(this.fileDirectoryToolStripMenuItem_Click);
+            this.fileDirectoryToolStripMenuItem.Click += new System.EventHandler(this.List_Click_OpenDirectory);
             // 
-            // ilListIcons
+            // ListIcons
             // 
-            this.ilListIcons.ImageStream = ((System.Windows.Forms.ImageListStreamer)(resources.GetObject("ilListIcons.ImageStream")));
-            this.ilListIcons.TransparentColor = System.Drawing.Color.Transparent;
-            this.ilListIcons.Images.SetKeyName(0, "cm");
-            this.ilListIcons.Images.SetKeyName(1, "co");
-            this.ilListIcons.Images.SetKeyName(2, "lo");
-            this.ilListIcons.Images.SetKeyName(3, "ro");
-            this.ilListIcons.Images.SetKeyName(4, "ft");
-            this.ilListIcons.Images.SetKeyName(5, "nv");
-            this.ilListIcons.Images.SetKeyName(6, "lm");
-            this.ilListIcons.Images.SetKeyName(7, "dt");
-            this.ilListIcons.Images.SetKeyName(8, "if");
-            this.ilListIcons.Images.SetKeyName(9, "ds");
-            this.ilListIcons.Images.SetKeyName(10, "default");
-            this.ilListIcons.Images.SetKeyName(11, "3mf");
-            this.ilListIcons.Images.SetKeyName(12, "ai");
-            this.ilListIcons.Images.SetKeyName(13, "asmdot");
-            this.ilListIcons.Images.SetKeyName(14, "asmprp");
-            this.ilListIcons.Images.SetKeyName(15, "avi");
-            this.ilListIcons.Images.SetKeyName(16, "bas");
-            this.ilListIcons.Images.SetKeyName(17, "bat");
-            this.ilListIcons.Images.SetKeyName(18, "bmp");
-            this.ilListIcons.Images.SetKeyName(19, "btl");
-            this.ilListIcons.Images.SetKeyName(20, "cnc");
-            this.ilListIcons.Images.SetKeyName(21, "cs");
-            this.ilListIcons.Images.SetKeyName(22, "csproj");
-            this.ilListIcons.Images.SetKeyName(23, "csv");
-            this.ilListIcons.Images.SetKeyName(24, "cwr");
-            this.ilListIcons.Images.SetKeyName(25, "dat");
-            this.ilListIcons.Images.SetKeyName(26, "db");
-            this.ilListIcons.Images.SetKeyName(27, "dic");
-            this.ilListIcons.Images.SetKeyName(28, "doc");
-            this.ilListIcons.Images.SetKeyName(29, "docx");
-            this.ilListIcons.Images.SetKeyName(30, "dot");
-            this.ilListIcons.Images.SetKeyName(31, "drwdot");
-            this.ilListIcons.Images.SetKeyName(32, "dwg");
-            this.ilListIcons.Images.SetKeyName(33, "dxf");
-            this.ilListIcons.Images.SetKeyName(34, "edrw");
-            this.ilListIcons.Images.SetKeyName(35, "eps");
-            this.ilListIcons.Images.SetKeyName(36, "gcode");
-            this.ilListIcons.Images.SetKeyName(37, "gif");
-            this.ilListIcons.Images.SetKeyName(38, "gz");
-            this.ilListIcons.Images.SetKeyName(39, "htm");
-            this.ilListIcons.Images.SetKeyName(40, "igs");
-            this.ilListIcons.Images.SetKeyName(41, "indd");
-            this.ilListIcons.Images.SetKeyName(42, "index");
-            this.ilListIcons.Images.SetKeyName(43, "jpg");
-            this.ilListIcons.Images.SetKeyName(44, "ldb");
-            this.ilListIcons.Images.SetKeyName(45, "log");
-            this.ilListIcons.Images.SetKeyName(46, "m");
-            this.ilListIcons.Images.SetKeyName(47, "mdb");
-            this.ilListIcons.Images.SetKeyName(48, "ods");
-            this.ilListIcons.Images.SetKeyName(49, "odt");
-            this.ilListIcons.Images.SetKeyName(50, "pdf");
-            this.ilListIcons.Images.SetKeyName(51, "png");
-            this.ilListIcons.Images.SetKeyName(52, "propdesc");
-            this.ilListIcons.Images.SetKeyName(53, "prtdot");
-            this.ilListIcons.Images.SetKeyName(54, "prtprp");
-            this.ilListIcons.Images.SetKeyName(55, "ps");
-            this.ilListIcons.Images.SetKeyName(56, "resx");
-            this.ilListIcons.Images.SetKeyName(57, "rpt");
-            this.ilListIcons.Images.SetKeyName(58, "settings");
-            this.ilListIcons.Images.SetKeyName(59, "sla");
-            this.ilListIcons.Images.SetKeyName(60, "sldasm");
-            this.ilListIcons.Images.SetKeyName(61, "sldblk");
-            this.ilListIcons.Images.SetKeyName(62, "sldbomtbt");
-            this.ilListIcons.Images.SetKeyName(63, "slddrt");
-            this.ilListIcons.Images.SetKeyName(64, "slddrw");
-            this.ilListIcons.Images.SetKeyName(65, "sldedb");
-            this.ilListIcons.Images.SetKeyName(66, "sldedbold");
-            this.ilListIcons.Images.SetKeyName(67, "sldgtolfvt");
-            this.ilListIcons.Images.SetKeyName(68, "sldholtbt");
-            this.ilListIcons.Images.SetKeyName(69, "sldlfp");
-            this.ilListIcons.Images.SetKeyName(70, "sldmtnfvt");
-            this.ilListIcons.Images.SetKeyName(71, "sldprt");
-            this.ilListIcons.Images.SetKeyName(72, "sldpuntbt");
-            this.ilListIcons.Images.SetKeyName(73, "sldrevtbt");
-            this.ilListIcons.Images.SetKeyName(74, "sldsffvt");
-            this.ilListIcons.Images.SetKeyName(75, "sldtbt");
-            this.ilListIcons.Images.SetKeyName(76, "sldweldfvt");
-            this.ilListIcons.Images.SetKeyName(77, "sldwldtbt");
-            this.ilListIcons.Images.SetKeyName(78, "sln");
-            this.ilListIcons.Images.SetKeyName(79, "sqy");
-            this.ilListIcons.Images.SetKeyName(80, "suo");
-            this.ilListIcons.Images.SetKeyName(81, "svg");
-            this.ilListIcons.Images.SetKeyName(82, "swp");
-            this.ilListIcons.Images.SetKeyName(83, "sym");
-            this.ilListIcons.Images.SetKeyName(84, "tbox");
-            this.ilListIcons.Images.SetKeyName(85, "tif");
-            this.ilListIcons.Images.SetKeyName(86, "ttf");
-            this.ilListIcons.Images.SetKeyName(87, "txt");
-            this.ilListIcons.Images.SetKeyName(88, "wxm");
-            this.ilListIcons.Images.SetKeyName(89, "wxmx");
-            this.ilListIcons.Images.SetKeyName(90, "x_b");
-            this.ilListIcons.Images.SetKeyName(91, "x_t");
-            this.ilListIcons.Images.SetKeyName(92, "xls");
-            this.ilListIcons.Images.SetKeyName(93, "xlsx");
-            this.ilListIcons.Images.SetKeyName(94, "xml");
-            this.ilListIcons.Images.SetKeyName(95, "zip");
-            this.ilListIcons.Images.SetKeyName(96, "delete_image_button");
+            this.ListIcons.ImageStream = ((System.Windows.Forms.ImageListStreamer)(resources.GetObject("ListIcons.ImageStream")));
+            this.ListIcons.TransparentColor = System.Drawing.Color.Transparent;
+            this.ListIcons.Images.SetKeyName(0, "cm");
+            this.ListIcons.Images.SetKeyName(1, "co");
+            this.ListIcons.Images.SetKeyName(2, "lo");
+            this.ListIcons.Images.SetKeyName(3, "ro");
+            this.ListIcons.Images.SetKeyName(4, "ft");
+            this.ListIcons.Images.SetKeyName(5, "nv");
+            this.ListIcons.Images.SetKeyName(6, "lm");
+            this.ListIcons.Images.SetKeyName(7, "dt");
+            this.ListIcons.Images.SetKeyName(8, "if");
+            this.ListIcons.Images.SetKeyName(9, "ds");
+            this.ListIcons.Images.SetKeyName(10, "default");
+            this.ListIcons.Images.SetKeyName(11, "3mf");
+            this.ListIcons.Images.SetKeyName(12, "ai");
+            this.ListIcons.Images.SetKeyName(13, "asmdot");
+            this.ListIcons.Images.SetKeyName(14, "asmprp");
+            this.ListIcons.Images.SetKeyName(15, "avi");
+            this.ListIcons.Images.SetKeyName(16, "bas");
+            this.ListIcons.Images.SetKeyName(17, "bat");
+            this.ListIcons.Images.SetKeyName(18, "bmp");
+            this.ListIcons.Images.SetKeyName(19, "btl");
+            this.ListIcons.Images.SetKeyName(20, "cnc");
+            this.ListIcons.Images.SetKeyName(21, "cs");
+            this.ListIcons.Images.SetKeyName(22, "csproj");
+            this.ListIcons.Images.SetKeyName(23, "csv");
+            this.ListIcons.Images.SetKeyName(24, "cwr");
+            this.ListIcons.Images.SetKeyName(25, "dat");
+            this.ListIcons.Images.SetKeyName(26, "db");
+            this.ListIcons.Images.SetKeyName(27, "dic");
+            this.ListIcons.Images.SetKeyName(28, "doc");
+            this.ListIcons.Images.SetKeyName(29, "docx");
+            this.ListIcons.Images.SetKeyName(30, "dot");
+            this.ListIcons.Images.SetKeyName(31, "drwdot");
+            this.ListIcons.Images.SetKeyName(32, "dwg");
+            this.ListIcons.Images.SetKeyName(33, "dxf");
+            this.ListIcons.Images.SetKeyName(34, "edrw");
+            this.ListIcons.Images.SetKeyName(35, "eps");
+            this.ListIcons.Images.SetKeyName(36, "gcode");
+            this.ListIcons.Images.SetKeyName(37, "gif");
+            this.ListIcons.Images.SetKeyName(38, "gz");
+            this.ListIcons.Images.SetKeyName(39, "htm");
+            this.ListIcons.Images.SetKeyName(40, "igs");
+            this.ListIcons.Images.SetKeyName(41, "indd");
+            this.ListIcons.Images.SetKeyName(42, "index");
+            this.ListIcons.Images.SetKeyName(43, "jpg");
+            this.ListIcons.Images.SetKeyName(44, "ldb");
+            this.ListIcons.Images.SetKeyName(45, "log");
+            this.ListIcons.Images.SetKeyName(46, "m");
+            this.ListIcons.Images.SetKeyName(47, "mdb");
+            this.ListIcons.Images.SetKeyName(48, "ods");
+            this.ListIcons.Images.SetKeyName(49, "odt");
+            this.ListIcons.Images.SetKeyName(50, "pdf");
+            this.ListIcons.Images.SetKeyName(51, "png");
+            this.ListIcons.Images.SetKeyName(52, "propdesc");
+            this.ListIcons.Images.SetKeyName(53, "prtdot");
+            this.ListIcons.Images.SetKeyName(54, "prtprp");
+            this.ListIcons.Images.SetKeyName(55, "ps");
+            this.ListIcons.Images.SetKeyName(56, "resx");
+            this.ListIcons.Images.SetKeyName(57, "rpt");
+            this.ListIcons.Images.SetKeyName(58, "settings");
+            this.ListIcons.Images.SetKeyName(59, "sla");
+            this.ListIcons.Images.SetKeyName(60, "sldasm");
+            this.ListIcons.Images.SetKeyName(61, "sldblk");
+            this.ListIcons.Images.SetKeyName(62, "sldbomtbt");
+            this.ListIcons.Images.SetKeyName(63, "slddrt");
+            this.ListIcons.Images.SetKeyName(64, "slddrw");
+            this.ListIcons.Images.SetKeyName(65, "sldedb");
+            this.ListIcons.Images.SetKeyName(66, "sldedbold");
+            this.ListIcons.Images.SetKeyName(67, "sldgtolfvt");
+            this.ListIcons.Images.SetKeyName(68, "sldholtbt");
+            this.ListIcons.Images.SetKeyName(69, "sldlfp");
+            this.ListIcons.Images.SetKeyName(70, "sldmtnfvt");
+            this.ListIcons.Images.SetKeyName(71, "sldprt");
+            this.ListIcons.Images.SetKeyName(72, "sldpuntbt");
+            this.ListIcons.Images.SetKeyName(73, "sldrevtbt");
+            this.ListIcons.Images.SetKeyName(74, "sldsffvt");
+            this.ListIcons.Images.SetKeyName(75, "sldtbt");
+            this.ListIcons.Images.SetKeyName(76, "sldweldfvt");
+            this.ListIcons.Images.SetKeyName(77, "sldwldtbt");
+            this.ListIcons.Images.SetKeyName(78, "sln");
+            this.ListIcons.Images.SetKeyName(79, "sqy");
+            this.ListIcons.Images.SetKeyName(80, "suo");
+            this.ListIcons.Images.SetKeyName(81, "svg");
+            this.ListIcons.Images.SetKeyName(82, "swp");
+            this.ListIcons.Images.SetKeyName(83, "sym");
+            this.ListIcons.Images.SetKeyName(84, "tbox");
+            this.ListIcons.Images.SetKeyName(85, "tif");
+            this.ListIcons.Images.SetKeyName(86, "ttf");
+            this.ListIcons.Images.SetKeyName(87, "txt");
+            this.ListIcons.Images.SetKeyName(88, "wxm");
+            this.ListIcons.Images.SetKeyName(89, "wxmx");
+            this.ListIcons.Images.SetKeyName(90, "x_b");
+            this.ListIcons.Images.SetKeyName(91, "x_t");
+            this.ListIcons.Images.SetKeyName(92, "xls");
+            this.ListIcons.Images.SetKeyName(93, "xlsx");
+            this.ListIcons.Images.SetKeyName(94, "xml");
+            this.ListIcons.Images.SetKeyName(95, "zip");
+            this.ListIcons.Images.SetKeyName(96, "delete_image_button");
             // 
-            // tabControl1
+            // VersionTabs
             // 
-            this.tabControl1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) 
+            this.VersionTabs.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.tabControl1.Controls.Add(this.OdooHistoryPage);
-            this.tabControl1.Controls.Add(this.OdooParentsPage);
-            this.tabControl1.Controls.Add(this.OdooChildrenPage);
-            this.tabControl1.Controls.Add(this.OdooPropertiesPage);
-            this.tabControl1.Controls.Add(this.OdooVersionPage);
-            this.tabControl1.Location = new System.Drawing.Point(13, 498);
-            this.tabControl1.Name = "tabControl1";
-            this.tabControl1.SelectedIndex = 0;
-            this.tabControl1.Size = new System.Drawing.Size(1191, 297);
-            this.tabControl1.TabIndex = 2;
+            this.VersionTabs.Controls.Add(this.OdooHistoryPage);
+            this.VersionTabs.Controls.Add(this.OdooParentsPage);
+            this.VersionTabs.Controls.Add(this.OdooChildrenPage);
+            this.VersionTabs.Controls.Add(this.OdooPropertiesPage);
+            this.VersionTabs.Controls.Add(this.OdooVersionPage);
+            this.VersionTabs.Location = new System.Drawing.Point(13, 498);
+            this.VersionTabs.Name = "VersionTabs";
+            this.VersionTabs.SelectedIndex = 0;
+            this.VersionTabs.Size = new System.Drawing.Size(1191, 297);
+            this.VersionTabs.TabIndex = 2;
             // 
             // OdooHistoryPage
             // 
@@ -548,7 +548,7 @@
             this.OdooHistory.UseCompatibleStateImageBehavior = false;
             this.OdooHistory.View = System.Windows.Forms.View.Details;
             this.OdooHistory.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.OdooHistory_ItemSelectionChanged);
-            this.OdooHistory.DoubleClick += new System.EventHandler(this.OdooHistory_DoubleClick);
+            this.OdooHistory.DoubleClick += new System.EventHandler(this.History_DoubleClick);
             // 
             // OdooVersionHistoryMenu
             // 
@@ -567,21 +567,21 @@
             this.downloadToolStripMenuItem.Name = "downloadToolStripMenuItem";
             this.downloadToolStripMenuItem.Size = new System.Drawing.Size(128, 22);
             this.downloadToolStripMenuItem.Text = "Download";
-            this.downloadToolStripMenuItem.Click += new System.EventHandler(this.downloadToolStripMenuItem_Click);
+            this.downloadToolStripMenuItem.Click += new System.EventHandler(this.History_Click_Download);
             // 
             // toTemporaryToolStripMenuItem
             // 
             this.toTemporaryToolStripMenuItem.Name = "toTemporaryToolStripMenuItem";
             this.toTemporaryToolStripMenuItem.Size = new System.Drawing.Size(168, 22);
             this.toTemporaryToolStripMenuItem.Text = "To Temporary";
-            this.toTemporaryToolStripMenuItem.Click += new System.EventHandler(this.toTemporaryToolStripMenuItem_Click);
+            this.toTemporaryToolStripMenuItem.Click += new System.EventHandler(this.History_Click_TemporaryDownload);
             // 
             // overwriteCurrentToolStripMenuItem1
             // 
             this.overwriteCurrentToolStripMenuItem1.Name = "overwriteCurrentToolStripMenuItem1";
             this.overwriteCurrentToolStripMenuItem1.Size = new System.Drawing.Size(168, 22);
             this.overwriteCurrentToolStripMenuItem1.Text = "Overwrite Current";
-            this.overwriteCurrentToolStripMenuItem1.Click += new System.EventHandler(this.overwriteCurrentToolStripMenuItem1_Click);
+            this.overwriteCurrentToolStripMenuItem1.Click += new System.EventHandler(this.History_Click_OverwriteDownload);
             // 
             // openToolStripMenuItem
             // 
@@ -591,20 +591,21 @@
             this.openToolStripMenuItem.Name = "openToolStripMenuItem";
             this.openToolStripMenuItem.Size = new System.Drawing.Size(128, 22);
             this.openToolStripMenuItem.Text = "Open";
+            this.openToolStripMenuItem.Click += new System.EventHandler(this.History_Click_Open);
             // 
             // overwriteAndOpenToolStripMenuItem
             // 
             this.overwriteAndOpenToolStripMenuItem.Name = "overwriteAndOpenToolStripMenuItem";
-            this.overwriteAndOpenToolStripMenuItem.Size = new System.Drawing.Size(183, 22);
+            this.overwriteAndOpenToolStripMenuItem.Size = new System.Drawing.Size(184, 22);
             this.overwriteAndOpenToolStripMenuItem.Text = "Overwrite and open";
-            this.overwriteAndOpenToolStripMenuItem.Click += new System.EventHandler(this.overwriteAndOpenToolStripMenuItem_Click);
+            this.overwriteAndOpenToolStripMenuItem.Click += new System.EventHandler(this.History_Click_OverwriteOpen);
             // 
             // temporaryAndOpenToolStripMenuItem
             // 
             this.temporaryAndOpenToolStripMenuItem.Name = "temporaryAndOpenToolStripMenuItem";
-            this.temporaryAndOpenToolStripMenuItem.Size = new System.Drawing.Size(183, 22);
+            this.temporaryAndOpenToolStripMenuItem.Size = new System.Drawing.Size(184, 22);
             this.temporaryAndOpenToolStripMenuItem.Text = "Temporary and open";
-            this.temporaryAndOpenToolStripMenuItem.Click += new System.EventHandler(this.temporaryAndOpenToolStripMenuItem_Click);
+            this.temporaryAndOpenToolStripMenuItem.Click += new System.EventHandler(this.History_Click_TemporaryOpen);
             // 
             // moveToolStripMenuItem
             // 
@@ -618,16 +619,16 @@
             // toCurrentToolStripMenuItem
             // 
             this.toCurrentToolStripMenuItem.Name = "toCurrentToolStripMenuItem";
-            this.toCurrentToolStripMenuItem.Size = new System.Drawing.Size(145, 22);
+            this.toCurrentToolStripMenuItem.Size = new System.Drawing.Size(147, 22);
             this.toCurrentToolStripMenuItem.Text = "To Current";
-            this.toCurrentToolStripMenuItem.Click += new System.EventHandler(this.toCurrentToolStripMenuItem_Click);
+            this.toCurrentToolStripMenuItem.Click += new System.EventHandler(this.History_Click_OverwriteMove);
             // 
             // toTemporaryToolStripMenuItem1
             // 
             this.toTemporaryToolStripMenuItem1.Name = "toTemporaryToolStripMenuItem1";
-            this.toTemporaryToolStripMenuItem1.Size = new System.Drawing.Size(145, 22);
+            this.toTemporaryToolStripMenuItem1.Size = new System.Drawing.Size(147, 22);
             this.toTemporaryToolStripMenuItem1.Text = "To Temporary";
-            this.toTemporaryToolStripMenuItem1.Click += new System.EventHandler(this.toTemporaryToolStripMenuItem1_Click);
+            this.toTemporaryToolStripMenuItem1.Click += new System.EventHandler(this.History_Click_TemporaryMove);
             // 
             // OdooParentsPage
             // 
@@ -757,51 +758,51 @@
             this.ShowInactive.UseVisualStyleBackColor = true;
             this.ShowInactive.CheckedChanged += new System.EventHandler(this.CheckedChange_Event);
             // 
-            // toolStrip1
+            // MoreTools
             // 
-            this.toolStrip1.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.toolStrip1.Dock = System.Windows.Forms.DockStyle.None;
-            this.toolStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.toolStripDropDownButton1});
-            this.toolStrip1.Location = new System.Drawing.Point(840, 492);
-            this.toolStrip1.Name = "toolStrip1";
-            this.toolStrip1.Size = new System.Drawing.Size(41, 25);
-            this.toolStrip1.TabIndex = 0;
-            this.toolStrip1.Text = "toolStrip1";
+            this.MoreTools.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.MoreTools.Dock = System.Windows.Forms.DockStyle.None;
+            this.MoreTools.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.AdditionalTools});
+            this.MoreTools.Location = new System.Drawing.Point(840, 492);
+            this.MoreTools.Name = "MoreTools";
+            this.MoreTools.Size = new System.Drawing.Size(41, 25);
+            this.MoreTools.TabIndex = 0;
+            this.MoreTools.Text = "toolStrip1";
             // 
-            // toolStripDropDownButton1
+            // AdditionalTools
             // 
-            this.toolStripDropDownButton1.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
-            this.toolStripDropDownButton1.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.AdditionalTools.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            this.AdditionalTools.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.OdooRefreshDropdown,
             this.OdooSearchDropdown,
             this.OdooManageTypesDropdown});
-            this.toolStripDropDownButton1.Image = ((System.Drawing.Image)(resources.GetObject("toolStripDropDownButton1.Image")));
-            this.toolStripDropDownButton1.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.toolStripDropDownButton1.Name = "toolStripDropDownButton1";
-            this.toolStripDropDownButton1.Size = new System.Drawing.Size(29, 22);
-            this.toolStripDropDownButton1.Text = "toolStripDropDownButton1";
+            this.AdditionalTools.Image = ((System.Drawing.Image)(resources.GetObject("AdditionalTools.Image")));
+            this.AdditionalTools.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.AdditionalTools.Name = "AdditionalTools";
+            this.AdditionalTools.Size = new System.Drawing.Size(29, 22);
+            this.AdditionalTools.Text = "AdditionalTools";
             // 
             // OdooRefreshDropdown
             // 
             this.OdooRefreshDropdown.Name = "OdooRefreshDropdown";
-            this.OdooRefreshDropdown.Size = new System.Drawing.Size(170, 22);
+            this.OdooRefreshDropdown.Size = new System.Drawing.Size(171, 22);
             this.OdooRefreshDropdown.Text = "Refresh View";
-            this.OdooRefreshDropdown.Click += new System.EventHandler(this.OdooRefreshDropdown_Click);
+            this.OdooRefreshDropdown.Click += new System.EventHandler(this.AdditionalTools_Click_Refresh);
             // 
             // OdooSearchDropdown
             // 
             this.OdooSearchDropdown.Name = "OdooSearchDropdown";
-            this.OdooSearchDropdown.Size = new System.Drawing.Size(170, 22);
+            this.OdooSearchDropdown.Size = new System.Drawing.Size(171, 22);
             this.OdooSearchDropdown.Text = "Search";
-            this.OdooSearchDropdown.Click += new System.EventHandler(this.OdooSearchDropdown_Click);
+            this.OdooSearchDropdown.Click += new System.EventHandler(this.AdditionalTools_Click_Search);
             // 
             // OdooManageTypesDropdown
             // 
             this.OdooManageTypesDropdown.Name = "OdooManageTypesDropdown";
-            this.OdooManageTypesDropdown.Size = new System.Drawing.Size(170, 22);
+            this.OdooManageTypesDropdown.Size = new System.Drawing.Size(171, 22);
             this.OdooManageTypesDropdown.Text = "Manage File Types";
-            this.OdooManageTypesDropdown.Click += new System.EventHandler(this.OdooManageTypesDropdown_Click);
+            this.OdooManageTypesDropdown.Click += new System.EventHandler(this.AdditionalTools_Click_ManageTypes);
             // 
             // HackFileManager
             // 
@@ -809,16 +810,16 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.Control;
             this.ClientSize = new System.Drawing.Size(1478, 807);
-            this.Controls.Add(this.toolStrip1);
+            this.Controls.Add(this.MoreTools);
             this.Controls.Add(this.ShowInactive);
             this.Controls.Add(this.panel1);
-            this.Controls.Add(this.tabControl1);
+            this.Controls.Add(this.VersionTabs);
             this.Controls.Add(this.OdooEntryList);
             this.Controls.Add(this.OdooDirectoryTree);
             this.Name = "HackFileManager";
-            this.OdooCMSTree.ResumeLayout(false);
-            this.OdooCMSList.ResumeLayout(false);
-            this.tabControl1.ResumeLayout(false);
+            this.TreeContextDirectory.ResumeLayout(false);
+            this.ListContextEntry.ResumeLayout(false);
+            this.VersionTabs.ResumeLayout(false);
             this.OdooHistoryPage.ResumeLayout(false);
             this.OdooVersionHistoryMenu.ResumeLayout(false);
             this.OdooParentsPage.ResumeLayout(false);
@@ -827,8 +828,8 @@
             this.OdooVersionPage.ResumeLayout(false);
             this.panel1.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.OdooEntryImage)).EndInit();
-            this.toolStrip1.ResumeLayout(false);
-            this.toolStrip1.PerformLayout();
+            this.MoreTools.ResumeLayout(false);
+            this.MoreTools.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -836,33 +837,35 @@
 
         #endregion
 
+        private System.Windows.Forms.ToolStripMenuItem TreeGetLatest;
+		private System.Windows.Forms.ToolStripMenuItem TreeGetLatestTop;
+		private System.Windows.Forms.ToolStripMenuItem TreeGetLatestAll;
         private System.Windows.Forms.TreeView OdooDirectoryTree;
         private System.Windows.Forms.ListView OdooEntryList;
-        private System.Windows.Forms.TabControl tabControl1;
+        private System.Windows.Forms.TabControl VersionTabs;
         private System.Windows.Forms.TabPage OdooHistoryPage;
         private System.Windows.Forms.TabPage OdooParentsPage;
         private System.Windows.Forms.Panel panel1;
-        private System.Windows.Forms.ContextMenuStrip OdooCMSTree;
-        private System.Windows.Forms.ToolStripMenuItem getLatestToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem toolStripMenuItem1;
-        private System.Windows.Forms.ToolStripMenuItem commitToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem undoToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem analyzeToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem deleteToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem logicalDeleteToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem perminentDeleteToolStripMenuItem;
-        private System.Windows.Forms.ContextMenuStrip OdooCMSList;
-        private System.Windows.Forms.ToolStripMenuItem toolStripMenuItem2;
-        private System.Windows.Forms.ToolStripMenuItem CheckoutStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem CommitEntryStrip;
-        private System.Windows.Forms.ToolStripMenuItem toolStripMenuItem5;
+        private System.Windows.Forms.ContextMenuStrip TreeContextDirectory;
+        private System.Windows.Forms.ToolStripMenuItem TreeCheckout;
+        private System.Windows.Forms.ToolStripMenuItem TreeCommit;
+        private System.Windows.Forms.ToolStripMenuItem TreeUndoCheckout;
+        private System.Windows.Forms.ToolStripMenuItem TreeAnalyze;
+        private System.Windows.Forms.ToolStripMenuItem TreeDelete;
+        private System.Windows.Forms.ToolStripMenuItem TreeLogicalDelete;
+        private System.Windows.Forms.ToolStripMenuItem TreePermanentDelete;
+        private System.Windows.Forms.ContextMenuStrip ListContextEntry;
+        private System.Windows.Forms.ToolStripMenuItem ListGetLatest;
+        private System.Windows.Forms.ToolStripMenuItem ListCheckout;
+        private System.Windows.Forms.ToolStripMenuItem ListCommit;
+        private System.Windows.Forms.ToolStripMenuItem ListUndoCheckout;
         private System.Windows.Forms.ToolStripMenuItem toolStripMenuItem6;
         private System.Windows.Forms.ToolStripMenuItem OpenEntryStrip;
         private System.Windows.Forms.ToolStripMenuItem logicalDeleteToolStripMenuItem1;
         private System.Windows.Forms.ToolStripMenuItem unDeleteToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem permanentDeleteToolStripMenuItem;
-        private System.Windows.Forms.ImageList ilTreeIcons;
-        private System.Windows.Forms.ImageList ilListIcons;
+        private System.Windows.Forms.ImageList TreeIcons;
+        private System.Windows.Forms.ImageList ListIcons;
         private System.Windows.Forms.PictureBox OdooEntryImage;
         private System.Windows.Forms.TabPage OdooChildrenPage;
         private System.Windows.Forms.TabPage OdooPropertiesPage;
@@ -873,19 +876,17 @@
 		private System.Windows.Forms.TabPage OdooVersionPage;
 		private System.Windows.Forms.ListView OdooVersionInfoList;
 		private System.Windows.Forms.CheckBox ShowInactive;
-		private System.Windows.Forms.ToolStrip toolStrip1;
-		private System.Windows.Forms.ToolStripDropDownButton toolStripDropDownButton1;
+		private System.Windows.Forms.ToolStrip MoreTools;
+		private System.Windows.Forms.ToolStripDropDownButton AdditionalTools;
 		private System.Windows.Forms.ToolStripMenuItem OdooRefreshDropdown;
 		private System.Windows.Forms.ToolStripMenuItem OdooSearchDropdown;
 		private System.Windows.Forms.ToolStripMenuItem OdooManageTypesDropdown;
 		private System.Windows.Forms.ToolStripMenuItem OpenLatestRemoteStrip;
 		private System.Windows.Forms.ToolStripMenuItem OpenLatestLocalStrip;
-		private System.Windows.Forms.ToolStripMenuItem topDirectoryToolStripMenuItem;
-		private System.Windows.Forms.ToolStripMenuItem allDirectoriesToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem fileDirectoryToolStripMenuItem;
-		private System.Windows.Forms.ToolStripMenuItem unDeleteToolStripMenuItem1;
-		private System.Windows.Forms.ToolStripMenuItem topDirectoryToolStripMenuItem1;
-		private System.Windows.Forms.ToolStripMenuItem allDirectoriesToolStripMenuItem1;
+		private System.Windows.Forms.ToolStripMenuItem TreeRestore;
+		private System.Windows.Forms.ToolStripMenuItem TreeRestoreTop;
+		private System.Windows.Forms.ToolStripMenuItem TreeRestoreAll;
 		private System.Windows.Forms.ContextMenuStrip OdooVersionHistoryMenu;
 		private System.Windows.Forms.ToolStripMenuItem downloadToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem toTemporaryToolStripMenuItem;
@@ -896,8 +897,8 @@
 		private System.Windows.Forms.ToolStripMenuItem moveToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem toCurrentToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem toTemporaryToolStripMenuItem1;
-		private System.Windows.Forms.ToolStripMenuItem openDirectoryToolStripMenuItem;
-		private System.Windows.Forms.ToolStripMenuItem localDeleteToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem TreeOpenDirectory;
+		private System.Windows.Forms.ToolStripMenuItem TreeLocalDelete;
 		private System.Windows.Forms.ToolStripMenuItem localDeleteToolStripMenuItem1;
     }
 }

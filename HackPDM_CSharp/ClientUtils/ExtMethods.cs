@@ -1,18 +1,21 @@
-﻿using XmlRpc.Goober;
-using System.Xml;
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
-using System.Diagnostics.Metrics;
-using System.Drawing;
-using static HackPDM.FileOperations;
 using System.Windows.Forms;
+using System.Xml;
+
+using XmlRpc.Goober;
+
+using static HackPDM.FileOperations;
 
 namespace HackPDM.ClientUtils
 {
@@ -417,5 +420,28 @@ namespace HackPDM.ClientUtils
 			=> [.. fileInfos.Select( file => new HackFile( file ) )];
         public static byte[] ToBytes(this Image image) => ImageToByteArray(image);
         public static string ToBase64String(this Image image) => Convert.ToBase64String(image.ToBytes());
-	}
+        public static bool SetFormTheme(this Control control, Theme theme, bool isRoot = true)
+        {
+            if (control == null) throw new ArgumentNullException(nameof(control));
+            if (theme == null) throw new ArgumentNullException(nameof(theme));
+            try
+            {
+                Debug.WriteLine($"c name: {control.Name}");
+                control.BackColor = isRoot ? theme.BackgroundColor ?? Color.White : theme.SecondaryBackgroundColor ?? Color.LightGray;
+                control.ForeColor = theme.ForegroundColor ?? Color.Black;
+                control.Font = new Font(theme.FontFamily, theme.FontSize);
+                
+                foreach (Control item in control.Controls)
+                {
+                    item.SetFormTheme(theme, false);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.Fail($"Failed to set theme on form: {ex.Message}");
+                return false;
+            }
+        }
+    }
 }

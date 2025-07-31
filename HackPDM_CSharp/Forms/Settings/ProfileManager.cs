@@ -31,6 +31,7 @@ using System.Runtime.Remoting.Messaging;
 using System.Text;
 using System.Windows.Forms;
 
+using HackPDM.ClientUtils;
 using HackPDM.Forms.Hack;
 using HackPDM.HackClient;
 using HackPDM.Verifier;
@@ -41,14 +42,15 @@ namespace HackPDM
 {
     public partial class ProfileManager : Form
     {
+        public static Theme MyTheme = ThemePreset.GetCurrentTheme();
         OdooSettings odooSettings;
         HackSettings hackSettings;
 
         public ProfileManager()
         {
 			this.FormClosing += this.ProfileManager_FormClosing;
-
             InitializeComponent();
+            this.SetFormTheme(MyTheme);
         }
 
 		private void ProfileManager_FormClosing( object sender, FormClosingEventArgs e ) 
@@ -165,5 +167,10 @@ namespace HackPDM
                 return false;
             }
 		}
-	}
+
+        private void ProfileManager_Load(object sender, EventArgs e)
+        {
+
+        }
+    }
 }
