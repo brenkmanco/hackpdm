@@ -256,6 +256,22 @@ namespace HackPDM.ClientUtils
                 SortRowOrder = column;
             }
         }
+        public static ListDetail GetListDetail(ColumnGroup group) => group switch
+        {
+            ColumnGroup.Row                 => ColumnMap.RowWidths,
+            ColumnGroup.History             => ColumnMap.HistoryRows,
+            ColumnGroup.Parent              => ColumnMap.ParentRows,
+            ColumnGroup.Child               => ColumnMap.ChildrenRows,
+            ColumnGroup.Property            => ColumnMap.PropertiesRows,
+            ColumnGroup.Version             => ColumnMap.VersionInfoRows,
+            ColumnGroup.Search              => ColumnMap.SearchRows,
+            ColumnGroup.SearchProp          => ColumnMap.SearchPropRows,
+            ColumnGroup.FileType            => ColumnMap.FileTypeRows,
+            ColumnGroup.FileTypeEntryFilter => ColumnMap.FileTypeEntryFilterRows,
+            ColumnGroup.FileTypeLoc         => ColumnMap.FileTypeLocRows,
+            ColumnGroup.FileTypeLocDat      => ColumnMap.FileTypeLocDatRows,
+            _                               => ColumnMap.RowWidths,
+        };
     }
     public class ColumnInfo
     {
@@ -273,6 +289,8 @@ namespace HackPDM.ClientUtils
         {
             Rank = rank;
             Sort = sort;
+            sort?.Group = group;
+
             switch (value)
             {
                 case ColumnHeader column:
@@ -361,7 +379,8 @@ namespace HackPDM.ClientUtils
     {
         public delegate int CompareFunction(object x, object y);
         public CompareFunction ComparerFunction;
-        public ListDetail ListDetail;
+        private ListDetail ListDetail;
+        public ColumnGroup Group;
         public bool IsAscending;
         public bool InvalidsAtBack;
         public SortPredefined SortType;
@@ -388,7 +407,7 @@ namespace HackPDM.ClientUtils
         }
         private int DefaultComparer(object x, object y)
         {
-            if (ListDetail is null) ListDetail = ColumnMap.RowWidths;
+            ListDetail = ListDetail.GetListDetail(Group);
             string xItem = (x as ListViewItem).SubItems[ListDetail.SortRowOrder.Name].Text;
             string yItem = (y as ListViewItem).SubItems[ListDetail.SortRowOrder.Name].Text;
 

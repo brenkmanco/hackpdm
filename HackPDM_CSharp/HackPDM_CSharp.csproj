@@ -454,6 +454,12 @@
     <Compile Include="Forms\Settings\SearchOdoo.Designer.cs">
       <DependentUpon>SearchOdoo.cs</DependentUpon>
     </Compile>
+    <Compile Include="Forms\Settings\ThemeSettings.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\Settings\ThemeSettings.Designer.cs">
+      <DependentUpon>ThemeSettings.cs</DependentUpon>
+    </Compile>
     <Compile Include="HackClient\HackDefaults.cs" />
     <Compile Include="HackClient\HackBaseFile.cs" />
     <Compile Include="HackClient\HackUpdater.cs" />
@@ -556,6 +562,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Forms\Settings\SearchOdoo.resx">
       <DependentUpon>SearchOdoo.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\Settings\ThemeSettings.resx">
+      <DependentUpon>ThemeSettings.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>

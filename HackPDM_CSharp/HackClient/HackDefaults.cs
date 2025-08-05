@@ -1,5 +1,4 @@
-﻿using HackPDM.Properties;
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -8,6 +7,10 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+
+using HackPDM.Properties;
+
+using Microsoft.VisualStudio.TextManager.Interop;
 
 namespace HackPDM
 {
@@ -156,20 +159,74 @@ namespace HackPDM
     public class HackFile : HackBaseFile
     {
         // file settings
-        public string TypeExt { get; set; }
-        public DateTime ModifiedDate { get; set; }
-        public string SHA1Checksum { get; set; }
-        public long? FileSize { get; set; }
+        public string TypeExt 
+        {
+            get => Info?.Extension ?? field;
+            set
+            {
+                field = Info?.Extension ?? value;
+            }
+        }
+        public DateTime ModifiedDate 
+        {
+            get => field;
+            set
+            {
+                if (OverwriteDate != default)
+                {
+                    field = OverwriteDate;
+                    return;
+                }
+                if (field == default)
+                {
+                    field = Info?.LastWriteTime ?? value;
+                }
+                else
+                {
+                    if (Exists)
+                    {
+                        Info?.LastWriteTime = value;
+                        field = Info?.LastWriteTime ?? value;
+                    }
+                    else
+                    {
+                        field = value;
+                    }
+                }
+            }
+        }
+        internal void ApplyModifiedDateToLocal()
+        {
+            Info = new(FullPath);
+            if (OverwriteDate == default) return;
+            if (Exists)
+            {
+                try
+                {
+                    Info?.LastWriteTime = OverwriteDate;
+                }
+                catch { }
+            }
+        }
+        public void SetModifiedDate(DateTime date)
+        {
+            OverwriteDate = date;
+        }
+        private DateTime OverwriteDate = default;
+        public string Checksum { get; set; }
+        public long? FileSize 
+        {
+            get => Info?.Length ?? field;
+            set
+            {
+                field = Info?.Length ?? value;
+            }
+        }
         
         // odoo settings
         public int? HpVersionID { get; set; }
         public bool? HasRemoteVersion { get; set; }
-
-        internal byte[] fileContents 
-        { 
-            get;
-            set; 
-        } = null;
+        public bool Exists => Info?.Exists ?? false;
 
         public HackFile() {}
         public HackFile(HackFile hack)
@@ -188,57 +245,68 @@ namespace HackPDM
             string basePath=null,
             string relativePath=null)
         {
+            if (fullPath is not null and not "")
+            {
+                FileInfo file = new(fullPath);
+                if (file.Exists)
+                {
+                    this.Info = file;
+                }
+            }
             // base class
-            this.Name = name;
             this.FullPath = fullPath;
+            this.Name = name;
             this.BasePath = basePath;
             this.RelativePath = relativePath;
 
             // this class
             this.TypeExt = typeExt;
             this.ModifiedDate = modifiedDate;
-            this.SHA1Checksum = SHA1Checksum;
+            this.Checksum = SHA1Checksum;
             this.HpVersionID = hpVersionID;
             this.HasRemoteVersion = hasRemoteVersion;
             this.FileSize = fileSize;
         }
         public HackFile(FileInfo file)
         {
+            Info = file;
 			Name = file.Name;
 			BasePath = file.DirectoryName;
 			FullPath = file.FullName;
 			TypeExt = file.Extension;
 			ModifiedDate = file.LastWriteTime;
             FileSize = file.Length;
-			SHA1Checksum = FileOperations.FileChecksum( file.FullName, SHA1.Create() );
+			Checksum = FileOperations.FileChecksum( file.FullName, SHA1.Create() );
 		}
         public HackFile(string fullPath) => InitializeHackFromPath( fullPath );
 		public void InitializeHackFromPath(string path) => AssignToSelf(GetFromPath(path));
         private void AssignToSelf(HackFile hack)
         {
-			this.Name = hack.Name;
+            this.Info = hack?.Info;
 			this.FullPath = hack.FullPath;
+            this.Name = hack.Name;
 			this.BasePath = hack.BasePath;
 			this.RelativePath = hack.RelativePath;
 			this.TypeExt = hack.TypeExt;
 			this.ModifiedDate = hack.ModifiedDate;
-			this.SHA1Checksum = hack.SHA1Checksum;
+			this.Checksum = hack.Checksum;
 			this.HpVersionID = hack.HpVersionID;
 			this.HasRemoteVersion = hack.HasRemoteVersion;
-			this.fileContents = hack.fileContents;
+			this.FileContents = hack.FileContents;
             this.FileSize = hack.FileSize;
 		}
         public static async Task<HackFile> GetFromFileInfo( FileInfo file )
 		{
             HackFile hack = new()
             {
+                Info = file,
 			    Name = file.Name,
 			    BasePath = file.DirectoryName,
 			    FullPath = file.FullName,
 			    TypeExt = file.Extension,
 			    ModifiedDate = file.LastWriteTime,
                 FileSize = file.Length,
-			    SHA1Checksum = await FileOperations.FileChecksumAsync( file.FullName, SHA1.Create() ),
+			    Checksum = await FileOperations.FileChecksumAsync( file.FullName, SHA1.Create() ),
             };
 			return hack;
 		}
@@ -295,7 +363,7 @@ namespace HackPDM
         {
             if (version.winPathway == null) return null;
             HackFile hack = GetFromPath(Path.Combine(HackDefaults.PWAPathAbsolute, version.winPathway, version.name), Path.Combine(HackDefaults.PWAPathRelative, version.winPathway));
-            if (hack != null && hack.SHA1Checksum == version.checksum)
+            if (hack != null && hack.Checksum == version.checksum)
             {
                 hack.HasRemoteVersion = true;
                 hack.HpVersionID = version.ID;
@@ -333,7 +401,7 @@ namespace HackPDM
         public static bool IsLocalVersion(in HpVersion version, in HackFile hackFile)
         {
             //if (HasLocalVersion(hackFile) && hackFile?.HpVersionID == version.ID) return true;
-            if (hackFile.SHA1Checksum == version.checksum) return true;
+            if (hackFile.Checksum == version.checksum) return true;
             return false;
         }
         public static bool GetLocalVersion(in HpVersion[] versions, out HackFile hackFile)
@@ -361,7 +429,7 @@ namespace HackPDM
                 {
                     new ArrayList() { "name", "=", hackFile.Name },
                     //new ArrayList() { "checksum", "=", hackFile.SHA1Checksum },
-                    //new ArrayList() { "directory_complete_name", "=", filePath },
+                    new ArrayList() { "directory_complete_name", "=", filePath },
                 }
             ];
             version = HpVersion.GetRecordsBySearch(arrList)?[0];
@@ -381,7 +449,28 @@ namespace HackPDM
             return hackMap;
         }
 
-		public override bool Equals( object obj )
+
+        public static async Task<int> CreateFiles(params HackFile[] hackFiles)
+        {
+            List<Task<bool>> tasks = [];
+            int success = 0;
+
+            foreach (HackFile file in hackFiles)
+            {
+                if (file.FileContents != null && file.FileContents.Length > 0)
+                    tasks.Add(FileOperations.WriteAllBytesAsync(file));
+            }
+            Task<bool[]> waitTask = Task.WhenAll(tasks);
+            await waitTask;
+
+            foreach (bool val in waitTask.Result) success += val ? 1 : 0;
+            return success;
+        }
+        public bool CreateFile()
+        {
+            return FileOperations.WriteAllBytes(this);
+        }
+        public override bool Equals( object obj )
         {
             string filePath = "";
             HackFile hack = obj as HackFile;
@@ -408,18 +497,18 @@ namespace HackPDM
                     if (this.HpVersionID == hack.HpVersionID ) return true;
                     
 				}
-                if (this.SHA1Checksum is not null and not "" )
+                if (this.Checksum is not null and not "" )
                 {
-					if ( this.SHA1Checksum == hack.SHA1Checksum ) return true;
+					if ( this.Checksum == hack.Checksum ) return true;
 					
 				}
-                if (hack.SHA1Checksum is not null and not "")
+                if (hack.Checksum is not null and not "")
                 {
 
 				    if ( filePath is not "" )
 				    {
 					    string checksum = FileOperations.FileChecksum( this.FullPath, SHA1.Create() );
-					    if ( checksum == hack.SHA1Checksum ) return true;
+					    if ( checksum == hack.Checksum ) return true;
 				    }
                 }
 	        }
@@ -431,9 +520,9 @@ namespace HackPDM
 					if ( this.HpVersionID == version.ID )
 						return true;
 				}
-				if ( this.SHA1Checksum is not null and not "" )
+				if ( this.Checksum is not null and not "" )
 				{
-					if ( this.SHA1Checksum == version.checksum )
+					if ( this.Checksum == version.checksum )
 						return true;
 				}
 				if ( version.checksum is not null and not "" )
@@ -468,10 +557,10 @@ namespace HackPDM
 			hash.Add( this.RelativePath );
 			hash.Add( this.TypeExt );
 			hash.Add( this.ModifiedDate );
-			hash.Add( this.SHA1Checksum );
+			hash.Add( this.Checksum );
 			hash.Add( this.HpVersionID );
 			hash.Add( this.HasRemoteVersion );
-			hash.Add( this.fileContents );
+			hash.Add( this.FileContents );
 			return hash.ToHashCode();
 		}
 	}

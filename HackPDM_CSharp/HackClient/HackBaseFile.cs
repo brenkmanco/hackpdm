@@ -12,13 +12,34 @@ namespace HackPDM
 {
     public abstract class HackBaseFile
     {
-        public string Name { get; set; }
-        public string FullPath { get; set; }
-        public string BasePath { get; set; }
+        public string Name 
+        { 
+            get => Info?.Name ?? field; 
+            set
+            {
+                field = Info?.Name ?? value;
+            }
+        }
+        public string BasePath 
+        { 
+            get => Info?.DirectoryName ?? field; 
+            set
+            {
+                field = Info?.DirectoryName ?? value;
+            }
+        }
+        public string FullPath 
+        { 
+            get => Info?.FullName ?? field ?? Path.Combine(HackDefaults.PWAPathAbsolute, BasePath, Name); 
+            set
+            {
+                field = Info?.FullName ?? value;
+            }
+        }
         public string RelativePath { get; set; }
-        private byte[] FileContents { get; set; }
+        internal byte[] FileContents { get; set; }
+        internal FileInfo Info { get; set; }
 
-        
         public Hashtable ComputeHashtable(bool includeEmpty = true, in string[] excludedFieldNames = null)
         {
             Hashtable ht;

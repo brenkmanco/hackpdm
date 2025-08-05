@@ -141,7 +141,7 @@ namespace HackPDM.ClientUtils
             {
                 if (theme == null) throw new ArgumentException($"Theme is null");
                 if (string.IsNullOrEmpty(theme.Name)) throw new ArgumentException($"Theme has an invalid name of '{theme.Name}'.", nameof(theme));
-                if (themeRoot?.Themes.Any(t => t.Id == theme.Id) == true)
+                if (themeRoot?.Themes?.Any(t => t.Id == theme.Id) == true)
                 {
                     throw new ArgumentException($"Theme already exists with the same values.", nameof(theme));
                 }

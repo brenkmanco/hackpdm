@@ -47,6 +47,19 @@ namespace HackPDM.ClientUtils
         FileTypeLoc,
         FileTypeLocDat,
     }
+    public enum HackVersionType
+    {
+        Latest,
+        Older,
+        Unique,
+        New,
+    }
+    public enum TaskProgress
+    {
+        InProgress,
+        Finished,
+        Cancelling,
+    }
     public enum SortPredefined
     {
         String,

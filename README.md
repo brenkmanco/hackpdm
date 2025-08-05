@@ -12,9 +12,19 @@ Because:
  - We don't want to worry about how many licenses we need
 
 
+
+- client_status_code:
+    - ro = remote only ![alt](./HackPDM_CSharp/Icons/StatusIcons/ro.png)
+    - lo = local only ![alt](./HackPDM_CSharp/Icons/StatusIcons/lo.png)
+    - nv = new remote version ![alt](./HackPDM_CSharp/Icons/StatusIcons/nv.png)
+    - cm = checked out to me ![alt](./HackPDM_CSharp/Icons/StatusIcons/cm.png)
+    - co = checked out to other ![alt](./HackPDM_CSharp/Icons/StatusIcons/co.png)
+    - if = ignore filter ![alt](./HackPDM_CSharp/Icons/StatusIcons/if.png)
+    - ft = no remote file type ![alt](./HackPDM_CSharp/Icons/StatusIcons/ft.png)
+    - lm = local modification ![alt](./HackPDM_CSharp/Icons/StatusIcons/lm.png)
+    - dt = deleted ![alt](./HackPDM_CSharp/Icons/StatusIcons/dt.png)
+    - ds = destroyed ![alt](./HackPDM_CSharp/Icons/StatusIcons/ds.png)
+    
+
 Setup:
- - Download latest justinOdooIntegration release for hackpdm
- - Build the HackPDM_CSharp project in Release Configuration with x64 or x86
- - Navigate to .\HackPDM_CSharp\bin\x64\Release
- - Execute HackPDM.exe
- 
+ - 

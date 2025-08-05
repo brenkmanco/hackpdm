@@ -987,18 +987,11 @@ namespace HackPDM
         }
         public async static Task<int> BatchDownloadFiles(List<HpVersion> processVersions)
         {
-            FileData[] datas = DownloadFilesData(processVersions);
+            HackFile[] datas = DownloadFilesData(processVersions);
             
             if (datas == null || datas.Length < 1) return 0;
             
-            //// filter FileData[]
-            //FileData[] revisedData = datas.TakeWhile((data) =>
-            //{
-            //    if (data.FileContents != null && data.FileContents.Length > 0) 
-            //        return true;
-            //    return false;
-            //}).ToArray();
-            Task<int[]> finish = Task.WhenAll(FileData.CreateFiles(datas));
+            Task<int[]> finish = Task.WhenAll(HackFile.CreateFiles(datas));
             await finish;
             return finish.Result[0];
         }
@@ -1006,9 +999,9 @@ namespace HackPDM
         public bool DownloadFile(string toPath)
         {
             if (!Directory.Exists(toPath) && !Directory.CreateDirectory(toPath).Exists) return false;
-            FileData data = DownloadFileData();
+            HackFile data = DownloadFileData();
 
-            data.FilePath = toPath;
+            data.BasePath = toPath;
             if (data.FileContents != null && data.FileContents.Length > 0)
                 data.CreateFile();
 
@@ -1025,15 +1018,14 @@ namespace HackPDM
                 // which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
                 if (file_size != 0)
                 {
-                    this.file_contents = (string)((Hashtable)OClient.Read(HpModel, [this.ID], [fileContents])[0])[fileContents];
-                    return this.file_contents;
+                    return (string)((Hashtable)OClient.Read(HpModel, [this.ID], [fileContents])[0])[fileContents];
                 }
             }
             return null;
         }
         public static List<HpVersion> DownloadContentsAll(List<HpVersion> versions)
         {
-            string[] fileContents = ["file_contents", "dir_id", "name"];
+            string[] fileContents = ["file_contents", "dir_id", "name", "file_modify_stamp"];
             List<HpVersion> processVersions = [.. versions.TakeAndRemove(version =>
             {
                 if (version.file_contents is not null and not "") return false;
@@ -1056,11 +1048,11 @@ namespace HackPDM
             //return fileContentsBase64;
             return versions;
         }
-        public FileData DownloadFileData()
+        public HackFile DownloadFileData()
         {
             if (file_contents == null) DownloadContents();
 
-            FileData file = new(name, type:null);
+            HackFile file = new(name, null);
             if (file_contents == null) return file;
 
             byte[] fileContents = Convert.FromBase64String(file_contents);
@@ -1068,7 +1060,7 @@ namespace HackPDM
 
             return file;
         }
-        public static FileData[] DownloadFilesData(List<HpVersion> versions)
+        public static HackFile[] DownloadFilesData(List<HpVersion> versions)
         {
             versions = DownloadContentsAll(versions);
             //string[] fileContentsBase64 = DownloadContentsAll(versions).ToArray();
@@ -1076,27 +1068,27 @@ namespace HackPDM
             if (versions is null) return null;
             
             int vLen = versions.Count();
-            FileData[] fileData = new FileData[vLen];
+            var hackFiles = new HackFile[vLen];
 
             for (int i = 0; i < vLen; i++)
             {
-                FileData file = new(versions[i].name, type: null);
-
+                HackFile hack = new(versions[i].name, null);
                 if (versions[i] != null && versions[i].file_contents is not null and not "")
                 {
-                    byte[] fileContents = Convert.FromBase64String(versions[i].file_contents);
-                    file.Name = versions[i].name;
-                    file.FileContents = fileContents;
-                    file.FilePath = versions[i].winPathway;
+                    hack.FileContents = Convert.FromBase64String(versions[i].file_contents);
+                    hack.Name = versions[i].name;
+                    hack.BasePath = versions[i].winPathway;
+                    hack.SetModifiedDate(versions[i]?.file_modify_stamp ?? default);
+                    // winpathway is probably the shortened version
                 }
                 else
                 {
-                    file.FileContents = null;
+                    hack.FileContents = null;
                 }
 
-                fileData[i] = file;
+                hackFiles[i] = hack;
             }
-            return fileData;
+            return hackFiles;
         }
         public static string[] GetDirectoryPath(ArrayList ids)
         {
@@ -1183,8 +1175,8 @@ namespace HackPDM
             if (OdooDefaults.RestrictTypes & !OdooDefaults.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
                 return null;
 
-            string fileBase64 = hackFile.fileContents != null
-            ? Convert.ToBase64String(hackFile.fileContents)
+            string fileBase64 = hackFile.FileContents != null
+            ? Convert.ToBase64String(hackFile.FileContents)
             : FileOperations.ConvertToBase64(hackFile.FullPath);
 
             HpVersion newVersion = new()
@@ -1294,81 +1286,10 @@ namespace HackPDM
             }
             return null;
         }
-        public FileData DownloadFileData()
-        {
-            DownloadContents();
-            FileData file = new(name, type);
-            if (fileContentsBase64 == null) return file;
-            
-            byte[] fileContents = Convert.FromBase64String(fileContentsBase64);
-            file.FileContents = fileContents;
-
-            return file;
-        }
+        
         public string GetFileContentsB64() => fileContentsBase64;
     }
-    public struct FileData(
-        string name,
-        string type,
-        string filePath = null,
-        int fileSize = 0,
-        //string checksum = null, 
-        byte[] fileContents = null)
-    {
-        // file information
-        public string Name { get; set; } = name;
-        public string Type { get; set; } = type;
-        public int FileSize { get; set; } = fileSize;
-
-        // ir.attachment records store by SHA1 checksum
-        private string m_Checksum = null;
-        public string Checksum 
-        { 
-            get
-            {
-                if (m_Checksum != null) return m_Checksum;
-                if (FileContents != null && FileContents.Length > 0)
-                {
-                    using (var sha = SHA1.Create())
-                    {
-                        byte[] byteArr = sha.ComputeHash(FileContents);
-
-                        m_Checksum = string.Join("", byteArr.Select(i => i.ToString("X2")));
-                        return m_Checksum;
-                    }
-                }
-                return null;
-            }
-            
-        }
-
-        // directory info
-        public string FilePath { get; set; } = filePath;
-
-        // file contents
-        public byte[] FileContents { get; set; } = fileContents;
-
-        public bool CreateFile()
-        {
-            return FileOperations.WriteAllBytes(this);
-        }
-        public async static Task<int> CreateFiles(FileData[] filedata)
-        {
-            List<Task<bool>> tasks = [];
-            int success = 0;
-
-            foreach (FileData file in filedata)
-            {
-                if (file.FileContents != null && file.FileContents.Length > 0)
-                    tasks.Add(FileOperations.WriteAllBytesAsync(file));
-            }
-            Task<bool[]> waitTask = Task.WhenAll(tasks);
-            await waitTask;
-            foreach (bool val in waitTask.Result) success += val ? 1 : 0;
-            return success;
-        }
-        
-    }
+    
     public class HpVersionProperty : HpBaseModel<HpVersionProperty>
     {
         public string sw_config_name;

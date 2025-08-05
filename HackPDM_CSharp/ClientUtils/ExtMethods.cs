@@ -8,6 +8,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -442,6 +443,29 @@ namespace HackPDM.ClientUtils
                 Debug.Fail($"Failed to set theme on form: {ex.Message}");
                 return false;
             }
+        }
+    }
+    public static class FileInfoExtensions
+    {
+        extension(FileInfo file)
+        {
+            //public string Checksum
+            //{
+            //    get
+            //    {
+
+            //        if (file.Exists && file.Length > 0)
+            //        {
+            //            using SHA1 sha = SHA1.Create();
+            //            using FileStream stream = file.OpenRead();
+            //            byte[] bytearray = sha.ComputeHash(stream);
+
+            //            return string.Join("", bytearray.Select(i => i.ToString("X2")));
+            //        }
+                    
+            //        return file.Checksum;
+            //    }
+            //}
         }
     }
 }

@@ -24,7 +24,8 @@ namespace HackPDM
             => Convert.ToBase64String(ReadFileInChunks(filePath));
         public static byte[] ConvertFromBase64(string base64String )
 			=> Convert.FromBase64String( base64String );
-		public static bool WriteAllBytes(FileData file)
+	
+        public static bool WriteAllBytes(HackFile file)
         {
             if (file.FileContents == null)
             {
@@ -33,7 +34,7 @@ namespace HackPDM
             }
             try
             {
-                string combinedPath = file.FilePath;//Path.Combine(HackDefaults.PWAPathAbsolute, file.FilePath);
+                string combinedPath = file.BasePath;//Path.Combine(HackDefaults.PWAPathAbsolute, file.FilePath);
                 if (!Directory.Exists(combinedPath))
                 {
                     Directory.CreateDirectory(combinedPath);
@@ -41,8 +42,9 @@ namespace HackPDM
                 combinedPath = Path.Combine(combinedPath, file.Name);
 
                 File.WriteAllBytes(combinedPath, file.FileContents);
-
-                Console.WriteLine($"{file.Name} create in {combinedPath}");
+                
+                Console.WriteLine($"{file.Name} created in {combinedPath}");
+                file.ApplyModifiedDateToLocal();
                 return true;
             }
             catch (Exception e)
@@ -51,7 +53,7 @@ namespace HackPDM
                 return false;
             }
         }
-        public async static Task<bool> WriteAllBytesAsync(FileData file)
+        public async static Task<bool> WriteAllBytesAsync(HackFile file)
         {
             if (file.FileContents == null)
             {
@@ -60,7 +62,7 @@ namespace HackPDM
             }
             try
             {
-                string combinedPath = Path.Combine(HackDefaults.PWAPathAbsolute, file.FilePath);
+                string combinedPath = Path.Combine(HackDefaults.PWAPathAbsolute, file.BasePath);
                 if (!Directory.Exists(combinedPath))
                 {
                     Directory.CreateDirectory(combinedPath);
@@ -68,6 +70,7 @@ namespace HackPDM
                 combinedPath = Path.Combine(combinedPath, file.Name);
 
                 await WriteBytes(combinedPath, file.FileContents);
+                file.ApplyModifiedDateToLocal();
                 return true;
 
             }
@@ -77,6 +80,7 @@ namespace HackPDM
                 return false;
             }
         }
+        
         public static bool SameChecksum(HpVersion version, ChecksumType cType=ChecksumType.SHA1)
             => SameChecksum(
                 Path.Combine(
@@ -141,16 +145,14 @@ namespace HackPDM
                 if (path.Length == 0) throw new ArgumentException("Invalid Argument: Empty path");
                 if (bytes == null) throw new ArgumentNullException("bytes");
 
-                using (FileStream fileStream = new(
+                using FileStream fileStream = new(
                     path: path,
                     mode: FileMode.Create,
                     access: FileAccess.Write,
                     share: FileShare.Read,
                     bufferSize: 4096,
-                    useAsync: true))
-                {
-                    await fileStream.WriteAsync(bytes, 0, bytes.Length);
-                }
+                    useAsync: true);
+                await fileStream.WriteAsync(bytes, 0, bytes.Length);
                 return true;
             }
             catch
@@ -269,9 +271,9 @@ namespace HackPDM
                     if (item["checksum"] is string checksum)
                     {
 				        // this means that this hackFile is in the database so it can be skipped
-                        if (checksum == hackArr[i].SHA1Checksum)
+                        if (checksum == hackArr[i].Checksum)
 				        {
-					        HackFileManager.Dialog.AddStatusLine("FOUND", $"checksum found remotely ({hackArr [ i ].SHA1Checksum}) for: {filePath}" );
+					        HackFileManager.Dialog.AddStatusLine("FOUND", $"checksum found remotely ({hackArr [ i ].Checksum}) for: {filePath}" );
                             isFound = true;
                             break;
 				        }
@@ -279,7 +281,7 @@ namespace HackPDM
 			    }
                 if ( !isFound )
                 {
-				    HackFileManager.Dialog.AddStatusLine( "INFO", $"Queued commit for {hackArr[i].Name} (Checksum: {hackArr [ i ].SHA1Checksum}) for: {filePath}" );
+				    HackFileManager.Dialog.AddStatusLine( "INFO", $"Queued commit for {hackArr[i].Name} (Checksum: {hackArr [ i ].Checksum}) for: {filePath}" );
 				    hacks.Add( hackArr [ i ] );
                 }
 
