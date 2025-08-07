@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
 
+using HackPDM.ClientUtils;
 using HackPDM.Properties;
 
 
@@ -70,5 +71,5 @@ namespace HackPDM.Forms.Hack
 			try {Directory.CreateDirectory( path ); return true;}
 			catch {return false;}
 		}
-	}
+    }
 }

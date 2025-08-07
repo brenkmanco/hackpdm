@@ -1,16 +1,63 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data.Entity.Core.Metadata.Edm;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+
+using HackPDM.Properties;
 
 using static System.Net.Mime.MediaTypeNames;
 
 namespace HackPDM.ClientUtils
 {
+    public class Notifier
+    {
+        private static CancellationTokenSource cFileSystem = new();
+        public static ConcurrentQueue<FileCheck> QueueFileCheck = new();
+        public static FileSystemWatcher FileWatcher { get; set; }
+        public static NotifyIcon Notify { get; set; } = null;
+        static Notifier()
+        {
+            FileWatcher = new()
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.CreationTime | NotifyFilters.Attributes,
+                Path = HackPDM.Properties.UserSettings.Default.PWAPathAbsolute ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), System.Windows.Forms.Application.ProductName, "pwa"),
+                EnableRaisingEvents = true,
+            };
+            FileWatcher.Created += (s, e) => QueueFileCheck.Enqueue(new FileCheck(e));
+            FileWatcher.Deleted += (s, e) => QueueFileCheck.Enqueue(new FileCheck(e));
+            FileWatcher.Changed += (s, e) => QueueFileCheck.Enqueue(new FileCheck(e));
+            FileWatcher.Renamed += (s, e) => QueueFileCheck.Enqueue(new FileCheck(e));
+            FileWatcher.EnableRaisingEvents = true;
+        }
+        public async static void FileCheckLoop(CancellationToken cToken)
+        {
+            while (!cToken.IsCancellationRequested)
+            { 
+                if (Notify is not null && QueueFileCheck.Count == 1)
+                {
+                    QueueFileCheck.TryDequeue(out FileCheck fileCheck);
+                    fileCheck.Notify();
+                }
+                else if (Notify is not null && QueueFileCheck.Count > 1)
+                {
+                    string commonPath = FileCheck.FindCommonPath(QueueFileCheck);
+                    FileCheck.Notify("Files Changed", $"{QueueFileCheck.Count} files were changed");
+                }
+
+                QueueFileCheck = new(); // clear the queue
+                await Task.Delay(2000, cToken);
+            }
+            cFileSystem.Dispose();
+        }
+    }
     // List Views Column Name and Widths
     public static class NameConfig
     {
@@ -374,7 +421,121 @@ namespace HackPDM.ClientUtils
 
         }
     }
-    
+    public struct FileCheck
+    {
+        public readonly WatcherChangeTypes ChangeType { get; }
+        public readonly string Name { get; }
+        public readonly string CurrentPath { get; }
+        public readonly string OldPath { get; }
+        public HackFile Hack
+        {
+            get
+            {
+                if (CurrentPath is not null && ChangeType != (WatcherChangeTypes.Deleted | WatcherChangeTypes.All))
+                {
+                    field ??= new HackFile(CurrentPath);
+                }
+                return field;
+            }
+        }
+        public FileCheck(string name, string path, string oldPath = null, WatcherChangeTypes type = WatcherChangeTypes.All)
+        {
+            Name = name;
+            ChangeType = type;
+            CurrentPath = path;
+            OldPath = oldPath;
+        }
+        public FileCheck(EventArgs e)
+        {
+            switch (e)
+            {
+                case RenamedEventArgs renamedEvent:
+                    {
+                        Name = renamedEvent.Name;
+                        ChangeType = WatcherChangeTypes.Renamed;
+                        CurrentPath = renamedEvent.FullPath;
+                        OldPath = renamedEvent.OldFullPath;
+                        break;
+                    }
+                case FileSystemEventArgs fileEvent:
+                    {
+                        Name = fileEvent.Name;
+                        ChangeType = fileEvent.ChangeType;
+                        CurrentPath = fileEvent.FullPath;
+                        OldPath = null;
+                        break;
+                    }
+                default:
+                    {
+                        Name = string.Empty;
+                        ChangeType = WatcherChangeTypes.All;
+                        CurrentPath = string.Empty;
+                        OldPath = string.Empty;
+                        Hack = null;
+                        break;
+                    }
+            }
+        }
+        
+        public override bool Equals(object obj)
+        {
+
+            if (obj is FileCheck other)
+            {
+                return Name == other.Name && CurrentPath == other.CurrentPath;
+            }
+            return false;
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Name, CurrentPath);
+        }
+
+        public static bool operator ==(FileCheck left, FileCheck right)
+        {
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(FileCheck left, FileCheck right)
+        {
+            return !(left == right);
+        }
+        public void Notify()
+            => Notify($"File {Enum.GetName(typeof(WatcherChangeTypes), ChangeType)}", $"File: {Name}");
+        public static void Notify(string title, string text, ToolTipIcon icon = ToolTipIcon.Info)
+        {
+            Notifier.Notify.BalloonTipTitle = title;
+            Notifier.Notify.BalloonTipText = text;
+            Notifier.Notify.Text = text[0..Math.Min(text.Length, 62)];
+            Notifier.Notify.BalloonTipIcon = icon;
+            Notifier.Notify.Icon = Resources.hackpdm_icon;
+            Notifier.Notify.ShowBalloonTip(2000); // Show for 3 seconds
+        }
+        public static string FindCommonPath(IEnumerable<FileCheck> fileChecks)
+        {
+            if (fileChecks == null || !fileChecks.Any())
+                return string.Empty;
+
+            var paths = fileChecks.Select(fc => fc.CurrentPath).Where(p => !string.IsNullOrEmpty(p)).ToList();
+            
+            if (!paths.Any())
+                return string.Empty;
+
+            // Find the common path
+            var commonPath = paths[0];
+            foreach (var path in paths.Skip(1))
+            {
+                while (!path.StartsWith(commonPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    commonPath = Path.GetDirectoryName(commonPath);
+                    if (commonPath == null)
+                        return string.Empty;
+                }
+            }
+            return commonPath;
+        }
+    }
     public class ComparerSort : IComparer
     {
         public delegate int CompareFunction(object x, object y);

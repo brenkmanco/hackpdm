@@ -22,6 +22,9 @@
 
 using System;
 using System.IO;
+using System.Threading.Tasks;
+
+using HackPDM.ClientUtils;
 using HackPDM.HackClient;
 
 using Application = System.Windows.Forms.Application;
@@ -44,8 +47,8 @@ namespace HackPDM
 
 			Application.EnableVisualStyles();
 			Application.SetCompatibleTextRenderingDefault(false);
-
-			Application.Run(new ProfileManager());		
+			Notifier.FileCheckLoop(default); // start file check loop in background
+            Application.Run(new ProfileManager());		
 		}
 		
 	}

@@ -51,6 +51,7 @@ namespace HackPDM
 			this.FormClosing += this.ProfileManager_FormClosing;
             InitializeComponent();
             this.SetFormTheme(MyTheme);
+            Notifier.Notify = NotifyPopup;
         }
 
 		private void ProfileManager_FormClosing( object sender, FormClosingEventArgs e ) 
@@ -74,6 +75,10 @@ namespace HackPDM
 
                 ProfileManStatusList.Items.Add(listItem);
             }
+        }
+        private NotifyIcon InitNotifier ()
+        {
+            return NotifyPopup;
         }
               
         private void odooSettingsBtn_Click(object sender, EventArgs e)

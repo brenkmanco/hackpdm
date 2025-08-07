@@ -28,12 +28,15 @@
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(ProfileManager));
             this.OdooLoginBtn = new System.Windows.Forms.Button();
             this.odooSettingsBtn = new System.Windows.Forms.Button();
             this.HackSettingsBtn = new System.Windows.Forms.Button();
             this.ProfileManStatusList = new System.Windows.Forms.ListView();
             this.ProfileManStatusHead = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.ProfileManMessageHead = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.NotifyPopup = new System.Windows.Forms.NotifyIcon(this.components);
             this.SuspendLayout();
             // 
             // OdooLoginBtn
@@ -91,6 +94,13 @@
             this.ProfileManMessageHead.Text = "Message";
             this.ProfileManMessageHead.Width = 313;
             // 
+            // NotifyPopup
+            // 
+            this.NotifyPopup.BalloonTipIcon = System.Windows.Forms.ToolTipIcon.Info;
+            this.NotifyPopup.Icon = ((System.Drawing.Icon)(resources.GetObject("NotifyPopup.Icon")));
+            this.NotifyPopup.Text = "HackPDM";
+            this.NotifyPopup.Visible = true;
+            // 
             // ProfileManager
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -116,5 +126,6 @@
 		private System.Windows.Forms.ListView ProfileManStatusList;
 		private System.Windows.Forms.ColumnHeader ProfileManStatusHead;
 		private System.Windows.Forms.ColumnHeader ProfileManMessageHead;
-	}
+        public System.Windows.Forms.NotifyIcon NotifyPopup;
+    }
 }

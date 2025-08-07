@@ -107,5 +107,5 @@
 		private System.Windows.Forms.TextBox txtPwaInput;
 		private System.Windows.Forms.Label label1;
 		private System.Windows.Forms.TextBox HackTempFolderPath;
-	}
+    }
 }

@@ -48,9 +48,11 @@ namespace HackPDM
 {
 	public partial class HackFileManager : Form
     {
-	#region Declarations
-        public static		StatusDialog				Dialog { get; set; }
+		#region Declarations
+		public static		NotifyIcon					Notify { get; } = Notifier.Notify;
+		public static		StatusDialog				Dialog { get; set; }
 		public static		ConcurrentQueue<string[]>	QueueAsyncStatus = new();
+		
 		public static		ListDetail					ActiveList { get; set; }
 		public static		int							DownloadBatchSize 
         { 
@@ -86,6 +88,7 @@ namespace HackPDM
 		};
         private static		CancellationTokenSource		cSource = new();
 		private static		CancellationTokenSource		cTreeSource = new();
+		
 		private static		System.Drawing.Image		previewImage	= null;
 		private static		bool						IsActive { get; set; } = false;
         private static		int							ProcessCounter;
@@ -102,7 +105,7 @@ namespace HackPDM
 
 		private				HpDirectory					Root;
 		private				Point						prevOverlayMousePos = new(0, 0);
-        private				bool						isClosing = false;
+        private	static		bool						isClosing = false;
 		private				string						SWKey;
         private delegate	void						BackgroundMethodDel		(object sender, DoWorkEventArgs e);
         private delegate	void						BackgroundCompleteDel	(object sender, RunWorkerCompletedEventArgs e);
@@ -150,6 +153,7 @@ namespace HackPDM
             this.Load += new EventHandler(FormLoaded);
             this.Root = HpBaseModel<HpDirectory>.GetRecordByID(1);
         }
+		
 		private void					FormLoaded					(object sender, EventArgs e)
 		{
 			CreateTreeViewBackground();
@@ -3093,8 +3097,138 @@ namespace HackPDM
             HpEntry[] entries = HpEntry.GetRecordsByIDS(null, searchFilters: [new ArrayList() { "deleted", "=", true }, new ArrayList() { "dir_id", "=", (int)LastSelectedNode.Tag }], excludedFields: ["type_id", "cat_id", "checkout_node"]);
             await AsyncRunner(() => Async_LogicalUnDelete(entries), "Logically UnDelete Files");
         }
-        
+
 
         #endregion
+
+        private void ListTabs_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void TreeAnalyze_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void TreeDelete_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooEntryList_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void ListContextEntry_Opening(object sender, CancelEventArgs e)
+        {
+
+        }
+
+        private void toolStripMenuItem6_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void VersionTabs_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooHistoryPage_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooHistory_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooVersionHistoryMenu_Opening(object sender, CancelEventArgs e)
+        {
+
+        }
+
+        private void moveToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooParentsPage_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooParents_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooChildrenPage_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooChildren_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooPropertiesPage_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooProperties_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooVersionPage_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooVersionInfoList_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void panel1_Paint(object sender, PaintEventArgs e)
+        {
+
+        }
+
+        private void MoreTools_ItemClicked(object sender, ToolStripItemClickedEventArgs e)
+        {
+
+        }
+
+        private void EntriesTab_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void Changes_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void HackChangesList_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void AdditionalTools_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void OdooEntryImage_Click(object sender, EventArgs e)
+        {
+
+        }
     }
 }

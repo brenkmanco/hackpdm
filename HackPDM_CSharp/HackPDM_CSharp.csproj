@@ -623,8 +623,9 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Resources\delete_image_button.png" />
     <Content Include="hackpdm-icon.ico" />
+    <Content Include="Resources\delete_image_button.png" />
+    <Content Include="Resources\hackpdm-icon.ico" />
     <None Include="Resources\UnknownImage.png" />
   </ItemGroup>
   <ItemGroup>
