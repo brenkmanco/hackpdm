@@ -466,19 +466,44 @@ namespace HackPDM
             return [.. records];
         }
 
-        private static T RecordPopulation(Hashtable ht, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
+        internal static T RecordPopulation(Hashtable ht, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string> RemapNames = null)
         {
             if (ht is null) return null;
 
+            if (RemapNames is not null)
+            {
+                foreach (DictionaryEntry pair in ht)
+                {
+                    if (RemapNames.TryGetValue(pair.Key.ToString(), out string newName))
+                    {
+                        DictionaryEntry de = new(newName, pair.Value);
+                        ht[pair.Key.ToString()] = de;
+                    }
+                }
+            }
             T record = HashConverter.ConvertToClass<T>(ht);
             
             FinalizePopulation(record, ht, excludedFields, hashStoreType);
             return record;
         }
-        private static T[] RecordsPopulation(Hashtable[] hts, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
+        internal static T[] RecordsPopulation(Hashtable[] hts, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string> RemapNames = null)
         {
             if (hts is null) return null;
 
+            if (RemapNames is not null)
+            {
+                foreach(Hashtable ht in hts)
+                {
+                    foreach (DictionaryEntry pair in ht)
+                    {
+                        if (RemapNames.TryGetValue(pair.Key.ToString(), out string newName))
+                        {
+                            DictionaryEntry de = new(newName, pair.Value);
+                            ht[pair.Key.ToString()] = de;
+                        }
+                    }
+                }
+            }
             T[] records = HashConverter.ConvertToClasses<T>(hts);
 
             FinalizePopulations(records, hts, excludedFields, hashStoreType);

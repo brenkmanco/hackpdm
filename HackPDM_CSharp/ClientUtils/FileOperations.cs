@@ -71,6 +71,7 @@ namespace HackPDM
 
                 await WriteBytes(combinedPath, file.FileContents);
                 file.ApplyModifiedDateToLocal();
+                file.ApplyNonOwnerReadOnly();
                 return true;
 
             }
@@ -273,7 +274,7 @@ namespace HackPDM
 				        // this means that this hackFile is in the database so it can be skipped
                         if (checksum == hackArr[i].Checksum)
 				        {
-					        HackFileManager.Dialog.AddStatusLine("FOUND", $"checksum found remotely ({hackArr [ i ].Checksum}) for: {filePath}" );
+					        HackFileManager.Dialog.AddStatusLine(StatusMessage.FOUND, $"checksum found remotely ({hackArr [ i ].Checksum}) for: {filePath}" );
                             isFound = true;
                             break;
 				        }
@@ -281,7 +282,7 @@ namespace HackPDM
 			    }
                 if ( !isFound )
                 {
-				    HackFileManager.Dialog.AddStatusLine( "INFO", $"Queued commit for {hackArr[i].Name} (Checksum: {hackArr [ i ].Checksum}) for: {filePath}" );
+				    HackFileManager.Dialog.AddStatusLine(StatusMessage.INFO, $"Queued commit for {hackArr[i].Name} (Checksum: {hackArr [ i ].Checksum}) for: {filePath}" );
 				    hacks.Add( hackArr [ i ] );
                 }
 
@@ -296,13 +297,15 @@ namespace HackPDM
 	    }
         public static string FileSizeReformat(int? bytesize)
             => FileSizeReformat((long?)bytesize);
-        public static string FileSizeReformat(long? bytesize)
+        public static string FileSizeReformat(long? bytesize, bool standard = false)
             => bytesize switch
             {
-                < 1024 => $"{bytesize}     B",
-                < 1048576 => $"{bytesize / 1024f:.##}   KB",
-                <= 1073741824 => $"{bytesize / 1048576f:.##}   MB",
-                _ => $"{bytesize}     B",
+                < 1024 => standard ? $"{bytesize} B" : $"{bytesize}     B",
+                < 1048576 => standard ? $"{bytesize / 1024f:.##} KB" : $"{bytesize / 1024f:.##}   KB",
+                < 1073741824 => standard ? $"{bytesize / 1048576f:.##} MB" : $"{bytesize / 1048576f:.##}   MB",
+                < 1099511627776 => standard ? $"{bytesize / 1073741824f:.##} GB" : $"{bytesize / 1073741824f:.##}   GB",
+                <= 1125899906842624 => standard ? $"{bytesize / 1099511627776f:.##} TB" : $"{bytesize / 1099511627776f:.##}   TB",
+                _ => standard ? $"{bytesize} B": $"{bytesize}     B",
             };
 
         public static bool IsFileLocked(FileInfo file)

@@ -217,6 +217,22 @@ namespace HackPDM
                 field = value;
             }
         }
+        public static int? MaxConcurrency
+        {
+            get
+            {
+                field ??= HpSettings.First(setting => setting.name == "max_concurrency").int_value;
+                return field;
+            }
+        }
+        public static int? MaxBatchSize
+        {
+            get
+            {
+                field ??= HpSettings.First(setting => setting.name == "max_batch_size").int_value;
+                return field;
+            }
+        }
         // low enough number of records to get before
         public static HpSetting [] HpSettings
         {
@@ -521,6 +537,18 @@ namespace HackPDM
             return name;
         }
 	}
+    public class HpEntryMini : HpBaseModel<HpEntry>
+    {
+        public string name;
+        public string type;
+        public long size;
+        public string checkout;
+        public string fullname;
+        public DateTime latest_date;
+        public bool? deleted;
+        public string latest_checksum;
+        public string category;
+    }
     public class HpEntry : HpBaseModel<HpEntry>
     {
         public string name;
@@ -570,8 +598,8 @@ namespace HackPDM
 
             return list;
         }
-        public bool CanCheckOut() => checkout_user == 0 && !deleted;
-        public bool CanUnCheckOut() => checkout_user == OdooDefaults.OdooID;
+        public bool CanCheckOut() => (checkout_user is null or 0) && !deleted;
+        public bool CanUnCheckOut() => (checkout_user is not null) && checkout_user == OdooDefaults.OdooID;
         public async Task CheckOut()
         {
             if (!CanCheckOut()) return;
@@ -583,6 +611,16 @@ namespace HackPDM
             HpVersion version = new(node_id: checkout_node);
             version.ID = latest_version_id;
             await version.WriteChangedValuesAsync("node_id");
+            if (HashedValues.TryGetValue("windows_complete_name", out object objpath) && objpath is string winpath)
+            {
+                string absPath = Path.Combine(HackDefaults.PWAPathAbsolute, winpath[5..]);
+                FileInfo file = new(absPath);
+                if (file.Exists)
+                {
+                    file.Attributes &= ~FileAttributes.ReadOnly;
+                }
+            }
+
 		}
         public async Task UnCheckOut()
         {
@@ -592,7 +630,16 @@ namespace HackPDM
 			checkout_node = null;
 
 			await WriteChangedValuesAsync( "checkout_user", "checkout_date", "checkout_node" );
-		}
+            if (HashedValues.TryGetValue("windows_complete_name", out object objpath) && objpath is string winpath)
+            {
+                string absPath = Path.Combine(HackDefaults.PWAPathAbsolute, winpath[5..]);
+                FileInfo file = new(absPath);
+                if (file.Exists)
+                {
+                    file.Attributes |= FileAttributes.ReadOnly;
+                }
+            }
+        }
         internal static async Task<HpEntry> CreateNew( HackFile hackFile, int dir_id )
         {
 			if (OdooDefaults.RestrictTypes & !OdooDefaults.ExtToType.TryGetValue( hackFile.TypeExt.ToLower(), out HpType type ) )
@@ -1025,17 +1072,16 @@ namespace HackPDM
         }
         public static List<HpVersion> DownloadContentsAll(List<HpVersion> versions)
         {
-            string[] fileContents = ["file_contents", "dir_id", "name", "file_modify_stamp"];
+            string[] fileContents = ["file_contents", "dir_id", "name", "file_modify_stamp", "file_size"];
             List<HpVersion> processVersions = [.. versions.TakeAndRemove(version =>
             {
-                if (version.file_contents is not null and not "") return false;
-                return true;
+                return version.file_contents is null or ""; 
             })];
             
             ArrayList ids = new(processVersions.Select(v => v.ID).ToArray());
             //string[] fileContentsBase64 = 
             //ArrayList results = OClient.Read(GetHpModel(), ids, [fileContents], 60000);
-            HpVersion[] readyVersions = HpVersion.GetRecordsByIDS(ids, includedFields: fileContents);
+            HpVersion[] readyVersions = HpVersion.GetRecordsByIDS(ids, includedFields: fileContents, insertFields: ["checkout_user"]);
             if (readyVersions is not null && readyVersions.Length > 0)
                 versions.AddRange(readyVersions);
 
@@ -1073,12 +1119,16 @@ namespace HackPDM
             for (int i = 0; i < vLen; i++)
             {
                 HackFile hack = new(versions[i].name, null);
+                var check_user = versions[i].HashedValues["checkout_user"];
+                
+                hack.Owner = check_user is int id && OdooDefaults.OdooID == id;
                 if (versions[i] != null && versions[i].file_contents is not null and not "")
                 {
                     hack.FileContents = Convert.FromBase64String(versions[i].file_contents);
                     hack.Name = versions[i].name;
                     hack.BasePath = versions[i].winPathway;
                     hack.SetModifiedDate(versions[i]?.file_modify_stamp ?? default);
+                    hack.FileSize = versions[i].file_size;
                     // winpathway is probably the shortened version
                 }
                 else
@@ -1602,77 +1652,33 @@ namespace HackPDM
         public string name;
 		public string login;
         public string email;
-        public string tz_offset;
         public string signature;
-        public string totp_secret;
-        public string odoobot_state;
         public string notification_type;
         public DateTime? login_date;
         
-        public int? partner_id;
         public int? company_id;
-        public int? groups_id;
-        public int? action_id;
 
-        public int? log_ids;
-        public int? company_ids;
-        
-        public int? groups_count;
-        public int? companies_count;
-        public int? accesses_count;
-        public int? rules_count;
-        
-        public bool? share;
         public bool? active;
-        public bool? active_partner;
 
         public HpUser() {}
 
 		public HpUser( string name,
 				string login = null,
 				string email = null,
-				string tz_offset = null,
 				string signature = null,
-				string totp_secret = null,
-				string odoobot_state = null,
 				string notification_type = null,
 				DateTime? login_date = null,
-				int? partner_id = null,
 				int? company_id = null,
-				int? groups_id = null,
-				int? action_id = null,
-				int? log_ids = null,
-				int? company_ids = null,
-				int? groups_count = null,
-				int? companies_count = null,
-				int? accesses_count = null,
-				int? rules_count = null,
-				bool? share = null,
-				bool? active = null,
-				bool? active_partner = null)
+				bool? active = null)
 		{
 			this.name= name;
 			this.login= login;
 			this.email= email;
-			this.tz_offset= tz_offset;
 			this.signature= signature;
-			this.totp_secret= totp_secret;
-			this.odoobot_state= odoobot_state;
 			this.notification_type= notification_type;
 			this.login_date= login_date;
-			this.partner_id= partner_id;
 			this.company_id= company_id;
-			this.groups_id= groups_id;
-			this.action_id= action_id;
-			this.log_ids= log_ids;
-			this.company_ids= company_ids;
-			this.groups_count= groups_count;
-			this.companies_count= companies_count;
-			this.accesses_count= accesses_count;
-			this.rules_count= rules_count;
-			this.share= share;
 			this.active= active;
-			this.active_partner= active_partner;
 		}
 		public override string ToString()
 		{

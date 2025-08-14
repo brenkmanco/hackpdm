@@ -6,6 +6,32 @@ using System.Threading.Tasks;
 
 namespace HackPDM.ClientUtils
 {
+    public enum FileStatus
+    {
+        LO, // Local Only
+        RO, // Remote Only
+        OK, // Latest
+        NV, // Newer Remote Version
+        LM, // Local Modification
+        DT, // Deleted
+        DS, // Destroyed
+        IF, // Ignore Filter
+        FT, // Filter Type
+        CM, // Checked Out To Me
+        CO, // Checked Out To Other
+
+    }
+    public enum StatusMessage
+    {
+        PROCESSING,
+        SKIP,
+        FOUND,
+        INFO,
+        SUCCESS,
+        WARNING,
+        ERROR,
+        OTHER,
+    }
     public enum ChecksumType
     {
         SHA1,

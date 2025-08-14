@@ -197,13 +197,26 @@ namespace HackPDM
         }
         internal void ApplyModifiedDateToLocal()
         {
-            Info = new(FullPath);
             if (OverwriteDate == default) return;
+            Info ??= new(FullPath);
             if (Exists)
             {
                 try
                 {
                     Info?.LastWriteTime = OverwriteDate;
+                }
+                catch { }
+            }
+        }
+        internal void ApplyNonOwnerReadOnly()
+        {
+            Info ??= new(FullPath);
+            if (Owner) return;
+            if (Exists)
+            {
+                try
+                {
+                    Info.Attributes |= FileAttributes.ReadOnly;
                 }
                 catch { }
             }
@@ -226,6 +239,7 @@ namespace HackPDM
         // odoo settings
         public int? HpVersionID { get; set; }
         public bool? HasRemoteVersion { get; set; }
+        public bool Owner { get; set; } = false;
         public bool Exists => Info?.Exists ?? false;
 
         public HackFile() {}
@@ -390,14 +404,6 @@ namespace HackPDM
 
             return false;
         }
-        public static bool HasLocalVersion(in HackFile hackFile)
-        {
-            if (hackFile == null) return false;
-            if (hackFile.HasRemoteVersion != null && (bool)hackFile.HasRemoteVersion && hackFile.HpVersionID != null)
-                return true;
-            
-            return false;
-        }
         public static bool IsLocalVersion(in HpVersion version, in HackFile hackFile)
         {
             //if (HasLocalVersion(hackFile) && hackFile?.HpVersionID == version.ID) return true;
@@ -428,27 +434,13 @@ namespace HackPDM
                 new ArrayList()
                 {
                     new ArrayList() { "name", "=", hackFile.Name },
-                    //new ArrayList() { "checksum", "=", hackFile.SHA1Checksum },
                     new ArrayList() { "directory_complete_name", "=", filePath },
                 }
             ];
-            version = HpVersion.GetRecordsBySearch(arrList)?[0];
+            version = HpVersion.GetRecordsBySearch(arrList, ["file_contents", "preview_image"])?[0];
 
             return version != null;
         }
-        public static Dictionary<HackFile, HpVersion> GetVersionFromLocals(HackFile[] hackFiles)
-        {
-            Dictionary<HackFile, HpVersion> hackMap = [];
-            foreach (HackFile hf in hackFiles)
-            {
-                if (GetVersionFromLocal(hf, out HpVersion version))
-                {
-                    hackMap.Add(hf, version);
-                }
-            }
-            return hackMap;
-        }
-
 
         public static async Task<int> CreateFiles(params HackFile[] hackFiles)
         {
@@ -459,6 +451,11 @@ namespace HackPDM
             {
                 if (file.FileContents != null && file.FileContents.Length > 0)
                     tasks.Add(FileOperations.WriteAllBytesAsync(file));
+                if (file.FileSize is long size)
+                {
+                    HackFileManager.DownloadBytes += size;
+                    HackFileManager.SessionDownloadBytes += size;
+                }
             }
             Task<bool[]> waitTask = Task.WhenAll(tasks);
             await waitTask;
@@ -563,7 +560,7 @@ namespace HackPDM
 			hash.Add( this.FileContents );
 			return hash.ToHashCode();
 		}
-	}
+    }
     public struct DirectoryDict : IConvert<DirectoryDict>
     {
         public DirectoryDict[] directories;

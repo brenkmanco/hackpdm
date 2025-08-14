@@ -42,7 +42,7 @@ namespace HackPDM
             }
 
             HackFileManager.DownloadBatchSize = batchSize;
-            StatusDialog.HistoryLength = historyLength;
+            StatusDialog.MaxHistoryLength = historyLength;
             StatusDialog.SkipText = skipped;
             StatusErrorMessage.ForeColor = Color.Green;
             StatusErrorMessage.Text = "Successfully saved\nnew settings";

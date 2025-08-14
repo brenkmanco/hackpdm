@@ -86,17 +86,18 @@
             this.OdooVersionPage = new System.Windows.Forms.TabPage();
             this.OdooVersionInfoList = new System.Windows.Forms.ListView();
             this.panel1 = new System.Windows.Forms.Panel();
+            this.OdooEntryImage = new System.Windows.Forms.PictureBox();
             this.ShowInactive = new System.Windows.Forms.CheckBox();
             this.MoreTools = new System.Windows.Forms.ToolStrip();
-            this.ListTabs = new System.Windows.Forms.TabControl();
-            this.EntriesTab = new System.Windows.Forms.TabPage();
-            this.Changes = new System.Windows.Forms.TabPage();
-            this.HackChangesList = new System.Windows.Forms.ListView();
             this.AdditionalTools = new System.Windows.Forms.ToolStripDropDownButton();
             this.OdooRefreshDropdown = new System.Windows.Forms.ToolStripMenuItem();
             this.OdooSearchDropdown = new System.Windows.Forms.ToolStripMenuItem();
             this.OdooManageTypesDropdown = new System.Windows.Forms.ToolStripMenuItem();
-            this.OdooEntryImage = new System.Windows.Forms.PictureBox();
+            this.ListTabs = new System.Windows.Forms.TabControl();
+            this.EntriesTab = new System.Windows.Forms.TabPage();
+            this.Changes = new System.Windows.Forms.TabPage();
+            this.HackChangesList = new System.Windows.Forms.ListView();
+            this.OdooChangesList = new System.Windows.Forms.ListView();
             this.TreeContextDirectory.SuspendLayout();
             this.ListContextEntry.SuspendLayout();
             this.VersionTabs.SuspendLayout();
@@ -107,11 +108,11 @@
             this.OdooPropertiesPage.SuspendLayout();
             this.OdooVersionPage.SuspendLayout();
             this.panel1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.OdooEntryImage)).BeginInit();
             this.MoreTools.SuspendLayout();
             this.ListTabs.SuspendLayout();
             this.EntriesTab.SuspendLayout();
             this.Changes.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.OdooEntryImage)).BeginInit();
             this.SuspendLayout();
             // 
             // OdooDirectoryTree
@@ -193,7 +194,7 @@
             this.TreeAnalyze.Name = "TreeAnalyze";
             this.TreeAnalyze.Size = new System.Drawing.Size(157, 22);
             this.TreeAnalyze.Text = "Analyze";
-            this.TreeAnalyze.Click += new System.EventHandler(this.TreeAnalyze_Click);
+            //this.TreeAnalyze.Click += new System.EventHandler(this.TreeAnalyze_Click);
             // 
             // TreeDelete
             // 
@@ -205,7 +206,7 @@
             this.TreeDelete.Name = "TreeDelete";
             this.TreeDelete.Size = new System.Drawing.Size(157, 22);
             this.TreeDelete.Text = "Delete";
-            this.TreeDelete.Click += new System.EventHandler(this.TreeDelete_Click);
+            //this.TreeDelete.Click += new System.EventHandler(this.TreeDelete_Click);
             // 
             // TreeLogicalDelete
             // 
@@ -291,7 +292,7 @@
             this.OdooEntryList.View = System.Windows.Forms.View.Details;
             this.OdooEntryList.ColumnClick += new System.Windows.Forms.ColumnClickEventHandler(this.List_ColumnClick);
             this.OdooEntryList.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.OdooEntryList_ItemSelectionChanged);
-            this.OdooEntryList.SelectedIndexChanged += new System.EventHandler(this.OdooEntryList_SelectedIndexChanged);
+            //this.OdooEntryList.SelectedIndexChanged += new System.EventHandler(this.OdooEntryList_SelectedIndexChanged);
             this.OdooEntryList.DragDrop += new System.Windows.Forms.DragEventHandler(this.List_DragDrop);
             this.OdooEntryList.DragEnter += new System.Windows.Forms.DragEventHandler(this.List_DragEnter);
             this.OdooEntryList.DragOver += new System.Windows.Forms.DragEventHandler(this.List_DragOver);
@@ -308,7 +309,7 @@
             this.OpenEntryStrip});
             this.ListContextEntry.Name = "OdooCMSList";
             this.ListContextEntry.Size = new System.Drawing.Size(158, 136);
-            this.ListContextEntry.Opening += new System.ComponentModel.CancelEventHandler(this.ListContextEntry_Opening);
+            //this.ListContextEntry.Opening += new System.ComponentModel.CancelEventHandler(this.ListContextEntry_Opening);
             // 
             // ListGetLatest
             // 
@@ -352,7 +353,7 @@
             this.toolStripMenuItem6.Name = "toolStripMenuItem6";
             this.toolStripMenuItem6.Size = new System.Drawing.Size(157, 22);
             this.toolStripMenuItem6.Text = "Delete";
-            this.toolStripMenuItem6.Click += new System.EventHandler(this.toolStripMenuItem6_Click);
+            //this.toolStripMenuItem6.Click += new System.EventHandler(this.toolStripMenuItem6_Click);
             // 
             // logicalDeleteToolStripMenuItem1
             // 
@@ -535,7 +536,7 @@
             this.VersionTabs.SelectedIndex = 0;
             this.VersionTabs.Size = new System.Drawing.Size(1191, 297);
             this.VersionTabs.TabIndex = 2;
-            this.VersionTabs.SelectedIndexChanged += new System.EventHandler(this.VersionTabs_SelectedIndexChanged);
+            //this.VersionTabs.SelectedIndexChanged += new System.EventHandler(this.VersionTabs_SelectedIndexChanged);
             // 
             // OdooHistoryPage
             // 
@@ -547,7 +548,7 @@
             this.OdooHistoryPage.TabIndex = 0;
             this.OdooHistoryPage.Text = "History (0)";
             this.OdooHistoryPage.UseVisualStyleBackColor = true;
-            this.OdooHistoryPage.Click += new System.EventHandler(this.OdooHistoryPage_Click);
+            //this.OdooHistoryPage.Click += new System.EventHandler(this.OdooHistoryPage_Click);
             // 
             // OdooHistory
             // 
@@ -562,8 +563,8 @@
             this.OdooHistory.UseCompatibleStateImageBehavior = false;
             this.OdooHistory.View = System.Windows.Forms.View.Details;
             this.OdooHistory.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.OdooHistory_ItemSelectionChanged);
-            this.OdooHistory.SelectedIndexChanged += new System.EventHandler(this.OdooHistory_SelectedIndexChanged);
-            this.OdooHistory.DoubleClick += new System.EventHandler(this.History_DoubleClick);
+            //this.OdooHistory.SelectedIndexChanged += new System.EventHandler(this.OdooHistory_SelectedIndexChanged);
+            //this.OdooHistory.DoubleClick += new System.EventHandler(this.History_DoubleClick);
             // 
             // OdooVersionHistoryMenu
             // 
@@ -573,7 +574,7 @@
             this.moveToolStripMenuItem});
             this.OdooVersionHistoryMenu.Name = "OdooVersionHistoryMenu";
             this.OdooVersionHistoryMenu.Size = new System.Drawing.Size(129, 70);
-            this.OdooVersionHistoryMenu.Opening += new System.ComponentModel.CancelEventHandler(this.OdooVersionHistoryMenu_Opening);
+            //this.OdooVersionHistoryMenu.Opening += new System.ComponentModel.CancelEventHandler(this.OdooVersionHistoryMenu_Opening);
             // 
             // downloadToolStripMenuItem
             // 
@@ -612,14 +613,14 @@
             // overwriteAndOpenToolStripMenuItem
             // 
             this.overwriteAndOpenToolStripMenuItem.Name = "overwriteAndOpenToolStripMenuItem";
-            this.overwriteAndOpenToolStripMenuItem.Size = new System.Drawing.Size(184, 22);
+            this.overwriteAndOpenToolStripMenuItem.Size = new System.Drawing.Size(183, 22);
             this.overwriteAndOpenToolStripMenuItem.Text = "Overwrite and open";
             this.overwriteAndOpenToolStripMenuItem.Click += new System.EventHandler(this.History_Click_OverwriteOpen);
             // 
             // temporaryAndOpenToolStripMenuItem
             // 
             this.temporaryAndOpenToolStripMenuItem.Name = "temporaryAndOpenToolStripMenuItem";
-            this.temporaryAndOpenToolStripMenuItem.Size = new System.Drawing.Size(184, 22);
+            this.temporaryAndOpenToolStripMenuItem.Size = new System.Drawing.Size(183, 22);
             this.temporaryAndOpenToolStripMenuItem.Text = "Temporary and open";
             this.temporaryAndOpenToolStripMenuItem.Click += new System.EventHandler(this.History_Click_TemporaryOpen);
             // 
@@ -631,19 +632,19 @@
             this.moveToolStripMenuItem.Name = "moveToolStripMenuItem";
             this.moveToolStripMenuItem.Size = new System.Drawing.Size(128, 22);
             this.moveToolStripMenuItem.Text = "Move";
-            this.moveToolStripMenuItem.Click += new System.EventHandler(this.moveToolStripMenuItem_Click);
+            //this.moveToolStripMenuItem.Click += new System.EventHandler(this.moveToolStripMenuItem_Click);
             // 
             // toCurrentToolStripMenuItem
             // 
             this.toCurrentToolStripMenuItem.Name = "toCurrentToolStripMenuItem";
-            this.toCurrentToolStripMenuItem.Size = new System.Drawing.Size(147, 22);
+            this.toCurrentToolStripMenuItem.Size = new System.Drawing.Size(145, 22);
             this.toCurrentToolStripMenuItem.Text = "To Current";
             this.toCurrentToolStripMenuItem.Click += new System.EventHandler(this.History_Click_OverwriteMove);
             // 
             // toTemporaryToolStripMenuItem1
             // 
             this.toTemporaryToolStripMenuItem1.Name = "toTemporaryToolStripMenuItem1";
-            this.toTemporaryToolStripMenuItem1.Size = new System.Drawing.Size(147, 22);
+            this.toTemporaryToolStripMenuItem1.Size = new System.Drawing.Size(145, 22);
             this.toTemporaryToolStripMenuItem1.Text = "To Temporary";
             this.toTemporaryToolStripMenuItem1.Click += new System.EventHandler(this.History_Click_TemporaryMove);
             // 
@@ -657,7 +658,7 @@
             this.OdooParentsPage.TabIndex = 1;
             this.OdooParentsPage.Text = "Where Used (0)";
             this.OdooParentsPage.UseVisualStyleBackColor = true;
-            this.OdooParentsPage.Click += new System.EventHandler(this.OdooParentsPage_Click);
+            //this.OdooParentsPage.Click += new System.EventHandler(this.OdooParentsPage_Click);
             // 
             // OdooParents
             // 
@@ -671,7 +672,7 @@
             this.OdooParents.UseCompatibleStateImageBehavior = false;
             this.OdooParents.View = System.Windows.Forms.View.Details;
             this.OdooParents.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.OdooParents_ItemSelectionChanged);
-            this.OdooParents.SelectedIndexChanged += new System.EventHandler(this.OdooParents_SelectedIndexChanged);
+            //this.OdooParents.SelectedIndexChanged += new System.EventHandler(this.OdooParents_SelectedIndexChanged);
             this.OdooParents.DoubleClick += new System.EventHandler(this.OdooParents_DoubleClick);
             // 
             // OdooChildrenPage
@@ -683,7 +684,7 @@
             this.OdooChildrenPage.TabIndex = 2;
             this.OdooChildrenPage.Text = "Dependents (0)";
             this.OdooChildrenPage.UseVisualStyleBackColor = true;
-            this.OdooChildrenPage.Click += new System.EventHandler(this.OdooChildrenPage_Click);
+            //this.OdooChildrenPage.Click += new System.EventHandler(this.OdooChildrenPage_Click);
             // 
             // OdooChildren
             // 
@@ -697,7 +698,7 @@
             this.OdooChildren.UseCompatibleStateImageBehavior = false;
             this.OdooChildren.View = System.Windows.Forms.View.Details;
             this.OdooChildren.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.OdooChildren_ItemSelectionChanged);
-            this.OdooChildren.SelectedIndexChanged += new System.EventHandler(this.OdooChildren_SelectedIndexChanged);
+            //this.OdooChildren.SelectedIndexChanged += new System.EventHandler(this.OdooChildren_SelectedIndexChanged);
             this.OdooChildren.DoubleClick += new System.EventHandler(this.OdooChildren_DoubleClick);
             // 
             // OdooPropertiesPage
@@ -709,7 +710,7 @@
             this.OdooPropertiesPage.TabIndex = 3;
             this.OdooPropertiesPage.Text = "Properties";
             this.OdooPropertiesPage.UseVisualStyleBackColor = true;
-            this.OdooPropertiesPage.Click += new System.EventHandler(this.OdooPropertiesPage_Click);
+            //this.OdooPropertiesPage.Click += new System.EventHandler(this.OdooPropertiesPage_Click);
             // 
             // OdooProperties
             // 
@@ -722,7 +723,7 @@
             this.OdooProperties.TabIndex = 1;
             this.OdooProperties.UseCompatibleStateImageBehavior = false;
             this.OdooProperties.View = System.Windows.Forms.View.Details;
-            this.OdooProperties.SelectedIndexChanged += new System.EventHandler(this.OdooProperties_SelectedIndexChanged);
+            //this.OdooProperties.SelectedIndexChanged += new System.EventHandler(this.OdooProperties_SelectedIndexChanged);
             // 
             // OdooVersionPage
             // 
@@ -733,7 +734,7 @@
             this.OdooVersionPage.TabIndex = 4;
             this.OdooVersionPage.Text = "Info";
             this.OdooVersionPage.UseVisualStyleBackColor = true;
-            this.OdooVersionPage.Click += new System.EventHandler(this.OdooVersionPage_Click);
+            //this.OdooVersionPage.Click += new System.EventHandler(this.OdooVersionPage_Click);
             // 
             // OdooVersionInfoList
             // 
@@ -746,7 +747,7 @@
             this.OdooVersionInfoList.TabIndex = 0;
             this.OdooVersionInfoList.UseCompatibleStateImageBehavior = false;
             this.OdooVersionInfoList.View = System.Windows.Forms.View.Details;
-            this.OdooVersionInfoList.SelectedIndexChanged += new System.EventHandler(this.OdooVersionInfoList_SelectedIndexChanged);
+            //this.OdooVersionInfoList.SelectedIndexChanged += new System.EventHandler(this.OdooVersionInfoList_SelectedIndexChanged);
             // 
             // panel1
             // 
@@ -756,7 +757,22 @@
             this.panel1.Name = "panel1";
             this.panel1.Size = new System.Drawing.Size(256, 274);
             this.panel1.TabIndex = 3;
-            this.panel1.Paint += new System.Windows.Forms.PaintEventHandler(this.panel1_Paint);
+            //this.panel1.Paint += new System.Windows.Forms.PaintEventHandler(this.panel1_Paint);
+            // 
+            // OdooEntryImage
+            // 
+            this.OdooEntryImage.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.OdooEntryImage.Image = ((System.Drawing.Image)(resources.GetObject("OdooEntryImage.Image")));
+            this.OdooEntryImage.InitialImage = ((System.Drawing.Image)(resources.GetObject("OdooEntryImage.InitialImage")));
+            this.OdooEntryImage.Location = new System.Drawing.Point(0, 0);
+            this.OdooEntryImage.MinimumSize = new System.Drawing.Size(256, 256);
+            this.OdooEntryImage.Name = "OdooEntryImage";
+            this.OdooEntryImage.Size = new System.Drawing.Size(256, 274);
+            this.OdooEntryImage.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
+            this.OdooEntryImage.TabIndex = 2;
+            this.OdooEntryImage.TabStop = false;
+            //this.OdooEntryImage.Click += new System.EventHandler(this.OdooEntryImage_Click);
             // 
             // ShowInactive
             // 
@@ -781,63 +797,7 @@
             this.MoreTools.Size = new System.Drawing.Size(41, 25);
             this.MoreTools.TabIndex = 0;
             this.MoreTools.Text = "toolStrip1";
-            this.MoreTools.ItemClicked += new System.Windows.Forms.ToolStripItemClickedEventHandler(this.MoreTools_ItemClicked);
-            // 
-            // ListTabs
-            // 
-            this.ListTabs.Controls.Add(this.EntriesTab);
-            this.ListTabs.Controls.Add(this.Changes);
-            this.ListTabs.Location = new System.Drawing.Point(350, 0);
-            this.ListTabs.Name = "ListTabs";
-            this.ListTabs.SelectedIndex = 0;
-            this.ListTabs.Size = new System.Drawing.Size(1116, 492);
-            this.ListTabs.TabIndex = 6;
-            this.ListTabs.SelectedIndexChanged += new System.EventHandler(this.ListTabs_SelectedIndexChanged);
-            // 
-            // EntriesTab
-            // 
-            this.EntriesTab.Controls.Add(this.OdooEntryList);
-            this.EntriesTab.Location = new System.Drawing.Point(4, 22);
-            this.EntriesTab.Name = "EntriesTab";
-            this.EntriesTab.Padding = new System.Windows.Forms.Padding(3);
-            this.EntriesTab.Size = new System.Drawing.Size(1108, 466);
-            this.EntriesTab.TabIndex = 0;
-            this.EntriesTab.Text = "Entries";
-            this.EntriesTab.UseVisualStyleBackColor = true;
-            this.EntriesTab.Click += new System.EventHandler(this.EntriesTab_Click);
-            // 
-            // Changes
-            // 
-            this.Changes.Controls.Add(this.HackChangesList);
-            this.Changes.Location = new System.Drawing.Point(4, 22);
-            this.Changes.Name = "Changes";
-            this.Changes.Padding = new System.Windows.Forms.Padding(3);
-            this.Changes.Size = new System.Drawing.Size(1108, 466);
-            this.Changes.TabIndex = 1;
-            this.Changes.Text = "Changes";
-            this.Changes.UseVisualStyleBackColor = true;
-            this.Changes.Click += new System.EventHandler(this.Changes_Click);
-            // 
-            // HackChangesList
-            // 
-            this.HackChangesList.AllowColumnReorder = true;
-            this.HackChangesList.AllowDrop = true;
-            this.HackChangesList.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.HackChangesList.ContextMenuStrip = this.ListContextEntry;
-            this.HackChangesList.FullRowSelect = true;
-            this.HackChangesList.GridLines = true;
-            this.HackChangesList.HideSelection = false;
-            this.HackChangesList.Location = new System.Drawing.Point(0, -2);
-            this.HackChangesList.Name = "HackChangesList";
-            this.HackChangesList.Size = new System.Drawing.Size(928, 470);
-            this.HackChangesList.SmallImageList = this.ListIcons;
-            this.HackChangesList.Sorting = System.Windows.Forms.SortOrder.Ascending;
-            this.HackChangesList.TabIndex = 2;
-            this.HackChangesList.UseCompatibleStateImageBehavior = false;
-            this.HackChangesList.View = System.Windows.Forms.View.Details;
-            this.HackChangesList.SelectedIndexChanged += new System.EventHandler(this.HackChangesList_SelectedIndexChanged);
+            //this.MoreTools.ItemClicked += new System.Windows.Forms.ToolStripItemClickedEventHandler(this.MoreTools_ItemClicked);
             // 
             // AdditionalTools
             // 
@@ -851,43 +811,108 @@
             this.AdditionalTools.Name = "AdditionalTools";
             this.AdditionalTools.Size = new System.Drawing.Size(29, 22);
             this.AdditionalTools.Text = "AdditionalTools";
-            this.AdditionalTools.Click += new System.EventHandler(this.AdditionalTools_Click);
+            //this.AdditionalTools.Click += new System.EventHandler(this.AdditionalTools_Click);
             // 
             // OdooRefreshDropdown
             // 
             this.OdooRefreshDropdown.Name = "OdooRefreshDropdown";
-            this.OdooRefreshDropdown.Size = new System.Drawing.Size(171, 22);
+            this.OdooRefreshDropdown.Size = new System.Drawing.Size(170, 22);
             this.OdooRefreshDropdown.Text = "Refresh View";
             this.OdooRefreshDropdown.Click += new System.EventHandler(this.AdditionalTools_Click_Refresh);
             // 
             // OdooSearchDropdown
             // 
             this.OdooSearchDropdown.Name = "OdooSearchDropdown";
-            this.OdooSearchDropdown.Size = new System.Drawing.Size(171, 22);
+            this.OdooSearchDropdown.Size = new System.Drawing.Size(170, 22);
             this.OdooSearchDropdown.Text = "Search";
             this.OdooSearchDropdown.Click += new System.EventHandler(this.AdditionalTools_Click_Search);
             // 
             // OdooManageTypesDropdown
             // 
             this.OdooManageTypesDropdown.Name = "OdooManageTypesDropdown";
-            this.OdooManageTypesDropdown.Size = new System.Drawing.Size(171, 22);
+            this.OdooManageTypesDropdown.Size = new System.Drawing.Size(170, 22);
             this.OdooManageTypesDropdown.Text = "Manage File Types";
             this.OdooManageTypesDropdown.Click += new System.EventHandler(this.AdditionalTools_Click_ManageTypes);
             // 
-            // OdooEntryImage
+            // ListTabs
             // 
-            this.OdooEntryImage.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            this.ListTabs.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.OdooEntryImage.Image = ((System.Drawing.Image)(resources.GetObject("OdooEntryImage.Image")));
-            this.OdooEntryImage.InitialImage = ((System.Drawing.Image)(resources.GetObject("OdooEntryImage.InitialImage")));
-            this.OdooEntryImage.Location = new System.Drawing.Point(0, 0);
-            this.OdooEntryImage.MinimumSize = new System.Drawing.Size(256, 256);
-            this.OdooEntryImage.Name = "OdooEntryImage";
-            this.OdooEntryImage.Size = new System.Drawing.Size(256, 274);
-            this.OdooEntryImage.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
-            this.OdooEntryImage.TabIndex = 2;
-            this.OdooEntryImage.TabStop = false;
-            this.OdooEntryImage.Click += new System.EventHandler(this.OdooEntryImage_Click);
+            this.ListTabs.Controls.Add(this.EntriesTab);
+            this.ListTabs.Controls.Add(this.Changes);
+            this.ListTabs.Location = new System.Drawing.Point(350, 0);
+            this.ListTabs.Name = "ListTabs";
+            this.ListTabs.SelectedIndex = 0;
+            this.ListTabs.Size = new System.Drawing.Size(1116, 492);
+            this.ListTabs.TabIndex = 6;
+            //this.ListTabs.SelectedIndexChanged += new System.EventHandler(this.ListTabs_SelectedIndexChanged);
+            // 
+            // EntriesTab
+            // 
+            this.EntriesTab.Controls.Add(this.OdooEntryList);
+            this.EntriesTab.Location = new System.Drawing.Point(4, 22);
+            this.EntriesTab.Name = "EntriesTab";
+            this.EntriesTab.Padding = new System.Windows.Forms.Padding(3);
+            this.EntriesTab.Size = new System.Drawing.Size(1108, 466);
+            this.EntriesTab.TabIndex = 0;
+            this.EntriesTab.Text = "Entries";
+            this.EntriesTab.UseVisualStyleBackColor = true;
+            //this.EntriesTab.Click += new System.EventHandler(this.EntriesTab_Click);
+            // 
+            // Changes
+            // 
+            this.Changes.Controls.Add(this.OdooChangesList);
+            this.Changes.Controls.Add(this.HackChangesList);
+            this.Changes.Location = new System.Drawing.Point(4, 22);
+            this.Changes.Name = "Changes";
+            this.Changes.Padding = new System.Windows.Forms.Padding(3);
+            this.Changes.Size = new System.Drawing.Size(1108, 466);
+            this.Changes.TabIndex = 1;
+            this.Changes.Text = "Changes";
+            this.Changes.UseVisualStyleBackColor = true;
+            //this.Changes.Click += new System.EventHandler(this.Changes_Click);
+            // 
+            // HackChangesList
+            // 
+            this.HackChangesList.AllowColumnReorder = true;
+            this.HackChangesList.AllowDrop = true;
+            this.HackChangesList.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.HackChangesList.ContextMenuStrip = this.ListContextEntry;
+            this.HackChangesList.FullRowSelect = true;
+            this.HackChangesList.GridLines = true;
+            this.HackChangesList.HideSelection = false;
+            this.HackChangesList.Location = new System.Drawing.Point(-4, 0);
+            this.HackChangesList.Name = "HackChangesList";
+            this.HackChangesList.Size = new System.Drawing.Size(543, 470);
+            this.HackChangesList.SmallImageList = this.ListIcons;
+            this.HackChangesList.Sorting = System.Windows.Forms.SortOrder.Ascending;
+            this.HackChangesList.TabIndex = 2;
+            this.HackChangesList.UseCompatibleStateImageBehavior = false;
+            this.HackChangesList.View = System.Windows.Forms.View.Details;
+            //this.HackChangesList.SelectedIndexChanged += new System.EventHandler(this.HackChangesList_SelectedIndexChanged);
+            // 
+            // OdooChangesList
+            // 
+            this.OdooChangesList.AllowColumnReorder = true;
+            this.OdooChangesList.AllowDrop = true;
+            this.OdooChangesList.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.OdooChangesList.ContextMenuStrip = this.ListContextEntry;
+            this.OdooChangesList.FullRowSelect = true;
+            this.OdooChangesList.GridLines = true;
+            this.OdooChangesList.HideSelection = false;
+            this.OdooChangesList.Location = new System.Drawing.Point(549, 0);
+            this.OdooChangesList.Name = "OdooChangesList";
+            this.OdooChangesList.Size = new System.Drawing.Size(559, 470);
+            this.OdooChangesList.SmallImageList = this.ListIcons;
+            this.OdooChangesList.Sorting = System.Windows.Forms.SortOrder.Ascending;
+            this.OdooChangesList.TabIndex = 3;
+            this.OdooChangesList.UseCompatibleStateImageBehavior = false;
+            this.OdooChangesList.View = System.Windows.Forms.View.Details;
             // 
             // HackFileManager
             // 
@@ -903,6 +928,7 @@
             this.Controls.Add(this.OdooDirectoryTree);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "HackFileManager";
+            this.Text = "Hack File Manager";
             this.WindowState = System.Windows.Forms.FormWindowState.Maximized;
             this.TreeContextDirectory.ResumeLayout(false);
             this.ListContextEntry.ResumeLayout(false);
@@ -914,12 +940,12 @@
             this.OdooPropertiesPage.ResumeLayout(false);
             this.OdooVersionPage.ResumeLayout(false);
             this.panel1.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.OdooEntryImage)).EndInit();
             this.MoreTools.ResumeLayout(false);
             this.MoreTools.PerformLayout();
             this.ListTabs.ResumeLayout(false);
             this.EntriesTab.ResumeLayout(false);
             this.Changes.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)(this.OdooEntryImage)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -994,5 +1020,6 @@
         private System.Windows.Forms.TabPage EntriesTab;
         private System.Windows.Forms.TabPage Changes;
         private System.Windows.Forms.ListView HackChangesList;
+        private System.Windows.Forms.ListView OdooChangesList;
     }
 }

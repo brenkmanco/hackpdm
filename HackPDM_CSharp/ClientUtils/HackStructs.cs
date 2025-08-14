@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data.Entity.Core.Metadata.Edm;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -18,10 +19,11 @@ namespace HackPDM.ClientUtils
 {
     public class Notifier
     {
-        private static CancellationTokenSource cFileSystem = new();
+        private static CancellationTokenSource FileSystemCancel = new();
         public static ConcurrentQueue<FileCheck> QueueFileCheck = new();
         public static FileSystemWatcher FileWatcher { get; set; }
         public static NotifyIcon Notify { get; set; } = null;
+        public static bool IsRunning { get; private set; } = false;
         static Notifier()
         {
             FileWatcher = new()
@@ -37,25 +39,46 @@ namespace HackPDM.ClientUtils
             FileWatcher.Renamed += (s, e) => QueueFileCheck.Enqueue(new FileCheck(e));
             FileWatcher.EnableRaisingEvents = true;
         }
-        public async static void FileCheckLoop(CancellationToken cToken)
+        public static void CancelCheckLoop()
         {
-            while (!cToken.IsCancellationRequested)
-            { 
-                if (Notify is not null && QueueFileCheck.Count == 1)
-                {
-                    QueueFileCheck.TryDequeue(out FileCheck fileCheck);
-                    fileCheck.Notify();
-                }
-                else if (Notify is not null && QueueFileCheck.Count > 1)
-                {
-                    string commonPath = FileCheck.FindCommonPath(QueueFileCheck);
-                    FileCheck.Notify("Files Changed", $"{QueueFileCheck.Count} files were changed");
-                }
-
-                QueueFileCheck = new(); // clear the queue
-                await Task.Delay(2000, cToken);
+            if (IsRunning)
+            {
+                FileSystemCancel.Cancel();
             }
-            cFileSystem.Dispose();
+        }
+        public async static void FileCheckLoop()
+        {
+            if (IsRunning) return;
+            Debug.WriteLine("file check loop was started");
+
+            CancellationToken cToken = FileSystemCancel.Token;
+            IsRunning = true;
+            try
+            {
+                while (!cToken.IsCancellationRequested)
+                { 
+                    if (Notify is not null && QueueFileCheck.Count == 1)
+                    {
+                        QueueFileCheck.TryDequeue(out FileCheck fileCheck);
+                        fileCheck.Notify();
+                    }
+                    else if (Notify is not null && QueueFileCheck.Count > 1)
+                    {
+                        //string commonPath = FileCheck.FindCommonPath(QueueFileCheck);
+                        FileCheck.Notify("Files Changed", $"{QueueFileCheck.Count} files were changed");
+                    }
+
+                    QueueFileCheck = new(); // clear the queue
+                    await Task.Delay(2000, cToken);
+                }
+            }
+            catch
+            {
+                Debug.WriteLine("file check loop was cancelled");
+            }
+            FileSystemCancel.Dispose();
+            FileSystemCancel = new();
+            IsRunning = false;
         }
     }
     // List Views Column Name and Widths
@@ -136,7 +159,7 @@ namespace HackPDM.ClientUtils
     }
     public static class ColumnMap
     {
-        public static ListDetail RowWidths                  = new(
+        public static readonly ListDetail RowWidths                  = new(
         [
             NameConfig.RowID,
             NameConfig.RowName,
@@ -149,7 +172,7 @@ namespace HackPDM.ClientUtils
             NameConfig.RowRemoteDate,
             NameConfig.RowFullName
         ], "ID");
-        public static ListDetail HistoryRows                = new(
+        public static readonly ListDetail HistoryRows                = new(
         [
             NameConfig.HistoryVersion,
             NameConfig.HistoryModUser,
@@ -157,19 +180,19 @@ namespace HackPDM.ClientUtils
             NameConfig.HistorySize,
             NameConfig.HistoryRelDate
         ], "Version");
-        public static ListDetail ParentRows                 = new(
+        public static readonly ListDetail ParentRows                 = new(
         [
             NameConfig.ParentVersion,
             NameConfig.ParentName,
             NameConfig.ParentBasePath
         ], "Version");
-        public static ListDetail ChildrenRows               = new(
+        public static readonly ListDetail ChildrenRows               = new(
         [
             NameConfig.ChildrenVersion,
             NameConfig.ChildrenName,
             NameConfig.ChildrenBasePath
         ], "Version");
-        public static ListDetail PropertiesRows             = new(
+        public static readonly ListDetail PropertiesRows             = new(
         [
             NameConfig.PropertiesVersion,
             NameConfig.PropertiesConfiguration,
@@ -178,7 +201,7 @@ namespace HackPDM.ClientUtils
             NameConfig.PropertiesType,
             NameConfig.PropertiesValue
         ], "Version");
-        public static ListDetail VersionInfoRows            = new(
+        public static readonly ListDetail VersionInfoRows            = new(
         [
             NameConfig.VersionID,
             NameConfig.VersionName,
@@ -191,39 +214,39 @@ namespace HackPDM.ClientUtils
             NameConfig.VersionChecksum,
             NameConfig.VersionOdooCompletePath
         ], "ID");
-        public static ListDetail SearchRows                 = new(
+        public static readonly ListDetail SearchRows                 = new(
         [
             NameConfig.SearchID,
             NameConfig.SearchName,
             NameConfig.SearchDirectory
         ], "ID");
-        public static ListDetail SearchPropRows             = new(
+        public static readonly ListDetail SearchPropRows             = new(
         [
             NameConfig.SearchPropName,
             NameConfig.SearchPropEqual,
             NameConfig.SearchPropValue
         ], "Name");
-        public static ListDetail FileTypeRows               = new(
+        public static readonly ListDetail FileTypeRows               = new(
         [
             NameConfig.FileTypeExtension,
             NameConfig.FileTypeCategory,
             NameConfig.FileTypeRegEx,
             NameConfig.FileTypeDescription
         ], "Extension");
-        public static ListDetail FileTypeEntryFilterRows    = new(
+        public static readonly ListDetail FileTypeEntryFilterRows    = new(
         [
             NameConfig.FileTypeEntryFilterID,
             NameConfig.FileTypeEntryFilterProto,
             NameConfig.FileTypeEntryFilterRegEx,
             NameConfig.FileTypeEntryFilterDescription
         ], "ID");
-        public static ListDetail FileTypeLocRows            = new(
+        public static readonly ListDetail FileTypeLocRows            = new(
         [
             NameConfig.FileTypeLocExt,
             NameConfig.FileTypeLocStatus,
             NameConfig.FileTypeLocExample
         ], "Extension");
-        public static ListDetail FileTypeLocDatRows         = new(
+        public static readonly ListDetail FileTypeLocDatRows         = new(
         [
             NameConfig.FileTypeLocDatExt,
             NameConfig.FileTypeLocDatReg,

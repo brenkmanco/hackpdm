@@ -47,7 +47,7 @@ namespace HackPDM
 
 			Application.EnableVisualStyles();
 			Application.SetCompatibleTextRenderingDefault(false);
-			Notifier.FileCheckLoop(default); // start file check loop in background
+			Notifier.FileCheckLoop(); // start file check loop in background
             Application.Run(new ProfileManager());		
 		}
 		
