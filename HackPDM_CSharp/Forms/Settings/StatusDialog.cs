@@ -32,22 +32,22 @@ using System.Windows.Forms;
 
 using HackPDM.ClientUtils;
 using HackPDM.ClientUtils.Queue;
-
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
+using HackPDM.Extensions.Form;
 
 using ListView = System.Windows.Forms.ListView;
 
-namespace HackPDM
+namespace HackPDM.Forms.Settings
 {
     /// <summary>
     /// Description of StatusDialog.
     /// </summary>
-    public partial class StatusDialog : Form
+    public partial class StatusDialog : SingletonForm<StatusDialog>
     {
+        public static   StatusData StaticData { get; set; } = StatusData.StaticData;
+        public static   StatusDialog Dialog { get; set; }
+        public          FrozenDictionary<StatusMessage, ListDetails> StatConfig;
+        public          FrozenDictionary<ListView, GroupLists> RefDetails;
 
-        public FrozenDictionary<StatusMessage, ListDetails> StatConfig;
-        public FrozenDictionary<ListView, GroupLists> RefDetails;
-        
         public readonly ListView[] Views;
         readonly ColumnHeader ActionDefault = new()
         {
@@ -63,7 +63,7 @@ namespace HackPDM
             Width = 1000,
             TextAlign = HorizontalAlignment.Left,
         };
-        int ErrorCount = 0;
+        
 
         public static bool SkipText
         {
@@ -121,9 +121,8 @@ namespace HackPDM
         }
 
         public StatusDialog() 
-        {            
+        {
             InitializeComponent();
-            
             Views = [
                 StatusList,
                 InfoList,
@@ -163,7 +162,7 @@ namespace HackPDM
             ListDetails listInfo    = new(InfoList,     new StatusConfig(InfoList,      Color.Black, Color.White, "..."));
             ListDetails listSkip    = new(InfoList,     new StatusConfig(InfoList,      Color.DarkGray, Color.White, "SKIP"));
             ListDetails listFound   = new(InfoList,     new StatusConfig(InfoList,      Color.DarkGray, Color.White, "FOUND"));
-            ListDetails listWarn    = new(ErrorList,    new StatusConfig(ErrorList,     Color.Yellow, Color.White, "WARNING"));
+            ListDetails listWarn    = new(ErrorList,    new StatusConfig(ErrorList,     Color.OrangeRed, Color.White, "WARNING"));
             ListDetails listError   = new(ErrorList,    new StatusConfig(ErrorList,     Color.White, Color.Red, "ERROR"));
 
             StatConfig = new Dictionary<StatusMessage, ListDetails>
@@ -247,7 +246,7 @@ namespace HackPDM
                 fileCheckStatus.Maximum = max;
                 fileCheckStatus.Value = value;
                 ProgressText.Text = $"({(value / (float)max)*100:f2}%)\n{value} / {max}";
-                SkippedLabel.Text = $"({HackFileManager.SkipCounter}) Skipped";
+                SkippedLabel.Text = $"({StatusData.StaticData.SkipCounter}) Skipped";
             }
         }
         private delegate void SetDownloadedDel(long size);
@@ -349,8 +348,8 @@ namespace HackPDM
         }
         
         public void OperationCompleted() {
-            if (ErrorCount != 0)
-                AddStatusLine(StatusMessage.ERROR, String.Format("Encountered {0} errors", ErrorCount));
+            if (StatusData.StaticData.ErrorCount != 0)
+                AddStatusLine(StatusMessage.ERROR, String.Format("Encountered {0} errors", StatusData.StaticData.ErrorCount));
             else if (cbxAutoClose.Checked == true)
                 this.Close();
             cmdCancel.Enabled = false;
@@ -450,6 +449,28 @@ namespace HackPDM
             e.Index = Math.Max(1, details.QueueValues.Count - 1);
         }
 
+    }
+    public class StatusData
+    {
+        internal static StatusData StaticData = null;
+        internal static long SessionDownloadBytes = 0;
+        internal int ProcessCounter = 0;
+        internal int totalProcessed = 0;
+        internal int MaxCount = 0;
+        internal long DownloadBytes = 0;
+        internal int ErrorCount = 0;
+        internal int SkipCounter = 0;
+
+        static StatusData()
+        {
+            if (StaticData is null)
+            {
+                StaticData = new();
+            }
+        }
+        public StatusData()
+        {
+        }
     }
     public struct StatusConfig(ListView list, Color foreground, Color background, string statusMessage)
     {

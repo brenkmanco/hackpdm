@@ -16,11 +16,12 @@ using HackPDM.ClientUtils;
 using System.Drawing.Imaging;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using System.Text.RegularExpressions;
+using HackPDM.Extensions.General;
 
 namespace HackPDM.Forms.Odoo
 {
-	public partial class OdooFileTypeManager : Form
-	{
+	public partial class OdooFileTypeManager : SingletonForm<OdooFileTypeManager>
+    {
 		private HackFileManager hackman;
 		private readonly static Size closeImgSize = new Size(32, 32);
 		private Image closeImg

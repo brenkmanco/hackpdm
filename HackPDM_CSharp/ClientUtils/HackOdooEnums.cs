@@ -21,6 +21,41 @@ namespace HackPDM.ClientUtils
         CO, // Checked Out To Other
 
     }
+    public enum DomainOperators
+    {
+        And,
+        Or,
+        Not,
+    }
+    public enum Operators
+    {
+        Equal,
+        NotEqual,
+        GreaterThan,
+        GreaterThanOrEqual,
+        LessThan,
+        LessThanOrEqual,
+        Unset,
+        Like,
+        LikeEqual,
+        NotLike,
+        ILike,
+        NotILike,
+        ILikeEqual,
+        In,
+        NotIn,
+        ChildOf,
+        ParentOf
+    }
+    public enum ValueConversion
+    {
+        NULL,
+        Assignable,
+        Enum,
+        DateTime,
+        Nullable,
+        OtherConvert,
+    }
     public enum StatusMessage
     {
         PROCESSING,

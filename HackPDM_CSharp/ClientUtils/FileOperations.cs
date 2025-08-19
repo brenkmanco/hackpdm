@@ -14,7 +14,11 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
+using HackPDM.Extensions.General;
+using HackPDM.Extensions.Odoo;
+
 using OClient = OdooRpcCs.OdooClient;
+using StatDialog = HackPDM.Forms.Settings.StatusDialog;
 
 namespace HackPDM
 {
@@ -274,7 +278,7 @@ namespace HackPDM
 				        // this means that this hackFile is in the database so it can be skipped
                         if (checksum == hackArr[i].Checksum)
 				        {
-					        HackFileManager.Dialog.AddStatusLine(StatusMessage.FOUND, $"checksum found remotely ({hackArr [ i ].Checksum}) for: {filePath}" );
+					        StatDialog.Dialog.AddStatusLine(StatusMessage.FOUND, $"checksum found remotely ({hackArr [ i ].Checksum}) for: {filePath}" );
                             isFound = true;
                             break;
 				        }
@@ -282,7 +286,7 @@ namespace HackPDM
 			    }
                 if ( !isFound )
                 {
-				    HackFileManager.Dialog.AddStatusLine(StatusMessage.INFO, $"Queued commit for {hackArr[i].Name} (Checksum: {hackArr [ i ].Checksum}) for: {filePath}" );
+                    StatDialog.Dialog.AddStatusLine(StatusMessage.INFO, $"Queued commit for {hackArr[i].Name} (Checksum: {hackArr [ i ].Checksum}) for: {filePath}" );
 				    hacks.Add( hackArr [ i ] );
                 }
 

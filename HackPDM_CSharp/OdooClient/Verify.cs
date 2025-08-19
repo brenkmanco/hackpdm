@@ -12,8 +12,8 @@ namespace HackPDM.Verifier
 {
 	public static class Verify
 	{
-		public static bool CorrectOdooAddress() => OdooClient.CorrectOdooAddress();
-		public static bool CorrectOdooPort() => OdooClient.CorrectOdooPort();
+		public static bool CorrectOdooAddress() => OdooRpcCs.OdooClient.CorrectOdooAddress();
+		public static bool CorrectOdooPort() => OdooRpcCs.OdooClient.CorrectOdooPort();
 
 		public static bool VerifySettings()
 		{

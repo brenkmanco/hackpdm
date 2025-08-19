@@ -1,19 +1,11 @@
 ﻿using HackPDM.ClientUtils;
-using OdooRpcCs;
+using HackPDM.Extensions.General;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data.Entity.Infrastructure;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Xml.Linq;
-using static Npgsql.PostgresTypes.PostgresCompositeType;
 using OClient = OdooRpcCs.OdooClient;
 
 namespace HackPDM

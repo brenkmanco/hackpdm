@@ -12,6 +12,8 @@ using System.Windows.Forms.PropertyGridInternal;
 using CredentialManagement;
 using HackPDM;
 using HackPDM.ClientUtils;
+using HackPDM.Extensions.Odoo;
+
 using XmlRpc.Goober;
 
 
@@ -63,14 +65,7 @@ namespace OdooRpcCs
         {
             try
             {
-                if (OdooDefaults.OdooID != 0)
-                {
-                    return 1;
-                }
-                else
-                {
-                    return 0;
-                }
+                return OdooDefaults.OdooID is null or 0 ? 0 : 1;
             }
             catch
             {
@@ -98,7 +93,7 @@ namespace OdooRpcCs
 				return false;
 			}
 		}
-		public static int Login(int? timeout = null)
+		public static int? Login(int? timeout = null)
         {
             latestException = "";
             int userTimeout = timeout == null ? commonTimeout : (int)timeout;

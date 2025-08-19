@@ -10,6 +10,8 @@ using Microsoft.Build.Experimental.BuildCheck;
 
 using Newtonsoft.Json.Linq;
 
+using StatDialog = HackPDM.Forms.Settings.StatusDialog;
+
 namespace HackPDM.ClientUtils
 {
     internal class AsyncHelper
@@ -143,7 +145,31 @@ namespace HackPDM.ClientUtils
             => await DoWhileWaitInternal(eval, action, true, pollingMs, msTimeout, token);
         public static async Task<bool> DoWhileWaitWhile(Func<bool> eval, Action action, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
             => await DoWhileWaitInternal(eval, action, false, pollingMs, msTimeout, token);
+        public static async Task<bool> AsyncRunner(Func<Task> function, string statusHeader = "Status", CancellationTokenSource tokenSource = default)
+        {
+            tokenSource ??= new();
+            var task = Task.Run(() => function(), tokenSource.Token);
+            bool blnWorkCanceled = await AsyncHelper.WaitUntil(() => StatDialog.Dialog.Canceled || task.IsCompleted || task.IsCanceled, 500);
 
+            if (blnWorkCanceled)
+            {
+                if (StatDialog.Dialog.Canceled || task.IsCanceled)
+                {
+                    tokenSource.Cancel();
+                    try
+                    {
+                        await task; // Await to observe cancellation
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // handles cancellation feedback
+                    }
+                    return false;
+                }
+            }
+            await task;
+            return true;
+        }
 
         private static async Task<bool> DoWhileWaitInternal(Func<bool> eval, Action action, bool wantTrue = true, int pollingMsEval = 1000, int msTimeout = -1, CancellationToken token = default)
         {

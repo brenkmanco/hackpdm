@@ -2,35 +2,16 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Xml;
 
-using XmlRpc.Goober;
+using HackPDM.ClientUtils;
 
-using static HackPDM.FileOperations;
-
-namespace HackPDM.ClientUtils
+namespace HackPDM.Extensions.General
 {
-    public static class ExtMethods
+    public static class ExtensionMethods
     {
-        // xmlrpc
-		private static readonly Encoding _encoding = new ASCIIEncoding();
-		private static readonly XmlRpcRequestSerializer _serializer = new();
-		private static readonly XmlRpcResponseDeserializer _deserializer = new();
-
-        // useful extension methods
-        public static ArrayList GetIDs(this IEnumerable<HpBaseModel> models)
-            => models.Select(model=>model.ID).ToArrayList();
-
         public static T[] Populate<T>(this T[] values, Func<T> func)
         {
             for (int i = 0; i < values.Length; i++)
@@ -64,7 +45,7 @@ namespace HackPDM.ClientUtils
         }
         public static IEnumerable<Tout> SelectKeysWhere<Tin, Tout>(this Hashtable ht, Func<Tin, Tout> selector, Func<Tin, Tout, bool> predicate)
         {
-            foreach (Tin obj in ht.Keys.OfType<Tin>() )
+            foreach (Tin obj in ht.Keys.OfType<Tin>())
             {
                 Tout result = selector(obj);
                 bool isPredicate = predicate(obj, result);
@@ -75,25 +56,25 @@ namespace HackPDM.ClientUtils
         {
             foreach (Tin item in source.Keys.OfType<Tin>())
             {
-				foreach ( var result in selector( item ) )
-				{
-					yield return result;
-				}
-			}
+                foreach (var result in selector(item))
+                {
+                    yield return result;
+                }
+            }
         }
         public static IEnumerable<Tout> SelectMany<Tin, Tout>(this ArrayList source, Func<Tin, IEnumerable<Tout>> selector)
         {
-			foreach ( Tin item in source.OfType<Tin>() )
-			{
-				foreach ( var result in selector( item ) )
-				{
-					yield return result;
-				}
-			}
-		}
+            foreach (Tin item in source.OfType<Tin>())
+            {
+                foreach (var result in selector(item))
+                {
+                    yield return result;
+                }
+            }
+        }
         public static IEnumerable<Tout> SkipSelect<Tin, Tout>(this IEnumerable<Tin> source, Predicate<Tin> predicate, Func<Tin, Tout> selector)
         {
-            foreach (Tin obj in source.OfType<Tin>() )
+            foreach (Tin obj in source.OfType<Tin>())
             {
                 if (!predicate(obj))
                 {
@@ -130,16 +111,16 @@ namespace HackPDM.ClientUtils
         }
         public static List<Tout> TakeAndRemove<Tout>(this List<Tout> source, Func<Tout, bool> predicate)
         {
-			var takenElements = source.Where(predicate).ToList();
+            var takenElements = source.Where(predicate).ToList();
 
-			// Remove the elements that match the predicate
-			foreach ( var element in takenElements )
-			{
-				source.Remove( element );
-			}
+            // Remove the elements that match the predicate
+            foreach (var element in takenElements)
+            {
+                source.Remove(element);
+            }
 
-			return takenElements;
-		}
+            return takenElements;
+        }
         public static bool TryGetValue(this Hashtable ht, object key, out object value)
         {
             value = ht[key];
@@ -157,17 +138,17 @@ namespace HackPDM.ClientUtils
             }
             return false;
         }
-		public static bool SelectContains<Tin, Tout>( this IEnumerable<Tin> source, Tout value, Func<Tin, Tout> selector )
-		{
-			foreach ( Tin obj in source )
-			{
-				Tout sourceValue = selector(obj);
-				if ( sourceValue.Equals(value) )
-					return true;
-			}
-			return false;
-		}
-		public static bool SelectContainsAny<Tin, Tout>(this IEnumerable<Tin> source, IEnumerable<Tout> values, Func<Tin, Tout> selector)
+        public static bool SelectContains<Tin, Tout>(this IEnumerable<Tin> source, Tout value, Func<Tin, Tout> selector)
+        {
+            foreach (Tin obj in source)
+            {
+                Tout sourceValue = selector(obj);
+                if (sourceValue.Equals(value))
+                    return true;
+            }
+            return false;
+        }
+        public static bool SelectContainsAny<Tin, Tout>(this IEnumerable<Tin> source, IEnumerable<Tout> values, Func<Tin, Tout> selector)
         {
             foreach (Tin obj in source)
             {
@@ -207,11 +188,11 @@ namespace HackPDM.ClientUtils
         public static bool GetFileEndType(this string str, out string extension)
         {
             extension = null;
-            for (int i = str.Length-1; i >= 0; i--)
+            for (int i = str.Length - 1; i >= 0; i--)
             {
-                if (str[i] == '.') 
+                if (str[i] == '.')
                 {
-                    extension = str.Substring(i+1).ToLower();
+                    extension = str.Substring(i + 1).ToLower();
                     return true;
                 }
             }
@@ -277,174 +258,54 @@ namespace HackPDM.ClientUtils
                 }
                 else return null;
             }
-            catch {}
+            catch { }
             return null;
         }
-        public static bool DownloadAll(this HpVersion[] versions, out List<HpVersion> failedDownloads)
-        {
-            failedDownloads = [];
-            bool IsSuccess = true;
-            foreach (var version in versions)
-            {
-                if (!version.DownloadFile())
-                {
-                    IsSuccess = false;
-                    failedDownloads.Add(version);
-                }
-            }
-            return IsSuccess;
-        }
-
-
-        // xmlrpc request
-        public async static Task<XmlRpcResponse> SendAsync(this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null)
-        {
-            //HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
-            HttpWebRequest httpWebRequest = HttpWebRequest.CreateHttp(url);
-            if (httpWebRequest == null)
-            {
-                throw new XmlRpcException(-32300, "Transport Layer Error: Could not create request with " + url);
-            }
-
-            httpWebRequest.Proxy = proxy;
-            httpWebRequest.Method = "POST";
-            httpWebRequest.ContentType = "text/xml";
-            httpWebRequest.AllowWriteStreamBuffering = true;
-            if (timeout > 0)
-            {
-                httpWebRequest.Timeout = timeout;
-            }
-
-            XmlTextWriter xmlTextWriter = new(httpWebRequest.GetRequestStream(), _encoding);
-            _serializer.Serialize(xmlTextWriter, request);
-            xmlTextWriter.Flush();
-            xmlTextWriter.Close();
-
-            //HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse();
-            HttpWebResponse httpWebResponse = (HttpWebResponse)await httpWebRequest.GetResponseAsync();
-
-            StreamReader streamReader = new(httpWebResponse.GetResponseStream());
-            
-            XmlRpcResponse result = _deserializer.DeserializeResponse(streamReader);
-            streamReader.Close();
-            httpWebResponse.Close();
-            return result;
-        }
-
-		// treeview functions
-		public static TreeNode FindTreeNode( this TreeView view, string path )
-		{
-			TreeNodeCollection nodes = null;
-			TreeNode node = null;
-			string[] paths = path.Split('\\');
-			try
-			{
-				for ( int i = 0; i < paths.Length; i++ )
-				{
-					if ( i == 0 )
-						nodes = view.Nodes;
-					else
-						nodes = node.Nodes;
-
-					bool wasFound = false;
-					foreach ( TreeNode n in nodes )
-					{
-						if ( n.Text == paths [ i ] )
-						{
-							wasFound = true;
-							node = n;
-							break;
-						}
-					}
-					if ( !wasFound )
-						return null;
-				}
-                return node;
-			}
-			catch
-			{
-				return null;
-			}
-		}
-
-		// convert to another type
-		public static ArrayList ToArrayListIDs<T>( this T [] models ) where T : HpBaseModel<T>, new()
-		{
-			ArrayList ids = [];
-			foreach ( T model in models )
-			{
-				ids.Add( model.ID );
-			}
-			return ids;
-		}
-		public static ConcurrentBag<T> ConvertToBag<T>(this IEnumerable<T> items)
-        {
-            try { return new ConcurrentBag<T>(items); }
-            catch { return null; }
-        }
-        public static ConcurrentBag<T> ConvertToBag<T>(this IEnumerable items)
-        {
-            return items.Cast<object>().ConvertToBag<T>();
-        }
-		public static T [] ToArray<T>( this ArrayList list ) => [.. list.Cast<T>()];
-        public static HashSet<T> ToHashSet<T>( this ArrayList list ) => [.. list.Cast<T>()];
         public static HashSet<T> AddAll<T>(this HashSet<T> hashset, IEnumerable<T> values)
         {
-            foreach( T value in values )
+            foreach (T value in values)
             {
                 hashset.Add(value);
             }
             return hashset;
         }
-        public static ConcurrentSet<T> ToConcurrentSet<T>( this IEnumerable list )
+    }
+    public static class ExtensionConvertMethods
+    {
+        public static T[] ToArray<T>(this ArrayList list) => [.. list.Cast<T>()];
+        public static HashSet<T> ToHashSet<T>(this ArrayList list) => [.. list.Cast<T>()];
+        public static ConcurrentBag<T> ToConcurrentBag<T>(this IEnumerable<T> items)
+        {
+            try { return [.. items]; }
+            catch { return null; }
+        }
+        public static ConcurrentBag<T> ToConcurrentBag<T>(this IEnumerable items)
+        {
+            return items.Cast<object>().ToConcurrentBag<T>();
+        }
+        public static ConcurrentSet<T> ToConcurrentSet<T>(this IEnumerable list)
             => list.Cast<T>().ToConcurrentSet();
-        public static ConcurrentSet<T> ToConcurrentSet<T>( this IEnumerable<T> list )
+        public static ConcurrentSet<T> ToConcurrentSet<T>(this IEnumerable<T> list)
         {
             ConcurrentSet<T> set = [.. list];
             return set;
         }
-		public static ArrayList ToArrayList<T>( this IEnumerable<T> source )
-		{
-			if ( source == null )
-				throw new ArgumentNullException( nameof( source ) );
-
-			return [ .. source ];
-		}
-		public static ArrayList ToArrayList( this IEnumerable source )
-		{
-			if ( source == null )
-				throw new ArgumentNullException( nameof( source ) );
-
-			return [ .. source ];
-		}
-		public static HackFile [] ToHackArray( this IEnumerable<FileInfo> fileInfos )
-			=> [.. fileInfos.Select( file => new HackFile( file ) )];
-        public static byte[] ToBytes(this Image image) => ImageToByteArray(image);
-        public static string ToBase64String(this Image image) => Convert.ToBase64String(image.ToBytes());
-        public static bool SetFormTheme(this Control control, Theme theme, bool isRoot = true)
+        public static ArrayList ToArrayList<T>(this IEnumerable<T> source)
         {
-            if (control == null) throw new ArgumentNullException(nameof(control));
-            if (theme == null) throw new ArgumentNullException(nameof(theme));
-            try
-            {
-                Debug.WriteLine($"c name: {control.Name}");
-                control.BackColor = isRoot ? theme.BackgroundColor ?? Color.White : theme.SecondaryBackgroundColor ?? Color.LightGray;
-                control.ForeColor = theme.ForegroundColor ?? Color.Black;
-                control.Font = new Font(theme.FontFamily, theme.FontSize);
-                
-                foreach (Control item in control.Controls)
-                {
-                    item.SetFormTheme(theme, false);
-                }
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.Fail($"Failed to set theme on form: {ex.Message}");
-                return false;
-            }
-        }
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
 
+            return [.. source];
+        }
+        public static ArrayList ToArrayList(this IEnumerable source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+
+            return [.. source];
+        }
+        public static byte[] ToBytes(this Image image) => FileOperations.ImageToByteArray(image);
+        public static string ToBase64String(this Image image) => Convert.ToBase64String(image.ToBytes());
     }
     public static class FileInfoExtensions
     {
@@ -463,7 +324,7 @@ namespace HackPDM.ClientUtils
 
             //            return string.Join("", bytearray.Select(i => i.ToString("X2")));
             //        }
-                    
+
             //        return file.Checksum;
             //    }
             //}

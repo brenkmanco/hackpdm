@@ -22,19 +22,12 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Runtime.Remoting.Messaging;
-using System.Text;
 using System.Windows.Forms;
 
 using HackPDM.ClientUtils;
 using HackPDM.Forms.Hack;
 using HackPDM.HackClient;
-using HackPDM.Verifier;
+using HackPDM.Extensions.Form;
 
 using OdooRpcCs;
 
@@ -124,7 +117,7 @@ namespace HackPDM
             try
             {
 			    List<string> errors = [];
-                int status = OdooClient.CorrectUserID();
+                int status = OdooRpcCs.OdooClient.CorrectUserID();
                 switch (status)
                 {
                     case 1: return true;
@@ -140,11 +133,11 @@ namespace HackPDM
                     }
                 }
 
-			    if (!OdooClient.CorrectOdooAddress())
+			    if (!OdooRpcCs.OdooClient.CorrectOdooAddress())
 			    {
 				    errors.Add("invalid odoo address or unreachable host");
 			    } 
-			    else if (!OdooClient.CorrectOdooPort())
+			    else if (!OdooRpcCs.OdooClient.CorrectOdooPort())
 			    {
 				    errors.Add("invalid odoo port or server is down");
 			    }

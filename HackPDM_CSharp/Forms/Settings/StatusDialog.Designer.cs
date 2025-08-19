@@ -6,7 +6,7 @@
  * 
  * To change this template use Tools | Options | Coding | Edit Standard Headers.
  */
-namespace HackPDM
+namespace HackPDM.Forms.Settings
 {
     partial class StatusDialog
     {

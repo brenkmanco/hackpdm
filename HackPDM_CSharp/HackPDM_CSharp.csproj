@@ -429,7 +429,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ClientUtils\AsyncHelper.cs" />
-    <Compile Include="ClientUtils\ExtMethods.cs" />
+    <Compile Include="ClientUtils\FormHelper.cs" />
+    <Compile Include="ClientUtils\SingletonForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Extensions\Odoo\ExtensionOdoo.cs" />
     <Compile Include="ClientUtils\ConcurrentSet.cs" />
     <Compile Include="ClientUtils\FileOperations.cs" />
     <Compile Include="ClientUtils\HackOdooEnums.cs" />
@@ -437,6 +441,8 @@
     <Compile Include="ClientUtils\ImageUtils.cs" />
     <Compile Include="ClientUtils\Queue\IndexedQueue.cs" />
     <Compile Include="ClientUtils\ThemePreset.cs" />
+    <Compile Include="Extensions\Form\ExtensionForm.cs" />
+    <Compile Include="Extensions\General\ExtensionMethods.cs" />
     <Compile Include="Forms\Hack\HackSettings.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -465,7 +471,28 @@
     <Compile Include="HackClient\HackBaseFile.cs" />
     <Compile Include="HackClient\HackUpdater.cs" />
     <Compile Include="ClientUtils\HackInterfaces.cs" />
-    <Compile Include="OdooClient\HpBaseModel.cs" />
+    <Compile Include="OdooClient\Methods\Checkout.cs" />
+    <Compile Include="OdooClient\Methods\Commit.cs" />
+    <Compile Include="OdooClient\Methods\Delete.cs" />
+    <Compile Include="OdooClient\Methods\Latest.cs" />
+    <Compile Include="OdooClient\Methods\UnCheckout.cs" />
+    <Compile Include="OdooClient\OdooModels\HpBaseModel.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpCategory.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpCategoryProperty.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpDirectory.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpEntry.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpEntryNameFilter.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpNode.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpProperty.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpRelease.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpReleaseVersionRel.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpSetting.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpType.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpUser.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpVersion.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpVersionProperty.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\HpVersionRelationship.cs" />
+    <Compile Include="OdooClient\OdooModels\Models\IrAttachment.cs" />
     <Compile Include="OdooClient\OdooDefaults.cs" />
     <Compile Include="Forms\Hack\HackFileManager.cs">
       <SubType>Form</SubType>
@@ -594,6 +621,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="OdooClient\Methods\Other\" />
     <Folder Include="Properties\DataSources\" />
   </ItemGroup>
   <ItemGroup>

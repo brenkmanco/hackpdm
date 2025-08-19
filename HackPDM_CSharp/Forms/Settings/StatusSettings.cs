@@ -8,6 +8,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
+using HackPDM.Forms.Settings;
+
 namespace HackPDM
 {
     public partial class StatusSettings : Form
@@ -20,6 +22,7 @@ namespace HackPDM
         private void button1_Click(object sender, EventArgs e)
         {
             StringBuilder sb = new();
+            var SD = StatusData.StaticData;
             bool skipped = skippedSetting.Checked;
             bool wasHistoryParsed = int.TryParse(StatusHistoryLengthTextbox.Text, out int historyLength);
             bool wasBatchParsed = int.TryParse(batchSizeTextbox.Text, out int batchSize);
@@ -41,9 +44,9 @@ namespace HackPDM
                 return;
             }
 
-            HackFileManager.DownloadBatchSize = batchSize;
-            StatusDialog.MaxHistoryLength = historyLength;
-            StatusDialog.SkipText = skipped;
+            //OdooDefaults.DownloadBatchSize = batchSize;
+            //StatusDialog.MaxHistoryLength = historyLength;
+            //SkipText = skipped;
             StatusErrorMessage.ForeColor = Color.Green;
             StatusErrorMessage.Text = "Successfully saved\nnew settings";
         }

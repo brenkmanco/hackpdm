@@ -1,5 +1,4 @@
-﻿using CredentialManagement;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -9,9 +8,13 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
+using CredentialManagement;
+
+using HackPDM.ClientUtils;
+
 namespace HackPDM
 {
-    public partial class OdooSettings : Form
+    public partial class OdooSettings : SingletonForm<OdooSettings>
     {
         public OdooSettings()
         {

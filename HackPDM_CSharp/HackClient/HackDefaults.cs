@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
+using HackPDM.Forms.Settings;
 using HackPDM.Properties;
 
 using Microsoft.VisualStudio.TextManager.Interop;
@@ -453,8 +454,8 @@ namespace HackPDM
                     tasks.Add(FileOperations.WriteAllBytesAsync(file));
                 if (file.FileSize is long size)
                 {
-                    HackFileManager.DownloadBytes += size;
-                    HackFileManager.SessionDownloadBytes += size;
+                    StatusData.StaticData.DownloadBytes += size;
+                    StatusData.SessionDownloadBytes += size;
                 }
             }
             Task<bool[]> waitTask = Task.WhenAll(tasks);

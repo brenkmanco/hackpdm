@@ -2,42 +2,27 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.ComponentModel;
-using System.ComponentModel.Design;
 using System.Data;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Xml.Linq;
-
-using EnvDTE;
 
 using HackPDM.ClientUtils;
+using HackPDM.Extensions.Form;
+using HackPDM.Extensions.General;
+using HackPDM.Extensions.Odoo;
 using HackPDM.Forms.Odoo;
 using HackPDM.Forms.Settings;
-using HackPDM.HackClient;
-
-using Microsoft.Build.Execution;
-
-using Microsoft.VisualStudio.OLE.Interop;
-
-using Npgsql;
-
-using OpenMcdf;
-
-using SolidWorks.Interop.sldworks;
-
-using static System.Net.Mime.MediaTypeNames;
-using static Microsoft.ApplicationInsights.MetricDimensionNames.TelemetryContext;
+using HackPDM.OdooClient.OdooMethods;
+using StatData = HackPDM.Forms.Settings.StatusData;
 
 using Directory = System.IO.Directory;
 using Image = System.Drawing.Image;
@@ -46,57 +31,22 @@ using Path = System.IO.Path;
 
 namespace HackPDM
 {
-	public partial class HackFileManager : Form
+	public partial class HackFileManager : SingletonForm<HackFileManager>
     {
 	#region Declarations
+		
 		public static		NotifyIcon					Notify { get; } = Notifier.Notify;
-		public static		StatusDialog				Dialog { get; set; }
+		
 		public static		ConcurrentQueue<(StatusMessage action, string description)>	QueueAsyncStatus = new();
 		
 		public static		ListDetail					ActiveList { get; set; }
-		public static		int							DownloadBatchSize 
-        {
-			get
-			{
-				if (field == 0)
-				{
-					field = OdooDefaults.MaxBatchSize ?? 5;
-				}
-				return field;
-			}
-			set
-			{
-				if (field == 0)
-				{
-					field = OdooDefaults.MaxBatchSize ?? 5;
-				}
-				field = Math.Min(OdooDefaults.MaxBatchSize ?? 5, field);
-			}
-        }
-        public static int ConcurrencySize
-        {
-            get
-            {
-                if (field == 0)
-                {
-                    field = OdooDefaults.MaxConcurrency ?? 2;
-                }
-                return field;
-            }
-            set
-            {
-                if (field == 0)
-                {
-                    field = OdooDefaults.MaxConcurrency ?? 2;
-                }
-                field = Math.Min(OdooDefaults.MaxConcurrency ?? 2, field);
-            }
-        }
-        public static		int							SkipCounter { get; private set; }
+		public				bool						InactiveEntries { get => ShowInactive.Checked; set => ShowInactive.Checked = value; }
+
+
         private static		Task						EntryListChange = default;
 		private static		Task						TreeItemChange = default;
-		private static (object sender, ListViewItemSelectionChangedEventArgs e) queuedEntryChange = (null, null);
-        private static (object sender, TreeViewEventArgs e) queuedTreeChange = (null, null);
+		private static		(object sender, ListViewItemSelectionChangedEventArgs e) queuedEntryChange = (null, null);
+        private static		(object sender, TreeViewEventArgs e) queuedTreeChange = (null, null);
 
         private static		BackgroundWorker			backgroundWorker = new()
 		{
@@ -107,11 +57,7 @@ namespace HackPDM
 		
 		private static		System.Drawing.Image		previewImage	= null;
 		private static		bool						IsActive { get; set; } = false;
-        private static		int							ProcessCounter;
-		private static		int							totalProcessed;
-        private static		int							MaxCount;
-		public	static		long						SessionDownloadBytes = 0;
-		public	static		long						DownloadBytes = 0;
+
 
         // if EntryPollingMs is set to less than or equal to 0 then it will not poll for changes
 		public				TreeNode					LastSelectedNode { get; set; } = null;
@@ -141,24 +87,6 @@ namespace HackPDM
 		static		HackFileManager	() {}
         public		HackFileManager	()
 		{
-			// --
-
-			//string filepath = @"C:\Users\jnjohnson\Documents\dev\testing\wigwam\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM";
-			//string temppath = @"C:\Users\jnjohnson\Documents\dev\testing\wigwam\temp\";
-			//string temppath2 = @"C:\Users\jnjohnson\Documents\dev\testing\wigwam\temp\X010166.Frame Base Weldment, Haggis.SLDASM";
-			//var dependencies = HackDefaults.docMgr.GetDependencies(filepath);
-			//var dependencies2 = HackDefaults.docMgr.GetDependencies(temppath2);
-			//var files = dependencies.Select(pathname =>
-			//{
-			//	string oldPath = pathname[1];
-			//	string newPath = Path.Combine(temppath, pathname[0]);
-			//	FileInfo fInfo = new(oldPath);
-			//	if (fInfo is null) return null;
-			//	return fInfo.CopyTo(newPath);
-			//});
-
-			// --
-
 			InitializeComponent();
             this.SetFormTheme(ProfileManager.MyTheme);
             previewImage = OdooEntryImage.Image;
@@ -1209,157 +1137,22 @@ namespace HackPDM
 	#endregion
 
 	#region Background Worker functions
-		private async Task				Async_GetLatest				((ArrayList, CancellationToken) arguements, bool sentFromCheckout = false)
-		{
-			object lockObject = new();
-			ArrayList entryIDs = arguements.Item1;
-			HpVersion[] versions;
-
-			// add status lines for entry id and upcoming versions
-			lock ( lockObject )
-			{
-				Dialog.AddStatusLine(StatusMessage.FOUND, $"{entryIDs.Count} entries" );
-				Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Retrieving all latest versions associated with entries..." );
-			}
-
-			versions = GetLatestVersions( entryIDs, [ "preview_image", "entry_id", "node_id", "file_modify_stamp", "attachment_id", "file_contents" ] );
-
-			IEnumerable<List<HpVersion>> versionBatches = Utils.BatchList(versions, DownloadBatchSize);
-
-			MaxCount = versions.Length;
-			SkipCounter = 0;
-			ProcessCounter = 0;
-			DownloadBytes = 0;
-
-			try
-			{
-				await ProcessDownloadsAsync(versionBatches, arguements.Item2);
-			}
-			catch
-			{
-				MessageBox.Show("Cancelled Download");
-			}
-
-            Dialog.SetProgressBar(versions.Length, versions.Length);
-
-			if (!sentFromCheckout)
-			{
-				MessageBox.Show( $"Completed!" );
-			}
-			RestartEntries();
-		}
-        private async Task				Async_Commit				(ValueTuple<HpEntry[], List<HackFile>> Arguments)
-        {
-			object lockObject = new();
-            // section for checking if the existing remote file already has a version with the same checksum 
-            // or possibly an entry that has a newer version from that which is downloaded locally
-            
-			ConcurrentBag<HpEntry> entries = Arguments.Item1.ConvertToBag();
-			ConcurrentSet<HackFile> hackFiles = Arguments.Item2;
-
-
-			// testing filter hacks..
-			if (entries is not null && entries.Count > 0)
-			{
-				Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Filtering out uncommitable entries found remotely");
-				entries = await FilterCommitEntries(entries);
-                Dialog.AddStatusLine(StatusMessage.INFO, $"Able to commit ({hackFiles.Count}) remote files");
-            }
-			else
-			{
-				entries = new();
-			}
-
-			// section for checking if hack files have a checksum that matches the fullpath
-			if (hackFiles is not null && hackFiles.Count > 0)
-			{
-                Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Filtering out uncommitable entries found locally");
-                hackFiles = await FilterCommitHackFiles(hackFiles);
-				Dialog.AddStatusLine(StatusMessage.INFO, $"Able to commit ({hackFiles.Count}) local only files");
-			}
-			else
-			{
-				hackFiles = [];
-			}
-
-			List<HpVersion> versions = new(entries.Count() + hackFiles.Count());
-
-			while (hackFiles.TryTake(out HackFile result))
-			{
-				HpVersion newVersion = await OdooDefaults.ConvertHackFile(result);
-				versions.Add(newVersion);
-			}
-
-			var datas = new List<(HackFile, HpEntry, HashedValueStoring)>(entries.Count);
-
-            while (entries.TryTake(out HpEntry entry))
-			{
-				string entry_dir = HpDirectory.ConvertToWindowsPath(entry.HashedValues["directory_complete_name"] as string, false);
-				HackFile hack = HackFile.GetFromPath(Path.Combine(HackDefaults.PWAPathAbsolute, entry_dir, entry.name));
-				datas.Add((hack, entry, HashedValueStoring.None));
-				//HpVersion newVersion = await OdooDefaults.CreateNewVersion(hack, entry);
-				//versions.Add(newVersion);
-			}
-
-            var versionBatches = Utils.BatchList(datas, DownloadBatchSize);
-
-			ProcessCounter = 0;
-			SkipCounter = 0;
-			MaxCount = entries.Count;
-			if (versionBatches.Count > 0) Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Commiting new versions to database...");
-			else Dialog.AddStatusLine(StatusMessage.INFO, $"No new remote versions to commit for existing entries to the database...");
-            for (int i = 0; i < versionBatches.Count; i++)
-			{
-				Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Commiting batch {i + 1}/{versionBatches.Count}...");
-
-				HpVersion[] vbatch = await HpVersion.CreateAllNew([.. versionBatches[i]]);
-				versions.AddRange(vbatch);
-
-				ProcessCounter += versionBatches[i].Count;
-				Dialog.SetProgressBar((SkipCounter + ProcessCounter) / 3, MaxCount);
-			}
-
-            // create new parent, child hp_version_relationship's for versions
-			if (versions.Count < 1)
-			{
-                Dialog.AddStatusLine(StatusMessage.INFO, $"No new version relationship commits for database...");
-            }
-			else
-			{
-				Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Commiting new version relationship commits to database...");
-				HpVersionRelationship.Create([.. versions]);
-			}
-			Dialog.SetProgressBar(2*(MaxCount) / 3, MaxCount);
-
-			if (versions.Count < 1)
-			{
-                Dialog.AddStatusLine(StatusMessage.INFO, $"No new version property commits for database...");
-            }
-			else
-			{
-				Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Commiting new version property commits to database...");
-				HpVersionProperty.Create([.. versions]);
-			}
-			Dialog.SetProgressBar(MaxCount, MaxCount);
-
-            MessageBox.Show($"Completed!");
-            RestartEntries();
-        }
+        
 		private async Task				Async_CheckOut				(HpEntry[] entries)
 		{
 			object lockObject = new();
-
-            ProcessCounter = 0;
-            SkipCounter = 0;
-            MaxCount = entries.Length;
+			var SD = StatData.StaticData;
+            SD.ProcessCounter = 0;
+            SD.SkipCounter = 0;
+            SD.MaxCount = entries.Length;
 
 			if (entries is null or {Length: < 1})
 			{
-                Dialog.AddStatusLine(StatusMessage.ERROR, "No entries to checkout");
+                StatusDialog.Dialog.AddStatusLine(StatusMessage.ERROR, "No entries to checkout");
             }
 			else
 			{
-				Dialog.AddStatusLine(StatusMessage.INFO, $"{MaxCount} check outs");
+				StatusDialog.Dialog.AddStatusLine(StatusMessage.INFO, $"{SD.MaxCount} check outs");
 			
 				for (int i = 0; i < entries.Length; i++)
 				{
@@ -1367,47 +1160,47 @@ namespace HackPDM
 
 					lock(lockObject)
 					{
-						Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Checking out {entry.name} ({entry.ID})" );
+						StatusDialog.Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Checking out {entry.name} ({entry.ID})" );
 					}
 					await CheckOutEntry( entry );
 
 					lock(lockObject)
 					{
-						ProcessCounter += 1;
-						Dialog.SetProgressBar((SkipCounter + ProcessCounter), MaxCount);
+                        SD.ProcessCounter += 1;
+						StatusDialog.Dialog.SetProgressBar((SD.SkipCounter + SD.ProcessCounter), SD.MaxCount);
 					}
 				}
 			}
-            Dialog.SetProgressBar(MaxCount, MaxCount);
+            StatusDialog.Dialog.SetProgressBar(SD.MaxCount, SD.MaxCount);
             MessageBox.Show($"Completed!");
             RestartEntries();
 		}
 		private async Task				Async_UnCheckOut			(HpEntry[] entries)
 		{
 			object lockObject = new();
-
-            ProcessCounter = 0;
-            SkipCounter = 0;
-            MaxCount = entries.Length;
-            Dialog.AddStatusLine(StatusMessage.INFO, $"{MaxCount} uncheck outs");
+			var SD = StatData.StaticData;
+            SD.ProcessCounter = 0;
+            SD.SkipCounter = 0;
+            SD.MaxCount = entries.Length;
+            StatusDialog.Dialog.AddStatusLine(StatusMessage.INFO, $"{SD.MaxCount} uncheck outs");
             for (int i = 0; i < entries.Length; i++)
             {
                 HpEntry entry = entries[i];
 
                 lock (lockObject)
                 {
-                    Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Unchecking out {entry.name} ({entry.ID})");
+                    StatusDialog.Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Unchecking out {entry.name} ({entry.ID})");
                 }
                 await UnCheckOutEntry(entry);
 
                 lock (lockObject)
                 {
-                    ProcessCounter += 1;
-                    Dialog.SetProgressBar((SkipCounter + ProcessCounter), MaxCount);
+                    SD.ProcessCounter += 1;
+                    StatusDialog.Dialog.SetProgressBar((SD.SkipCounter + SD.ProcessCounter), SD.MaxCount);
                 }
             }
 
-            Dialog.SetProgressBar(MaxCount, MaxCount);
+            StatusDialog.Dialog.SetProgressBar(SD.MaxCount, SD.MaxCount);
             MessageBox.Show($"Completed!");
             RestartEntries();
 		}
@@ -1426,7 +1219,7 @@ namespace HackPDM
 
 			if (vDeleted)
 			{
-                Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Completed permanent delete");
+                StatusDialog.Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Completed permanent delete");
             }
 			else
 			{
@@ -1444,7 +1237,7 @@ namespace HackPDM
 			{
 				lock ( lockObject )
 				{
-					Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Setting InActive {entry.name}: {entry.ID}" );
+					StatusDialog.Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Setting InActive {entry.name}: {entry.ID}" );
 				}
 				await entry.LogicalDelete();
                 
@@ -1460,12 +1253,12 @@ namespace HackPDM
 			{
 				lock ( lockObject )
 				{
-					Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Setting Active {entry.name}: {entry.ID}" );
+					StatusDialog.Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Setting Active {entry.name}: {entry.ID}" );
 				}
 				await entry.LogicalUnDelete();
 			}
 
-            Dialog.SetProgressBar(5, 5);
+            StatusDialog.Dialog.SetProgressBar(5, 5);
             MessageBox.Show($"Completed!");
             RestartEntries();
         }
@@ -1487,7 +1280,7 @@ namespace HackPDM
             worker.DoWork += new DoWorkEventHandler(function);
             worker.RunWorkerAsync(arguments);
 
-            bool blnWorkCanceled = Dialog.ShowStatusDialog(statusHeader);
+            bool blnWorkCanceled = StatusDialog.Dialog.ShowStatusDialog(statusHeader);
             if (blnWorkCanceled)
             {
                 tokenSource.Cancel();
@@ -1496,31 +1289,7 @@ namespace HackPDM
             }
             return true;
         }
-        private async Task<bool>		AsyncRunner			(Func<Task> function, string statusHeader = "Status", CancellationTokenSource tokenSource = default)
-        {
-			tokenSource ??= new();
-            var task = Task.Run(() => function(), tokenSource.Token);
-            bool blnWorkCanceled = await AsyncHelper.WaitUntil(() => Dialog.Canceled || task.IsCompleted || task.IsCanceled, 500);
-
-            if (blnWorkCanceled)
-            {
-                if (Dialog.Canceled || task.IsCanceled)
-                {
-                    tokenSource.Cancel();
-                    try
-                    {
-                        await task; // Await to observe cancellation
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        // handles cancellation feedback
-                    }
-                    return false;
-                }
-            }
-            await task;
-            return true;
-        }
+        
     #endregion
 
     #region CheckOut Functions
@@ -1561,278 +1330,11 @@ namespace HackPDM
 	#endregion
 
 	#region Commit Functions
-        private async Task<ConcurrentBag<HpEntry>>	FilterCommitEntries			(ConcurrentBag<HpEntry> entries)
-        {
-            if (entries == null || entries.Count < 1) return null;
 
-            string[] excludedFields = ["preview_image", "attachment_id", "file_modify_stamp", "file_size", "node_id", "file_contents"];
-            ConcurrentBag<Task<HpEntry>> tasks = [];
-            object lockObject = new();
-
-			while (entries.TryTake(out HpEntry entry))
-			{
-				Task<HpEntry> entryTask = Task.Run(() =>
-				{
-					// true means that this entry is checked out
-					if (entry.checkout_user != OdooDefaults.OdooID)
-					{
-						if (entry.checkout_user == 0)
-						{
-                            lock (lockObject)
-                            {
-                                Dialog.AddStatusLine(StatusMessage.ERROR, $"entry is not checked out to you: {entry.name} ({entry.ID})");
-                            }
-                        }
-						else
-						{
-							lock (lockObject)
-							{
-								string userString = OdooDefaults.IDToUser.TryGetValue(entry.checkout_user ?? 0, out HpUser user) ? $"{user.name} (id: {user.ID}))" : $"(id: {entry.checkout_user})";
-								Dialog.AddStatusLine(StatusMessage.ERROR, $"checked out to user {userString}: {entry.name} ({entry.ID}) ");
-							}
-						}
-						return null;
-					}
-					// can eventually just change this to get the list of id's available instead
-					HpVersion latestVersion = HpEntry.GetRelatedRecordByIDS<HpVersion>([entry.ID], "latest_version_id", excludedFields).FirstOrDefault();
-
-					if (latestVersion is null) return null;
-
-					// check if latest version checksum matches local file
-                    if (HackFile.GetLocalVersion(latestVersion, out HackFile hack))
-                    {
-                        lock (lockObject)
-                        {
-                            Dialog.AddStatusLine(StatusMessage.WARNING, $"Latest remote version {latestVersion.name} matches local version");
-                        }
-                        
-                        return null;
-                    }
-					
-					if (!hack.Exists)
-					{
-						lock (lockObject)
-                        {
-                            Dialog.AddStatusLine(StatusMessage.ERROR, $"{latestVersion.name} has no local version");
-                        }
-                        
-                        return null;
-					}
-
-                    lock (lockObject)
-                    {
-                        Dialog.AddStatusLine(StatusMessage.PROCESSING, $"commiting {latestVersion.name}");
-                    }
-                    return entry;
-                });
-                await entryTask;
-                tasks.Add(entryTask);
-            }
-            await Task.WhenAll(tasks);
-            return tasks.SkipSelect(
-                taskPredicate =>
-                {
-                    return taskPredicate.Result == null;
-                },
-                taskSelect => taskSelect.Result).ConvertToBag();
-        }
-		private async Task<ConcurrentSet<HackFile>> FilterCommitHackFiles		(ConcurrentSet<HackFile> hackFiles)
-		{
-			List<Task<HackFile>> tasks = [];
-			object lockObject = new();
-			string combinedPattern = string.Join("|", OdooDefaults.EntryFilterPatterns);
-			var regex = new Regex(combinedPattern, RegexOptions.IgnoreCase);
-			//string[] filePaths = hackFiles.Select(hack => hack.FullPath).ToArray();
-			
-			List<HackFile> hacks = new();
-			foreach (HackFile hack in hackFiles)
-			{
-                regex = new Regex(combinedPattern, RegexOptions.IgnoreCase);
-                if (!regex.IsMatch($".{hack.TypeExt.ToLower()}"))
-				{
-					hacks.Add(hack);
-				}
-			}
-			HackFile[] files = await FileOperations.FilesNotInOdoo(hacks);
-			return files;
-		}
 	#endregion
 
 	#region Latest Functions
-		private HpVersion []			GetLatestVersions			(ArrayList entryIDs, string[] excludedFields = null)
-        {
-			if (excludedFields == null) excludedFields = ["preview_image", "file_contents"];
-			return HpEntry.GetRelatedRecordByIDS<HpVersion>(entryIDs, "latest_version_id", excludedFields);
-        }
-        private async Task				ProcessVersionBatchAsync	(List<HpVersion> batchVersions)
-        {
-            object lockObject = new();
-            ConcurrentBag<HpVersion> processVersions = [];
-            ConcurrentBag<int> unprocessedVersions = [];
-            List<Task> tasks = [];
-			
-
-            foreach (HpVersion version in batchVersions)
-            {
-                bool willProcess = true;
-                
-                // ==============================================================
-				// check to see if the version has a checksum and if it is the
-				// same as the one locally; if not don't download
-                // ==============================================================
-                if (version.checksum == null || version.checksum.Length == 0 || version.checksum == "False")
-                {
-                    QueueAsyncStatus.Enqueue((StatusMessage.ERROR, $"Checksum not found for version: {version.name}"));
-                    SkipCounter++;
-					willProcess = false;
-                }
-                if (willProcess && FileOperations.SameChecksum(version, ChecksumType.SHA1))
-                {
-
-                    //unprocessedVersions.Add(version.ID);
-                    QueueAsyncStatus.Enqueue((StatusMessage.FOUND, $"Skipping version download: {version.name}"));
-					SkipCounter++;
-					willProcess = false;
-                }
-                // ==============================================================
-
-                // ==============================================================
-                if (willProcess)
-				{
-					string fileName = Path.Combine(version.winPathway, version.name);
-					processVersions.Add(version);
-
-					QueueAsyncStatus.Enqueue((StatusMessage.PROCESSING, $"Downloading latest version: {fileName}"));
-					ProcessCounter++;
-				}
-				totalProcessed = SkipCounter + ProcessCounter;
-                if (totalProcessed % 25 == 0 || totalProcessed >= MaxCount)
-                {
-					Dialog.SetTotalDownloaded(SessionDownloadBytes);
-					Dialog.SetDownloaded(DownloadBytes);
-                    Dialog.AddStatusLines(QueueAsyncStatus);
-                }
-                Dialog.SetProgressBar(SkipCounter + ProcessCounter, MaxCount);
-
-
-      //          tasks.Add(
-      //              Task.Run(() =>
-      //              {
-      //                  if (version.checksum == null || version.checksum.Length == 0 || version.checksum == "False") 
-						//{
-						//	Interlocked.Increment(ref skipCounter);
-						//	return null;
-						//}
-      //                  if (FileOperations.SameChecksum(version, ChecksumType.SHA1))
-      //                  {
-      //                      //unprocessedVersions.Add(version.ID);
-      //                      QueueAsyncStatus.Enqueue((StatusMessage.INFO, $"Skipping download (Found): {version.name}"]);
-      //                      Interlocked.Increment(ref skipCounter);
-      //                      return null;
-      //                  }
-      //                  return version;
-      //              })
-      //              .ContinueWith((task) =>
-      //              {
-      //                  if (task.Result == null) return;
-
-      //                  string fileName = Path.Combine(task.Result.winPathway, task.Result.name);
-      //                  processVersions.Add(task.Result);
-
-      //                  QueueAsyncStatus.Enqueue((StatusMessage.INFO, $"Downloading missing latest file: {fileName}"]);
-      //                  Interlocked.Increment(ref processCounter);
-      //              })
-      //              .ContinueWith((task2) =>
-      //              {
-      //                  lock (lockObject)
-      //                  {
-      //                      if (SkipCounter % 100 == 0 || SkipCounter == maxCount)
-      //                      {
-      //                          Dialog.AddStatusLines(queueAsyncStatus);
-      //                      }
-      //                      Dialog.SetProgressBar(skipCounter + processCounter, maxCount);
-      //                  }
-      //              })
-      //          );
-			}
-			
-            await Task.Run(async () =>
-			{
-                if (processVersions.Count > 0)
-                {
-                    Task<int[]> finishSuccesses = Task.WhenAll(HpVersion.BatchDownloadFiles([.. processVersions]));
-                    await finishSuccesses;
-                    return finishSuccesses.Result[0];
-                }
-                return 0;
-            });
-
-			//      // when all the tasks are completed for checking checksums start another task 
-			//      // that then batch downloads those files to the correct folders.
-			//      await Task.WhenAll(tasks)
-			//.ContinueWith(async (task) =>
-			//{
-			//    if (processVersions.Count > 0)
-			//    {
-			//        Task<int[]> finishSuccesses = Task.WhenAll(HpVersion.BatchDownloadFiles(processVersions.ToList()));
-			//        await finishSuccesses;
-			//        return finishSuccesses.Result[0];
-			//    }
-			//    return 0;
-			//});
-        }
-        public async Task				ProcessDownloadsAsync		(IEnumerable<List<HpVersion>> versionBatches, CancellationToken cToken)
-        {
-            SemaphoreSlim throttler = new(ConcurrencySize);
-			ConcurrentQueue<Task> tasks = new();
-			
-            foreach (var batch in versionBatches)
-            {
-                await throttler.WaitAsync();
-
-                Task task = Task.Run(async () =>
-                {
-                    cToken.ThrowIfCancellationRequested();
-                    try
-                    {
-                        await ProcessVersionBatchAsync(batch);
-                    }
-                    finally
-                    {
-                        throttler.Release();
-                    }
-                });
-
-				if (tasks.Count > ConcurrencySize)
-				{
-					tasks.TryDequeue(out Task _);
-				}
-				tasks.Enqueue(task);
-            }
-
-            await Task.WhenAll(tasks);
-        }
-        private async void				GetLatestFromTreeNode		(bool withSubdirectories = false, bool sentFromCheckout = false)
-		{
-            object lockObject = new();
-
-            TreeNode tnCurrent = LastSelectedNode;
-
-			if ( tnCurrent == null )
-			{
-				MessageBox.Show( "current directory doesn't exist remotely" );
-				return;
-			}
-
-            // directory only needs ID set to find that record's entries
-            HpDirectory directory = new("temp")
-            {
-                ID = (int)tnCurrent.Tag
-            };
-
-			ArrayList entryIDs = directory.GetDirectoryEntryIDs( withSubdirectories, ShowInactive.Checked );
-            await GetLatestInternal(entryIDs, sentFromCheckout);
-        }
+		
     #endregion
        
     #region Form Event Handlers
@@ -1956,11 +1458,11 @@ namespace HackPDM
 
 		//
 		private void					Tree_Click_GetLatest					(object sender, EventArgs e)
-			=> GetLatestFromTreeNode(true);
+			=> Latest.GetLatestFromTreeNode(true);
         private void					Tree_Click_GetLatestAll					(object sender, EventArgs e) 
 			=> Tree_Click_GetLatest(sender, e);
 		private void					Tree_Click_GetLatestTop					(object sender, EventArgs e)
-			=> GetLatestFromTreeNode(false);
+			=> Latest.GetLatestFromTreeNode(false);
         private async void				Tree_Click_Commit						(object sender, EventArgs e)
 		{
 			int dir_id = (int)LastSelectedNode.Tag;
@@ -1986,17 +1488,17 @@ namespace HackPDM
 			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs(HpDirectory.ID, true);
 	
 			// get all files in folder path to commit.
-			await CommitInternal(entryIDs, HackFile.FolderPathToHackWithDependencies(pathway));
+			await Commit.CommitInternal(entryIDs, HackFile.FolderPathToHackWithDependencies(pathway));
 		}
 		private async void				Tree_Click_Checkout						(object sender, EventArgs e)
 		{
-			GetLatestFromTreeNode(true, true);
+			Latest.GetLatestFromTreeNode(true, true);
             ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)LastSelectedNode.Tag, true);
 			await CheckoutInternal(entryIDs);
 		}
         private async void				Tree_Click_UndoCheckout					(object sender, EventArgs e)
 		{
-			Dialog = new StatusDialog();
+			StatusDialog.Dialog = new StatusDialog();
 			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)LastSelectedNode.Tag, true);
 
 			await UnCheckoutInternal(entryIDs);
@@ -2032,7 +1534,7 @@ namespace HackPDM
 		}
 		private async void				Tree_Click_LogicalDelete				(object sender, EventArgs e)
 		{
-			Dialog = new StatusDialog();
+			StatusDialog.Dialog = new StatusDialog();
 			
 			ArrayList entryIDs = HpDirectory.GetDirectoryEntryIDs((int)LastSelectedNode.Tag, true);
 
@@ -2045,9 +1547,9 @@ namespace HackPDM
 		#endif
 		}
 
-		private void List_Click_GetLatest(object sender, EventArgs e)
+		private void					List_Click_GetLatest					(object sender, EventArgs e)
 			=> GetLatestList(sender, e);
-		private async void GetLatestList(object sender, EventArgs e, bool sentFromCheckout = false)
+		private async void				GetLatestList							(object sender, EventArgs e, bool sentFromCheckout = false)
 		{
 			var entryItem = OdooEntryList.SelectedItems;
 						
@@ -2061,7 +1563,7 @@ namespace HackPDM
 				}
 			}
 
-			await GetLatestInternal(entryIDs, sentFromCheckout);
+			await Latest.GetLatestInternal(entryIDs, sentFromCheckout);
 
 		}
 
@@ -2088,7 +1590,7 @@ namespace HackPDM
 				}
 			}
 
-            await CommitInternal(entryIDs, hackFiles);
+            await Commit.CommitInternal(entryIDs, hackFiles);
         }
 		private async void				List_Click_Checkout						(object sender, EventArgs e)
 		{
@@ -2114,7 +1616,7 @@ namespace HackPDM
 
 			if (entryIDs.Count < 1)
 			{
-				Dialog.AddStatusLine(StatusMessage.ERROR, "No entries to checkout");
+				StatusDialog.Dialog.AddStatusLine(StatusMessage.ERROR, "No entries to checkout");
 				return;
 			}
 
@@ -2322,7 +1824,7 @@ namespace HackPDM
 		}		
 		private async void				List_Click_LogicalDelete				(object sender, EventArgs e)
 		{
-			Dialog = new StatusDialog();
+			StatusDialog.Dialog = new StatusDialog();
 
 			var entryItem = OdooEntryList.SelectedItems;
 			//var directory = HackDefaults.DefaultPath(lastSelectedNode.FullPath, true);
@@ -2341,7 +1843,7 @@ namespace HackPDM
         private async void				List_Click_PermanentDelete				(object sender, EventArgs e)
         {
 #if DEBUG
-            Dialog = new StatusDialog();
+            StatusDialog.Dialog = new StatusDialog();
 
             var entryItem = OdooEntryList.SelectedItems;
             var directory = LastSelectedNode.FullPath;
@@ -2363,7 +1865,7 @@ namespace HackPDM
                 return;
             }
 
-            await AsyncRunner(() => Async_PermDelete(entries), "Permanently Delete Files");
+            await AsyncHelper.AsyncRunner(() => Async_PermDelete(entries), "Permanently Delete Files");
 #endif
         }
 		//
@@ -2596,7 +2098,7 @@ namespace HackPDM
 			string[] fileDrop = e.Data.GetData(DataFormats.FileDrop) as string[];
 			if (fileDrop is null or { Length: < 1 }) return;
 
-			Dialog = new StatusDialog();
+			StatusDialog.Dialog = new StatusDialog();
 
 			var directory = LastSelectedNode.FullPath;
 			var winDirect = Path.Combine(HackDefaults.PWAPathAbsolute, directory[5..]);
@@ -2621,7 +2123,7 @@ namespace HackPDM
 				$"files:\n{string.Join("\n", hackFiles.Select(f => $"{f.RelativePath}\\{f.Name}"))}", "Commit Files", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
             if (response == DialogResult.Yes)
 			{
-				await AsyncRunner(() => Async_Commit((new HpEntry[0], hackFiles)), "Commit Files");
+				//await AsyncRunner(() => Async_Commit((new HpEntry[0], hackFiles)), "Commit Files");
 			}
 		}
         private void					List_DragEnter					(object sender, DragEventArgs e)
@@ -2880,11 +2382,7 @@ namespace HackPDM
                 }
             }
         }
-        private async Task<ArrayList>	GetEntryList							(int[] entry_ids, bool update = false)
-        {
-            ArrayList arr = await OClient.CommandAsync<ArrayList>(HpVersion.GetHpModel(), "get_recursive_dependency_entries", [entry_ids.ToArrayList()], 1000000);
-            return arr;
-        }
+        
 		private async Task<ArrayList>	GetVersionList							(params int[] version_ids)
 		{
             ArrayList arr = await OClient.CommandAsync<ArrayList>(HpVersion.GetHpModel(), "get_recursive_dependency_versions", [version_ids.ToArrayList()], 1000000);
@@ -2916,21 +2414,21 @@ namespace HackPDM
 				&& vProps.Count() > 0)
 			{
 				ArrayList newIds = vProps.GetIDs();
-                Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Deleting version properties...");
+                StatusDialog.Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Deleting version properties...");
                 deletedVersionProps = await OClient.DeleteAsync(HpVersionProperty.GetHpModel(), [newIds], 100000);
                 if (deletedVersionProps)
                 {
-                    Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Deleted version properties: {string.Join(", ", newIds.ToArray())}");
+                    StatusDialog.Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Deleted version properties: {string.Join(", ", newIds.ToArray())}");
                 }
                 else
                 {
-                    Dialog.AddStatusLine(StatusMessage.ERROR, $"Unable to delete version properties");
+                    StatusDialog.Dialog.AddStatusLine(StatusMessage.ERROR, $"Unable to delete version properties");
                 }
             }
 			else
 			{
 				deletedVersionProps = true; 
-				Dialog.AddStatusLine(StatusMessage.SKIP, $"No version properties to delete");
+				StatusDialog.Dialog.AddStatusLine(StatusMessage.SKIP, $"No version properties to delete");
 			}
 #if DEBUG
             Debug.WriteLine($"version properties deleted = {deletedVersionProps}");
@@ -2954,42 +2452,42 @@ namespace HackPDM
 				&& vRelationsParent.Count() > 0)
 			{
 				ArrayList newIds = vRelationsParent.GetIDs();
-                Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Deleting parent version relationships...");
+                StatusDialog.Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Deleting parent version relationships...");
                 deletedVersionRelParent = OClient.Delete(HpVersionRelationship.GetHpModel(), [newIds], 100000);
 				if (deletedVersionRelParent)
 				{
-					Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Deleted parent version relationships: {string.Join(", ", newIds.ToArray())}");
+					StatusDialog.Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Deleted parent version relationships: {string.Join(", ", newIds.ToArray())}");
 				}
 				else
 				{
-					Dialog.AddStatusLine(StatusMessage.ERROR, $"Unable to delete parent version relationships");
+					StatusDialog.Dialog.AddStatusLine(StatusMessage.ERROR, $"Unable to delete parent version relationships");
 				}
 			}
 			else
 			{
 				deletedVersionRelParent = true; 
-				Dialog.AddStatusLine(StatusMessage.SKIP, $"No version relationship parents to delete");
+				StatusDialog.Dialog.AddStatusLine(StatusMessage.SKIP, $"No version relationship parents to delete");
 			}
 
 			if (vRelationsChild is not null
 				&& vRelationsChild.Count() > 0)
 			{
 				ArrayList newIds = vRelationsChild.GetIDs();
-                Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Deleting child version relationships...");
+                StatusDialog.Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Deleting child version relationships...");
                 deletedVersionRelChild = await OClient.DeleteAsync(HpVersionRelationship.GetHpModel(), [newIds], 100000);
 				if (deletedVersionRelChild)
 				{
-					Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Deleted child version relationships: {string.Join(", ", newIds.ToArray())}");
+					StatusDialog.Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Deleted child version relationships: {string.Join(", ", newIds.ToArray())}");
 				}
 				else
 				{
-					Dialog.AddStatusLine(StatusMessage.ERROR, $"Unable to delete child version relationships");
+					StatusDialog.Dialog.AddStatusLine(StatusMessage.ERROR, $"Unable to delete child version relationships");
 				}
 			}
 			else
 			{
 				deletedVersionRelChild = true; 
-				Dialog.AddStatusLine(StatusMessage.SKIP, $"No version relationship children to delete");
+				StatusDialog.Dialog.AddStatusLine(StatusMessage.SKIP, $"No version relationship children to delete");
 			}
 
 #if DEBUG
@@ -3004,15 +2502,15 @@ namespace HackPDM
 			if (ids is null || ids.Count < 1) return false;
 
 			bool deletedVersions = await PermanentDeleteVersions( ids );
-            Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Deleting entries...");
+            StatusDialog.Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Deleting entries...");
             bool deletedEntries = deletedVersions && OClient.Delete(HpEntry.GetHpModel(), [ids]);
             if (deletedEntries)
             {
-                Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Deleted entries");
+                StatusDialog.Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Deleted entries");
             }
             else
             {
-                Dialog.AddStatusLine(StatusMessage.ERROR, $"Unable to delete entries");
+                StatusDialog.Dialog.AddStatusLine(StatusMessage.ERROR, $"Unable to delete entries");
             }
 #if DEBUG
             Debug.WriteLine($"Entries deleted = {deletedEntries}");
@@ -3044,7 +2542,7 @@ namespace HackPDM
 					new ArrayList() { "res_field", "=", "file_contents"},	
 				]);
             }
-            Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Deleting IR Attachments...");
+            StatusDialog.Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Deleting IR Attachments...");
             deletedIrAttachments = deletedVersionsProps 
 				&& deletedVersionsRel 
 				&& (irAttachments is null 
@@ -3053,13 +2551,13 @@ namespace HackPDM
 
 			if (deletedIrAttachments)
 			{
-                Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Deleted IR Attachments");
+                StatusDialog.Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Deleted IR Attachments");
             }
 			else
 			{
-                Dialog.AddStatusLine(StatusMessage.INFO, $"unable to delete IR Attachments");
+                StatusDialog.Dialog.AddStatusLine(StatusMessage.INFO, $"unable to delete IR Attachments");
             }
-            Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Deleting versions...");
+            StatusDialog.Dialog.AddStatusLine(StatusMessage.PROCESSING, $"Deleting versions...");
             deletedVersions = deletedIrAttachments
 				&& (vIds is null
 					|| vIds.Count <= 0
@@ -3067,11 +2565,11 @@ namespace HackPDM
 
             if (deletedVersions)
             {
-                Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Deleted versions");
+                StatusDialog.Dialog.AddStatusLine(StatusMessage.SUCCESS, $"Deleted versions");
             }
             else
             {
-                Dialog.AddStatusLine(StatusMessage.ERROR, $"Unable to delete versions");
+                StatusDialog.Dialog.AddStatusLine(StatusMessage.ERROR, $"Unable to delete versions");
             }
 
 #if DEBUG
@@ -3081,52 +2579,13 @@ namespace HackPDM
             return deletedIrAttachments && deletedVersions;
 		}
         //
-        private async Task				GetLatestInternal						(ArrayList entryIDs, bool sentFromCheckout = false)
-        {
-			Notifier.CancelCheckLoop();
-            Dialog = new StatusDialog();
-            await Dialog.ShowWait("Get Latest");
-
-            Dialog.AddStatusLine(StatusMessage.INFO, "Finding Entry Dependencies...");
-            HpEntry[] entries = await HpEntry.GetRecordsByIDSAsync(entryIDs, includedFields: ["latest_version_id"]);
-            //HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
-
-            ArrayList newIds = await GetEntryList([.. entries.Select(entry => entry.latest_version_id)]);
-
-            newIds.AddRange(entryIDs);
-            newIds = newIds.ToHashSet<int>().ToArrayList();
-            CancellationTokenSource tokenSource = new();
-            (ArrayList, CancellationToken) arguments = (newIds, tokenSource.Token);
-            await AsyncRunner(() => Async_GetLatest(arguments, sentFromCheckout), "Get Latest", tokenSource);
-            Notifier.FileCheckLoop();
-        }
-        private async Task				CommitInternal							(ArrayList entryIDs, IEnumerable<HackFile> hackFiles)
-        {
-            Notifier.CancelCheckLoop();
-            Dialog = new StatusDialog();
-            await Dialog.ShowWait("Commit Files");
-
-            HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
-            HpEntry[] allEntries = null;
-
-            if (entries is not null && entries.Length > 0)
-            {
-                ArrayList newIds = await GetEntryList([.. entries.Select(e => e.latest_version_id)]);
-                newIds.AddRange(entryIDs);
-                newIds = newIds.ToHashSet<int>().ToArrayList();
-                allEntries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"], insertFields: ["directory_complete_name"]);
-            }
-
-            await AsyncRunner(() => Async_Commit((allEntries, hackFiles.ToList())), "Commit Files");
-            Notifier.FileCheckLoop();
-        }
         private async Task				CheckoutInternal						(ArrayList entryIDs)
         {
 			Notifier.CancelCheckLoop();
 
             HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
 
-            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
+            ArrayList newIds = await HpEntry.GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
 
             newIds.AddRange(entryIDs);
             newIds = newIds.ToHashSet<int>().ToArrayList();
@@ -3135,25 +2594,25 @@ namespace HackPDM
 
 			if (entries is null || entries.Length < 1)
 			{
-                Dialog.AddStatusLine(StatusMessage.ERROR, "No entries to commit");
+                StatusDialog.Dialog.AddStatusLine(StatusMessage.ERROR, "No entries to commit");
                 Notifier.FileCheckLoop(); 
 				return;
 			}
 
             entries = [.. FilterCheckoutEntries(entries)];
 
-			await AsyncRunner(() => Async_CheckOut(entries), "Checkout Files");
+			await AsyncHelper.AsyncRunner(() => Async_CheckOut(entries), "Checkout Files");
 			Notifier.FileCheckLoop();
 		}
 		private async Task				UnCheckoutInternal						(ArrayList entryIDs)
         {
             if (entryIDs is null or { Count: < 1 }) return;
 			Notifier.CancelCheckLoop();
-            Dialog = new StatusDialog();
-            await Dialog.ShowWait("Uncheckout Files");
+            StatusDialog.Dialog = new StatusDialog();
+            await StatusDialog.Dialog.ShowWait("Uncheckout Files");
 
             HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
-            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
+            ArrayList newIds = await HpEntry.GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
 
             newIds.AddRange(entryIDs);
             newIds = newIds.ToHashSet<int>().ToArrayList();
@@ -3169,34 +2628,34 @@ namespace HackPDM
             // filter out entries that are already checked out
             entries = [.. FilterUnCheckoutEntries(entries)];
 
-			await AsyncRunner(() => Async_UnCheckOut(entries), "UnCheckout Files");
+			await AsyncHelper.AsyncRunner(() => Async_UnCheckOut(entries), "UnCheckout Files");
 			Notifier.FileCheckLoop();
 		}
 		private async Task				LogicalDeleteInternal					(ArrayList entryIDs)
         {
 			Notifier.CancelCheckLoop();
-            Dialog = new StatusDialog();
-            await Dialog.ShowWait("Logically Delete Files");
+            StatusDialog.Dialog = new StatusDialog();
+            await StatusDialog.Dialog.ShowWait("Logically Delete Files");
 
             HpEntry[] entriesTemp = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
 
-            ArrayList newIds = await GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
+            ArrayList newIds = await HpEntry.GetEntryList([.. entriesTemp.Select(e => e.latest_version_id)]);
 
             newIds.AddRange(entryIDs);
             newIds = newIds.ToHashSet<int>().ToArrayList();
 
             HpEntry[] entries = HpEntry.GetRecordsByIDS(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"]);
 
-			await AsyncRunner(() => Async_LogicalDelete(entries), "Logically Delete Files");
+			await AsyncHelper.AsyncRunner(() => Async_LogicalDelete(entries), "Logically Delete Files");
 			Notifier.FileCheckLoop();
 		}
 		private async Task				UnDeleteInternal						(bool withSubdirectories = false)
         {
-            Dialog = new StatusDialog();
-            await Dialog.ShowWait("Logically Undelete Files");
+            StatusDialog.Dialog = new StatusDialog();
+            await StatusDialog.Dialog.ShowWait("Logically Undelete Files");
 
             HpEntry[] entries = HpEntry.GetRecordsByIDS(null, searchFilters: [new ArrayList() { "deleted", "=", true }, new ArrayList() { "dir_id", "=", (int)LastSelectedNode.Tag }], excludedFields: ["type_id", "cat_id", "checkout_node"]);
-            await AsyncRunner(() => Async_LogicalUnDelete(entries), "Logically UnDelete Files");
+            await AsyncHelper.AsyncRunner(() => Async_LogicalUnDelete(entries), "Logically UnDelete Files");
         }
 
 

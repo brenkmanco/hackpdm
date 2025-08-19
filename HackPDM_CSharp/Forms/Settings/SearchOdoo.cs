@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using HackPDM.ClientUtils;
 
+using HackPDM.Extensions.General;
+
 using OdooRpcCs;
 
 namespace HackPDM.Forms.Settings
@@ -128,7 +130,7 @@ namespace HackPDM.Forms.Settings
 				fields,				
 			];
 
-			results = await OdooClient.BrowseAsync(HpEntry.GetHpModel(), execParams, 10000);
+			results = await OdooRpcCs.OdooClient.BrowseAsync(HpEntry.GetHpModel(), execParams, 10000);
 			
 
 			if (localOnly)
@@ -251,7 +253,7 @@ namespace HackPDM.Forms.Settings
 								"text_value", 
 								item.SubItems[NameConfig.SearchPropEqual.Name].Text, 
 								item.SubItems[NameConfig.SearchPropValue.Name ].Text});
-						return await OdooClient.BrowseAsync(HpVersionProperty.GetHpModel(), [arr1, fields], 10000);
+						return await OdooRpcCs.OdooClient.BrowseAsync(HpVersionProperty.GetHpModel(), [arr1, fields], 10000);
 					});
 					await newTask;
 					tasks.Add(newTask);

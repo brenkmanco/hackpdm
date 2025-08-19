@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 
 using HackPDM.ClientUtils;
+using HackPDM.Extensions.General;
 
 using Newtonsoft.Json.Linq;
 
@@ -685,14 +686,6 @@ namespace HackPDM
                 _ => null,
             };
         }
-        public enum ValueConversion
-        {
-            NULL,
-            Assignable,
-            Enum,
-            DateTime,
-            Nullable,
-            OtherConvert,
-        }
+        
     }
 }

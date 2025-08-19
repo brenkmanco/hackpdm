@@ -12,7 +12,7 @@ using HackPDM.Properties;
 
 namespace HackPDM.Forms.Hack
 {
-	public partial class HackSettings : Form
+	public partial class HackSettings : SingletonForm<HackSettings>
 	{
 		UserSettings userSettings;
 		AppSettings appSettings;
