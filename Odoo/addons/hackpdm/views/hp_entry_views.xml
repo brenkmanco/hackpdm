@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="hp_entry_view_form" model="ir.ui.view">
+        <field name="name">hp.entry.form</field>
+        <field name="model">hp.entry</field>
+        <field name="arch" type="xml">
+            <form string="Entry Details">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1>
+                            <field name="name" placeholder="e.g. bolt.SLDPRT"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <field name="name"/>
+                        <field name="directory_complete_name"/>
+                        <field name="windows_complete_path"/>
+                        <field name="windows_complete_name"/>
+                        <field name="checkout_date"/>
+                        <field name="latest_date"/>
+                        <field name="latest_version_id"/>
+                        <field name="latest_file_size"/>
+                        <field name="latest_release_id"/>
+                        <field name="dir_id"/>
+                        <field name="type_id"/>
+                        <field name="checkout_node"/>
+                        <field name="checkout_user"/>
+                        <field name="deleted"/>
+                        <field name="version_property_ids"/>
+                        <field name="release_ids"/>
+                        <field name="version_ids"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="ir_actions_act_window_hp_entry" model="ir.actions.act_window">
+        <field name="name">Entry</field>
+        <field name="res_model">hp.entry</field>
+        <field name="view_mode">form</field>
+    </record>
+</odoo>

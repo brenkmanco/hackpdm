@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="hp_version_view_form" model="ir.ui.view">
+        <field name="name">hp.version.form</field>
+        <field name="model">hp.version</field>
+        <field name="arch" type="xml">
+            <form string="Version Details">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1>
+                            <field name="name" placeholder="e.g. bolt.SLDPRT"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <field name="name"/>
+                        <field name="entry_id"/>
+                        <field name="node_id"/>
+                        <field name="dir_id"/>
+                        <field name="file_modify_stamp"/>
+                        <field name="checkout_date"/>
+                        <field name="checkout_user"/>
+                        <field name="checkout_node"/>
+                        <field name="release_id"/>
+                        <field name="attachment_id"/>
+                        <field name="file_size"/>
+                        <field name="file_ext"/>
+                        <field name="directory_complete_name"/>
+                        <field name="checksum"/>
+                        <field name="file_contents"/>
+                        <field name="node_latest_ids"/>
+                        <field name="parent_ids"/>
+                        <field name="child_ids"/>
+                        <field name="preview_image"/>
+                        <field name="version_property_ids"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="ir_actions_act_window_hp_version" model="ir.actions.act_window">
+        <field name="name">Version</field>
+        <field name="res_model">hp.version</field>
+        <field name="view_mode">form</field>
+    </record>
+</odoo>

@@ -396,3 +396,10 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# For Odoo
+*.py[co]
+__pycache__/
+*.egg-info
+*~
+*#
