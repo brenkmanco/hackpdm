@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" xmlns:bx="https://boxy-svg.com">
+  <path d="M 190.255 22.097 H 305.596 V 193.527 H 477.026 V 308.868 H 305.596 V 480.298 H 190.255 V 308.868 H 18.825 V 193.527 H 190.255 Z" bx:shape="cross 18.825 22.097 458.201 458.201 115.34 115.34 0.5 1@385117de" style="stroke: rgb(0, 0, 0); fill: rgb(0, 255, 35); fill-opacity: 0.75; stroke-width: 8px;"/>
+</svg>

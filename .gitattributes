@@ -1,15 +1,5 @@
 # files that will always have CRLF line endings on checkout
-*.cs eol=crlf
-*.resx eol=crlf
-*.rc eol=crlf
-*.csproj eol=crlf
-*.config eol=crlf
-*.sln eol=crlf
-*.settings eol=crlf
-
-# files that will always have LF (Linux) line endings on checkout
-*.py text eol=lf
-*.sql text eol=lf
+* text=auto
 
 # don't change binary files
 *.psd binary

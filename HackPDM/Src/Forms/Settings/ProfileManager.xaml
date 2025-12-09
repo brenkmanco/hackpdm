@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="HackPDM.Forms.Settings.ProfileManager"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:com="using:CommunityToolkit.WinUI.UI.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:data="using:Microsoft.UI.Xaml.Data"
+    xmlns:local="using:HackPDM.Forms.Hack"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:xaml="using:Microsoft.UI.Xaml"
+    mc:Ignorable="d">
+    <Grid Margin="12">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="40" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="55" />
+        </Grid.RowDefinitions>
+
+        <!--  Hack Settings Button  -->
+        <Button
+            x:Name="HackSettingsBtn"
+            Grid.Row="1"
+            Grid.Column="0"
+            Height="35"
+            MinWidth="100"
+            Margin="5,5,5,5"
+            Padding="5,5,5,5"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Bottom"
+            Content="Hack Settings" />
+
+        <!--  Odoo Settings Button  -->
+        <Button
+            x:Name="odooSettingsBtn"
+            Grid.Row="1"
+            Grid.Column="1"
+            Height="35"
+            MinWidth="100"
+            Margin="5,5,5,5"
+            Padding="5,5,5,5"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Bottom"
+            Content="Odoo Settings" />
+        <!--  Odoo Login Button  -->
+        <Button
+            x:Name="OdooLoginBtn"
+            Grid.Row="1"
+            Grid.Column="2"
+            Height="35"
+            MinWidth="100"
+            Margin="5,5,5,5"
+            Padding="5,5,5,5"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Bottom"
+            Content="Odoo Login" />
+        <ProgressRing
+            x:Name="OdooLoginProgressRing"
+            Grid.Row="1"
+            Grid.Column="3"
+            Width="32"
+            Height="32"
+            Margin="5,5,5,5"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            IsActive="False" />
+        <!--  Status List View  -->
+        <com:DataGrid
+            x:Name="ProfileManStatusList"
+            Grid.Row="0"
+            Grid.Column="0"
+            Grid.ColumnSpan="4"
+            Margin="0,5,0,10"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            AutoGenerateColumns="False"
+            BorderThickness="1,1,1,1">
+            <!--  FIX: Remove ListView.View, use ListView.ItemTemplate for UWP/WinUI  -->
+            <com:DataGrid.Columns>
+                <!--<TextBlock Grid.Column="0" Text="{data:Binding Status}" />
+				<TextBlock Grid.Column="1" Text="{data:Binding Message}" />-->
+                <com:DataGridTextColumn
+                    Width="Auto"
+                    Binding="{Binding Status}"
+                    Header="Action" />
+                <com:DataGridTextColumn
+                    Width="*"
+                    Binding="{Binding Message}"
+                    Header="Description" />
+            </com:DataGrid.Columns>
+        </com:DataGrid>
+    </Grid>
+</Page>

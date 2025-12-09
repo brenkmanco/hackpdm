@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "HackPDM (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "HackPDM (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
