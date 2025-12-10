@@ -15,10 +15,14 @@
 	<DefineConstants Condition="!('$(WindowsTargetPlatformVersion)' &gt;= '10.0.10240.0')">WINDOWS_LEGACY</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="Src\Forms\Helper\**" />
+    <EmbeddedResource Remove="Src\Forms\Helper\**" />
+    <None Remove="Src\Forms\Helper\**" />
+    <Page Remove="Src\Forms\Helper\**" />
+  </ItemGroup>
+  <ItemGroup>
     <None Remove="Src\Forms\Hack\HackFileManager.xaml" />
     <None Remove="Src\Forms\Hack\HackSettings.xaml" />
-	<None Remove="Src\Forms\Helper\MessageBox.xaml" />
-    <None Remove="Src\Forms\Helper\MessageBoxWindow.xaml" />
     <None Remove="Src\Forms\Odoo\OdooFileTypeManager.xaml" />
     <None Remove="Src\Forms\Odoo\OdooSettings.xaml" />
     <None Remove="Src\Forms\Odoo\SearchOdoo.xaml" />
@@ -518,12 +522,6 @@
 	<Page Update="Src\Forms\Hack\HackFileManager.xaml">
 		<Generator>MSBuild:Compile</Generator>
 	</Page>
-	<Page Update="Src\Forms\Helper\MessageBox.xaml">
-		<Generator>MSBuild:Compile</Generator>
-	</Page>
-	<Page Update="Src\Forms\Helper\MessageBoxWindow.xaml">
-		<Generator>MSBuild:Compile</Generator>
-	</Page>
 	<Page Update="Src\Forms\Odoo\OdooFileTypeManager.xaml">
 		<Generator>MSBuild:Compile</Generator>
 	</Page>
@@ -581,9 +579,6 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Src\Forms\Helper\" />
-  </ItemGroup>
 
   <!--
     Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
@@ -607,4 +602,7 @@
     <UseWPF>False</UseWPF>
     <UseWindowsForms>False</UseWindowsForms>
   </PropertyGroup>
+  <ItemGroup>
+    <PRIResource Remove="Src\Forms\Helper\**" />
+  </ItemGroup>
 </Project>

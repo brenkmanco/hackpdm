@@ -68,8 +68,8 @@ public abstract partial class HpBaseModel
     // }
     public bool IsRecord { get; internal set; }
     public Hashtable HashedValues { get; internal set; } = [];
-    public string[] ExcludedFields { get; internal set; }
-    public string[] InsertFields { get; internal set; }
+    public string[]? ExcludedFields { get; internal set; }
+    public string[]? InsertFields { get; internal set; }
 }
 public abstract partial class HpBaseModel
 {
@@ -96,7 +96,7 @@ public abstract partial class HpBaseModel
         return tempId;
     }
     public virtual async Task<int> CreateAsync() => await CreateAsync(false);
-    public virtual async Task<int> CreateAsync(bool withEmpty = false, string[] excludedFields = null)
+    public virtual async Task<int> CreateAsync(bool withEmpty = false, string[]? excludedFields = null)
     {
         Hashtable ht = ComputeHashtable(withEmpty, excludedFields, isNew:true);
         int tempId = await OClient.CreateAsync(HpModel, ht, 10000);
@@ -146,7 +146,7 @@ public abstract partial class HpBaseModel
         return tempId;
     }
 
-    protected Hashtable ComputeHashtable(bool includeEmpty = true, in string[] excludedFieldNames = null, bool isNew = false)
+    protected Hashtable ComputeHashtable(bool includeEmpty = true, in string[]? excludedFieldNames = null, bool isNew = false)
     {
         Hashtable ht = [];
         Type type = GetType();
@@ -288,7 +288,7 @@ public abstract partial class HpBaseModel
     }
 
 
-    protected ArrayList ComputeArrayList(bool includeEmpty, in string[] excludedFieldNames = null)
+    protected ArrayList ComputeArrayList(bool includeEmpty, in string[]? excludedFieldNames = null)
     {
         ArrayList al = [];
         Hashtable ht = ComputeHashtable(includeEmpty, in excludedFieldNames);
@@ -299,7 +299,7 @@ public abstract partial class HpBaseModel
 
         return al;
     }
-    public static ArrayList GetFields(Type type, string[] excludedFieldNames = null, string[] includedFieldNames = null, string[] insertFieldNames = null)
+    public static ArrayList GetFields(Type type, string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
     {
         ArrayList fieldNames = [];
         FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
@@ -324,15 +324,18 @@ public abstract partial class HpBaseModel
 }
 public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 {
-    public virtual T GetRecord()
+    public virtual T? GetRecord()
     {
         ArrayList list = ComputeArrayList(false);
-        int recordId = (int)OClient.Search(HpModel, list)[0];
+        int? recordId = OClient.Search(HpModel, list)?[0] as int?;
         return GetRecord(recordId);
     }
-    public virtual T GetRecord(int recordId)
+    public virtual T? GetRecord(int? recordId)
     {
-        Hashtable ht = OClient.Read(HpModel, [recordId], GetFields())[0] as Hashtable;
+        if (recordId is null or 0) return null;
+        Hashtable? ht = OClient.Read(HpModel, [recordId], GetFields()).FirstOrDefault<Hashtable>();
+        if (ht is null) return null;
+
         return RecordPopulation(ht);
     }
     //public virtual ArrayList GetAllFields()
@@ -499,7 +502,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
         }
         return [.. records];
     }
-    internal static T[] GetAllRecords(string[] excludedFields = null, string[] insertFields = null)
+    internal static T[]? GetAllRecords(string[] excludedFields = null, string[] insertFields = null)
     {
         string modelName = HpModelDictionary[typeof(T)];
 
@@ -553,7 +556,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
         => GetFieldValueAsync<Tval>(id, fieldName, defaultVal).GetAwaiter().GetResult();
 
 
-    internal static T? RecordPopulation(Hashtable ht, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string> remapNames = null)
+    internal static T? RecordPopulation(Hashtable ht, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string>? remapNames = null)
     {
         if (ht is null) return null;
 
@@ -573,7 +576,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
         FinalizePopulation(ref record, ht, excludedFields, hashStoreType);
         return record;
     }
-    internal static T[] RecordsPopulation(Hashtable[] hts, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string> remapNames = null)
+    internal static T[] RecordsPopulation(Hashtable[] hts, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string>? remapNames = null)
     {
         if (hts is null) return null;
 
@@ -597,7 +600,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
         return records;
     }
 
-    public static void FinalizePopulation(ref T record, Hashtable ht, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
+    public static void FinalizePopulation(ref T record, Hashtable ht, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
     {
         // set record settings
         record.Id = (int)ht["id"];

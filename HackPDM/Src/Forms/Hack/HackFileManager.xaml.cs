@@ -433,6 +433,8 @@ public sealed partial class HackFileManager : Page
 		}
 		var localVersions = Help.BatchArray(localConversions, DownloadBatchSize);
 
+		
+
 		_processCounter = 0;
 		SkipCounter = 0;
 
@@ -1829,7 +1831,7 @@ public sealed partial class HackFileManager : Page
 	// private delegate void UpdateTabPageTextDel(TabPage page, string text);
 	// private delegate void SafeInvokeDelGeneric<T>(Control c, T data, Action<T> action);
 	// private delegate void SafeInvokeDel(Control c, Action action);
-	private static void UpdateTabPageText(TabViewItem page, string text)
+	private static void UpdateTabPageText(TabViewItem page, string text) 
 	{
 		HackDispatcherQueue.TryEnqueue(() => page.Header = text);
 	}

@@ -14,15 +14,23 @@ public abstract class HackBaseFile
         get => field ??= Info?.Name; 
         set => field = value ?? Info?.Name;
     }
-    public string? BasePath 
+    public string? DirectoryName 
     { 
         get => field ??= Info?.DirectoryName; 
-        set => field = Info?.DirectoryName ?? value;
+        set => field = value ?? Info?.DirectoryName;
     }
     public string? FullPath 
-    { 
-        get => field ??= Info?.FullName ?? Path.Combine(HackDefaults.PwaPathAbsolute, BasePath, Name); 
-        set => field = value;
+    {
+        get
+        {
+            field ??= Info?.FullName;
+			return field is not null
+				? (field)
+				: DirectoryName is null || Name is null 
+                    ? (field) 
+                    : (field = Path.Combine(HackDefaults.PwaPathAbsolute, DirectoryName, Name));
+		}
+		set => field = value;
     }
     public string? RelativePath { get; set; }
     internal byte[]? FileContents { get; set; }
@@ -35,7 +43,7 @@ public abstract class HackBaseFile
             
         return ht;
     }
-    public async static Task<HackFile> GetHackFileAsync<T>(string? fullFilePath) where T : HackFile, new()
+    public async static Task<HackFile?> GetHackFileAsync<T>(string? fullFilePath) where T : HackFile, new()
     {
 		if (string.IsNullOrEmpty(fullFilePath)) return null;
         HackFile hackFile = DefaultType<HackFile>();
@@ -55,14 +63,5 @@ public abstract class HackBaseFile
         return hackFile;
     }
     private static async Task<HackFile> FileInfoToHackFile(FileInfo fileInfo) => await HackFile.GetFromFileInfo(fileInfo);
-        
-        
-    private static T DefaultType<T>() where T : new()
-    {
-        if (typeof(T).IsValueType)
-        {
-            return default;
-        }
-        return new T();
-    }
+	private static T? DefaultType<T>() where T : new() => typeof(T).IsValueType ? default : new T();
 }

@@ -124,7 +124,7 @@ public static class FileOperations
         }
         try
         {
-            string combinedPath = file.BasePath;//Path.Combine(HackDefaults.PWAPathAbsolute, file.FilePath);
+            string combinedPath = file.DirectoryName;//Path.Combine(HackDefaults.PWAPathAbsolute, file.FilePath);
             if (!Directory.Exists(combinedPath))
             {
                 Directory.CreateDirectory(combinedPath);
@@ -152,7 +152,7 @@ public static class FileOperations
         }
         try
         {
-            string combinedPath = Path.Combine(HackDefaults.PwaPathAbsolute, file.BasePath);
+            string combinedPath = Path.Combine(HackDefaults.PwaPathAbsolute, file.DirectoryName);
             if (!Directory.Exists(combinedPath))
             {
 				//CreateDirectory(combinedPath);

@@ -128,7 +128,7 @@ public static class OdooClient
     }
 
     //  [("res_model", "=", "hp.version"), ("res_id", "=", 1)]
-    public static object Execute(string model, string method, ArrayList parameters, int? timeout = null)
+    public static object? Execute(string model, string method, ArrayList parameters, int? timeout = null)
     {
         _latestException = "";
         int userTimeout = timeout == null ? _objectTimeout : (int)timeout;
@@ -175,15 +175,15 @@ public static class OdooClient
     }
 
     // generic execute command that'll return the response or the default/empty type
-    public static TReturn Command<TReturn>(string model, string method, ArrayList execParams, int? timeout = null) where TReturn : new()
+    public static TReturn? Command<TReturn>(string model, string method, ArrayList execParams, int? timeout = null) where TReturn : new()
     {
-        object response = Execute(model, method, execParams, timeout);
+        object? response = Execute(model, method, execParams, timeout);
 
-        if (typeof(TReturn).IsValueType)
-        {
-            return (TReturn)(response ?? default(TReturn));
-        }
-        return (TReturn)(response ?? new TReturn());
+        return response is TReturn resp 
+            ? resp 
+            : typeof(TReturn).IsValueType 
+                ? default
+                : new TReturn();
     }
 
 

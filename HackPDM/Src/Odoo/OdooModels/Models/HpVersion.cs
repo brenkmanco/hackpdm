@@ -157,7 +157,7 @@ public partial class HpVersion : HpBaseModel<HpVersion>
             if (!Directory.Exists(toPath) && !Directory.CreateDirectory(toPath).Exists) return false;
             HackFile data = DownloadFileData();
     
-            data.BasePath = toPath;
+            data.DirectoryName = toPath;
             if (data.FileContents != null && data.FileContents.Length > 0)
                 data.CreateFile();
     
@@ -235,7 +235,7 @@ public partial class HpVersion : HpBaseModel<HpVersion>
                 {
                     hack.FileContents = Convert.FromBase64String(versions[i].file_contents);
                     hack.Name = versions[i].name;
-                    hack.BasePath = versions[i].WinPathway;
+                    hack.DirectoryName = versions[i].WinPathway;
                     hack.SetModifiedDate(versions[i]?.file_modify_stamp ?? default);
                     hack.FileSize = versions[i].file_size;
                     // winpathway is probably the shortened version

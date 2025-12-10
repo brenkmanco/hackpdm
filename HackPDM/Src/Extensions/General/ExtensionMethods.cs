@@ -42,6 +42,20 @@ public static class ExtensionMethods
         obj ??= func();
         return obj;
     }
+    public static T? FirstOrDefault<T>(this ArrayList? list, Predicate<T>? predicate = null) where T : class
+    {
+        if (list is not {Count: > 0}) return default;
+        if (predicate is null) return list[0] as T;
+
+		foreach (T obj in list.OfType<T>())
+        {
+            if (predicate is { } pred && pred(obj))
+            {
+                return obj;
+            }
+        }
+        return default;
+    }
     public static T[] Populate<T>(this T[] values, Func<T> func)
     {
         for (int i = 0; i < values.Length; i++)

@@ -213,7 +213,14 @@ public class HackFile : HackBaseFile
 
     public bool? Exists
     {
-		get => field ??= Info?.Exists ?? Path.Exists(FullPath);
+        get
+        {
+            field ??= Info?.Exists;
+            if (field is not null) return field;
+            if (FullPath is not null) field ??= Path.Exists(FullPath);
+
+            return field;
+        }
     }
 
 
@@ -247,7 +254,7 @@ public class HackFile : HackBaseFile
         // base class
         this.FullPath = fullPath;
         this.Name = name;
-        this.BasePath = basePath;
+        this.DirectoryName = basePath;
         this.RelativePath = relativePath;
 
         // this class
@@ -269,7 +276,7 @@ public class HackFile : HackBaseFile
 		}
         Info = file;
         Name = file.Name;
-        BasePath = file?.DirectoryName;
+        DirectoryName = file?.DirectoryName;
         FullPath = file?.FullName;
         TypeExt = file?.Extension;
         ModifiedDate = file?.LastWriteTime ?? default;
@@ -303,7 +310,7 @@ public class HackFile : HackBaseFile
 			catch { }
 		}
 		this.Name = this.Info?.Name ?? entry.Name;
-		this.BasePath = this.Info?.DirectoryName ?? Path.GetDirectoryName(FullPath);
+		this.DirectoryName = this.Info?.DirectoryName ?? Path.GetDirectoryName(FullPath);
 		this.FileSize = this.Info?.Length ?? entry.Size;
 		this.ModifiedDate = this.Info?.LastWriteTime ?? entry.LocalDate ?? entry.RemoteDate ?? default;
 		this.TypeExt = this.Info?.Extension ?? entry.Type;
@@ -346,7 +353,7 @@ public class HackFile : HackBaseFile
 	{
 		Info = null;
 		Name = null;
-		BasePath = null;
+		DirectoryName = null;
 		FullPath = null;
 		TypeExt = null;
 		ModifiedDate = default;
@@ -359,7 +366,7 @@ public class HackFile : HackBaseFile
         this.Info = hack?.Info;
         this.FullPath = hack?.FullPath;
         this.Name = hack?.Name;
-        this.BasePath = hack?.BasePath;
+        this.DirectoryName = hack?.DirectoryName;
         this.RelativePath = hack?.RelativePath;
         this.TypeExt = hack?.TypeExt;
         this.ModifiedDate = hack?.ModifiedDate ?? default;
@@ -375,7 +382,7 @@ public class HackFile : HackBaseFile
 	{
 		hack.Info = file;
 		hack.Name = file.Name;
-		hack.BasePath = file.DirectoryName;
+		hack.DirectoryName = file.DirectoryName;
 		hack.FullPath = file.FullName;
 		hack.TypeExt = file.Extension;
 		hack.ModifiedDate = file.LastWriteTime;
@@ -396,7 +403,7 @@ public class HackFile : HackBaseFile
         {
             hack = GetHackFromPathUninitialized(entry.FullName, null);
         }
-        hack?.RelativePath = Path.Combine("root", hack?.BasePath?[Math.Min(HackDefaults.PwaPathAbsolute.Length+1, hack.BasePath.Length)..] ?? "");
+        hack?.RelativePath = Path.Combine("root", hack?.DirectoryName?[Math.Min(HackDefaults.PwaPathAbsolute.Length+1, hack.DirectoryName.Length)..] ?? "");
         return hack;
     }
 	public static HackFile? GetFromPath(string? path, string? directory = null, bool initWithFileInfo=true)
@@ -414,7 +421,7 @@ public class HackFile : HackBaseFile
 			hack = GetHackFromPathUninitialized(path, directory);
 		}
 
-        hack?.RelativePath = Path.Combine("root", hack?.BasePath?[Math.Min(HackDefaults.PwaPathAbsolute.Length+1, hack.BasePath.Length)..] ?? "");
+        hack?.RelativePath = Path.Combine("root", hack?.DirectoryName?[Math.Min(HackDefaults.PwaPathAbsolute.Length+1, hack.DirectoryName.Length)..] ?? "");
         return hack;
     }
     private static HackFile? GetHackFromPathUninitialized(string? path, string? directory=null)
@@ -423,7 +430,7 @@ public class HackFile : HackBaseFile
 		{
 			Name = Path.GetFileName(path),
 			FullPath = Path.GetFullPath(path ?? ""),
-			BasePath = directory ?? Path.GetDirectoryName(path),
+			DirectoryName = directory ?? Path.GetDirectoryName(path),
 			TypeExt = Path.GetExtension(path),
 			ModifiedDate = File.GetLastWriteTime(path ?? ""),
 		};
@@ -686,10 +693,10 @@ public class HackFile : HackBaseFile
                 filePath = this.FullPath;
             }
             if ( filePath is ""
-                 && this.BasePath is not null and not ""
+                 && this.DirectoryName is not null and not ""
                  && this.Name is not null and not "" )
             {
-                filePath = Path.Combine( this.BasePath, this.Name );
+                filePath = Path.Combine( this.DirectoryName, this.Name );
             }
         }
 
@@ -735,10 +742,10 @@ public class HackFile : HackBaseFile
                     filePath = this.FullPath;
                 }
                 if ( filePath is ""
-                     && this.BasePath is not null and not ""
+                     && this.DirectoryName is not null and not ""
                      && this.Name is not null and not "" )
                 {
-                    filePath = Path.Combine( this.BasePath, this.Name );
+                    filePath = Path.Combine( this.DirectoryName, this.Name );
                 }
                 if ( filePath is not "" )
                 {

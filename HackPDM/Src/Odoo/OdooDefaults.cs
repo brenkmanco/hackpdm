@@ -141,7 +141,8 @@ public static class OdooDefaults
 
         set
         {
-			if (!string.IsNullOrEmpty(OdooPass)) CredentialManager.WriteCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, value ?? "", OdooPass, CredentialPersistence.LocalMachine);
+			if (!string.IsNullOrEmpty(OdooPass) && !string.IsNullOrEmpty(value)) 
+                CredentialManager.WriteCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, value ?? "", OdooPass, CredentialPersistence.LocalMachine);
             field = value;
         }
     }
@@ -158,7 +159,8 @@ public static class OdooDefaults
 
         set
         {
-			if (!string.IsNullOrEmpty(OdooUser)) CredentialManager.WriteCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, OdooUser, value ?? "", CredentialPersistence.LocalMachine);
+			if (!string.IsNullOrEmpty(OdooUser) && !string.IsNullOrEmpty(value)) 
+                CredentialManager.WriteCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, OdooUser, value, CredentialPersistence.LocalMachine);
             field = value;
         }
     }
@@ -220,7 +222,7 @@ public static class OdooDefaults
             }
             return field;
         }
-        set
+        internal set
         {
             if (field == 0)
             {
@@ -239,7 +241,7 @@ public static class OdooDefaults
             }
             return field;
         }
-        set
+        internal set
         {
             if (field == 0)
             {
@@ -265,7 +267,7 @@ public static class OdooDefaults
         }
     }
     // low enough number of records to get before
-    public static HpSetting [] HpSettings
+    public static HpSetting []? HpSettings
     {
         get
         {
@@ -278,7 +280,7 @@ public static class OdooDefaults
     public static bool RestrictProperties = HpSettings?.First(sett => sett.name == RESTRICT_PROP_NAME).bool_value ?? true;
     public static bool RestrictTypes = HpSettings?.First(sett => sett.name == RESTRICT_TYPES_NAME).bool_value ?? true;
 	
-    public static HpEntryNameFilter[] HpEntryNameFilters
+    public static HpEntryNameFilter[]? HpEntryNameFilters
     {
         get
         {
@@ -287,7 +289,7 @@ public static class OdooDefaults
         } 
         set => field = value;
     }
-    public static HpCategory[] HpCategories
+    public static HpCategory[]? HpCategories
     {
         get
         {
@@ -296,7 +298,7 @@ public static class OdooDefaults
         }
         set => field = value;
     }
-    public static HpType[] HpTypes
+    public static HpType[]? HpTypes
     {
         get
         {
@@ -305,7 +307,7 @@ public static class OdooDefaults
         }
         set => field = value;
     }
-    public static HpProperty[] HpProperties
+    public static HpProperty[]? HpProperties
     {
         get
         {
@@ -314,7 +316,7 @@ public static class OdooDefaults
         }
         set => field = value;
     }
-    public static HpNode[] HpNodes
+    public static HpNode[]? HpNodes
     {
         get
         {
@@ -323,7 +325,7 @@ public static class OdooDefaults
         }
         set => field = value;
     }
-    public static HpUser[] HpUsers
+    public static HpUser[]? HpUsers
     {
         get
         {
@@ -449,8 +451,10 @@ public static class OdooDefaults
         }
         return dict;
     }
-    public static Dictionary<string, HpCategory> ExtensionMapCategory( in HpCategory [] categories, in HpType [] types )
+    public static Dictionary<string, HpCategory> ExtensionMapCategory( in HpCategory []? categories, in HpType []? types )
     {
+        if (categories is null || types is null) return [];
+
         Dictionary<string, HpCategory> dict = [];
         foreach ( HpType type in types )
         {
@@ -465,9 +469,10 @@ public static class OdooDefaults
         }
         return dict;
     }
-    public static Dictionary<int, HpProperty> IdMapProperty(in HpProperty[] props )
+    public static Dictionary<int, HpProperty> IdMapProperty(in HpProperty[]? props )
     {
-        Dictionary<int, HpProperty> dict = [];
+        if (props is null) return [];
+		Dictionary<int, HpProperty> dict = [];
 
         foreach ( HpProperty prop in props )
         {
