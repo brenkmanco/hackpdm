@@ -24,11 +24,11 @@ public class SwDocMgr
 	public SwDocMgr(string strLicenseKey)
     {
 
-        SwDMClassFactory swClassFact;
-        swClassFact = new SwDMClassFactory();
 
         try
         {
+            SwDMClassFactory swClassFact;
+            swClassFact = new SwDMClassFactory();
             _swDocMgr = swClassFact.GetApplication(strLicenseKey);
         }
         catch (Exception ex)

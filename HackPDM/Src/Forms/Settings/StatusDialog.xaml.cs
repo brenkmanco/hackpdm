@@ -52,6 +52,7 @@ public sealed partial class StatusDialog : Page
     public static Brush ColorDefaultBack { get; set; } = StorageBox.BrushWhite;
 
     private delegate void SetProgressBarDel(int[] @params);
+    private delegate void AddStatusLineDel(string[] @params);
     private delegate void AddStatusLinesDel(List<(StatusMessage action, string description)> values);
     
 	int _errorCount = 0;
@@ -105,29 +106,40 @@ public sealed partial class StatusDialog : Page
         ClearStatus();
         this.Loaded += new((s, e)=> HasLoaded = true);
 		ParentWindow?.AppWindow.Closing += AppWindow_Closing;
+		this.Unloaded += StatusDialog_Unloaded;
+    }
+
+	private async void StatusDialog_Unloaded(object sender, RoutedEventArgs e)
+	{
+        //if (HackFileManager.statusToken is { } cts)
+        //{
+        //    await cts.CancelAsync();
+        //}
+        //IsInProcess = false;
     }
 
 	private async void AppWindow_Closing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
 	{
-		args.Cancel = DialogResult.OK != MessageBox.Show(
-			"There are items still processing..\nWould you like to continue and close the window and operations?", 
-			"Cancel Operation?",
-			MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
-		if (args.Cancel)
-		{
-			if (HackFileManager.statusToken is { } cts)
-			{
-				await cts.CancelAsync();
-			}
-			IsInProcess = false;
-		}
+        if (IsInProcess)
+        {
+		    args.Cancel = DialogResult.OK != MessageBox.Show(
+			    "There are items still processing..\nWould you like to continue and close the window and operations?", 
+			    "Cancel Operation?",
+			    MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
+		    if (args.Cancel)
+		    {
+			    if (HackFileManager.statusToken is { } cts)
+			    {
+				    await cts.CancelAsync();
+			    }
+			    IsInProcess = false;
+		    }
+        }
 	}
 
 	private StatusDialog(string titleText) : this()
     {
-        HackFileManager.QueueAsyncStatus = new();
         ParentWindow?.Title = titleText;
-        ClearStatus();
     }
     public void ClearStatus()
     {
@@ -137,7 +149,6 @@ public sealed partial class StatusDialog : Page
     {
         AddStatusLine((action, description));
     }
-
     public void AddStatusLines(ConcurrentQueue<(StatusMessage action, string description)> values)
     {
         //ObservableQueue<(StatusMessage, string)> batch = new(values.Count);
@@ -148,7 +159,6 @@ public sealed partial class StatusDialog : Page
         //}
         AddStatusLinesInternal(values);
     }
-
     public void SetProgressBar(int value, int max)
     {
         SetProgressBarInternal([value, max]);
@@ -167,7 +177,6 @@ public sealed partial class StatusDialog : Page
             SkippedLabel.Text = $"({HackFileManager.SkipCounter}) Skipped";
         });
     }
-
     private void AddStatusLinesInternal(ConcurrentQueue<(StatusMessage action, string description)> values)
     {
 		this.DispatcherQueue.ExecuteUI(()=>
@@ -220,7 +229,6 @@ public sealed partial class StatusDialog : Page
 			grid.ScrollIntoView(collection.LastOrDefault(), null);
 		}
 	}
-    private delegate void AddStatusLineDel(string[] @params);
     private void AddStatusLine((StatusMessage action, string description) statusMessage)
     {
         this.DispatcherQueue.ExecuteUI(()=>
@@ -234,7 +242,6 @@ public sealed partial class StatusDialog : Page
             collection.Add(lvItem);
 		});
     }
-    
     private void ColorizeStatus((StatusMessage action, string description) values, ListViewItem item)
     {
         switch (values.action)
@@ -313,22 +320,26 @@ public sealed partial class StatusDialog : Page
         //var page = InstanceManager.GetAPage<StatusSettings>();
         var window = WindowHelper.CreateWindowPage<StatusSettings>();
     }
-
-	internal void SetDownloaded(object downloadBytes)
+	internal void SetDownloaded(long downloadBytes)
 	{
-		throw new NotImplementedException();
+        this.DispatcherQueue.ExecuteUI(() =>
+        {
+            Downloaded.Text = $"Downloaded: {OperatorConverter.LongBytesToString(downloadBytes)}";
+        });
 	}
-
-	internal void SetTotalDownloaded(object sessionDownloadBytes)
+	internal void SetTotalDownloaded(long sessionDownloadBytes)
 	{
-		throw new NotImplementedException();
-	}
+        this.DispatcherQueue.ExecuteUI(() =>
+        {
+            TotalDownload.Text = $"Session Downloaded: {OperatorConverter.LongBytesToString(sessionDownloadBytes)}";
+        });
+    }
 }
-public struct StatusData
+public class StatusData
 {
     public static StatusData StaticData = new();
     public static long SessionDownloadBytes;
-    public int totalProcessed;
+    public int TotalProcess;
     public int SkipCounter;
     public int ProcessCounter;
     public int MaxCount;

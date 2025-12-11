@@ -54,7 +54,20 @@ public class FileSizeConverter : IValueConverter
 }
 public partial class OperatorConverter : IValueConverter
 {
-	public static string OperatorToString(Operators op) 
+    public static string LongBytesToString(long bytesize)
+    {
+        return bytesize switch
+        {
+            < 1024 => $"{bytesize} B",
+            < 1048576 => $"{bytesize / 1024f:.##} KB",
+            < 1073741824 => $"{bytesize / 1048576f:.##}   MB",
+            < 1099511627776 => $"{bytesize / 1073741824f:.##} GB",
+            <= 1125899906842624 => $"{bytesize / 1099511627776f:.##} TB",
+            _ => $"{bytesize} B",
+        };
+    }
+
+    public static string OperatorToString(Operators op) 
 		=> op switch
 		{
 			Operators.Equal => "=",
@@ -132,7 +145,8 @@ public static class FileOperations
             combinedPath = Path.Combine(combinedPath, file.Name);
 
             File.WriteAllBytes(combinedPath, file.FileContents);
-                
+            HackFileManager.Downloaded += file.FileSize ?? 0;
+
             Console.WriteLine($"{file.Name} created in {combinedPath}");
             file.ApplyModifiedDateToLocal();
             return true;

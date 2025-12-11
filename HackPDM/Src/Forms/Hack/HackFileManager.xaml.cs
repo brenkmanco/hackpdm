@@ -58,7 +58,6 @@ using Path = System.IO.Path;
 using System.Drawing;
 using Image = Microsoft.UI.Xaml.Controls.Image;
 using System.Runtime.CompilerServices;
-using HackPDM.Odoo.Methods;
 
 
 // To learn more about WinUI, the WinUI project structure,
@@ -122,10 +121,12 @@ public sealed partial class HackFileManager : Page, ISingletonPage<HackFileManag
 		set => OdooDefaults.DownloadBatchSize = value;
 	}
 	public static int SkipCounter { get; private set; }
-	internal static int _processCounter;
-	internal static int _totalProcessed;
-	internal static int _maxCount;
-	internal bool IsActive { get; set; } = false;
+    internal static long Downloaded { get; set; }
+	internal static long SessionDownloaded { get; set; }
+    internal static int TotalProcessed { get; set; }
+	internal static int ProcessCounter { get; set; }
+    internal static int MaxCount { get; set; }
+    internal bool IsActive { get; set; } = false;
 	internal bool IsFiltered { get; set; } = true;
 
 	private TreeHelp _treeHelper { get; init; }
@@ -229,14 +230,6 @@ public sealed partial class HackFileManager : Page, ISingletonPage<HackFileManag
 
 		OdooDirectoryTree.SelectionChanged += OdooDirectoryTree_SelectionChanged;
 		OdooDirectoryTree.RightTapped += OdooDirectoryTree_RightTapped;
-
-		// ONodes.CollectionChanged			+= CollectionChanged;
-		// OEntries.CollectionChanged		+= CollectionChanged;
-		// OHistories.CollectionChanged		+= CollectionChanged;
-		// OParents.CollectionChanged		+= CollectionChanged;
-		// OChildren.CollectionChanged		+= CollectionChanged;
-		// OProperties.CollectionChanged	+= CollectionChanged;
-		// OVersions.CollectionChanged		+= CollectionChanged;
 
 		OdooEntryList.SelectionChanged	+= OdooEntryList_SelectionChanged;
 		OdooEntryList.Sorting			+= List_ColumnClick;
@@ -383,13 +376,15 @@ public sealed partial class HackFileManager : Page
 
 		IEnumerable<IEnumerable<HpVersion>>? versionBatches = Help.BatchArray(versions, DownloadBatchSize);
 
-		_maxCount = versions.Length;
+		MaxCount = versions.Length;
 		SkipCounter = 0;
-		_processCounter = 0;
+		ProcessCounter = 0;
+		Downloaded = 0;
 
 		if (versionBatches is null)
 		{
 			MessageBox.Show("Cancelled Download... No Versions to Process");
+			return;
 		}
 		try
 		{
@@ -417,7 +412,7 @@ public sealed partial class HackFileManager : Page
 		// entries = entries is not null && !entries.IsEmpty ? await Commit.FilterCommitEntries(entries) : [];
 
 		// section for checking if hack files have a checksum that matches the fullpath
-		hackFiles = hackFiles is not null && hackFiles.Count > 0 ? await Commit.FilterCommitHackFiles(hackFiles) : [];
+		hackFiles = hackFiles is not null && hackFiles.Count > 0 ? await FilterCommitHackFiles(hackFiles) : [];
 
 
 		//HpVersion[] localConversions = new HpVersion[hackFiles.Count];
@@ -435,11 +430,11 @@ public sealed partial class HackFileManager : Page
 
 		
 
-		_processCounter = 0;
+		ProcessCounter = 0;
 		SkipCounter = 0;
 
 		statusToken = await statusToken.RenewTokenSourceAsync();
-		_maxCount = localVersions?.Length ?? 0;
+		MaxCount = localVersions?.Length ?? 0;
 		Dialog?.IsInProcess = true;
 
 		if (localVersions is not null)
@@ -452,12 +447,12 @@ public sealed partial class HackFileManager : Page
 				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Commiting local version relationships ...");
 				HpVersionProperty.Create(localVersions[i]);
 				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Commiting local version properties ...");
-				Dialog?.SetProgressBar((SkipCounter + _processCounter) / 3, _maxCount);
-				_processCounter += 1;
+				Dialog?.SetProgressBar((SkipCounter + ProcessCounter) / 3, MaxCount);
+				ProcessCounter += 1;
 			}
 		}
 		// create new parent, child hp_version_relationship's for versions
-		Dialog?.SetProgressBar(_maxCount, _maxCount);
+		Dialog?.SetProgressBar(MaxCount, MaxCount);
 
 		MessageBox.Show($"Completed!");
 		await _treeHelper.RestartTree(OdooDirectoryTree);
@@ -468,10 +463,10 @@ public sealed partial class HackFileManager : Page
 		object lockObject = new();
 		entries = [.. FilterCheckoutEntries(entries)];
 		
-		_processCounter = 0;
+		ProcessCounter = 0;
 		SkipCounter = 0;
-		_maxCount = entries.Length;
-		Dialog?.AddStatusLine(StatusMessage.INFO, $"{_maxCount} check outs");
+		MaxCount = entries.Length;
+		Dialog?.AddStatusLine(StatusMessage.INFO, $"{MaxCount} check outs");
 		for (int i = 0; i < entries.Length; i++)
 		{
 			HpEntry entry = entries[i];
@@ -484,12 +479,12 @@ public sealed partial class HackFileManager : Page
 
 			lock (lockObject)
 			{
-				_processCounter += 1;
-				Dialog?.SetProgressBar((SkipCounter + _processCounter), _maxCount);
+				ProcessCounter += 1;
+				Dialog?.SetProgressBar((SkipCounter + ProcessCounter), MaxCount);
 			}
 		}
 
-		Dialog?.SetProgressBar(_maxCount, _maxCount);
+		Dialog?.SetProgressBar(MaxCount, MaxCount);
 		MessageBox.Show($"Completed!");
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
@@ -497,10 +492,10 @@ public sealed partial class HackFileManager : Page
 	{
 		object lockObject = new();
 
-		_processCounter = 0;
+		ProcessCounter = 0;
 		SkipCounter = 0;
-		_maxCount = entries.Length;
-		Dialog?.AddStatusLine(StatusMessage.INFO, $"{_maxCount} uncheck outs");
+		MaxCount = entries.Length;
+		Dialog?.AddStatusLine(StatusMessage.INFO, $"{MaxCount} uncheck outs");
 		for (int i = 0; i < entries.Length; i++)
 		{
 			HpEntry entry = entries[i];
@@ -513,12 +508,12 @@ public sealed partial class HackFileManager : Page
 
 			lock (lockObject)
 			{
-				_processCounter += 1;
-				Dialog?.SetProgressBar((SkipCounter + _processCounter), _maxCount);
+				ProcessCounter += 1;
+				Dialog?.SetProgressBar((SkipCounter + ProcessCounter), MaxCount);
 			}
 		}
 
-		Dialog?.SetProgressBar(_maxCount, _maxCount);
+		Dialog?.SetProgressBar(MaxCount, MaxCount);
 		MessageBox.Show($"Completed!");
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
@@ -687,78 +682,6 @@ public sealed partial class HackFileManager : Page
 	#endregion
 
 	#region Commit Functions
-	private async Task<ConcurrentBag<HpEntry>> FilterCommitEntries(ConcurrentBag<HpEntry> entries)
-	{
-		if (entries == null || entries.Count < 1) return null;
-
-		string[] excludedFields = ["preview_image", "attachment_id", "file_modify_stamp", "file_size", "node_id", "file_contents"];
-		ConcurrentBag<Task<HpEntry?>> tasks = [];
-		object lockObject = new();
-
-		while (entries.TryTake(out HpEntry entry))
-		{
-			Task<HpEntry?> entryTask = Task.Run(async () =>
-			{
-				// true means that this entry is checked out
-				if (entry.checkout_user != OdooDefaults.OdooId)
-				{
-					if (entry.checkout_user == 0)
-					{
-						lock (lockObject)
-						{
-							Dialog?.AddStatusLine(StatusMessage.ERROR, $"entry is not checked out to you: {entry.name} ({entry.Id})");
-						}
-					}
-					else
-					{
-						lock (lockObject)
-						{
-							string userString = OdooDefaults.IdToUser.TryGetValue(entry.checkout_user ?? 0, out HpUser user) ? $"{user.name} (id: {user.Id}))" : $"(id: {entry.checkout_user})";
-							Dialog?.AddStatusLine(StatusMessage.ERROR, $"checked out to user {userString}: {entry.name} ({entry.Id}) ");
-						}
-					}
-					return null;
-				}
-				// can eventually just change this to get the list of id's available instead
-				HpVersion[] entryVersions = await _gridHelper.GetVersionsForEntryAsync(entry.Id, excludedFields);
-
-				if (entryVersions is null || entryVersions.Length == 0) return null;
-				// check if any of the versions checksums are local
-				HpVersion temp = entryVersions.First();
-				if (HackFile.GetLocalVersion(entryVersions, out HackFile _))
-				{
-					lock (lockObject)
-					{
-						Dialog?.AddStatusLine(StatusMessage.FOUND, $"Remote {temp.name} has matching local version");
-					}
-
-					return null;
-				}
-				FileInfo file = new(Path.Combine(HackDefaults.PwaPathAbsolute, temp.WinPathway, temp.name));
-				if (!file.Exists)
-				{
-					lock (lockObject)
-					{
-						Dialog?.AddStatusLine(StatusMessage.ERROR, $"{temp.name} has no local version");
-					}
-
-					return null;
-				}
-
-				lock (lockObject)
-				{
-					Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"commiting {entryVersions.First().name}");
-				}
-				return entry;
-			});
-			await entryTask;
-			tasks.Add(entryTask);
-		}
-		await Task.WhenAll(tasks);
-		return tasks.SkipSelect(
-			taskPredicate => taskPredicate.Result == null,
-			taskSelect => taskSelect.Result).ToConcurrentBag()!;
-	}
 	private async Task<ConcurrentSet<HackFile>> FilterCommitHackFiles(ConcurrentSet<HackFile> hackFiles)
 	{
 		List<Task<HackFile>> tasks = [];
@@ -782,7 +705,7 @@ public sealed partial class HackFileManager : Page
 	#endregion
 
 	#region Latest Functions
-	private HpVersion[] GetLatestVersions(ArrayList entryIDs, string[] excludedFields = null)
+	private HpVersion[] GetLatestVersions(ArrayList entryIDs, string[]? excludedFields = null)
 	{
 		if (excludedFields == null) excludedFields = ["preview_image", "file_contents"];
 		return HpEntry.GetRelatedRecordByIds<HpVersion>(entryIDs, "latest_version_id", excludedFields);
@@ -794,8 +717,7 @@ public sealed partial class HackFileManager : Page
 		ConcurrentBag<int> unprocessedVersions = [];
 		List<Task> tasks = [];
 
-
-		foreach (HpVersion version in batchVersions)
+        foreach (HpVersion version in batchVersions)
 		{
 			bool willProcess = true;
 
@@ -818,22 +740,23 @@ public sealed partial class HackFileManager : Page
 				willProcess = false;
 			}
 			// ==============================================================
-
-			// ==============================================================
 			if (willProcess)
 			{
 				string fileName = Path.Combine(version.WinPathway, version.name);
 				processVersions.Add(version);
 
 				QueueAsyncStatus.Enqueue((StatusMessage.PROCESSING, $"Downloading latest version: {fileName}"));
-				_processCounter++;
+				ProcessCounter++;
 			}
-			_totalProcessed = SkipCounter + _processCounter;
-			if (_totalProcessed % 25 == 0 || _totalProcessed >= _maxCount)
+			TotalProcessed = SkipCounter + ProcessCounter;
+
+            if (TotalProcessed % 5 == 0 || TotalProcessed >= MaxCount)
 			{
+				Dialog?.SetDownloaded(Downloaded);
+				Dialog?.SetTotalDownloaded(SessionDownloaded);
 				Dialog?.AddStatusLines(QueueAsyncStatus);
-			}
-			Dialog?.SetProgressBar(SkipCounter + _processCounter, _maxCount);
+            }
+            Dialog?.SetProgressBar(SkipCounter + ProcessCounter, MaxCount);
 		}
 
 		await Task.Run(async () =>
@@ -846,27 +769,14 @@ public sealed partial class HackFileManager : Page
 			}
 			return 0;
 		}, statusToken.Token);
-
-		//      // when all the tasks are completed for checking checksums start another task 
-		//      // that then batch downloads those files to the correct folders.
-		//      await Task.WhenAll(tasks)
-		//.ContinueWith(async (task) =>
-		//{
-		//    if (processVersions.Count > 0)
-		//    {
-		//        Task<int[]> finishSuccesses = Task.WhenAll(HpVersion.BatchDownloadFiles(processVersions.ToList()));
-		//        await finishSuccesses;
-		//        return finishSuccesses.Result[0];
-		//    }
-		//    return 0;
-		//});
 	}
-	public async Task ProcessDownloadsAsync(IEnumerable<IEnumerable<HpVersion>> versionBatches, CancellationToken cToken, int maxConcurrency = 3)
+	public async Task ProcessDownloadsAsync(IEnumerable<IEnumerable<HpVersion>> versionBatches, CancellationToken cToken, int maxConcurrency = 2)
 	{
 		SemaphoreSlim throttler = new(maxConcurrency);
-		List<Task> allTasks = [];
+        int size = versionBatches.TryGetNonEnumeratedCount(out int count) ? count : versionBatches?.Count() ?? 0;
+        List<Task> allTasks = new(size);
 
-		foreach (var batch in versionBatches)
+		foreach (var batch in versionBatches ?? [])
 		{
 			await throttler.WaitAsync(cToken);
 
@@ -892,14 +802,13 @@ public sealed partial class HackFileManager : Page
 	{
 		WindowHelper.CreateWindowAndPage<StatusDialog>(out var Dialog, out _);
 		HackFileManager.Dialog = Dialog;
-		// Dialog = new StatusDialog();
-		//await Dialog?.ShowWait("Get Latest");
 
 		statusToken = await statusToken.RenewTokenSourceAsync();
 		object lockObject = new();
 
 		TreeViewNode? tnCurrent = LastSelectedNode;
 		TreeData? data = LastSelectedNode?.LinkedData;
+
 		if (tnCurrent == null)
 		{
 			MessageBox.Show("current directory doesn't exist remotely");
@@ -921,14 +830,15 @@ public sealed partial class HackFileManager : Page
 		Dialog?.IsInProcess = true;
 
 		ArrayList? entryIDs = await directory.GetDirectoryEntryIDsAsync(withSubdirectories, ShowInactive.IsChecked ?? false);
-		if (statusToken!.IsCancellationRequested) return;
+		statusToken.Token.Register(CancelledOperation);
+
 		await GetLatestInternal(entryIDs);
 	}
 	#endregion
-	
-	#region Form Event Handlers
-	// after select events
-	private async void ODT_SetLastSelected(TreeData? tData)
+
+    #region Form Event Handlers
+    // after select events
+    private async void ODT_SetLastSelected(TreeData? tData)
 	{
 		
 		LastSelectedNode = tData?.Node;
@@ -1660,182 +1570,9 @@ public sealed partial class HackFileManager : Page
 	}
 
 
-	// drag events
-	private void StartOverlay(DragEventArgs e)
-	{
-		// start overlay graphic
-
-		FileDragGraphics(OdooEntryList, e);
-	}
-	private void UpdateOverlay(DragEventArgs e)
-	{
-		// update overlay graphic
-		// FileDragGraphics(OdooEntryList, e);
-	}
-	private void FileDragGraphics(Control control, DragEventArgs e)
-	{
-		// string[] files = e.Data.GetData(DataFormats.FileDrop) as string[] ?? new string[0];
-		// if (files.Length < 1) return;
-		// List<FileInfo> fileInfos = [.. files.Select(f => new FileInfo(f))];
-		//
-		// // get graphics reset
-		// Graphics g = control.CreateGraphics();
-		// g.Clear(OdooEntryList.BackColor);
-		//
-		// // add the size of the radial gradient
-		// Rectangle controlSize = control.ClientRectangle;
-		// float hypot = controlSize.Size.Width * 2;
-		// PointF midPoint = new((controlSize.Width / 2) + controlSize.X, (controlSize.Height / 2) + controlSize.Y);
-		// Rectangle sizeBox = new(0, 0, controlSize.Width, controlSize.Height);
-		//
-		// // create graphics path for radial gradient
-		// PointF scalePoint = ScalePoint(new PointF(e.X, e.Y), midPoint, hypot);
-		//
-		// using (var gPathBrush = new LinearGradientBrush(midPoint, scalePoint, Color.AliceBlue, Color.Coral))
-		// {
-		// 	gPathBrush.LinearColors = [Color.AliceBlue, Color.Azure, Color.DarkSlateBlue, Color.Coral];
-		// 	g.FillRectangle(gPathBrush, controlSize);
-		// }
-		//
-		//
-		// // create back color 
-		// Font font = new(FontFamily.GenericSansSerif, 55f, GraphicsUnit.Pixel);
-		// Font fontValid = new(FontFamily.GenericSansSerif, 15f, GraphicsUnit.Pixel);
-		// Font fontInvalid = new(FontFamily.GenericSansSerif, 15f, FontStyle.Strikeout, GraphicsUnit.Pixel);
-		//
-		// SizeF offSet = new(controlSize.Width / 5f, controlSize.Height / 5f);
-		// const float imgRadius = 25f;
-		//
-		// RectangleF imageLayout = new(
-		// 	midPoint.X - imgRadius,
-		// 	midPoint.Y - imgRadius,
-		// 	imgRadius * 2,
-		// 	imgRadius * 2
-		// );
-		// RectangleF layout = new(
-		// 	imageLayout.X - 50,
-		// 	imageLayout.Y - 50,
-		// 	400,
-		// 	100
-		// );
-		// Rectangle layoutPixel = new(
-		// 	(int)layout.X,
-		// 	(int)layout.Y,
-		// 	(int)layout.Width,
-		// 	(int)layout.Height
-		// );
-		// //Rectangle dot = new(Convert.ToInt32(midPoint.X), Convert.ToInt32(midPoint.Y), 5, 5);
-		// Pen pen = new Pen(new SolidBrush(Color.FromArgb(100, Color.Black)));
-		//
-		//
-		// //g.DrawRectangle(pen, layoutPixel);
-		// Image def = ListIcons.Images["default"];
-		// g.DrawImage(def, imageLayout);
-		// RectangleF startRect = new(32, 50, controlSize.Width * 0.4f, 32f);
-		// using (var brush = new SolidBrush(Color.Black))
-		// using (var brushInvalid = new SolidBrush(Color.Crimson))
-		// {
-		// 	g.DrawString($"{files.Length} Files", font, brush, layout);
-		//
-		// 	foreach (var file in fileInfos)
-		// 	{
-		// 		if (!file.Exists)
-		// 			continue;
-		//
-		// 		Image img = null;
-		//
-		// 		if (!OdooDefaults.ExtToType.ContainsKey(file.Extension))
-		// 		{
-		// 			img = ListIcons.Images["delete_image_button"];
-		//
-		// 			g.DrawString(file.FullName, fontInvalid, brushInvalid, startRect);
-		// 		}
-		// 		else
-		// 		{
-		// 			img = ListIcons.Images[file.Extension[1..]];
-		// 			if (img == null)
-		// 				img = def;
-		//
-		// 			g.DrawString(file.FullName, fontValid, brush, startRect);
-		// 		}
-		// 		g.DrawImage(img, 0, startRect.Y, 32, 32);
-		// 		startRect.Y += 32;
-		// 	}
-		// }
-
-		//g.DrawEllipse(pen, dot);
-		//dot.X = Convert.ToInt32(scalePoint.X);
-		//dot.Y = Convert.ToInt32(scalePoint.Y);
-		//g.DrawEllipse(pen, dot);
-	}
-	private async void List_DragDrop(object sender, RoutedEvent e)
-	{
-		// if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
-		// string[] fileDrop = e.Data.GetData(DataFormats.FileDrop) as string[];
-		// if (fileDrop is null or { Length: < 1 }) return;
-		//
-		// Dialog = new StatusDialog();
-		//
-		// var directory = LastSelectedNode.FullPath;
-		// var winDirect = Path.Combine(HackDefaults.PwaPathAbsolute, directory[5..]);
-		// List<HackFile> hackFiles = [];
-		//
-		// foreach (var path in fileDrop)
-		// {
-		// 	//if (!HackDefaults.PWAPathAbsolute.StartsWith(path)) continue;
-		// 	FileInfo file = new(path);
-		// 	if (!file.Exists) continue;
-		// 	file = file.CopyFile(winDirect);
-		//
-		// 	HackFile hack = await HackFile.GetFromFileInfo(file);
-		// 	string newDirectory = path[HackDefaults.PwaPathAbsolute.Length..];
-		// 	hack.RelativePath = newDirectory;
-		// 	if (hack != null)
-		// 		hackFiles.Add(hack);
-		// }
-		//
-		// if (hackFiles.Count < 1) return;
-		// var response = MessageBox.Show($"Are you sure you want to commit ({hackFiles.Count}) files?\n" +
-		//                                $"files:\n{string.Join("\n", hackFiles.Select(f => $"{f.RelativePath}\\{f.Name}"))}", "Commit Files", type: MessageBoxType.YesNoCancel, icon: MessageBoxIcon.Warning);
-		// if (response == DialogResult.Yes)
-		// {
-		// 	await AsyncRunner(() => Async_Commit((new HpEntry[0], hackFiles)), "Commit Files");
-		// }
-	}
-	private void List_DragEnter(object sender, DragEventArgs e)
-	{
-		// if (e.Data.GetDataPresent(DataFormats.FileDrop))
-		// {
-		// 	e.Effect = DragDropEffects.Copy;
-		// 	StartOverlay(e);
-		// }
-		// else
-		// {
-		// 	e.Effect = DragDropEffects.None;
-		// }
-	}
-	private void List_DragLeave(object sender, RoutedEvent e)
-	{
-		// EndOverlay();
-	}
-	private void List_DragOver(object sender, DragEventArgs e)
-	{
-		// if (e.Data.GetDataPresent(DataFormats.FileDrop))
-		// {
-		// 	UpdateOverlay(e);
-		// }
-	}
 	#endregion
 
 	#region Form Helper Functions
-	// private delegate void UpdateTabPageTextDel(TabPage page, string text);
-	// private delegate void SafeInvokeDelGeneric<T>(Control c, T data, Action<T> action);
-	// private delegate void SafeInvokeDel(Control c, Action action);
-	private static void UpdateTabPageText(TabViewItem page, string text) 
-	{
-		HackDispatcherQueue.TryEnqueue(() => page.Header = text);
-	}
-
 	private void OpenLocalFile(string path)
 	{
 		FileOperations.OpenFile(path);
@@ -2032,7 +1769,7 @@ public sealed partial class HackFileManager : Page
 			}
 		}
 	}
-	private async Task<ArrayList> GetAllEntriesAndDependenciesList(int[] entryIds, bool update = false)
+	internal static async Task<ArrayList> GetAllEntriesAndDependenciesList(int[] entryIds, bool update = false)
 	{
 		ArrayList arr = await OClient.CommandAsync<ArrayList>(HpVersion.GetHpModel(), "get_recursive_dependency_entries", [entryIds.ToArrayList()], 1000000);
 		return arr;
@@ -2245,10 +1982,15 @@ public sealed partial class HackFileManager : Page
 		
 		(ArrayList, CancellationToken) arguments = (newIds, statusToken.Token);
 
-		if (statusToken.IsCancellationRequested) return;
-		await AsyncHelper.AsyncRunner(() => Async_GetLatest(arguments), "Get Latest", statusToken);
+        statusToken.Token.Register(CancelledOperation);
+        await AsyncHelper.AsyncRunner(() => Async_GetLatest(arguments), "Get Latest", statusToken);
 	}
-	internal async Task CommitInternal(IEnumerable<HackFile> hackFiles)
+    internal static void CancelledOperation()
+    {
+        HackFileManager.Dialog?.IsInProcess = false;
+        MessageBox.Show("Cancelled Operation");
+    }
+    internal async Task CommitInternal(IEnumerable<HackFile> hackFiles)
 		=> await AsyncHelper.AsyncRunner(() => Async_Commit([.. hackFiles]), "Commit Files");
 	
 	internal async Task CheckoutInternal(ArrayList entryIDs)
@@ -2276,12 +2018,19 @@ public sealed partial class HackFileManager : Page
 		if (entryIDs is null or { Count: < 1 }) return;
 
 		var entriesTemp = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: ["latest_version_id"]);
-		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp.Select(e => e.latest_version_id)]);
+		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp?.Select(e => e.latest_version_id) ?? []]);
 
 		newIds.AddRange(entryIDs);
 		newIds = newIds.ToHashSet<int>().ToArrayList();
 
-		var entries = await HpEntry.GetRecordsByIdsAsync(newIds, excludedFields: ["type_id", "cat_id", "checkout_node"]);
+		var entries = await HpEntry.GetRecordsByIdsAsync(newIds, [
+			new ArrayList() 
+			{ 
+				"checkout_user", 
+				OperatorConverter.OperatorToString(Operators.Equal), 
+				OdooDefaults.OdooId, 
+			}
+		], excludedFields: ["type_id", "cat_id"]);
 
 		if (entries is null || entries.Length < 1)
 			return;
@@ -2346,11 +2095,7 @@ public sealed partial class HackFileManager : Page
 
 	
 }
-public struct LocalPath(string path, bool isBroken = false)
-{
-	public string Path { get; set; } = path;
-	public bool IsBroken { get; set; } = isBroken;
-}
+
 public struct EntryLocalPath(string path, HpEntry? entry, bool isBroken = false)
 {
 	public HpEntry? Entry { get; set; } = entry;

@@ -666,8 +666,8 @@ public class HackFile : HackBaseFile
                 tasks.Add(FileOperations.WriteAllBytesAsync(file));
             if (file.FileSize is long size)
             {
-                StatusData.StaticData.DownloadBytes += size;
-                StatusData.SessionDownloadBytes += size;
+                HackFileManager.Downloaded += size;
+                HackFileManager.SessionDownloaded += size;
             }
         }
         Task<bool[]> waitTask = Task.WhenAll(tasks);

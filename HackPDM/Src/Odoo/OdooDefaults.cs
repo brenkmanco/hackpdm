@@ -436,6 +436,7 @@ public static class OdooDefaults
         return dict;
     }
     #endregion
+    #region Functions
 
     public static string OdooDateFormat(DateTime dt)
     {
@@ -554,6 +555,7 @@ public static class OdooDefaults
     {
         return dt.ToString( "yyyy-MM-dd HH:mm:ss" );
     }
+    #endregion
 }
 
 //
