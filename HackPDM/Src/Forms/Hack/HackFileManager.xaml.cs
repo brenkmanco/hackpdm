@@ -38,7 +38,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Microsoft.WindowsAppSDK.Runtime;
+
 
 using Newtonsoft.Json.Linq;
 
@@ -388,7 +388,7 @@ public sealed partial class HackFileManager : Page
 		}
 		try
 		{
-			await ProcessDownloadsAsync(versionBatches, arguements.Item2, 5);
+			await ProcessDownloadsAsync(versionBatches, arguements.Item2, OdooDefaults.ConcurrencySize);
 		}
 		catch
 		{
@@ -749,14 +749,6 @@ public sealed partial class HackFileManager : Page
 				ProcessCounter++;
 			}
 			TotalProcessed = SkipCounter + ProcessCounter;
-
-            if (TotalProcessed % 5 == 0 || TotalProcessed >= MaxCount)
-			{
-				Dialog?.SetDownloaded(Downloaded);
-				Dialog?.SetTotalDownloaded(SessionDownloaded);
-				Dialog?.AddStatusLines(QueueAsyncStatus);
-            }
-            Dialog?.SetProgressBar(SkipCounter + ProcessCounter, MaxCount);
 		}
 
 		await Task.Run(async () =>
@@ -765,7 +757,7 @@ public sealed partial class HackFileManager : Page
 			{
 				Task<int[]> finishSuccesses = Task.WhenAll(HpVersion.BatchDownloadFiles([.. processVersions]));
 				await finishSuccesses;
-				return finishSuccesses.Result[0];
+				//return finishSuccesses.Result[0];
 			}
 			return 0;
 		}, statusToken.Token);
@@ -776,12 +768,13 @@ public sealed partial class HackFileManager : Page
         int size = versionBatches.TryGetNonEnumeratedCount(out int count) ? count : versionBatches?.Count() ?? 0;
         List<Task> allTasks = new(size);
 
+		Dialog?.UpdateStatusDialogLoop(cToken);
+
 		foreach (var batch in versionBatches ?? [])
 		{
-			await throttler.WaitAsync(cToken);
-
 			Task task = Task.Run(async () =>
 			{
+				await throttler.WaitAsync(cToken);
 				cToken.ThrowIfCancellationRequested();
 				try
 				{
@@ -797,6 +790,7 @@ public sealed partial class HackFileManager : Page
 		}
 
 		await Task.WhenAll(allTasks);
+		Dialog?.EndStatusDialogLoop();
 	}
 	private async void GetLatestFromTreeNode(bool withSubdirectories = false)
 	{
@@ -1975,6 +1969,7 @@ public sealed partial class HackFileManager : Page
 		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: ["latest_version_id"]);
 		//HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
 
+		if (entries is null || entries.Length < 1) return;
 		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entries.Select(entry => entry.latest_version_id)]);
 
 		newIds.AddRange(entryIDs);

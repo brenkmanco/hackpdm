@@ -36,7 +36,14 @@ public static class ExtensionMethods
 			list.RemoveAt(i);
 		}
 	}
-
+    public static IList AddRange(this IList list, IEnumerable items)
+    {
+        foreach (var item in items)
+        {
+            list.Add(item);
+        }
+        return list;
+    }
 	public static T GetAssign<T>(this T obj, Func<T> func) where T : class
     {
         obj ??= func();

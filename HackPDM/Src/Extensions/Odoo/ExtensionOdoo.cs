@@ -15,6 +15,8 @@ using HackPDM.Odoo.XmlRpc;
 using MessageBox = System.Windows.Forms.MessageBox;
 using DialogResult = System.Windows.Forms.DialogResult;
 using MessageBoxButtons = System.Windows.Forms.MessageBoxButtons;
+using System.Net.Http;
+using System;
 
 namespace HackPDM.Extensions.Odoo;
 
@@ -71,37 +73,79 @@ public static class ExtensionOdoo
         }
         return ids;
     }
+    //public async static Task<XmlRpcResponse> SendAsync(this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null)
+    //{
+    //    //HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
+    //    HttpWebRequest httpWebRequest = WebRequest.CreateHttp(url);
+    //    if (httpWebRequest == null)
+    //    {
+    //        throw new XmlRpcException(-32300, "Transport Layer Error: Could not create request with " + url);
+    //    }
+
+    //    httpWebRequest.Proxy = proxy;
+    //    httpWebRequest.Method = "POST";
+    //    httpWebRequest.ContentType = "text/xml";
+    //    httpWebRequest.AllowWriteStreamBuffering = true;
+    //    if (timeout > 0)
+    //    {
+    //        httpWebRequest.Timeout = timeout;
+    //    }
+
+    //    XmlTextWriter xmlTextWriter = new(httpWebRequest.GetRequestStream(), Encoding);
+    //    Serializer.Serialize(xmlTextWriter, request);
+    //    xmlTextWriter.Flush();
+    //    xmlTextWriter.Close();
+
+    //    //HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse();
+    //    HttpWebResponse httpWebResponse = (HttpWebResponse)await httpWebRequest.GetResponseAsync();
+
+    //    StreamReader streamReader = new(httpWebResponse.GetResponseStream());
+
+    //    XmlRpcResponse result = Deserializer.DeserializeResponse(streamReader);
+    //    streamReader.Close();
+    //    httpWebResponse.Close();
+    //    return result;
+    //}
     public async static Task<XmlRpcResponse> SendAsync(this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null)
     {
         //HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
-        HttpWebRequest httpWebRequest = WebRequest.CreateHttp(url);
-        if (httpWebRequest == null)
+        var handler = new HttpClientHandler();
+        if (proxy is not null)
         {
-            throw new XmlRpcException(-32300, "Transport Layer Error: Could not create request with " + url);
+            handler.Proxy = proxy;
+            handler.UseProxy = true;
         }
+        using var httpClient = new HttpClient(handler);
 
-        httpWebRequest.Proxy = proxy;
-        httpWebRequest.Method = "POST";
-        httpWebRequest.ContentType = "text/xml";
-        httpWebRequest.AllowWriteStreamBuffering = true;
         if (timeout > 0)
         {
-            httpWebRequest.Timeout = timeout;
+            httpClient.Timeout = TimeSpan.FromMilliseconds(timeout);
         }
 
-        XmlTextWriter xmlTextWriter = new(httpWebRequest.GetRequestStream(), Encoding);
-        Serializer.Serialize(xmlTextWriter, request);
-        xmlTextWriter.Flush();
-        xmlTextWriter.Close();
+		// Serialize into a MemoryStream with UTF-8
+		using var ms = new MemoryStream();
+		var xmlWriter = new XmlTextWriter(ms, Encoding.UTF8);
+		Serializer.Serialize(xmlWriter, request);
+		xmlWriter.Flush();
+		ms.Position = 0;
 
-        //HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse();
-        HttpWebResponse httpWebResponse = (HttpWebResponse)await httpWebRequest.GetResponseAsync();
+		var httpRequest = new HttpRequestMessage(HttpMethod.Post, url)
+		{
+			Content = new StreamContent(ms)
+		};
+		httpRequest.Content.Headers.ContentType =
+		new System.Net.Http.Headers.MediaTypeHeaderValue("text/xml")
+		{
+			CharSet = "utf-8"
+		};
 
-        StreamReader streamReader = new(httpWebResponse.GetResponseStream());
+		using var response = await httpClient.SendAsync(httpRequest);
+		response.EnsureSuccessStatusCode();
 
-        XmlRpcResponse result = Deserializer.DeserializeResponse(streamReader);
-        streamReader.Close();
-        httpWebResponse.Close();
-        return result;
-    }
+		using var responseStream = await response.Content.ReadAsStreamAsync();
+		using var reader = new StreamReader(responseStream);
+
+		XmlRpcResponse result = Deserializer.DeserializeResponse(reader);
+		return result;
+	}
 }

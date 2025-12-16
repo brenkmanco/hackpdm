@@ -30,7 +30,7 @@
             Grid.ColumnSpan="2"
             Margin="0,0,0,5"
             AutoGenerateColumns="False"
-            CanUserSortColumns="False"
+            CanUserSortColumns="True"
             IsReadOnly="True"
             ItemsSource="{x:Bind OStatus, Mode=OneWay}"
             RowDetailsVisibilityMode="Collapsed">
@@ -38,11 +38,13 @@
                 <com:DataGridTextColumn
                     Width="120"
                     Binding="{Binding Status}"
-                    Header="Action" />
+                    Header="Action"
+                    SortDirection="Descending"/>
                 <com:DataGridTextColumn
                     Width="1158"
                     Binding="{Binding Message}"
-                    Header="Description" />
+                    Header="Description" 
+                    SortDirection="Descending"/>
             </com:DataGrid.Columns>
         </com:DataGrid>
 
@@ -61,7 +63,7 @@
             Grid.Column="0"
             Margin="0,5,5,5"
             AutoGenerateColumns="False"
-            CanUserSortColumns="False"
+            CanUserSortColumns="True"
             IsReadOnly="True"
             ItemsSource="{x:Bind OInfo, Mode=OneWay}"
             RowDetailsVisibilityMode="Collapsed">
@@ -69,20 +71,15 @@
                 <com:DataGridTextColumn
                     Width="120"
                     Binding="{Binding Status}"
-                    Header="Action" />
+                    Header="Action" 
+                    SortDirection="Descending"/>
                 <com:DataGridTextColumn
                     Width="1158"
                     Binding="{Binding Message}"
-                    Header="Description" />
+                    Header="Description" 
+                    SortDirection="Descending"/>
             </com:DataGrid.Columns>
         </com:DataGrid>
-
-        <!--  Splitter between InfoList and ErrorList  -->
-        <AppBarSeparator
-            Grid.Row="2"
-            Grid.Column="1"
-            Width="5"
-            Background="Gray" />
 
         <!--  Error List  -->
         <com:DataGrid
@@ -91,7 +88,7 @@
             Grid.Column="1"
             Margin="5,5,0,5"
             AutoGenerateColumns="False"
-            CanUserSortColumns="False"
+            CanUserSortColumns="True"
             IsReadOnly="True"
             ItemsSource="{x:Bind OError, Mode=OneWay}"
             RowDetailsVisibilityMode="Collapsed">
@@ -99,11 +96,13 @@
                 <com:DataGridTextColumn
                     Width="120"
                     Binding="{Binding Status}"
-                    Header="Action" />
+                    Header="Action" 
+                    SortDirection="Descending"/>
                 <com:DataGridTextColumn
                     Width="1158"
                     Binding="{Binding Message}"
-                    Header="Description" />
+                    Header="Description" 
+                    SortDirection="Descending"/>
             </com:DataGrid.Columns>
         </com:DataGrid>
 
@@ -154,7 +153,8 @@
             <Button
                 x:Name="StatusSettings"
                 Margin="0,0,10,0"
-                Content="configure settings" />
+                Content="configure settings" 
+                Click="StatusSettings_Click"/>
             <CheckBox
                 x:Name="cbxAutoClose"
                 Margin="0,0,10,0"
@@ -162,8 +162,10 @@
             <Button
                 x:Name="cmdCancel"
                 Margin="0,0,10,0"
-                Content="Cancel" />
-            <Button x:Name="cmdClose" Content="Close" />
+                Content="Cancel" 
+                Click="CmdCancelClick"/>
+            <Button x:Name="cmdClose" Content="Close" 
+                Click="CmdCloseClick"/>
         </StackPanel>
         <Grid.Resources>
 

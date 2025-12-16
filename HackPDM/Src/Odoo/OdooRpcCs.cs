@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections;
+using System.Linq;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+
+using HackPDM.Extensions.General;
 using HackPDM.Extensions.Odoo;
 using HackPDM.Odoo.OdooModels;
 using HackPDM.Odoo.XmlRpc;
@@ -236,19 +239,20 @@ public static class OdooClient
         _latestException = "";
         int userTimeout = timeout == null ? _objectTimeout : (int)timeout;
 
-        XmlRpcRequest objectClient = new()
-        {
-            MethodName = "execute"
-        };
-        objectClient.Params.Clear();
-        objectClient.Params.Add(OdooDefaults.OdooDb);
-        objectClient.Params.Add(OdooDefaults.OdooId);
-        objectClient.Params.Add(OdooDefaults.OdooPass);
-        objectClient.Params.Add(model);
-        objectClient.Params.Add(method);
+        int[] test = [1, 2, 3, .. Enumerable.Range(0, 1)];
 
-        foreach (object obj in parameters)
-            objectClient.Params.Add(obj);
+		XmlRpcRequest objectClient = new()
+        {
+            MethodName = "execute",
+            Params = {
+				OdooDefaults.OdooDb,
+				OdooDefaults.OdooId,
+				OdooDefaults.OdooPass,
+				model,
+				method,
+			},
+		};
+        objectClient.Params.AddRange(parameters);
 
         object resVal;
         try

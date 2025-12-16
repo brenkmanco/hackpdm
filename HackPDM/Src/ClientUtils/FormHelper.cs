@@ -46,6 +46,8 @@ internal static class FormHelper
             dispatcher.TryEnqueue(()=>function());
         }
     }
+	internal static Task ExecuteUIAsync(this DispatcherQueue dispatcher, Action function)
+	    => Task.Run(async () => ExecuteUI(dispatcher, function));
 	static ScrollViewer? GetScrollViewer(DependencyObject parent)
 	{
 		for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)

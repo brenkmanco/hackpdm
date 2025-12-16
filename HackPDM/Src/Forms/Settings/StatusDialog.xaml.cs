@@ -2,9 +2,12 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
+using CommunityToolkit.WinUI;
 using CommunityToolkit.WinUI.UI.Controls;
 
 using HackPDM.ClientUtils;
@@ -19,13 +22,14 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 
-using Setting = HackPDM.Properties.Settings;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.Window;
 
-using MessageBox = System.Windows.Forms.MessageBox;
 using DialogResult = System.Windows.Forms.DialogResult;
+using MessageBox = System.Windows.Forms.MessageBox;
 using MessageBoxButtons = System.Windows.Forms.MessageBoxButtons;
-using MessageBoxIcon = System.Windows.Forms.MessageBoxIcon;
 using MessageBoxDefaultButton = System.Windows.Forms.MessageBoxDefaultButton;
+using MessageBoxIcon = System.Windows.Forms.MessageBoxIcon;
+using Setting = HackPDM.Properties.Settings;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -73,7 +77,7 @@ public sealed partial class StatusDialog : Page
     {
         get
         {
-            field ??= Setting.Get("HistoryLength", field) ?? 1000;
+            field ??= Setting.Get("HistoryLength", field) ?? 100000;
             return field;
         }
         set
@@ -145,27 +149,48 @@ public sealed partial class StatusDialog : Page
     {
 
     }
-    public void AddStatusLine(StatusMessage action, string description)
+    public async Task UpdateStatusDialogLoop(CancellationToken token)
     {
-        AddStatusLine((action, description));
+        try
+        {
+            await Task.Run(async () =>
+            {
+                while (!Canceled)
+                {
+                    token.ThrowIfCancellationRequested();
+					await (SetDownloaded(HackFileManager.Downloaded));
+					await (SetTotalDownloaded(HackFileManager.SessionDownloaded));
+					await (AddStatusLines(HackFileManager.QueueAsyncStatus));
+					await (SetProgressBar(HackFileManager.SkipCounter + HackFileManager.ProcessCounter, HackFileManager.MaxCount));
+					await Task.Delay(100, token);
+			    }
+		    }, token);
+        }
+        catch
+        {
+            Debug.WriteLine("Status dialog loop cancelled.");
+		}
     }
-    public void AddStatusLines(ConcurrentQueue<(StatusMessage action, string description)> values)
+    public void EndStatusDialogLoop()
     {
-        //ObservableQueue<(StatusMessage, string)> batch = new(values.Count);
-        //for (int i = 0; i < values.Count; i++)
-        //{
-        //    if (values.TryDequeue(out (StatusMessage action, string description) item)) batch.Enqueue(item);
-        //    else break;
-        //}
-        AddStatusLinesInternal(values);
+        Canceled = true;
     }
-    public void SetProgressBar(int value, int max)
+
+	public async Task AddStatusLine(StatusMessage action, string description)
     {
-        SetProgressBarInternal([value, max]);
+        await AddStatusLine((action, description));
     }
-    private void SetProgressBarInternal(int[] @params)
+    public async Task AddStatusLines(ConcurrentQueue<(StatusMessage action, string description)> values)
     {
-        this.DispatcherQueue.ExecuteUI(()=>
+        await AddStatusLinesInternal(values);
+    }
+    public async Task SetProgressBar(int value, int max)
+    {
+        await SetProgressBarInternal([value, max]);
+    }
+    private async Task SetProgressBarInternal(int[] @params)
+    {
+        await this.DispatcherQueue.ExecuteUIAsync(()=>
         {
             int max, value;
             value = @params[0];
@@ -177,9 +202,9 @@ public sealed partial class StatusDialog : Page
             SkippedLabel.Text = $"({HackFileManager.SkipCounter}) Skipped";
         });
     }
-    private void AddStatusLinesInternal(ConcurrentQueue<(StatusMessage action, string description)> values)
+    private async Task AddStatusLinesInternal(ConcurrentQueue<(StatusMessage action, string description)> values)
     {
-		this.DispatcherQueue.ExecuteUI(()=>
+		await this.DispatcherQueue.ExecuteUIAsync(()=>
         {
             while (values.TryDequeue(out var value))
             {
@@ -191,47 +216,34 @@ public sealed partial class StatusDialog : Page
 				//ColorizeStatus(item, lvItem);
 				// set background color, based on status action
 
-				collection.Add(lvItem);
+				collection.Insert(0, lvItem);
 			}
+
 
 			RemoveExcessLines(StatusList);
 			RemoveExcessLines(InfoList);
-			RemoveExcessLines(ErrorList);
+            RemoveExcessLines(ErrorList);
 		});
     }
 	private void RemoveExcessLines(DataGrid grid)
 	{
-		object locker = new();
-		lock (locker)
-		{
-			var collection = grid.ItemsSource as ObservableCollection<BasicStatusMessage>;
-			if (collection == null) return;
+		var collection = grid.ItemsSource as ObservableCollection<BasicStatusMessage>;
+		if (collection == null) return;
 
-			int totalCount = collection!.Count;
-			
-			if (totalCount > (HistoryLength ?? 1000))
-			{
-				// 65 lvM count
-				// 100 values count
-				// 165 total 
-				// 150 history length 
-				// 15 = total - history length
-				// lvM - value = 150
-				int histOffset = (totalCount - HistoryLength) ?? 1000;
-				for (int i = 0; i < histOffset; i++)
-				{
-					if (collection.Count > 0)
-					{
-						collection.RemoveAt(0);
-					}
-				}
-			}
-			grid.ScrollIntoView(collection.LastOrDefault(), null);
+		int max = HistoryLength ?? 1000;
+		if (collection.Count > max)
+		{
+			var trimmed = new ObservableCollection<BasicStatusMessage>(
+				collection.Take(max)
+			);
+			grid.ItemsSource = trimmed; // one CollectionChanged event
 		}
+        //grid.UpdateLayout();
+		//grid.ScrollIntoView((grid.ItemsSource as ObservableCollection<BasicStatusMessage>)?.LastOrDefault(), null);
 	}
-    private void AddStatusLine((StatusMessage action, string description) statusMessage)
+    private async Task AddStatusLine((StatusMessage action, string description) statusMessage)
     {
-        this.DispatcherQueue.ExecuteUI(()=>
+        await this.DispatcherQueue.ExecuteUIAsync(()=>
         {
             // we are executing in the UI thread
             GetDataGrid(statusMessage.action, out var collection, out var messageLog);
@@ -239,7 +251,7 @@ public sealed partial class StatusDialog : Page
             lvItem.Status = statusMessage.action;
             lvItem.Message = statusMessage.description;
             // set background color, based on status action
-            collection.Add(lvItem);
+            collection.Insert(0, lvItem);
 		});
     }
     private void ColorizeStatus((StatusMessage action, string description) values, ListViewItem item)
@@ -294,42 +306,32 @@ public sealed partial class StatusDialog : Page
                 break;
         }
     }
-    private void CmdCancelClick()
+    private void CmdCancelClick(object sender, RoutedEventArgs arg)
     {
         Canceled = true;
     }
 
-    void CmdCloseClick()
+    void CmdCloseClick(object sender, RoutedEventArgs arg)
     {
 		Canceled = true;
 		ParentWindow?.Close();
 	}
 
-    public void OperationCompleted()
-    {
-        if (_errorCount != 0)
-            AddStatusLine(StatusMessage.ERROR, $"Encountered {_errorCount} errors");
-        else if (cbxAutoClose.IsEnabled == true)
-            CmdCloseClick();
-        cmdCancel.IsEnabled = false;
-        cmdClose.IsEnabled = true;
-    }
-
-    private void StatusSettings_Click(object sender, EventArgs e)
+    private void StatusSettings_Click(object sender, RoutedEventArgs arg)
     {
         //var page = InstanceManager.GetAPage<StatusSettings>();
         var window = WindowHelper.CreateWindowPage<StatusSettings>();
     }
-	internal void SetDownloaded(long downloadBytes)
+	internal async Task SetDownloaded(long downloadBytes)
 	{
-        this.DispatcherQueue.ExecuteUI(() =>
+        await this.DispatcherQueue.ExecuteUIAsync(() =>
         {
             Downloaded.Text = $"Downloaded: {OperatorConverter.LongBytesToString(downloadBytes)}";
         });
 	}
-	internal void SetTotalDownloaded(long sessionDownloadBytes)
+	internal async Task SetTotalDownloaded(long sessionDownloadBytes)
 	{
-        this.DispatcherQueue.ExecuteUI(() =>
+        await this.DispatcherQueue.ExecuteUIAsync(() =>
         {
             TotalDownload.Text = $"Session Downloaded: {OperatorConverter.LongBytesToString(sessionDownloadBytes)}";
         });
