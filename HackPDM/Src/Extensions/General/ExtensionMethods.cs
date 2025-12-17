@@ -9,6 +9,7 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 
@@ -71,7 +72,18 @@ public static class ExtensionMethods
         }
         return values;
     }
-    public static IEnumerable<TOut> Select<TIn, TOut>(this ArrayList list, Func<TIn, TOut> selector)
+    public static bool Any<T>(this ArrayList list, Func<T, bool> predicate)
+    {
+        foreach (T obj in list.OfType<T>())
+        {
+            if (predicate(obj))
+            {
+                return true;
+            }
+        }
+        return false;
+	}
+	public static IEnumerable<TOut> Select<TIn, TOut>(this ArrayList list, Func<TIn, TOut> selector)
     {
         foreach (TIn obj in list.OfType<TIn>())
         {
@@ -123,7 +135,7 @@ public static class ExtensionMethods
             }
         }
     }
-    public static IEnumerable<TOut> SkipSelect<TIn, TOut>(this IEnumerable<TIn> source, Predicate<TIn> predicate, Func<TIn, TOut> selector)
+    public static IEnumerable<TOut> SkipSelect<TIn, TOut>(this IEnumerable<TIn> source, Func<TIn, bool> predicate, Func<TIn, TOut> selector)
     {
         foreach (TIn obj in source)
         {
@@ -133,6 +145,17 @@ public static class ExtensionMethods
             }
         }
     }
+	public static IEnumerable<TOut?> SkipSelect<TIn, TOut>(this IEnumerable<TIn> source, Func<TIn, (bool, TOut)> predicateSelector)
+	{
+		foreach (TIn obj in source)
+		{
+			var result = predicateSelector(obj);
+			if (!result.Item1)
+			{
+				yield return result.Item2;
+			}
+		}
+	}
 	public static IEnumerable<Tout> SkipSelect<TIn, Tout>(this ArrayList source, Predicate<TIn> predicate, Func<TIn, Tout> selector)
 	{
 		foreach (TIn obj in source.OfType<TIn>())
@@ -602,4 +625,39 @@ public class DynamicTuple<T>
 		f = _items.Length > 5 ? _items[5] : default!;
 		g = _items.Length > 6 ? _items[6] : default!;
 	}
+}
+public static class UnsafeExtensions
+{
+	public static Span<T> Skip<T>(this Span<T> span, Func<T, bool> predicate)
+	{
+		T[] temp = new T[span.Length]; int count = 0; for (int i = 0; i < span.Length; i++)
+		{
+			T val = span[i]; // safe indexing
+            if (!predicate(val)) 
+            { 
+                temp[count++] = val; 
+            } 
+        } 
+        return temp.AsSpan(0, count); 
+    }
+
+	public static Span<T> SkipUnsafe<T>(this Span<T> span, Func<T, bool> predicate) 
+	{
+		T[] temp = new T[span.Length];
+		int count = 0;
+
+		ref T start = ref MemoryMarshal.GetReference(span);
+
+		for (int i = 0; i < span.Length; i++)
+		{
+			T val = Unsafe.Add(ref start, i);
+			if (!predicate(val))
+			{
+				temp[count++] = val;
+			}
+		}
+
+		return temp.AsSpan(0, count);
+	}
+
 }

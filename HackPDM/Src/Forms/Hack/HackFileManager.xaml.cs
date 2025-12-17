@@ -400,19 +400,19 @@ public sealed partial class HackFileManager : Page
 		await MessageBox.ShowAsync("Completed!");
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
-	private async Task Async_Commit(List<HackFile> hacks)
+	private async Task Async_Commit(List<HackFile>? hacks)
 	{
 		object lockObject = new();
 		// section for checking if the existing remote file already has a version with the same checksum 
 		// or possibly an entry that has a newer version from that which is downloaded locally
 
-		ConcurrentSet<HackFile> hackFiles = hacks;
-
+		ConcurrentSet<HackFile> hackFiles;
+		ConcurrentSet<HackFile> hackFilesInOdoo;
 		// testing filter hacks..
 		// entries = entries is not null && !entries.IsEmpty ? await Commit.FilterCommitEntries(entries) : [];
 
 		// section for checking if hack files have a checksum that matches the fullpath
-		hackFiles = hackFiles is not null && hackFiles.Count > 0 ? await FilterCommitHackFiles(hackFiles) : [];
+		(hackFiles, hackFilesInOdoo) = hacks is not null && hacks.Count > 0 ? await FilterCommitHackFiles(hacks) : ([], []);
 
 
 		//HpVersion[] localConversions = new HpVersion[hackFiles.Count];
@@ -429,7 +429,6 @@ public sealed partial class HackFileManager : Page
 		var localVersions = Help.BatchArray(localConversions, DownloadBatchSize);
 
 		
-
 		ProcessCounter = 0;
 		SkipCounter = 0;
 
@@ -682,7 +681,7 @@ public sealed partial class HackFileManager : Page
 	#endregion
 
 	#region Commit Functions
-	private async Task<ConcurrentSet<HackFile>> FilterCommitHackFiles(ConcurrentSet<HackFile> hackFiles)
+	private static async Task<(ConcurrentSet<HackFile>, ConcurrentSet<HackFile>)> FilterCommitHackFiles(ConcurrentSet<HackFile> hackFiles)
 	{
 		List<Task<HackFile>> tasks = [];
 		object lockObject = new();
@@ -690,7 +689,7 @@ public sealed partial class HackFileManager : Page
 		var regex = new Regex(combinedPattern, RegexOptions.IgnoreCase);
 		//string[] filePaths = hackFiles.Select(hack => hack.FullPath).ToArray();
 
-		List<HackFile> hacks = new();
+		List<HackFile> hacks = [];
 		foreach (HackFile hack in hackFiles)
 		{
 			regex = new Regex(combinedPattern, RegexOptions.IgnoreCase);
@@ -699,8 +698,7 @@ public sealed partial class HackFileManager : Page
 				hacks.Add(hack);
 			}
 		}
-		HackFile[] files = await FileOperations.FilesNotInOdoo(hacks);
-		return files;
+		return await FileOperations.FilesNotInOdooSegmented(hacks);
 	}
 	#endregion
 
@@ -1077,8 +1075,9 @@ public sealed partial class HackFileManager : Page
 		statusToken = await statusToken.RenewTokenSourceAsync();
 		//ArrayList? entryIDs = await HpDirectory.GetDirectoryEntryIDsAsync(dat?.DirectoryId ?? 0, true);
 		if (statusToken.IsCancellationRequested) return;
-
-		await CommitInternal(HackFile.GetHackFolderWithDependencies(pathway, true));
+		
+		HackFile.GetHackFolderWithDependencies(pathway, true, out List<HackFile> hf);
+		await CommitInternal(hf);
 	}
 	private async void Tree_Click_Checkout(object sender, RoutedEventArgs e)
 	{
@@ -1183,7 +1182,7 @@ public sealed partial class HackFileManager : Page
 
         	if (OdooDefaults.DependentExt.Contains($".{item.Type.ToUpper()}"))
         	{
-        		hackFiles.AddAll(HackFile.GetHackFileWithDependencies(item, true));
+        		hackFiles.AddAll(HackFile.GetHackFileWithDependencies(item, true, out List<HackFile> hf) ? hf : []);
         	}
         	else
         	{

@@ -744,11 +744,10 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 {	
     // async methods
-	internal async static Task<T[]?> GetRecordsByIdsAsync(ArrayList recordIds, ArrayList? searchFilters = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
+	internal async static Task<T[]?> GetRecordsByIdsAsync(ArrayList? recordIds, ArrayList? searchFilters = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
 	{
 		string modelName = HpModelDictionary[typeof(T)];
 
-		List<T> records = [];
 		ArrayList fields = GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
 		ArrayList result;
 
@@ -764,13 +763,13 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 
 		if (result.Count == 0) return null;
 
-		//records = RecordsPopulation([.. result.Select<Hashtable, Hashtable>(h=>h)], excludedFields);
-		foreach (Hashtable ht in result)
+		T[] records = new T[result.Count];
+        foreach ((int i, Hashtable ht) in result.Select<Hashtable, (int, Hashtable)>(r => (result.IndexOf(r), r)))
 		{
-			records.Add(RecordPopulation(ht, excludedFields));
+			records[i] = RecordPopulation(ht, excludedFields);
 		}
-		//return records;
-		return [.. records];
+        //return records;
+        return records;
 	}
 	public static async Task<Tval?> GetFieldValueAsync<Tval>(int id, string fieldName) where Tval : class
 	{

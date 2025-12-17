@@ -32,7 +32,17 @@ public abstract class HackBaseFile
 		}
 		set => field = value;
     }
-    public string? RelativePath { get; set; }
+    public string? RelativePath 
+    {
+        get
+        {
+            field ??= FullPath is null
+                ? null
+                : Path.GetRelativePath(HackDefaults.PwaPathAbsolute, FullPath);
+            return field;
+		} 
+        set; 
+    }
     internal byte[]? FileContents { get; set; }
     internal FileInfo? Info { get; set; }
 

@@ -356,30 +356,19 @@ public static class FileOperations
         ArrayList values = Help.GetResults(result, "checksum", true);
         return values;
     }
-    public async static Task<HackFile[]> FilesNotInOdoo(IEnumerable<HackFile> hackFiles)
-    {
-        // key: checksum, value: filepath
-        //Dictionary<string, string> checkFiles = new(hackFiles.Count());
-        //foreach (HackFile filePath in hackFiles)
-        //{
-        //    //if (OdooDefaults.ExtToType.ContainsKey(filePath.TypeExt))
-        //    if (!OdooDefaults.ExtToFilter.ContainsKey(filePath.TypeExt))
-        //    {
-        //        checkFiles.Add(filePath.FullPath, FileChecksum(filePath.FullPath, SHA1.Create()));
-        //    }
-        //}
-         
+    public async static Task<(HackFile[], HackFile[])> FilesNotInOdooSegmented(IEnumerable<HackFile> hackFiles)
+    {        
         HackFile[] hackArr = [.. hackFiles];
         List<HackFile> hacks = [];
-
+        List<HackFile> hacksFound = [];
 
         ArrayList[] arrayList = new ArrayList[hackArr.Length];
-        ArrayList fields = ["name", "checksum", "dir_id"];
 
         for (int i = 0; i < hackArr.Length; i++)
         {
+            bool isFound = false;
             string filepath = hackArr[i].TypeExt.ToLower();
-            if (OdooDefaults.RestrictTypes && !OdooDefaults.ExtToType.ContainsKey(filepath)) continue;
+            if (OdooDefaults.RestrictTypes && !OdooDefaults.ExtToType.ContainsKey(filepath ?? "-=-=-")) continue;
 
             string filePath = HpDirectory.WindowsToOdooPath(hackArr[i].RelativePath);
             ArrayList arrList =
@@ -389,33 +378,25 @@ public static class FileOperations
                 new ArrayList() { "directory_complete_name", "=", filePath },
                 
             ];
+            HpEntry? entry = (await HpEntry.GetRecordsByIdsAsync(null, arrList, includedFields: ["name", "dir_id"], insertFields: ["version_ids.checksum"]))?.FirstOrDefault();
 
-            //ArrayList execParam = [arrList, fields];
-            //int resultTest = await OClient.CommandAsync<int>(HpVersion.GetHpModel(), "search_count", arrList, 10000);
-            ArrayList result = await OClient.BrowseAsync( HpVersion.GetHpModel(), [arrList, fields], 10000 );
+            ArrayList fields = [];
 
-            bool isFound = false;
-            foreach ( Hashtable item in result )
+            if (entry is not null && entry.HashedValues.TryGetValue("checksum", out ArrayList? arr))
             {
-                if (item["checksum"] is string checksum)
-                {
-                    // this means that this hackFile is in the database so it can be skipped
-                    if (checksum == hackArr[i].Checksum)
-                    {
-                        HackFileManager.Dialog?.AddStatusLine(StatusMessage.FOUND, $"checksum found remotely ({hackArr [ i ].Checksum}) for: {filePath}" );
-                        isFound = true;
-                        break;
-                    }
-                }
-            }
-            if ( !isFound )
-            {
-                HackFileManager.Dialog?.AddStatusLine(StatusMessage.INFO, $"Queued commit for {hackArr[i].Name} (Checksum: {hackArr [ i ].Checksum}) for: {filePath}" );
-                hacks.Add( hackArr [ i ] );
-            }
+				// this means that this hackFile is in the database so it can be skipped
+				if (arr.FirstOrDefault<string>(x => x.ToString() == hackArr[i].Checksum) is string checksum)
+				{
+					HackFileManager.Dialog?.AddStatusLine(StatusMessage.FOUND, $"checksum found remotely ({checksum}) for: {filePath}");
+					hacksFound.Add(hackArr[i]);
+					continue;
+				}
+			}
 
+            HackFileManager.Dialog?.AddStatusLine(StatusMessage.INFO, $"Queued commit for {hackArr[i].Name} (Checksum: {hackArr [ i ].Checksum}) for: {filePath}" );
+            hacks.Add( hackArr [ i ] );
         }
-        return [.. hacks];
+        return ([.. hacks], [.. hacksFound]);
     }
     public static string? GetRelativePath( string fullPath )
     {

@@ -105,7 +105,7 @@ class hp_entry(models.Model):
         compute='_compute_all_properties',
         string='version properties',
     )
-
+    
     def first_helper(self, key = lambda x: True):
         try:
             return next(x for x in self if key(x))

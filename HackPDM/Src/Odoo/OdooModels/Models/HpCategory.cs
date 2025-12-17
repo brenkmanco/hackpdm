@@ -25,7 +25,6 @@ public partial class HpCategory : HpBaseModel<HpCategory>
         this.track_depends = trackDepends;
     }
 }
-
 public partial class HpCategory : HpBaseModel<HpCategory>
 {
 
