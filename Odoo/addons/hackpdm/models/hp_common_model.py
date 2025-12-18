@@ -117,8 +117,15 @@ class hp_common_model(models.AbstractModel):
         Model = self.env[model_name] 
 
         records = None
+
         if not domain and not ids:
             return []
+        
+        if fields is None or len(fields) == 0:
+            fields = [field for field in fields if field in self._fields]
+        
+        logging.info(f"\nfields: {fields}\nmodel_name: {model_name}\ndomain: {domain}\nIDs: {ids}")
+        
         if not domain:
             records = Model.browse(ids) 
         elif not ids:
@@ -128,6 +135,7 @@ class hp_common_model(models.AbstractModel):
 
         if not records or len(records) == 0:
             return []
+
 
         results = [] 
         
