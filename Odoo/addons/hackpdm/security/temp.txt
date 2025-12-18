@@ -1,0 +1,13 @@
+access_test_model,access_test_model,model_test_model_custom,base.group_user,1,1,1,1
+access_hp_category,access_hp_category,model_hp_category,base.group_user,1,1,1,1
+access_hp_category_property,access_hp_category_property,model_hp_category_property,base.group_user,1,1,1,1
+access_hp_directory,access_hp_directory,model_hp_directory,base.group_user,1,1,1,1
+access_hp_entry,access_hp_entry,model_hp_entry,base.group_user,1,1,1,1
+access_hp_entry_name_filter,access_hp_entry_name_filter,model_hp_entry_name_filter,base.group_user,1,1,1,1
+access_hp_property,access_hp_property,model_hp_property,base.group_user,1,1,1,1
+access_hp_release,access_hp_release,model_hp_release,base.group_user,1,1,1,1
+access_hp_release_version_rel,access_hp_release_version_rel,model_hp_release_version_rel,base.group_user,1,1,1,1
+access_hp_type,access_hp_type,model_hp_type,base.group_user,1,1,1,1
+access_hp_version,access_hp_version,model_hp_version,base.group_user,1,1,1,1
+access_hp_version_property,access_hp_version_property,model_hp_version_property,base.group_user,1,1,1,1
+access_hp_version_relationship,access_hp_version_relationship,model_hp_version_relationship,base.group_user,1,1,1,1

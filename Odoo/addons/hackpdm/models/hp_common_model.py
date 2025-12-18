@@ -88,17 +88,27 @@ class hp_common_model(models.AbstractModel):
     _name = 'hp.common.model'
     _description = 'commmon model functions for hp models'
 
+    def _help_gather(self, value, parts):
+       if len(parts) == 1:
+           if isinstance(value, models.BaseModel):
+               if len(value) == 1:
+                   return {"id": value.id, "name": value.name if "name" in value._fields else value._name }
+               else:
+                   return [{"id": rec.id, "name": rec.name if "name" in rec._fields else rec._name} for rec in value]
+           else:
+               return value
+
     def _resolve_field(self, record, parts): 
         """Recursively resolve dot-notated fields into rich structures.""" 
         field = parts[0] 
         value = record[field] 
 
         if len(parts) == 1: # Terminal field → return raw value 
-            return value
+            return self._help_gather(value, parts)
         
          # Still more parts to traverse 
         rest = parts[1:] 
-        if value._name: # Many2one 
+        if value._name and len(value) == 1: # Many2one 
             return { 
                 "id": value.id, 
                 rest[-1]: self._resolve_field(value, rest) 
@@ -113,13 +123,9 @@ class hp_common_model(models.AbstractModel):
             ] 
         
     @api.model 
-    def smart_read(self, test): 
+    def smart_read(self, domain, ids, fields): 
         # domain=None, ids=None, fields=None
-        logging.info(f"\nTEST: {test}\n")
-        domain = test[0]
-        ids = test[1]
-        fields = test[2]
-        # logging.info(f"\nfields: {fields}\nmodel_name: {self._name}\ndomain: {domain}\nIDs: {ids}")
+        logging.info(f"\nfields: {fields}\nmodel_name: {self._name}\ndomain: {domain}\nIDs: {ids}")
 
         Model = self 
 
