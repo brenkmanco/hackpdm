@@ -88,6 +88,45 @@ class hp_common_model(models.AbstractModel):
     _name = 'hp.common.model'
     _description = 'commmon model functions for hp models'
 
+    def _resolve_field(self, record, parts): 
+        """Recursively resolve dot-notated fields into rich structures.""" 
+        field = parts[0] 
+        value = record[field] 
+
+        if len(parts) == 1: # Terminal field → return raw value 
+            return value
+        
+         # Still more parts to traverse 
+        rest = parts[1:] 
+        if value._name: # Many2one 
+            return { 
+                "id": value.id, 
+                rest[-1]: self._resolve_field(value, rest) 
+            } 
+        else: # One2many / Many2many 
+            return [ 
+                { 
+                    "id": child.id, 
+                    rest[-1]: self._resolve_field(child, rest) 
+                } 
+                for child in value
+            ] 
+        
+    @api.model 
+    def smart_read(self, model_name, domain=None, ids=None, fields=None): 
+        Model = self.env[model_name] 
+        records = Model.browse(ids) if ids else Model.search(domain or []) 
+        results = [] 
+        
+        for rec in records: 
+            data = {} 
+            for field in fields or []: 
+                parts = field.split(".") 
+                data[field] = self._resolve_field(rec, parts) 
+            results.append(data) 
+        return results
+
+
     @api.model
     def fast_read(self, ids, fields):
         #logging.info(f"ids {ids}\n\nfields: {fields}\n")

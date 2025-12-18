@@ -378,8 +378,7 @@ public static class FileOperations
                 new ArrayList() { "directory_complete_name", "=", filePath },
                 
             ];
-            HpEntry? entry = (await HpEntry.GetRecordsByIdsAsync(null, arrList, includedFields: ["name", "dir_id"], insertFields: ["version_ids.checksum"]))?.FirstOrDefault();
-
+            HpEntry? entry = (await HpEntry.GetRecordsBySearchAsync(searchFilter: arrList, includedFields: ["name", "dir_id"], insertFields: ["version_ids"]))?.FirstOrDefault();
             ArrayList fields = [];
 
             if (entry is not null && entry.HashedValues.TryGetValue("checksum", out ArrayList? arr))

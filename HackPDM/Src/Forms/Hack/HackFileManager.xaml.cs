@@ -160,6 +160,13 @@ public sealed partial class HackFileManager : Page, ISingletonPage<HackFileManag
 	public HackFileManager()
 	{
 		InitializeComponent();
+
+#if DEBUG
+
+		DebugTest();
+
+#endif
+
 		_treeHelper = new TreeHelp(this);
 		_gridHelper = new GridHelp(this);
 		_hackLists = new()
@@ -210,6 +217,21 @@ public sealed partial class HackFileManager : Page, ISingletonPage<HackFileManag
 			//this.SetFormTheme(ThemePreset.LightTheme);
 		}
 	}
+
+#if DEBUG
+	private async Task DebugTest()
+	{
+		string filePath = (@"root\fileToOpen.txt");
+		ArrayList arrList =
+		[
+			new ArrayList() { "name", "=", "fileToOpen.txt" },
+			new ArrayList() { "windows_complete_name", "=", filePath },
+		];
+		// "version_ids.checksum"
+		HpEntry[]? entries = (await HpEntry.GetRecordsBySearchAsync(searchFilter: arrList, includedFields: ["name", "dir_id"], insertFields: ["dir_id.name"]));
+		HpEntry? entry = entries?.FirstOrDefault();
+	}
+#endif
 	private void AssignCollections()
 	{
 		OdooDirectoryTree.ItemsSource = ONodes;
@@ -328,12 +350,12 @@ public sealed partial class HackFileManager : Page, ISingletonPage<HackFileManag
 	internal (Image, ProgressRing) GetVisualizer() => (OdooEntryImage, LoadRing);
 	internal void RestartEntries() => _treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	internal async Task RestartTree() => await _treeHelper.RestartTree(OdooDirectoryTree);
-	#endregion
+#endregion
 	#region TEST_VARIABLES
 #if DEBUG
 	internal Stopwatch _stopwatch;
 #endif
-	#endregion
+#endregion
 }
 public sealed partial class HackFileManager : Page
 {
@@ -828,7 +850,7 @@ public sealed partial class HackFileManager : Page
 	}
 	#endregion
 
-    #region Form Event Handlers
+	#region Form Event Handlers
     // after select events
     private async void ODT_SetLastSelected(TreeData? tData)
 	{

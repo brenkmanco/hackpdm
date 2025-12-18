@@ -883,12 +883,12 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 		}
 		return [.. records];
 	}
-	public static async Task<T[]?> GetRecordsBySearchAsync(ArrayList? searchFilter = null, string[]? excludedFields = null, string[]? insertFields = null)
+    public static async Task<T[]?> GetRecordsBySearchAsync(ArrayList? searchFilter = null, string[]? includedFields = null, string[]? excludedFields = null, string[]? insertFields = null)
 	{
 		string modelName = HpModelDictionary[typeof(T)];
 
 		List<T> records = [];
-		ArrayList fields = GetFields(excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+		ArrayList fields = GetFields(excludedFieldNames: excludedFields, includedFieldNames: includedFields, insertFieldNames: insertFields);
 		ArrayList result;
 
 		if (searchFilter == null)
