@@ -115,7 +115,20 @@ class hp_common_model(models.AbstractModel):
     @api.model 
     def smart_read(self, model_name, domain=None, ids=None, fields=None): 
         Model = self.env[model_name] 
-        records = Model.browse(ids) if ids else Model.search(domain or []) 
+
+        records = None
+        if not domain and not ids:
+            return []
+        if not domain:
+            records = Model.browse(ids) 
+        elif not ids:
+            records = Model.search(domain or [])
+        else:
+            records = Model.search(domain + [('id', 'in', ids)])
+
+        if not records or len(records) == 0:
+            return []
+
         results = [] 
         
         for rec in records: 
