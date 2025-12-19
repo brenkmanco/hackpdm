@@ -88,39 +88,37 @@ class hp_common_model(models.AbstractModel):
     _name = 'hp.common.model'
     _description = 'commmon model functions for hp models'
 
-    def _help_gather(self, value, parts):
+    def _form_dict(self, value, arr, depth):
+       data = {"id": value.id, "name": value.name if "name" in value._fields else "", "model": value._name}
+       if arr:
+           data["path"] = arr
+       return data
+
+
+    def _help_gather(self, value, parts, arr, depth):
        if len(parts) == 1:
            if isinstance(value, models.BaseModel):
                if len(value) == 1:
-                   return {"id": value.id, "name": value.name if "name" in value._fields else value._name }
+                   return self._form_dict(value, arr, depth)
                else:
-                   return [{"id": rec.id, "name": rec.name if "name" in rec._fields else rec._name} for rec in value]
+                   return [self._form_dict(rec, arr, depth) for rec in value]
            else:
-               return value
+               return {"value": value, "path": arr} if len(arr) > 0 else value
 
-    def _resolve_field(self, record, parts): 
+    def _resolve_field(self, record, parts, arr, depth): 
         """Recursively resolve dot-notated fields into rich structures.""" 
         field = parts[0] 
         value = record[field] 
 
         if len(parts) == 1: # Terminal field → return raw value 
-            return self._help_gather(value, parts)
+            return self._help_gather(value, parts, arr, depth)
         
          # Still more parts to traverse 
         rest = parts[1:] 
         if value._name and len(value) == 1: # Many2one 
-            return { 
-                "id": value.id, 
-                rest[-1]: self._resolve_field(value, rest) 
-            } 
+            return self._resolve_field(value, rest, arr + [self._form_dict(value, None, depth)], depth+1)
         else: # One2many / Many2many 
-            return [ 
-                { 
-                    "id": child.id, 
-                    rest[-1]: self._resolve_field(child, rest) 
-                } 
-                for child in value
-            ] 
+            return [self._resolve_field(child, rest, arr + [self._form_dict(child, None, depth)], depth+1) for child in value]
         
     @api.model 
     def smart_read(self, domain, ids, fields): 
@@ -155,7 +153,7 @@ class hp_common_model(models.AbstractModel):
             data = {} 
             for field in fields or []: 
                 parts = field.split(".") 
-                data[field] = self._resolve_field(rec, parts) 
+                data[field] = self._resolve_field(rec, parts, [], 0)
             results.append(data) 
         return results
 
