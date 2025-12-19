@@ -163,7 +163,7 @@ public sealed partial class HackFileManager : Page, ISingletonPage<HackFileManag
 
 #if DEBUG
 
-		DebugTest();
+		//DebugTest();
 
 #endif
 
@@ -219,16 +219,16 @@ public sealed partial class HackFileManager : Page, ISingletonPage<HackFileManag
 	}
 
 #if DEBUG
-	private async Task DebugTest()
+	private static async Task DebugTest()
 	{
-		string filePath = (@"root\fileToOpen.txt");
+		string filePath = (@"root\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM");
+		//string filePath = (@"root\fileToOpen.txt");
 		ArrayList arrList =
 		[
-			new ArrayList() { "name", "=", "fileToOpen.txt" },
 			new ArrayList() { "windows_complete_name", "=", filePath },
 		];
 		// "version_ids.checksum"
-		HpEntry[]? entries = (await HpEntry.GetRecordsBySearchAsync(searchFilter: arrList, includedFields: ["name", "dir_id"], insertFields: ["dir_id.name"]));
+		HpEntry[]? entries = (await HpEntry.GetRecordsByIdsAsync(null, arrList, includedFields: ["name", "dir_id"], insertFields: ["dir_id.name", "version_ids.child_ids.child_id.checksum"]));
 		HpEntry? entry = entries?.FirstOrDefault();
 	}
 #endif

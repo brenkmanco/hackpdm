@@ -197,7 +197,9 @@ public static class OdooClient
         => Command<ArrayList>(model, "read", [ids, fields], timeout); //
     public static ArrayList FastRead(string model, ArrayList ids, ArrayList fields, int? timeout = null) 
         => Command<ArrayList>(model, "fast_read", [ids, fields], timeout);
-    public static bool Update(string model, int id, Hashtable values, int? timeout = null) 
+	public static ArrayList SmartSearch(string model, ArrayList? domain, ArrayList? ids, ArrayList? fields, int? timeout = null)
+	    => Command<ArrayList>(model, "smart_read", [domain, ids, fields ?? []], timeout); // read-only
+	public static bool Update(string model, int id, Hashtable values, int? timeout = null) 
         => Command<bool>(model, "write", [id, values], timeout); //
     public static bool Delete(string model, ArrayList execParams, int? timeout = null) 
         => Command<bool>(model, "unlink", execParams, timeout); //
@@ -310,7 +312,9 @@ public static class OdooClient
         => await CommandAsync<int>(model, "search_count", execParams, timeout); // read-only
     public static async Task<ArrayList> BrowseAsync(string model, ArrayList execParams, int? timeout = null)
         => await CommandAsync<ArrayList>(model, "search_read", execParams, timeout); // read-only
-    public static async Task<ArrayList> RelatedBrowseAsync(string model, ArrayList execParams, int? timeout = null)
+    public static async Task<ArrayList> SmartSearchAsync(string model, ArrayList? domain, ArrayList? ids, ArrayList? fields, int? timeout = null)
+        => await CommandAsync<ArrayList>(model, "smart_read", [domain, ids ?? [], fields ?? []], timeout); // read-only
+	public static async Task<ArrayList> RelatedBrowseAsync(string model, ArrayList execParams, int? timeout = null)
         => await CommandAsync<ArrayList>(model, "related_browse", execParams, timeout); // read-only
 	public static async Task<ArrayList> RelatedSearchAsync(string model, ArrayList execParams, int? timeout = null)
 		=> await CommandAsync<ArrayList>(model, "related_search_browse", execParams, timeout); // read-only

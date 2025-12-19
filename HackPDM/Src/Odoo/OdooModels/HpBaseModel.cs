@@ -514,7 +514,8 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 
         if (result.Count == 0) return null;
 
-        foreach (Hashtable ht in result)
+        records.AddRange(RecordsPopulation(result.OfType<Hashtable>(), excludedFields));
+		foreach (Hashtable ht in result)
         {
             records.Add(RecordPopulation(ht, excludedFields));
         }
@@ -576,7 +577,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
         FinalizePopulation(ref record, ht, excludedFields, hashStoreType);
         return record;
     }
-    internal static T[] RecordsPopulation(Hashtable[] hts, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string>? remapNames = null)
+    internal static T[] RecordsPopulation(IEnumerable<Hashtable>? hts, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string>? remapNames = null)
     {
         if (hts is null) return null;
 
@@ -594,7 +595,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
                 }
             }
         }
-        T[] records = HashConverter.ConvertToClasses<T>(hts);
+        T[]? records = HashConverter.ConvertToClasses<T>(hts);
 
         FinalizePopulations(records, hts, excludedFields, hashStoreType);
         return records;
@@ -635,7 +636,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 
         record.CompleteConstruction();
     }
-    public static void FinalizePopulations(T[] records, Hashtable[] hts, string[] excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
+    public static void FinalizePopulations(T[] records, Hashtable[] hts, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
     {
         if (records.Length != hts.Length) return;
         for (int i = 0; i < records.Length; i++)
@@ -758,7 +759,8 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 		else
 		{
 			if (recordIds is not null and { Count: > 0 }) searchFilters.Add(new ArrayList { "id", "in", recordIds });
-			result = await OClient.BrowseAsync(modelName, [searchFilters, fields], 90000);
+			result = await OClient.BrowseAsync(modelName, [searchFilters, new ArrayList { "dir_id" }], 90000);
+            // result = await OClient.SmartSearchAsync(modelName, searchFilters, [], fields, 90000);
 		}
 
 		if (result.Count == 0) return null;
@@ -883,7 +885,25 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 		}
 		return [.. records];
 	}
-    public static async Task<T[]?> GetRecordsBySearchAsync(ArrayList? searchFilter = null, string[]? includedFields = null, string[]? excludedFields = null, string[]? insertFields = null)
+    public static async Task<T[]?> GetRecordsBySmartSearchAsync(ArrayList? searchFilter = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
+    {
+        string modelName = HpModelDictionary[typeof(T)];
+        List<T> records = [];
+        ArrayList fields = GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+        ArrayList result;
+
+        searchFilter ??= [];
+
+        result = await OClient.SmartSearchAsync(modelName, searchFilter, [], fields, 10000);
+        if (result.Count == 0) return null;
+        foreach (Hashtable ht in result)
+        {
+            records.Add(RecordPopulation(ht, excludedFields));
+		}
+        return [.. records];
+	}
+
+	public static async Task<T[]?> GetRecordsBySearchAsync(ArrayList? searchFilter = null, string[]? includedFields = null, string[]? excludedFields = null, string[]? insertFields = null)
 	{
 		string modelName = HpModelDictionary[typeof(T)];
 

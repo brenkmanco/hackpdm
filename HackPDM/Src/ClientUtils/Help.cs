@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,6 +11,7 @@ using HackPDM.Data;
 using HackPDM.Extensions.General;
 using HackPDM.Forms.Hack;
 using HackPDM.Hack;
+using HackPDM.Odoo;
 using HackPDM.Odoo.OdooModels;
 using HackPDM.Odoo.OdooModels.Models;
 using HackPDM.Src.ClientUtils.Types;
@@ -512,23 +514,27 @@ public static class HashConverter
         AssignToClass(ht, ref obj, mType);
         return obj;
     }
-    public static T[] ConvertToClasses<T>(in Hashtable[] hts, MethodType mType = MethodType.FieldOnly) where T : HpBaseModel, new()
+    public static T[]? ConvertToClasses<T>(in IEnumerable<Hashtable>? hts, MethodType mType = MethodType.FieldOnly) where T : HpBaseModel, new()
     {
-        T[] objs = new T[hts.Length].Populate(() => new());
-        AssignToClasses(hts, ref objs, mType);
-        return objs;
+        //T[] objs = new T[hts.TryGetNonEnumeratedCount(out int len) ? len : hts.Count()].PopulateZip(() => new());
+        IEnumerable<(Hashtable, T)>? objs = hts?.PopulateZip(obj => new T());
+        return AssignToClasses(ref objs, mType);
     }
     public static T AssignToClass<T>(in Hashtable ht, T obj, MethodType mType = MethodType.FieldOnly)
         where T : HpBaseModel
     {
         Type type = typeof(T);
 
+        PropertyInfo[]? properties = mType is MethodType.PropertyAndField or MethodType.PropertyOnly ? type?.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly) : null;
+        FieldInfo[]? fields = mType is MethodType.PropertyAndField or MethodType.FieldOnly ? type?.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly) : null;
+		
         foreach (DictionaryEntry entry in ht)
         {
             if (mType is MethodType.PropertyOnly or MethodType.PropertyAndField)
             {
-                PropertyInfo? prop = type?.GetProperty(entry.Key?.ToString() ?? "", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-                if (prop != null && prop.CanWrite)
+                PropertyInfo? prop = properties?.FirstOrDefault(p => p.Name == entry.Key.ToString());
+				// type?.GetProperty(entry.Key?.ToString() ?? "", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+				if (prop != null && prop.CanWrite)
                 {
                     object value = ConvertValue(entry.Value, prop.PropertyType);
                     prop.SetValue(obj, value);
@@ -540,8 +546,9 @@ public static class HashConverter
             }
             if (mType is MethodType.FieldOnly or MethodType.PropertyAndField)
             {
-                FieldInfo field = type.GetField(entry.Key.ToString(), BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-                if (field != null)
+                FieldInfo? field = fields?.FirstOrDefault(f => f.Name == entry.Key.ToString());
+				// type.GetField(entry.Key.ToString(), BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+				if (field != null)
                 {
                     object value = ConvertValue(entry.Value, field.FieldType);
                     field.SetValue(obj, value);
@@ -554,94 +561,154 @@ public static class HashConverter
         }
         return obj;
     }
-    public static T[] AssignToClasses<T>(in Hashtable[] hts, ref T[] objs, MethodType mType = MethodType.FieldOnly)
+    public static T[]? AssignToClasses<T>(ref IEnumerable<(Hashtable, T)>? hts, MethodType mType = MethodType.FieldOnly)
         where T : HpBaseModel
     {
-        if (hts is null) return null;
+        if (hts is null || hts.FirstOrDefault().Item1 is not Hashtable hashFirst) return null;
 
         Type type = typeof(T);
-        string[] firstKeys = [.. hts.First().Keys.Cast<string>()];
+        string[] firstKeys = [.. hashFirst.Keys.Cast<string>()];
 
-        (PropertyInfo, ValueConversion)[]? propInfos
-            = mType == MethodType.PropertyOnly
-                ? new (PropertyInfo, ValueConversion)[firstKeys.Length]
+        List<PropertyInfo>? properties = null;
+        //mType is MethodType.PropertyAndField or MethodType.PropertyOnly
+        //    ? type?.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+        //    : null;
+        List<FieldInfo>? fields = null;
+        //= mType is MethodType.PropertyAndField or MethodType.FieldOnly 
+        //    ? type?.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+        //    : null;
+        
+		(PropertyInfo?, ValueConversion?)[]? propInfos
+            = mType is MethodType.PropertyOnly or MethodType.PropertyAndField
+				? new (PropertyInfo?, ValueConversion?)[firstKeys.Length]
                 : null;
-        (FieldInfo, ValueConversion)[]? fieldInfos
-            = mType == MethodType.FieldOnly
-                ? new (FieldInfo, ValueConversion)[firstKeys.Length]
+        (FieldInfo?, ValueConversion?)[]? fieldInfos
+            = mType is MethodType.FieldOnly or MethodType.PropertyAndField
+				? new (FieldInfo?, ValueConversion?)[firstKeys.Length]
                 : null;
 
-        string[]? pkeys = propInfos is null ? null : firstKeys;
-        string[]? fkeys = fieldInfos is null ? null : firstKeys;
-
-        for (int i = 0; i < hts.Length; i++)
+        bool IsFlagged;
+        for (int i = 0; i < firstKeys.Length; i++)
         {
-            if (hts[i] is null) continue;
-
+			IsFlagged = false; 
             if (mType is MethodType.PropertyOnly or MethodType.PropertyAndField)
             {
-                for (int j = 0; j < propInfos.Length; j++)
+                var prop = type?.GetProperty(firstKeys[i], BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                if (prop is not null)
                 {
-                    (PropertyInfo, ValueConversion) prop = i == 0
-                        ? (type.GetProperty(firstKeys[j], BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly), NULL: ValueConversion.Null)
-                        : propInfos[j];
-
-
-                    object value;
-                    var cMethod = prop.Item2;
-                    var entry = hts[i][j] as DictionaryEntry?;
-                    if (entry is null) continue;
-                    if (prop.Item1 is not null && prop.Item1.CanWrite)
-                    {
-                        if (cMethod == ValueConversion.Null && entry?.Value != null)
-                        {
-                            cMethod = ConvertValueMethod(entry.Value, prop.Item1.PropertyType);
-                            prop.Item2 = cMethod;
-                            propInfos[j] = prop;
-                        }
-                        value = ConvertValue(entry?.Value, prop.Item1.PropertyType, cMethod);
-                        prop.Item1.SetValue(objs[i], value);
-                    }
-                    else
-                    {
-                        objs[i].HashedValues[pkeys[j]] = entry.Value;
-                    }
+                    propInfos![i] = (prop, null);
                 }
-
+                else
+                {
+                    IsFlagged = true;
+                    propInfos![i] = (null, ValueConversion.DoNothing);
+                }
             }
             if (mType is MethodType.FieldOnly or MethodType.PropertyAndField)
             {
-                for (int j = 0; j < fieldInfos.Length; j++)
+				var field = type?.GetField(firstKeys[i], BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                if (field is not null && !IsFlagged && mType is MethodType.PropertyAndField)
                 {
-                    (FieldInfo, ValueConversion) field = i == 0
-                        ? (type.GetField(firstKeys[j], BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly), NULL: ValueConversion.Null)
-                        : fieldInfos[j];
-
-                    object value;
-                    var cMethod = field.Item2;
-                    var entry = hts[i][j] as DictionaryEntry?;
-                    if (entry is null) continue;
-                    hts[i][fkeys[j]] = cMethod;
-                    if (field.Item1 is not null)
-                    {
-                        if (cMethod == ValueConversion.Null && entry?.Value != null)
-                        {
-                            cMethod = ConvertValueMethod(entry.Value, field.Item1.FieldType);
-                            field.Item2 = cMethod;
-                            fieldInfos[j] = field;
-                        }
-                        value = ConvertValue(entry.Value, field.Item1.FieldType, cMethod);
-                        field.Item1.SetValue(objs[i], value);
-                    }
-                    else
-                    {
-                        objs[i].HashedValues[fkeys[j]] = entry.Value;
-                    }
+                    fieldInfos![i] = (null, ValueConversion.Skip);
+					continue;
+                }
+                if (field is not null)
+                {
+                    fieldInfos![i] = (field, null);
+                }
+                else
+                {
+                    fieldInfos![i] = (null, ValueConversion.DoNothing);
                 }
             }
         }
+        string[]? pkeys = propInfos is null ? null : firstKeys;
+        string[]? fkeys = fieldInfos is null ? null : firstKeys;
+        
+        foreach ((Hashtable hashtable, T obj) in hts)
+        {
+            if (hashtable is null) continue;
 
-        return objs;
+            if (hashtable.TryGetValue("id", out int? id) && id is not null)
+            {
+                obj.Id = id ?? 0;
+			}
+			
+			if (mType is MethodType.PropertyOnly or MethodType.PropertyAndField)
+            {
+                for (int j = 0; j < propInfos!.Length; j++)
+                {
+					var entry = hashtable[j] as DictionaryEntry?;
+					if (entry is null) continue;
+
+					ref (PropertyInfo?, ValueConversion?) prop = ref propInfos[j];
+
+                    if (prop.Item2 is ValueConversion.Skip) continue;
+
+					if (prop.Item1?.Name is "dir_id" && (obj.HpModel is OdooDefaults.HP_VERSION or OdooDefaults.HP_ENTRY))
+					{
+						obj.HashedValues.Add("dir_id", entry?.Value);
+					}
+
+					if (prop.Item2 is ValueConversion.DoNothing || prop.Item1 is null || !prop.Item1.CanWrite)
+					{
+						obj.HashedValues[pkeys[j]] = entry?.Value;
+                        prop.Item2 = ValueConversion.DoNothing;
+						continue;
+					}
+
+                    var cMethod = prop.Item2;
+                    if (cMethod == ValueConversion.Null && entry?.Value != null)
+                    {
+                        cMethod = ConvertValueMethod(entry.Value, prop.Item1.PropertyType);
+                        prop.Item2 = cMethod;
+                        propInfos[j] = prop;
+					}
+                    prop.Item1.SetValue(obj, ConvertValue(entry?.Value, prop.Item1.PropertyType, cMethod ?? ValueConversion.Null));
+					obj.CompleteConstruction();
+					obj.IsRecord = true;
+				}
+            }
+            if (mType is MethodType.FieldOnly or MethodType.PropertyAndField)
+            {
+                for (int j = 0; j < fieldInfos!.Length; j++)
+                {
+					var entry = hashtable[j] as DictionaryEntry?;
+					if (entry is null) continue;
+
+                    ref (FieldInfo?, ValueConversion?) field = ref fieldInfos[j];
+
+                    if (field.Item2 is ValueConversion.Skip) continue;
+
+					if (field.Item1?.Name is "dir_id" && (obj.HpModel is OdooDefaults.HP_VERSION or OdooDefaults.HP_ENTRY))
+					{
+						obj.HashedValues.Add("dir_id", entry?.Value);
+					}
+
+					if (field.Item2 is ValueConversion.DoNothing || field.Item1 is null)
+                    {
+						obj.HashedValues[fkeys[j]] = entry?.Value;
+                        field.Item2 = ValueConversion.DoNothing;
+						continue;
+					}
+
+					var cMethod = field.Item2;
+					if (cMethod == ValueConversion.Null && entry?.Value != null)
+					{
+						cMethod = ConvertValueMethod(entry.Value, field.Item1.FieldType);
+						field.Item2 = cMethod;
+						fieldInfos[j] = field;
+					}
+					field.Item1.SetValue(obj, ConvertValue(entry?.Value, field.Item1.FieldType, cMethod ?? ValueConversion.Null));
+                    obj.CompleteConstruction();
+                    obj.IsRecord = true;
+				}
+			}
+
+			
+		}
+
+		return [.. hts.Select(i => i.Item2)];
     }
     public static void PopulateSelf<T>(this T hprecord, in Hashtable ht, MethodType mType = MethodType.FieldOnly) where T : HpBaseModel
         => AssignToClass(ht, hprecord, mType);

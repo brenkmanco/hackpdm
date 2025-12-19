@@ -72,7 +72,14 @@ public static class ExtensionMethods
         }
         return values;
     }
-    public static bool Any<T>(this ArrayList list, Func<T, bool> predicate)
+    public static IEnumerable<(T, T2)> PopulateZip<T, T2>(this IEnumerable<T> source, Func<T, T2> func)
+    {
+        foreach (T obj in source)
+        {
+            yield return (obj, func(obj));
+        }
+	}
+	public static bool Any<T>(this ArrayList list, Func<T, bool> predicate)
     {
         foreach (T obj in list.OfType<T>())
         {

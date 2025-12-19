@@ -64,6 +64,8 @@ public enum ValueConversion
     DateTime,
     Nullable,
     OtherConvert,
+    DoNothing,
+    Skip,
 }
 public enum StatusMessage
 {

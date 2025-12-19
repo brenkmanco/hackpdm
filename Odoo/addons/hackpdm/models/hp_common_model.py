@@ -113,8 +113,8 @@ class hp_common_model(models.AbstractModel):
             ] 
         
     @api.model 
-    def smart_read(self, model_name, domain=None, ids=None, fields=None): 
-        Model = self.env[model_name] 
+    def smart_read(self, domain=None, ids=None, fields=None): 
+        Model = self
 
         records = None
 
