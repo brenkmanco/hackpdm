@@ -163,7 +163,7 @@ public sealed partial class HackFileManager : Page, ISingletonPage<HackFileManag
 
 #if DEBUG
 
-		//DebugTest();
+		DebugTest();
 
 #endif
 
@@ -221,15 +221,7 @@ public sealed partial class HackFileManager : Page, ISingletonPage<HackFileManag
 #if DEBUG
 	private static async Task DebugTest()
 	{
-		string filePath = (@"root\Designed\Haggis\Frame\Base Weldment\X010166.Frame Base Weldment, Haggis.SLDASM");
-		//string filePath = (@"root\fileToOpen.txt");
-		ArrayList arrList =
-		[
-			new ArrayList() { "windows_complete_name", "=", filePath },
-		];
-		// "version_ids.checksum"
-		HpEntry[]? entries = (await HpEntry.GetRecordsByIdsAsync(null, arrList, includedFields: ["name", "dir_id"], insertFields: ["dir_id.name", "version_ids.child_ids.child_id.checksum"]));
-		HpEntry? entry = entries?.FirstOrDefault();
+
 	}
 #endif
 	private void AssignCollections()
@@ -494,7 +486,7 @@ public sealed partial class HackFileManager : Page
 
 			lock (lockObject)
 			{
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Checking out {entry.name} ({entry.Id})");
+				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Checking out {entry.name} ({entry.id})");
 			}
 			await CheckOutEntry(entry);
 
@@ -523,7 +515,7 @@ public sealed partial class HackFileManager : Page
 
 			lock (lockObject)
 			{
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Unchecking out {entry.name} ({entry.Id})");
+				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Unchecking out {entry.name} ({entry.id})");
 			}
 			await UnCheckOutEntry(entry);
 
@@ -540,7 +532,7 @@ public sealed partial class HackFileManager : Page
 	}
 	private async Task Async_PermDelete(HpEntry[] entries)
 	{
-		ArrayList ids = entries.Select(e => e.Id).ToArrayList();
+		ArrayList ids = entries.Select(e => e.id).ToArrayList();
 		bool vDeleted = false;
 
 		// using DeleteEntry also deletes entries, versions, version props, version relationships, and ir attachment records
@@ -572,7 +564,7 @@ public sealed partial class HackFileManager : Page
 		{
 			lock (lockObject)
 			{
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Setting InActive {entry.name}: {entry.Id}");
+				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Setting InActive {entry.name}: {entry.id}");
 			}
 			await entry.LogicalDelete();
 
@@ -589,7 +581,7 @@ public sealed partial class HackFileManager : Page
 		{
 			lock (lockObject)
 			{
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Setting Active {entry.name}: {entry.Id}");
+				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Setting Active {entry.name}: {entry.id}");
 			}
 			await entry.LogicalUnDelete();
 		}
@@ -832,13 +824,13 @@ public sealed partial class HackFileManager : Page
 		// directory only needs ID set to find that record's entries
 		HpDirectory directory = new()
 		{
-			Id = data?.DirectoryId ?? 0,
+			id = data?.DirectoryId ?? 0,
 			name = data?.Name ?? "",			
 		};
 
 		lock (lockObject)
 		{
-			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Retrieving all entries and their and their associated dependencies within directory ({directory.name}, id: {directory.Id})");
+			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Retrieving all entries and their and their associated dependencies within directory ({directory.name}, id: {directory.id})");
 		}
 
 		Dialog?.IsInProcess = true;
@@ -1545,12 +1537,12 @@ public sealed partial class HackFileManager : Page
 		HpEntry entry = (await HpEntry.GetRecordsByIdsAsync([version.entry_id])).First();
 		ArrayList versions = await GetVersionList(item.Version);
 		HashSet<int> vIds = versions.ToHashSet<int>();
-		vIds.Add(version.Id);
+		vIds.Add(version.id);
 		string vIdsText = string.Join(", ", vIds);
 		string eText = entry.latest_version_id == item.Version ? $"You are trying to download the latest version and dependencies. Continue?" : "You are trying to download a previous version and dependencies. Continue?";
 		string vText = $"version:\n" +
 					   $"\tName = {version.name}\n" +
-					   $"\tID = {version.Id}\n" +
+					   $"\tID = {version.id}\n" +
 					   $"\tSize = {version.file_size}\n" +
 					   $"\tChecksum = {version.checksum}\n" +
 					   $"\tAttachID = {version.attachment_id}\n" +
@@ -1930,7 +1922,7 @@ public sealed partial class HackFileManager : Page
 		HpVersion[] versions = HpEntry.GetRelatedRecordByIds<HpVersion>(ids, "version_ids", includedFields: ["ID"]);
 		IrAttachment[] irAttachments = null;
 
-		ArrayList vIds = versions?.Select(v => v.Id).ToArrayList() ?? [];
+		ArrayList vIds = versions?.Select(v => v.id).ToArrayList() ?? [];
 
 		bool deletedIrAttachments = false;
 		bool deletedVersions = false;

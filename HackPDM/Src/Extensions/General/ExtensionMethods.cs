@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
@@ -14,9 +15,12 @@ using System.Runtime.InteropServices;
 using System.Threading;
 
 using HackPDM.ClientUtils;
+using HackPDM.Odoo.XmlRpc;
 using HackPDM.Src.ClientUtils.Types;
 
 using Windows.ApplicationModel.Activation;
+
+using static HackPDM.Extensions.General.ExtensionMethods;
 
 namespace HackPDM.Extensions.General;
 
@@ -181,9 +185,77 @@ public static class ExtensionMethods
 			if (item is { } clean && !clean.Equals(default)) yield return clean;
 		}
 	}
-	public static (List<TOut>, List<TOut>) SegmentWhere<TOut>(this IEnumerable<TOut?> array, Predicate<TOut?> predicate)
+    public static (IEnumerable<TOut?>, IEnumerable<TOut?>) SegmentSelectWhere<TIn, TOut>(this IEnumerable<TIn?> array, Func<TIn?, (bool, TOut?)> predicateSelect, bool skipNullItem = true)
+    {
+        var segmentList = SegmentSelectInternal(array, predicateSelect, skipNullItem);
+        return (segmentList.SkipSelect(item => (!item.Item1, item.Item2)), segmentList.SkipSelect(item => item));
+	}
+	public static (IEnumerable<TOut?>, IEnumerable<TOut2?>) SegmentSelectDiffWhere<TIn, TOut, TOut2>(this IEnumerable<TIn?> array, Func<TIn?, int, (bool, TOut?, TOut2?)> predicateSelect, bool skipNullItem = true)
 	{
-		(List<TOut>, List<TOut>) items = new(new(), new());
+		var segmentList = SegmentSelectDiffInternal(array, predicateSelect, skipNullItem);
+		return (segmentList.SkipSelect(item => (!item.Item1, item.Item2)), segmentList.SkipSelect(item => (item.Item1, item.Item3)));
+	}
+	public static (IEnumerable<TOut?>, IEnumerable<TOut?>) SegmentSelectWhere<TIn, TOut>(this IEnumerable<TIn?> array, Func<TIn?, int, (bool, TOut?)> predicateSelect, bool skipNullItem = true)
+	{
+		var segmentList = SegmentSelectInternal(array, predicateSelect, skipNullItem);
+		return (segmentList.SkipSelect(item => (!item.Item1, item.Item2)), segmentList.SkipSelect(item => item));
+	}
+
+	public static IEnumerable<TOut?> LambdaContextual<TIn, TContext, TOut>(this IEnumerable<TIn?> array, TContext context, Func<TContext, TIn?, (bool, TOut?)> predicateSelect)
+    {
+        foreach (TIn? item in array)
+        {
+            var res = predicateSelect(context, item);
+            if (res.Item1) yield return res.Item2;
+        }
+    }
+	private static IEnumerable<(bool, TOut?)> SegmentSelectInternal<TIn, TOut>(IEnumerable<TIn?> array, Func<TIn?, (bool, TOut?)> predicateSelect, bool skipNullItem = true)
+    {
+        
+        foreach (TIn? item in array)
+        {
+            if (skipNullItem && item is null) continue;
+
+            var value = predicateSelect(item);
+			
+            yield return (value.Item1, value.Item2);
+		}
+    }
+	private static IEnumerable<(bool, TOut?)> SegmentSelectInternal<TIn, TOut>(IEnumerable<TIn?> array, Func<TIn?, int, (bool, TOut?)> predicateSelect, bool skipNullItem = true)
+	{
+        int index = -1;
+		foreach (TIn? item in array)
+		{
+            checked
+            {
+                index++;
+            }
+			if (skipNullItem && item is null) continue;
+
+			var value = predicateSelect(item, index);
+
+			yield return (value.Item1, value.Item2);
+		}
+	}
+	private static IEnumerable<(bool, TOut?, TOut2?)> SegmentSelectDiffInternal<TIn, TOut, TOut2>(IEnumerable<TIn?> array, Func<TIn?, int, (bool, TOut?, TOut2?)> predicateSelect, bool skipNullItem = true)
+	{
+		int index = -1;
+		foreach (TIn? item in array)
+		{
+			checked
+			{
+				index++;
+			}
+			if (skipNullItem && item is null) continue;
+
+			var value = predicateSelect(item, index);
+
+			yield return (value.Item1, value.Item2, value.Item3);
+		}
+	}
+	public static (List<TOut?>, List<TOut?>) SegmentWhere<TOut>(this IEnumerable<TOut?> array, Predicate<TOut?> predicate)
+	{
+		(List<TOut?>, List<TOut?>) items = new(new(), new());
 		foreach (TOut? item in array)
 		{
 			if (predicate(item)) items.Item1.Add(item);

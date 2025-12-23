@@ -57,16 +57,39 @@ public static class OdooDefaults
     public static readonly string[] DependentExt = [".SLDPRT", ".SLDASM", ".SLDDRW"];
 
     public static readonly string DependentExtRegex = "(?i)(" + string.Join("|", DependentExt.Select(s => $"(\\{s}$)")) + ")";
-    public static string[] EntryFilterPatterns = [.. HpEntryNameFilters?.Select(eFilter => eFilter.name_regex) ?? []];
-    // lock asynchonous operations
-    private static readonly object MLockObject = new();
-    public static string? OdooDb 
+    public static string? OdooUser
     {
-        get => Settings.Get<string>("OdooDb");
+        get 
+        {
+			if (field is not null) return field;
+			var cm = CredentialManager.ReadCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, CredentialType.Generic);
+			field = cm?.UserName;
+            return field;
+        }
 
         set
         {
-            Settings.Set("OdooDb", value);
+			if (!string.IsNullOrEmpty(OdooPass) && !string.IsNullOrEmpty(value)) 
+                CredentialManager.WriteCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, value ?? "", OdooPass, CredentialPersistence.LocalMachine);
+            field = value;
+        }
+    }
+    public static string? OdooPass
+    {
+        get
+        {
+			if (field is not null) return field;
+			// read from windows credential manager
+			var cm = CredentialManager.ReadCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, CredentialType.Generic);
+            field = cm?.Password;
+            return field;
+        }
+
+        set
+        {
+			if (!string.IsNullOrEmpty(OdooUser) && !string.IsNullOrEmpty(value)) 
+                CredentialManager.WriteCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, OdooUser, value, CredentialPersistence.LocalMachine);
+            field = value;
         }
     }
     public static string? OdooAddress
@@ -78,6 +101,15 @@ public static class OdooDefaults
     {
         get => Settings.Get<string>("OdooPort");
         set => Settings.Set("OdooPort", value);
+    }
+    public static string? OdooDb 
+    {
+        get => Settings.Get<string>("OdooDb");
+
+        set
+        {
+            Settings.Set("OdooDb", value);
+        }
     }
     public static string? OdooUrl 
     {
@@ -129,78 +161,44 @@ public static class OdooDefaults
             field = value;
         }
     }
-    public static string? OdooUser
-    {
-        get 
-        {
-			if (field is not null) return field;
-			var cm = CredentialManager.ReadCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, CredentialType.Generic);
-			field = cm?.UserName;
-            return field;
-        }
-
-        set
-        {
-			if (!string.IsNullOrEmpty(OdooPass) && !string.IsNullOrEmpty(value)) 
-                CredentialManager.WriteCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, value ?? "", OdooPass, CredentialPersistence.LocalMachine);
-            field = value;
-        }
-    }
-    public static string? OdooPass
+	public static int OdooId
     {
         get
         {
-			if (field is not null) return field;
-			// read from windows credential manager
-			var cm = CredentialManager.ReadCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, CredentialType.Generic);
-            field = cm?.Password;
-            return field;
-        }
+                try
+                {
 
-        set
-        {
-			if (!string.IsNullOrEmpty(OdooUser) && !string.IsNullOrEmpty(value)) 
-                CredentialManager.WriteCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, OdooUser, value, CredentialPersistence.LocalMachine);
-            field = value;
-        }
-    }
-	private static bool _failedLogin = false;
-	public static int? OdooId
-    {
-        get
-        {
-            try
-            {
-				if (!_failedLogin && field is null or 0)
-				{
-					field = OClient.Login(7000);
-					if (field is null or 0)
-					{
-						_failedLogin = true;
-					}
-					return field;
-				}
-				return field;
-            }
-            catch
-            {
-                field = 0;
-            }
-            return field;
+				    if (field is 0)
+				    {
+                        field = OClient.Login(7000) ?? 0;
+                        return field;
+                    }
+				    return field;
+				    
+                }
+                catch
+                {
+                    field = 0;
+                }
+                return field;
         }
 
 		internal set
 		{
-			if (value is not (null or 0))
+			if (value is not 0)
 			{
 				if (value != field)
 				{
-					_failedLogin = false;
 					field = value;
 				}
 			}
 		}
     }
+
+    public static string[] EntryFilterPatterns = [.. HpEntryNameFilters?.Select(eFilter => eFilter.name_regex) ?? []];
+    // lock asynchonous operations
+    private static readonly object MLockObject = new();
+	
     public static HpNode? MyNode
     {
         get
@@ -431,9 +429,16 @@ public static class OdooDefaults
 
         foreach ( HpUser user in hpUsers )
         {
-            dict.Add( user.Id, user );
+            dict.Add( user.id, user );
         }
         return dict;
+    }
+    #endregion
+    #region Static Constructor
+    static OdooDefaults()
+    {
+        // need to ensure that this gets initialized first in the getter.
+        _ = OdooId;
     }
     #endregion
     #region Functions
@@ -461,7 +466,7 @@ public static class OdooDefaults
         {
             foreach ( HpCategory category in categories )
             {
-                if ( category.Id == type.cat_id )
+                if ( category.id == type.cat_id )
                 {
                     dict.Add( $".{type.file_ext.ToLower()}", category );
                     break;
@@ -477,7 +482,7 @@ public static class OdooDefaults
 
         foreach ( HpProperty prop in props )
         {
-            dict.Add( prop.Id, prop );
+            dict.Add( prop.id, prop );
         }
         return dict;
     }
@@ -494,7 +499,7 @@ public static class OdooDefaults
             HpDirectory[] directories = await HpDirectory.CreateNew(paths);
             HpDirectory lastDirectory = directories.Last() ?? throw new Exception($"{HpDirectory.GetHpModel()} didn't create any records");
             // create an HpEntry that doesn't exist in odoo
-            (entryReturn, HpEntry? entry) = await HpEntry.GetFallbackCreateEntryAsync(hackFile, lastDirectory.Id);
+            (entryReturn, HpEntry? entry) = await HpEntry.GetFallbackCreateEntryAsync(hackFile, lastDirectory.id);
 
 			switch (entryReturn)
 			{
@@ -528,7 +533,7 @@ public static class OdooDefaults
 
 			// create an HpVersion that doesn't exist in odoo
 			HpVersion version = await CreateNewVersion(hackFile, entry);
-			if (version.Id is 0) entryReturn = EntryReturnType.Failed;
+			if (version.id is 0) entryReturn = EntryReturnType.Failed;
 			return (entryReturn, version);
         }
         catch (Exception e)
@@ -542,7 +547,7 @@ public static class OdooDefaults
         try { 
             // create an HpVersion that doesn't exist in odoo
             HpVersion version = await HpVersion.CreateNew(hack, entry) ?? throw new Exception( $"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}" );
-            entry.latest_version_id = version.Id;
+            entry.latest_version_id = version.id;
             return version;
         }
         catch (Exception e)

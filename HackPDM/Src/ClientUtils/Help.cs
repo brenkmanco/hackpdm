@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 
@@ -577,129 +578,120 @@ public static class HashConverter
         //= mType is MethodType.PropertyAndField or MethodType.FieldOnly 
         //    ? type?.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
         //    : null;
+        bool IsProp = mType is MethodType.PropertyOnly or MethodType.PropertyAndField;
+        bool IsField = mType is MethodType.FieldOnly or MethodType.PropertyAndField;
         
-		(PropertyInfo?, ValueConversion?)[]? propInfos
-            = mType is MethodType.PropertyOnly or MethodType.PropertyAndField
-				? new (PropertyInfo?, ValueConversion?)[firstKeys.Length]
-                : null;
-        (FieldInfo?, ValueConversion?)[]? fieldInfos
-            = mType is MethodType.FieldOnly or MethodType.PropertyAndField
-				? new (FieldInfo?, ValueConversion?)[firstKeys.Length]
-                : null;
+		//(PropertyInfo?, ValueConversion?)[]? propInfos
+  //          = IsProp
+		//		? new (PropertyInfo?, ValueConversion?)[firstKeys.Length]
+  //              : null;
+  //      (FieldInfo?, ValueConversion?)[]? fieldInfos
+  //          = IsField
+		//		? new (FieldInfo?, ValueConversion?)[firstKeys.Length]
+  //              : null;
 
         bool IsFlagged;
-        for (int i = 0; i < firstKeys.Length; i++)
+
+		(IEnumerable<PropInfoEntry> propInfos, 
+            IEnumerable<FieldInfoEntry> fieldInfos) = firstKeys.SegmentSelectDiffWhere(
+                (key, index) =>
         {
-			IsFlagged = false; 
-            if (mType is MethodType.PropertyOnly or MethodType.PropertyAndField)
-            {
-                var prop = type?.GetProperty(firstKeys[i], BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-                if (prop is not null)
+			IsFlagged = false;
+            
+            PropInfoEntry? propReturn = null;
+            FieldInfoEntry? fieldReturn = null;
+
+			if (mType is MethodType.PropertyOnly or MethodType.PropertyAndField)
+			{
+                var prop = type?.GetProperty(key!, BindingFlags.Public | BindingFlags.Instance);
+                IsFlagged = prop is null;
+                propReturn = new (!IsFlagged
+                    ? (prop, key, null)
+                    : (null, key, ValueConversion.DoNothing));
+			}
+			if (mType is MethodType.FieldOnly or MethodType.PropertyAndField)
+			{
+                if (!IsFlagged && mType is MethodType.PropertyAndField)
                 {
-                    propInfos![i] = (prop, null);
+                    fieldReturn = new (null, key, ValueConversion.Skip);
                 }
                 else
                 {
-                    IsFlagged = true;
-                    propInfos![i] = (null, ValueConversion.DoNothing);
+				    var field = type?.GetField(key!, BindingFlags.Public | BindingFlags.Instance);
+                
+                    fieldReturn = new(field is not null 
+                        ? (field, key, null) 
+                        : (null, key, ValueConversion.DoNothing));
                 }
-            }
-            if (mType is MethodType.FieldOnly or MethodType.PropertyAndField)
-            {
-				var field = type?.GetField(firstKeys[i], BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-                if (field is not null && !IsFlagged && mType is MethodType.PropertyAndField)
-                {
-                    fieldInfos![i] = (null, ValueConversion.Skip);
-					continue;
-                }
-                if (field is not null)
-                {
-                    fieldInfos![i] = (field, null);
-                }
-                else
-                {
-                    fieldInfos![i] = (null, ValueConversion.DoNothing);
-                }
-            }
-        }
-        string[]? pkeys = propInfos is null ? null : firstKeys;
-        string[]? fkeys = fieldInfos is null ? null : firstKeys;
+			}
+            return (!(IsField && fieldReturn.Conversion is not ValueConversion.Skip), propReturn, fieldReturn);
+		});
+
         
         foreach ((Hashtable hashtable, T obj) in hts)
         {
             if (hashtable is null) continue;
 
-            if (hashtable.TryGetValue("id", out int? id) && id is not null)
-            {
-                obj.Id = id ?? 0;
-			}
+   //          if (hashtable.TryGetValue("id", out int? id) && id is not null)
+   //          {
+   //              obj.id = id ?? 0;
+			// }
 			
 			if (mType is MethodType.PropertyOnly or MethodType.PropertyAndField)
             {
-                for (int j = 0; j < propInfos!.Length; j++)
+                foreach (var propEntry in propInfos)
                 {
-					var entry = hashtable[j] as DictionaryEntry?;
-					if (entry is null) continue;
+					if (!hashtable.TryGetValue(propEntry.Name, out object? val) || val is null) continue;
 
-					ref (PropertyInfo?, ValueConversion?) prop = ref propInfos[j];
+                    if (propEntry.Conversion is ValueConversion.Skip) continue;
 
-                    if (prop.Item2 is ValueConversion.Skip) continue;
-
-					if (prop.Item1?.Name is "dir_id" && (obj.HpModel is OdooDefaults.HP_VERSION or OdooDefaults.HP_ENTRY))
+					if (propEntry.PropInfo?.Name is "dir_id" && (obj.HpModel is OdooDefaults.HP_VERSION or OdooDefaults.HP_ENTRY))
 					{
-						obj.HashedValues.Add("dir_id", entry?.Value);
+						obj.HashedValues.Add("dir_id", val);
 					}
 
-					if (prop.Item2 is ValueConversion.DoNothing || prop.Item1 is null || !prop.Item1.CanWrite)
+					if (propEntry.Conversion is ValueConversion.DoNothing || propEntry.PropInfo is null || !propEntry.PropInfo.CanWrite)
 					{
-						obj.HashedValues[pkeys[j]] = entry?.Value;
-                        prop.Item2 = ValueConversion.DoNothing;
+						obj.HashedValues[propEntry.Name!] = val;
+                        propEntry.Conversion = ValueConversion.DoNothing;
 						continue;
 					}
 
-                    var cMethod = prop.Item2;
-                    if (cMethod == ValueConversion.Null && entry?.Value != null)
+                    if (propEntry.Conversion is ValueConversion.Null && val is not null)
                     {
-                        cMethod = ConvertValueMethod(entry.Value, prop.Item1.PropertyType);
-                        prop.Item2 = cMethod;
-                        propInfos[j] = prop;
+                        propEntry.Conversion = ConvertValueMethod(val, propEntry.PropInfo.PropertyType);
 					}
-                    prop.Item1.SetValue(obj, ConvertValue(entry?.Value, prop.Item1.PropertyType, cMethod ?? ValueConversion.Null));
+                    propEntry.PropInfo?.SetValue(obj, ConvertValue(val, propEntry.PropInfo.PropertyType, propEntry.Conversion ?? ValueConversion.Null));
 					obj.CompleteConstruction();
 					obj.IsRecord = true;
 				}
             }
             if (mType is MethodType.FieldOnly or MethodType.PropertyAndField)
             {
-                for (int j = 0; j < fieldInfos!.Length; j++)
+                foreach(var fieldEntry in fieldInfos)
                 {
-					var entry = hashtable[j] as DictionaryEntry?;
-					if (entry is null) continue;
+					if (!hashtable.TryGetValue(fieldEntry.Name, out object? val) || val is null) continue;
 
-                    ref (FieldInfo?, ValueConversion?) field = ref fieldInfos[j];
+                    if (fieldEntry.Conversion is ValueConversion.Skip) continue;
 
-                    if (field.Item2 is ValueConversion.Skip) continue;
-
-					if (field.Item1?.Name is "dir_id" && (obj.HpModel is OdooDefaults.HP_VERSION or OdooDefaults.HP_ENTRY))
+					if (fieldEntry.Name is "dir_id" && (obj.HpModel is OdooDefaults.HP_VERSION or OdooDefaults.HP_ENTRY))
 					{
-						obj.HashedValues.Add("dir_id", entry?.Value);
+						obj.HashedValues.Add("dir_id", val);
 					}
 
-					if (field.Item2 is ValueConversion.DoNothing || field.Item1 is null)
+					if (fieldEntry.Conversion is ValueConversion.DoNothing || fieldEntry.FieldInfo is null)
                     {
-						obj.HashedValues[fkeys[j]] = entry?.Value;
-                        field.Item2 = ValueConversion.DoNothing;
+						obj.HashedValues[fieldEntry.Name!] = val;
+                        fieldEntry.Conversion = ValueConversion.DoNothing;
 						continue;
 					}
 
-					var cMethod = field.Item2;
-					if (cMethod == ValueConversion.Null && entry?.Value != null)
+					if (fieldEntry.Conversion is null or ValueConversion.Null && val is not null)
 					{
-						cMethod = ConvertValueMethod(entry.Value, field.Item1.FieldType);
-						field.Item2 = cMethod;
-						fieldInfos[j] = field;
+						fieldEntry.Conversion = ConvertValueMethod(val, fieldEntry.FieldInfo.FieldType);
 					}
-					field.Item1.SetValue(obj, ConvertValue(entry?.Value, field.Item1.FieldType, cMethod ?? ValueConversion.Null));
+
+					fieldEntry.FieldInfo?.SetValue(obj, ConvertValue(val, fieldEntry.FieldInfo.FieldType, fieldEntry.Conversion ?? ValueConversion.Null));
                     obj.CompleteConstruction();
                     obj.IsRecord = true;
 				}
@@ -783,20 +775,21 @@ public static class HashConverter
     // first case: value is nullable but target type isn't
     // second case: target type is nullable but value isn't
     // 
-    internal static object ConvertValue(object value, Type targetType)
+    internal static object? ConvertValue(object value, Type targetType)
     {
         if (value == null) return null;
 
         Type valueOfType = value.GetType();
-
+        Type? underType = Nullable.GetUnderlyingType( targetType );
+        bool isEqual = underType == valueOfType;
+        if (!isEqual && underType != typeof(bool)) return null;
+        
         if (targetType.IsAssignableFrom( valueOfType ) ) return value;
         if (targetType.IsEnum) return Enum.Parse(targetType, value.ToString());
         if (DateTime.TryParse(value.ToString(), out DateTime dt)) return dt;
             
         if (value is ArrayList list && list.Count > 0) return ConvertValue(list[0], targetType);
 
-        Type underType = Nullable.GetUnderlyingType( targetType );
-        bool isEqual = underType == valueOfType;
 
         return valueOfType == typeof( bool ) && !isEqual ? null : isEqual ? value : Convert.ChangeType(value, targetType);
     }
@@ -822,9 +815,9 @@ public static class HashConverter
         {
             ValueConversion.Null => null,
             ValueConversion.Assignable => value,
+            ValueConversion.Nullable => value,
             ValueConversion.Enum => Enum.Parse(targetType, value?.ToString() ?? ""),
             ValueConversion.DateTime => DateTime.TryParse(value?.ToString() ?? "", out DateTime dt) ? dt : null,
-            ValueConversion.Nullable => value,
             ValueConversion.OtherConvert => Convert.ChangeType(value, targetType),
             _ => null,
         };

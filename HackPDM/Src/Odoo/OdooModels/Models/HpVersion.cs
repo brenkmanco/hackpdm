@@ -102,11 +102,11 @@ public partial class HpVersion : HpBaseModel<HpVersion>
 
 	internal async Task<bool> GetPreviewImage()
 	{
-		if (preview_image is null or "" && Id != 0) 
+		if (preview_image is null or "" && id != 0) 
 		{
 			// reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
 			// which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
-			ArrayList list = await OClient.ReadAsync(HpModel, [this.Id], ["preview_image"]);
+			ArrayList list = await OClient.ReadAsync(HpModel, [this.id], ["preview_image"]);
 			preview_image = (list[0] as Hashtable)?["preview_image"] as string;									
 		}
 		return preview_image is not null and not "";
@@ -162,13 +162,13 @@ public partial class HpVersion : HpBaseModel<HpVersion>
     {
         const string fileContents = "file_contents";
     
-        if (this.IsRecord || this.Id != 0)
+        if (this.IsRecord || this.id != 0)
         {
             // reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
             // which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
             if (file_size != 0)
             {
-                return (string)((Hashtable)OClient.Read(HpModel, [this.Id], [fileContents])[0])[fileContents];
+                return (string)((Hashtable)OClient.Read(HpModel, [this.id], [fileContents])[0])[fileContents];
             }
         }
         return null;
@@ -181,7 +181,7 @@ public partial class HpVersion : HpBaseModel<HpVersion>
             return version.file_contents is null or ""; 
         })];
                 
-        ArrayList ids = new(processVersions.Select(v => v.Id).ToArray());
+        ArrayList ids = new(processVersions.Select(v => v.id).ToArray());
         //string[] fileContentsBase64 = 
         //ArrayList results = OClient.Read(GetHpModel(), ids, [fileContents], 60000);
         HpVersion[] readyVersions = HpVersion.GetRecordsByIds(ids, includedFields: fileContents, insertFields: ["checkout_user"]);
@@ -282,9 +282,9 @@ public partial class HpVersion : HpBaseModel<HpVersion>
     internal HpVersionProperty[] GetProperties()
     {
         const string versionPropField = "version_property_ids";
-        if (this.IsRecord || this.Id != 0)
+        if (this.IsRecord || this.id != 0)
         {
-            ArrayList list = OClient.Read(HpModel, [this.Id], [versionPropField]);
+            ArrayList list = OClient.Read(HpModel, [this.id], [versionPropField]);
             ArrayList values = (ArrayList)((Hashtable)list[0])[versionPropField];
             return HpBaseModel<HpVersionProperty>.GetRecordsByIds(values);
         }
@@ -333,9 +333,9 @@ public partial class HpVersion : HpBaseModel<HpVersion>
     
         HpVersion newVersion = new()
         {
-            name = $"{entry.Id}.{hackFile.Name}",
+            name = $"{entry.id}.{hackFile.Name}",
             dir_id = entry.dir_id,
-            entry_id = entry.Id,
+            entry_id = entry.id,
             file_ext = hackFile.TypeExt[1..].ToLower(),
             WinPathway = hackFile.FullPath,
         };
@@ -350,7 +350,7 @@ public partial class HpVersion : HpBaseModel<HpVersion>
         HpVersion newVersion = PrepareCreation(hackFile, entry, hashStoreType);
         await newVersion.CreateAsync( false, ["file_ext"] );
     
-        return newVersion.Id == 0 ? null : newVersion;
+        return newVersion.id == 0 ? null : newVersion;
     }
     internal static async Task<HpVersion[]> CreateAllNew( params (HackFile hackFile, HpEntry entry, HashedValueStoring hashStoreType)[] data)
     {

@@ -55,7 +55,7 @@ public static class OdooClient
     {
         try
         {
-			return await Task.Run(()=>OdooDefaults.OdooId is null or 0 ? 0 : 1);
+			return await Task.Run(()=>OdooDefaults.OdooId is 0 ? 0 : 1);
         }
         catch {}
 		return -1;

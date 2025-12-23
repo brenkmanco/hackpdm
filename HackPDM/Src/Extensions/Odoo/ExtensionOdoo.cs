@@ -27,7 +27,7 @@ public static class ExtensionOdoo
     private static readonly XmlRpcRequestSerializer Serializer = new();
     private static readonly XmlRpcResponseDeserializer Deserializer = new();
     public static ArrayList GetIDs(this IEnumerable<HpBaseModel> models)
-        => models.Select(model => model.Id).ToArrayList();
+        => models.Select(model => model.id).ToArrayList();
     public static IEnumerable<HpEntry> TakeOutLatest(this IEnumerable<HpEntry> entries, out IEnumerable<HpEntry> latestEntries)
     {
         latestEntries = entries.TakeWhile(entry => entry.IsLatest);
@@ -69,7 +69,7 @@ public static class ExtensionOdoo
         ArrayList ids = [];
         foreach (T model in source)
         {
-            ids.Add(model.Id);
+            ids.Add(model.id);
         }
         return ids;
     }

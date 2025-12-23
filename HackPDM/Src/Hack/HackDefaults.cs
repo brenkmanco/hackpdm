@@ -624,7 +624,7 @@ public class HackFile : HackBaseFile
         if (hack != null && hack.Checksum == version.checksum)
         {
             hack.HasRemoteVersion = true;
-            hack.HpVersionId = version.Id;
+            hack.HpVersionId = version.id;
         }
         return hack;
     }
@@ -758,7 +758,7 @@ public class HackFile : HackBaseFile
         {
             if ( this.HpVersionId is not null and not 0 )
             {
-                if ( this.HpVersionId == version.Id )
+                if ( this.HpVersionId == version.id )
                     return true;
             }
             if ( this.Checksum is not null and not "" )

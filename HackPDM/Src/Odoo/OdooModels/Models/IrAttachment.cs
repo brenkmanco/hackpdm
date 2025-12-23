@@ -44,11 +44,11 @@ public partial class IrAttachment : HpBaseModel<IrAttachment>
     public string DownloadContents()
     {
         const string datas = "datas";
-        if (this.IsRecord || this.Id != 0)
+        if (this.IsRecord || this.id != 0)
         {
             // reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
             // which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
-            this._fileContentsBase64 = (string)((Hashtable)OClient.Read(HpModel, [this.Id], [datas])[0])[datas];
+            this._fileContentsBase64 = (string)((Hashtable)OClient.Read(HpModel, [this.id], [datas])[0])[datas];
             return this._fileContentsBase64;
         }
         return null;

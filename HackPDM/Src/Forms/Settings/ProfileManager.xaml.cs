@@ -31,6 +31,7 @@ namespace HackPDM.Forms.Settings;
 public sealed partial class ProfileManager : Page, ISingletonPage<ProfileManager>
 {
     public static ObservableCollection<BasicStatusMessage> OStatus { get; internal set; }           = [];
+    private static readonly object LockObject = new();
     public ProfileManager()
     {
         InitializeComponent();
@@ -102,6 +103,7 @@ public sealed partial class ProfileManager : Page, ISingletonPage<ProfileManager
         {
             return false;
         }
+        
     }
     public void OdooSetting(object sender, RoutedEventArgs e)
     {

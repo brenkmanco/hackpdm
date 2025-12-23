@@ -175,7 +175,7 @@ public partial class HpEntry : HpBaseModel<HpEntry>
 	public int GetLatestID()
     {
         if (HashedValues.TryGetValue("latest_version_id", out int latestId)) return latestId;
-		ArrayList list = OClient.Read(GetHpModel(), [this.Id], ["latest_version_id"], 10000);
+		ArrayList list = OClient.Read(GetHpModel(), [this.id], ["latest_version_id"], 10000);
 
 		return list is not null and {Count: > 0 } ? ((list[0] as Hashtable)?["latest_version_id"] as ArrayList)?[0] is int id ? id : 0 : 0;
 	}
@@ -187,11 +187,11 @@ public partial class HpEntry : HpBaseModel<HpEntry>
         if (!CanCheckOut()) return;
         checkout_user = OdooDefaults.OdooId;
         checkout_date = OdooDefaults.OdooDateFormat( DateTime.Now );
-        checkout_node = OdooDefaults.MyNode.Id;
+        checkout_node = OdooDefaults.MyNode.id;
 
         await WriteChangedValuesAsync("checkout_user", "checkout_date", "checkout_node");
         HpVersion version = new(nodeId: checkout_node);
-        version.Id = latest_version_id;
+        version.id = latest_version_id;
         await version.WriteChangedValuesAsync("node_id");
         if (HashedValues.TryGetValue("windows_complete_name", out object objpath) && objpath is string winpath)
         {
@@ -236,12 +236,12 @@ public partial class HpEntry : HpBaseModel<HpEntry>
         if (type is not null)
         {
             newEntry.cat_id = type.cat_id;
-            newEntry.type_id = type.Id;
+            newEntry.type_id = type.id;
         }
 	
         await newEntry.CreateAsync( false );
 
-        return newEntry.Id == 0 ? null : newEntry;
+        return newEntry.id == 0 ? null : newEntry;
     }
 	internal static async Task<(EntryReturnType, HpEntry?)> GetFallbackCreateEntryAsync( HackFile hackFile, int dirId )
 	{
@@ -264,10 +264,10 @@ public partial class HpEntry : HpBaseModel<HpEntry>
 		if (type is not null)
 		{
 			newEntry.cat_id = type.cat_id;
-			newEntry.type_id = type.Id;
+			newEntry.type_id = type.id;
 		}
 		await newEntry.CreateAsync( false );
-		return entry?.Id == 0 ? (EntryReturnType.Failed, null) : (EntryReturnType.Created, entry);
+		return entry?.id == 0 ? (EntryReturnType.Failed, null) : (EntryReturnType.Created, entry);
 	}
 	
     internal static async Task<ArrayList> GetEntryList(int[] entryIds, bool update = false)

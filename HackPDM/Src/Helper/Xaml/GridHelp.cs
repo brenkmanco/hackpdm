@@ -230,7 +230,7 @@ namespace HackPDM.Src.Helper.Xaml
 
 						foreach (HpVersionProperty versionProp in versionProperties)
 						{
-							if (versionProp == null || versionProp.Id == 0) continue;
+							if (versionProp == null || versionProp.id == 0) continue;
 
 							var item = EmptyListItemInternal<PropertiesRow>(grid);
 
@@ -270,7 +270,7 @@ namespace HackPDM.Src.Helper.Xaml
 					foreach (HpVersion version in v)
 					{
 						var item = EmptyListItemInternal<ChildrenRow>(grid);
-						item.Version = version.Id;
+						item.Version = version.id;
 						item.Name = version.name;
 						item.BasePath = Path.Combine(/*HackDefaults.PWAPathAbsolute,*/ version.WinPathway);
 						grid.ItemAdd(item);
@@ -293,7 +293,7 @@ namespace HackPDM.Src.Helper.Xaml
 					foreach (HpVersion version in v)
 					{
 						var item = EmptyListItemInternal<ParentRow>(grid);
-						item.Version = version.Id;
+						item.Version = version.id;
 						item.Name = version.name;
 						item.BasePath = version.WinPathway;
 
@@ -321,7 +321,7 @@ namespace HackPDM.Src.Helper.Xaml
 					{
 						var item = EmptyListItemInternal<HistoryRow>(grid);
 
-						item.Version = version.Id;
+						item.Version = version.id;
 						int? moduser = null;
 						if (version.HashedValues.TryGetValue("create_uid", out ArrayList? obj))
 						{
@@ -355,7 +355,7 @@ namespace HackPDM.Src.Helper.Xaml
 					InitListViewInternal(grid);
 					var item = EmptyListItemInternal<VersionRow>(grid);
 
-					item.Id = version.Id;
+					item.Id = version.id;
 					item.Name = version.name;
 					item.Checksum = version.checksum;
 					item.FileSize = version.file_size;

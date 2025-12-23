@@ -18,6 +18,7 @@ namespace HackPDM.Odoo.OdooModels;
 public abstract partial class HpBaseModel
 {
 	// (MVVM) VIEW
+    public int id;
 	internal static string[] UsualExcludedFields { get; set; } = [];
     internal static string[] UsualIncludedFields { get; set; } = [];
     
@@ -40,7 +41,6 @@ public abstract partial class HpBaseModel
         {typeof(IrAttachment), OdooDefaults.IR_ATTACHMENT},
         {typeof(HpUser), OdooDefaults.RES_USERS},
     };
-    public int Id { get; internal set; }
     // ID of the record in the database
     public virtual string HpModel
     {
@@ -82,7 +82,7 @@ public abstract partial class HpBaseModel
 
         if (tempId != 0)
         {
-            Id = tempId;
+            id = tempId;
             //HashedValues = ht;
             if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
             {
@@ -103,7 +103,7 @@ public abstract partial class HpBaseModel
 
         if (tempId != 0)
         {
-            Id = tempId;
+            id = tempId;
 				
             if (HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value)) 
             {
@@ -124,7 +124,7 @@ public abstract partial class HpBaseModel
         ArrayList fields = GetFields(type, includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
         ArrayList result;
 
-        result = OClient.Read(modelName, [Id], fields, 90000);
+        result = OClient.Read(modelName, [id], fields, 90000);
             
         if (result.Count == 0) return;
 
@@ -183,7 +183,7 @@ public abstract partial class HpBaseModel
         if (excludeFields.Count > 0 ) ExcludedFields = [.. excludeFields];
 
         if (!isNew)
-            ht.Add("id", Id);
+            ht.Add("id", id);
 
         return ht;
     }
@@ -235,7 +235,7 @@ public abstract partial class HpBaseModel
             //            }
         }
 
-        return await OClient.UpdateAsync( HpModel, Id, ht );
+        return await OClient.UpdateAsync( HpModel, id, ht );
     }
         
 
@@ -265,7 +265,7 @@ public abstract partial class HpBaseModel
     //}
     private bool WriteInternal(Hashtable ht)
     {
-        bool wasWritten = OClient.Update(HpModel, Id, ht);
+        bool wasWritten = OClient.Update(HpModel, id, ht);
         if (wasWritten)
         {
             //Refresh();
@@ -401,8 +401,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
         ArrayList result;
 
         result = OClient.RelatedBrowse(modelName, [recordIds, relatedFieldName, fields], 60000);
-            
-
+        
         if (result.Count == 0) return null;
 
         foreach (Hashtable ht in result)
@@ -410,7 +409,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
             TOther record = HashConverter.ConvertToClass<TOther>(ht);
 
             // set record settings
-            record.Id = (int)ht["id"];
+            record.id = (int)ht["id"];
             //record.HashedValues = ht;
             if (record.HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out ArrayList? value)) 
             {
@@ -461,7 +460,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
             TOther record = HashConverter.ConvertToClass<TOther>(ht);
 
             // set record settings
-            record.Id = (int)ht["id"];
+            record.id = (int)ht["id"];
             //record.HashedValues = ht;
             if (record.HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value))
             {
@@ -514,8 +513,8 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 
         if (result.Count == 0) return null;
 
-        records.AddRange(RecordsPopulation(result.OfType<Hashtable>(), excludedFields));
-		foreach (Hashtable ht in result)
+        //records.AddRange(RecordsPopulation(result.OfType<Hashtable>(), excludedFields));
+        foreach (Hashtable ht in result)
         {
             records.Add(RecordPopulation(ht, excludedFields));
         }
@@ -532,7 +531,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 	}
     public void Refresh()
     {
-        Hashtable ht = (Hashtable)OClient.Read(HpModel, [Id], GetFields())?[0];
+        Hashtable ht = (Hashtable)OClient.Read(HpModel, [id], GetFields())?[0];
 
         if (ht != null)
         {
@@ -577,7 +576,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
         FinalizePopulation(ref record, ht, excludedFields, hashStoreType);
         return record;
     }
-    internal static T[] RecordsPopulation(IEnumerable<Hashtable>? hts, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string>? remapNames = null)
+    internal static T[]? RecordsPopulation(IEnumerable<Hashtable>? hts, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string>? remapNames = null)
     {
         if (hts is null) return null;
 
@@ -595,16 +594,13 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
                 }
             }
         }
-        T[]? records = HashConverter.ConvertToClasses<T>(hts);
-
-        FinalizePopulations(records, hts, excludedFields, hashStoreType);
-        return records;
+        return HashConverter.ConvertToClasses<T>(hts);
     }
 
     public static void FinalizePopulation(ref T record, Hashtable ht, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
     {
         // set record settings
-        record.Id = (int)ht["id"];
+        record.id = (int)ht["id"];
 
         record.IsRecord = (bool)true;
         record.ExcludedFields = excludedFields;
@@ -690,7 +686,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
             if (a is null) return 0;
             else
             {
-                return a.Id.CompareTo(b.Id);
+                return a.id.CompareTo(b.id);
             }
         }
     }
@@ -739,7 +735,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
         => HpModelDictionary.TryGetValue(typeof(T), out string? value) ? value : null;
     public override string ToString()
     {
-        return Id.ToString();
+        return id.ToString();
     }
 }
 public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
@@ -765,13 +761,13 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 
 		if (result.Count == 0) return null;
 
-		T[] records = new T[result.Count];
-        foreach ((int i, Hashtable ht) in result.Select<Hashtable, (int, Hashtable)>(r => (result.IndexOf(r), r)))
-		{
-			records[i] = RecordPopulation(ht, excludedFields);
-		}
+		//T[] records = new T[result.Count];
+  //      foreach ((int i, Hashtable ht) in result.Select<Hashtable, (int, Hashtable)>(r => (result.IndexOf(r), r)))
+		//{
+		//	records[i] = RecordPopulation(ht, excludedFields);
+		//}
         //return records;
-        return records;
+        return RecordsPopulation(result.Select<Hashtable, Hashtable>(h=>h), excludedFields);
 	}
 	public static async Task<Tval?> GetFieldValueAsync<Tval>(int id, string fieldName) where Tval : class
 	{
@@ -818,7 +814,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 			TOther record = HashConverter.ConvertToClass<TOther>(ht);
 
 			// set record settings
-			record.Id = (int)ht["id"];
+			record.id = (int)ht["id"];
 			//record.HashedValues = ht;
 			if (record.HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out object value))
 			{
@@ -868,7 +864,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 			TOther record = HashConverter.ConvertToClass<TOther>(ht);
 
 			// set record settings
-			record.Id = (int)ht["id"];
+			record.id = (int)ht["id"];
 			//record.HashedValues = ht;
 			if (record.HpModel == OdooDefaults.HP_VERSION && ht.TryGetValue("dir_id", out int value))
 			{
@@ -956,7 +952,7 @@ public partial class HpBaseModel<T> : HpBaseModel where T : HpBaseModel, new()
 	}
 	public async Task RefreshAsync()
 	{
-		if ((await OClient.ReadAsync(HpModel, [Id], GetFields()))?[0] is Hashtable ht)
+		if ((await OClient.ReadAsync(HpModel, [id], GetFields()))?[0] is Hashtable ht)
 		{
 			HashConverter.AssignToClass(ht, this);
 

@@ -56,8 +56,8 @@ public partial class HpVersionRelationship : HpBaseModel<HpVersionRelationship>
                 hvrCreate = [.. hvrCreate, .. 
                     getVersions.Select(v => new HpVersionRelationship()
                     {
-                        parent_id = version.Id,
-                        child_id = v.Id,
+                        parent_id = version.id,
+                        child_id = v.id,
                     })
                 ];
             }
