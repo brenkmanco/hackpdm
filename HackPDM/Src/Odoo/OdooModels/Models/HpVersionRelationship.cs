@@ -13,10 +13,11 @@ using HackPDM.Hack;
 
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.HP_VERSION_RELATIONSHIP_NAME, OdooDefaults.HP_VERSION_RELATIONSHIP)]
 public partial class HpVersionRelationship : HpBaseModel<HpVersionRelationship>
 {
-    public int parent_id;
-    public int child_id;
+    [OdooField(OdooFieldType.Many2one)] public int parent_id;
+	[OdooField(OdooFieldType.Many2one)] public int child_id;
 
     public HpVersionRelationship() { } 
     public HpVersionRelationship(

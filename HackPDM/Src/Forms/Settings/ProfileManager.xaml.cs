@@ -58,7 +58,7 @@ public sealed partial class ProfileManager : Page, ISingletonPage<ProfileManager
             {
                 errors.Add("invalid odoo address or unreachable host");
             }
-            else if (!OdooClient.CorrectOdooPort())
+            else if (!await OdooClient.CorrectOdooPort())
             {
                 errors.Add("invalid odoo port or server is down");
             }
@@ -121,7 +121,6 @@ public sealed partial class ProfileManager : Page, ISingletonPage<ProfileManager
 		var IsLoggedIn = await AbleToLogin(); 
 		OdooLoginProgressRing.IsActive = false;
 		if (!IsLoggedIn) return;
-
-        WindowHelper.CreateWindowPage<HackFileManager>();
+        else WindowHelper.CreateWindowPage<HackFileManager>();
     }
 }

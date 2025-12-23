@@ -3,11 +3,12 @@
 // ReSharper disable InconsistentNaming
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.HP_PROPERTY_NAME, OdooDefaults.HP_PROPERTY)]
 public partial class HpProperty : HpBaseModel<HpProperty>
 {
-    public string name;
-    public string prop_type;
-    public bool active;
+	[OdooField(OdooFieldType.Char)] public string name;
+    [OdooField(OdooFieldType.Char)] public string prop_type;
+	[OdooField(OdooFieldType.Boolean)] public bool active;
 
     public HpProperty() { }
     public HpProperty(

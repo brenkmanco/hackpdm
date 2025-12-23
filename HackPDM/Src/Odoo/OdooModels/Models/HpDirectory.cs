@@ -14,15 +14,16 @@ using OClient = HackPDM.Odoo.OdooClient;
 
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.HP_DIRECTORY_NAME, OdooDefaults.HP_DIRECTORY)]
 public partial class HpDirectory : HpBaseModel<HpDirectory>
 {
     internal readonly string[] UsualExcludedFields = [];
-    public string name;
-    public string parent_path;
-    public int? parent_id;
-    public int? default_cat;
-    public bool? deleted;
-    public bool? sandboxed;
+	[OdooField(OdooFieldType.Char)] public string name;
+	[OdooField(OdooFieldType.Char)] public string parent_path;
+	[OdooField(OdooFieldType.Many2one)] public int? parent_id;
+	[OdooField(OdooFieldType.Many2one)] public int? default_cat;
+	[OdooField(OdooFieldType.Boolean)] public bool? deleted;
+	[OdooField(OdooFieldType.Boolean)] public bool? sandboxed;
 
     public HpDirectory() { }
     public HpDirectory(

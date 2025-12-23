@@ -526,8 +526,8 @@ public static class HashConverter
     {
         Type type = typeof(T);
 
-        PropertyInfo[]? properties = mType is MethodType.PropertyAndField or MethodType.PropertyOnly ? type?.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly) : null;
-        FieldInfo[]? fields = mType is MethodType.PropertyAndField or MethodType.FieldOnly ? type?.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly) : null;
+        PropertyInfo[]? properties = mType is MethodType.PropertyAndField or MethodType.PropertyOnly ? type?.GetProperties(BindingFlags.Public | BindingFlags.Instance) : null;
+        FieldInfo[]? fields = mType is MethodType.PropertyAndField or MethodType.FieldOnly ? type?.GetFields(BindingFlags.Public | BindingFlags.Instance) : null;
 		
         foreach (DictionaryEntry entry in ht)
         {
@@ -782,16 +782,16 @@ public static class HashConverter
         Type valueOfType = value.GetType();
         Type? underType = Nullable.GetUnderlyingType( targetType );
         bool isEqual = underType == valueOfType;
-        if (!isEqual && underType != typeof(bool)) return null;
         
+        if (value is ArrayList list && list.Count > 0) return ConvertValue(list[0], targetType);
+
         if (targetType.IsAssignableFrom( valueOfType ) ) return value;
         if (targetType.IsEnum) return Enum.Parse(targetType, value.ToString());
         if (DateTime.TryParse(value.ToString(), out DateTime dt)) return dt;
             
-        if (value is ArrayList list && list.Count > 0) return ConvertValue(list[0], targetType);
+        if (!isEqual && underType != typeof(bool)) return null;
 
-
-        return valueOfType == typeof( bool ) && !isEqual ? null : isEqual ? value : Convert.ChangeType(value, targetType);
+        return isEqual ? value : Convert.ChangeType(value, targetType);
     }
     internal static ValueConversion ConvertValueMethod(object value, Type targetType)
     {

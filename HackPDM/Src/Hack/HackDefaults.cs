@@ -70,11 +70,11 @@ public static class HackDefaults
     } = null;
     public static string CurrentPath { get; set; }
 
-    public static SwDocMgr DocMgr
+    public static SwDocMgr? DocMgr
     {
         get
         {
-            return field ??= new(OdooDefaults.SwApi);
+            return field ??= !string.IsNullOrEmpty(OdooDefaults.SwApi) ? new(OdooDefaults.SwApi) : null;
         }
         set;
     }

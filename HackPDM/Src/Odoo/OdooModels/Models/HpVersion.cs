@@ -22,21 +22,24 @@ using OClient = HackPDM.Odoo.OdooClient;
 
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.HP_VERSION_NAME, OdooDefaults.HP_VERSION)]
 public partial class HpVersion : HpBaseModel<HpVersion>
 {
-    public string? name;
-    public string? preview_image;
-    public int? entry_id;
-    public int? node_id;
-    public int? dir_id;
+    [OdooField(OdooFieldType.Char)] public string? name;
+    [OdooField(OdooFieldType.Char)] public string? file_ext;
+    [OdooField(OdooFieldType.Char)] public string? checksum;
+    
+    [OdooField(OdooFieldType.Many2one)] public int? entry_id;
+    [OdooField(OdooFieldType.Many2one)] public int? node_id;
+	[OdooField(OdooFieldType.Many2one)] public int? dir_id;
+    [OdooField(OdooFieldType.Many2one)] public int? attachment_id;
 
-    //public string create_stamp; // 
-    public DateTime? file_modify_stamp;
-    public int? attachment_id;
-    public int? file_size;
-    public string? file_ext;
-    public string? checksum;
-    public string? file_contents;
+    [OdooField(OdooFieldType.DateTime)] public DateTime? file_modify_stamp;
+    
+    [OdooField(OdooFieldType.Integer)] public int? file_size;
+
+    [OdooField(OdooFieldType.Binary)] public string? preview_image;
+	[OdooField(OdooFieldType.Binary)] public string? file_contents;
 	public SwDmDocumentType FileTypeExt
 	{
 		get => file_ext is null or "" ? SwDmDocumentType.swDmDocumentUnknown : HackFile.GetSwDmDocumentTypeFromExtension(file_ext);
@@ -322,9 +325,9 @@ public partial class HpVersion : HpBaseModel<HpVersion>
         HpVersion[] versions = GetRecordsByIds(ids, includedFields: ["entry_id"]);
         return versions;
     }
-    internal static HpVersion PrepareCreation(HackFile hackFile, HpEntry entry, HashedValueStoring hashStoreType = HashedValueStoring.None)
+    internal static HpVersion? PrepareCreation(HackFile hackFile, HpEntry entry, HashedValueStoring hashStoreType = HashedValueStoring.None)
     {
-        if (OdooDefaults.RestrictTypes & !OdooDefaults.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
+        if (OdooDefaults.RestrictTypes is true & !OdooDefaults.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
             return null;
     
         string fileBase64 = hackFile.FileContents != null

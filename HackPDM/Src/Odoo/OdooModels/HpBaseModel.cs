@@ -18,7 +18,8 @@ namespace HackPDM.Odoo.OdooModels;
 public abstract partial class HpBaseModel
 {
 	// (MVVM) VIEW
-    public int id;
+	[OdooField(OdooFieldType.Integer)]
+	public int id;
 	internal static string[] UsualExcludedFields { get; set; } = [];
     internal static string[] UsualIncludedFields { get; set; } = [];
     
@@ -175,7 +176,7 @@ public abstract partial class HpBaseModel
 
             if (isNew && fieldValue is DateTime dt)
             {
-                string date = OdooDefaults.ConvertToOdooFormat(dt);
+                string date = OdooDefaults.OdooDateFormat(dt);
                 fieldValue = date;
             }
             ht.Add(fieldName, fieldValue);

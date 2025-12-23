@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -57,8 +59,10 @@ public static class OdooClient
         {
 			return await Task.Run(()=>OdooDefaults.OdooId is 0 ? 0 : 1);
         }
-        catch {}
-		return -1;
+        catch 
+        {
+		    return -1;
+        }
     }
         
     public static async Task<bool> CorrectOdooAddress()
@@ -68,16 +72,20 @@ public static class OdooClient
 			&& await pinger.SendPingAsync(OdooDefaults.OdooAddress) is PingReply reply 
 			&& reply.Status == IPStatus.Success;
 	}
-	public static bool CorrectOdooPort()
+	public static async Task<bool> CorrectOdooPort()
     {
         try
         {
-			if (OdooDefaults.OdooAddress is not null
-				&& OdooDefaults.OdooPort is not null
-				&& new TcpClient( OdooDefaults.OdooAddress, int.Parse( OdooDefaults.OdooPort ) ) is not null)
-			{
-				return true;
-			}
+            return await Task.Run(() =>
+            {
+			    if (OdooDefaults.OdooAddress is not null
+				    && OdooDefaults.OdooPort is not null
+				    && new TcpClient( OdooDefaults.OdooAddress, int.Parse( OdooDefaults.OdooPort ) ) is not null)
+			    {
+				    return true;
+			    }
+                return false;
+            });
         }
         catch {}
 		return false;
@@ -532,4 +540,65 @@ public static class OdooClient<T> where T : HpBaseModel<T>, new()
     public static async Task<ArrayList> DuplicateAsync(ArrayList execParams, int? timeout = null)
         => await CommandAsync<ArrayList>("copy_data", execParams, timeout); //
 
+}
+
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
+public class OdooFieldAttribute(OdooFieldType odooType) : Attribute
+{
+    public OdooFieldType OdooType { get; } = odooType;
+}
+// odoo model db name
+// odoo model name
+public class OdooModelAttribute(string odooName, string odooDBName) : Attribute
+{
+    public string OdooName { get; } = odooName;
+    public string DBName { get; } = odooDBName;
+}
+public enum OdooFieldType
+{
+	// Basic scalar types
+	Char,          // string -------------------------------|
+	Text,          // long string / multiline               |
+	Html,          // HTML content--------------------------|
+	Integer,       // int                                   |
+	Float,         // double/decimal -----------------------|
+	Monetary,      // decimal with currency                 |
+	Boolean,       // bool ---------------------------------|
+	Date,          // DateOnly                              |
+	DateTime,      // DateTime -----------------------------|
+	Binary,        // byte[] (attachments, images)          |
+    //                                                      |      
+	// Relational types                                     |
+	Many2one,      // foreign key to another model ---------|
+	One2many,      // collection of related records         |
+	Many2many,     // many-to-many relation ----------------|
+    //                                                      |
+	// Special / computed types                             |
+	Selection,     // enum-like choice field                |
+	Reference,     // polymorphic relation (model + id) ----|
+	Serialized,    // JSON/dict stored in DB                |
+    //                                                      |
+    Unknown,       // Catch all case to bruteforce type ----|
+}
+public static class OdooFieldExtension
+{
+    public static readonly Dictionary<OdooFieldType, Type[]> Schema = new()
+    {
+        { OdooFieldType.Char,       new[] { typeof(string) } },
+        { OdooFieldType.Text,       new[] { typeof(string) } },
+        { OdooFieldType.Html,       new[] { typeof(string) } },
+        { OdooFieldType.Integer,    new[] { typeof(int), typeof(long) } },
+        { OdooFieldType.Float,      new[] { typeof(double), typeof(decimal) } },
+        { OdooFieldType.Monetary,   new[] { typeof(decimal) } },
+        { OdooFieldType.Boolean,    new[] { typeof(bool) } },
+        { OdooFieldType.Date,       new[] { typeof(DateOnly), typeof(DateTime) } },
+        { OdooFieldType.DateTime,   new[] { typeof(DateTime) } },
+        { OdooFieldType.Binary,     new[] { typeof(string), typeof(byte[]) } }, // Odoo sometimes base64 encodes
+        { OdooFieldType.Many2one,   new[] { typeof(object[]), typeof(ValueTuple<int,string>) } },
+        { OdooFieldType.One2many,   new[] { typeof(int[]), typeof(ArrayList) } },
+        { OdooFieldType.Many2many,  new[] { typeof(int[]), typeof(ArrayList) } },
+        { OdooFieldType.Selection,  new[] { typeof(string), typeof(int) } },
+        { OdooFieldType.Reference,  new[] { typeof(string), typeof(object[]) } },
+        { OdooFieldType.Serialized, new[] { typeof(Dictionary<string,object>), typeof(string) } },
+    };
 }

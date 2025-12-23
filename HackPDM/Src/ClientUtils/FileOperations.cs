@@ -369,7 +369,7 @@ public static class FileOperations
         {
             bool isFound = false;
             string filepath = hackArr[i].TypeExt.ToLower();
-            if (OdooDefaults.RestrictTypes && !OdooDefaults.ExtToType.ContainsKey(filepath ?? "-=-=-")) continue;
+            if (OdooDefaults.RestrictTypes is true && !OdooDefaults.ExtToType.ContainsKey(filepath ?? "-=-=-")) continue;
 
             string filePath = HpDirectory.WindowsToOdooPath(hackArr[i].RelativePath);
             ArrayList arrList =

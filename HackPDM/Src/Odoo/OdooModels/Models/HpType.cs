@@ -9,13 +9,16 @@ using HackPDM.Extensions.General;
 
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.HP_TYPE_NAME, OdooDefaults.HP_TYPE)]
 public partial class HpType : HpBaseModel<HpType>
 {
-	public string description;
-	public string file_ext;
-	public string icon;
-	public string type_regex;
-	public int cat_id;
+	[OdooField(OdooFieldType.Char)] public string description;
+	[OdooField(OdooFieldType.Char)] public string file_ext;
+	[OdooField(OdooFieldType.Char)] public string type_regex;
+	
+	[OdooField(OdooFieldType.Binary)] public string icon;
+	
+	[OdooField(OdooFieldType.Many2one)] public int cat_id;
 	public Image ImageSave {get;set;}
 
 	public HpType()

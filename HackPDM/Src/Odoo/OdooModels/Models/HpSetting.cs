@@ -8,16 +8,17 @@
 
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.HP_SETTINGS_NAME, OdooDefaults.HP_SETTINGS)]
 public partial class HpSetting : HpBaseModel<HpSetting>
 {
-	public string name;
-	public string description;
-	public string type;
-	public bool bool_value;
-	public int int_value;
-	public string char_value;
-	public float float_value;
-	public DateTime date_value;
+	[OdooField(OdooFieldType.Char)] public string name;
+	[OdooField(OdooFieldType.Char)] public string description;
+	[OdooField(OdooFieldType.Char)] public string type;
+	[OdooField(OdooFieldType.Boolean)] public bool bool_value;
+	[OdooField(OdooFieldType.Integer)] public int int_value;
+	[OdooField(OdooFieldType.Char)] public string char_value;
+	[OdooField(OdooFieldType.Float)] public float float_value;
+	[OdooField(OdooFieldType.DateTime)] public DateTime date_value;
 
 	public HpSetting()
 	{

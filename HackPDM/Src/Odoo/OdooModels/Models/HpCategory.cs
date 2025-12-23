@@ -5,13 +5,18 @@ using System;
 
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.HP_CATEGORY_NAME, OdooDefaults.HP_CATEGORY)]
 public partial class HpCategory : HpBaseModel<HpCategory>
 {
     internal readonly string[] UsualExcludedFields = [];
+    [OdooField(OdooFieldType.Char)]
     public string name;
-    public string cat_description;
-    public bool track_version;
-    public bool track_depends;
+	[OdooField(OdooFieldType.Char)]
+	public string cat_description;
+	[OdooField(OdooFieldType.Boolean)]
+	public bool track_version;
+	[OdooField(OdooFieldType.Boolean)]
+	public bool track_depends;
     public HpCategory() { }
     public HpCategory(
         string name,
@@ -27,7 +32,6 @@ public partial class HpCategory : HpBaseModel<HpCategory>
 }
 public partial class HpCategory : HpBaseModel<HpCategory>
 {
-
     public override string ToString()
     {
         return name;

@@ -21,17 +21,18 @@ using OClient = HackPDM.Odoo.OdooClient;
 
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.HP_ENTRY_NAME, OdooDefaults.HP_ENTRY)]
 public partial class HpEntry : HpBaseModel<HpEntry>
 {
-	public string name;
-    public string checkout_date;
-    public bool deleted;
-    public int latest_version_id;
-    public int dir_id;
-    public int type_id;
-    public int cat_id;
-    public int? checkout_user;
-    public int? checkout_node;
+	[OdooField(OdooFieldType.Char)] public string name;
+	[OdooField(OdooFieldType.DateTime)] public string checkout_date;
+	[OdooField(OdooFieldType.Boolean)] public bool deleted;
+	[OdooField(OdooFieldType.Many2one)] public int latest_version_id;
+	[OdooField(OdooFieldType.Many2one)] public int dir_id;
+	[OdooField(OdooFieldType.Many2one)] public int type_id;
+	[OdooField(OdooFieldType.Many2one)] public int cat_id;
+	[OdooField(OdooFieldType.Many2one)] public int? checkout_user;
+	[OdooField(OdooFieldType.Many2one)] public int? checkout_node;
     internal bool IsLatest { get; set; } = false;
     
     public HpEntry() {  }
@@ -224,7 +225,7 @@ public partial class HpEntry : HpBaseModel<HpEntry>
     }
     internal static async Task<HpEntry?> CreateNew( HackFile hackFile, int dirId )
     {
-        if (OdooDefaults.RestrictTypes & !OdooDefaults.ExtToType.TryGetValue( hackFile.TypeExt.ToLower(), out HpType type ) )
+        if (OdooDefaults.RestrictTypes is true & !OdooDefaults.ExtToType.TryGetValue( hackFile.TypeExt.ToLower(), out HpType type ) )
             return null;
 
         HpEntry newEntry = new()
@@ -247,7 +248,7 @@ public partial class HpEntry : HpBaseModel<HpEntry>
 	{
 		HpEntry? entry = null;
 
-		if (OdooDefaults.RestrictTypes & !OdooDefaults.ExtToType.TryGetValue( hackFile.TypeExt.ToLower(), out HpType type ) )
+		if (OdooDefaults.RestrictTypes is true & !OdooDefaults.ExtToType.TryGetValue( hackFile.TypeExt.ToLower(), out HpType type ) )
 			return (EntryReturnType.InvalidType, null);
 
 		entry = (await GetRecordsBySearchAsync( [("name", "=", hackFile.Name), ("dir_id", "=", dirId), ("deleted", "=", false)] ))?.FirstOrDefault();

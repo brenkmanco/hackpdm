@@ -5,12 +5,13 @@ using System;
 
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.HP_RELEASE_NAME, OdooDefaults.HP_RELEASE)]
 public partial class HpRelease : HpBaseModel<HpRelease>
 {
-	public int version_id;
-    public int release_user_id;
-    public DateTime? release_stamp;
-    public string release_note;
+	[OdooField(OdooFieldType.Many2one)] public int version_id;
+	[OdooField(OdooFieldType.Many2one)] public int release_user_id;
+	[OdooField(OdooFieldType.DateTime)] public DateTime? release_stamp;
+	[OdooField(OdooFieldType.Char)] public string release_note;
 
     public HpRelease() { }
     public HpRelease(

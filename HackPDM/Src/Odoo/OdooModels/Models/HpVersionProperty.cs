@@ -13,35 +13,40 @@ using HackPDM.Hack;
 
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.HP_VERSION_PROPERTY_NAME, OdooDefaults.HP_VERSION_PROPERTY)]
 public partial class HpVersionProperty : HpBaseModel<HpVersionProperty>
 {
-	public string sw_config_name;
-        public string text_value;
-        public float number_value;
-        public bool yesno_value;
-        public string date_value;
-        public int version_id;
-        public int prop_id;
-        public string prop_name;
+	[OdooField(OdooFieldType.Char)] public string prop_name;
+	[OdooField(OdooFieldType.Char)] public string sw_config_name;
+    [OdooField(OdooFieldType.Char)] public string text_value;
+
+    [OdooField(OdooFieldType.Float)] public float number_value;
+
+    [OdooField(OdooFieldType.Boolean)] public bool yesno_value;
+
+    [OdooField(OdooFieldType.DateTime)] public string date_value;
+
+    [OdooField(OdooFieldType.Many2one)] public int version_id;
+    [OdooField(OdooFieldType.Many2one)] public int prop_id;
     
-        public HpVersionProperty() { }
-        public HpVersionProperty(
-            string swConfigName = null,
-            string textValue = null,
-            float numberValue = default,
-            bool yesnoValue = default,
-            string dateValue = null,
-            int versionId = 0,
-            int propId = 0)
-        {
-            this.sw_config_name = swConfigName;
-            this.text_value = textValue;
-            this.number_value = numberValue;
-            this.yesno_value = yesnoValue;
-            this.date_value = dateValue;
-            this.version_id = versionId;
-            this.prop_id = propId;
-        }
+    public HpVersionProperty() { }
+    public HpVersionProperty(
+        string swConfigName = null,
+        string textValue = null,
+        float numberValue = default,
+        bool yesnoValue = default,
+        string dateValue = null,
+        int versionId = 0,
+        int propId = 0)
+    {
+        this.sw_config_name = swConfigName;
+        this.text_value = textValue;
+        this.number_value = numberValue;
+        this.yesno_value = yesnoValue;
+        this.date_value = dateValue;
+        this.version_id = versionId;
+        this.prop_id = propId;
+    }
 }
 public partial class HpVersionProperty : HpBaseModel<HpVersionProperty>
 {
@@ -128,10 +133,13 @@ public partial class HpVersionProperty : HpBaseModel<HpVersionProperty>
                 List<string> paths = [];
 				
                 List<Tuple<string, string, string, object>> props = HackDefaults.DocMgr.GetProperties(pathway);
-                HpVersionProperty[] properties = [.. props.Select(prop =>
+                HpVersionProperty[] properties = [.. props.SkipSelect(prop =>
                 {
                     bool isSuccessful = false;
-                    if (!OdooDefaults.RestrictProperties | OdooDefaults.ExtToProp.TryGetValue(prop.Item2, out HpProperty hpProperty))
+                    HpProperty? hpProperty = null;
+                    bool isFound = OdooDefaults.ExtToProp?.TryGetValue(prop.Item2, out hpProperty) ?? false;
+
+                    if (isFound || OdooDefaults.RestrictProperties is false)
                     {
                         HpVersionProperty vProp = new()
                         {
@@ -148,11 +156,11 @@ public partial class HpVersionProperty : HpBaseModel<HpVersionProperty>
                         }
                         isSuccessful = true;
                         Debug.WriteLine($"prop: {prop.Item2} | {isSuccessful}");
-                        return vProp;
+                        return (false, vProp);
                     }
                     Debug.WriteLine($"prop: {prop.Item2} | {isSuccessful}");
-                    return null;
-                })];
+                    return (true, null);
+                }) ?? []];
                 versionProperties = [.. versionProperties, .. properties];
             }
             catch (Exception e)

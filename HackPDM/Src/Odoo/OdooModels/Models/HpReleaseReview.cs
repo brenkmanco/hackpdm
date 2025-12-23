@@ -4,23 +4,24 @@ using System.Text;
 
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.HP_RELEASE_REVIEW_NAME, OdooDefaults.HP_RELEASE_REVIEW)]
 internal class HpReleaseReview : HpBaseModel<HpReleaseReview>
 {
-	public int? review_release_version_id;
-	public int? review_user_id;
-	public int? release_id;
-	public int? release_user_id;
+	[OdooField(OdooFieldType.Many2one)] public int? review_release_version_id;
+	[OdooField(OdooFieldType.Many2one)] public int? review_user_id;
+	[OdooField(OdooFieldType.Many2one)] public int? release_id;
+	[OdooField(OdooFieldType.Many2one)] public int? release_user_id;
 
-	public DateTime? review_stamp;
-	public DateTime? review_deadline;
-	public DateTime? release_reviewed;
-	public DateTime? release_date;
+	[OdooField(OdooFieldType.DateTime)] public DateTime? review_stamp;
+	[OdooField(OdooFieldType.DateTime)] public DateTime? review_deadline;
+	[OdooField(OdooFieldType.DateTime)] public DateTime? release_reviewed;
+	[OdooField(OdooFieldType.DateTime)] public DateTime? release_date;
 	
-	public string? review_note;
-	public string? release_note;
+	[OdooField(OdooFieldType.Char)] public string? review_note;
+	[OdooField(OdooFieldType.Char)] public string? release_note;
 
-	public bool? reviewed;
-	public bool? accepted;
+	[OdooField(OdooFieldType.Boolean)] public bool? reviewed;
+	[OdooField(OdooFieldType.Boolean)] public bool? accepted;
 	 
 	public HpReleaseReview() { }
 	public HpReleaseReview(

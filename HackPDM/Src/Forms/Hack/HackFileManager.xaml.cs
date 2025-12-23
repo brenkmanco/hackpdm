@@ -1663,7 +1663,7 @@ public sealed partial class HackFileManager : Page
 
 		OpenLocalFile(Path.Combine(version.WinPathway, version.name));
 	}
-	private HpVersion DownloadHistory(bool toTemp = false)
+	private HpVersion? DownloadHistory(bool toTemp = false)
 	{
 		var version = GetVersionFromHistory();
 		if (version is null) return null;
@@ -1678,9 +1678,11 @@ public sealed partial class HackFileManager : Page
 			version.DownloadFile(tempPath);
 			if (version.FileTypeExt != SolidWorks.Interop.swdocumentmgr.SwDmDocumentType.swDmDocumentUnknown)
 			{
+#if Debug
 				HackDefaults.DocMgr.GetDependencies(path);
 				HackDefaults.DocMgr.ReplaceDependencies(version.WinPathway, tempPath, version.FileTypeExt);
 				HackDefaults.DocMgr.GetDependencies(path);
+#endif
 			}
 		}
 		else
@@ -2076,7 +2078,7 @@ public sealed partial class HackFileManager : Page
 		await AsyncHelper.AsyncRunner(() => Async_LogicalUnDelete(entries), "Logically UnDelete Files");
 	}
 
-	#endregion
+#endregion
 
 	private void TreeViewItem_Loaded(object sender, RoutedEventArgs e)
 	{

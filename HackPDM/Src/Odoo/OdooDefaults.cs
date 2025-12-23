@@ -40,14 +40,34 @@ public static class OdooDefaults
     public const string HP_VERSION_PROPERTY = "hp.version.property";
     public const string HP_VERSION_RELATIONSHIP = "hp.version.relationship";
     public const string HP_RELEASE = "hp.release";
+    public const string HP_RELEASE_REVIEW = "hp.release.review";
     public const string HP_RELEASE_VERSION_REL = "hp.release.version.rel";
     public const string HP_SETTINGS = "hp.settings";
     public const string HP_PROPERTY = "hp.property";
     public const string HP_TYPE = "hp.type";
-    // adopted models
-    public const string RES_USERS = "res.users";
+	// adopted models
+	public const string RES_USERS = "res.users";
     public const string IR_ATTACHMENT = "ir.attachment";
     public const string IR_MODEL = "ir.model";
+
+	public const string HP_NODE_NAME = "hp_node";
+	public const string HP_ENTRY_NAME = "hp_entry";
+	public const string HP_ENTRY_NAME_FILTER_NAME = "hp_entry_name_filter";
+	public const string HP_DIRECTORY_NAME = "hp_directory";
+	public const string HP_CATEGORY_NAME = "hp_category";
+	public const string HP_CATEGORY_PROPERTY_NAME = "hp_category_property";
+	public const string HP_VERSION_NAME = "hp_version";
+	public const string HP_VERSION_PROPERTY_NAME = "hp_version_property";
+	public const string HP_VERSION_RELATIONSHIP_NAME = "hp_version_relationship";
+	public const string HP_RELEASE_NAME = "hp_release";
+	public const string HP_RELEASE_REVIEW_NAME = "hp_release_review";
+	public const string HP_RELEASE_VERSION_REL_NAME = "hp_release_version_rel";
+	public const string HP_SETTINGS_NAME = "hp_settings";
+	public const string HP_PROPERTY_NAME = "hp_property";
+	public const string HP_TYPE_NAME = "hp_type";
+    public const string RES_USERS_NAME = "res_users";
+    public const string IR_ATTACHMENT_NAME = "ir_attachment";
+    public const string IR_MODEL_NAME = "ir_model";
     // odoo name identifiers
     public const string ODOO_VERSION_KEY_NAME = "client_version";
     public const string SW_KEY_NAME = "swdocmgr_key";
@@ -66,8 +86,7 @@ public static class OdooDefaults
 			field = cm?.UserName;
             return field;
         }
-
-        set
+        set 
         {
 			if (!string.IsNullOrEmpty(OdooPass) && !string.IsNullOrEmpty(value)) 
                 CredentialManager.WriteCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, value ?? "", OdooPass, CredentialPersistence.LocalMachine);
@@ -84,7 +103,6 @@ public static class OdooDefaults
             field = cm?.Password;
             return field;
         }
-
         set
         {
 			if (!string.IsNullOrEmpty(OdooUser) && !string.IsNullOrEmpty(value)) 
@@ -94,37 +112,32 @@ public static class OdooDefaults
     }
     public static string? OdooAddress
     {
-        get => Settings.Get<string>("OdooAddress");
-        set => Settings.Set("OdooAddress", value);
+        get => field ??= Settings.Get<string>("OdooAddress");
+        set => Settings.Set("OdooAddress", field = value);
     }
     public static string? OdooPort
     {
-        get => Settings.Get<string>("OdooPort");
-        set => Settings.Set("OdooPort", value);
+        get => field ??= Settings.Get<string>("OdooPort");
+        set => Settings.Set("OdooPort", field = value);
+        
     }
     public static string? OdooDb 
     {
-        get => Settings.Get<string>("OdooDb");
-
-        set
-        {
-            Settings.Set("OdooDb", value);
-        }
+        get => field ??= Settings.Get<string>("OdooDb");
+        set => Settings.Set("OdooDb", field = value);
     }
     public static string? OdooUrl 
     {
         get 
         {
-            if (field is null or "")
-            {
-                string? port = Settings.Get<string>("OdooPort");
-                port = port is null or "" ? "" : $":{port}";
+            if (field is not null) return field;
+            string? port = Settings.Get<string>("OdooPort");
+            port = port is null or "" ? "" : $":{port}";
 
-                field = $"http://{OdooAddress}{port}";
-            }
+            field = $"http://{OdooAddress}{port}";
+            
             return field;
         }
-
         set
         {
             field = value;
@@ -133,80 +146,63 @@ public static class OdooDefaults
     public static string? OdooSwKey
     {
         get => field ??= Settings.Get<string>("SwLicenseKey");
-
-        set
-        {
-            Settings.Set("SwLicenseKey", value);
-            field = value;
-        }
+        set => Settings.Set("SwLicenseKey", field = value);
     }
-    public static decimal OdooAreaFactor
+    public static decimal? OdooAreaFactor
     {
-        get => field = Settings.Get<decimal>("AreaFactor");
-
-        set
-        {
-            Settings.Set("AreaFactor", value);
-            field = value;
-        }
+        get => field ??= Settings.Get<decimal>("AreaFactor");
+        set => Settings.Set("AreaFactor", field = value);
     }
     public static string? OdooCredentialTarget 
     {
         // Settings.Get<string?>("OdooCredentialTarget", StorageBox.DEFAULT_ODOO_CREDENTIALS)
         get => field ??= StorageBox.DEFAULT_ODOO_CREDENTIALS;
-
-        set
-        {
-            Settings.Set("OdooCredentialTarget", value);
-            field = value;
-        }
+        set => Settings.Set("OdooCredentialTarget", field = value);
+        
     }
-	public static int OdooId
+    public static int OdooId
     {
         get
         {
-                try
-                {
+            try
+            {
 
-				    if (field is 0)
-				    {
-                        field = OClient.Login(7000) ?? 0;
-                        return field;
-                    }
-				    return field;
-				    
-                }
-                catch
+                if (field is 0)
                 {
-                    field = 0;
+                    field = OClient.Login(7000) ?? 0;
+                    return field;
                 }
                 return field;
+
+            }
+            catch 
+            {
+            }
+            return 0;
         }
-
-		internal set
-		{
-			if (value is not 0)
-			{
-				if (value != field)
-				{
-					field = value;
-				}
-			}
-		}
+        internal set
+        {
+            if (value is not 0)
+            {
+                if (value != field)
+                {
+                    field = value;
+                }
+            }
+        }
+    } = 0;
+    public static string[] EntryFilterPatterns
+    {
+        get => field ??= [.. HpEntryNameFilters?.Select(eFilter => eFilter.name_regex) ?? []];
     }
-
-    public static string[] EntryFilterPatterns = [.. HpEntryNameFilters?.Select(eFilter => eFilter.name_regex) ?? []];
     // lock asynchonous operations
     private static readonly object MLockObject = new();
 	
     public static HpNode? MyNode
     {
-        get
-        {
-            field ??= HpNodes?.FirstOrDefault(node => node.name.Equals(Environment.MachineName.ToLower()))
-	            ?? TryAssignNewHpNode().Result ?? throw new ArgumentNullException(nameof(HpNode), @"Unable to register new node");
-            return field;
-        }
+        get => field ??= HpNodes?.FirstOrDefault(node => node.name.Equals(Environment.MachineName.ToLower()))
+	            ?? TryAssignNewHpNode().Result 
+                ?? throw new ArgumentNullException(nameof(HpNode), @"Unable to register new node");
     }
 
    
@@ -267,69 +263,54 @@ public static class OdooDefaults
     // low enough number of records to get before
     public static HpSetting []? HpSettings
     {
-        get
-        {
-            field ??= HpSetting.GetAllRecords();
-            return field;
-        }
+        get => field ??= HpSetting.GetAllRecords();
         set => field = value;
     }
-    public static string SwApi = HpSettings?.First(sett => sett.name == SW_KEY_NAME).char_value ?? "";
-    public static bool RestrictProperties = HpSettings?.First(sett => sett.name == RESTRICT_PROP_NAME).bool_value ?? true;
-    public static bool RestrictTypes = HpSettings?.First(sett => sett.name == RESTRICT_TYPES_NAME).bool_value ?? true;
+    public static string? SwApi
+    {
+        get => !string.IsNullOrEmpty(field) ? field : HpSettings?.First(sett => sett.name == SW_KEY_NAME).char_value;
+        set => field = value;
+    }
+    public static bool? RestrictProperties
+	{
+		get => field ??= HpSettings?.First(sett => sett.name == RESTRICT_PROP_NAME).bool_value ?? true;
+		set => field = value;
+	} 
+    public static bool? RestrictTypes
+	{
+		get => field ??= HpSettings?.First(sett => sett.name == RESTRICT_TYPES_NAME).bool_value ?? true;
+		set => field = value;
+	}
+	
 	
     public static HpEntryNameFilter[]? HpEntryNameFilters
     {
-        get
-        {
-            field ??= HpEntryNameFilter.GetAllRecords();
-            return field;
-        } 
+        get => field ??= HpEntryNameFilter.GetAllRecords();
         set => field = value;
     }
     public static HpCategory[]? HpCategories
     {
-        get
-        {
-            field ??= HpCategory.GetAllRecords();
-            return field;
-        }
+        get => field ??= HpCategory.GetAllRecords();
         set => field = value;
     }
     public static HpType[]? HpTypes
     {
-        get
-        {
-            field ??= HpType.GetAllRecords();
-            return field;
-        }
+        get => field ??= HpType.GetAllRecords();
         set => field = value;
     }
     public static HpProperty[]? HpProperties
     {
-        get
-        {
-            field ??= HpProperty.GetAllRecords();
-            return field;
-        }
+        get => field ??= HpProperty.GetAllRecords();
         set => field = value;
     }
     public static HpNode[]? HpNodes
     {
-        get
-        {
-            field ??= HpNode.GetAllRecords();
-            return field;
-        }
+        get => field ??= HpNode.GetAllRecords();
         set => field = value;
     }
     public static HpUser[]? HpUsers
     {
-        get
-        {
-            field ??= HpUser.GetAllRecords();
-            return field;
-        }
+        get => field ??= HpUser.GetAllRecords();
         set => field = value;
     }
 
@@ -337,94 +318,66 @@ public static class OdooDefaults
     // like extension to Type or Category
     public static Dictionary<string, HpType> ExtToType 
     { 
-        get
-        {
-            field ??= ExtensionMapType( HpTypes );
-            return field;
-        }
-        set
-        {
-            field = value;
-        }
+        get => field ??= ExtensionMapType( HpTypes );
+        set => field = value;
     }
     public static Dictionary<string, HpCategory> ExtToCat
     {
-        get
-        {
-            field ??= ExtensionMapCategory( HpCategories, [ .. ExtToType.Values ] );
-            return field;
-        }
-        set
-        {
-            field = value;
-        }
+        get => field ??= ExtensionMapCategory( HpCategories, [ .. ExtToType.Values ] );
+        set =>field = value;
     }
-    public static Dictionary<string, HpProperty> ExtToProp
+    public static Dictionary<string, HpProperty>? ExtToProp
     {
-        get 
-        {
-            if (field is null)
-            {
-                field = [];
-
-                foreach (HpProperty prop in HpProperties)
-                {
-                    field.Add(prop.name, prop);
-                }
-            }
-            return field;
-        }
-        set => field = value;
-    }
-    public static Dictionary<int, HpProperty> IdToProp
-    {
-        get
-        {
-            field ??= IdMapProperty(HpProperties);
-            return field;
-        }
-        set => field = value;
-    }
-    public static Dictionary<int, HpUser> IdToUser
-    {
-        get
-        {
-            field ??= IdMapUser( HpUsers );
-            return field;
-        }
+        get => field ??= new(HpProperties?.Select(prop => new KeyValuePair<string, HpProperty>(prop.name, prop)) ?? []);
         set => field = value;
     }
     public static Dictionary<string, HpEntryNameFilter> ExtToFilter
     {
-        get
-        {
-            field ??= ExtensionMapFilter( HpEntryNameFilters );
-            return field;
-        }
+        get => field ??= ExtensionMapFilter( HpEntryNameFilters );
         set => field = value;
+    }
+    public static Dictionary<int, HpProperty> IdToProp
+    {
+        get => field ??= IdMapProperty(HpProperties);
+        set => field = value;
+    }
+    public static Dictionary<int, HpUser> IdToUser
+    {
+        get => field ??= IdMapUser( HpUsers );
+        set => field = value;
+    }
+    #endregion
+    #region Static Constructor
+    #endregion
+    #region Functions
+
+    public static string OdooDateFormat(DateTime dt)
+    {
+        return dt.ToString("yyyy-MM-dd HH:mm:ss");
     }
 	private static async Task<HpNode?> TryAssignNewHpNode()
 	{
 		HpNode? node = null;
 		HpNode createdNode = new() { name = Environment.MachineName.ToLower(), };
-		if (HpNodes.Any(n => n.name.Equals(createdNode.name)))
+		if (HpNodes?.Any(n => n.name.Equals(createdNode.name)) is true)
 			return node;
 
 		return await HpNode.GetRecordByIdAsync(await createdNode.CreateAsync());
 	}
-	private static Dictionary<string, HpEntryNameFilter> ExtensionMapFilter( HpEntryNameFilter [] hpEntryNameFilters )
+	private static Dictionary<string, HpEntryNameFilter> ExtensionMapFilter( HpEntryNameFilter []? hpEntryNameFilters )
     {
-        Dictionary<string, HpEntryNameFilter> dict = [];
+        if (hpEntryNameFilters is null) return [];
 
+        Dictionary<string, HpEntryNameFilter> dict = [];
         foreach ( HpEntryNameFilter filter in hpEntryNameFilters )
         {
             dict.Add( $"{filter.name_proto}", filter );
         }
         return dict;
     }
-
-    private static Dictionary<int, HpUser> IdMapUser( in HpUser[] hpUsers )
+    private static Dictionary<int, HpUser> IdMapUser( in HpUser[]? hpUsers )
     {
+        if (hpUsers is null) return [];
         Dictionary<int, HpUser> dict = [];
 
         foreach ( HpUser user in hpUsers )
@@ -433,24 +386,10 @@ public static class OdooDefaults
         }
         return dict;
     }
-    #endregion
-    #region Static Constructor
-    static OdooDefaults()
+    public static Dictionary<string, HpType> ExtensionMapType( in HpType []? types )
     {
-        // need to ensure that this gets initialized first in the getter.
-        _ = OdooId;
-    }
-    #endregion
-    #region Functions
-
-    public static string OdooDateFormat(DateTime dt)
-    {
-        return dt.ToString("yyyy-MM-dd HH:mm:ss");
-    }
-    public static Dictionary<string, HpType> ExtensionMapType( in HpType [] types )
-    {
+        if (types is null) return [];
         Dictionary<string, HpType> dict = [];
-
         foreach ( HpType type in types )
         {
             dict.Add( $".{type.file_ext.ToLower()}", type );
@@ -520,7 +459,7 @@ public static class OdooDefaults
 				}
 				case EntryReturnType.InvalidType:
 				{
-					if (RestrictTypes)
+					if (RestrictTypes is true)
 					{
 						HackFileManager.Dialog?.AddStatusLine(StatusMessage.ERROR, $"Found invalid type for {hackFile.Name}, file extension {hackFile.TypeExt}");
 						throw new Exception($"found invalid type for {hackFile.Name}, file extension {hackFile.TypeExt}");
@@ -555,10 +494,6 @@ public static class OdooDefaults
             Debug.WriteLine($"{e.Message}\n{e.StackTrace}");
         }
         return null;
-    }
-    public static string ConvertToOdooFormat(DateTime dt)
-    {
-        return dt.ToString( "yyyy-MM-dd HH:mm:ss" );
     }
     #endregion
 }

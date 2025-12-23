@@ -8,17 +8,19 @@
 
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.RES_USERS_NAME, OdooDefaults.RES_USERS)]
 public partial class HpUser : HpBaseModel<HpUser>
 {
-	public string name;
-	public string login;
-	public string email;
-	public string signature;
-	public DateTime? login_date;
-        
-	public int? company_id;
-
-	public bool? active;
+	[OdooField(OdooFieldType.Char)] public string name;
+	[OdooField(OdooFieldType.Char)] public string login;
+	[OdooField(OdooFieldType.Char)] public string email;
+	[OdooField(OdooFieldType.Char)] public string signature;
+	
+	[OdooField(OdooFieldType.DateTime)] public DateTime? login_date;
+	
+	[OdooField(OdooFieldType.Boolean)] public bool? active;
+	
+	[OdooField(OdooFieldType.Many2one)] public int? company_id;
 
 	public HpUser() {}
 

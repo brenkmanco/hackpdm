@@ -512,11 +512,11 @@ namespace HackPDM.Src.Helper.Xaml
 
 
 
-			if ((OdooDefaults.RestrictTypes || _HFM.IsFiltered) & !OdooDefaults.ExtToType.TryGetValue(type, out var hpType))
+			if ((OdooDefaults.RestrictTypes is true || _HFM.IsFiltered) & !OdooDefaults.ExtToType.TryGetValue(type, out var hpType))
 			{
 				status = "ft";
 			}
-			if (OdooDefaults.RestrictTypes & OdooDefaults.ExtToFilter.TryGetValue(type, out var filterType))
+			if (OdooDefaults.RestrictTypes is true & OdooDefaults.ExtToFilter.TryGetValue(type, out var filterType))
 			{
 				status = "if";
 			}

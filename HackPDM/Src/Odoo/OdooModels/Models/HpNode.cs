@@ -8,9 +8,10 @@ using OClient = HackPDM.Odoo.OdooClient;
 
 namespace HackPDM.Odoo.OdooModels.Models;
 
+[OdooModel(OdooDefaults.HP_NODE_NAME, OdooDefaults.HP_NODE)]
 public partial class HpNode : HpBaseModel<HpNode>
 {
-	public string name;
+	[OdooField(OdooFieldType.Char)] public string name;
     
         public HpNode() { }
         public HpNode(
