@@ -1,0 +1,452 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="HackPDM.UI.Forms.Hack.HackFileManager"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:com="using:CommunityToolkit.WinUI.UI.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:HackPDM.UI.Data"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:sys="using:System"
+    xmlns:ui="using:CommunityToolkit.WinUI"
+    xmlns:help="clr-namespace:HackPDM.UI.Forms.Helper"
+    xmlns:types="using:HackPDM.UI.Types"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <help:FileSizeConverter x:Key="FileSizeFormatter" />
+    </Page.Resources>
+
+    <Grid Margin="12" CornerRadius="10">
+        <!--  TreeView for Directories  -->
+        <SplitView
+            Grid.RowSpan="4"
+            Grid.ColumnSpan="1"
+            DisplayMode="Inline"
+            IsPaneOpen="True"
+            PanePlacement="Left">
+            <SplitView.Pane>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <BreadcrumbBar
+                        x:Name="OdooDirectoryBreadcrumb"
+                        Grid.Row="0"
+                        Margin="5,0,5,10"
+                        VerticalAlignment="Top"
+                        BorderBrush="DimGray"
+                        BorderThickness="3"
+                        CornerRadius="10"
+                        ItemsSource="{x:Bind LastSelectedNodePaths}"
+                        Visibility="Visible">
+                        <BreadcrumbBar.ItemTemplate>
+                            <DataTemplate x:DataType="types:TreeData">
+                                <TextBlock Text="{x:Bind Name}" />
+                            </DataTemplate>
+                        </BreadcrumbBar.ItemTemplate>
+                    </BreadcrumbBar>
+                    <ScrollViewer Grid.Row="1">
+                        <TreeView
+                            x:Name="OdooDirectoryTree"
+                            Margin="0,0,10,0"
+                            VerticalAlignment="Top"
+                            BorderBrush="DimGray"
+                            BorderThickness="3"
+                            CanDrag="True"
+                            CanDragItems="False"
+                            CornerRadius="10"
+                            Visibility="Visible">
+                            <TreeView.ContextFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutSubItem x:Name="TreeDownload" Text="Download">
+                                        <MenuFlyoutItem x:Name="TreeDownloadAll" Text="All" />
+                                        <MenuFlyoutItem x:Name="TreeDownloadTop" Text="Top Directory" />
+                                    </MenuFlyoutSubItem>
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem x:Name="TreeCheckout" Text="Checkout" />
+                                    <MenuFlyoutItem x:Name="TreeUndoCheckout" Text="Undo Checkout" />
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem x:Name="TreeCommit" Text="Commit" />
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem x:Name="TreeAnalyze" Text="Analyze" />
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutSubItem x:Name="TreeDelete" Text="Delete">
+                                        <MenuFlyoutItem x:Name="TreeLocalDelete" Text="Local" />
+                                        <MenuFlyoutItem x:Name="TreeLogicalDelete" Text="Logical" />
+                                        <MenuFlyoutItem x:Name="TreePermanentDelete" Text="Permanent" />
+                                    </MenuFlyoutSubItem>
+                                    <MenuFlyoutSubItem x:Name="TreeUndelete" Text="Restore">
+                                        <MenuFlyoutItem x:Name="TreeRestoreAll" Text="All" />
+                                        <MenuFlyoutItem x:Name="TreeRestoreTop" Text="Top Directory" />
+                                    </MenuFlyoutSubItem>
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem x:Name="TreeOpenDirectory" Text="Open Directory" />
+                                </MenuFlyout>
+                            </TreeView.ContextFlyout>
+                            <TreeView.ItemTemplate>
+                                <DataTemplate x:DataType="types:TreeData">
+                                    <TreeViewItem Loaded="TreeViewItem_Loaded" Unloaded="TreeViewItem_Unloaded">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Image
+                                                Width="22"
+                                                Height="22"
+                                                Margin="0,0,8,0"
+                                                Source="{x:Bind Icon}" />
+                                            <TextBlock Text="{x:Bind Name}" />
+                                        </StackPanel>
+                                    </TreeViewItem>
+                                </DataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+                    </ScrollViewer>
+                </Grid>
+            </SplitView.Pane>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" MinWidth="300" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="*" MaxHeight="15" />
+                    <RowDefinition Height="*" MaxHeight="400" />
+                    <RowDefinition Height="*" MaxHeight="30" />
+                </Grid.RowDefinitions>
+                <!--  TabView for file lists  -->
+                <TabView
+                    x:Name="ListTabs"
+                    Grid.Row="0"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="2"
+                    Margin="0,0,10,0">
+
+                    <TabViewItem Header="Entries" IsClosable="False">
+                        <com:DataGrid
+                            x:Name="OdooEntryList"
+                            VerticalContentAlignment="Stretch"
+                            AutoGenerateColumns="False"
+                            CanUserSortColumns="True"
+                            IsReadOnly="True"
+                            ItemsSource="{x:Bind OEntries}"
+                            LoadingRowGroup="OdooEntryDataGrid_LoadingRowGroup"
+                            RowDetailsVisibilityMode="Collapsed"
+                            RowHeight="32"
+                            SelectionMode="Extended"
+                            Sorting="OdooEntryDataGrid_Sorting"
+                            VerticalScrollBarVisibility="Visible">
+                            <com:DataGrid.RowDetailsTemplate>
+                                <DataTemplate>
+                                    <com:DataGrid
+                                        x:Name="OdooEntryVersionGrid"
+                                        AlternatingRowBackground="CornflowerBlue"
+                                        AutoGenerateColumns="False"
+                                        CanUserSortColumns="False"
+                                        IsReadOnly="True"
+                                        ItemsSource="{Binding History}"
+                                        RowDetailsVisibilityMode="Collapsed"
+                                        SelectionMode="Extended">
+                                        <com:DataGrid.Columns>
+                                            <com:DataGridTextColumn Binding="{Binding Name}" Header="Name" />
+                                        </com:DataGrid.Columns>
+                                    </com:DataGrid>
+                                </DataTemplate>
+                            </com:DataGrid.RowDetailsTemplate>
+                            <com:DataGrid.Columns>
+                                <com:DataGridTemplateColumn Width="40">
+                                    <com:DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Canvas
+                                                Width="40"
+                                                Height="32"
+                                                Margin="0,0,8,0">
+                                                <Image
+                                                    Canvas.Left="0"
+                                                    Canvas.Top="0"
+                                                    Width="32"
+                                                    Height="32"
+                                                    Source="{Binding Icon}" />
+                                                <Image
+                                                    Canvas.Left="10"
+                                                    Canvas.Top="0"
+                                                    Width="24"
+                                                    Height="24"
+                                                    Source="{Binding StatusIcon}"
+                                                    Stretch="UniformToFill" />
+                                            </Canvas>
+                                        </DataTemplate>
+                                    </com:DataGridTemplateColumn.CellTemplate>
+                                </com:DataGridTemplateColumn>
+                                <com:DataGridTextColumn
+                                    Width="450"
+                                    Binding="{Binding Name}"
+                                    Header="Name" />
+                                <com:DataGridTextColumn Binding="{Binding Type}" Header="Type" />
+                                <com:DataGridTemplateColumn Header="Size">
+                                    <com:DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock
+                                                Padding="5,0,5,0"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Center"
+                                                Text="{Binding Size,
+                                                                    Converter={StaticResource FileSizeFormatter}}"
+                                                TextAlignment="Right" />
+                                        </DataTemplate>
+                                    </com:DataGridTemplateColumn.CellTemplate>
+                                </com:DataGridTemplateColumn>
+                                <!--<com:DataGridTextColumn Binding="{xaml:Binding Category}" Header="Category" />-->
+                                <com:DataGridTextColumn Binding="{Binding LatestReleaseId}" Header="Release" />
+                                <com:DataGridTextColumn Binding="{Binding Status}" Header="Status" />
+                                <com:DataGridTextColumn Binding="{Binding Checkout}" Header="Checkout" />
+                                <com:DataGridTextColumn Binding="{Binding LocalDate}" Header="Local Date" />
+                                <com:DataGridTextColumn Binding="{Binding RemoteDate}" Header="Remote Date" />
+                                <com:DataGridTextColumn Binding="{Binding FullName}" Header="Full Name" />
+                            </com:DataGrid.Columns>
+                            <com:DataGrid.ContextFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutSubItem x:Name="ListOpen" Text="Open">
+                                        <MenuFlyoutItem x:Name="ListPreview" Text="Preview Latest Remote" />
+                                        <MenuFlyoutItem x:Name="ListLocal" Text="Latest Local" />
+                                        <MenuFlyoutItem x:Name="ListFileDirectory" Text="File Directory" />
+                                    </MenuFlyoutSubItem>
+                                    <MenuFlyoutItem x:Name="ListGetLatest" Text="Download" />
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem x:Name="ListCheckout" Text="Checkout" />
+                                    <MenuFlyoutItem x:Name="ListUndoCheckout" Text="Undo Checkout" />
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem x:Name="ListCommit" Text="Commit" />
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem x:Name="ListRestore" Text="Restore" />
+                                    <MenuFlyoutItem x:Name="SaveIcon" Text="Upload Icon" />
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutSubItem x:Name="ListDelete" Text="Delete">
+                                        <MenuFlyoutItem x:Name="ListDeleteLocal" Text="Local" />
+                                        <MenuFlyoutItem x:Name="ListDeleteLogical" Text="Logical" />
+                                        <MenuFlyoutItem x:Name="ListDeletePermanent" Text="Permanent" />
+                                    </MenuFlyoutSubItem>
+                                </MenuFlyout>
+                            </com:DataGrid.ContextFlyout>
+                        </com:DataGrid>
+                    </TabViewItem>
+                    <TabViewItem Header="Changes" IsClosable="False">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ListView x:Name="HackChangesList" Grid.Column="0" />
+                            <ListView x:Name="OdooChangesList" Grid.Column="1" />
+                        </Grid>
+                    </TabViewItem>
+                </TabView>
+                <Grid
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="3">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        x:Name="EntryListStatus"
+                        Grid.Column="0"
+                        Padding="5,0,5,0"
+                        VerticalAlignment="Center"
+                        FontWeight="Bold"
+                        Text="Entries: None" />
+                    <TextBlock
+                        x:Name="EntryListLocalOnly"
+                        Grid.Column="1"
+                        Padding="5,0,5,0"
+                        VerticalAlignment="Center"
+                        FontWeight="Bold"
+                        Text="Local Only: None" />
+                    <TextBlock
+                        x:Name="EntryListRemoteOnly"
+                        Grid.Column="2"
+                        Padding="5,0,5,0"
+                        VerticalAlignment="Center"
+                        FontWeight="Bold"
+                        Text="Remote Only: None" />
+                </Grid>
+                <!--  Right-side controls (image, version tabs)  -->
+                <TabView
+                    x:Name="VersionTabs"
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    MaxHeight="400"
+                    Margin="10,0,0,0"
+                    SelectionChanged="VersionTabs_SelectionChanged">
+                    <TabViewItem x:Name="HistoryTab" Header="History">
+
+                        <com:DataGrid
+                            x:Name="OdooHistory"
+                            AutoGenerateColumns="False"
+                            ItemsSource="{x:Bind OHistories}"
+                            LoadingRowGroup="OdooEntryDataGrid_LoadingRowGroup">
+                            <com:DataGrid.Columns>
+                                <com:DataGridTextColumn Binding="{Binding Version}" Header="Version" />
+                                <com:DataGridTextColumn Binding="{Binding ModUser}" Header="Mod User" />
+                                <com:DataGridTextColumn Binding="{Binding ModDate}" Header="Mod Date" />
+                                <com:DataGridTextColumn Binding="{Binding Size}" Header="Size" />
+                                <com:DataGridTextColumn Binding="{Binding RelDate}" Header="Rel Date" />
+                            </com:DataGrid.Columns>
+                            <com:DataGrid.ContextFlyout>
+                                <MenuFlyout x:Name="HistoryContextMenu">
+                                    <MenuFlyoutSubItem x:Name="HistoryDownload" Text="Download">
+                                        <MenuFlyoutItem x:Name="HistoryDownloadTemp" Text="Temporary" />
+                                        <MenuFlyoutItem x:Name="HistoryDownloadOverwrite" Text="Overwrite" />
+                                    </MenuFlyoutSubItem>
+                                    <MenuFlyoutSubItem x:Name="HistoryOpen" Text="Open">
+                                        <MenuFlyoutItem x:Name="HistoryOpenTemp" Text="Temporary" />
+                                        <MenuFlyoutItem x:Name="HistoryOpenOverwrite" Text="Overwrite" />
+                                    </MenuFlyoutSubItem>
+                                    <MenuFlyoutSubItem x:Name="HistoryMove" Text="Move">
+                                        <MenuFlyoutItem x:Name="HistoryMoveTemp" Text="Temporary" />
+                                        <MenuFlyoutItem x:Name="HistoryMoveOverwrite" Text="Overwrite" />
+                                    </MenuFlyoutSubItem>
+                                </MenuFlyout>
+                            </com:DataGrid.ContextFlyout>
+                        </com:DataGrid>
+                    </TabViewItem>
+                    <TabViewItem x:Name="ParentTab" Header="Where Used">
+                        <com:DataGrid
+                            x:Name="OdooParents"
+                            AutoGenerateColumns="False"
+                            CanUserSortColumns="False"
+                            ItemsSource="{x:Bind OParents}"
+                            RowDetailsVisibilityMode="Collapsed">
+                            <com:DataGrid.Columns>
+                                <com:DataGridTextColumn Binding="{Binding Version}" Header="Version" />
+                                <com:DataGridTextColumn Binding="{Binding BasePath}" Header="BasePath" />
+                            </com:DataGrid.Columns>
+                        </com:DataGrid>
+                    </TabViewItem>
+                    <TabViewItem x:Name="ChildTab" Header="Dependents">
+                        <com:DataGrid
+                            x:Name="OdooChildren"
+                            AutoGenerateColumns="False"
+                            ItemsSource="{x:Bind OChildren}"
+                            RowDetailsVisibilityMode="Collapsed"
+                            SelectionMode="Extended">
+                            <com:DataGrid.Columns>
+                                <com:DataGridTextColumn Binding="{Binding Version}" Header="Version" />
+                                <com:DataGridTextColumn Binding="{Binding BasePath}" Header="BasePath" />
+                            </com:DataGrid.Columns>
+                        </com:DataGrid>
+                    </TabViewItem>
+                    <TabViewItem x:Name="PropertiesTab" Header="Properties">
+                        <com:DataGrid
+                            x:Name="OdooProperties"
+                            AutoGenerateColumns="False"
+                            ItemsSource="{x:Bind OProperties}"
+                            RowDetailsVisibilityMode="Collapsed">
+                            <com:DataGrid.Columns>
+                                <com:DataGridTextColumn Binding="{Binding Version}" Header="Version" />
+                                <com:DataGridTextColumn Binding="{Binding Property}" Header="Property" />
+                                <com:DataGridTextColumn Binding="{Binding Configuration}" Header="Configuration" />
+                                <com:DataGridTextColumn Binding="{Binding Type}" Header="Type" />
+                                <com:DataGridTextColumn Binding="{Binding ValueData}" Header="Value" />
+                            </com:DataGrid.Columns>
+                        </com:DataGrid>
+                    </TabViewItem>
+                    <TabViewItem x:Name="InfoTab" Header="Info">
+                        <com:DataGrid
+                            x:Name="OdooVersionInfoList"
+                            AutoGenerateColumns="False"
+                            IsReadOnly="True"
+                            ItemsSource="{x:Bind OVersions}"
+                            RowDetailsVisibilityMode="Collapsed">
+                            <com:DataGrid.Columns>
+                                <com:DataGridTextColumn Binding="{Binding Id}" Header="Version Id" />
+                                <com:DataGridTextColumn Binding="{Binding FileSize}" Header="File Size" />
+                                <com:DataGridTextColumn Binding="{Binding DirectoryId}" Header="Directory Id" />
+                                <com:DataGridTextColumn Binding="{Binding NodeId}" Header="Node Id" />
+                                <com:DataGridTextColumn Binding="{Binding EntryId}" Header="Entry Id" />
+                                <com:DataGridTextColumn Binding="{Binding AttachmentId}" Header="Attachment Id" />
+                                <com:DataGridTextColumn Binding="{Binding ModifyDate}" Header="Modify Date" />
+                                <com:DataGridTextColumn Binding="{Binding Checksum}" Header="Checksum" />
+                                <com:DataGridTextColumn Binding="{Binding OdooCompletePath}" Header="Odoo Complete Path" />
+                            </com:DataGrid.Columns>
+                        </com:DataGrid>
+                    </TabViewItem>
+                </TabView>
+
+                <!--  Bottom Controls  -->
+                <Grid
+                    Grid.Row="2"
+                    Grid.RowSpan="2"
+                    Grid.Column="3"
+                    BorderThickness="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" MaxWidth="10" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="40" />
+                    </Grid.RowDefinitions>
+                    <!--  Image Panel  -->
+
+                    <StackPanel
+                        x:Name="ImageSlot"
+                        Grid.Row="0"
+                        Width="256"
+                        Height="256">
+                        <ProgressRing
+                            x:Name="LoadRing"
+                            Width="Auto"
+                            Height="Auto"
+                            IsActive="True" />
+                        <Image
+                            x:Name="OdooEntryImage"
+                            Width="0"
+                            Height="0"
+                            Source="ms-appx:///Assets/placeholder.png"
+                            Stretch="UniformToFill" />
+
+                    </StackPanel>
+                    <CommandBar
+                        x:Name="MoreTools"
+                        Grid.Row="1"
+                        DefaultLabelPosition="Right">
+                        <AppBarToggleButton
+                            x:Name="ShowInactive"
+                            VerticalAlignment="Center"
+                            Checked="ShowInactive_Checked"
+                            Icon="Stop"
+                            Label="Show Inactive"
+                            Unchecked="ShowInactive_Checked" />
+                        <AppBarToggleButton
+                            x:Name="ShowHidden"
+                            VerticalAlignment="Center"
+                            Checked="ShowHidden_Checked"
+                            Icon="View"
+                            Label="Ignore Filter"
+                            Unchecked="ShowHidden_Checked" />
+                        <AppBarButton
+                            x:Name="AdditionalTools"
+                            VerticalAlignment="Center"
+                            Icon="More"
+                            Label="Additional Tools">
+                            <AppBarButton.Flyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem x:Name="OdooRefreshDropdown" Text="Refresh View" />
+                                    <MenuFlyoutItem x:Name="OdooSearchDropdown" Text="Search" />
+                                    <MenuFlyoutItem x:Name="OdooManageTypesDropdown" Text="Manage File Types" />
+                                </MenuFlyout>
+                            </AppBarButton.Flyout>
+                        </AppBarButton>
+                    </CommandBar>
+                </Grid>
+            </Grid>
+        </SplitView>
+    </Grid>
+
+</Page>

@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+        <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+		<LangVersion>preview</LangVersion>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\HackPDM.Abstractions\HackPDM.Abstractions.csproj" />
+		<ProjectReference Include="..\HackPDM.Domain\HackPDM.Domain.csproj" />
+		<ProjectReference Include="..\HackPDM.Shared\HackPDM.Shared.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="Meziantou.Framework.Win32.CredentialManager" Version="1.7.15" />
+	  <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.1" />
+	</ItemGroup>
+
+</Project>

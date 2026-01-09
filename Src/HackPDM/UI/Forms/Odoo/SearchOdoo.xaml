@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="HackPDM.UI.Forms.Odoo.SearchOdoo"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:com="using:CommunityToolkit.WinUI.UI.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:globalData="using:HackPDM.Shared.GlobalData"
+    xmlns:representation="using:HackPDM.Domain.Representation"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <globalData:OperatorConverter x:Key="OperationConverter" />
+    </Page.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" ColumnSpacing="24">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Spacing="8">
+                <TextBlock x:Name="label1" Text="Filename Value" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <ComboBox x:Name="OdooSearchComparer" Width="80">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="representation:OperatorsRow">
+                                <TextBlock Text="{Binding OpRepr}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBox
+                        x:Name="FileNameTextbox"
+                        MinWidth="250"
+                        HorizontalAlignment="Stretch" />
+                </StackPanel>
+
+                <StackPanel
+                    Margin="0,8,0,0"
+                    Orientation="Horizontal"
+                    Spacing="24">
+                    <CheckBox
+                        x:Name="OdooCheckedMe"
+                        Checked="OdooCheckedMe_CheckedChanged"
+                        Content="Checked Out to Me"
+                        Unchecked="OdooCheckedMe_CheckedChanged" />
+                    <CheckBox
+                        x:Name="OdooLocalOnly"
+                        Checked="OdooLocalOnly_CheckedChanged"
+                        Content="Only Existing Locally"
+                        Unchecked="OdooLocalOnly_CheckedChanged" />
+                    <CheckBox
+                        x:Name="OdooDeletedIsLocal"
+                        Checked="OdooDeletedIsLocal_CheckedChanged"
+                        Content="Deleted Existing Locally"
+                        Unchecked="OdooDeletedIsLocal_CheckedChanged" />
+                </StackPanel>
+
+                <StackPanel
+                    Margin="0,4,0,0"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <TextBlock
+                        x:Name="lblMaxRes"
+                        VerticalAlignment="Center"
+                        Text="Max Results" />
+                    <TextBox
+                        x:Name="OdooMaxRes"
+                        Width="60"
+                        Text="100" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Spacing="8">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock x:Name="label2" Text="Property" />
+                        <ComboBox x:Name="OdooSearchProperty" MinWidth="150">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="representation:SearchPropertiesRow">
+                                    <TextBlock Text="{Binding Name}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Spacing="4">
+                        <TextBlock x:Name="OdooPropComparer" Text="is" />
+                        <ComboBox x:Name="OdooSearchPropEqual" Width="80">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="representation:OperatorsRow">
+                                    <TextBlock Text="{Binding OpRepr}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Spacing="4">
+                        <TextBlock x:Name="label3" Text="Value" />
+                        <TextBox x:Name="OdooSearchPropValue" MinWidth="150" />
+                    </StackPanel>
+
+                    <Button
+                        x:Name="OdooPropAdd"
+                        Grid.Column="3"
+                        MinWidth="120"
+                        VerticalAlignment="Bottom"
+                        Click="OdooPropAdd_Click"
+                        Content="Add" />
+                </Grid>
+
+                <StackPanel
+                    HorizontalAlignment="Right"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button
+                        x:Name="OdooPropDelete"
+                        Click="OdooPropDelete_Click"
+                        Content="Delete" />
+                    <Button
+                        x:Name="OdooPropertyReset"
+                        Click="OdooPropertyReset_Click"
+                        Content="Reset List" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+
+        <com:DataGrid
+            x:Name="OdooSearchPropList"
+            Grid.Row="1"
+            Height="120"
+            Margin="0,16,0,0">
+            <com:DataGrid.Columns>
+                <com:DataGridTextColumn
+                    Width="2*"
+                    Binding="{Binding Name}"
+                    Header="Property" />
+                <com:DataGridComboBoxColumn
+                    Width="1*"
+                    Binding="{Binding Comparer}"
+                    Header="Comparer" />
+                <com:DataGridTextColumn
+                    Width="2*"
+                    Binding="{Binding Value}"
+                    Header="Value" />
+            </com:DataGrid.Columns>
+        </com:DataGrid>
+
+        <com:DataGrid
+            x:Name="OdooSearchResults"
+            Grid.Row="2"
+            Margin="0,16,0,0"
+            DoubleTapped="OdooSearchResults_DoubleTapped"
+            SelectionMode="Extended">
+
+            <com:DataGrid.Columns>
+                <com:DataGridTextColumn
+                    Width="0"
+                    Binding="{Binding Id}"
+                    Header="ID" />
+
+                <com:DataGridTextColumn
+                    Width="350"
+                    Binding="{Binding Name}"
+                    Header="File Name" />
+                <com:DataGridTextColumn
+                    Width="*"
+                    Binding="{Binding Directory}"
+                    Header="File Path" />
+            </com:DataGrid.Columns>
+            <com:DataGrid.ContextFlyout>
+                <MenuFlyout>
+                    <MenuFlyoutSubItem x:Name="CheckOutMenuItem" Text="Checkout">
+                        <MenuFlyoutItem
+                            x:Name="checkoutOpenToolStripMenuItem"
+                            Click="checkoutOpenToolStripMenuItem_Click"
+                            Text="Checkout and Open" />
+                    </MenuFlyoutSubItem>
+                    <MenuFlyoutItem
+                        x:Name="unCheckoutToolStripMenuItem"
+                        Click="unCheckoutToolStripMenuItem_Click"
+                        Text="UnCheckout" />
+                    <MenuFlyoutItem
+                        x:Name="openToolStripMenuItem"
+                        Click="openToolStripMenuItem_Click"
+                        Text="Open" />
+                </MenuFlyout>
+            </com:DataGrid.ContextFlyout>
+        </com:DataGrid>
+
+        <Grid Grid.Row="3" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button
+                    x:Name="btnCancel"
+                    Click="OdooCancel_Click"
+                    Content="Cancel"
+                    Style="{ThemeResource AccentButtonStyle}">
+                    <Button.Resources>
+                        <ResourceDictionary>
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="PaleVioletRed" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="DarkRed" />
+                            <SolidColorBrush x:Key="ButtonBackground" Color="LightPink" />
+                        </ResourceDictionary>
+                    </Button.Resources>
+                </Button>
+                <Button
+                    x:Name="btnReset"
+                    Click="OdooReset_Click"
+                    Content="Reset" />
+            </StackPanel>
+
+            <Button
+                x:Name="btnSearch"
+                Grid.Column="2"
+                MinWidth="200"
+                Click="OdooSearch_Click"
+                Content="Search"
+                Style="{ThemeResource AccentButtonStyle}" />
+        </Grid>
+    </Grid>
+</Page>

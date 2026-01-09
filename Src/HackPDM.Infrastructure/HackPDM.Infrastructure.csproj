@@ -1,0 +1,46 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+        <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+		<LangVersion>preview</LangVersion>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\HackPDM.Abstractions\HackPDM.Abstractions.csproj" />
+		<ProjectReference Include="..\HackPDM.Domain\HackPDM.Domain.csproj" />
+		<ProjectReference Include="..\HackPDM.Core\HackPDM.Core.csproj" />
+		<ProjectReference Include="..\HackPDM.Shared\HackPDM.Shared.csproj" />
+		<ProjectReference Include="..\HackPDM.SchemaGenerator\HackPDM.SchemaGenerator.csproj"
+						  OutputItemType="Analyzer"
+						  ReferenceOutputAssembly="false" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="Meziantou.Framework.Win32.CredentialManager" Version="1.7.15" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Reference Include="SolidWorks.Interop.sldworks">
+	    <HintPath>lib\SolidWorks.Interop.sldworks.dll</HintPath>
+	  </Reference>
+	  <Reference Include="SolidWorks.Interop.swcommands">
+	    <HintPath>lib\SolidWorks.Interop.swcommands.dll</HintPath>
+	  </Reference>
+	  <Reference Include="SolidWorks.Interop.swconst">
+	    <HintPath>lib\SolidWorks.Interop.swconst.dll</HintPath>
+	  </Reference>
+	  <Reference Include="SolidWorks.Interop.swdocumentmgr">
+	    <HintPath>lib\SolidWorks.Interop.swdocumentmgr.dll</HintPath>
+	  </Reference>
+	  <Reference Include="XmlRpcCs">
+	    <HintPath>..\HackPDM\lib\XmlRpcCs.dll</HintPath>
+	  </Reference>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Hack\" />
+	</ItemGroup>
+
+</Project>

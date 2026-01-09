@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="HackPDM.UI.Forms.Settings.StatusDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:com="clr-namespace:CommunityToolkit.WinUI.UI.Controls;assembly=CommunityToolkit.WinUI.UI.Controls.DataGrid"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:rep="using:HackPDM.Domain.Representation"
+    xmlns:ui="using:CommunityToolkit.WinUI"
+    xmlns:data="clr-namespace:Microsoft.UI.Xaml.Data;assembly=Microsoft.WinUI"
+    xmlns:xaml="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+    mc:Ignorable="d">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="3*" />
+            <RowDefinition Height="5" />
+            <RowDefinition Height="2*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!--  Main Status List  -->
+        <com:DataGrid
+            x:Name="StatusList"
+            Grid.Row="0"
+            Grid.ColumnSpan="2"
+            Margin="0,0,0,5"
+            AutoGenerateColumns="False"
+            CanUserSortColumns="True"
+            IsReadOnly="True"
+            ItemsSource="{x:Bind OStatus, Mode=OneWay}"
+            DataContext="{rep:BasicStatusMessage}"
+            RowDetailsVisibilityMode="Collapsed">
+            
+            <com:DataGrid.Columns>
+                <com:DataGridTextColumn
+                    Width="120"
+                    Binding="{data:Binding Status}"
+                    Header="Action"
+                    SortDirection="Descending"/>
+                <com:DataGridTextColumn
+                    Width="1158"
+                    Binding="{data:Binding Message}"
+                    Header="Description" 
+                    SortDirection="Descending"/>
+            </com:DataGrid.Columns>
+        </com:DataGrid>
+
+        <!--  Splitter between StatusList and the two lower lists  -->
+        <SplitView
+            Grid.Row="1"
+            Grid.ColumnSpan="2"
+            Height="5"
+            HorizontalAlignment="Stretch"
+            Background="Gray" />
+
+        <!--  Info List  -->
+        <com:DataGrid
+            x:Name="InfoList"
+            Grid.Row="2"
+            Grid.Column="0"
+            Margin="0,5,5,5"
+            AutoGenerateColumns="False"
+            CanUserSortColumns="True"
+            IsReadOnly="True"
+            ItemsSource="{x:Bind OInfo, Mode=OneWay}"
+            DataContext="{rep:BasicStatusMessage}"
+            RowDetailsVisibilityMode="Collapsed">
+            <com:DataGrid.Columns>
+                <com:DataGridTextColumn
+                    Width="120"
+                    Binding="{data:Binding Status}"
+                    Header="Action" 
+                    SortDirection="Descending"/>
+                <com:DataGridTextColumn
+                    Width="1158"
+                    Binding="{data:Binding Message}"
+                    Header="Description" 
+                    SortDirection="Descending"/>
+            </com:DataGrid.Columns>
+        </com:DataGrid>
+
+        <!--  Error List  -->
+        <com:DataGrid
+            x:Name="ErrorList"
+            Grid.Row="2"
+            Grid.Column="1"
+            Margin="5,5,0,5"
+            AutoGenerateColumns="False"
+            CanUserSortColumns="True"
+            IsReadOnly="True"
+            ItemsSource="{x:Bind OError, Mode=OneWay}"
+            DataContext="{rep:BasicStatusMessage}"
+            RowDetailsVisibilityMode="Collapsed">
+            <com:DataGrid.Columns>
+                <com:DataGridTextColumn
+                    Width="120"
+                    Binding="{data:Binding Status}"
+                    Header="Action" 
+                    SortDirection="Descending"/>
+                <com:DataGridTextColumn
+                    Width="1158"
+                    Binding="{data:Binding Message}"
+                    Header="Description" 
+                    SortDirection="Descending"/>
+            </com:DataGrid.Columns>
+        </com:DataGrid>
+
+        <!--  Progress Bar  -->
+        <ProgressBar
+            x:Name="fileCheckStatus"
+            Grid.Row="3"
+            Grid.ColumnSpan="2"
+            Height="15"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Center" />
+
+        <!--  Progress Text and Status Labels  -->
+        <StackPanel
+            Grid.Row="4"
+            Grid.Column="0"
+            VerticalAlignment="Bottom"
+            Orientation="Horizontal">
+            <TextBlock
+                x:Name="ProgressText"
+                Margin="0,0,10,0"
+                Text="(0%)&#x0a;0 / 0" />
+            <TextBlock
+                x:Name="Downloaded"
+                Margin="0,0,10,0"
+                Text="Downloaded: " />
+            <TextBlock
+                x:Name="TotalDownload"
+                Margin="0,0,10,0"
+                Text="Session Downloaded: " />
+        </StackPanel>
+
+        <!--  Skipped Label  -->
+        <TextBlock
+            x:Name="SkippedLabel"
+            Grid.Row="4"
+            Grid.Column="0"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Bottom"
+            Text="(0) Skipped" />
+
+        <!--  Control Buttons  -->
+        <StackPanel
+            Grid.Row="4"
+            Grid.Column="1"
+            HorizontalAlignment="Right"
+            Orientation="Horizontal">
+            <Button
+                x:Name="StatusSettings"
+                Margin="0,0,10,0"
+                Content="configure settings" 
+                Click="StatusSettings_Click"/>
+            <CheckBox
+                x:Name="cbxAutoClose"
+                Margin="0,0,10,0"
+                Content="Close When Complete" />
+            <Button
+                x:Name="cmdCancel"
+                Margin="0,0,10,0"
+                Content="Cancel" 
+                Click="CmdCancelClick"/>
+            <Button x:Name="cmdClose" Content="Close" 
+                Click="CmdCloseClick"/>
+        </StackPanel>
+        <Grid.Resources>
+
+            <xaml:Style TargetType="ListViewItem">
+                <xaml:Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            </xaml:Style>
+
+        </Grid.Resources>
+    </Grid>
+</Page>
