@@ -5,13 +5,17 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:com="using:CommunityToolkit.WinUI.UI.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:local="using:HackPDM.UI.Data"
+    xmlns:help="using:HackPDM.UI.Forms.Helper"
+    
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:sys="using:System"
     xmlns:ui="using:CommunityToolkit.WinUI"
-    xmlns:help="clr-namespace:HackPDM.UI.Forms.Helper"
-    xmlns:types="using:HackPDM.UI.Types"
+    xmlns:types="using:HackPDM.UI.Types" 
+    xmlns:model="using:HackPDM.Domain.Representation"
     mc:Ignorable="d">
+
+    <!--xmlns:local="using:HackPDM.UI.Data"-->
+
 
     <Page.Resources>
         <help:FileSizeConverter x:Key="FileSizeFormatter" />
@@ -130,7 +134,7 @@
                             AutoGenerateColumns="False"
                             CanUserSortColumns="True"
                             IsReadOnly="True"
-                            ItemsSource="{x:Bind OEntries}"
+                            ItemsSource="{x:Bind OEntries}"  
                             LoadingRowGroup="OdooEntryDataGrid_LoadingRowGroup"
                             RowDetailsVisibilityMode="Collapsed"
                             RowHeight="32"
@@ -138,7 +142,7 @@
                             Sorting="OdooEntryDataGrid_Sorting"
                             VerticalScrollBarVisibility="Visible">
                             <com:DataGrid.RowDetailsTemplate>
-                                <DataTemplate>
+                                <DataTemplate x:DataType="types:EntryRow">
                                     <com:DataGrid
                                         x:Name="OdooEntryVersionGrid"
                                         AlternatingRowBackground="CornflowerBlue"
@@ -191,13 +195,14 @@
                                                 Padding="5,0,5,0"
                                                 HorizontalAlignment="Right"
                                                 VerticalAlignment="Center"
-                                                Text="{Binding Size,
-                                                                    Converter={StaticResource FileSizeFormatter}}"
+                             
                                                 TextAlignment="Right" />
+                                            <!--="{Binding Size,
+                                       Converter={StaticResource FileSizeFormatter}}"-->
                                         </DataTemplate>
                                     </com:DataGridTemplateColumn.CellTemplate>
                                 </com:DataGridTemplateColumn>
-                                <!--<com:DataGridTextColumn Binding="{xaml:Binding Category}" Header="Category" />-->
+                                <!--<com:DataGridTextColumn Binding="{Binding Category}" Header="Category" />-->
                                 <com:DataGridTextColumn Binding="{Binding LatestReleaseId}" Header="Release" />
                                 <com:DataGridTextColumn Binding="{Binding Status}" Header="Status" />
                                 <com:DataGridTextColumn Binding="{Binding Checkout}" Header="Checkout" />

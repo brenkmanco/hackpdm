@@ -7,14 +7,16 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+
 using CommunityToolkit.WinUI.UI.Controls;
+
 using HackPDM.Core;
 using HackPDM.Core.Configuration;
 using HackPDM.Core.General;
+using HackPDM.Core.Hack;
 using HackPDM.Domain.Helper;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Domain.Representation;
-using HackPDM.Infrastructure.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
@@ -22,10 +24,13 @@ using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Hack;
 using HackPDM.UI.Forms.Settings;
 using HackPDM.UI.Types;
+
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+
 using WinRT;
+
 using EntryRow = HackPDM.UI.Types.EntryRow;
 using RoutedEventArgs = Microsoft.UI.Xaml.RoutedEventArgs;
 
@@ -219,7 +224,7 @@ namespace HackPDM.UI.Forms.Odoo
 			const string Empty = "-";
 			// NOTE: InitListViewPercentage is removed.
 
-			DirectoryInfo directoryInfo = new DirectoryInfo(HackDefaults.PwaPathAbsolute);
+			DirectoryInfo directoryInfo = new DirectoryInfo(HackDefaults.Instance.PwaPathAbsolute);
 			FileInfo[] files = [.. directoryInfo.EnumerateFiles($"*{filename}*", SearchOption.AllDirectories)];
 
 			Dictionary<string, List<string>> hts = GetNamePathwaysDict(results);
@@ -230,7 +235,7 @@ namespace HackPDM.UI.Forms.Odoo
 				if (counter >= limit)
 					break;
 
-				string odooPath = FileOperations.WindowsToOdooPath(file.DirectoryName[(HackDefaults.PwaPathAbsolute.Length - HackDefaults.PwaPathRelative.Length)..]);
+				string odooPath = FileOperations.WindowsToOdooPath(file.DirectoryName[(HackDefaults.Instance.PwaPathAbsolute.Length - HackDefaults.Instance.PwaPathRelative.Length)..]);
 
 				if (isNotOnlyLocal ^ !(hts.TryGetValue(file.Name.ToLower(), out List<string> paths) && paths.Contains(odooPath)))
 				{

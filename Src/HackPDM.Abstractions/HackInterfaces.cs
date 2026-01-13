@@ -41,48 +41,33 @@ public interface ISettingsProvider
 	bool Contains(string key);
 	void Remove(string key);
 }
-public abstract class HackDefaultBase
+public interface IHackDefaultBase
 {
-	public static ISettingsProvider? SettingsProvider { get; set; }
-	public static string PwaPathAbsolute 
-	{ 
-		get => SettingsProvider?.Get<string>("PWAPathAbsolute") ?? ""; 
-		set => SettingsProvider?.Set("PWAPathAbsolute", value);
-	}
-	public static string PwaPathRelative
+	public ISettingsProvider? SettingsProvider { get; set; }
+	public string PwaPathAbsolute 
 	{
-		get
-		{
-			field ??= Path.GetFileName(PwaPathAbsolute);
-			return field;
-		}
-		set
-		{
-			field = value;
-		}
+		get;set;
 	}
-	public static string MeasureFileSize 
-	{ 
-		get => SettingsProvider?.Get<string>("MeasureFileSize"); 
-		set => SettingsProvider?.Set("MeasureFileSize", value);
-	}
-	public static double MeasureByteSize 
-	{ 
-		get => SettingsProvider?.Get<double>("MeasureByteSize") ?? 0;
-		set => SettingsProvider?.Set("MeasureByteSize", value);
-	}
-	public static double FileSizeMult
+	public string PwaPathRelative
 	{
-		get => SettingsProvider?.Get<double>("FileSizeMult") ?? 0;
-		set => SettingsProvider?.Set("FileSizeMult", value);
+		get;set;
 	}
-	public static double? ByteSizeMultiplier
+	public string MeasureFileSize 
 	{
-		get
-		{
-			field ??= 1D / Math.Pow(MeasureByteSize, FileSizeMult);
-			return field;
-		}
-	} = null;
-	public static string CurrentPath { get; set; }
+		get;set;
+	}
+	public double MeasureByteSize 
+	{
+		get;set;
+	}
+	public double FileSizeMult
+	{
+		get;set;
+	}
+	public double? ByteSizeMultiplier
+	{
+		get;
+	}
+	public string? CurrentPath { get; set; }
 }
+

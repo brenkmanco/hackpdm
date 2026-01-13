@@ -10,6 +10,7 @@ using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using HackPDM.Core.Helper.Xaml;
 
 namespace HackPDM.UI.Compatibility;
 
@@ -43,7 +44,7 @@ public class AssetsImageProvider : IImageProvider
 	}
 	public async Task<ImageSource?> GetImageAsync(string key)
 	{
-		return await Task.Run(ImageSource? () =>
+		return await SafeHelper.SafeInvoker(ImageSource? () =>
 		{
 			if (!AssetMap.TryGetValue(key, out var uriString)) return null;
 			Uri uri = new(uriString);

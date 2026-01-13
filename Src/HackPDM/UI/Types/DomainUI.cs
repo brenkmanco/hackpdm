@@ -78,7 +78,7 @@ public partial class TreeData(string? name) : HackPDM.Domain.Representation.Tree
 	public TreeData? Parent => Node?.Depth <= 0 ? null : Node?.Parent?.LinkedData;
 	public ImageSource? Icon { get; set; }
 	public IEnumerable<TreeData>? Children => Node?.Children.Select(n => n.LinkedData);
-	public new string? Name
+	public override string? Name
 	{
 		get
 		{
@@ -87,9 +87,9 @@ public partial class TreeData(string? name) : HackPDM.Domain.Representation.Tree
 		set;
 	} = name;
 
-	public new string? FullPath => Parent is null ? Depth < 0 ? null : Name : $"{Parent?.FullPath}\\{Name}";
-	public new object? Tag { get; set; }
-	public new int? DirectoryId { get; set; }
+	public override string? FullPath => Parent is null ? Depth < 0 ? null : Name : $"{Parent?.FullPath}\\{Name}";
+	public override object? Tag { get; set; }
+	public override int? DirectoryId { get; set; }
 
 	public override bool IsLinked => Node is not null;
 	public override bool HasChildren => Node?.HasChildren ?? false;

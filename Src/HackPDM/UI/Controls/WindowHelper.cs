@@ -14,60 +14,66 @@ public static partial class WindowHelper
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool MoveWindow(IntPtr hWnd, int x, int y, int nWidth, int nHeight, [MarshalAs(UnmanagedType.Bool)] bool bRepaint);
-
     public static void ResizeWindow(Window window, int width, int height)
     {
         IntPtr hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
         MoveWindow(hwnd, 100, 100, width, height, true);
     }
 
-    public static Window CreateWindowPage(Type pageType, bool activated = true)
-    {
-        var window = new Window();
-        var rootFrame = new Frame();
-        if (activated) window.Activate();
-        window.Content = rootFrame;
-		string name = pageType.Name;
-		if (WindowConfig.PresetWindowConfig.TryGetValue(name, out WindowConfig? value))
-		{
-			SetWindowConfig(window, value);
-		}
-		rootFrame.Navigate(pageType);
-        return window;
-    }
-    public static Window CreateWindowPage<T>(bool activated = true) where T : Page
+    public static Window CreateWindowPage<T>(bool activated = true) where T : Page, new()
     {
         CreateWindowAndPage<T>(out _, out var window, activated);
         return window;
     }
-	public static void CreateWindowAndPage<T>(out T page, out Window window, bool activated = true) 
-        where T : Page 
-        => CreateWindowAndPageInternal(out page, out window, activated);
-    public static void CreateWindowAndPage<TPage, TWindow>(out TPage page, out TWindow window, bool activated = true) 
+    public static Window CreateWindowFromPage<TPage>(TPage page, bool activated = true)
         where TPage : Page
-        where TWindow : Window, new()
-		=> CreateWindowAndPageInternal(out page, out window, activated);
-	private static void CreateWindowAndPageInternal<TPage, TWindow>(out TPage page, out TWindow window, bool activated = true)
+    {
+        CreateWindowFromPageInternal(page, out Window window, activated);
+        return window;
+    }
+    public static void CreateWindowFromPage<TPage, TWindow>(TPage page, out TWindow window, bool activated = true)
         where TPage : Page
         where TWindow : Window, new()
     {
-        window = new TWindow();
-        Frame rootFrame = new();
-        if (activated) window.Activate();
-        window.Content = rootFrame;
-        string name = typeof(TPage).Name;
-        if (WindowConfig.PresetWindowConfig.TryGetValue(name, out WindowConfig? value))
-        {
-            SetWindowConfig(window, value);
-        }
-        rootFrame.Navigate(typeof(TPage));
-        page = rootFrame.Content as TPage;
-        if (page != null)
-        {
-            InstanceManager.RegisterWindow(page, window);
-        }
+        CreateWindowFromPageInternal(page, out window, activated);
 	}
-	public static Window CreateWindowPage<T>(WindowConfig winConfig) where T : Page
+	public static void CreateWindowAndPage<T>(out T page, out Window window, bool activated = true) 
+        where T : Page, new() 
+        => CreateWindowAndPageInternal(out page, out window, activated);
+    public static void CreateWindowAndPage<TPage, TWindow>(out TPage page, out TWindow window, bool activated = true) 
+        where TPage : Page, new()
+        where TWindow : Window, new()
+		=> CreateWindowAndPageInternal(out page, out window, activated);
+	private static void CreateWindowFromPageInternal<TPage, TWindow>(TPage page, out TWindow window, bool activated = true)
+        where TPage : Page
+        where TWindow : Window, new()
+	{
+		Frame rootFrame = new()
+		{
+			Content = page
+		};
+
+		window = new TWindow();
+		if (activated) window.Activate();
+        
+		window.Content = rootFrame;
+		if (WindowConfig.PresetWindowConfig.TryGetValue(typeof(TPage).Name, out WindowConfig? value))
+		{
+			SetWindowConfig(window, value);
+		}
+		if (page != null)
+		{
+			InstanceManager.RegisterWindow(page, window);
+		}
+	}
+	private static void CreateWindowAndPageInternal<TPage, TWindow>(out TPage page, out TWindow window, bool activated = true)
+        where TPage : Page, new()
+        where TWindow : Window, new()
+    {
+        page = new();
+        CreateWindowFromPageInternal(page, out window, activated);
+	}
+	public static Window CreateWindowPage<T>(WindowConfig winConfig) where T : Page, new()
     {
         Window win = CreateWindowPage<T>();
         SetWindowConfig(win, winConfig);

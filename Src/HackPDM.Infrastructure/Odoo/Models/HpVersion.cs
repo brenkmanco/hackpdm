@@ -5,7 +5,6 @@ using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
-using HackPDM.Infrastructure.Hack;
 using HackPDM.Shared.GlobalData;
 
 using SolidWorks.Interop.swdocumentmgr;
@@ -117,7 +116,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         await finish;
         return finish.Result[0];
     }
-    public bool DownloadFile() => DownloadFile(Path.Combine(HackDefaults.PwaPathAbsolute, this.WinPathway));
+    public bool DownloadFile() => DownloadFile(Path.Combine(HackDefaults.Instance.PwaPathAbsolute, this.WinPathway));
     public bool DownloadFile(string toPath)
     {
         if (!Directory.Exists(toPath) && !Directory.CreateDirectory(toPath).Exists) return false;
@@ -333,7 +332,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
     }
     public static HpVersion[] GetFromPaths(params string[] fullPaths)
     {
-        var paths = Help.FastSlice(fullPaths, HackDefaults.PwaPathAbsolute.Length+1, "root\\").ToArrayList();
+        var paths = Help.FastSlice(fullPaths, HackDefaults.Instance.PwaPathAbsolute.Length+1, "root\\").ToArrayList();
     
         ArrayList searchParams = new() 
         {
@@ -344,7 +343,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
     }
     public static HpVersion[] GetFromPaths(string[] excludedFields = null, string[] includedFields = null, params string[] fullPaths)
     {
-        var paths = Help.FastSlice(fullPaths, HackDefaults.PwaPathAbsolute.Length + 1, "root\\").ToArrayList();
+        var paths = Help.FastSlice(fullPaths, HackDefaults.Instance.PwaPathAbsolute.Length + 1, "root\\").ToArrayList();
     
         ArrayList searchParams = new()
         {

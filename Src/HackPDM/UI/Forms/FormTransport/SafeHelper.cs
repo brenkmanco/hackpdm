@@ -16,7 +16,23 @@ namespace HackPDM.Core.Helper.Xaml
 		internal static void SafeInvoker(Action action)
 			=> SafeInvokerInternal(action, DispatcherQueue.GetForCurrentThread());
 		
-		
+		internal static Task<T> SafeInvoker<T>(Func<T> func)
+		{
+			var tcs = new TaskCompletionSource<T>();
+			SafeInvokerInternal(() =>
+			{
+				try
+				{
+					T result = func();
+					tcs.SetResult(result);
+				}
+				catch (Exception ex)
+				{
+					tcs.SetException(ex);
+				}
+			}, DispatcherQueue.GetForCurrentThread());
+			return tcs.Task;
+		}
 		private static void SafeInvokerInternal(Action action, DispatcherQueue dispatcher)
 		{
 			_ = dispatcher is not null and { HasThreadAccess: true}

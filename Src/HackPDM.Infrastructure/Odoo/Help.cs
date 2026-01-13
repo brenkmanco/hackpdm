@@ -12,7 +12,6 @@ using System.IO;
 using System.Security.Cryptography;
 using HackPDM.Core;
 using HackPDM.Domain.OdooModels;
-using HackPDM.Infrastructure.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
@@ -22,6 +21,7 @@ using SolidWorks.Interop.swdocumentmgr;
 using EntryRow = HackPDM.Domain.Representation.EntryRow;
 using TreeData = HackPDM.Domain.Representation.TreeData;
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
+using Attribute = System.Attribute;
 
 //
 
@@ -135,7 +135,7 @@ public static class Help
 	{
 		file = new T();
 		var swApp = new SldWorksClass();
-		FileInfo vInfo = new(Path.Combine(HackDefaults.PwaPathAbsolute ?? "", versionModel.WinPathway, versionModel.name));
+		FileInfo vInfo = new(Path.Combine(HackDefaults.Instance.PwaPathAbsolute ?? "", versionModel.WinPathway, versionModel.name));
 		if (!vInfo.Exists) return false;
 
 		swDocumentTypes_e extSWType = versionModel.file_ext.ToLower() switch
@@ -186,8 +186,8 @@ public class Kwargs<T>(T obj)
     public T ApplyKwargsToObject()
     {
         Type type = _obj.GetType();
-        FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-        PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+        FieldInfo[] fields = [.. type.GetFields(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooFieldAttribute)))];
+		PropertyInfo[] properties = [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute)))];
 
         string[] memberNames = [.. fields.Select(x => x.Name), .. properties.Select(x => x.Name)];
 
@@ -195,13 +195,13 @@ public class Kwargs<T>(T obj)
         {
             if (memberNames.Contains(entry.Key))
             {
-                object memberInfo = type.GetField(entry.Key, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                object memberInfo = type.GetFields(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooFieldAttribute))).ToArray();
                 Type mType;
                 bool isField = true;
 
                 if (memberInfo == null)
                 {
-                    memberInfo = type.GetProperty(entry.Key, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                    memberInfo = type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute))).ToArray();
                     mType = ((PropertyInfo)memberInfo).PropertyType;
                     isField = false;
                 }
@@ -252,8 +252,8 @@ public static class HashConverter
     {
         Type type = typeof(T);
 
-        PropertyInfo[]? properties = mType is MethodType.PropertyAndField or MethodType.PropertyOnly ? type?.GetProperties(BindingFlags.Public | BindingFlags.Instance) : null;
-        FieldInfo[]? fields = mType is MethodType.PropertyAndField or MethodType.FieldOnly ? type?.GetFields(BindingFlags.Public | BindingFlags.Instance) : null;
+        PropertyInfo[]? properties = mType is MethodType.PropertyAndField or MethodType.PropertyOnly ? [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute)))] : null;
+        FieldInfo[]? fields = mType is MethodType.PropertyAndField or MethodType.FieldOnly ? [.. type?.GetFields(BindingFlags.Public | BindingFlags.Instance).Where(f=>Attribute.IsDefined(f, typeof(OdooFieldAttribute)))] : null;
 		
         foreach (DictionaryEntry entry in ht)
         {
@@ -461,7 +461,7 @@ public static class HashConverter
     private static void GetProperties<T>(T obj, ref Hashtable ht, bool includeEmpty = true, in string[] excludedFieldNames = null)
     {
         Type type = typeof(T);
-        PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+        PropertyInfo[] properties = (PropertyInfo[])type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => System.Attribute.IsDefined(p, typeof(OdooPropAttribute)));
         foreach (PropertyInfo prop in properties)
         {
             if (!prop.CanRead) continue;
@@ -481,7 +481,7 @@ public static class HashConverter
     private static void GetFields<T>(T obj, ref Hashtable ht, bool includeEmpty = true, in string[] excludedFieldNames = null)
     {
         Type type = typeof(T);
-        FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+        FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
         foreach (FieldInfo field in fields)
         {
             if (!includeEmpty)

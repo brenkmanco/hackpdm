@@ -7,6 +7,9 @@ using Window = Microsoft.UI.Xaml.Window;
 using Microsoft.UI.Xaml.Controls;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.UI.Controls;
+using HackPDM.UI.Compatibility;
+using HackPDM.Core.Configuration;
+using Microsoft.UI.Xaml.Navigation;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -18,17 +21,18 @@ namespace HackPDM.UI.Forms.Odoo;
 /// </summary>
 public sealed partial class OdooSettings : Page
 {
-    private static ISettingsProvider Sett;
+    
+    private static CoreSettings? Sett;
     public OdooSettings()
     {
         InitializeComponent();
-        GetInfoDefault();
     }
 
-    public OdooSettings(ISettingsProvider settingsProvider)
+    public OdooSettings(ISettingsProvider settingsProvider) : this()
     {
-        Sett = settingsProvider;
-    }
+        Sett = settingsProvider as CoreSettings;
+		GetInfoDefault();
+	}
     private void SubmitOdooSettings(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
         SetInfoDefault();

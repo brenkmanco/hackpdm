@@ -2,10 +2,10 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels;
-using HackPDM.Infrastructure.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Infrastructure.SldWrks;
@@ -54,9 +54,9 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
                 {
                     string path = deps[1];
                     string absolute = "";
-                    var splitPath = path.Split([$"\\{HackDefaults.PwaPathRelative}\\"], StringSplitOptions.RemoveEmptyEntries);
+                    var splitPath = path.Split([$"\\{HackDefaults.Instance.PwaPathRelative}\\"], StringSplitOptions.RemoveEmptyEntries);
                     if (splitPath.Length == 2)
-                        absolute = Path.Combine([HackDefaults.PwaPathAbsolute, splitPath[1]]);
+                        absolute = Path.Combine([HackDefaults.Instance.PwaPathAbsolute, splitPath[1]]);
                     else continue;
                     paths.Add(absolute);
                 }

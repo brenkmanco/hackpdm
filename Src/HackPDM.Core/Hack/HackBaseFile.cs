@@ -26,7 +26,7 @@ public abstract class HackBaseFile : IHackBaseFileModel
             field ??= Info?.FullName;
 			return field ?? (DirectoryName is null || Name is null 
                 ? (field) 
-                : (field = Path.Combine(HackDefaultBase.PwaPathAbsolute, DirectoryName, Name)));
+                : (field = Path.Combine(HackDefaults.Instance.PwaPathAbsolute, DirectoryName, Name)));
 		}
 		set => field = value;
     }
@@ -36,7 +36,7 @@ public abstract class HackBaseFile : IHackBaseFileModel
         {
             field ??= FullPath is null
                 ? null
-                : Path.GetRelativePath(HackDefaultBase.PwaPathAbsolute, FullPath);
+                : Path.GetRelativePath(HackDefaults.Instance.PwaPathAbsolute, FullPath);
             return field;
 		} 
         set; 

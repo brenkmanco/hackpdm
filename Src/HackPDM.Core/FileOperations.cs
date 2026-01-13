@@ -2,10 +2,10 @@
 using System.Diagnostics;
 using System.Net.Mime;
 using System.Security.Cryptography;
+
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels.Models;
-using HackPDM.Infrastructure.Hack;
 using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Core;
@@ -19,7 +19,7 @@ public static class FileOperations
     public static byte[] ConvertFromBase64(string base64String )
         => Convert.FromBase64String( base64String );
 	
-	public static bool InPWAFolder(string? fullFileName) => fullFileName?.StartsWith(HackDefaults.PwaPathAbsolute) ?? false;
+	public static bool InPWAFolder(string? fullFileName) => fullFileName?.StartsWith(HackDefaults.Instance.PwaPathAbsolute) ?? false;
 
     public static long? WriteAllBytes(HackFile file)
     {
@@ -30,7 +30,7 @@ public static class FileOperations
         }
         try
         {
-            string combinedPath = file.DirectoryName;//Path.Combine(HackDefaults.PWAPathAbsolute, file.FilePath);
+            string combinedPath = file.DirectoryName;//Path.Combine(HackDefaults.Instance.InstancePWAPathAbsolute, file.FilePath);
             if (!Directory.Exists(combinedPath))
             {
                 Directory.CreateDirectory(combinedPath);
@@ -58,7 +58,7 @@ public static class FileOperations
         }
         try
         {
-            string combinedPath = Path.Combine(HackDefaults.PwaPathAbsolute, file.DirectoryName);
+            string combinedPath = Path.Combine(HackDefaults.Instance.PwaPathAbsolute, file.DirectoryName);
             if (!Directory.Exists(combinedPath))
             {
 				//CreateDirectory(combinedPath);
@@ -82,7 +82,7 @@ public static class FileOperations
     public static bool SameChecksum(IHpVersionModel versionModel, ChecksumType cType=ChecksumType.Sha1)
         => SameChecksum(
             Path.Combine(
-                HackDefaults.PwaPathAbsolute, 
+                HackDefaults.Instance.PwaPathAbsolute, 
                 versionModel.windows_complete_name[5..]), 
             versionModel.checksum,
             GetHashAlgorithm(cType));
@@ -235,8 +235,8 @@ public static class FileOperations
     {
         // Get the directory of the full path
         string? directoryPath = Path.GetDirectoryName(fullPath);
-		return directoryPath?.StartsWith(HackDefaults.PwaPathAbsolute) is true
-			? directoryPath[(HackDefaults.PwaPathAbsolute.Length - HackDefaults.PwaPathRelative.Length)..]
+		return directoryPath?.StartsWith(HackDefaults.Instance.PwaPathAbsolute) is true
+			? directoryPath[(HackDefaults.Instance.PwaPathAbsolute.Length - HackDefaults.Instance.PwaPathRelative.Length)..]
 			: null;
     }
     public static string FileSizeReformat(int? bytesize)
@@ -316,34 +316,34 @@ public static class FileOperations
     {
         if (pathway is null) return null;
         string[] pathwaySegmented = pathway.Split([" / "], StringSplitOptions.RemoveEmptyEntries);
-        if (pathwaySegmented[0] == "root" || pathwaySegmented[0] == HackDefaults.PwaPathRelative)
+        if (pathwaySegmented[0] == "root" || pathwaySegmented[0] == HackDefaults.Instance.PwaPathRelative)
         {
             pathwaySegmented = pathwaySegmented[1..];
         }
         string relativePath = string.Join(@"\", pathwaySegmented);
 
-        return withAbsolutePath ? Path.Combine(HackDefaults.PwaPathAbsolute, relativePath) : relativePath;
+        return withAbsolutePath ? Path.Combine(HackDefaults.Instance.PwaPathAbsolute, relativePath) : relativePath;
     }
     public static string? NodePathToWindowsPath(string? pathway, bool withAbsolutePath = true)
     {
         if (pathway is null) return null;
         string[] pathwaySegmented = pathway.Split(["\\"], StringSplitOptions.RemoveEmptyEntries);
-        if (pathwaySegmented[0] == "root" || pathwaySegmented[0] == HackDefaults.PwaPathRelative)
+        if (pathwaySegmented[0] == "root" || pathwaySegmented[0] == HackDefaults.Instance.PwaPathRelative)
         {
             pathwaySegmented = pathwaySegmented[1..];
         }
         string relativePath = string.Join(@"\", pathwaySegmented);
 
-        return withAbsolutePath ? Path.Combine(HackDefaults.PwaPathAbsolute, relativePath) : relativePath;
+        return withAbsolutePath ? Path.Combine(HackDefaults.Instance.PwaPathAbsolute, relativePath) : relativePath;
     }
     public static string WindowsToOdooPath(string pathway, bool fromFullPath = false)
     {
         if (fromFullPath)
         {
-            pathway = pathway[(HackDefaults.PwaPathAbsolute.Length - HackDefaults.PwaPathRelative.Length)..];
+            pathway = pathway[(HackDefaults.Instance.PwaPathAbsolute.Length - HackDefaults.Instance.PwaPathRelative.Length)..];
         }
         string[] pathwaySegmented = pathway.Split('\\');
-        if (pathwaySegmented[0] == HackDefaults.PwaPathRelative)
+        if (pathwaySegmented[0] == HackDefaults.Instance.PwaPathRelative)
         {
             pathwaySegmented[0] = "root";
         }

@@ -28,8 +28,8 @@ public class ReflectionHelp
     {
         Type type = typeof(T);
 
-        PropertyInfo[]? properties = mType is MethodType.PropertyAndField or MethodType.PropertyOnly ? type?.GetProperties(BindingFlags.Public | BindingFlags.Instance) : null;
-        FieldInfo[]? fields = mType is MethodType.PropertyAndField or MethodType.FieldOnly ? type?.GetFields(BindingFlags.Public | BindingFlags.Instance) : null;
+        PropertyInfo[]? properties = mType is MethodType.PropertyAndField or MethodType.PropertyOnly ? [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute)))] : null;
+        FieldInfo[]? fields = mType is MethodType.PropertyAndField or MethodType.FieldOnly ? [.. type.GetFields(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooFieldAttribute)))] : null;
 		
         foreach (DictionaryEntry entry in ht)
         {
@@ -236,8 +236,8 @@ public class ReflectionHelp
     private static void GetProperties<T>(T obj, ref Hashtable ht, bool includeEmpty = true, in string[] excludedFieldNames = null)
     {
         Type type = typeof(T);
-        PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-        foreach (PropertyInfo prop in properties)
+        PropertyInfo[] properties = [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute)))];
+		foreach (PropertyInfo prop in properties)
         {
             if (!prop.CanRead) continue;
             if (!includeEmpty)
@@ -256,12 +256,12 @@ public class ReflectionHelp
     private static void GetFields<T>(T obj, ref Hashtable ht, bool includeEmpty = true, in string[] excludedFieldNames = null)
     {
         Type type = typeof(T);
-        FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-        foreach (FieldInfo field in fields)
+		PropertyInfo[] fields = [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute)))];
+		foreach (PropertyInfo field in fields)
         {
             if (!includeEmpty)
             {
-                Type fType = field.FieldType;
+                Type fType = field.PropertyType;
                 bool valueType = fType.IsValueType;
                 if (valueType && Activator.CreateInstance(fType) == field.GetValue(obj)) continue;
                 else if (!valueType && field.GetValue(obj) == null) continue;

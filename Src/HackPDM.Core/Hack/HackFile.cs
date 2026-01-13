@@ -1,10 +1,10 @@
 ﻿using System.Collections;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+
 using HackPDM.Domain.Hack;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Domain.Representation;
-using HackPDM.Infrastructure.Hack;
 using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Core.Hack;
@@ -264,7 +264,7 @@ public class HackFile : HackBaseFile, IHackFileModel
         {
             hack = GetHackFromPathUninitialized(entry.FullName, null);
         }
-        hack?.RelativePath = Path.Combine("root", hack?.DirectoryName?[Math.Min(HackDefaults.PwaPathAbsolute.Length+1, hack.DirectoryName.Length)..] ?? "");
+        hack?.RelativePath = Path.Combine("root", hack?.DirectoryName?[Math.Min(HackDefaults.Instance.PwaPathAbsolute.Length+1, hack.DirectoryName.Length)..] ?? "");
         return hack;
     }
 	public static HackFile? GetFromPath(string? path, string? directory = null, bool initWithFileInfo=true)
@@ -282,7 +282,7 @@ public class HackFile : HackBaseFile, IHackFileModel
 			hack = GetHackFromPathUninitialized(path, directory);
 		}
 
-        hack?.RelativePath = Path.Combine("root", hack?.DirectoryName?[Math.Min(HackDefaults.PwaPathAbsolute.Length+1, hack.DirectoryName.Length)..] ?? "");
+        hack?.RelativePath = Path.Combine("root", hack?.DirectoryName?[Math.Min(HackDefaults.Instance.PwaPathAbsolute.Length+1, hack.DirectoryName.Length)..] ?? "");
         return hack;
     }
     private static HackFile? GetHackFromPathUninitialized(string? path, string? directory=null)
@@ -312,7 +312,7 @@ public class HackFile : HackBaseFile, IHackFileModel
     public static HackFile GetFromVersion(IHpVersionModel versionModel)
     {
         if (versionModel.windows_complete_name == null) return null;
-        HackFile hack = GetFromPath(Path.Combine(HackDefaults.PwaPathAbsolute, versionModel.windows_complete_name[HpBaseModel.ROOT_OFFSET..]), Path.Combine(HackDefaults.PwaPathRelative, versionModel.windows_complete_name[HpBaseModel.ROOT_OFFSET..(versionModel.windows_complete_name.Length - versionModel.name.Length)]));
+        HackFile hack = GetFromPath(Path.Combine(HackDefaults.Instance.PwaPathAbsolute, versionModel.windows_complete_name[HpBaseModel.ROOT_OFFSET..]), Path.Combine(HackDefaults.Instance.PwaPathRelative, versionModel.windows_complete_name[HpBaseModel.ROOT_OFFSET..(versionModel.windows_complete_name.Length - versionModel.name.Length)]));
         if (hack != null && hack.Checksum == versionModel.checksum)
         {
             hack.HasRemoteVersion = true;

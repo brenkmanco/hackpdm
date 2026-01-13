@@ -17,15 +17,20 @@ namespace HackPDM.Infrastructure.Odoo;
 
 public class OdooDefaults : IOdooDefaults
 {
-    public ISettingsProvider Settings { get; }
-    private OdooDefaults(ISettingsProvider settingsProvider)
+    public static IOdooDefaults? Instance { get; set; } = new OdooDefaults();
+    public ISettingsProvider Settings { get; set; }
+
+    private OdooDefaults() {}
+    public OdooDefaults(ISettingsProvider settingsProvider)
     {
+        if (Instance is not null)
+        {
+            Instance.Settings = settingsProvider;
+            return;
+        }
         Settings = settingsProvider;
         Instance = this;
     }
-    
-    
-    public static OdooDefaults? Instance { get; private set; }
 
 	#region Declarations
 	public string? OdooUser
@@ -126,7 +131,7 @@ public class OdooDefaults : IOdooDefaults
             }
             return 0;
         }
-        internal set
+        set
         {
             if (value is 0) return;
             if (value != field) field = value;
@@ -324,6 +329,20 @@ public class OdooDefaults : IOdooDefaults
         }
         return dict;
     }
+
+
+
+
+
+
+
+
+
+
+    // TODO: fix type.file_ext being null.
+    // field is not actually null but the field
+    // AssignClasses funciton is not reading properly
+
     public static Dictionary<string, IHpTypeModel> ExtensionMapType( in IHpTypeModel []? types )
     {
         if (types is null) return [];
@@ -334,6 +353,22 @@ public class OdooDefaults : IOdooDefaults
         }
         return dict;
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     public static Dictionary<string, IHpCategoryModel> ExtensionMapCategory( in IHpCategoryModel []? categories, in IHpTypeModel []? types )
     {
         if (categories is null || types is null) return [];

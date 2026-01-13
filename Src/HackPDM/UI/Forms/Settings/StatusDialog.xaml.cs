@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HackPDM.Abstractions;
 using HackPDM.Core;
+using HackPDM.Core.Hack;
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo.FormTransport;
 using HackPDM.Shared.GlobalData;
@@ -50,26 +51,26 @@ public sealed partial class StatusDialog : Page
     {
         get
         {
-            field ??= HackDefaultBase.SettingsProvider?.Get("SkipText", field);
+            field ??= HackDefaults.Instance?.SettingsProvider?.Get("SkipText", field);
             return field;
         }
         set
         {
             field = value;
-            HackDefaultBase.SettingsProvider?.Set("SkipText", field);
+            HackDefaults.Instance?.SettingsProvider?.Set("SkipText", field);
         }
     }
     public static int? HistoryLength
     {
         get
         {
-            field ??= HackDefaultBase.SettingsProvider?.Get("HistoryLength", field) ?? 100000;
+            field ??= HackDefaults.Instance?.SettingsProvider?.Get("HistoryLength", field) ?? 100000;
             return field;
         }
         set
         {
             field = value;
-            HackDefaultBase.SettingsProvider?.Set("HistoryLength", field);
+            HackDefaults.Instance?.SettingsProvider?.Set("HistoryLength", field);
         }
     }
     public bool DoubleBuff { get; set; } = true;

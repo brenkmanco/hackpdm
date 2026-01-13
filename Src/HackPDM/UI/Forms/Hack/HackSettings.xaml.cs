@@ -4,13 +4,13 @@ using System.Reflection;
 using System.Text;
 using HackPDM.Core;
 using HackPDM.Core.Configuration;
-
-using HackPDM.Infrastructure.Hack;
 using HackPDM.Shared.GlobalData;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
 using HackPDM.UI.Controls;
+using HackPDM.Abstractions;
+using HackPDM.Core.Hack;
 
 
 // To learn more about WinUI, the WinUI project structure,
@@ -24,6 +24,7 @@ namespace HackPDM.UI.Forms.Hack;
 public sealed partial class HackSettings : Page
 {
 	Assembly assembly;
+	ISettingsProvider settingsProvider;
 	string documents;
 
 	public HackSettings()
@@ -34,13 +35,17 @@ public sealed partial class HackSettings : Page
 		InitializeComponent();
 		GetInfoDefaults();
 	}
+	public HackSettings(ISettingsProvider settingsProvider) : this() 
+	{
+		this.settingsProvider = settingsProvider;
+	}
 	private void GetInfoDefaults()
 	{
 		FileInfo hackExe = new FileInfo(assembly.Location);
 		string? assemblyDir = hackExe.DirectoryName;
 
-		if (HackDefaults.PwaPathAbsolute is null or "") txtPwaInput.Text = Path.Combine(documents, StorageBox.APP_NAME, "pwa");
-		else txtPwaInput.Text = HackDefaults.PwaPathAbsolute;
+		if (HackDefaults.Instance.PwaPathAbsolute is null or "") txtPwaInput.Text = Path.Combine(documents, StorageBox.APP_NAME, "pwa");
+		else txtPwaInput.Text = HackDefaults.Instance.PwaPathAbsolute;
 
 		if (StorageBox.TemporaryPath is null or "") HackTempFolderPath.Text = Path.Combine(Path.GetTempPath(), StorageBox.APP_NAME);
 		else HackTempFolderPath.Text = StorageBox.TemporaryPath;
@@ -59,8 +64,8 @@ public sealed partial class HackSettings : Page
 			return;
 		}
 		var dirInfo = new DirectoryInfo(txtPwaInput.Text);
-		HackDefaults.PwaPathAbsolute = txtPwaInput.Text;
-		HackDefaults.PwaPathRelative = dirInfo.Name;
+		HackDefaults.Instance.PwaPathAbsolute = txtPwaInput.Text;
+		HackDefaults.Instance.PwaPathRelative = dirInfo.Name;
 		StorageBox.TemporaryPath = HackTempFolderPath.Text;
 		this.Window?.Close();
 	}

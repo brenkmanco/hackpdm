@@ -6,6 +6,7 @@ using System.Text;
 
 using HackPDM.Core;
 using HackPDM.Core.General;
+using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Shared.GlobalData;
 
@@ -92,7 +93,7 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 	{
 		Type type = GetType();
 
-		WriteInternal(type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly));
+		WriteInternal([.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute)))]);
 		return true;
 	}
 	public virtual bool Write(params string[] fieldNamesToWrite)
@@ -100,7 +101,7 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 		//List<string> fields = [];
 		//foreach (string fieldName in fieldNamesToWrite)
 		//{
-		//    FieldInfo field = GetType().GetField(fieldName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+		//    PropertyInfo field = GetType().GetProperties(fieldName, BindingFlags.Public | BindingFlags.Instance);
 
 		//    fields.Add(fieldName);
 		//    //if (HashedValues.ContainsKey(fieldName) && HashedValues[fieldName] != field.GetValue(this))
@@ -112,7 +113,7 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 		Hashtable ht = [];
 		foreach (string field in fieldNamesToWrite)
 		{
-			FieldInfo fieldInfo = GetType().GetField(field, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+			PropertyInfo fieldInfo = GetType().GetProperty(field, BindingFlags.Public | BindingFlags.Instance);
 			ht.Add(field, fieldInfo.GetValue(this));
 		}
 		return WriteInternal(ht);
@@ -124,7 +125,7 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 
 		foreach (string fieldName in fieldNamesToWrite)
 		{
-			FieldInfo field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+			PropertyInfo field = type.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance);
 			ht.Add(fieldName, field.GetValue(this));
 			//if ( HashedValues.TryGetValue( fieldName, out object value ) )
 			//            {                
@@ -143,14 +144,14 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 	/// <summary>
 	/// To compute any remaining fields that are based off of other field initializations
 	/// </summary>
-	
+
 	//private bool VerifyModified()
 	//{
 	//    if (HashedValues == null || ExcludedFields == null) return false;
 	//    Type type = GetType();
-	//    FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+	//    PropertyInfo[] fields = (PropertyInfo[])type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p=>Attribute.IsDefined(p, typeof(OdooPropAttribute)));
 
-	//    foreach (FieldInfo field in fields)
+	//    foreach (PropertyInfo field in fields)
 	//    {
 	//        string fieldName = field.Name;
 	//        object fieldValue = field.GetValue(this);
@@ -178,10 +179,10 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 		}
 		return wasWritten;
 	}
-	protected bool WriteInternal(params FieldInfo[] fields)
+	protected bool WriteInternal(params PropertyInfo[] fields)
 	{
 		Hashtable ht = [];
-		foreach (FieldInfo field in fields)
+		foreach (PropertyInfo field in fields)
 		{
 			ht.Add(field.Name, field.GetValue(this));
 		}
@@ -203,9 +204,9 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 	public static ArrayList GetFields(Type type, string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
 	{
 		ArrayList fieldNames = [];
-		FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+		PropertyInfo[] fields = [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p=>Attribute.IsDefined(p, typeof(OdooPropAttribute)))];
 
-		foreach (FieldInfo field in fields)
+		foreach (PropertyInfo field in fields)
 		{
 			bool isExcluded = false, isIncluded = true;
 			if (excludedFieldNames != null) isExcluded = excludedFieldNames.Contains(field.Name);
@@ -223,7 +224,45 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 		return fieldNames;
 	}
 }
+public abstract partial class HpBaseModelTransport
+{
+	protected static new readonly Dictionary<Type, string> HpModelDictionary = new()
+	{
+		{typeof(IHpNodeModel),                OdooDefaultsConstants.HP_NODE},
+		{typeof(IHpEntryModel),               OdooDefaultsConstants.HP_ENTRY},
+		{typeof(IHpEntryNameFilterModel),     OdooDefaultsConstants.HP_ENTRY_NAME_FILTER},
+		{typeof(IHpDirectoryModel),           OdooDefaultsConstants.HP_DIRECTORY},
+		{typeof(IHpCategoryModel),            OdooDefaultsConstants.HP_CATEGORY},
+		{typeof(IHpCategoryPropertyModel),    OdooDefaultsConstants.HP_CATEGORY_PROPERTY},
+		{typeof(IHpVersionModel),             OdooDefaultsConstants.HP_VERSION},
+		{typeof(IHpVersionPropertyModel),     OdooDefaultsConstants.HP_VERSION_PROPERTY},
+		{typeof(IHpVersionRelationshipModel), OdooDefaultsConstants.HP_VERSION_RELATIONSHIP},
+		{typeof(IHpReleaseModel),             OdooDefaultsConstants.HP_RELEASE},
+		{typeof(IHpReleaseVersionRelModel),   OdooDefaultsConstants.HP_RELEASE_VERSION_REL},
+		{typeof(IHpTypeModel),                OdooDefaultsConstants.HP_TYPE},
+		{typeof(IHpPropertyModel),            OdooDefaultsConstants.HP_PROPERTY},
+		{typeof(IHpSettingModel),             OdooDefaultsConstants.HP_SETTINGS},
+		{typeof(IIrAttachment),          OdooDefaultsConstants.IR_ATTACHMENT},
+		{typeof(IHpUserModel),                OdooDefaultsConstants.RES_USERS},
 
+		{typeof(HpNode),                OdooDefaultsConstants.HP_NODE},
+		{typeof(HpEntry),               OdooDefaultsConstants.HP_ENTRY},
+		{typeof(HpEntryNameFilter),     OdooDefaultsConstants.HP_ENTRY_NAME_FILTER},
+		{typeof(HpDirectory),           OdooDefaultsConstants.HP_DIRECTORY},
+		{typeof(HpCategory),            OdooDefaultsConstants.HP_CATEGORY},
+		{typeof(HpCategoryProperty),    OdooDefaultsConstants.HP_CATEGORY_PROPERTY},
+		{typeof(HpVersion),             OdooDefaultsConstants.HP_VERSION},
+		{typeof(HpVersionProperty),     OdooDefaultsConstants.HP_VERSION_PROPERTY},
+		{typeof(HpVersionRelationship), OdooDefaultsConstants.HP_VERSION_RELATIONSHIP},
+		{typeof(HpRelease),             OdooDefaultsConstants.HP_RELEASE},
+		{typeof(HpReleaseVersionRel),   OdooDefaultsConstants.HP_RELEASE_VERSION_REL},
+		{typeof(HpType),                OdooDefaultsConstants.HP_TYPE},
+		{typeof(HpProperty),            OdooDefaultsConstants.HP_PROPERTY},
+		{typeof(HpSetting),             OdooDefaultsConstants.HP_SETTINGS},
+		{typeof(IrAttachment),          OdooDefaultsConstants.IR_ATTACHMENT},
+		{typeof(HpUser),                OdooDefaultsConstants.RES_USERS},
+	};
+}
 public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport where T : HpBaseModelTransport, new()
 {
 	public virtual T?				GetRecord()
@@ -401,7 +440,7 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 				}
 		}
 		Type type = typeof(T);
-		IEnumerable<string> fieldInfo = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Select(fi => fi.Name);
+		IEnumerable<string> fieldInfo = type.GetFields(BindingFlags.Public | BindingFlags.Instance).Select(fi => fi.Name);
 		// if All then take all                                                                     true            = true
 		// if ExistingFields then IsExisting is true so if it does contain the key then             true    ^ !true = true
 		// if NotExistingFields then IsExisting is false so if it does not contain the key then     false   ^ !true = false

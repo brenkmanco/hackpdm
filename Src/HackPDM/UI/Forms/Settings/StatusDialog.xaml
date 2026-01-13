@@ -1,16 +1,15 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="HackPDM.UI.Forms.Settings.StatusDialog"
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns="using:Microsoft.UI.Xaml.Controls"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:com="clr-namespace:CommunityToolkit.WinUI.UI.Controls;assembly=CommunityToolkit.WinUI.UI.Controls.DataGrid"
+    xmlns:com="using:CommunityToolkit.WinUI.UI.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:rep="using:HackPDM.Domain.Representation"
     xmlns:ui="using:CommunityToolkit.WinUI"
-    xmlns:data="clr-namespace:Microsoft.UI.Xaml.Data;assembly=Microsoft.WinUI"
     xmlns:xaml="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+    Background="{xaml:ThemeResource ApplicationPageBackgroundThemeBrush}"
     mc:Ignorable="d">
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -35,18 +34,17 @@
             CanUserSortColumns="True"
             IsReadOnly="True"
             ItemsSource="{x:Bind OStatus, Mode=OneWay}"
-            DataContext="{rep:BasicStatusMessage}"
             RowDetailsVisibilityMode="Collapsed">
             
             <com:DataGrid.Columns>
                 <com:DataGridTextColumn
                     Width="120"
-                    Binding="{data:Binding Status}"
+                    Binding="{xaml:Binding Status}"
                     Header="Action"
                     SortDirection="Descending"/>
                 <com:DataGridTextColumn
                     Width="1158"
-                    Binding="{data:Binding Message}"
+                    Binding="{xaml:Binding Message}"
                     Header="Description" 
                     SortDirection="Descending"/>
             </com:DataGrid.Columns>
@@ -70,17 +68,16 @@
             CanUserSortColumns="True"
             IsReadOnly="True"
             ItemsSource="{x:Bind OInfo, Mode=OneWay}"
-            DataContext="{rep:BasicStatusMessage}"
             RowDetailsVisibilityMode="Collapsed">
             <com:DataGrid.Columns>
                 <com:DataGridTextColumn
                     Width="120"
-                    Binding="{data:Binding Status}"
+                    Binding="{xaml:Binding Status}"
                     Header="Action" 
                     SortDirection="Descending"/>
                 <com:DataGridTextColumn
                     Width="1158"
-                    Binding="{data:Binding Message}"
+                    Binding="{xaml:Binding Message}"
                     Header="Description" 
                     SortDirection="Descending"/>
             </com:DataGrid.Columns>
@@ -96,17 +93,16 @@
             CanUserSortColumns="True"
             IsReadOnly="True"
             ItemsSource="{x:Bind OError, Mode=OneWay}"
-            DataContext="{rep:BasicStatusMessage}"
             RowDetailsVisibilityMode="Collapsed">
             <com:DataGrid.Columns>
                 <com:DataGridTextColumn
                     Width="120"
-                    Binding="{data:Binding Status}"
+                    Binding="{xaml:Binding Status}"
                     Header="Action" 
                     SortDirection="Descending"/>
                 <com:DataGridTextColumn
                     Width="1158"
-                    Binding="{data:Binding Message}"
+                    Binding="{xaml:Binding Message}"
                     Header="Description" 
                     SortDirection="Descending"/>
             </com:DataGrid.Columns>

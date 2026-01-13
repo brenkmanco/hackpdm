@@ -7,7 +7,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:globalData="using:HackPDM.Shared.GlobalData"
-    xmlns:representation="using:HackPDM.Domain.Representation"
+    xmlns:rep="using:HackPDM.Domain.Representation"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     mc:Ignorable="d">
 
@@ -34,7 +34,7 @@
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <ComboBox x:Name="OdooSearchComparer" Width="80">
                         <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="representation:OperatorsRow">
+                            <DataTemplate x:DataType="rep:OperatorsRow">
                                 <TextBlock Text="{Binding OpRepr}" />
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
@@ -94,7 +94,7 @@
                         <TextBlock x:Name="label2" Text="Property" />
                         <ComboBox x:Name="OdooSearchProperty" MinWidth="150">
                             <ComboBox.ItemTemplate>
-                                <DataTemplate x:DataType="representation:SearchPropertiesRow">
+                                <DataTemplate x:DataType="rep:SearchPropertiesRow">
                                     <TextBlock Text="{Binding Name}" />
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
@@ -105,7 +105,7 @@
                         <TextBlock x:Name="OdooPropComparer" Text="is" />
                         <ComboBox x:Name="OdooSearchPropEqual" Width="80">
                             <ComboBox.ItemTemplate>
-                                <DataTemplate x:DataType="representation:OperatorsRow">
+                                <DataTemplate x:DataType="rep:OperatorsRow">
                                     <TextBlock Text="{Binding OpRepr}" />
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>

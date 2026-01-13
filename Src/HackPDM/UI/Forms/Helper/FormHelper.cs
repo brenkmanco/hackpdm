@@ -14,7 +14,7 @@ using Microsoft.UI.Xaml.Media;
 
 namespace HackPDM.UI.Forms.Helper;
 
-internal static class FormHelper
+public static class FormHelper
 {
     /// <summary>
     /// Returns an absolute or relative path for the parent of the passed argument
@@ -241,7 +241,7 @@ internal static class FormHelper
 		return null;
 	}
 }
-public class FileSizeConverter : IValueConverter
+public partial class FileSizeConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {

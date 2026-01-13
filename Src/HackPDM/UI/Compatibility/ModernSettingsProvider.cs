@@ -2,6 +2,7 @@
 using System.Runtime.Versioning;
 using Windows.Storage;
 using HackPDM.Abstractions;
+using System.Collections.Generic;
 
 namespace HackPDM.UI.Compatibility;
 
@@ -14,7 +15,11 @@ public class ModernSettingsProvider : ISettingsProvider
         Settings.Values.TryGetValue(key, out var value) && value is T typed
             ? typed
             : defaultValue;
-    public void Set<T>(string key, T? value) => Settings.Values[key] = value is null ? default : value;
+    public void Set<T>(string key, T value)
+    {
+        try { Settings.Values.TryAdd(key, value is null ? default : value); } 
+        catch { Debug.WriteLine("Can't write to data container"); }
+    }
     public bool Contains(string key) => Settings.Values.ContainsKey(key);
     public void Remove(string key) => Settings.Values.Remove(key);
 }

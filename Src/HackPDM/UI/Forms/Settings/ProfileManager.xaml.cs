@@ -18,6 +18,8 @@ using HackPDM.Infrastructure.Odoo.FormTransport;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Odoo;
+using Microsoft.Extensions.DependencyInjection;
+using HackPDM.UI.Forms.Hack;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -51,12 +53,13 @@ public sealed partial class ProfileManager : Page
     
     public void OdooSetting(object sender, RoutedEventArgs e)
     {
-        //WindowConfig config = new("Odoo Settings", new Src.Data.Numeric.int4(0, 0, 1280, 720));
-        WindowHelper.CreateWindowPage<OdooSettings>();
+		OdooSettings oSettings = HackApp.Services?.GetRequiredService<OdooSettings>();
+		WindowHelper.CreateWindowFromPage<OdooSettings>(oSettings);
     }
     public void HackSetting(object sender, RoutedEventArgs e)
     {
-        WindowHelper.CreateWindowPage<Hack.HackSettings>();
+		HackSettings hSettings = HackApp.Services?.GetRequiredService<HackSettings>();
+		WindowHelper.CreateWindowFromPage<HackSettings>(hSettings);
     }
     private async Task<bool> AbleToLogin()
     {

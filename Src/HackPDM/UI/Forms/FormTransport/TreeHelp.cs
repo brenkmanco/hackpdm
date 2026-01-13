@@ -8,21 +8,24 @@ using System.Linq;
 using System.Net.Mime;
 using System.Threading;
 using System.Threading.Tasks;
+
 using Windows.Storage.Streams;
+
 using CommunityToolkit.WinUI;
+
 using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Core.Helper.Xaml;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Domain.Representation;
-using HackPDM.Infrastructure.Hack;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Compatibility;
 using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Hack;
 using HackPDM.UI.Forms.Helper;
+
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -32,7 +35,8 @@ using EntryRow = HackPDM.UI.Types.EntryRow;
 using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
 using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
 using Image = Microsoft.UI.Xaml.Controls.Image;
-using static HackPDM.UI.Controls.UISettings; 
+
+using static HackPDM.UI.Controls.UISettings;
 
 namespace HackPDM.Infrastructure.Odoo.FormTransport
 {
@@ -194,8 +198,8 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 		internal static void CreateLocalTree(in TreeView treeView)
 		{
 			Dictionary<string, TreeViewNode>? treeDict = FormHelper.ConvertTreeToDictionary(treeView);
-			IEnumerable<string> pathways = Directory.EnumerateDirectories(HackDefaults.PwaPathAbsolute, "*", SearchOption.AllDirectories);
-			pathways = Help.FastSlice(pathways, HackDefaults.PwaPathAbsolute.Length, prependText: "root");
+			IEnumerable<string> pathways = Directory.EnumerateDirectories(HackDefaults.Instance.PwaPathAbsolute, "*", SearchOption.AllDirectories);
+			pathways = Help.FastSlice(pathways, HackDefaults.Instance.PwaPathAbsolute.Length, prependText: "root");
 
 			foreach (string pathway in pathways)
 			{

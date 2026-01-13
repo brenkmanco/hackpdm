@@ -37,7 +37,6 @@ using HackPDM.Domain.Helper;
 using HackPDM.UI.Controls;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Domain.Representation;
-using HackPDM.Infrastructure.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.FormTransport;
 using HackPDM.Infrastructure.Odoo.Models;
@@ -1023,7 +1022,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	// tree open events
 	private void OdooCMSTree_Opening(object sender, CancelEventArgs e)
 	{
-		string pathway = LastSelectedNodePath?.Length < 5 ? HackDefaults.PwaPathAbsolute : Path.Combine(HackDefaults.PwaPathAbsolute, LastSelectedNodePath[5..]);
+		string pathway = LastSelectedNodePath?.Length < 5 ? HackDefaults.Instance.PwaPathAbsolute : Path.Combine(HackDefaults.Instance.PwaPathAbsolute, LastSelectedNodePath[5..]);
 		if (Directory.Exists(pathway))
 		{
 			// TreeOpenDirectory.Enabled = true;
@@ -1137,7 +1136,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		=> GetLatestFromTreeNode(false);
 	private async void Tree_Click_Commit(object sender, RoutedEventArgs e)
 	{
-		string pathway = LastSelectedNodePath?.Length < 5 ? HackDefaults.PwaPathAbsolute : Path.Combine(HackDefaults.PwaPathAbsolute, LastSelectedNodePath?[5..] ?? "");
+		string pathway = LastSelectedNodePath?.Length < 5 ? HackDefaults.Instance.PwaPathAbsolute : Path.Combine(HackDefaults.Instance.PwaPathAbsolute, LastSelectedNodePath?[5..] ?? "");
 		//HpDirectory hpDirectory;
 		TreeData? dat = LastSelectedNode?.LinkedData;
 		if (dat?.IsRemoteOnly is true) return;
@@ -1168,7 +1167,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	}
 	private void Tree_Click_OpenDirectory(object sender, RoutedEventArgs e)
 	{
-		string pathway = LastSelectedNodePath?.Length < 5 ? HackDefaults.PwaPathAbsolute : Path.Combine(HackDefaults.PwaPathAbsolute, LastSelectedNodePath[5..]);
+		string pathway = LastSelectedNodePath?.Length < 5 ? HackDefaults.Instance.PwaPathAbsolute : Path.Combine(HackDefaults.Instance.PwaPathAbsolute, LastSelectedNodePath[5..]);
 		if (Directory.Exists(pathway))
 		{
 			Process.Start("explorer.exe", pathway);
@@ -1182,7 +1181,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		=> MessageBox.Show("Not Implemented Yet");
 	private void Tree_Click_LocalDelete(object sender, RoutedEventArgs e)
 	{
-		string pathway = LastSelectedNodePath?.Length < 5 ? HackDefaults.PwaPathAbsolute : Path.Combine(HackDefaults.PwaPathAbsolute, LastSelectedNodePath[5..]);
+		string pathway = LastSelectedNodePath?.Length < 5 ? HackDefaults.Instance.PwaPathAbsolute : Path.Combine(HackDefaults.Instance.PwaPathAbsolute, LastSelectedNodePath[5..]);
 		DirectoryInfo directory = new(pathway);
 		if (directory.Exists)
 		{
@@ -1451,7 +1450,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	}
 	private void List_Click_LocalDelete(object sender, RoutedEventArgs e)
 	{
-		string pathway = LastSelectedNodePath?.Length < 5 ? HackDefaults.PwaPathAbsolute : Path.Combine(HackDefaults.PwaPathAbsolute, LastSelectedNodePath?[5..]);
+		string pathway = LastSelectedNodePath?.Length < 5 ? HackDefaults.Instance.PwaPathAbsolute : Path.Combine(HackDefaults.Instance.PwaPathAbsolute, LastSelectedNodePath?[5..]);
 		DirectoryInfo directory = new(pathway);
 		if (!directory.Exists) return;
 
@@ -1540,7 +1539,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		page.StoreWindowInstance(window);
 	}
 	private void AdditionalTools_Click_ManageTypes(object sender, RoutedEventArgs e)
-		=> WindowHelper.CreateWindowPage(typeof(OdooFileTypeManager)).Title = "Manage Types";
+		=> WindowHelper.CreateWindowPage<OdooFileTypeManager>().Title = "Manage Types";
 	//
 	private void History_Click_Download(object sender, DoubleTappedRoutedEventArgs e)
 	{
@@ -1820,7 +1819,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		if (item?.Version is null or 0) return null;
 
 		var version = HpVersion.GetRecordById(item!.Version, HpVersion.UsualExcludedFields);
-		version.WinPathway = Path.Combine(HackDefaults.PwaPathAbsolute, version.WinPathway);
+		version.WinPathway = Path.Combine(HackDefaults.Instance.PwaPathAbsolute, version.WinPathway);
 		return version;
 	}
 	private void EndNodePaths(TreeViewNode node, in List<string> paths)

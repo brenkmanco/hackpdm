@@ -5,7 +5,6 @@ using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
-using HackPDM.Infrastructure.Hack;
 using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Shared.GlobalData;
 
@@ -81,11 +80,11 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 				foreach (string[] deps in dependencies)
 				{
 					string dpath = deps[1];
-					int index = dpath.IndexOf($"\\{HackDefaults.PwaPathRelative}\\");
+					int index = dpath.IndexOf($"\\{HackDefaults.Instance.PwaPathRelative}\\");
 					if (index == -1) return null;
 					var splitPath = dpath[index..];
 					
-					dependentPaths.Add(Path.Combine([HackDefaults.PwaPathAbsolute, splitPath]));
+					dependentPaths.Add(Path.Combine([HackDefaults.Instance.PwaPathAbsolute, splitPath]));
 				}
 			}
 		}
@@ -118,7 +117,7 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 				foreach (string[] deps in dependencies)
 				{
 					string dpath = deps[1];
-					bool insidePwa = dpath.StartsWith(HackDefaults.PwaPathAbsolute);
+					bool insidePwa = dpath.StartsWith(HackDefaults.Instance.PwaPathAbsolute);
 
 					yield return insidePwa ? new(dpath, this) : new(dpath, this, true);
 				}
@@ -172,7 +171,7 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 		await version.WriteChangedValuesAsync("node_id");
         if (HashedValues.TryGetValue("windows_complete_name", out object objpath) && objpath is string winpath)
         {
-            string absPath = Path.Combine(HackDefaults.PwaPathAbsolute, winpath[5..]);
+            string absPath = Path.Combine(HackDefaults.Instance.PwaPathAbsolute, winpath[5..]);
             FileInfo file = new(absPath);
             if (file.Exists)
             {
@@ -191,7 +190,7 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
         await WriteChangedValuesAsync( "checkout_user", "checkout_date", "checkout_node" );
         if (HashedValues.TryGetValue("windows_complete_name", out object objpath) && objpath is string winpath)
         {
-            string absPath = Path.Combine(HackDefaults.PwaPathAbsolute, winpath[5..]);
+            string absPath = Path.Combine(HackDefaults.Instance.PwaPathAbsolute, winpath[5..]);
             FileInfo file = new(absPath);
             if (file.Exists)
             {

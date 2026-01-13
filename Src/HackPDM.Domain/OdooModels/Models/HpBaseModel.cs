@@ -65,9 +65,9 @@ public abstract partial class HpBaseModel
 	    Hashtable ht = [];
 	    Type type = GetType();
 	    List<string> excludeFields = [];
-	    FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+	    PropertyInfo[] fields = [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute)))];
 
-	    foreach (FieldInfo field in fields)
+	    foreach (PropertyInfo field in fields)
 	    {
 		    if (excludedFieldNames != null && excludedFieldNames.Contains(field.Name))
 		    {
@@ -76,7 +76,7 @@ public abstract partial class HpBaseModel
 		    }
 		    if (!includeEmpty)
 		    {
-			    Type fType = field.FieldType;
+			    Type fType = field.PropertyType;
 			    bool valueType = fType.IsValueType;
 
 			    object fVal = field.GetValue(this);

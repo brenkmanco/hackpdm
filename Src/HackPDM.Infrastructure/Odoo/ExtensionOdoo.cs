@@ -9,12 +9,12 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
+
 using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Domain.Representation;
-using HackPDM.Infrastructure.Hack;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Infrastructure.XmlRpc;
@@ -158,10 +158,10 @@ public static class ExtensionOdoo
 					    foreach (string[] deps in dependencies)
 					    {
 						    string path = deps[1];
-						    var splitPath = path.Split([$"\\{HackDefaults.PwaPathRelative}\\"], StringSplitOptions.RemoveEmptyEntries);
+						    var splitPath = path.Split([$"\\{HackDefaults.Instance?.PwaPathRelative}\\"], StringSplitOptions.RemoveEmptyEntries);
 						    if (splitPath.Length == 2)
 						    {
-							    newFiles.Add(Path.Combine([HackDefaults.PwaPathAbsolute, splitPath[1]]));
+							    newFiles.Add(Path.Combine([HackDefaults.Instance.PwaPathAbsolute, splitPath[1]]));
 						    }
 					    }
 				    }

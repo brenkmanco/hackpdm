@@ -42,7 +42,7 @@ public class Notifier
             {
                 IncludeSubdirectories = true,
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.CreationTime | NotifyFilters.Attributes,
-                Path = HackDefaultBase.PwaPathAbsolute ?? "",
+                Path = HackDefaults.Instance.PwaPathAbsolute ?? "",
                 EnableRaisingEvents = true,
             };
             FileWatcher.Created += (s, e) => QueueFileCheck.Enqueue(new FileCheck(e));
@@ -50,7 +50,7 @@ public class Notifier
             FileWatcher.Changed += (s, e) => QueueFileCheck.Enqueue(new FileCheck(e));
             FileWatcher.Renamed += (s, e) => QueueFileCheck.Enqueue(new FileCheck(e));
             FileWatcher.EnableRaisingEvents = true;
-            Directory = new(HackDefaultBase.PwaPathAbsolute ?? "");
+            Directory = new(HackDefaults.Instance.PwaPathAbsolute ?? "");
             IsInvalidDirectory = Directory?.Exists ?? false;
         }
         catch (Exception e)

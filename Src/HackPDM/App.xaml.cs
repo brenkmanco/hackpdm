@@ -12,6 +12,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 
 using ProfileManager = HackPDM.UI.Forms.Settings.ProfileManager;
+using HackPDM.UI.Forms.Odoo;
+using HackPDM.UI.Forms.Hack;
+using HackPDM.Core.Hack;
+using HackPDM.Infrastructure.Odoo;
+using HackPDM.Domain.OdooModels;
+using HackPDM.Domain.Hack;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -33,24 +39,29 @@ public partial class HackApp : Application
     public HackApp()
     {
         InitializeComponent();
-        ConfigureServices();
         Setup();
     }
 
     private void ConfigureServices()
     {
 	    var services = new ServiceCollection();
-	    
-	    services.AddSingleton<ISettingsProvider, ModernSettingsProvider>();
-	    services.AddSingleton<ISettingsProvider>(provider =>
-	    {
-		    var inner = provider.GetRequiredService<ISettingsProvider>();
-		    return new CoreSettings(inner);
-	    });
-	    
 
-	    Services =  services.BuildServiceProvider();
-    }
+        services.AddSingleton<ModernSettingsProvider>();
+        services.AddSingleton<ISettingsProvider>(provider 
+            => new CoreSettings(provider.GetRequiredService<ModernSettingsProvider>()));
+        services.AddSingleton<IHackDefaults, HackDefaults>();
+        services.AddSingleton<IOdooDefaults, OdooDefaults>();
+
+
+	    services.AddTransient<ProfileManager>();
+		services.AddTransient<OdooSettings>();
+		services.AddTransient<HackSettings>();
+
+		Services =  services.BuildServiceProvider();
+
+		var t1 = Services.GetRequiredService<IHackDefaults>();
+        var t2 = Services.GetRequiredService<IOdooDefaults>();
+	}
 
     /// <summary>
     /// Invoked when the application is launched.
@@ -58,7 +69,8 @@ public partial class HackApp : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        Window = new MainWindow();
+        ConfigureServices();
+		Window = new MainWindow();
 		Window.SetWindowType(AppWindowPresenterKind.Overlapped);
 		var rootFrame = new Frame();
         Window.Activate();
