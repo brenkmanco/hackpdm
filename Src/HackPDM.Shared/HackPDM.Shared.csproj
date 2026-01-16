@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
 	<LangVersion>preview</LangVersion>
-    <ImplicitUsings>enable</ImplicitUsings>
+<!--    <ImplicitUsings>enable</ImplicitUsings>-->
     <Nullable>enable</Nullable>
   </PropertyGroup>
 

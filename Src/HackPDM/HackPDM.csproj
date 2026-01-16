@@ -24,11 +24,9 @@
   </ItemGroup>
     <ItemGroup>
 		<ProjectReference Include="..\HackPDM.Infrastructure\HackPDM.Infrastructure.csproj" />
-		<ProjectReference Include="..\HackPDM.Core\HackPDM.Core.csproj" />
-		<ProjectReference Include="..\HackPDM.Domain\HackPDM.Domain.csproj" />
-		<ProjectReference Include="..\HackPDM.Abstractions\HackPDM.Abstractions.csproj" />
-		<ProjectReference Include="..\HackPDM.Shared\HackPDM.Shared.csproj" />
-<!--		<ProjectReference Include="..\HackPDM.SchemaGenerator\HackPDM.SchemaGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />-->
+        <!-- <ProjectReference Include="..\HackPDM.SchemaGenerator\HackPDM.SchemaGenerator.csproj" 
+						  OutputItemType="Analyzer" 
+						  ReferenceOutputAssembly="false" /> -->
     </ItemGroup>
 
   <ItemGroup>

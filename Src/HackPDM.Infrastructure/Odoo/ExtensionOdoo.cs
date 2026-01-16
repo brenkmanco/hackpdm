@@ -20,6 +20,8 @@ using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Infrastructure.XmlRpc;
 using HackPDM.Shared.GlobalData;
 
+using Newtonsoft.Json;
+
 
 namespace HackPDM.Infrastructure.Odoo;
 
@@ -310,4 +312,417 @@ public static class ExtensionOdoo
 		    return entries;
 	    }
     }
+}
+public static class OdooFieldExtension
+{
+	public static readonly Dictionary<OdooFieldType, Type[]> Schema = new()
+	{
+		{ OdooFieldType.Char,       new[] { typeof(string) } },
+		{ OdooFieldType.Text,       new[] { typeof(string) } },
+		{ OdooFieldType.Html,       new[] { typeof(string) } },
+		{ OdooFieldType.Integer,    new[] { typeof(int), typeof(long) } },
+		{ OdooFieldType.Float,      new[] { typeof(double), typeof(decimal) } },
+		{ OdooFieldType.Monetary,   new[] { typeof(decimal) } },
+		{ OdooFieldType.Boolean,    new[] { typeof(bool) } },
+		{ OdooFieldType.Date,       new[] { typeof(DateTime) } },
+		{ OdooFieldType.DateTime,   new[] { typeof(DateTime) } },
+		{ OdooFieldType.Binary,     new[] { typeof(string), typeof(byte[]) } }, // Odoo sometimes base64 encodes
+        { OdooFieldType.Many2one,   new[] { typeof(object[]), typeof(ValueTuple<int,string>) } },
+		{ OdooFieldType.One2many,   new[] { typeof(int[]), typeof(ArrayList) } },
+		{ OdooFieldType.Many2many,  new[] { typeof(int[]), typeof(ArrayList) } },
+		{ OdooFieldType.Selection,  new[] { typeof(string), typeof(int) } },
+		{ OdooFieldType.Reference,  new[] { typeof(string), typeof(object[]) } },
+		{ OdooFieldType.Serialized, new[] { typeof(Dictionary<string,object>), typeof(string) } },
+	};
+	private static bool IsValidShape(this OdooFieldType type, object? value) =>
+	type switch
+	{
+		OdooFieldType.Char
+			or OdooFieldType.Text
+			or OdooFieldType.Html
+			=> value is string,
+
+		OdooFieldType.Integer
+			=> value is int or long or string,
+
+		OdooFieldType.Float
+			or OdooFieldType.Monetary
+			=> value is double or decimal or string,
+
+		OdooFieldType.Boolean
+			=> value is bool or int or string,
+
+		OdooFieldType.Date
+			or OdooFieldType.DateTime
+			=> value is string or DateTime,
+
+		OdooFieldType.Binary
+			=> value is string or byte[],
+
+		OdooFieldType.Many2one
+			=> value is object[],
+
+		OdooFieldType.One2many
+			or OdooFieldType.Many2many
+			=> value is int[] or System.Collections.ArrayList,
+
+		OdooFieldType.Selection
+			=> value is string or int,
+
+		OdooFieldType.Reference
+			=> value is string or object[],
+
+		OdooFieldType.Serialized
+			=> value is string or System.Collections.Generic.Dictionary<string, object>,
+
+		_ => true
+	};
+
+}
+public static class OdooFieldHelpers
+{
+
+	public static bool TryCast<T>(object? value, out T? result)
+	{
+		if (value is T t)
+		{
+			result = t;
+			return true;
+		}
+
+		result = default;
+		return false;
+	}
+	public static bool TryCast<TIn, TOut>(
+		object? value,
+		in Func<TIn, TOut> func,
+		out TOut? result)
+	{
+		if (value is TIn t)
+		{
+			result = func(t);
+			return true;
+		}
+		result = default;
+		return false;
+	}
+	public static bool TryCastAny<T1, T2, TOut>(
+		object? value,
+		in Func<T1, TOut> f1,
+		in Func<T2, TOut> f2,
+		out TOut result)
+	{
+		return value switch
+		{
+			T1 t1 => ReturnTrue(result = f1(t1)),
+			T2 t2 => ReturnTrue(result = f2(t2)),
+			_ => ReturnFalse(result = default!),
+		};
+	}
+	public static bool TryCastAny<T1, T2, T3, TOut>(
+		object? value,
+		in Func<T1, TOut> f1,
+		in Func<T2, TOut> f2,
+		in Func<T3, TOut> f3,
+		out TOut result)
+	{
+		return value switch
+		{
+			T1 t1 => ReturnTrue(result = f1(t1)),
+			T2 t2 => ReturnTrue(result = f2(t2)),
+			T3 t3 => ReturnTrue(result = f3(t3)),
+			_ => ReturnFalse(result = default!),
+		};
+	}
+	public static bool TryCastAny<T1, T2, T3, T4, TOut>(
+		object? value,
+		in Func<T1, TOut> f1,
+		in Func<T2, TOut> f2,
+		in Func<T3, TOut> f3,
+		in Func<T4, TOut> f4,
+		out TOut result)
+	{
+		return value switch
+		{
+			T1 t1 => ReturnTrue(result = f1(t1)),
+			T2 t2 => ReturnTrue(result = f2(t2)),
+			T3 t3 => ReturnTrue(result = f3(t3)),
+			T4 t4 => ReturnTrue(result = f4(t4)),
+			_ => ReturnFalse(result = default!),
+		};
+	}
+	private static bool ReturnTrue<T>(in T _) => true;
+	private static bool ReturnFalse<T>(in T _) => false;
+	private static bool TryNull<TIn, TOut>(TIn input, Func<TIn, TOut> func, out TOut? result)
+	{
+		try
+		{
+			result = func(input);
+		}
+		finally
+		{
+			result = default!;
+		}
+		return false;
+	}
+	private static TOut? TryNull<TIn, TOut>(TIn input, Func<TIn, TOut> func)
+	{
+		try
+		{
+			return func(input);
+		}
+		catch
+		{
+			return default;
+		}
+	}
+	public static object? Convert(OdooFieldType type, object? value)
+	{
+		value = Normalize(type, value);
+		return value is null
+			? null
+			: type switch
+			{
+				// int
+				OdooFieldType.Integer => ConvertInteger(value),
+				// string
+				OdooFieldType.Char
+					or OdooFieldType.Text
+					or OdooFieldType.Html => ConvertString(value),
+				// bool
+				OdooFieldType.Boolean => ConvertBoolean(value),
+				// DateTime
+				OdooFieldType.DateTime => ConvertDateTime(value),
+				// Date
+				OdooFieldType.Date => ConvertDate(value),
+				// ValueTuple<int,string>?
+				OdooFieldType.Many2one => ConvertMany2one(value),
+				// int[]
+				OdooFieldType.One2many
+					or OdooFieldType.Many2many => ConvertOne2many(value),
+				// byte[]
+				OdooFieldType.Binary => ConvertBinary(value),
+				OdooFieldType.Float => ConvertFloat(value),
+				OdooFieldType.Monetary => ConvertMonetary(value),
+				OdooFieldType.Selection => ConvertSelectionString(value),
+				OdooFieldType.Reference => ConvertReferenceString(value),
+				OdooFieldType.Serialized => ConvertSerializedDict(value),
+				_ => value
+			};
+	}
+
+	// --------------------------------------------------------------------
+	// Normalization + shape validation
+	// --------------------------------------------------------------------
+
+	private static object? Normalize(OdooFieldType type, object? value)
+	{
+		// Global Odoo rule: non-boolean fields use False for null
+		if (value is bool b && b == false && type != OdooFieldType.Boolean)
+			return null;
+
+		return value;
+	}
+
+	private static bool IsValidShape(OdooFieldType type, object? value) =>
+		type switch
+		{
+			OdooFieldType.Char
+				or OdooFieldType.Text
+				or OdooFieldType.Html
+				=> value is null or string,
+
+			OdooFieldType.Integer
+				=> value is null or int or long or string,
+
+			OdooFieldType.Float
+				=> value is null or double or decimal or string,
+
+			OdooFieldType.Monetary
+				=> value is null or decimal or double or string,
+
+			OdooFieldType.Boolean
+				=> value is null or bool or int or string,
+
+			OdooFieldType.Date
+				or OdooFieldType.DateTime
+				=> value is null or string or DateTime,
+
+			OdooFieldType.Binary
+				=> value is null or string or byte[],
+
+			OdooFieldType.Many2one
+				=> value is null or object[],
+
+			OdooFieldType.One2many
+				or OdooFieldType.Many2many
+				=> value is null or int[] or ArrayList,
+
+			OdooFieldType.Selection
+				=> value is null or string or int,
+
+			OdooFieldType.Reference
+				=> value is null or string or object[],
+
+			OdooFieldType.Serialized
+				=> value is null
+					or string
+					or Dictionary<string, object>,
+
+			_ => true
+		};
+
+	private static int FromInt(int i) => i;
+	private static int FromLong(long l) => (int)l;
+	private static double FromDouble(double d) => d;
+	private static double FromDecimal(decimal m) => (double)m;
+	private static decimal FromDecimalMonetary(decimal m) => m;
+	private static decimal FromDoubleMonetary(double d) => (decimal)d;
+	private static (int id, string name)? FromObjectArray(object value)
+		=> value is IList list && list.Count >= 2
+			? (list[0] as int? ?? 0, list[1] as string ?? "")
+			: null;
+	private static (int id, string name)? FromArrayList(object value)
+		=> FromObjectArray(value);
+
+	// Char/Text/Html -> string?
+	public static string ConvertString(object value)
+	{
+		if (TryCast<string>(value, out var s))
+			return s!;
+
+		return value.ToString()!;
+	}
+	// Integer -> int
+	public static int ConvertInteger(object value)
+	{
+		// Allowed shapes: int, long, string (validated by IsValidShape)
+		if (TryCastAny<int, long, int>(
+				value,
+				FromInt,
+				FromLong,
+				out var result))
+			return result;
+
+		return default;
+	}
+	// Float -> double
+	public static double ConvertFloat(object value)
+	{
+		// Allowed shapes: double, decimal, string
+		if (TryCastAny<double, decimal, double>(
+				value,
+				FromDouble,
+				FromDecimal,
+				out var result))
+			return result;
+
+		return default;
+	}
+	// Monetary -> decimal
+	public static decimal ConvertMonetary(object value)
+	{
+		// Allowed shapes: decimal, double, string
+		if (TryCastAny<decimal, double, decimal>(
+				value,
+				FromDecimalMonetary,
+				FromDoubleMonetary,
+				out var result))
+			return result;
+
+		return default;
+	}
+	// Boolean -> bool
+	public static bool ConvertBoolean(object value)
+		=> TryCast<bool>(value, out var b) && b;
+	// Date -> DateTime (date-only)
+	public static DateTime ConvertDate(object value)
+		=> ConvertDateTime(value).Date;
+	// DateTime -> DateTime
+	public static DateTime ConvertDateTime(object value)
+	{
+		if (value is DateTime dt)
+			return dt;
+
+		if (TryCast<string>(value, out var s) &&
+			DateTime.TryParse(s, out var parsed))
+			return parsed;
+
+		return default;
+	}
+	// Binary -> byte[]?
+	public static byte[] ConvertBinary(object value)
+	{
+		return TryCast<string>(value, out var s) && !string.IsNullOrEmpty(s)
+			? TryNull(s, System.Convert.FromBase64String)!
+			: TryCast<byte[]>(value, out var bytes) ? bytes! : default!;
+	}
+	// Many2one -> (int id, string name)?
+	// Odoo shape: [id, "Name"]
+	public static Many2One ConvertMany2one(object value)
+	{
+		if (!TryCast<object, ValueTuple<int, string>?>(
+				value,
+				FromObjectArray,
+				out var arr))
+			return new Many2One { id=0, name="" };
+
+		var id = ConvertInteger(arr?.Item1 ?? 0);
+		var name = ConvertString(arr?.Item2 ?? "") ?? string.Empty;
+
+		return new Many2One { id = id, name = name }; ;
+	}
+	// One2many/Many2many -> int[]
+	public static One2Many ConvertOne2many(object value)
+	{
+		if (TryCast<int[]>(value, out var ids))
+			return ids!;
+
+		if (TryCast<IList>(value, out var al))
+			return new One2Many { Ids = [.. al?.Cast<int>() ?? []] };
+
+		return [];
+	}
+	public static Many2Many ConvertMany2many(object value)
+	{
+		if (TryCast<int[]>(value, out var ids))
+			return ids!;
+
+		if (TryCast<IList>(value, out var al))
+			return [.. al?.Cast<int>() ?? []];
+
+		return [];
+	}
+	// Selection -> preserve as string or int (you can refine as needed)
+	public static string ConvertSelectionString(object value)
+		=> value is string s ? s : value.ToString()!;
+	public static int ConvertSelectionInt(object value)
+		=> value is int id ? ConvertInteger(value) : 0;
+	// Reference -> typically "model_name,ID" or [model, id]
+	public static string ConvertReferenceString(object value)
+		=> ConvertString(value);
+	public static (string model, int id) ConvertReferenceToTuple(object value)
+	{
+		if (value is string s)
+		{
+			var parts = s.Split(',');
+			if (parts.Length == 2 && int.TryParse(parts[1], out var id))
+				return (parts[0], id);
+			return ("", 0);
+		}
+		else if (value is object[] arr && arr.Length >= 2)
+		{
+			var model = arr[0]?.ToString() ?? string.Empty;
+			var id = ConvertInteger(arr[1]!);
+			return (model, id);
+		}
+		return ("", 0);
+	}
+	// Serialized -> leave as-is, or decode JSON
+	public static string ConvertSerializedString(object value)
+		=> value is string s ? s : string.Empty;
+	public static Dictionary<string, object> ConvertSerializedDict(object value)
+	{
+		return JsonConvert.DeserializeObject<Dictionary<string, object>>(ConvertSerializedString(value)) ?? [];
+	}
 }

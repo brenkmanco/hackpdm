@@ -9,7 +9,6 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\HackPDM.Abstractions\HackPDM.Abstractions.csproj" />
-		<ProjectReference Include="..\HackPDM.Shared\HackPDM.Shared.csproj" />
 	</ItemGroup>
 
 </Project>

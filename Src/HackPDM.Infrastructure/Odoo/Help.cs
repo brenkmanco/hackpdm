@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
 using HackPDM.Core.General;
@@ -9,6 +11,7 @@ using HackPDM.Domain.OdooModels.Models;
 
 //
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using HackPDM.Core;
 using HackPDM.Domain.OdooModels;
@@ -22,6 +25,7 @@ using EntryRow = HackPDM.Domain.Representation.EntryRow;
 using TreeData = HackPDM.Domain.Representation.TreeData;
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 using Attribute = System.Attribute;
+using HackPDM.Shared.OdooAttributes;
 
 //
 
@@ -29,11 +33,9 @@ namespace HackPDM.Infrastructure.Odoo;
 
 public static class Help
 {
-    
-    
     // [0, 1, 2, 3, 4]
-    // [0, 1], [2, 3], [4]
-    public static List<List<T>>? BatchList<T>(T[]? list, int batchSize)
+	// [0, 1], [2, 3], [4]
+	public static List<List<T>>? BatchList<T>(T[]? list, int batchSize)
     {
         if (list is null) return null;
         List<List<T>> batchList = [];
@@ -234,20 +236,22 @@ public class Kwargs<T>(T obj)
 }
 public static class HashConverter
 {
-    public static T ConvertToClass<T>(in Hashtable ht, MethodType mType = MethodType.FieldOnly) 
+	static readonly Type boolType = typeof(bool);
+	static readonly Type arrType = typeof(ArrayList);
+	public static T ConvertToClass<T>(in Hashtable ht, MethodType mType = MethodType.PropertyOnly) 
         where T : HpBaseModelTransport, new()
     {
         T obj = new();
         AssignToClass(ht, ref obj, mType);
         return obj;
     }
-    public static T[]? ConvertToClasses<T>(in IEnumerable<Hashtable>? hts, MethodType mType = MethodType.FieldOnly) where T : HpBaseModelTransport, new()
+    public static T[]? ConvertToClasses<T>(in IEnumerable<Hashtable>? hts, MethodType mType = MethodType.PropertyOnly) where T : HpBaseModelTransport, new()
     {
         //T[] objs = new T[hts.TryGetNonEnumeratedCount(out int len) ? len : hts.Count()].PopulateZip(() => new());
         IEnumerable<(Hashtable, T)>? objs = hts?.PopulateZip(obj => new T());
         return AssignToClasses(ref objs, mType);
     }
-    public static T AssignToClass<T>(in Hashtable ht, T obj, MethodType mType = MethodType.FieldOnly)
+    public static T AssignToClass<T>(in Hashtable ht, T obj, MethodType mType = MethodType.PropertyOnly)
         where T : HpBaseModel
     {
         Type type = typeof(T);
@@ -288,7 +292,7 @@ public static class HashConverter
         }
         return obj;
     }
-    public static T[]? AssignToClasses<T>(ref IEnumerable<(Hashtable, T)>? hts, MethodType mType = MethodType.FieldOnly)
+    public static T[]? AssignToClasses<T>(ref IEnumerable<(Hashtable, T)>? hts, MethodType mType = MethodType.PropertyOnly)
         where T : HpBaseModelTransport
     {
         if (hts is null || hts.FirstOrDefault().Item1 is not Hashtable hashFirst) return null;
@@ -428,9 +432,9 @@ public static class HashConverter
 
 		return [.. hts.Select(i => i.Item2)];
     }
-    public static void PopulateSelf<T>(this T hprecord, in Hashtable ht, MethodType mType = MethodType.FieldOnly) where T : HpBaseModel
+    public static void PopulateSelf<T>(this T hprecord, in Hashtable ht, MethodType mType = MethodType.PropertyOnly) where T : HpBaseModel
         => AssignToClass(ht, hprecord, mType);
-    public static void AssignToClass<T>( in Hashtable ht, ref T obj, MethodType mType = MethodType.FieldOnly )
+    public static void AssignToClass<T>( in Hashtable ht, ref T obj, MethodType mType = MethodType.PropertyOnly )
         where T : HpBaseModel, new()
         => AssignToClass( ht, obj, mType );
     public static Hashtable ConvertToHashtable<T>(T obj, MethodType mType = MethodType.PropertyAndField, bool includeEmpty = true, in string[] excludedFieldNames = null)
@@ -503,21 +507,52 @@ public static class HashConverter
     // 
     internal static object? ConvertValue(object value, Type targetType)
     {
-        if (value == null) return null;
+		if (value == null) return null;
+		
+        // if the value is an ArrayList, get the first value and convert that
+		if (value is ArrayList list && list is [int id, string _]) return ConvertValue(id, targetType);
 
-        Type valueOfType = value.GetType();
-        Type? underType = Nullable.GetUnderlyingType( targetType );
-        bool isEqual = underType == valueOfType;
-        
-        if (value is ArrayList list && list.Count > 0) return ConvertValue(list[0], targetType);
+		// get the type for value from odoo
+		Type typeOfValue = value.GetType();
 
-        if (targetType.IsAssignableFrom( valueOfType ) ) return value;
-        if (targetType.IsEnum) return Enum.Parse(targetType, value.ToString());
-        if (DateTime.TryParse(value.ToString(), out DateTime dt)) return dt;
+		// get the underlying type if nullable from target type
+		Type? underType = Nullable.GetUnderlyingType( targetType );
+		// If there is an underlying type, use that for checking, otherwise use the target type
+		Type checkType = underType ?? targetType;
+
+        // check if both types are the same
+		bool isEqual = checkType == typeOfValue;
+
+		// handles the bool special case
+		// --
+		// value can be false because it is a bool or because it is null
+		// if value is true then it is definitely a bool
+		if (value is bool boolOrNull)
+		{
+			return boolOrNull == false ?
+                isEqual
+				// if same type, return false
+				    ? false
+				    // if not same type, but nullable, return default of checkType
+				    : checkType.IsValueType
+				        ? Activator.CreateInstance(checkType)
+				        : null
+				// value is true, so definitely a bool
+				: true;
             
-        if (!isEqual && underType != typeof(bool)) return null;
+		}
 
-        return isEqual ? value : Convert.ChangeType(value, targetType);
+		// check direct assignable
+		if (checkType.IsAssignableFrom( typeOfValue ) ) return value;
+
+		// check enum conversion
+		if (checkType.IsEnum) return Enum.Parse(checkType, value.ToString()!);
+
+		// check DateTime conversion
+		if (DateTime.TryParse(value.ToString(), out DateTime dt)) return dt;
+            
+        // general conversion
+        return isEqual ? value : Convert.ChangeType(value, checkType);
     }
     internal static ValueConversion ConvertValueMethod(object value, Type targetType)
     {

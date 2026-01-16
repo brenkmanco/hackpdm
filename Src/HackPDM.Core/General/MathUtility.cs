@@ -1,4 +1,6 @@
-﻿namespace HackPDM.Core.General;
+﻿using System;
+
+namespace HackPDM.Core.General;
 
 public class MathUtility
 {

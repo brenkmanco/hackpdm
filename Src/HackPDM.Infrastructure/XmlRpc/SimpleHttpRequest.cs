@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
+using System.IO;
 using System.Net.Sockets;
 using Nwc.XmlRpc;
 

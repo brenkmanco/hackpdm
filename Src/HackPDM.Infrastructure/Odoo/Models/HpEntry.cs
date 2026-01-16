@@ -1,5 +1,9 @@
-﻿using System.Collections;
-
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
@@ -7,6 +11,8 @@ using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Shared.GlobalData;
+using HackPDM.Shared.OdooAttributes;
+
 
 
 
@@ -21,16 +27,22 @@ namespace HackPDM.Infrastructure.Odoo.Models;
 [OdooModel(OdooDefaultsConstants.HP_ENTRY_NAME, OdooDefaultsConstants.HP_ENTRY)]
 public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 {
-	[OdooProp(OdooFieldType.Char)] public string name {get;set;}
-	[OdooProp(OdooFieldType.Char)] public string? windows_complete_name { get; set; }
-	[OdooProp(OdooFieldType.DateTime)] public string checkout_date {get;set;}
-	[OdooProp(OdooFieldType.Boolean)] public bool deleted {get;set;}
-	[OdooProp(OdooFieldType.Many2one)] public int latest_version_id {get;set;}
-	[OdooProp(OdooFieldType.Many2one)] public int dir_id {get;set;}
-	[OdooProp(OdooFieldType.Many2one)] public int type_id {get;set;}
-	[OdooProp(OdooFieldType.Many2one)] public int cat_id {get;set;}
-	[OdooProp(OdooFieldType.Many2one)] public int? checkout_user {get;set;}
-	[OdooProp(OdooFieldType.Many2one)] public int? checkout_node {get;set;}
+	[OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
+	[OdooProp(OdooFieldType.Char, "windows_complete_name")] public string? windows_complete_name { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "checkout_date")] public string? checkout_date {get;set;}
+	[OdooProp(OdooFieldType.Boolean, "deleted")] public bool? deleted {get;set;}
+	[OdooProp(OdooFieldType.Many2one, "latest_version_id")] public Many2One? latest_version_id {get;set;}
+	IMany2One? IHpEntryModel.latest_version_id { get =>(IMany2One?)latest_version_id; set => latest_version_id = (Many2One?)value; }
+	[OdooProp(OdooFieldType.Many2one, "dir_id")] public Many2One? dir_id {get;set;}
+	IMany2One? IHpEntryModel.dir_id { get =>(IMany2One?)dir_id; set => dir_id = (Many2One?)value; }
+	[OdooProp(OdooFieldType.Many2one, "type_id")] public Many2One? type_id {get;set;}
+	IMany2One? IHpEntryModel.type_id { get =>(IMany2One?)type_id; set => type_id = (Many2One?)value; }
+	[OdooProp(OdooFieldType.Many2one, "cat_id")] public Many2One? cat_id {get;set;}
+	IMany2One? IHpEntryModel.cat_id { get =>(IMany2One?)cat_id; set => cat_id = (Many2One?)value; }
+	[OdooProp(OdooFieldType.Many2one, "checkout_user")] public Many2One? checkout_user {get;set;}
+	IMany2One? IHpEntryModel.checkout_user { get =>(IMany2One?)checkout_user; set => checkout_user = (Many2One?)value; }
+	[OdooProp(OdooFieldType.Many2one, "checkout_node")] public Many2One? checkout_node {get;set;}
+	IMany2One? IHpEntryModel.checkout_node { get =>(IMany2One?)checkout_node; set => checkout_node = (Many2One?)value; }
 	public bool IsLatest { get; }
 
 	public HackFile? LocalFile
@@ -152,7 +164,7 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 
 		return list is not null and {Count: > 0 } ? ((list[0] as Hashtable)?["latest_version_id"] as ArrayList)?[0] is int id ? id : 0 : 0;
 	}
-	public bool CanCheckOut() => (checkout_user is null or 0) && !deleted;
+	public bool CanCheckOut() => (checkout_user?.id is null or 0) && deleted is false;
     public bool CanUnCheckOut() => (checkout_user is not null) && checkout_user == OdooDefaults.Instance.OdooId;
         
     public async Task CheckOut()
@@ -240,7 +252,7 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 		};
 		if (type is not null)
 		{
-			newEntry.cat_id = type.cat_id ?? 0;
+			newEntry.cat_id = type.cat_id?.id ?? 0;
 			newEntry.type_id = type.id;
 		}
 		await newEntry.CreateAsync( false );

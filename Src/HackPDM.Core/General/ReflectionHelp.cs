@@ -1,29 +1,33 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Shared.GlobalData;
+using HackPDM.Shared.OdooAttributes;
 
 namespace HackPDM.Core.General;
 
 public class ReflectionHelp
 {
-    public static T ConvertToClass<T>(in Hashtable ht, MethodType mType = MethodType.FieldOnly) 
+    public static T ConvertToClass<T>(in Hashtable ht, MethodType mType = MethodType.PropertyOnly) 
         where T : HpBaseModel, new()
     {
         T obj = new();
         AssignToClass(ht, ref obj, mType);
         return obj;
     }
-    public static T[]? ConvertToClasses<T>(in IEnumerable<Hashtable>? hts, MethodType mType = MethodType.FieldOnly) where T : HpBaseModel, new()
+    public static T[]? ConvertToClasses<T>(in IEnumerable<Hashtable>? hts, MethodType mType = MethodType.PropertyOnly) where T : HpBaseModel, new()
     {
         //T[] objs = new T[hts.TryGetNonEnumeratedCount(out int len) ? len : hts.Count()].PopulateZip(() => new());
         IEnumerable<(Hashtable, T)>? objs = hts?.PopulateZip(obj => new T());
         return AssignToClasses(ref objs, mType);
     }
-    public static T AssignToClass<T>(in Hashtable ht, T obj, MethodType mType = MethodType.FieldOnly)
+    public static T AssignToClass<T>(in Hashtable ht, T obj, MethodType mType = MethodType.PropertyOnly)
         where T : HpBaseModel
     {
         Type type = typeof(T);
@@ -64,7 +68,7 @@ public class ReflectionHelp
         }
         return obj;
     }
-    public static T[]? AssignToClasses<T>(ref IEnumerable<(Hashtable, T)>? hts, MethodType mType = MethodType.FieldOnly)
+    public static T[]? AssignToClasses<T>(ref IEnumerable<(Hashtable, T)>? hts, MethodType mType = MethodType.PropertyOnly)
         where T : HpBaseModel
     {
         if (hts is null || hts.FirstOrDefault().Item1 is not Hashtable hashFirst) return null;
@@ -205,7 +209,7 @@ public class ReflectionHelp
 		return [.. hts.Select(i => i.Item2)];
     }
     
-    public static void AssignToClass<T>( in Hashtable ht, ref T obj, MethodType mType = MethodType.FieldOnly )
+    public static void AssignToClass<T>( in Hashtable ht, ref T obj, MethodType mType = MethodType.PropertyOnly )
         where T : HpBaseModel, new()
         => AssignToClass( ht, obj, mType );
     public static Hashtable ConvertToHashtable<T>(T obj, MethodType mType = MethodType.PropertyAndField, bool includeEmpty = true, in string[] excludedFieldNames = null)

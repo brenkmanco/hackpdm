@@ -1,9 +1,13 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 //
 using System.IO;
+using System.Linq;
 using System.Reflection;
 
 using HackPDM.Shared.GlobalData;
+using HackPDM.Shared.OdooAttributes;
 //
 
 
@@ -13,8 +17,7 @@ public abstract partial class HpBaseModel
 {
 	// (MVVM) VIEW
 	public const int ROOT_OFFSET = 5;
-	[OdooProp(OdooFieldType.Integer)]
-	public int id { get; set; }
+	[OdooProp(OdooFieldType.Integer, "id")] public int? id { get; set; }
 
 	public static string[] UsualExcludedFields { get; set; } = [];
 	public static string[] UsualIncludedFields { get; set; } = [];

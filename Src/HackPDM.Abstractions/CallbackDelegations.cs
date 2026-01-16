@@ -1,4 +1,6 @@
-﻿namespace HackPDM.Abstractions;
+﻿using System.Threading.Tasks;
+
+namespace HackPDM.Abstractions;
 
 public static class CallbackDelegations
 {

@@ -3,6 +3,9 @@
 //using stdole;
 //using Microsoft.VisualBasic.Compatibility.VB6;
 
+using System;
+using System.Collections.Generic;
+using System.IO;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 

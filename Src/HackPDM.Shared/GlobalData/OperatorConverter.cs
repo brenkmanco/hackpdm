@@ -1,4 +1,6 @@
 ﻿
+using System;
+
 namespace HackPDM.Shared.GlobalData;
 
 public partial class OperatorConverter

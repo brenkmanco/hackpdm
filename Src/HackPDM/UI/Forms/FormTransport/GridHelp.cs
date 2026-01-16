@@ -231,7 +231,7 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 
 							var item = EmptyListItemInternal<PropertiesRow>(grid);
 
-							item.Version = versionProp.version_id;
+							item.Version = versionProp.version_id?.id ?? 0;
 							item.Configuration = versionProp.sw_config_name;
 							item.Name = versionProp.prop_name;
 							item.Property = versionProp.prop_id;
@@ -267,7 +267,7 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 					foreach (HpVersion version in v)
 					{
 						var item = EmptyListItemInternal<ChildrenRow>(grid);
-						item.Version = version.id;
+						item.Version = version.id ?? 0;
 						item.Name = version.name;
 						item.BasePath = Path.Combine(/*HackDefaults.PWAPathAbsolute,*/ version.WinPathway);
 						grid.ItemAdd(item);
@@ -290,7 +290,7 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 					foreach (HpVersion version in v)
 					{
 						var item = EmptyListItemInternal<ParentRow>(grid);
-						item.Version = version.id;
+						item.Version = version.id ?? 0;
 						item.Name = version.name;
 						item.BasePath = version.WinPathway;
 
@@ -318,7 +318,7 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 					{
 						var item = EmptyListItemInternal<HistoryRow>(grid);
 
-						item.Version = version.id;
+						item.Version = version.id ?? 0;
 						int? moduser = null;
 						if (version.HashedValues.TryGetValue("create_uid", out ArrayList? obj))
 						{
@@ -352,7 +352,7 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 					InitListViewInternal(grid);
 					var item = EmptyListItemInternal<VersionRow>(grid);
 
-					item.Id = versionModel.id;
+					item.Id = versionModel.id ?? 0;
 					item.Name = versionModel.name;
 					item.Checksum = versionModel.checksum;
 					item.FileSize = versionModel.file_size;

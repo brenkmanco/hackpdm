@@ -8,13 +8,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\HackPDM.Abstractions\HackPDM.Abstractions.csproj" />
-		<ProjectReference Include="..\HackPDM.Domain\HackPDM.Domain.csproj" />
 		<ProjectReference Include="..\HackPDM.Core\HackPDM.Core.csproj" />
-		<ProjectReference Include="..\HackPDM.Shared\HackPDM.Shared.csproj" />
 		<ProjectReference Include="..\HackPDM.SchemaGenerator\HackPDM.SchemaGenerator.csproj"
 						  OutputItemType="Analyzer"
-						  ReferenceOutputAssembly="false" />
+						  ReferenceOutputAssembly="false" /> 
 	</ItemGroup>
 
 	<ItemGroup>
@@ -37,10 +34,6 @@
 	  <Reference Include="XmlRpcCs">
 	    <HintPath>..\HackPDM\lib\XmlRpcCs.dll</HintPath>
 	  </Reference>
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Folder Include="Hack\" />
 	</ItemGroup>
 
 </Project>

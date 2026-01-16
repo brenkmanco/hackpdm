@@ -1,5 +1,9 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Threading.Tasks;
 using HackPDM.Abstractions;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
@@ -325,7 +329,7 @@ public class OdooDefaults : IOdooDefaults
 
         foreach ( IHpUserModel user in hpUsers )
         {
-            dict.Add( user.id, user );
+            dict.Add( user.id ?? 0, user );
         }
         return dict;
     }
@@ -378,7 +382,7 @@ public class OdooDefaults : IOdooDefaults
         {
             foreach ( IHpCategoryModel category in categories )
             {
-                if (category.id != type.cat_id) continue;
+                if (category.id != type.cat_id?.id) continue;
                 dict.Add( $".{type.file_ext.ToLower()}", category );
                 break;
             }
@@ -392,7 +396,7 @@ public class OdooDefaults : IOdooDefaults
 
         foreach ( HpProperty prop in props )
         {
-            dict.Add( prop.id, prop );
+            dict.Add( prop.id ?? 0, prop );
         }
         return dict;
     }
@@ -401,8 +405,9 @@ public class OdooDefaults : IOdooDefaults
     {
         try { 
             // create an HpVersion that doesn't exist in odoo
+            HpEntry? ent = entry as HpEntry;
             HpVersion version = await HpVersion.CreateNew(hack, entry) ?? throw new Exception( $"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}" );
-            entry.latest_version_id = version.id;
+			ent?.latest_version_id = version.id;
             return version;
         }
         catch (Exception e)

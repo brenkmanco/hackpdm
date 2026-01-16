@@ -1,4 +1,6 @@
-﻿namespace HackPDM.Shared.GlobalData;
+﻿using System;
+
+namespace HackPDM.Shared.GlobalData;
 
 public enum FileStatus
 {

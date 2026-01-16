@@ -1,4 +1,6 @@
-﻿namespace HackPDM.Infrastructure.XmlRpc;
+﻿using System;
+
+namespace HackPDM.Infrastructure.XmlRpc;
 
 [Serializable]
 internal class XmlRpcException : Exception

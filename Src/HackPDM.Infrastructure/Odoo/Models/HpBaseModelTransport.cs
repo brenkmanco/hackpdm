@@ -1,14 +1,9 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections;
 using System.Reflection;
-using System.Text;
-
-using HackPDM.Core;
 using HackPDM.Core.General;
-using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Shared.GlobalData;
+using HackPDM.Shared.OdooAttributes;
 
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 
@@ -75,7 +70,7 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 
 		if (ht is not null)
 		{
-			this.PopulateSelf(ht, MethodType.FieldOnly);
+			this.PopulateSelf(ht, MethodType.PropertyOnly);
 		}
 
 	}
@@ -137,7 +132,7 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 			//            }
 		}
 
-		return await OClient.UpdateAsync(HpModel, id, ht);
+		return await OClient.UpdateAsync(HpModel, id ?? 0, ht);
 	}
 
 
@@ -167,7 +162,7 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 	//}
 	private bool WriteInternal(Hashtable ht)
 	{
-		bool wasWritten = OClient.Update(HpModel, id, ht);
+		bool wasWritten = OClient.Update(HpModel, id ?? 0, ht);
 		if (wasWritten)
 		{
 			//Refresh();
@@ -568,12 +563,11 @@ public abstract partial class HpBaseModelTransport<T>
 	public static string? SetHpModel(string? value)
 	{
 		if (value is null) return null;
-		Type type = typeof(T);
-		HpModelDictionary[type.BaseType ?? type] = value;
+		HpModelDictionaryGen[nameof(T)] = value;
 		return value;
 	}
 	public static string? GetHpModel()
-		=> HpModelDictionary.GetValueOrDefault(typeof(T));
+		=> HpModelDictionaryGen.GetValueOrDefault(nameof(T));
 
 	public static TOther[]		GetRelatedRecordByIds<TOther>(ArrayList recordIds, string relatedFieldName, string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null) 
 		where TOther : HpBaseModelTransport<TOther>, new()
@@ -765,7 +759,7 @@ public abstract partial class HpBaseModelTransport<T>
 			if (a is null) return 0;
 			else
 			{
-				return a.id.CompareTo(b.id);
+				return a.id?.CompareTo(b.id) ?? 0;
 			}
 		}
 	}

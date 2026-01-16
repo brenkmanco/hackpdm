@@ -1,9 +1,14 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.Helper;
 using HackPDM.Domain.OdooModels.Models;
@@ -514,7 +519,23 @@ public static class ExtensionMethods
 		    }
 		    return items;
 	    }
-    }
+
+		public IEnumerable<T> SkipNull()
+		{
+			foreach (T? item in array)
+			{
+				if (item is { }) yield return item;
+			}
+		}
+
+		public IEnumerable<TOut> SkipNullSelect<TOut>(Func<T, TOut> func) where TOut : notnull
+		{
+			foreach (T? item in array)
+			{
+				if (item is T notnullItem) yield return func(notnullItem);
+			}
+		}
+	}
     extension<T>(IEnumerable<T> source)
     {
 	    public IEnumerable<TOut> SkipSelect<TOut>(Func<T, bool> predicate, Func<T, TOut> selector)

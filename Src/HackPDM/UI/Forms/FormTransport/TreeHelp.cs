@@ -71,40 +71,35 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 			{
 				await SafeHelper.SafeInvokerAsync(async void () =>
 				{
-					try
+			
+					await CreateTreeHash(tree, OdooDefaults.Instance.HpDirectoryRoot as HpDirectory);
+					// Debug.WriteLine("");
+					// foreach (EntryRow row in OdooDirectoryTree.ItemsSource as ObservableCollection<EntryRow>)
+					// {
+					// 	Debug.WriteLine(row.Name);
+					// }
+					// Debug.WriteLine("");
+					CreateLocalTree(tree);
+
+					if (_HFM.LastSelectedNode != null)
 					{
-						await CreateTreeHash(tree, OdooDefaults.Instance.HpDirectoryRoot as HpDirectory);
-						// Debug.WriteLine("");
-						// foreach (EntryRow row in OdooDirectoryTree.ItemsSource as ObservableCollection<EntryRow>)
-						// {
-						// 	Debug.WriteLine(row.Name);
-						// }
-						// Debug.WriteLine("");
-						CreateLocalTree(tree);
-
-						if (_HFM.LastSelectedNode != null)
-						{
-							_HFM.LastSelectedNode = tree.FindTreeNode(_HFM.LastSelectedNodePath)?.Node;
-						}
-
-						var tData = tree.RootNodes;
-						foreach (var n in tData)
-						{
-							n.LinkedData.SortTree();
-						}
-
-						_HFM.LastSelectedNode?.LinkedData.EnsureVisible(tree);
+						_HFM.LastSelectedNode = tree.FindTreeNode(_HFM.LastSelectedNodePath)?.Node;
 					}
-					catch (Exception e)
+
+					var tData = tree.RootNodes;
+					foreach (var n in tData)
 					{
-						Debug.Fail(e.Message);
+						n.LinkedData.SortTree();
 					}
+
+					_HFM.LastSelectedNode?.LinkedData.EnsureVisible(tree);
+										
 				});
 				_HFM.IsTreeLoaded = true;
 			}
 			catch (Exception exception)
 			{
-				Debug.WriteLine(exception);
+				Debug.Fail(exception.Message);
 			}
 			ResetImagePreview(img, ring);
 		}

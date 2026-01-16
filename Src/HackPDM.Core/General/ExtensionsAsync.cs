@@ -1,4 +1,7 @@
-﻿namespace HackPDM.Core.General
+﻿using System.Threading;
+using System.Threading.Tasks;
+
+namespace HackPDM.Core.General
 {
 	public static class ExtensionsAsync
 	{

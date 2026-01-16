@@ -1,4 +1,7 @@
-﻿namespace HackPDM.Shared.GlobalData;
+﻿using System;
+using System.Linq;
+
+namespace HackPDM.Shared.GlobalData;
 
 public static class OdooDefaultsConstants
 {

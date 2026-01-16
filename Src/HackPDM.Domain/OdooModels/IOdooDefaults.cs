@@ -1,4 +1,5 @@
-﻿using HackPDM.Abstractions;
+﻿using System.Collections.Generic;
+using HackPDM.Abstractions;
 using HackPDM.Domain.OdooModels.Models;
 
 namespace HackPDM.Domain.OdooModels;

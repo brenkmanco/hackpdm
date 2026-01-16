@@ -10,6 +10,7 @@ using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Shared.GlobalData;
+using HackPDM.Shared.OdooAttributes;
 
 // Resharper disable InconsistentNaming
 
@@ -21,22 +22,21 @@ using HackPDM.Shared.GlobalData;
 namespace HackPDM.Infrastructure.Odoo.Models;
 
 [OdooModel(OdooDefaultsConstants.HP_VERSION_PROPERTY_NAME, OdooDefaultsConstants.HP_VERSION_PROPERTY)]
-public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
+public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>, IHpVersionPropertyModel
 {
-	[OdooField(OdooFieldType.Char)] public string prop_name;
-	[OdooField(OdooFieldType.Char)] public string sw_config_name;
-    [OdooField(OdooFieldType.Char)] public string text_value;
+	[OdooProp(OdooFieldType.Char, "prop_name")] public string? prop_name { get; set; }
+	[OdooProp(OdooFieldType.Char, "sw_config_name")] public string? sw_config_name { get; set; }
+	[OdooProp(OdooFieldType.Char, "text_value")] public string? text_value { get; set; }
+	[OdooProp(OdooFieldType.Float, "number_value")] public float? number_value { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "yesno_value")] public bool? yesno_value { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "date_value")] public string? date_value { get; set; }
+	[OdooProp(OdooFieldType.Many2one, "version_id")] public Many2One? version_id { get; set; }
+	[OdooProp(OdooFieldType.Many2one, "prop_id")] public Many2One? prop_id { get; set; }
 
-    [OdooField(OdooFieldType.Float)] public float number_value;
+	IMany2One? IHpVersionPropertyModel.version_id { get => (IMany2One?)version_id; set => version_id = (Many2One?)value; }
+	IMany2One? IHpVersionPropertyModel.prop_id { get => (IMany2One?)prop_id; set => prop_id = (Many2One?)value; }
 
-    [OdooField(OdooFieldType.Boolean)] public bool yesno_value;
-
-    [OdooField(OdooFieldType.DateTime)] public string date_value;
-
-    [OdooField(OdooFieldType.Many2one)] public int version_id;
-    [OdooField(OdooFieldType.Many2one)] public int prop_id;
-    
-    public HpVersionProperty() { }
+	public HpVersionProperty() { }
     public HpVersionProperty(
         string swConfigName = null,
         string textValue = null,
@@ -62,7 +62,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
         if (!string.IsNullOrEmpty(text_value) && text_value != "False") return PropertyType.Text;
         if (!string.IsNullOrEmpty(date_value) && date_value != "False") return PropertyType.Date;
         if (number_value != 0) return PropertyType.Number;
-        if (yesno_value) return PropertyType.Yesno;
+        if (yesno_value is true) return PropertyType.Yesno;
         return PropertyType.None;
     }
         
@@ -83,7 +83,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
         number = default;
         if (pType == PropertyType.Number)
         {
-            number = number_value;
+            number = number_value ?? 0;
             return true;
         }
         return false;
@@ -94,7 +94,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
         yesNo = default;
         if (pType == PropertyType.Yesno)
         {
-            yesNo = yesno_value;
+            yesNo = yesno_value is true;
             return true;
         }
         return false;
@@ -140,7 +140,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
                 List<string> paths = [];
 				
                 List<Tuple<string, string, string, object>> props = SolidWorksUtil.DocMgr.GetProperties(pathway);
-                HpVersionProperty[] properties = [.. props.SkipSelect(prop =>
+                HpVersionProperty[] properties = [.. props.SkipSelect( prop =>
                 {
                     bool isSuccessful = false;
                     IHpPropertyModel? hpProperty = null;
@@ -154,7 +154,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
                             sw_config_name = prop.Item1 == "" ? null : prop.Item1,
                             version_id = version.id != 0 ? version.id : throw new Exception("version id not defined"),
                         };
-                        if (hpProperty is not null) vProp.prop_id = hpProperty.id; 
+                        if (hpProperty is not null) vProp.prop_id = hpProperty.id ?? 0; 
                         switch (prop.Item3)
                         {
                             case "text": vProp.text_value        = (string)prop.Item4; break;

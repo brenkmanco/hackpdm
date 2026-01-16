@@ -1,4 +1,6 @@
-﻿namespace HackPDM.Shared.GlobalData;
+﻿using System.IO;
+
+namespace HackPDM.Shared.GlobalData;
 
 public static class StorageBox
 {

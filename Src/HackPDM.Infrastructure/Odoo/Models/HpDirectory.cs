@@ -9,6 +9,8 @@ using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Shared.GlobalData;
+using HackPDM.Shared.OdooAttributes;
+
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 
 // Resharper disable InconsistentNaming
@@ -18,12 +20,14 @@ namespace HackPDM.Infrastructure.Odoo.Models;
 [OdooModel(OdooDefaultsConstants.HP_DIRECTORY_NAME, OdooDefaultsConstants.HP_DIRECTORY)]
 public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirectoryModel
 {
-	[OdooProp(OdooFieldType.Char)] public string? name { get; set; }
-	[OdooProp(OdooFieldType.Char)] public string? parent_path { get; set; }
-	[OdooProp(OdooFieldType.Many2one)] public int? parent_id { get; set; }
-	[OdooProp(OdooFieldType.Many2one)] public int? default_cat { get; set; }
-	[OdooProp(OdooFieldType.Boolean)] public bool? deleted { get; set; }
-	[OdooProp(OdooFieldType.Boolean)] public bool? sandboxed { get; set; }
+	[OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
+	[OdooProp(OdooFieldType.Char, "parent_path")] public string? parent_path { get; set; }
+	[OdooProp(OdooFieldType.Many2one, "parent_id")] public Many2One? parent_id { get; set; }
+	IMany2One? IHpDirectoryModel.parent_id { get =>(IMany2One?)parent_id; set => parent_id = (Many2One?)value; }
+	[OdooProp(OdooFieldType.Many2one, "default_cat")] public Many2One? default_cat { get; set; }
+	IMany2One? IHpDirectoryModel.default_cat { get =>(IMany2One?)default_cat; set => default_cat = (Many2One?)value; }
+	[OdooProp(OdooFieldType.Boolean, "deleted")] public bool? deleted { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "sandboxed")] public bool? sandboxed { get; set; }
 
 	public static (int, int) LastAvailableDirectory( ArrayList paths )
     {
@@ -73,7 +77,7 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
                     
             directories[nextIndex] = newDirectory;
             // for next iteration
-            lastParentId = newDirectory.id;
+            lastParentId = newDirectory.id ?? 0;
         }
         return directories;
     }
@@ -119,9 +123,9 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
             
         
     public ArrayList? GetDirectoryEntryIDs(bool withSubEntries = false, bool withDeleted = true)
-        => GetDirectoryEntryIDs( this.id, withSubEntries, withDeleted );
+        => GetDirectoryEntryIDs( this.id ?? 0, withSubEntries, withDeleted );
 	public async Task<ArrayList?> GetDirectoryEntryIDsAsync(bool withSubEntries = false, bool withDeleted = true)
-		=> await GetDirectoryEntryIDsAsync(this.id, withSubEntries, withDeleted);
+		=> await GetDirectoryEntryIDsAsync(this.id ?? 0, withSubEntries, withDeleted);
 	public static async Task<ArrayList?> GetDirectoryEntryIDsAsync( int directoryId, bool withSubEntries = false, bool withDeleted = false)
 		=> directoryId != 0 
 			?  await OClient.CommandAsync<ArrayList>(GetHpModel()!, "get_all_entry_ids", [directoryId, withDeleted, withSubEntries], 10000 ) 

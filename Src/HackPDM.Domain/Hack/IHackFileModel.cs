@@ -1,4 +1,7 @@
-﻿namespace HackPDM.Domain.Hack;
+﻿using System;
+using System.IO;
+
+namespace HackPDM.Domain.Hack;
 
 public interface IHackFileModel : IHackBaseFileModel
 {

@@ -1,6 +1,7 @@
-﻿using HackPDM.Shared.GlobalData;
+﻿using System;
+using HackPDM.Shared.GlobalData;
 
-namespace HackPDM.Domain.OdooModels;
+namespace HackPDM.Shared.OdooAttributes;
 
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
 public class OdooFieldAttribute(OdooFieldType odooType) : Attribute

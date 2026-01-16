@@ -1,14 +1,19 @@
-﻿using System.Collections;
-
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Shared.GlobalData;
+using HackPDM.Shared.OdooAttributes;
 
 using SolidWorks.Interop.swdocumentmgr;
-
+using DateTime = System.DateTime;
 
 //using static System.Net.Mime.MediaTypeNames;
 
@@ -21,22 +26,26 @@ namespace HackPDM.Infrastructure.Odoo.Models;
 [OdooModel(OdooDefaultsConstants.HP_VERSION_NAME, OdooDefaultsConstants.HP_VERSION)]
 public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionModel
 {
-	[OdooProp(OdooFieldType.Char)] public string? name { get; set; }
-	[OdooProp(OdooFieldType.Char)] public string? file_ext { get; set; }
-	[OdooProp(OdooFieldType.Char)] public string? checksum { get; set; }
-    [OdooProp(OdooFieldType.Char)] public string? windows_complete_name { get; set; }
+	[OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
+	[OdooProp(OdooFieldType.Char, "file_ext")] public string? file_ext { get; set; }
+	[OdooProp(OdooFieldType.Char, "checksum")] public string? checksum { get; set; }
+    [OdooProp(OdooFieldType.Char, "windows_complete_name")] public string? windows_complete_name { get; set; }
     
-	[OdooProp(OdooFieldType.Many2one)] public int? entry_id { get; set; }
-	[OdooProp(OdooFieldType.Many2one)] public int? node_id { get; set; }
-	[OdooProp(OdooFieldType.Many2one)] public int? dir_id { get; set; }
-	[OdooProp(OdooFieldType.Many2one)] public int? attachment_id { get; set; }
+	[OdooProp(OdooFieldType.Many2one, "entry_id")] public Many2One? entry_id { get; set; }
+	IMany2One? IHpVersionModel.entry_id { get =>(IMany2One?)entry_id; set => entry_id = (Many2One?)value; }
+	[OdooProp(OdooFieldType.Many2one, "node_id")] public Many2One? node_id { get; set; }
+	IMany2One? IHpVersionModel.node_id { get =>(IMany2One?)node_id; set => node_id = (Many2One?)value; }
+	[OdooProp(OdooFieldType.Many2one, "dir_id")] public Many2One? dir_id { get; set; }
+	IMany2One? IHpVersionModel.dir_id { get =>(IMany2One?)dir_id; set => dir_id = (Many2One?)value; }
+	[OdooProp(OdooFieldType.Many2one, "attachment_id")] public Many2One? attachment_id { get; set; }
+	IMany2One? IHpVersionModel.attachment_id { get =>(IMany2One?)attachment_id; set => attachment_id = (Many2One?)value; }
 
-	[OdooProp(OdooFieldType.DateTime)] public DateTime? file_modify_stamp { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "file_modify_stamp")] public DateTime? file_modify_stamp { get; set; }
 
-	[OdooProp(OdooFieldType.Integer)] public int? file_size { get; set; }
+	[OdooProp(OdooFieldType.Integer, "file_size")] public int? file_size { get; set; }
 
-	[OdooProp(OdooFieldType.Binary)] public string? preview_image { get; set; }
-	[OdooProp(OdooFieldType.Binary)] public string? file_contents { get; set; }
+	[OdooProp(OdooFieldType.Binary, "preview_image")] public string? preview_image { get; set; }
+	[OdooProp(OdooFieldType.Binary, "file_contents")] public string? file_contents { get; set; }
 	public string? FileContentsBase64 { get; private set; }
     public string? WinPathway { get; set; }
     
@@ -305,7 +314,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         HpVersion newVersion = new()
         {
             name = $"{entry.id}.{hackFile.Name}",
-            dir_id = entry.dir_id,
+            dir_id = entry.dir_id as Many2One,
             entry_id = entry.id,
             file_ext = hackFile.TypeExt[1..].ToLower(),
             WinPathway = hackFile.FullPath,
