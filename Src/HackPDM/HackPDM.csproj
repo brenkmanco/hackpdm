@@ -19,7 +19,6 @@
     <DefineConstants Condition="!('$(WindowsTargetPlatformVersion)' &gt;= '10.0.10240.0')">WINDOWS_LEGACY</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <None Remove="UI\Forms\Helper\MessageBoxPage.xaml" />
     <None Remove="UI\Forms\Helper\MessageBoxWindow.xaml" />
   </ItemGroup>
     <ItemGroup>
@@ -455,7 +454,7 @@
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
-    <Page Update="UI\Forms\Helper\MessageBoxPage.xaml">
+    <Page Update="UI\Forms\Helper\MessageBox.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Update="UI\Forms\Helper\MessageBoxWindow.xaml">

@@ -53,6 +53,8 @@ using TreeData = HackPDM.UI.Types.TreeData;
 using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
 using WindowHelper = HackPDM.UI.Controls.WindowHelper;
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
+using HackPDM.Abstractions;
+using HackPDM.UI.Forms.Helper;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -164,6 +166,7 @@ public sealed partial class HackFileManager : Page
 		HackDispatcherQueue = DispatcherQueue.GetForCurrentThread();
 		// DesignTheme();
 		AssignCollections();
+		AssignGridAndCollectionsMap();
 		InitializeEvents();
 		// this.SetFormTheme(StorageBox.MyTheme ?? ThemePreset.DefaultTheme);
 		GridHelp.ResetListViews(_hackLists.AllLists);
@@ -200,6 +203,19 @@ public sealed partial class HackFileManager : Page
 		OdooProperties.ItemsSource = OProperties;
 		OdooVersionInfoList.ItemsSource = OVersions;
 		OdooDirectoryBreadcrumb.ItemsSource = LastSelectedNodePaths;
+	}
+
+	private void AssignGridAndCollectionsMap()
+	{
+		GridMap.Map = new()
+		{
+			{ OdooEntryList, OEntries },
+			{ OdooHistory, OHistories },
+			{ OdooParents, OParents },
+			{ OdooChildren, OChildren },
+			{ OdooProperties, OProperties },
+			{ OdooVersionInfoList, OVersions },
+		};
 	}
 	private void InitializeEvents()
 	{
@@ -567,42 +583,38 @@ public sealed partial class HackFileManager : Page
 		switch (LowerTabIndex?.Name)
 		{
 			case StorageBox.HISTORY_TAB:
-				await _gridHelper.ProcessHistorySelectAsync(OdooHistory, entry, token);
-				SafeHelper.SafeInvoker(() =>
+				
+				await SafeHelper.SafeInvokerAsync(async () =>
 				{
-					OHistories.Sort((x, y) => x.Version.CompareTo(y.Version), true);
+					await _gridHelper.ProcessHistorySelectAsync(OdooHistory, entry, token);
 					OdooHistory.UpdateLayout();
 				});
 				break;
 			case StorageBox.PARENT_TAB:
-				await _gridHelper.ProcessParentSelectAsync(OdooParents, entry, token);
-				SafeHelper.SafeInvoker(() =>
+				await SafeHelper.SafeInvokerAsync(async () =>
 				{
-					OParents.Sort((x, y) => x.Version.CompareTo(y.Version), true);
+					await _gridHelper.ProcessParentSelectAsync(OdooParents, entry, token);
 					OdooParents.UpdateLayout();
 				});
 				break;
 			case StorageBox.CHILD_TAB:
-				await _gridHelper.ProcessChildSelectAsync(OdooChildren, entry, token);
-				SafeHelper.SafeInvoker(() =>
+				await SafeHelper.SafeInvokerAsync(async () =>
 				{
-					OChildren.Sort((x, y) => x.Version.CompareTo(y.Version), true);
+					await _gridHelper.ProcessChildSelectAsync(OdooChildren, entry, token);
 					OdooChildren.UpdateLayout();
 				});
 				break;
 			case StorageBox.PROPERTIES_TAB:
-				await _gridHelper.ProcessPropertiesSelectAsync(OdooProperties, entry, token);
-				SafeHelper.SafeInvoker(() =>
+				await SafeHelper.SafeInvokerAsync(async () =>
 				{
-					OProperties.Sort((x, y) => x.Version.CompareTo(y.Version), true);
+					await _gridHelper.ProcessPropertiesSelectAsync(OdooProperties, entry, token);
 					OdooProperties.UpdateLayout();
 				});
 				break;
 			case StorageBox.INFO_TAB:
-				await _gridHelper.ProcessInfoSelectAsync(OdooVersionInfoList, entry, token);
-				SafeHelper.SafeInvoker(() =>
+				await SafeHelper.SafeInvokerAsync(async () =>
 				{
-					OVersions.Sort((x, y) => x.Id.CompareTo(y.Id), true);
+					await _gridHelper.ProcessInfoSelectAsync(OdooVersionInfoList, entry, token);
 					OdooVersionInfoList.UpdateLayout();
 				});
 				break;

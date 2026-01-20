@@ -22,6 +22,7 @@ using EntryRow = HackPDM.Domain.Representation.EntryRow;
 using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
 using ListView = Microsoft.UI.Xaml.Controls.ListView;
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
+using HackPDM.UI.Models;
 namespace HackPDM.Infrastructure.Odoo.FormTransport
 {
 	internal class GridHelp
@@ -86,7 +87,10 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 			}
 			if (!listProperties || (versionProperties is null or { Count: < 1 })) return versionProperties;
 			token.ThrowIfCancellationRequested();
-			await SafeHelper.SafeInvokerAsync(() => PopulateProperties(grid, versionProperties ?? []));
+			await SafeHelper.SafeInvokerAsync(() =>
+			{
+				PopulateProperties(grid, versionProperties ?? []);
+			});
 			return versionProperties;
 		}
 		internal async Task<HpVersion[]?> ProcessParentSelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listParents = true)
@@ -235,7 +239,7 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 							item.Configuration = versionProp.sw_config_name;
 							item.Name = versionProp.prop_name;
 							item.Property = versionProp.prop_id;
-							
+
 							item.Type = versionProp.GetValueType();
 							item.ValueData = item.Type switch
 							{
@@ -249,6 +253,7 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 							grid.ItemAdd(item);
 						}
 					}
+					_HFM.OProperties.Sort((x, y) => x.Version.CompareTo(y.Version), true);
 				});
 			}
 		}
@@ -272,6 +277,7 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 						item.BasePath = Path.Combine(/*HackDefaults.PWAPathAbsolute,*/ version.WinPathway);
 						grid.ItemAdd(item);
 					}
+					_HFM.OChildren.Sort((x, y) => x.Version.CompareTo(y.Version), true);
 				});
 			}
 		}
@@ -296,6 +302,7 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 
 						grid.ItemAdd(item);
 					}
+					_HFM.OParents.Sort((x, y) => x.Version.CompareTo(y.Version), true);
 				});
 			}
 		}
@@ -332,8 +339,10 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 						item.Size = version.file_size;
 						item.RelDate = null;
 
-						grid.ItemAdd(item);
+						_HFM.OHistories.Add(item);
+						//grid.ItemAdd(item);
 					}
+					_HFM.OHistories.Sort((x, y) => x.Version.CompareTo(y.Version), true);
 				});
 			}
 		}
@@ -394,18 +403,21 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 		#endregion
 
 
-		internal static T EmptyGridTable<T>(ItemsControl grid) where T : new()
-			=> EmptyListItem<T>(grid);
-		internal static T EmptyListItem<T>(ItemsControl list) where T : new()
-		{
-			T entry = new();
-			SafeHelper.SafeInvoker(() => list.ItemsSource ??= new ObservableCollection<T>());
-			return entry;
-		}
+		//internal static T EmptyGridTable<T>(ItemsControl grid) where T : new()
+		//	=> EmptyListItem<T>(grid);
+		//internal static T EmptyListItem<T>(ItemsControl list) where T : new()
+		//{
+		//	T entry = new();
+		//	SafeHelper.SafeInvoker(() => list.ItemsSource ??= new ObservableCollection<T>());
+		//	return entry;
+		//}
 		internal static T EmptyListItem<T>(DataGrid grid) where T : new()
 		{
 			T entry = new();
-			SafeHelper.SafeInvoker(() => grid.ItemsSource ??= new ObservableCollection<T>());
+			SafeHelper.SafeInvoker(() =>
+			{
+				grid.ItemsSource ??= GridMap.Map.TryGetValue(grid, out IList? collection) ? collection as ObservableCollection<T> : [];
+			});
 			return entry;
 		}
 		//internal static void InitListViewPercentage(ListView list, ListDetail rows)
@@ -446,8 +458,8 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 		//		list.ListViewItemSorter = row.SortRowOrder.Sort;
 		//	});
 		//}
-		internal static T EmptyListItemInternal<T>(ListView list) where T : new()
-			=> EmptyListItem<T>(list);
+		//internal static T EmptyListItemInternal<T>(ListView list) where T : new()
+		//	=> EmptyListItem<T>(list);
 		internal static T EmptyListItemInternal<T>(DataGrid grid) where T : new()
 			=> EmptyListItem<T>(grid);
 

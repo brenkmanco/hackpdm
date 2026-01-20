@@ -47,7 +47,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
 	[OdooProp(OdooFieldType.Binary, "preview_image")] public string? preview_image { get; set; }
 	[OdooProp(OdooFieldType.Binary, "file_contents")] public string? file_contents { get; set; }
 	public string? FileContentsBase64 { get; private set; }
-    public string? WinPathway { get; set; }
+    public string? WinPathway { get => field ??= windows_complete_name?[OdooDefaultsConstants.ODOO_PATH_PREFIX_LENGTH..]; set; }
     
     public SwDmDocumentType FileTypeExt
 	{

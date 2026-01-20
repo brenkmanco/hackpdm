@@ -18,6 +18,7 @@ using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.Hack;
+using HackPDM.UI.Forms.Helper;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -32,11 +33,11 @@ public partial class HackApp : Application
 	public static IServiceProvider? Services { get; private set; }
     public static Window? Window;
     public static Frame? RootFrame;
-    
-    // To fix CS0121, fully qualify the InitializeComponent() call to specify the correct method.
-    // If your project has both a generated partial method and a user-defined method, use the global:: prefix.
 
-    public HackApp()
+	// To fix CS0121, fully qualify the InitializeComponent() call to specify the correct method.
+	// If your project has both a generated partial method and a user-defined method, use the global:: prefix.
+
+	public HackApp()
     {
         InitializeComponent();
         Setup();
@@ -70,6 +71,7 @@ public partial class HackApp : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         ConfigureServices();
+
 		Window = new MainWindow();
 		Window.SetWindowType(AppWindowPresenterKind.Overlapped);
 		var rootFrame = new Frame();

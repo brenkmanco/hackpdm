@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Controls;
 using HackPDM.UI.Controls;
 using HackPDM.Abstractions;
 using HackPDM.Core.Hack;
+using HackPDM.UI.Forms.Helper;
 
 
 // To learn more about WinUI, the WinUI project structure,

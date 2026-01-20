@@ -574,8 +574,9 @@ public static class OdooFieldHelpers
 
 	private static int FromInt(int i) => i;
 	private static int FromLong(long l) => (int)l;
-	private static double FromDouble(double d) => d;
-	private static double FromDecimal(decimal m) => (double)m;
+	private static float FromFloat(float f) => f;
+	private static float FromDouble(double d) => (float)d;
+	private static float FromDecimal(decimal m) => (float)m;
 	private static decimal FromDecimalMonetary(decimal m) => m;
 	private static decimal FromDoubleMonetary(double d) => (decimal)d;
 	private static (int id, string name)? FromObjectArray(object value)
@@ -607,11 +608,12 @@ public static class OdooFieldHelpers
 		return default;
 	}
 	// Float -> double
-	public static double ConvertFloat(object value)
+	public static float ConvertFloat(object value)
 	{
 		// Allowed shapes: double, decimal, string
-		if (TryCastAny<double, decimal, double>(
+		if (TryCastAny<float, double, decimal, float>(
 				value,
+				FromFloat,
 				FromDouble,
 				FromDecimal,
 				out var result))

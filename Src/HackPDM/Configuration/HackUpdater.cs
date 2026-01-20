@@ -6,6 +6,7 @@ using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Controls;
+using HackPDM.UI.Forms.Helper;
 
 namespace HackPDM.Configuration;
 

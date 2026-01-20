@@ -17,7 +17,11 @@ public class ModernSettingsProvider : ISettingsProvider
             : defaultValue;
     public void Set<T>(string key, T value)
     {
-        try { Settings.Values.TryAdd(key, value is null ? default : value); } 
+        try 
+        {
+            if (value is null) return;
+            Settings.Values[key] = value; 
+        } 
         catch { Debug.WriteLine("Can't write to data container"); }
     }
     public bool Contains(string key) => Settings.Values.ContainsKey(key);

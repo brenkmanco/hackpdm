@@ -238,20 +238,83 @@ public static class HashConverter
 {
 	static readonly Type boolType = typeof(bool);
 	static readonly Type arrType = typeof(ArrayList);
-	public static T ConvertToClass<T>(in Hashtable ht, MethodType mType = MethodType.PropertyOnly) 
+
+    //
+    public static T? ConvertToClass<T>(in Hashtable ht) where T : HpBaseModelTransport, new()
+    {
+		T record = new();
+        return AssignToClass(ht, ref record);
+	}
+	public static T[]? ConvertToClasses<T>(in IEnumerable<Hashtable>? hts) where T : HpBaseModelTransport, new()
+	{
+		(Hashtable, T)[] records = [.. hts?.PopulateZip(obj => new T()) ?? []];
+        var values = records.AsSpan();
+        return AssignToClasses(ref values).SelectSecond();
+	}
+	
+    public static ref T AssignToClass<T>(in Hashtable ht, ref T record) where T : HpBaseModelTransport
+    {
+		var map = OdooAssignments<T>.Map;
+		
+		if (ht.TryGetValue("id", out int? id) && id is not null)
+			record.id = id ?? 0;
+
+		foreach (DictionaryEntry entry in ht)
+		{
+			if (map.TryGetValue(entry.Key as string ?? "", out var assign))
+				assign(record, entry.Value);
+		}
+		return ref record;
+	}
+    public static void AssignToClass<T>(in Hashtable ht, T record) where T : HpBaseModelTransport
+    {
+		var map = OdooAssignments<T>.Map;
+
+		if (ht.TryGetValue("id", out int? id) && id is not null)
+			record.id = id ?? 0;
+
+		foreach (DictionaryEntry entry in ht)
+		{
+			if (map.TryGetValue(entry.Key as string ?? "", out var assign))
+				assign(record, entry.Value);
+		}
+	}
+	public static ref Span<(Hashtable, T)> AssignToClasses<T>(ref Span<(Hashtable, T)> values) where T : HpBaseModelTransport
+    {
+        if (values.Length == 0) return ref values;
+		var map = OdooAssignments<T>.Map;
+        
+		for (int i = 0; i < values.Length; i++)
+        {
+            ref (Hashtable ht, T record) record = ref values[i];
+
+			if (record.ht.TryGetValue("id", out int? id) && id is not null)
+				record.record.id = id ?? 0;
+            
+		    foreach (DictionaryEntry entry in record.ht)
+		    {
+			    if (map.TryGetValue(entry.Key as string ?? "", out var assign))
+				    assign(record.record, entry.Value);
+		    }
+		}
+        return ref values;
+	}
+	//
+	//
+	public static T ConvertToClassFallback<T>(in Hashtable ht, MethodType mType = MethodType.PropertyOnly) 
         where T : HpBaseModelTransport, new()
     {
         T obj = new();
-        AssignToClass(ht, ref obj, mType);
+        AssignToClassFallback(ht, ref obj, mType);
         return obj;
     }
-    public static T[]? ConvertToClasses<T>(in IEnumerable<Hashtable>? hts, MethodType mType = MethodType.PropertyOnly) where T : HpBaseModelTransport, new()
+    public static T[]? ConvertToClassesFallback<T>(in IEnumerable<Hashtable>? hts, MethodType mType = MethodType.PropertyOnly) where T : HpBaseModelTransport, new()
     {
         //T[] objs = new T[hts.TryGetNonEnumeratedCount(out int len) ? len : hts.Count()].PopulateZip(() => new());
         IEnumerable<(Hashtable, T)>? objs = hts?.PopulateZip(obj => new T());
-        return AssignToClasses(ref objs, mType);
+        return AssignToClassesFallback(ref objs, mType);
     }
-    public static T AssignToClass<T>(in Hashtable ht, T obj, MethodType mType = MethodType.PropertyOnly)
+    public static T AssignToClassFallback<T>(in Hashtable ht, T obj, MethodType mType = MethodType.PropertyOnly)
         where T : HpBaseModel
     {
         Type type = typeof(T);
@@ -292,7 +355,7 @@ public static class HashConverter
         }
         return obj;
     }
-    public static T[]? AssignToClasses<T>(ref IEnumerable<(Hashtable, T)>? hts, MethodType mType = MethodType.PropertyOnly)
+    public static T[]? AssignToClassesFallback<T>(ref IEnumerable<(Hashtable, T)>? hts, MethodType mType = MethodType.PropertyOnly)
         where T : HpBaseModelTransport
     {
         if (hts is null || hts.FirstOrDefault().Item1 is not Hashtable hashFirst) return null;
@@ -432,11 +495,13 @@ public static class HashConverter
 
 		return [.. hts.Select(i => i.Item2)];
     }
+    //
+
     public static void PopulateSelf<T>(this T hprecord, in Hashtable ht, MethodType mType = MethodType.PropertyOnly) where T : HpBaseModel
-        => AssignToClass(ht, hprecord, mType);
-    public static void AssignToClass<T>( in Hashtable ht, ref T obj, MethodType mType = MethodType.PropertyOnly )
+        => AssignToClassFallback(ht, hprecord, mType);
+    public static void AssignToClassFallback<T>( in Hashtable ht, ref T obj, MethodType mType = MethodType.PropertyOnly )
         where T : HpBaseModel, new()
-        => AssignToClass( ht, obj, mType );
+        => AssignToClassFallback( ht, obj, mType );
     public static Hashtable ConvertToHashtable<T>(T obj, MethodType mType = MethodType.PropertyAndField, bool includeEmpty = true, in string[] excludedFieldNames = null)
     {
         Hashtable ht = [];

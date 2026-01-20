@@ -446,7 +446,7 @@ public static class ExtensionMethods
 			return null;
 		}
 	}
-	
+
 	extension<T>(ObservableCollection<T> oc)
     {
         public void Sort(Comparison<T> comparer, bool reverse = false) => oc.SortInternal(comparer, reverse);
@@ -589,7 +589,6 @@ public static class ExtensionMethods
 		    }
 		    return false;
 	    }
-
 	    public IEnumerable<T> SkipList(IEnumerable<T> match)
 	    {
 		    foreach (T obj in source)
@@ -600,7 +599,7 @@ public static class ExtensionMethods
 			    }
 		    }
 	    }
-
+		
 	    public IEnumerable<(T, T2)> PopulateZip<T2>(Func<T, T2> func)
 	    {
 		    foreach (T obj in source)
@@ -747,8 +746,10 @@ public class DynamicTuple<T>
 }
 public static class UnsafeExtensions
 {
+	public delegate ref TOut RefSelector<TIn, TOut>(ref TIn input);
 	extension<T>(Span<T> span)
 	{
+
 		public Span<T> Skip(Func<T, bool> predicate)
 		{
 			T[] temp = new T[span.Length]; int count = 0; for (int i = 0; i < span.Length; i++)
@@ -761,7 +762,18 @@ public static class UnsafeExtensions
 			} 
 			return temp.AsSpan(0, count); 
 		}
-
+		public ref TOut[] RefSelect<TOut>(
+			RefSelector<T, TOut> selector,
+			ref TOut[] unpopOuts)
+		{
+			for (int i = 0; i < span.Length; i++)
+			{
+				ref T val = ref span[i];
+				ref TOut unpopItem = ref selector(ref val);
+				unpopOuts[i] = unpopItem;
+			}
+			return ref unpopOuts;
+		}
 		public Span<T> SkipUnsafe(Func<T, bool> predicate) 
 		{
 			T[] temp = new T[span.Length];
@@ -780,5 +792,29 @@ public static class UnsafeExtensions
 
 			return temp.AsSpan(0, count);
 		}
+	}
+	extension<TIn, TOut>(Span<(TIn, TOut)> span)
+	{
+		public TIn[] SelectFirst()
+		{
+			TIn[] temp = new TIn[span.Length];
+			for (int i = 0; i < span.Length; i++)
+			{
+				ref TIn item = ref span[i].Item1;
+				temp[i] = item;
+			}
+			return temp;
+		}
+		public TOut[] SelectSecond()
+		{
+			TOut[] temp = new TOut[span.Length];
+			for (int i = 0; i < span.Length; i++)
+			{
+				ref TOut item = ref span[i].Item2;
+				temp[i] = item;
+			}
+			return temp;
+		}
+		public Span<TOut> SelectSecondSpan() => span.SelectSecond();
 	}
 }

@@ -269,7 +269,7 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 	public virtual T?				GetRecord(int? recordId)
 	{
 		if (recordId is null or 0) return null;
-		Hashtable? ht = OClient.Read(HpModel, [recordId], GetFields()).FirstOrDefault<Hashtable>();
+		Hashtable? ht = OClient.Read(HpModel, [recordId], GetOdooFields()).FirstOrDefault<Hashtable>();
 		if (ht is null) return null;
 
 		return RecordPopulation(ht);
@@ -294,12 +294,11 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 	// if excludedFieldNames is null then don't exclude unless includedFieldNames is not null and doesn't contain field name
 
 	// HTTP response blocking methods
-	public static T[]				GetRecordsByIds(ArrayList? recordIds, ArrayList? searchFilters = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
+	public static T[]?				GetRecordsByIds(ArrayList? recordIds, ArrayList? searchFilters = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
 	{
 		string modelName = GetHpModel();
 
-		List<T> records = [];
-		ArrayList fields = GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+		ArrayList fields = GetOdooFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
 		ArrayList result;
 
 		if (searchFilters == null)
@@ -312,30 +311,23 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 			result = OClient.Browse(modelName, [searchFilters, fields], 90000);
 		}
 
-		if (result.Count == 0) return null;
+		if (result?.Count == 0) return null;
 
 		//records = RecordsPopulation([.. result.Select<Hashtable, Hashtable>(h=>h)], excludedFields);
-		foreach (Hashtable ht in result)
-		{
-			records.Add(RecordPopulation(ht, excludedFields));
-		}
-		//return records;
-
-		return [.. records];
+		var records = RecordsPopulation(hts: result?.Select<Hashtable, Hashtable>(static h => h), excludedFields);
+		
+		return [.. records ?? []];
 	}
-
-	public static T				GetRecordById(int recordId, string[] excludedFields = null)
+	public static T?				GetRecordById(int recordId, string[] excludedFields = null)
 	{
 		T[] records = GetRecordsByIds([recordId], excludedFields: excludedFields);
 		return records != null && records.Length > 0 ? records[0] : default;
 	}
-
 	public static T[]				GetRecordsBySearch(ArrayList searchFilter = null, string[] excludedFields = null, string[] insertFields = null)
 	{
 		string modelName = GetHpModel();
 
-		List<T> records = [];
-		ArrayList fields = GetFields(excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+		ArrayList fields = GetOdooFields(excludedFieldNames: excludedFields, insertFieldNames: insertFields);
 		ArrayList result;
 
 		if (searchFilter == null)
@@ -348,33 +340,23 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 
 		if (result.Count == 0) return null;
 
-		foreach (Hashtable ht in result)
-		{
-			records.Add(RecordPopulation(ht, excludedFields));
-		}
+		var records = RecordsPopulation(hts: result?.Select<Hashtable, Hashtable>(static h => h), excludedFields);
 		return [.. records];
 	}
-
 	public static T[]?				GetAllRecords(string[] excludedFields = null, string[] insertFields = null)
 	{
 		string modelName = GetHpModel();
 
-		List<T> records = [];
-		ArrayList fields = GetFields(excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+		ArrayList fields = GetOdooFields(excludedFieldNames: excludedFields, insertFieldNames: insertFields);
 
 		ArrayList result = OClient.Browse(modelName, [new ArrayList(), fields], 10000);
 
 
-		if (result.Count == 0) return null;
+		if (result?.Count == 0) return null;
 
-		//records.AddRange(RecordsPopulation(result.OfType<Hashtable>(), excludedFields));
-		foreach (Hashtable ht in result)
-		{
-			records.Add(RecordPopulation(ht, excludedFields));
-		}
-		return [.. records];
+		var records = RecordsPopulation(hts: result?.Select<Hashtable, Hashtable>(static h => h), excludedFields);
+		return [.. records ?? []];
 	}
-
 
 	internal static T?				RecordPopulation(Hashtable ht, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string>? remapNames = null)
 	{
@@ -391,12 +373,13 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 				}
 			}
 		}
+		
 		T record = HashConverter.ConvertToClass<T>(ht);
 
-		FinalizePopulation(ref record, ht, excludedFields, hashStoreType);
+		FinalizePopulation(ref record, excludedFields);
 		return record;
 	}
-	internal static T[]?			RecordsPopulation(IEnumerable<Hashtable>? hts, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string>? remapNames = null)
+	internal static T[]?			RecordsPopulation(IEnumerable<Hashtable>? hts, string[]? excludedFields = null, Dictionary<string, string>? remapNames = null)
 	{
 		if (hts is null) return null;
 
@@ -414,9 +397,11 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 				}
 			}
 		}
-		return HashConverter.ConvertToClasses<T>(hts);
+		T[] records = HashConverter.ConvertToClasses<T>(hts);
+		FinalizePopulations(records, excludedFields);
+		return records;
 	}
-
+	
 	private static Hashtable		ScalpFields(Hashtable ht, HashedValueStoring hashStoreType)
 	{
 		if (hashStoreType is HashedValueStoring.None) return null;
@@ -443,7 +428,6 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 		return newHt;
 	}
 	
-
 	public static T					Default()
 	{
 		if (typeof(T).IsValueType)
@@ -459,43 +443,34 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 	{
 		string modelName = GetHpModel();
 
-		List<T> records = [];
-		ArrayList fields = GetFields(excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+		ArrayList fields = GetOdooFields(excludedFieldNames: excludedFields, insertFieldNames: insertFields);
 
 		ArrayList result = await OClient.BrowseAsync(modelName, [new ArrayList(), fields], 10000);
 
 
 		if (result.Count == 0) return null;
 
-		foreach (Hashtable ht in result)
-		{
-			records.Add(RecordPopulation(ht, excludedFields));
-		}
-		return [.. records];
+		var records = RecordsPopulation(hts: result?.Select<Hashtable, Hashtable>(static h => h), excludedFields);
+		return [.. records ?? []];
 	}
-
 	public static async Task<T[]?>		GetRecordsBySmartSearchAsync(ArrayList? searchFilter = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
 	{
 		string modelName = GetHpModel();
-		List<T> records = [];
-		ArrayList fields = GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+		
+		ArrayList fields = GetOdooFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
 
 		searchFilter ??= [];
 
 		var result = await OClient.SmartSearchAsync(modelName, searchFilter, [], fields, 10000);
 		if (result.Count == 0) return null;
-		foreach (Hashtable ht in result)
-		{
-			records.Add(RecordPopulation(ht, excludedFields));
-		}
-		return [.. records];
+		var records = RecordsPopulation(hts: result?.Select<Hashtable, Hashtable>(static h => h), excludedFields);
+		return [.. records ?? []];
 	}
 	public static async Task<T[]?>		GetRecordsBySearchAsync(ArrayList? searchFilter = null, string[]? includedFields = null, string[]? excludedFields = null, string[]? insertFields = null)
 	{
 		string modelName = GetHpModel();
 
-		List<T> records = [];
-		ArrayList fields = GetFields(excludedFieldNames: excludedFields, includedFieldNames: includedFields, insertFieldNames: insertFields);
+		ArrayList fields = GetOdooFields(excludedFieldNames: excludedFields, includedFieldNames: includedFields, insertFieldNames: insertFields);
 		ArrayList result;
 
 		if (searchFilter == null)
@@ -508,11 +483,8 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 
 		if (result.Count == 0) return null;
 
-		foreach (Hashtable ht in result)
-		{
-			records.Add(RecordPopulation(ht, excludedFields));
-		}
-		return [.. records];
+		var records = RecordsPopulation(hts: result?.Select<Hashtable, Hashtable>(static h => h), excludedFields);
+		return [.. records ?? []];
 	}
 	public static async Task<T?>		GetRecordByIdAsync(int recordId, string[] excludedFields = null)
 	{
@@ -520,12 +492,11 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 		T[] records = await GetRecordsByIdsAsync([recordId], excludedFields: excludedFields);
 		return records != null && records!.Length > 0 ? records![0] : default;
 	}
-
 	public async static Task<T[]?>	GetRecordsByIdsAsync(ArrayList? recordIds, ArrayList? searchFilters = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
 	{
 		string modelName = GetHpModel();
 
-		ArrayList fields = GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+		ArrayList fields = GetOdooFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
 		ArrayList result;
 
 		if (searchFilters == null)
@@ -541,12 +512,6 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 
 		if (result.Count == 0) return null;
 
-		//T[] records = new T[result.Count];
-		//      foreach ((int i, Hashtable ht) in result.Select<Hashtable, (int, Hashtable)>(r => (result.IndexOf(r), r)))
-		//{
-		//	records[i] = RecordPopulation(ht, excludedFields);
-		//}
-		//return records;
 		return RecordsPopulation(result.Select<Hashtable, Hashtable>(h => h), excludedFields);
 	}
 
@@ -563,11 +528,13 @@ public abstract partial class HpBaseModelTransport<T>
 	public static string? SetHpModel(string? value)
 	{
 		if (value is null) return null;
-		HpModelDictionaryGen[nameof(T)] = value;
+		HpModelDictionaryGen[typeof(T).Name] = value;
 		return value;
 	}
 	public static string? GetHpModel()
-		=> HpModelDictionaryGen.GetValueOrDefault(nameof(T));
+	{ 
+		return HpModelDictionaryGen.GetValueOrDefault(typeof(T).Name);
+	}
 
 	public static TOther[]		GetRelatedRecordByIds<TOther>(ArrayList recordIds, string relatedFieldName, string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null) 
 		where TOther : HpBaseModelTransport<TOther>, new()
@@ -575,7 +542,7 @@ public abstract partial class HpBaseModelTransport<T>
 		string modelName = GetHpModel();
 
 		List<TOther> records = [];
-		ArrayList fields = HpBaseModelTransport<TOther>.GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+		ArrayList fields = HpBaseModelTransport<TOther>.GetOdooFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
 		ArrayList result;
 
 		result = OClient.RelatedBrowse(modelName, [recordIds, relatedFieldName, fields], 60000);
@@ -628,7 +595,7 @@ public abstract partial class HpBaseModelTransport<T>
 		string modelName = GetHpModel();
 
 		List<TOther> records = [];
-		ArrayList fields = HpBaseModelTransport<TOther>.GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+		ArrayList fields = HpBaseModelTransport<TOther>.GetOdooFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
 		ArrayList result;
 
 		result = OClient.RelatedSearch(modelName, [searchFilter, relatedFieldName, fields], 60000);
@@ -670,7 +637,7 @@ public abstract partial class HpBaseModelTransport<T>
 	}
 	public void						Refresh()
 	{
-		Hashtable ht = (Hashtable)OClient.Read(HpModel, [id], GetFields())?[0];
+		Hashtable ht = (Hashtable)OClient.Read(HpModel, [id], GetOdooFields())?[0];
 
 		if (ht != null)
 		{
@@ -695,47 +662,25 @@ public abstract partial class HpBaseModelTransport<T>
 	public static Tval?				GetFieldValue<Tval>(int id, string fieldName, Tval? defaultVal = null) 
 		where Tval : struct
 		=> GetFieldValueAsync<Tval>(id, fieldName, defaultVal).GetAwaiter().GetResult();
-	public static void				FinalizePopulation(ref T record, Hashtable ht, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
+	public static void				FinalizePopulation(ref T record, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
 	{
 		// set record settings
-		record.id = (int)ht["id"];
 
-		record.IsRecord = (bool)true;
+		// this is included in HashConverter.ConvertToClass
+		//record.id = (int)ht["id"];
+
+		record.IsRecord = true;
 		record.ExcludedFields = excludedFields;
-
-		//record.HashedValues = [];
-		switch (hashStoreType)
-		{
-			case HashedValueStoring.None: break;
-
-			case HashedValueStoring.ExistingFields:
-			case HashedValueStoring.NonExistingFields:
-				{
-					record.HashedValues = ScalpFields(ht, hashStoreType);
-					break;
-				}
-
-			case HashedValueStoring.All:
-				{
-					record.HashedValues = ht;
-					break;
-				}
-		}
-		if ((record.HpModel is OdooDefaultsConstants.HP_VERSION or OdooDefaultsConstants.HP_ENTRY)
-			&& ht.TryGetValue("dir_id", out object value))
-		{
-			record.HashedValues.Add("dir_id", value);
-		}
-
-
+		
 		record.CompleteConstruction();
 	}
-	public static void				FinalizePopulations(T[] records, Hashtable[] hts, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
+	public static void				FinalizePopulations(T[] records, string[]? excludedFields = null)
 	{
-		if (records.Length != hts.Length) return;
+		if (records.Length == 0) return;
+		
 		for (int i = 0; i < records.Length; i++)
 		{
-			FinalizePopulation(ref records[i], hts[i], excludedFields, hashStoreType);
+			FinalizePopulation(ref records[i], excludedFields);
 		}
 	}
 	internal static void			SortById(T[] arr)
@@ -781,8 +726,8 @@ public abstract partial class HpBaseModelTransport<T>
 		}
 		return arr;
 	}
-	public static ArrayList			GetAllFields() => GetFields();
-	public static ArrayList			GetFields(string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
+	public static ArrayList			GetAllFields() => GetOdooFields();
+	public static ArrayList			GetOdooFields(string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
 		=> GetFields(typeof(T), excludedFieldNames, includedFieldNames, insertFieldNames);
 	public override string			ToString() => id.ToString();
 	// async methods
@@ -815,7 +760,7 @@ public abstract partial class HpBaseModelTransport<T>
 		string modelName = GetHpModel();
 
 		List<TOther> records = [];
-		ArrayList fields = HpBaseModelTransport<TOther>.GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+		ArrayList fields = HpBaseModelTransport<TOther>.GetOdooFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
 
 		var result = await OClient.RelatedSearchAsync(modelName, [searchFilter, relatedFieldName, fields], 60000);
 
@@ -849,7 +794,7 @@ public abstract partial class HpBaseModelTransport<T>
 		string modelName = GetHpModel();
 
 		List<TOther> records = [];
-		ArrayList fields = HpBaseModelTransport<TOther>.GetFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+		ArrayList fields = HpBaseModelTransport<TOther>.GetOdooFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
 		ArrayList result = await OClient.RelatedBrowseAsync(modelName, [recordIds, relatedFieldName, fields], 60000);
 
 		if (result.Count == 0) return null;
@@ -903,7 +848,7 @@ public abstract partial class HpBaseModelTransport<T>
 	}
 	public async Task					RefreshAsync()
 	{
-		if ((await OClient.ReadAsync(HpModel, [id], GetFields()))?[0] is Hashtable ht)
+		if ((await OClient.ReadAsync(HpModel, [id], GetOdooFields()))?[0] is Hashtable ht)
 		{
 			HashConverter.AssignToClass(ht, this);
 

@@ -22,6 +22,7 @@ using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Hack;
+using HackPDM.UI.Forms.Helper;
 using HackPDM.UI.Forms.Settings;
 using HackPDM.UI.Types;
 
