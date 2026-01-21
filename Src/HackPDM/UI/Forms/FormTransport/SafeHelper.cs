@@ -55,7 +55,7 @@ namespace HackPDM.Core.Helper.Xaml
 		internal async static Task<TResult> SafeInvokerAsync<TResult>(Func<TResult> func)
 		{
 			var tcs = new TaskCompletionSource<TResult>();
-			HackFileManager.HackDispatcherQueue.TryEnqueue(() =>
+			HackApp.RootFrame?.DispatcherQueue.TryEnqueue(() =>
 			{
 				try
 				{

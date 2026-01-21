@@ -5,9 +5,9 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:com="using:CommunityToolkit.WinUI.UI.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:rep="using:HackPDM.Domain.Representation"
     xmlns:local="using:HackPDM.UI.Forms.Hack"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:rep="using:HackPDM.Domain.Representation"
     xmlns:xaml="using:Microsoft.UI.Xaml"
     mc:Ignorable="d">
     <Grid Margin="12">
@@ -92,6 +92,7 @@
                     Width="*"
                     Binding="{Binding Message}"
                     Header="Description" />
+
             </com:DataGrid.Columns>
         </com:DataGrid>
     </Grid>

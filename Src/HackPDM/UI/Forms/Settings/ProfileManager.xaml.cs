@@ -20,6 +20,8 @@ using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Odoo;
 using Microsoft.Extensions.DependencyInjection;
 using HackPDM.UI.Forms.Hack;
+using HackPDM.UI.Forms.Helper;
+using HackPDM.Core.General;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -45,7 +47,7 @@ public sealed partial class ProfileManager : Page
         HackApp.Window?.Title = "Profile Manager - HackPDM";
 
 		ProfileManStatusList.ItemsSource = OStatus;
-
+		
 		odooSettingsBtn.Click += OdooSetting;
 		HackSettingsBtn.Click += HackSetting;
 		OdooLoginBtn.Click += AttemptLogin;
@@ -58,8 +60,42 @@ public sealed partial class ProfileManager : Page
     }
     public void HackSetting(object sender, RoutedEventArgs e)
     {
-		HackSettings hSettings = HackApp.Services?.GetRequiredService<HackSettings>();
-		WindowHelper.CreateWindowFromPage<HackSettings>(hSettings);
+		string rawText = """
+				// buttons on bottom / text box on top
+				//		XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+				//		X																	X
+				//		X																	X
+				//		X																	X
+				//		X							TEXTBOX									X
+				//		X																	X
+				//		X																	X
+				//		X																	X
+				//		XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+				//		X                 			Buttons									X
+				//		XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+				// AHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+				private void DefaultImpl()
+				{
+					ScrollContainer = new();
+					TextBlockImpl = new()
+					{
+						Text = $"- {_message}",
+						TextAlignment = TextAlignment.Justify,
+						TextWrapping = TextWrapping.Wrap,
+					};
+					ScrollContainer.Content = TextBlockImpl;
+					gridRoot.Children.Add( ScrollContainer );
+					ScrollContainer.SetGrid(0, 0, 3, 3);
+					var (primary, secondary, close) = DefaultButtons();
+				}
+				// buttons on bottom / list above
+		//		
+		//		XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+		""";
+		
+		MessageBox.Show( rawText );
+		//HackSettings hSettings = HackApp.Services?.GetRequiredService<HackSettings>();
+		//WindowHelper.CreateWindowFromPage<HackSettings>(hSettings);
     }
     private async Task<bool> AbleToLogin()
     {

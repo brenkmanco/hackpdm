@@ -1,10 +1,15 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+
 using HackPDM.Domain.Representation;
 using HackPDM.UI.Forms;
+
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Navigation;
 
 namespace HackPDM.UI.Controls;
 
@@ -20,43 +25,52 @@ public static partial class WindowHelper
         MoveWindow(hwnd, 100, 100, width, height, true);
     }
 
-    public static Window CreateWindowPage<T>(bool activated = true) where T : Page, new()
+    public static Window CreateWindowPage<T>(bool activated = true, ArrayList? parameters = null) where T : Page, new()
     {
-        CreateWindowAndPage<T>(out _, out var window, activated);
+        CreateWindowAndPage<T>(out _, out var window, activated, parameters);
         return window;
     }
-    public static Window CreateWindowFromPage<TPage>(TPage page, bool activated = true)
+    public static Window CreateWindowFromPage<TPage>(TPage page, bool activated = true, ArrayList? parameters = null)
         where TPage : Page
     {
-        CreateWindowFromPageInternal(page, out Window window, activated);
+        CreateWindowFromPageInternal(page, out Window window, activated, parameters);
         return window;
     }
-    public static void CreateWindowFromPage<TPage, TWindow>(TPage page, out TWindow window, bool activated = true)
+    public static void CreateWindowFromPage<TPage, TWindow>(TPage page, out TWindow window, bool activated = true, ArrayList? parameter = null)
         where TPage : Page
         where TWindow : Window, new()
     {
-        CreateWindowFromPageInternal(page, out window, activated);
+        CreateWindowFromPageInternal(page, out window, activated, parameter);
 	}
-	public static void CreateWindowAndPage<T>(out T page, out Window window, bool activated = true) 
+	public static void CreateWindowAndPage<T>(out T page, out Window window, bool activated = true, ArrayList? parameters = null) 
         where T : Page, new() 
-        => CreateWindowAndPageInternal(out page, out window, activated);
-    public static void CreateWindowAndPage<TPage, TWindow>(out TPage page, out TWindow window, bool activated = true) 
+        => CreateWindowAndPageInternal(out page, out window, activated, parameters);
+    public static void CreateWindowAndPage<TPage, TWindow>(out TPage page, out TWindow window, bool activated = true, ArrayList? parameters = null) 
         where TPage : Page, new()
         where TWindow : Window, new()
-		=> CreateWindowAndPageInternal(out page, out window, activated);
-	private static void CreateWindowFromPageInternal<TPage, TWindow>(TPage page, out TWindow window, bool activated = true)
+		=> CreateWindowAndPageInternal(out page, out window, activated, parameters);
+	private static void CreateWindowFromPageInternal<TPage, TWindow>(TPage page, out TWindow window, bool activated = true, ArrayList? parameters = null)
         where TPage : Page
         where TWindow : Window, new()
 	{
-		Frame rootFrame = new()
-		{
-			Content = page
-		};
-
-		window = new TWindow();
+        window = new TWindow();
 		if (activated) window.Activate();
+
+        Frame rootFrame = new();
+		if (parameters is not null)
+        {
+            parameters.Add( window );
+            rootFrame.Navigate(typeof(TPage), parameters);
+            page = rootFrame.Content as TPage;
+        } else 
+        {
+            rootFrame.Content = page;
+        }
         
 		window.Content = rootFrame;
+        
+
+        
 		if (WindowConfig.PresetWindowConfig.TryGetValue(typeof(TPage).Name, out WindowConfig? value))
 		{
 			SetWindowConfig(window, value);
@@ -66,12 +80,12 @@ public static partial class WindowHelper
 			InstanceManager.RegisterWindow(page, window);
 		}
 	}
-	private static void CreateWindowAndPageInternal<TPage, TWindow>(out TPage page, out TWindow window, bool activated = true)
+	private static void CreateWindowAndPageInternal<TPage, TWindow>(out TPage? page, out TWindow window, bool activated = true, ArrayList? parameters = null)
         where TPage : Page, new()
         where TWindow : Window, new()
     {
-        page = new();
-        CreateWindowFromPageInternal(page, out window, activated);
+        page = parameters is null ? new() : null;
+        CreateWindowFromPageInternal(page, out window, activated, parameters);
 	}
 	public static Window CreateWindowPage<T>(WindowConfig winConfig) where T : Page, new()
     {
@@ -83,17 +97,20 @@ public static partial class WindowHelper
     {
         window.AppWindow.MoveAndResize(windowConfig.PositionAndSize);
         window.Title = windowConfig.Title;
+        window.SetWindowType(windowConfig.WindowKind);
     }
 }
-public class WindowConfig(string title, Vector4<int> positionAndSize)
+public class WindowConfig(string title, Vector4<int> positionAndSize, AppWindowPresenterKind kind = AppWindowPresenterKind.Default)
 {
     public static Dictionary<string, WindowConfig> PresetWindowConfig = new ()
 	{
 		{"ProfileManager", new WindowConfig("Profile Manager", new Vector4<int>(200, 200, 500, 200))},
         {"OdooSettings", new WindowConfig("Odoo Settings", new Vector4<int>(200, 200, 500, 500))},
-        {"HackSettings", new WindowConfig("Hack Settings", new Vector4<int>(200, 200, 500, 200))},
+        {"HackSettings", new WindowConfig("Hack Settings", new Vector4<int>(200, 200, 700, 200))},
         {"HackFileManager", new WindowConfig("Hack File Manager", new Vector4<int>(0, 0, 1280, 720))},
+        {"MessageBox", new WindowConfig("Info", new Vector4<int>(200, 200, 500, 300), AppWindowPresenterKind.CompactOverlay)},
     };
     public string Title { get; set; } = title;
     public Vector4<int> PositionAndSize { get; set; } = positionAndSize;
+    public AppWindowPresenterKind WindowKind { get; set; } = kind;
 }

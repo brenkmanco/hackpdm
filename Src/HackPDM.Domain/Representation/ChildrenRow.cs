@@ -1,13 +1,14 @@
-﻿using HackPDM.Abstractions;
+﻿
+using HackPDM.Abstractions;
 
 namespace HackPDM.Domain.Representation;
 
 public class ChildrenRow : DataGridData, IRowData<ChildrenRow>
 {
 	// (MVVM) VIEW
-	public int          Version     { get; set; }
-	public string?      BasePath    { get; set; }
-	public ChildrenRow() {}
+	public int Version { get; set; }
+	public string? BasePath { get; set; }
+	public ChildrenRow() { }
 	public ChildrenRow Clone()
 	{
 		var cItem = new ChildrenRow

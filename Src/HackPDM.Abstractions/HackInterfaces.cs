@@ -20,7 +20,6 @@ public interface ICloneable<T>
 }
 public interface IRowData<T> : ICloneable<T>
 {
-	
 }
 public interface ITreeItem
 {

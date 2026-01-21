@@ -129,17 +129,7 @@ public static class ExtensionMethods
 			}
 		}
 	}
-	private static void TakeWhile<T>(this Span<T> span, Predicate<T> predicate)
-	{
-		for (int i = 0; i < span.Length; i++)
-		{
-			ref var item = ref span[i];
-			if (predicate(item))
-			{
-				// list[i] = item;
-			}
-		}
-	}
+
 	public static bool StartsWith(this Span<char> str, Span<string> list)
 	{
 		
@@ -347,6 +337,22 @@ public static class ExtensionMethods
 			}
 			return tarray;
 		}
+		
+		public IEnumerable<string> SplitBy(Func<string, char, bool> evaluater)
+		{
+			string currentSection = "";
+			for( int i = 0; i < str.Length; i++ )
+			{
+				currentSection += str[i];
+				if( evaluater( currentSection, str[i] ) )
+				{
+					yield return currentSection;
+					currentSection = "";
+				}
+			}
+			if( currentSection.Length > 0 )
+				yield return currentSection;
+		}
 
 		public TArray Split<TArray>(string delimiter = " ", StringSplitOptions options = StringSplitOptions.RemoveEmptyEntries)
 			where TArray : IList, new()
@@ -488,7 +494,7 @@ public static class ExtensionMethods
 		    return (segmentList.SkipSelect(item => (!item.Item1, item.Item2)), segmentList.SkipSelect(item => item));
 	    }
 
-	    public (IEnumerable<TOut?>, IEnumerable<TOut2?>) SegmentSelectDiffWhere<TOut, TOut2>(Func<T?, int, (bool, TOut?, TOut2?)> predicateSelect, bool skipNullItem = true)
+		public (IEnumerable<TOut?>, IEnumerable<TOut2?>) SegmentSelectDiffWhere<TOut, TOut2>(Func<T?, int, (bool, TOut?, TOut2?)> predicateSelect, bool skipNullItem = true)
 	    {
 		    var segmentList = SegmentSelectDiffInternal(array, predicateSelect, skipNullItem);
 		    return (segmentList.SkipSelect(item => (!item.Item1, item.Item2)), segmentList.SkipSelect(item => (item.Item1, item.Item3)));
@@ -599,8 +605,27 @@ public static class ExtensionMethods
 			    }
 		    }
 	    }
-		
-	    public IEnumerable<(T, T2)> PopulateZip<T2>(Func<T, T2> func)
+		public TOut FirstSelect<TOut>(Func<T, (bool, TOut)> predicateSelect)
+		{
+			foreach (T item in source)
+			{
+				var result = predicateSelect(item);
+				if( result.Item1 )
+					return result.Item2;
+			}
+			throw new Exception("not found in enumerable");
+		}
+		public TOut? FirstOrDefaultSelect<TOut>( Func<T, (bool, TOut)> predicateSelect )
+		{
+			foreach( T item in source )
+			{
+				var result = predicateSelect(item);
+				if( result.Item1 )
+					return result.Item2;
+			}
+			return default;
+		}
+		public IEnumerable<(T, T2)> PopulateZip<T2>(Func<T, T2> func)
 	    {
 		    foreach (T obj in source)
 		    {
@@ -608,6 +633,11 @@ public static class ExtensionMethods
 		    }
 	    }
     }
+	extension(IEnumerable source)
+	{
+		public TOut? FirstOrDefaultSelect<TOut>( Func<object, (bool, TOut)> predicateSelect )
+			=> source.Cast<object>().FirstOrDefaultSelect( predicateSelect );
+	}
 
 }
 public static class ExtensionConvertMethods
@@ -749,7 +779,17 @@ public static class UnsafeExtensions
 	public delegate ref TOut RefSelector<TIn, TOut>(ref TIn input);
 	extension<T>(Span<T> span)
 	{
-
+		public void TakeWhile( Predicate<T> predicate )
+		{
+			for( int i = 0; i < span.Length; i++ )
+			{
+				ref var item = ref span[i];
+				if( predicate( item ) )
+				{
+					// list[i] = item;
+				}
+			}
+		}
 		public Span<T> Skip(Func<T, bool> predicate)
 		{
 			T[] temp = new T[span.Length]; int count = 0; for (int i = 0; i < span.Length; i++)

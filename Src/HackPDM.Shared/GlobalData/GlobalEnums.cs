@@ -100,6 +100,21 @@ namespace HackPDM.Shared.GlobalData
 		Information,
 		Warning,
 	}
+	public enum MessageBoxType
+	{
+		Default,
+		ListDetail,
+		GridDetail,
+		ContentDetail,
+		ToolTip,
+		Notification,
+	}
+	public enum MessageBoxWidth
+	{ 
+		Default,
+		DynamicWidthText,
+		DynamicWidthTextWithThreshold,
+	}
 	public enum ContentDialogButtonRepresentation
 	{
 		None,

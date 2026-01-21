@@ -225,7 +225,17 @@ public static class FormHelper
         internal Task ExecuteUIAsync(Action function)
             => Task.Run(async () => ExecuteUI(dispatcher, function));
     }
-
+    extension(FrameworkElement element)
+    {
+		public void SetGrid( int row, int column, int rowspan = 1, int columnspan = 1 )
+		{
+            element.SetValue( Grid.RowProperty, row );
+			element.SetValue( Grid.ColumnProperty, column );
+			element.SetValue( Grid.RowSpanProperty, rowspan );
+			element.SetValue( Grid.ColumnSpanProperty, columnspan );
+		}
+	}
+    
     static ScrollViewer? GetScrollViewer(DependencyObject parent)
 	{
 		for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
