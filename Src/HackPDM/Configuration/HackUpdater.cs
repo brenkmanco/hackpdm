@@ -2,6 +2,8 @@
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
+
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Shared.GlobalData;
@@ -22,7 +24,7 @@ internal class HackUpdater
 	{
 		return Assembly.GetExecutingAssembly().GetName().Version;
 	}
-	private static bool IsCorrectOdooVersion(Version? version, bool showOutdatedUpdater = false)
+	private static async Task<bool> IsCorrectOdooVersion(Version? version, bool showOutdatedUpdater = false)
 	{
 		string _hackClientVersion = $"{version?.Major}.{version?.Minor}.{version?.Build}.{version?.Revision}";
 		_odooClientVersion = OdooDefaults.Instance?.HpSettings?.FirstOrDefault(s => s.name == OdooDefaultsConstants.ODOO_VERSION_KEY_NAME);
@@ -30,7 +32,7 @@ internal class HackUpdater
 		if (_odooClientVersion is not null && _odooClientVersion.char_value.Equals(_hackClientVersion))
 			return true;
 
-		if (showOutdatedUpdater && MessageBox.Show( $"Latest version: {_hackClientVersion} doesn't match odoo version: {_odooClientVersion}\n" +
+		if (showOutdatedUpdater && await MessageBox.ShowAsync( $"Latest version: {_hackClientVersion} doesn't match odoo version: {_odooClientVersion}\n" +
 		        $"Would you like to download the latest version?",
 			    "Versions",
 			    MessageBoxButtons.YesNoCancel ) == DialogResult.Yes )
@@ -40,16 +42,16 @@ internal class HackUpdater
 
 		return false;
 	}
-	public static bool EnsureUpdated(bool showOutdatedUpdater = false)
+	public static async Task<bool> EnsureUpdated(bool showOutdatedUpdater = false)
 	{
 		var info = CurrentVersion();
-		return IsCorrectOdooVersion(info, showOutdatedUpdater);
+		return await IsCorrectOdooVersion(info, showOutdatedUpdater);
 	}
 	public static void UpdaterProcess( )
 	{
 		try
 		{
-			MessageBox.Show($"Opening {PUBLISH_URL}");
+			MessageBox.ShowAsync($"Opening {PUBLISH_URL}");
 			Process proc = Process.Start( PUBLISH_URL );
 			HackApp.Current.Exit();
 		}

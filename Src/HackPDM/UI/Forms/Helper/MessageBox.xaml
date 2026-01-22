@@ -8,6 +8,28 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
+    <Page.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <Style
+                        x:Key="DarkButtonActiveStyle1"
+                        BasedOn="{StaticResource DefaultButtonStyle}"
+                        TargetType="Button">
+                        <Setter Property="Background" Value="CornflowerBlue" />
+                        <Setter Property="Opacity" Value="0.9" />
+                    </Style>
+                    <Style
+                        x:Key="DarkButtonStyle1"
+                        BasedOn="{StaticResource DefaultButtonStyle}"
+                        TargetType="Button">
+                        <Setter Property="Background" Value="DarkSlateGray" />
+                        <Setter Property="Opacity" Value="0.8" />
+                    </Style>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Page.Resources>
     <Grid x:Name="gridRoot">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
@@ -17,9 +39,9 @@
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="2*" />
+            <RowDefinition Height="2*" />
+            <RowDefinition Height="25" />
         </Grid.RowDefinitions>
 
     </Grid>

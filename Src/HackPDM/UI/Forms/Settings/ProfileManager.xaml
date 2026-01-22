@@ -59,16 +59,44 @@
             HorizontalAlignment="Stretch"
             VerticalAlignment="Bottom"
             Content="Odoo Login" />
-        <ProgressRing
-            x:Name="OdooLoginProgressRing"
+        <Canvas
+            x:Name="InfoOrLoad"
             Grid.Row="1"
             Grid.Column="3"
             Width="32"
             Height="32"
             Margin="5,5,5,5"
             HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            IsActive="False" />
+            VerticalAlignment="Center">
+            <ProgressRing
+                x:Name="OdooLoginProgressRing"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                IsActive="False" />
+            <CommandBar
+                x:Name="MoreTools"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                DefaultLabelPosition="Right">
+                <AppBarButton
+                    x:Name="AdditionalTools"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    Icon="Help">
+                    <AppBarButton.Flyout>
+                        <MenuFlyout>
+                            <MenuFlyoutItem
+                                x:Name="LoadJsonSettingsBtn"
+                                Click="LoadJsonSettingsBtn_Click"
+                                Text="Load Json Settings" />
+                            <!--<MenuFlyoutItem x:Name="OdooSearchDropdown" Text="Search" />
+                            <MenuFlyoutItem x:Name="OdooManageTypesDropdown" Text="Manage File Types" />
+                            -->
+                        </MenuFlyout>
+                    </AppBarButton.Flyout>
+                </AppBarButton>
+            </CommandBar>
+        </Canvas>
         <!--  Status List View  -->
         <com:DataGrid
             x:Name="ProfileManStatusList"

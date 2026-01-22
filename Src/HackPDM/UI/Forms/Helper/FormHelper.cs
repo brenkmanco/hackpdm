@@ -35,7 +35,7 @@ public static class FormHelper
             }
             catch (ArgumentNullException)
             {
-                MessageBox.Show("Path is a null reference.  Could not find its parent.",
+                MessageBox.ShowAsync("Path is a null reference.  Could not find its parent.",
                     "Path Error",
                     buttons: MessageBoxButtons.OK,
                     icon: MessageBoxIcon.Error);
@@ -43,7 +43,7 @@ public static class FormHelper
             }
             catch (ArgumentException)
             {
-                MessageBox.Show("Path is an empty string.  Could not find its parent.",
+                MessageBox.ShowAsync("Path is an empty string.  Could not find its parent.",
                     "Path Error",
                     buttons: MessageBoxButtons.OK,
                     icon: MessageBoxIcon.Error);
@@ -51,7 +51,7 @@ public static class FormHelper
             }
             catch (System.IO.DirectoryNotFoundException)
             {
-                MessageBox.Show("The parent directory for path \"" + path + "\" could not be found.",
+                MessageBox.ShowAsync("The parent directory for path \"" + path + "\" could not be found.",
                     "Path Error",
                     buttons: MessageBoxButtons.OK,
                     icon: MessageBoxIcon.Error);
@@ -59,7 +59,7 @@ public static class FormHelper
             }
             catch
             {
-                MessageBox.Show("Could not find the parent directory for \"" + path + "\".",
+                MessageBox.ShowAsync("Could not find the parent directory for \"" + path + "\".",
                     "Path Error",
                     buttons: MessageBoxButtons.OK,
                     icon: MessageBoxIcon.Error);
@@ -90,7 +90,7 @@ public static class FormHelper
         }
         catch
         {
-            MessageBox.Show("Error getting Base Name from \"" + path + "\".",
+            MessageBox.ShowAsync("Error getting Base Name from \"" + path + "\".",
                 "Path Error",
                 buttons: MessageBoxButtons.OK,
                 icon: MessageBoxIcon.Error);
@@ -113,7 +113,7 @@ public static class FormHelper
         }
         catch ( System.Exception )
         {
-            MessageBox.Show("Error finding local files.",
+            MessageBox.ShowAsync("Error finding local files.",
                 "File Discovery Error",
                 buttons: MessageBoxButtons.OK,
                 icon: MessageBoxIcon.Error);

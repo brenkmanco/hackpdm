@@ -14,7 +14,7 @@ namespace HackPDM.UI.Forms.Helper;
 
 public static class SldWorksUI
 {
-    public static SoftwareBitmap GetPreview(string fileName, bool deep = false)
+    public static async Task<SoftwareBitmap> GetPreview(string fileName, bool deep = false)
     {
         // external references for assembly files (GetAllExternalReferences4)
         // external references for part files (GetExternalFeatureReferences)
@@ -32,7 +32,7 @@ public static class SldWorksUI
         swDoc = (SwDMDocument11)SwDocMgr.GetApplication().GetDocument(fileName, swDocType, true, out nRetVal);
         if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
         {
-            DialogResult dr = MessageBox.Show("Failed to open solidworks file: " + fileName,
+            DialogResult dr = await MessageBox.ShowAsync("Failed to open solidworks file: " + fileName,
                 "Loading SW File",
                 buttons: MessageBoxButtons.OK,
                 icon: MessageBoxIcon.Error);

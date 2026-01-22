@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 using HackPDM.Domain.Representation;
+using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Forms;
 
 using Microsoft.UI.Windowing;
@@ -25,6 +26,22 @@ public static partial class WindowHelper
         MoveWindow(hwnd, 100, 100, width, height, true);
     }
 
+    public static T CreateWindow<T>(string? configName = null, bool activated = true, bool withFrame = true) where T : Window, new()
+    {
+        T window = new T();
+        if (activated) window.Activate();
+
+        if (withFrame)
+        {
+            Frame rootFrame = new();
+            window.Content = rootFrame;
+        }
+        if (WindowConfig.PresetWindowConfig.TryGetValue(configName ?? "TemplateWindow", out WindowConfig? value))
+        {
+            SetWindowConfig(window, value);
+        }
+        return window;
+    }
     public static Window CreateWindowPage<T>(bool activated = true, ArrayList? parameters = null) where T : Page, new()
     {
         CreateWindowAndPage<T>(out _, out var window, activated, parameters);
@@ -95,9 +112,9 @@ public static partial class WindowHelper
     }
     private static void SetWindowConfig(Window window, WindowConfig windowConfig)
     {
-        window.AppWindow.MoveAndResize(windowConfig.PositionAndSize);
         window.Title = windowConfig.Title;
         window.SetWindowType(windowConfig.WindowKind);
+        window.AppWindow.MoveAndResize(windowConfig.PositionAndSize);
     }
 }
 public class WindowConfig(string title, Vector4<int> positionAndSize, AppWindowPresenterKind kind = AppWindowPresenterKind.Default)
@@ -108,7 +125,8 @@ public class WindowConfig(string title, Vector4<int> positionAndSize, AppWindowP
         {"OdooSettings", new WindowConfig("Odoo Settings", new Vector4<int>(200, 200, 500, 500))},
         {"HackSettings", new WindowConfig("Hack Settings", new Vector4<int>(200, 200, 700, 200))},
         {"HackFileManager", new WindowConfig("Hack File Manager", new Vector4<int>(0, 0, 1280, 720))},
-        {"MessageBox", new WindowConfig("Info", new Vector4<int>(200, 200, 500, 300), AppWindowPresenterKind.CompactOverlay)},
+        {"MessageBox", new WindowConfig("Info", new Vector4<int>(200, 200, 600, 350), AppWindowPresenterKind.CompactOverlay)},
+        {"TemplateWindow", new WindowConfig("Template Window", new Vector4<int>(200, 200, 500, 300))},
     };
     public string Title { get; set; } = title;
     public Vector4<int> PositionAndSize { get; set; } = positionAndSize;

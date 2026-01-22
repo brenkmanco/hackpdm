@@ -18,7 +18,9 @@ using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.Hack;
+using HackPDM.UI.Forms.FormTransport;
 using HackPDM.UI.Forms.Helper;
+using Microsoft.UI.Dispatching;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -33,6 +35,7 @@ public partial class HackApp : Application
 	public static IServiceProvider? Services { get; private set; }
     public static Window? Window;
     public static Frame? RootFrame;
+    public static DispatcherQueue DispatcherQueue;
 
 	// To fix CS0121, fully qualify the InitializeComponent() call to specify the correct method.
 	// If your project has both a generated partial method and a user-defined method, use the global:: prefix.
@@ -53,10 +56,14 @@ public partial class HackApp : Application
         services.AddSingleton<IHackDefaults, HackDefaults>();
         services.AddSingleton<IOdooDefaults, OdooDefaults>();
 
-
+        services.AddSingleton<TreeHelp>();
+        services.AddSingleton<GridHelp>();
+        
 	    services.AddTransient<ProfileManager>();
 		services.AddTransient<OdooSettings>();
 		services.AddTransient<HackSettings>();
+        services.AddTransient<MessageBox>();
+        services.AddTransient<HackFileManager>();
 
 		Services =  services.BuildServiceProvider();
 
@@ -77,6 +84,9 @@ public partial class HackApp : Application
 		var rootFrame = new Frame();
         Window.Activate();
         Window.Content = rootFrame;
+        
+        DispatcherQueue = Window.DispatcherQueue;
+        
         rootFrame.Navigate(typeof(ProfileManager));
     }
     private static void Setup ()

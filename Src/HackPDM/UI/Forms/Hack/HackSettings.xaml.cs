@@ -61,7 +61,7 @@ public sealed partial class HackSettings : Page
 		if (errors.Length > 0)
 		{
 			errors.AppendLine("changes were not saved");
-			MessageBox.Show(errors.ToString());
+			MessageBox.ShowAsync(errors.ToString());
 			return;
 		}
 		var dirInfo = new DirectoryInfo(txtPwaInput.Text);

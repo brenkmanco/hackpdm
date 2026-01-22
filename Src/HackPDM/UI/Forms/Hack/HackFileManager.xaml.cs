@@ -54,7 +54,9 @@ using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
 using WindowHelper = HackPDM.UI.Controls.WindowHelper;
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 using HackPDM.Abstractions;
+using HackPDM.UI.Forms.FormTransport;
 using HackPDM.UI.Forms.Helper;
+using Microsoft.Extensions.DependencyInjection;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -113,9 +115,9 @@ public sealed partial class HackFileManager : Page
     public bool IsActive { get; set; } = false;
     public bool IsFiltered { get; set; } = true;
 
-	private TreeHelp _treeHelper { get; init; }
-	private GridHelp _gridHelper { get; init; }
-	internal HackLists _hackLists { get; init; }
+	private TreeHelp _treeHelper { get; set; }
+	private GridHelp _gridHelper { get; set; }
+	internal HackLists _hackLists { get; set; }
 	public TreeViewNode? LastSelectedNode { get; set; } = null;
 	public string? LastSelectedNodePath { get; set; } = null;
 	// if EntryPollingMs is set to less than or equal to 0 then it will not poll for changes
@@ -140,19 +142,23 @@ public sealed partial class HackFileManager : Page
 	//public ListView OdooEntryList = new();
 	#endregion
 	#region Initializers
-	static HackFileManager() { }
-	public HackFileManager()
+	
+	public HackFileManager(ISettingsProvider settingsProvider)
 	{
 		InitializeComponent();
-
 #if DEBUG
-
 		DebugTest();
-
 #endif
+	}
 
-		_treeHelper = new TreeHelp(this);
-		_gridHelper = new GridHelp(this);
+	public void LoadHackMan()
+	{
+		_treeHelper = HackApp.Services.GetRequiredService<TreeHelp>();
+		_treeHelper.InjectHFM(this);
+		_gridHelper = HackApp.Services.GetRequiredService<GridHelp>();
+		_gridHelper.InjectHFM(this);
+		
+		
 		_hackLists = new()
 		{
 			Entry = OdooEntryList,
@@ -183,10 +189,14 @@ public sealed partial class HackFileManager : Page
 			_cTreeSource.Cancel();
 			_backgroundWorker.CancelAsync();
 		};
+		if (IsLoaded)
+		{
+			Task.Run(HackFileManager_Load);
+			return;
+		}
 		
 		this.Loaded += (_, _) => Task.Run(HackFileManager_Load);
 	}
-
 #if DEBUG
 	private static async Task DebugTest()
 	{
@@ -374,7 +384,7 @@ public sealed partial class HackFileManager : Page
 
 		if (versionBatches is null)
 		{
-			MessageBox.Show("Cancelled Download... No Versions to Process");
+			MessageBox.ShowAsync("Cancelled Download... No Versions to Process");
 			return;
 		}
 		try
@@ -444,7 +454,7 @@ public sealed partial class HackFileManager : Page
 		// create new parent, child hp_version_relationship's for versions
 		Dialog?.SetProgressBar(MaxCount, MaxCount);
 
-		MessageBox.Show($"Completed!");
+		await MessageBox.ShowAsync($"Completed!");
 		await _treeHelper.RestartTree(OdooDirectoryTree);
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
@@ -475,7 +485,7 @@ public sealed partial class HackFileManager : Page
 		}
 
 		Dialog?.SetProgressBar(MaxCount, MaxCount);
-		MessageBox.Show($"Completed!");
+		await MessageBox.ShowAsync($"Completed!");
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
 	private async Task Async_UnCheckOut(HpEntry[] entries)
@@ -504,7 +514,7 @@ public sealed partial class HackFileManager : Page
 		}
 
 		Dialog?.SetProgressBar(MaxCount, MaxCount);
-		MessageBox.Show($"Completed!");
+		await MessageBox.ShowAsync($"Completed!");
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
 	private async Task Async_PermDelete(HpEntry[] entries)
@@ -513,7 +523,7 @@ public sealed partial class HackFileManager : Page
 		bool vDeleted = false;
 
 		// using DeleteEntry also deletes entries, versions, version props, version relationships, and ir attachment records
-		DialogResult result = MessageBox.Show($"Are you sure you want to permanently delete {ids.Count} entries from the database?\n" +
+		DialogResult result = await MessageBox.ShowAsync($"Are you sure you want to permanently delete {ids.Count} entries from the database?\n" +
 											  $"This will also permanently delete all associative versions, version properties, and version relationships", "Delete Entries and Other Records?", MessageBoxButtons.YesNoCancel);
 
 		if (result is not DialogResult.Yes and not DialogResult.OK) return;
@@ -526,11 +536,11 @@ public sealed partial class HackFileManager : Page
 		}
 		else
 		{
-			MessageBox.Show("Was unable to delete entries", "Error", buttons: MessageBoxButtons.OKCancel, icon: MessageBoxIcon.Error);
+			MessageBox.ShowAsync("Was unable to delete entries", "Error", buttons: MessageBoxButtons.OKCancel, icon: MessageBoxIcon.Error);
 			return;
 		}
 
-		MessageBox.Show($"Completed!");
+		await MessageBox.ShowAsync($"Completed!");
 		await _treeHelper.RestartTree(OdooDirectoryTree);
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
@@ -547,7 +557,7 @@ public sealed partial class HackFileManager : Page
 
 		}
 
-		MessageBox.Show($"Completed!");
+		await MessageBox.ShowAsync($"Completed!");
 		await _treeHelper.RestartTree(OdooDirectoryTree);
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
@@ -564,7 +574,7 @@ public sealed partial class HackFileManager : Page
 		}
 
 		Dialog?.SetProgressBar(5, 5);
-		MessageBox.Show($"Completed!");
+		await MessageBox.ShowAsync($"Completed!");
 		await _treeHelper.RestartTree(OdooDirectoryTree);
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
@@ -887,7 +897,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 
 		if (tnCurrent == null)
 		{
-			MessageBox.Show("current directory doesn't exist remotely");
+			MessageBox.ShowAsync("current directory doesn't exist remotely");
 			return;
 		}
 
@@ -1190,14 +1200,14 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	private async void Tree_Click_RestoreTop(object sender, RoutedEventArgs e)
 		=> await UnDeleteInternal(false);
 	private void Tree_Click_RestoreAll(object sender, RoutedEventArgs e)
-		=> MessageBox.Show("Not Implemented Yet");
-	private void Tree_Click_LocalDelete(object sender, RoutedEventArgs e)
+		=> MessageBox.ShowAsync("Not Implemented Yet");
+	private async void Tree_Click_LocalDelete(object sender, RoutedEventArgs e)
 	{
 		string pathway = LastSelectedNodePath?.Length < 5 ? HackDefaults.Instance.PwaPathAbsolute : Path.Combine(HackDefaults.Instance.PwaPathAbsolute, LastSelectedNodePath[5..]);
 		DirectoryInfo directory = new(pathway);
 		if (directory.Exists)
 		{
-			if (MessageBox.Show($"Are you sure you want to delete this directory and ({directory.EnumerateFiles().Count()}) files inside?",
+			if (await MessageBox.ShowAsync($"Are you sure you want to delete this directory and ({directory.EnumerateFiles().Count()}) files inside?",
 					"Delete Directory",
 					buttons: MessageBoxButtons.YesNoCancel,
 					icon: MessageBoxIcon.Warning) == DialogResult.Yes)
@@ -1385,7 +1395,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 					}
 			}
 		}
-		if (errors.Length > 0) MessageBox.Show(errors.ToString());
+		if (errors.Length > 0) MessageBox.ShowAsync(errors.ToString());
 	}
 	private void List_Click_OpenLatestLocal(object sender, RoutedEventArgs e)
 	{
@@ -1424,7 +1434,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 					}
 			}
 		}
-		if (errors.Length > 0) MessageBox.Show(errors.ToString());
+		if (errors.Length > 0) MessageBox.ShowAsync(errors.ToString());
 	}
 	private void List_Click_OpenDirectory(object sender, RoutedEventArgs e)
 	{
@@ -1460,7 +1470,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	{
 
 	}
-	private void List_Click_LocalDelete(object sender, RoutedEventArgs e)
+	private async void List_Click_LocalDelete(object sender, RoutedEventArgs e)
 	{
 		string pathway = LastSelectedNodePath?.Length < 5 ? HackDefaults.Instance.PwaPathAbsolute : Path.Combine(HackDefaults.Instance.PwaPathAbsolute, LastSelectedNodePath?[5..]);
 		DirectoryInfo directory = new(pathway);
@@ -1481,7 +1491,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		});
 		bool tooMany = files.Count > 10;
 		string message = tooMany ? $"Are you sure you want to delete ({files.Count}) files?" : $"Are you sure you want to delete these files?\nfiles:\n{sb}";
-		if (MessageBox.Show(message,
+		if (await MessageBox.ShowAsync(message,
 				"Delete Directory",
 				buttons: MessageBoxButtons.YesNoCancel,
 				icon: MessageBoxIcon.Warning) == DialogResult.Yes)
@@ -1530,7 +1540,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		HpEntry[] entries = HpEntry.GetRecordsByIds(entryIDs, excludedFields: ["type_id", "cat_id", "checkout_node"]);
 		if (entries is null || entries.Length == 0)
 		{
-			MessageBox.Show("No entries to delete");
+			MessageBox.ShowAsync("No entries to delete");
 			return;
 		}
 
@@ -1553,7 +1563,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	private void AdditionalTools_Click_ManageTypes(object sender, RoutedEventArgs e)
 		=> WindowHelper.CreateWindowPage<OdooFileTypeManager>().Title = "Manage Types";
 	//
-	private void History_Click_Download(object sender, DoubleTappedRoutedEventArgs e)
+	private async void History_Click_Download(object sender, DoubleTappedRoutedEventArgs e)
 	{
 		var version = GetVersionFromHistory();
 		FileInfo file = new(Path.Combine(version.WinPathway, version.name));
@@ -1561,12 +1571,12 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		{
 			if (file.Exists)
 			{
-				var response = MessageBox.Show("File exists as a different version.\n" +
+				var response = MessageBox.ShowAsync("File exists as a different version.\n" +
 											   "Retry:\tDownload in the Temporary Folder\n" +
 											   "Ignore:\tOverwrite the current version\n" +
 											   "Abort:\tCancel download", "File Version Conflict", buttons: MessageBoxButtons.AbortRetryIgnore, icon: MessageBoxIcon.Warning);
 
-				switch (response)
+				switch (await response)
 				{
 					case DialogResult.Ignore:
 						version.DownloadFile(version.WinPathway);
@@ -1621,13 +1631,13 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 					   $"\tDir ID = {versionModel.dir_id}\n" +
 					   $"\tWin DL Path = {versionModel.WinPathway}";
 
-		var response = MessageBox.Show($"{eText}\n this will download version ids: {vIdsText}\n{vText}", "Version Download", buttons: MessageBoxButtons.YesNoCancel);
-		if (response != DialogResult.Yes) return;
+		var response = MessageBox.ShowAsync($"{eText}\n this will download version ids: {vIdsText}\n{vText}", "Version Download", buttons: MessageBoxButtons.YesNoCancel);
+		if (await response != DialogResult.Yes) return;
 		HpVersion[] downVersions = await HpVersion.GetRecordsByIdsAsync(versions);
 		if (downVersions.DownloadAll(out List<HpVersion> failed)) return;
 
 		ArrayList fIDs = failed.GetIDs();
-		MessageBox.Show($"failed to download version ids: {string.Join(", ", fIDs.ToArray<int>())}");
+		MessageBox.ShowAsync($"failed to download version ids: {string.Join(", ", fIDs.ToArray<int>())}");
 	}
 	private async void OdooParents_DoubleClick(object sender, DoubleTappedRoutedEventArgs e)
 	{
@@ -1760,7 +1770,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 
 		return version;
 	}
-	private void LocalMoveEntry(bool toTemp = false)
+	private async void LocalMoveEntry(bool toTemp = false)
 	{
 		var version = GetVersionFromHistory();
 		if (version == null) return;
@@ -1793,7 +1803,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 				icon = MessageBoxIcon.Question;
 			}
 			// temporary version file doesn't exist but does exist in current
-			if (DialogResult.Yes == MessageBox.Show(message, caption, buttons: MessageBoxButtons.YesNoCancel, icon: icon))
+			if (DialogResult.Yes == await MessageBox.ShowAsync(message, caption, buttons: MessageBoxButtons.YesNoCancel, icon: icon))
 			{
 				fileFrom.MoveFile(fileTo.DirectoryName);
 			}
@@ -1814,7 +1824,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 				icon = MessageBoxIcon.Question;
 			}
 			// temporary version file doesn't exist but does exist in current
-			if (DialogResult.Yes == MessageBox.Show(message, caption, buttons: MessageBoxButtons.YesNoCancel, icon: icon))
+			if (DialogResult.Yes == await MessageBox.ShowAsync(message, caption, buttons: MessageBoxButtons.YesNoCancel, icon: icon))
 			{
 				version.DownloadFile(fileTo.DirectoryName);
 			}
@@ -2068,7 +2078,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
     internal static void CancelledOperation()
     {
         HackFileManager.Dialog?.IsInProcess = false;
-        MessageBox.Show("Cancelled Operation");
+        MessageBox.ShowAsync("Cancelled Operation");
     }
     internal async Task CommitInternal(IEnumerable<HackFile> hackFiles)
 		=> await AsyncHelper.AsyncRunner(() => Async_Commit([.. hackFiles]), "Commit Files");

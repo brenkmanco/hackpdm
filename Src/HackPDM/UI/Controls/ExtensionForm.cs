@@ -105,7 +105,7 @@ public static class ExtensionForm
 			{
 				string lst = string.Join("\n", entries.Where(entry => entry.IsLatest).Take(10).Select(entry => $"{entry.name}"));
 				string message = $"{lst}{(entries.Count() > 10 ? $"...\nincluding {entries.Count() - 10} other files\n" : "\n")}";
-				if (DialogResult.Yes == MessageBox.Show($"{message}would you like to recommit the latest versions?", "recommit latest?", MessageBoxButtons.YesNoCancel))
+				if (DialogResult.Yes == MessageBox.ShowAsync($"{message}would you like to recommit the latest versions?", "recommit latest?", MessageBoxButtons.YesNoCancel).Result)
 				{
 					return true;
 				}

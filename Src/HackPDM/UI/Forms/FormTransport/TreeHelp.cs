@@ -5,32 +5,27 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net.Mime;
 using System.Threading;
 using System.Threading.Tasks;
-
 using Windows.Storage.Streams;
-
 using CommunityToolkit.WinUI;
-
 using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Core.Helper.Xaml;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Domain.Representation;
+using HackPDM.Infrastructure.Odoo;
+using HackPDM.Infrastructure.Odoo.FormTransport;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Compatibility;
 using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Hack;
 using HackPDM.UI.Forms.Helper;
-
-using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-
 using EntryRow = HackPDM.UI.Types.EntryRow;
 using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
 using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
@@ -38,22 +33,23 @@ using Image = Microsoft.UI.Xaml.Controls.Image;
 
 using static HackPDM.UI.Controls.UISettings;
 
-namespace HackPDM.Infrastructure.Odoo.FormTransport
+namespace HackPDM.UI.Forms.FormTransport
 {
 	public class TreeHelp
 	{
-		private HackFileManager _HFM { get; init; }
-		private TreeView _tree { get; init; }
-		private DataGrid _grid { get; init; }
+		private HackFileManager _HFM { get; set; }
+		private TreeView _tree { get; set; }
+		private DataGrid _grid { get; set; }
 		private static AssetsImageProvider? AssetsProvider { get => field ??= ImageProvider as AssetsImageProvider; }
 		
-		internal TreeHelp(HackFileManager hackFM)
+		public TreeHelp() { }
+
+		public void InjectHFM(HackFileManager hackFM)
 		{
 			_HFM = hackFM;
 			_tree = hackFM.GetOdooDirectoryTree();
 			_grid = hackFM.GetOdooEntryList();
 		}
-
 		#region TreeView functions
 		// tree view directories
 		public async Task CreateTreeViewBackground(TreeView tree)
@@ -69,16 +65,10 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 
 			try
 			{
-				await SafeHelper.SafeInvokerAsync(async void () =>
+				await SafeHelper.SafeInvokerAsync (async () =>
 				{
-			
 					await CreateTreeHash(tree, OdooDefaults.Instance.HpDirectoryRoot as HpDirectory);
-					// Debug.WriteLine("");
-					// foreach (EntryRow row in OdooDirectoryTree.ItemsSource as ObservableCollection<EntryRow>)
-					// {
-					// 	Debug.WriteLine(row.Name);
-					// }
-					// Debug.WriteLine("");
+
 					CreateLocalTree(tree);
 
 					if (_HFM.LastSelectedNode != null)
@@ -99,7 +89,7 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 			}
 			catch (Exception exception)
 			{
-				Debug.Fail(exception.Message);
+				Debug.WriteLine(exception.Message);
 			}
 			ResetImagePreview(img, ring);
 		}
@@ -233,8 +223,7 @@ namespace HackPDM.Infrastructure.Odoo.FormTransport
 				{
 					tree.RootNodes.Clear();
 					await AddNodesMinimalMemoryAsync(tree, entries);
-				}
-			);
+				});
 
 		internal static async Task AddNodesMinimalMemoryAsync(TreeView tree, Hashtable rootNode)
 		{

@@ -48,42 +48,41 @@ namespace HackPDM.Core.Helper.Xaml
 			}
 			catch (Exception ex)
 			{
-				Debug.Fail(ex.Message, ex.StackTrace);
+				Debug.WriteLine(ex.Message, ex.StackTrace);
 				return false;
 			}
 		}
-		internal async static Task<TResult> SafeInvokerAsync<TResult>(Func<TResult> func)
+		//internal async static Task<TResult> SafeInvokerAsync<TResult>(Func<TResult> func)
+		//{
+		//	var tcs = new TaskCompletionSource<TResult>();
+		//	HackApp.RootFrame?.DispatcherQueue.TryEnqueue(() =>
+		//	{
+		//		try
+		//		{
+		//			tcs.SetResult(func());
+		//		}
+		//		catch (Exception ex)
+		//		{
+		//			tcs.SetException(ex);
+		//		}
+		//	});
+		//	return await tcs.Task;
+		//}
+		internal static Task SafeInvokerAsync(Action action)
 		{
-			var tcs = new TaskCompletionSource<TResult>();
-			HackApp.RootFrame?.DispatcherQueue.TryEnqueue(() =>
+			var tcs = new TaskCompletionSource<bool>();
+			HackApp.DispatcherQueue.TryEnqueue(() =>
 			{
 				try
 				{
-					tcs.SetResult(func());
+					action();
+					tcs.SetResult(true);
 				}
 				catch (Exception ex)
 				{
 					tcs.SetException(ex);
 				}
 			});
-			return await tcs.Task;
-		}
-		internal static Task SafeInvokerAsync(Action action)
-		{
-			var tcs = new TaskCompletionSource<bool>();
-			HackFileManager.
-					HackDispatcherQueue.TryEnqueue(() =>
-					{
-						try
-						{
-							action();
-							tcs.SetResult(true);
-						}
-						catch (Exception ex)
-						{
-							tcs.SetException(ex);
-						}
-					});
 			return tcs.Task;
 		}
 	}

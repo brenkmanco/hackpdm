@@ -71,7 +71,7 @@ public sealed partial class OdooSettings : Page
         decimal AF;
         if (!decimal.TryParse(txtAreaFactor.Text, out AF))
         {
-            MessageBox.Show("Area Factor must be a decimal number");
+            MessageBox.ShowAsync("Area Factor must be a decimal number");
             return;
         }
         Sett.Set("AreaFactor", AF);

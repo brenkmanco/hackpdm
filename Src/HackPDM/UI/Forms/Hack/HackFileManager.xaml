@@ -6,15 +6,14 @@
     xmlns:com="using:CommunityToolkit.WinUI.UI.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:help="using:HackPDM.UI.Forms.Helper"
-    
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:sys="using:System"
-    xmlns:ui="using:CommunityToolkit.WinUI"
-    xmlns:types="using:HackPDM.UI.Types" 
     xmlns:model="using:HackPDM.Domain.Representation"
+    xmlns:sys="using:System"
+    xmlns:types="using:HackPDM.UI.Types"
+    xmlns:ui="using:CommunityToolkit.WinUI"
     mc:Ignorable="d">
 
-    <!--xmlns:local="using:HackPDM.UI.Data"-->
+    <!--  xmlns:local="using:HackPDM.UI.Data"  -->
 
 
     <Page.Resources>
@@ -134,7 +133,7 @@
                             AutoGenerateColumns="False"
                             CanUserSortColumns="True"
                             IsReadOnly="True"
-                            ItemsSource="{x:Bind OEntries}"  
+                            ItemsSource="{x:Bind OEntries}"
                             LoadingRowGroup="OdooEntryDataGrid_LoadingRowGroup"
                             RowDetailsVisibilityMode="Collapsed"
                             RowHeight="32"
@@ -195,10 +194,11 @@
                                                 Padding="5,0,5,0"
                                                 HorizontalAlignment="Right"
                                                 VerticalAlignment="Center"
-                             
                                                 TextAlignment="Right" />
-                                            <!--="{Binding Size,
-                                       Converter={StaticResource FileSizeFormatter}}"-->
+                                            <!--
+                                                ="{Binding Size,
+                                                Converter={StaticResource FileSizeFormatter}}"
+                                            -->
                                         </DataTemplate>
                                     </com:DataGridTemplateColumn.CellTemplate>
                                 </com:DataGridTemplateColumn>

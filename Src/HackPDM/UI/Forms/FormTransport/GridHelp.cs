@@ -10,29 +10,33 @@ using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Core.Helper.Xaml;
-using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Domain.Representation;
+using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Hack;
+using HackPDM.UI.Models;
 using HackPDM.UI.Types;
 using Microsoft.UI.Xaml.Controls;
 using EntryRow = HackPDM.Domain.Representation.EntryRow;
 using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
 using ListView = Microsoft.UI.Xaml.Controls.ListView;
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
-using HackPDM.UI.Models;
-namespace HackPDM.Infrastructure.Odoo.FormTransport
+
+namespace HackPDM.UI.Forms.FormTransport
 {
 	internal class GridHelp
 	{
-		private HackFileManager _HFM { get; init; }
-		internal GridHelp(HackFileManager hackFM)
+		private HackFileManager _HFM { get; set; }
+		public GridHelp()
 		{
-			_HFM = hackFM;
 		}
 
+		public void InjectHFM(HackFileManager hack)
+		{
+			_HFM = hack;
+		}
 
 		#region ListView / DataGrid Functions
 		public static void InitGridView(DataGrid grid) => InitListViewInternal(grid);

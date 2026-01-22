@@ -10,12 +10,15 @@ using System.Threading.Tasks;
 using CommunityToolkit.WinUI.UI.Controls;
 
 using HackPDM.Abstractions;
+using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Helper.Xaml;
 using HackPDM.Domain.Representation;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Controls;
+using HackPDM.UI.Forms.Hack;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -47,23 +50,37 @@ namespace HackPDM.UI.Forms.Helper
 		private MessageBoxIcon _icon;
 		private MessageBoxType _type;
 		private ContentDialogButtonRepresentation focusButton;
-		private MessageBoxWidth _windowWidthWrap = MessageBoxWidth.DynamicWidthText;
+		private MessageBoxWidth _windowWidthWrap = MessageBoxWidth.DynamicWidthTextWithThreshold;
 		private object[]? _parameters;
 
-		private MessageBoxWindow? _messageWindow;
+		public TaskCompletionSource<DialogResult> TCS { get; private set; }
+		public DialogResult? Result { get; private set; } = DialogResult.None;
+		
+		private Window? _messageWindow;
 
 		public ScrollView? ScrollContainer = null;
 		public TextBlock? TextBlockImpl = null;
 		public ListBox? ListBoxImpl = null;
 		public DataGrid? DataGridImpl = null;
-		public DialogResult? Result { get; private set; } = DialogResult.None;
 		public MessageBox()
 		{
 			InitializeComponent();
 		}
-		public MessageBox( string message, string? caption, MessageBoxButtons buttons, MessageBoxIcon icon = MessageBoxIcon.Information, MessageBoxType type = MessageBoxType.Default, MessageBoxWidth dynamicWidth = MessageBoxWidth.Default, params object[] parameters )
-			=> Init( new MessageBoxDetails( Message: message, Caption: caption, Buttons: buttons, Icon: icon, Type: type, DynamicWidth: dynamicWidth, Parameters: parameters ) );
-
+		public MessageBox(ArrayList parameters) => ParseParameters(parameters);
+		private void ParseParameters(ArrayList parameters)
+		{
+			if (parameters is not null)
+			{
+				var details = parameters.FirstOrDefaultSelect(p => p is MessageBoxDetails mbox ? (true, mbox) : (false, null));
+				_messageWindow ??= parameters.FirstOrDefaultSelect(p => p is Window win ? (true, win) : (false, null));
+				TCS = parameters.FirstOrDefaultSelect(p => p is TaskCompletionSource<DialogResult> tcs ? (true, tcs) : (false, null)) ?? new();
+				if (details is not null)
+				{
+					Init(details);
+					ShowInternal();
+				}
+			}
+		}
 		public void Init( MessageBoxDetails? details )
 		{
 			if( details is null )
@@ -110,61 +127,14 @@ namespace HackPDM.UI.Forms.Helper
 		{
 			base.OnNavigatedTo( e );
 			var arr = ( ( ArrayList )e.Parameter );
-			if( arr is not null )
-			{
-				var details = arr.FirstOrDefaultSelect(p => p is MessageBoxDetails mbox ? (true, mbox) : (false, null));
-				_messageWindow ??= arr.FirstOrDefaultSelect( p => p is MessageBoxWindow win ? (true, win) : (false, null) );
-				if( details is not null )
-				{
-					Init( details );
-					ShowInternal();
-				}
-			}
+			ParseParameters(arr);
 		}
 		private void GeneralBoxConfig()
 		{
-			gridRoot.Margin = new Thickness( 15, 15, 15, 15 );
+			gridRoot.Margin = new Thickness( 15, 15, 15, 5 );
 			gridRoot.UseLayoutRounding = true;
 			gridRoot.CornerRadius = new CornerRadius( 10, 10, 10, 10 );
 		}
-		//public async Task<DialogResult> ShowAsync(string message, string? caption, MessageBoxButtons buttons, MessageBoxIcon icon, Window window)
-		//{
-		//	_message = message;
-		//	_caption = caption;
-		//	_button = buttons;
-		//	_icon = icon;
-
-		//	var info = AlterMessageBoxLayout(message, caption, buttons, icon);
-
-		//	ContentDialog popup = new()
-		//	{
-		//		Title = info.Caption,
-		//		Content = info.Message
-		//	};
-		//	if (info.CloseText is not null) popup.CloseButtonText = info.CloseText;
-		//	if (info.PrimaryText is not null) popup.PrimaryButtonText = info.PrimaryText;
-		//	if (info.SecondaryText is not null) popup.SecondaryButtonText = info.SecondaryText;
-
-		//	Result = DialogResult.None;
-		//	var result = await popup.ShowAsync();
-		//	return MapContentToDialogResult(result, buttons);
-		//}
-		//public DialogResult Show(string message, string? caption, MessageBoxButtons buttons, MessageBoxIcon icon, Window window)
-		//{
-		//	var info = AlterMessageBoxLayout(message, caption, buttons, icon);
-
-		//	ContentDialog popup = new()
-		//	{
-		//		XamlRoot = window.Content.XamlRoot,
-		//		Title = info.Caption,
-		//		Content = info.Message
-		//	};
-		//	if (info.CloseText is not null) popup.CloseButtonText = info.CloseText;
-		//	if (info.PrimaryText is not null) popup.PrimaryButtonText = info.PrimaryText;
-		//	if (info.SecondaryText is not null) popup.SecondaryButtonText = info.SecondaryText;
-		//	var result = popup.ShowAsync().AsTask().Result;
-		//	return MapContentToDialogResult(result, buttons);
-		//}
 		private void ApplyPageConfig()
 			=> ( _type switch
 			{
@@ -192,10 +162,12 @@ namespace HackPDM.UI.Forms.Helper
 		private void DefaultImpl()
 		{
 			ScrollContainer = new();
+			
 			TextBlockImpl = new()
 			{
-				FontSize = 10,
-				TextAlignment = TextAlignment.Justify,
+				FontSize = 15,
+				TextAlignment = TextAlignment.DetectFromContent,
+				FontFamily = new FontFamily("Calibri"),
 			};
 			switch( _windowWidthWrap )
 			{
@@ -222,7 +194,8 @@ namespace HackPDM.UI.Forms.Helper
 
 			ScrollContainer.Content = TextBlockImpl;
 			gridRoot.Children.Add( ScrollContainer );
-			ScrollContainer.SetGrid( 0, 0, 4, 4 );
+			ScrollContainer.SetGrid( 0, 0, 3, 4 );
+
 			var (primary, secondary, close) = DefaultButtons();
 		}
 		// buttons on bottom / list above
@@ -380,8 +353,8 @@ namespace HackPDM.UI.Forms.Helper
 					{
 						Content = new TextBlock() { Text = "Cancel" }
 					};
-					primaryGrid = new( 3, 2, 1, 1 );
-					closeGrid = new( 3, 3, 1, 1 );
+					primaryGrid = new( 3, 3, 1, 1 );
+					closeGrid = new( 3, 2, 1, 1 );
 					focusButton = ContentDialogButtonRepresentation.Primary;
 					break;
 				}
@@ -482,32 +455,53 @@ namespace HackPDM.UI.Forms.Helper
 				gridRoot.Children.Add( primary );
 				if( primaryGrid is { } g )
 					primary.SetGrid( g.x, g.y, g.z, g.w );
+				primary.Style = (Style)this.Resources[focusButton is ContentDialogButtonRepresentation.Primary 
+					? "DarkButtonActiveStyle1" 
+					: "DarkButtonStyle1"];
 				primary.HorizontalAlignment = HorizontalAlignment.Stretch;
 				primary.VerticalAlignment = VerticalAlignment.Center;
-				primary.Height = 35;
+				primary.Height = 30;
+				primary.Click += PrimaryPress;
 			}
 			if( secondary != null )
 			{
 				gridRoot.Children.Add( secondary );
 				if( secondaryGrid is { } g )
 					secondary.SetGrid( g.x, g.y, g.z, g.w );
+				secondary.Style = (Style)this.Resources[focusButton is ContentDialogButtonRepresentation.Secondary
+					? "DarkButtonActiveStyle1"
+					: "DarkButtonStyle1"];
 				secondary.HorizontalAlignment = HorizontalAlignment.Stretch;
 				secondary.VerticalAlignment = VerticalAlignment.Center;
-				secondary.Height = 35;
+				secondary.Height = 30;
+				secondary.Click += SecondaryPress;
 			}
 			if( close != null )
 			{
 				gridRoot.Children.Add( close );
 				if( closeGrid is { } g )
 					close.SetGrid( g.x, g.y, g.z, g.w );
+				close.Style = (Style)this.Resources[focusButton is ContentDialogButtonRepresentation.Close
+					? "DarkButtonActiveStyle1"
+					: "DarkButtonStyle1"];
 				close.HorizontalAlignment = HorizontalAlignment.Stretch;
 				close.VerticalAlignment = VerticalAlignment.Center;
-				close.Height = 35;
+				close.Height = 30;
+				close.Click += ClosePress;
 			}
 
 			return (primary, secondary, close);
 		}
 
+		private void PrimaryPress(object sender, RoutedEventArgs e) => SetToClose(ContentDialogResult.Primary);
+		private void SecondaryPress(object sender, RoutedEventArgs e) => SetToClose(ContentDialogResult.Secondary);
+		private void ClosePress(object sender, RoutedEventArgs e) => SetToClose(ContentDialogResult.None);
+		private void SetToClose(ContentDialogResult buttonPress)
+		{
+			Result = MapContentToDialogResult(buttonPress, _button);
+			TCS.TrySetResult(Result ?? DialogResult.None);
+			_messageWindow?.Close();
+		}
 		private static DialogResult MapContentToDialogResult( ContentDialogResult result, MessageBoxButtons buttons ) =>
 		(buttons: buttons, result) switch
 		{
@@ -541,86 +535,7 @@ namespace HackPDM.UI.Forms.Helper
 
 			_ => DialogResult.Cancel
 		};
-		private static ContentDialogInfo AlterMessageBoxLayout( string message, string? caption, MessageBoxButtons buttons, MessageBoxIcon icon )
-		{
-			ContentDialogInfo popupInfo = new()
-			{
-				Message = message,
-				Caption = caption ?? "Info",
-			};
-
-			switch( buttons )
-			{
-				case MessageBoxButtons.OK:
-				{
-					popupInfo.ButtonRepresentation = ContentDialogButtonRepresentation.Close;
-					popupInfo.CloseText = "OK";
-					break;
-				}
-					;
-				case MessageBoxButtons.OKCancel:
-				{
-					popupInfo.ButtonRepresentation = ContentDialogButtonRepresentation.Primary;
-					popupInfo.PrimaryText = "OK";
-					popupInfo.CloseText = "Cancel";
-					break;
-				}
-					;
-				case MessageBoxButtons.AbortRetryIgnore:
-				{
-					popupInfo.ButtonRepresentation = ContentDialogButtonRepresentation.Secondary;
-					popupInfo.PrimaryText = "Abort";
-					popupInfo.SecondaryText = "Retry";
-					popupInfo.CloseText = "Ignore";
-					break;
-				}
-				case MessageBoxButtons.YesNoCancel:
-				{
-					popupInfo.ButtonRepresentation = ContentDialogButtonRepresentation.Primary;
-					popupInfo.PrimaryText = "Yes";
-					popupInfo.SecondaryText = "No";
-					popupInfo.CloseText = "Cancel";
-					break;
-				}
-				case MessageBoxButtons.YesNo:
-				{
-					popupInfo.ButtonRepresentation = ContentDialogButtonRepresentation.Primary;
-					popupInfo.PrimaryText = "Yes";
-					popupInfo.CloseText = "No";
-					break;
-				}
-				case MessageBoxButtons.RetryCancel:
-				{
-					popupInfo.ButtonRepresentation = ContentDialogButtonRepresentation.Primary;
-					popupInfo.PrimaryText = "Retry";
-					popupInfo.CloseText = "Cancel";
-					break;
-				}
-				case MessageBoxButtons.CancelTryContinue:
-				{
-					popupInfo.ButtonRepresentation = ContentDialogButtonRepresentation.Close;
-					popupInfo.PrimaryText = "Cancel";
-					popupInfo.SecondaryText = "Try";
-					popupInfo.CloseText = "Continue";
-					break;
-				}
-			}
-
-			return popupInfo;
-		}
-
-		public static DialogResult Show( string message ) =>
-			ShowInternal( message: message, caption: string.Empty, buttons: MessageBoxButtons.OK, icon: MessageBoxIcon.Information, type: MessageBoxType.Default, parameters: null);
-		public static DialogResult Show( string message, string caption, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
-			ShowInternal( message: message, caption: caption, buttons: MessageBoxButtons.OK, icon: MessageBoxIcon.Information, type: type, parameters: parameters );
-		public static DialogResult Show( string message, MessageBoxButtons buttons, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
-			ShowInternal( message: message, caption: null, buttons: buttons, icon: MessageBoxIcon.Information, type: type, parameters: parameters );
-		public static DialogResult Show( string message, string caption, MessageBoxButtons buttons, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
-			ShowInternal( message: message, caption: caption, buttons: buttons, icon: MessageBoxIcon.Information, type: type, parameters: parameters);
-		public static DialogResult Show( string message, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
-			ShowInternal( message: message, caption: null, buttons: buttons, icon: icon, type: type, parameters: parameters);
-		public static DialogResult Show( string message, string caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
-			ShowInternal( message: message, caption: caption, buttons: buttons, icon: icon, type: type, parameters: parameters );
+		
 
 		public static async Task<DialogResult> ShowAsync( string message ) =>
 			await ShowInternalAsync( message: message, caption: string.Empty, buttons: MessageBoxButtons.OK, icon: MessageBoxIcon.Information, type: MessageBoxType.Default, parameters: null );
@@ -638,11 +553,16 @@ namespace HackPDM.UI.Forms.Helper
 
 		private static DialogResult ShowInternal( string message, string? caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
 			ShowInternalAsync( message: message, caption: caption, buttons: buttons, icon: icon, type: type, parameters: parameters ).Result;
-		private static async Task<DialogResult> ShowInternalAsync( string message, string? caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxType type = MessageBoxType.Default, params object[]? parameters )
+		private static Task<DialogResult> ShowInternalAsync( string message, string? caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxType type = MessageBoxType.Default, params object[]? parameters )
 		{
-			//MessageBoxWidth dynamicWidth = MessageBoxWidth.Default,
-			WindowHelper.CreateWindowAndPage( out MessageBox page, out MessageBoxWindow window, true,
-				[
+			var tcs = new TaskCompletionSource<DialogResult>();
+			SafeHelper.SafeInvokerAsync(() =>
+			{
+				MessageBox mbox = HackApp.Services?.GetRequiredService<MessageBox>();
+				
+				Window window = WindowHelper.CreateWindow<Window>("MessageBox");
+				(window.Content as Frame)?.Content = mbox;
+				mbox?.ParseParameters([
 					new MessageBoxDetails(
 						message,
 						caption,
@@ -650,15 +570,27 @@ namespace HackPDM.UI.Forms.Helper
 						icon,
 						type,
 						MessageBoxWidth.Default,
-						parameters )
-				] );
+						parameters ),
+						window,
+						tcs
+				]);
 
-			return DialogResult.None;
-			//return await SafeHelper.SafeInvokerAsync(()=>
-			//{
-			//	return page.Show(message, caption, buttons, icon, window);
-			//});
-		}
+				//WindowHelper.CreateWindowAndPage( out MessageBox page, out var window, true,
+				//	[
+				//		new MessageBoxDetails(
+				//			message,
+				//			caption,
+				//			buttons,
+				//			icon,
+				//			type,
+				//			MessageBoxWidth.Default,
+				//			parameters ),
+				//			tcs
+				//	] );
+			
+			});
+			return tcs.Task;
+		}		
 		public record MessageBoxDetails(
 			string? Message,
 			string? Caption,

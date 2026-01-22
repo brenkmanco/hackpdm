@@ -12,6 +12,7 @@ using HackPDM.Infrastructure.Odoo.FormTransport;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Controls;
 using HackPDM.UI.Data;
+using HackPDM.UI.Forms.FormTransport;
 using HackPDM.UI.Forms.Hack;
 using HackPDM.UI.Forms.Helper;
 using Microsoft.UI.Xaml;
@@ -113,7 +114,7 @@ public sealed partial class StatusDialog : Page
 	{
         if (IsInProcess)
         {
-		    args.Cancel = DialogResult.OK != MessageBox.Show(
+		    args.Cancel = DialogResult.OK != await MessageBox.ShowAsync(
 			    "There are items still processing..\nWould you like to continue and close the window and operations?", 
 			    "Cancel Operation?",
 			    MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
