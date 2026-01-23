@@ -304,7 +304,7 @@ public sealed partial class StatusDialog : Page
     private void StatusSettings_Click(object sender, RoutedEventArgs arg)
     {
         //var page = InstanceManager.GetAPage<StatusSettings>();
-        var window = WindowHelper.CreateWindowPage<StatusSettings>();
+        var window = WindowHelper.CreateWindowPage<ApplicationSettingsPage>();
     }
 	public async Task SetDownloaded(long downloadBytes)
 	{

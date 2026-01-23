@@ -20,11 +20,14 @@ public static partial class WindowHelper
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool MoveWindow(IntPtr hWnd, int x, int y, int nWidth, int nHeight, [MarshalAs(UnmanagedType.Bool)] bool bRepaint);
-    public static void ResizeWindow(Window window, int width, int height)
+	// Declares managed prototypes for unmanaged functions.
+	
+	public static void ResizeWindow(Window window, int width, int height)
     {
-        IntPtr hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        IntPtr hwnd = window.IntPtrHandle;
         MoveWindow(hwnd, 100, 100, width, height, true);
     }
+    
 
     public static T CreateWindow<T>(string? configName = null, bool activated = true, bool withFrame = true) where T : Window, new()
     {
@@ -125,7 +128,7 @@ public class WindowConfig(string title, Vector4<int> positionAndSize, AppWindowP
         {"OdooSettings", new WindowConfig("Odoo Settings", new Vector4<int>(200, 200, 500, 500))},
         {"HackSettings", new WindowConfig("Hack Settings", new Vector4<int>(200, 200, 700, 200))},
         {"HackFileManager", new WindowConfig("Hack File Manager", new Vector4<int>(0, 0, 1280, 720))},
-        {"MessageBox", new WindowConfig("Info", new Vector4<int>(200, 200, 600, 350), AppWindowPresenterKind.CompactOverlay)},
+        {"MessageBox", new WindowConfig("Info", new Vector4<int>(200, 200, 450, 250), AppWindowPresenterKind.CompactOverlay)},
         {"TemplateWindow", new WindowConfig("Template Window", new Vector4<int>(200, 200, 500, 300))},
     };
     public string Title { get; set; } = title;

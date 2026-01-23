@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+
 using HackPDM.Abstractions;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
@@ -11,7 +12,10 @@ using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
+
 using Meziantou.Framework.Win32;
+
+using Newtonsoft.Json.Linq;
 
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 
@@ -41,15 +45,13 @@ public class OdooDefaults : IOdooDefaults
     {
         get 
         {
-			if (field is not null) return field;
-			var cm = CredentialManager.ReadCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, CredentialType.Generic);
+			if (!string.IsNullOrEmpty(field)) return field;
+			var cm = CredentialManager.ReadCredential(OdooCredentialTarget ?? StorageBox.DEFAULT_ODOO_CREDENTIALS, CredentialType.Generic);
 			field = cm?.UserName;
             return field;
         }
         set 
         {
-			if (!string.IsNullOrEmpty(OdooPass) && !string.IsNullOrEmpty(value)) 
-                CredentialManager.WriteCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, value ?? "", OdooPass, CredentialPersistence.LocalMachine);
             field = value;
         }
     }
@@ -59,17 +61,24 @@ public class OdooDefaults : IOdooDefaults
         {
 			if (field is not null) return field;
 			// read from windows credential manager
-			var cm = CredentialManager.ReadCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, CredentialType.Generic);
+			var cm = CredentialManager.ReadCredential(OdooCredentialTarget ?? StorageBox.DEFAULT_ODOO_CREDENTIALS, CredentialType.Generic);
             field = cm?.Password;
             return field;
         }
         set
         {
-			if (!string.IsNullOrEmpty(OdooUser) && !string.IsNullOrEmpty(value)) 
-                CredentialManager.WriteCredential(StorageBox.DEFAULT_ODOO_CREDENTIALS, OdooUser, value, CredentialPersistence.LocalMachine);
             field = value;
         }
     }
+    public bool SaveCredentials() => TrySetWindowsOdooUserPass( OdooUser, OdooPass, OdooCredentialTarget );
+	public static bool TrySetWindowsOdooUserPass(string? username, string? password, string? credentialName = null)
+    {
+        if( string.IsNullOrEmpty( password ) || string.IsNullOrEmpty( username ))
+            return false;
+
+		CredentialManager.WriteCredential( credentialName ?? StorageBox.DEFAULT_ODOO_CREDENTIALS, username, password, CredentialPersistence.LocalMachine );
+        return true;
+	}
     public string? OdooAddress
     {
         get => field ??= Settings.Get<string>("OdooAddress");
@@ -116,7 +125,7 @@ public class OdooDefaults : IOdooDefaults
     public string? OdooCredentialTarget 
     {
         // Settings.Get<string?>("OdooCredentialTarget", StorageBox.DEFAULT_ODOO_CREDENTIALS)
-        get => field ??= StorageBox.DEFAULT_ODOO_CREDENTIALS;
+        get => field ??= Settings.Get( "OdooCredentialTarget", StorageBox.DEFAULT_ODOO_CREDENTIALS);
         set => Settings.Set("OdooCredentialTarget", field = value);
         
     }

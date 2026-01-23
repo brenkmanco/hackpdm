@@ -32,6 +32,7 @@ namespace HackPDM;
 /// </summary>
 public partial class HackApp : Application
 {
+    public static Home? HomePage;
 	public static IServiceProvider? Services { get; private set; }
     public static Window? Window;
     public static Frame? RootFrame;
@@ -50,6 +51,8 @@ public partial class HackApp : Application
     {
 	    var services = new ServiceCollection();
 
+        services.AddSingleton<Home>();
+
         services.AddSingleton<ModernSettingsProvider>();
         services.AddSingleton<ISettingsProvider>(provider 
             => new CoreSettings(provider.GetRequiredService<ModernSettingsProvider>()));
@@ -58,7 +61,7 @@ public partial class HackApp : Application
 
         services.AddSingleton<TreeHelp>();
         services.AddSingleton<GridHelp>();
-        
+
 	    services.AddTransient<ProfileManager>();
 		services.AddTransient<OdooSettings>();
 		services.AddTransient<HackSettings>();
@@ -67,8 +70,11 @@ public partial class HackApp : Application
 
 		Services =  services.BuildServiceProvider();
 
-		var t1 = Services.GetRequiredService<IHackDefaults>();
-        var t2 = Services.GetRequiredService<IOdooDefaults>();
+		Services.GetRequiredService<IHackDefaults>();
+        Services.GetRequiredService<IOdooDefaults>();
+
+		HomePage = Services.GetRequiredService<Home>();
+
 	}
 
     /// <summary>
@@ -84,10 +90,9 @@ public partial class HackApp : Application
 		var rootFrame = new Frame();
         Window.Activate();
         Window.Content = rootFrame;
-        
+
         DispatcherQueue = Window.DispatcherQueue;
-        
-        rootFrame.Navigate(typeof(ProfileManager));
+        rootFrame.Content = HomePage;
     }
     private static void Setup ()
     {

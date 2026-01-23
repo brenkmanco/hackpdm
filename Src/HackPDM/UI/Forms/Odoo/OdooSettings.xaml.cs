@@ -11,6 +11,7 @@ using HackPDM.UI.Compatibility;
 using HackPDM.Core.Configuration;
 using Microsoft.UI.Xaml.Navigation;
 using HackPDM.UI.Forms.Helper;
+using HackPDM.Shared.GlobalData;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -24,6 +25,7 @@ public sealed partial class OdooSettings : Page
 {
     
     private static CoreSettings? Sett;
+    readonly string credTarget = StorageBox.DEFAULT_ODOO_CREDENTIALS;
     public OdooSettings()
     {
         InitializeComponent();
@@ -42,23 +44,21 @@ public sealed partial class OdooSettings : Page
     }
     private void GetInfoDefault()
     {
-        txtOdooAddress.Text = Sett.Get<string>("OdooAddress");
-        txtOdooPort.Text = Sett.Get<string>("OdooPort");
+        txtOdooAddress.Text = Sett?.Get<string>("OdooAddress");
+        txtOdooPort.Text = Sett?.Get<string>("OdooPort");
         changeURL();
 
-        txtOdooDb.Text = Sett.Get<string>("OdooDb");
-        txtSwKey.Text = Sett.Get<string>("SwLicenseKey");
-        txtAreaFactor.Text = Sett.Get<decimal>("AreaFactor").ToString();
-        Credential? cred = CredentialManager.ReadCredential("HackPDM-OdooUser");
-
-        txtOdooUser.Text = cred?.UserName ?? "";
-        txtOdooPass.Password = cred?.Password ?? "";
+        txtOdooDb.Text = Sett?.Get<string>("OdooDb");
+        txtSwKey.Text = Sett?.Get<string>("SwLicenseKey");
+        txtAreaFactor.Text = Sett?.Get<decimal>("AreaFactor").ToString();
+        
+        txtOdooUser.Text = OdooDefaults.Instance?.OdooUser ?? "";
+        txtOdooPass.Password = OdooDefaults.Instance?.OdooPass ?? "";
     }
-    private void SetInfoDefault()
+    private async void SetInfoDefault()
     {
-        const string credTarget = "HackPDM-OdooUser";
-        Sett.Set("OdooAddress", txtOdooAddress.Text);
-        Sett.Set("OdooPort", txtOdooPort.Text);
+        Sett?.Set("OdooAddress", txtOdooAddress.Text);
+        Sett?.Set("OdooPort", txtOdooPort.Text);
 
         StringBuilder sb = new();
         sb.Append($"http://{txtOdooAddress.Text}");
@@ -66,27 +66,20 @@ public sealed partial class OdooSettings : Page
         {
             sb.Append($":{txtOdooPort.Text}");
         }
-        Sett.Set("OdooDb", txtOdooDb.Text);
-        Sett.Set("SwLicenseKey", txtSwKey.Text);
+        Sett?.Set("OdooDb", txtOdooDb.Text);
+        Sett?.Set("SwLicenseKey", txtSwKey.Text);
         decimal AF;
         if (!decimal.TryParse(txtAreaFactor.Text, out AF))
         {
-            MessageBox.ShowAsync("Area Factor must be a decimal number");
+            await MessageBox.ShowAsync("Area Factor must be a decimal number");
             return;
         }
-        Sett.Set("AreaFactor", AF);
-
-        Credential? cred = CredentialManager.ReadCredential(credTarget) 
-            ?? new(CredentialType.Generic,
-                    Sett.Get<string>(credTarget) ?? credTarget,
-                    txtOdooUser.Text,
-                    txtOdooPass.Password,
-                    "HackPDM Odoo Credentials");
+        Sett?.Set("AreaFactor", AF);
+        string cTarget = OdooDefaults.Instance?.OdooCredentialTarget ?? credTarget;
+        OdooDefaults.Instance?.OdooUser = txtOdooUser.Text;
+        OdooDefaults.Instance?.OdooPass = txtOdooPass.Password;     
         
-        
-        OdooDefaults.Instance.OdooPass = txtOdooPass.Password;
-        OdooDefaults.Instance.OdooUser = txtOdooUser.Text;
-        OdooDefaults.Instance.OdooUrl = sb.ToString();
+        OdooDefaults.Instance?.OdooUrl = sb.ToString();
     }
 
     private void textBox1_TextChanged(object sender, EventArgs e) => changeURL();

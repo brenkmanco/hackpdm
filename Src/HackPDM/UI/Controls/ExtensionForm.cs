@@ -65,6 +65,7 @@ public static class ExtensionForm
 		{
 			try { window.AppWindow.SetPresenter(kind); return true; } catch { return false; }
 		}
+		public IntPtr IntPtrHandle { get { return WinRT.Interop.WindowNative.GetWindowHandle( window ); } }
 	}
 	extension (DataGrid grid)
 	{

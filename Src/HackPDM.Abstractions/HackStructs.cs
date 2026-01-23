@@ -53,5 +53,5 @@ public struct ContentDialogInfo
     public string? PrimaryText { get; set; } = null;
     public string? SecondaryText { get; set; } = null;
     public string? CloseText { get; set; } = null;
-    public ContentDialogButtonRepresentation ButtonRepresentation { get; set; } =  ContentDialogButtonRepresentation.Primary;
+    public MessageBoxRepresentation ButtonRepresentation { get; set; } =  MessageBoxRepresentation.Primary;
 }

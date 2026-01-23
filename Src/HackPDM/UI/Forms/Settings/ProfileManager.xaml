@@ -89,9 +89,21 @@
                                 x:Name="LoadJsonSettingsBtn"
                                 Click="LoadJsonSettingsBtn_Click"
                                 Text="Load Json Settings" />
-                            <!--<MenuFlyoutItem x:Name="OdooSearchDropdown" Text="Search" />
-                            <MenuFlyoutItem x:Name="OdooManageTypesDropdown" Text="Manage File Types" />
-                            -->
+
+                            <MenuFlyoutSubItem Text="Save Configuration To Json">
+                                <MenuFlyoutItem
+                                    x:Name="SaveSettingsJson"
+                                    Click="SaveSettingsJson_Click"
+                                    Text="With Password" />
+                                <MenuFlyoutItem
+                                    x:Name="SaveSettingsJsonWithoutPass"
+                                    Click="SaveSettingsJsonWithoutPassword_Click"
+                                    Text="Without Password" />
+                            </MenuFlyoutSubItem>
+                            <MenuFlyoutItem
+                                x:Name="CreateTemplateSettingsJson"
+                                Click="CreateTemplateSettingsJson_Click"
+                                Text="Create Template Json" />
                         </MenuFlyout>
                     </AppBarButton.Flyout>
                 </AppBarButton>
