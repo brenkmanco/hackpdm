@@ -33,7 +33,7 @@ public class HackDefaults : IHackDefaults
 	}
 	public string MeasureFileSize
 	{
-		get => SettingsProvider?.Get<string>("MeasureFileSize");
+		get => SettingsProvider?.Get<string>("MeasureFileSize") ?? "";
 		set => SettingsProvider?.Set("MeasureFileSize", value);
 	}
 	public double MeasureByteSize

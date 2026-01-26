@@ -146,13 +146,12 @@ public class OdooDefaults : IOdooDefaults
         }
         set
         {
-            if (value is 0) return;
             if (value != field) field = value;
         }
     } = 0;
     public string[] EntryFilterPatterns
     {
-        get => field ??= [.. HpEntryNameFilters?.Select(eFilter => eFilter.name_regex) ?? []];
+        get => [.. HpEntryNameFilters?.SkipNullSelect(eFilter => eFilter.name_regex) ?? []];
     }
     // lock asynchronous operations
     private readonly object MLockObject = new();
@@ -280,32 +279,46 @@ public class OdooDefaults : IOdooDefaults
     // like extension to Type or Category
     public Dictionary<string, IHpTypeModel> ExtToType 
     { 
-        get => field ??= ExtensionMapType( HpTypes );
+        get => field ??= HpTypes is IEnumerable<IHpPropertyModel> arr && arr.Any() 
+            ? ExtensionMapType( HpTypes )
+            : [];
         set => field = value;
     }
     public Dictionary<string, IHpCategoryModel> ExtToCat
     {
-        get => field ??= ExtensionMapCategory( HpCategories, [ .. ExtToType.Values ] );
+        get => field ??= 
+            HpCategories is IEnumerable<IHpPropertyModel> arr && arr.Any() 
+                && ExtToType is { Count: > 0 }    
+                ? ExtensionMapCategory( HpCategories, [ .. ExtToType.Values ] )
+                : [];
         set =>field = value;
     }
-    public Dictionary<string, IHpPropertyModel>? ExtToProp
+    public Dictionary<string, IHpPropertyModel> ExtToProp
     {
-        get => field ??= new(HpProperties?.Select(prop => new KeyValuePair<string, IHpPropertyModel>(prop.name, prop)) ?? []);
+        get => field ??= HpProperties is IEnumerable<IHpPropertyModel> arr && arr.Any() 
+            ? new(arr.Select(prop => new KeyValuePair<string, IHpPropertyModel>(prop?.name ?? "", prop)))
+            : [];
         set => field = value;
     }
     public Dictionary<string, IHpEntryNameFilterModel> ExtToFilter
     {
-        get => field ??= ExtensionMapFilter( HpEntryNameFilters );
+        get => field ??= HpEntryNameFilters is IEnumerable<IHpPropertyModel> arr && arr.Any() 
+            ? ExtensionMapFilter( HpEntryNameFilters )
+            : [];
         set => field = value;
     }
     public Dictionary<int, IHpPropertyModel> IdToProp
     {
-        get => field ??= IdMapProperty(HpProperties);
+        get => field ??= HpProperties is IEnumerable<IHpPropertyModel> arr && arr.Any()
+            ? IdMapProperty(HpProperties)
+            : [];
         set => field = value;
     }
     public Dictionary<int, IHpUserModel> IdToUser
     {
-        get => field ??= IdMapUser( HpUsers );
+        get => field ??= HpUsers is IEnumerable<IHpPropertyModel> arr && arr.Any()
+            ? IdMapUser(HpUsers)
+            : [];
         set => field = value;
     }
     #endregion
@@ -362,7 +375,7 @@ public class OdooDefaults : IOdooDefaults
         Dictionary<string, IHpTypeModel> dict = [];
         foreach ( HpType type in types )
         {
-            dict.Add( $".{type.file_ext.ToLower()}", type );
+            dict.Add( $".{type.file_ext?.ToLower()}", type );
         }
         return dict;
     }

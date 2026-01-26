@@ -1,17 +1,21 @@
 using System;
+using System.Collections;
 using System.IO;
 using System.Reflection;
 using System.Text;
+
+using HackPDM.Abstractions;
 using HackPDM.Core;
 using HackPDM.Core.Configuration;
+using HackPDM.Core.General;
+using HackPDM.Core.Hack;
 using HackPDM.Shared.GlobalData;
+using HackPDM.UI.Controls;
+using HackPDM.UI.Forms.Helper;
+
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-
-using HackPDM.UI.Controls;
-using HackPDM.Abstractions;
-using HackPDM.Core.Hack;
-using HackPDM.UI.Forms.Helper;
+using Microsoft.UI.Xaml.Navigation;
 
 
 // To learn more about WinUI, the WinUI project structure,
@@ -25,7 +29,7 @@ namespace HackPDM.UI.Forms.Hack;
 public sealed partial class HackSettings : Page
 {
 	Assembly assembly;
-	ISettingsProvider settingsProvider;
+	private static CoreSettings? Sett;
 	string documents;
 
 	public HackSettings()
@@ -36,22 +40,21 @@ public sealed partial class HackSettings : Page
 		InitializeComponent();
 		GetInfoDefaults();
 	}
-	public HackSettings(ISettingsProvider settingsProvider) : this() 
-	{
-		this.settingsProvider = settingsProvider;
-	}
+
 	private void GetInfoDefaults()
 	{
 		FileInfo hackExe = new FileInfo(assembly.Location);
 		string? assemblyDir = hackExe.DirectoryName;
 
-		if (HackDefaults.Instance.PwaPathAbsolute is null or "") txtPwaInput.Text = Path.Combine(documents, StorageBox.APP_NAME, "pwa");
-		else txtPwaInput.Text = HackDefaults.Instance.PwaPathAbsolute;
+		txtPwaInput.Text = HackDefaults.Instance?.PwaPathAbsolute is null or ""
+			? Path.Combine(documents, StorageBox.APP_NAME, "pwa")
+			: HackDefaults.Instance.PwaPathAbsolute;
 
-		if (StorageBox.TemporaryPath is null or "") HackTempFolderPath.Text = Path.Combine(Path.GetTempPath(), StorageBox.APP_NAME);
-		else HackTempFolderPath.Text = StorageBox.TemporaryPath;
+		HackTempFolderPath.Text = StorageBox.TemporaryPath is null or "" 
+			? Path.Combine(Path.GetTempPath(), StorageBox.APP_NAME) 
+			: StorageBox.TemporaryPath;
 	}
-	private void btnSubmit_Click(object sender, RoutedEventArgs e)
+	private async void btnSubmit_Click(object sender, RoutedEventArgs e)
 	{
 		StringBuilder errors = new();
 
@@ -61,12 +64,12 @@ public sealed partial class HackSettings : Page
 		if (errors.Length > 0)
 		{
 			errors.AppendLine("changes were not saved");
-			MessageBox.ShowAsync(errors.ToString());
+			await MessageBox.ShowAsync(errors.ToString());
 			return;
 		}
 		var dirInfo = new DirectoryInfo(txtPwaInput.Text);
-		HackDefaults.Instance.PwaPathAbsolute = txtPwaInput.Text;
-		HackDefaults.Instance.PwaPathRelative = dirInfo.Name;
+		HackDefaults.Instance?.PwaPathAbsolute = txtPwaInput.Text;
+		HackDefaults.Instance?.PwaPathRelative = dirInfo.Name;
 		StorageBox.TemporaryPath = HackTempFolderPath.Text;
 		this.Window?.Close();
 	}

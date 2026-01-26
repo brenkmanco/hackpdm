@@ -21,6 +21,7 @@
   <ItemGroup>
     <None Remove="UI\Forms\Hack\home.xaml" />
     <None Remove="UI\Forms\Helper\MessageBoxWindow.xaml" />
+    <None Remove="UI\Forms\Settings\NotLoggedIn.xaml" />
   </ItemGroup>
     <ItemGroup>
 		<ProjectReference Include="..\HackPDM.Infrastructure\HackPDM.Infrastructure.csproj" />
@@ -455,6 +456,9 @@
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
+    <Page Update="UI\Forms\Settings\NotLoggedIn.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Update="UI\Forms\Hack\Home.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>

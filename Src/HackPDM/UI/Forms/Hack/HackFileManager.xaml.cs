@@ -114,6 +114,7 @@ public sealed partial class HackFileManager : Page
     internal static int MaxCount { get; set; }
     public bool IsActive { get; set; } = false;
     public bool IsFiltered { get; set; } = true;
+	public bool HackLoaded { get; private set; }
 
 	private TreeHelp _treeHelper { get; set; }
 	private GridHelp _gridHelper { get; set; }
@@ -142,15 +143,16 @@ public sealed partial class HackFileManager : Page
 	//public ListView OdooEntryList = new();
 	#endregion
 	#region Initializers
-	
-	public HackFileManager(ISettingsProvider settingsProvider)
-	{
+
+	public HackFileManager() 
+	{ 
 		InitializeComponent();
+		HackLoaded = false;
 #if DEBUG
 		DebugTest();
 #endif
 	}
-
+	
 	public void LoadHackMan()
 	{
 		_treeHelper = HackApp.Services.GetRequiredService<TreeHelp>();
@@ -196,6 +198,7 @@ public sealed partial class HackFileManager : Page
 		}
 		
 		this.Loaded += (_, _) => Task.Run(HackFileManager_Load);
+		HackLoaded = true;
 	}
 #if DEBUG
 	private static async Task DebugTest()

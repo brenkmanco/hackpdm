@@ -3,6 +3,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
+using HackPDM.UI.Controls;
+
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 //
@@ -29,10 +32,10 @@ public static class InstanceManager
     }
     public static T GetAPage<T>() where T : Page, new()
     {
-	if (_pages.TryGetValue(typeof(T), out var page) && page?.Count > 0)
-	{
-		return (T)page[0];
-	}
+	    if (_pages.TryGetValue(typeof(T), out var page) && page?.Count > 0)
+	    {
+		    return (T)page[0];
+	    }
 
         T newPage = new();
         List<Page> newPages = [newPage];
@@ -51,8 +54,9 @@ public static class InstanceManager
 	    return newPages;
     }
 
-    public static void Register<T>(T page) where T : Page
+    public static void Register<T>(T? page) where T : Page
     {
+        if (page is null) return;
         if (_pages.TryGetValue(typeof(T), out var val) && val?.Count > 0)
         {
             if (!val?.Contains(page) == false) val!.Add(page);
@@ -68,7 +72,7 @@ public static class InstanceManager
     {
         if (_pages.TryGetValue(typeof(T), out var result) && result?[0] is T fpage)
         {
-		page = fpage;
+		    page = fpage;
             return true;
         }
         page = null;

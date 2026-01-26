@@ -166,3 +166,10 @@ public enum HackResult : ushort
 	MissingFile         = 16,
 	MissingDepFile      = 32,
 }
+public enum NavigatePageMenu
+{
+    HackFileManager,
+    ProfileManager,
+    Configuration,
+    Settings,
+}

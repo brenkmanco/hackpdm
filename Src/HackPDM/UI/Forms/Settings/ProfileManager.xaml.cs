@@ -49,6 +49,7 @@ namespace HackPDM.UI.Forms.Settings;
 /// </summary>
 public sealed partial class ProfileManager : Page
 {
+	public static bool IsLoggedIn { get; private set; }
 	public static ObservableCollection<BasicStatusMessage> OStatus { get; internal set; } = [];
 	private static readonly object LockObject = new();
 
@@ -70,15 +71,17 @@ public sealed partial class ProfileManager : Page
 
 	public void OdooSetting( object sender, RoutedEventArgs e )
 	{
-		OdooSettings oSettings = HackApp.Services?.GetRequiredService<OdooSettings>();
-		WindowHelper.CreateWindowFromPage<OdooSettings>( oSettings );
+		Home.NavigateToPage(NavigatePageMenu.Configuration);
+		//OdooSettings oSettings = HackApp.Services?.GetRequiredService<OdooSettings>();
+		//WindowHelper.CreateWindowFromPage<OdooSettings>( oSettings );
 	}
 	public async void HackSetting( object sender, RoutedEventArgs e )
 	{
-		await MessageBox.ShowAsync( string.Join( " ", Enumerable.Range( 0, 200 ) ) );
+		Home.NavigateToPage(NavigatePageMenu.Configuration);
+		//await MessageBox.ShowAsync( string.Join( " ", Enumerable.Range( 0, 200 ) ) );
 
-		HackSettings hSettings = HackApp.Services?.GetRequiredService<HackSettings>();
-		WindowHelper.CreateWindowFromPage<HackSettings>( hSettings );
+		//HackSettings hSettings = HackApp.Services?.GetRequiredService<HackSettings>();
+		//WindowHelper.CreateWindowFromPage<HackSettings>( hSettings );
 	}
 	private async Task<bool> AbleToLogin()
 	{
@@ -143,7 +146,7 @@ public sealed partial class ProfileManager : Page
 	{
 		OdooLoginProgressRing.IsActive = true;
 		OdooLoginProgressRing.UpdateLayout();
-		var IsLoggedIn = await AbleToLogin();
+		IsLoggedIn = await AbleToLogin();
 		OdooLoginProgressRing.IsActive = false;
 		if( !IsLoggedIn )
 			return;
@@ -151,10 +154,7 @@ public sealed partial class ProfileManager : Page
 		// now that login is verified, save credentials to windows credential manager
 		( OdooDefaults.Instance as OdooDefaults )?.SaveCredentials();
 
-		Window window = WindowHelper.CreateWindow<Window>("HackFileManager");
-		HackFileManager hack = HackApp.Services.GetRequiredService<HackFileManager>();
-		hack.LoadHackMan();
-		( window.Content as Frame )?.Content = hack;
+		Home.NavigateToPage(NavigatePageMenu.HackFileManager);
 	}
 	private void LoadFromJson( string json )
 	{

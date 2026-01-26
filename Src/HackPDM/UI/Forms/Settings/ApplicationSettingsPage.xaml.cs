@@ -23,7 +23,7 @@ public sealed partial class ApplicationSettingsPage : Page
         InitializeComponent();
 
 #if DEBUG
-        ShowIconLibrary();
+        // ShowIconLibrary();
 #endif
     }
 

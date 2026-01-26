@@ -37,6 +37,7 @@ public partial class HackApp : Application
     public static Window? Window;
     public static Frame? RootFrame;
     public static DispatcherQueue DispatcherQueue;
+    public static CoreSettings CoreSettings;
 
 	// To fix CS0121, fully qualify the InitializeComponent() call to specify the correct method.
 	// If your project has both a generated partial method and a user-defined method, use the global:: prefix.
@@ -63,18 +64,16 @@ public partial class HackApp : Application
         services.AddSingleton<GridHelp>();
 
 	    services.AddTransient<ProfileManager>();
-		services.AddTransient<OdooSettings>();
-		services.AddTransient<HackSettings>();
         services.AddTransient<MessageBox>();
         services.AddTransient<HackFileManager>();
 
 		Services =  services.BuildServiceProvider();
 
-		Services.GetRequiredService<IHackDefaults>();
+        Services.GetRequiredService<IHackDefaults>();
         Services.GetRequiredService<IOdooDefaults>();
 
-		HomePage = Services.GetRequiredService<Home>();
-
+        HomePage = Services.GetRequiredService<Home>();
+        CoreSettings = Services.GetRequiredService<ISettingsProvider>() as CoreSettings;
 	}
 
     /// <summary>

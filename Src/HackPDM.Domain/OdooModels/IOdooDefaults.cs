@@ -43,7 +43,7 @@ public interface IOdooDefaultBase
 	IHpUserModel[]? HpUsers { get; set; }
 	Dictionary<string, IHpTypeModel> ExtToType { get; set; }
 	Dictionary<string, IHpCategoryModel> ExtToCat { get; set; }
-	Dictionary<string, IHpPropertyModel>? ExtToProp { get; set; }
+	Dictionary<string, IHpPropertyModel> ExtToProp { get; set; }
 	Dictionary<string, IHpEntryNameFilterModel> ExtToFilter { get; set; }
 	Dictionary<int, IHpPropertyModel> IdToProp { get; set; }
 	Dictionary<int, IHpUserModel> IdToUser { get; set; }

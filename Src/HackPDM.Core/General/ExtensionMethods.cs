@@ -534,7 +534,7 @@ public static class ExtensionMethods
 			}
 		}
 
-		public IEnumerable<TOut> SkipNullSelect<TOut>(Func<T, TOut> func) where TOut : notnull
+		public IEnumerable<TOut> SkipNullSelect<TOut>(Func<T, TOut> func) 
 		{
 			foreach (T? item in array)
 			{

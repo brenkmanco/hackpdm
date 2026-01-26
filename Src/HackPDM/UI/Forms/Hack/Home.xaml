@@ -11,12 +11,13 @@
     <NavigationView
         x:Name="HomeNavigator"
         AlwaysShowHeader="False"
-        ExpandedModeThresholdWidth="200"
+        ExpandedModeThresholdWidth="900"
         Header="HackPDM"
         IsBackButtonVisible="Auto"
         IsBackEnabled="True"
         IsSettingsVisible="True"
         IsTabStop="False"
+        PaneDisplayMode="LeftCompact"
         PaneTitle="Pane"
         SelectionChanged="HomeNavigator_SelectionChanged"
         SelectionFollowsFocus="Disabled">
