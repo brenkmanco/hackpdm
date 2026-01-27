@@ -58,5 +58,12 @@ public static class StorageBox
         public const string FOLDERICONS     = "FolderIcons";
         public const string STATUSFOLDER    = "StatusIcons";
     #endregion
+    #region Helpful Constants
+    public const string ALPHABET_UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    public const string ALPHABET_LOWERCASE = "abcdefghijklmnopqrstuvwxyz";
+	public const string DIGITS = "0123456789";
+
+    public const string ALPHANUMERIC = ALPHABET_UPPERCASE + ALPHABET_LOWERCASE + DIGITS;
+	#endregion
 }
 

@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Text;
 
 using HackPDM.SchemaGenerator.GeneratedTypes;
+using HackPDM.Shared.General;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -27,9 +29,33 @@ public sealed class SchemaGenerator : IIncrementalGenerator
 		var compilationAndClasses =
 			context.CompilationProvider.Combine(classDeclarations.Collect());
 
-		context.RegisterSourceOutput(compilationAndClasses, Generate);
-	}
+		var colorCsvFiles = context.AdditionalTextsProvider.Where( f => Path.GetFileName( f.Path ).Equals( "colornames.csv", StringComparison.OrdinalIgnoreCase ) );
 
+		var colorRows = colorCsvFiles.Select((file, ct)=>
+		{
+			var text = file.GetText(ct)?.ToString() ?? "";
+			return Help.ParseCsv(text);
+		});
+		context.RegisterSourceOutput(compilationAndClasses, Generate);
+		context.RegisterSourceOutput( colorRows, ( spc, rows ) => spc.AddSource( "ColorNames.g.cs", GenerateEnum( rows ) ));
+	}
+	private static string GenerateEnum( IEnumerable<ColorCsvRow> rows )
+	{
+		var sb = new StringBuilder();
+
+		sb.AppendLine( "public enum ColorNames : uint" );
+		sb.AppendLine( "{" );
+
+		foreach( var row in rows.Where(r => r.GoodName) )
+		{
+			string enumName = Help.ToEnumName(row.Name);
+			uint value = Help.HexToUint(row.Hex);
+
+			sb.AppendLine( $"	{enumName} = 0x{value:X8}," );
+		}
+		sb.AppendLine( "}" );
+		return sb.ToString();
+	}
 	private static void Generate(
 		SourceProductionContext context,
 		(Compilation compilation, ImmutableArray<ClassDeclarationSyntax> classes) input)
@@ -172,7 +198,6 @@ public static partial class OdooAssignments_{{className}}
 
 		context.AddSource($"{className}_OdooAssignments.g.cs", source);
 	}
-
 	private static void EmitGenericFacade(
 		SourceProductionContext context,
 		List<(string FullName, string Name, string Namespace)> models)

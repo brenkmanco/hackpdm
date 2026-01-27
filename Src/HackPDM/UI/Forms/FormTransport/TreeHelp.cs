@@ -32,6 +32,7 @@ using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
 using Image = Microsoft.UI.Xaml.Controls.Image;
 
 using static HackPDM.UI.Controls.UISettings;
+using CommunityToolkit.WinUI.UI.Controls;
 
 namespace HackPDM.UI.Forms.FormTransport
 {
@@ -420,7 +421,9 @@ namespace HackPDM.UI.Forms.FormTransport
 
 			item.FullName = fullName;
 			await GridHelp.UpdateListAsync(grid, item);
+			
 		}
+
 		internal static async Task<ImageSource?> GetRemoteImage(string? name)
 		{
 			BitmapImage? imgExt = null;

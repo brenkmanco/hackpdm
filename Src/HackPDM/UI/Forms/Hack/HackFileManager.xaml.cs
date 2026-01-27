@@ -217,7 +217,7 @@ public sealed partial class HackFileManager : Page
 		OdooVersionInfoList.ItemsSource = OVersions;
 		OdooDirectoryBreadcrumb.ItemsSource = LastSelectedNodePaths;
 	}
-
+	
 	private void AssignGridAndCollectionsMap()
 	{
 		GridMap.Map = new()
@@ -239,6 +239,7 @@ public sealed partial class HackFileManager : Page
 
 		OdooEntryList.SelectionChanged	+= OdooEntryList_SelectionChanged;
 		OdooEntryList.Sorting			+= List_ColumnClick;
+		OdooEntryList.LoadingRow		+= OdooEntryList_LoadingRow;
 
 		// tree events
 		TreeAnalyze.Click				+= (sender, args) => { };
@@ -297,6 +298,72 @@ public sealed partial class HackFileManager : Page
 		HistoryMoveOverwrite.Click		+= History_Click_OverwriteMove;
 	}
 
+	private void OdooEntryList_LoadingRow( object? sender, DataGridRowEventArgs e )
+	{
+		var row = e.Row;
+		var item = row.DataContext as EntryRow;
+		switch( item?.Status )
+		{
+			case FileStatus.Lo:
+			{
+				
+				break;
+			}
+			case FileStatus.Ro:
+			{
+				break;
+			}
+			case FileStatus.Ok:
+			{
+
+				break;
+			}
+			case FileStatus.Nv:
+			{
+
+				break;
+			}
+			case FileStatus.Lm:
+			{
+				break;
+			}
+			case FileStatus.Dt:
+			{
+
+				break;
+			}
+			case FileStatus.Ds:
+			{
+
+				break;
+			}
+			case FileStatus.If:
+			{
+
+				break;
+			}
+			case FileStatus.Ft:
+			{
+
+				break;
+			}
+			case FileStatus.Cm:
+			{
+
+				break;
+			}
+			case FileStatus.Co:
+			{
+				break;
+			}
+			default:
+			{
+
+				break;
+			}
+		}
+	}
+
 	private void List_Click_SaveIcon(object sender, RoutedEventArgs e)
 	{
 		throw new NotImplementedException();
@@ -337,7 +404,7 @@ public sealed partial class HackFileManager : Page
 #if DEBUG
 	public Stopwatch TimerStopwatch;
 #endif
-#endregion
+	#endregion
 }
 public sealed partial class HackFileManager : Page
 {

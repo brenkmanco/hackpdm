@@ -4,6 +4,13 @@ using System.Text;
 
 namespace HackPDM.Shared.GlobalData
 {
+	public enum FlowDirection
+	{
+		LeftToRight,
+		TopToBottom,
+		TopLeftToBottomRight,
+		BottomLeftToTopRight,
+	}
 	public enum OdooFieldType
 	{
 		// Basic scalar types

@@ -2,7 +2,10 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Numerics;
 using System.Threading.Tasks;
+
+using HackPDM.Domain.Representation;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Controls;
 using HackPDM.UI.Types;
@@ -11,6 +14,15 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
+
+using SolidWorks.Interop.swdocumentmgr;
+
+using Windows.Foundation;
+using Windows.UI;
+
+using EntryRow = HackPDM.UI.Types.EntryRow;
+using FlowDirection = HackPDM.Shared.GlobalData.FlowDirection;
+using TreeData = HackPDM.UI.Types.TreeData;
 
 namespace HackPDM.UI.Forms.Helper;
 
@@ -236,6 +248,74 @@ public static class FormHelper
 		}
 	}
     
+    public static LinearGradientBrush EZGradient(FlowDirection direction, params Color[] colorGradient)
+    {
+        return EZGradient( direction switch
+        {
+            FlowDirection.TopToBottom => 90,
+            FlowDirection.TopLeftToBottomRight => 135,
+            FlowDirection.BottomLeftToTopRight => 225,
+            _ => 0,
+        }, colorGradient );
+    }
+    // angle in degrees mod 360
+    public static LinearGradientBrush EZGradient( double angle, params Color[] colorGradient )
+    {
+		var gradStopCollection = new GradientStopCollection();
+
+		for (int i = 0; i < colorGradient.Length; i++ )
+		{
+			var gradStop1 = new GradientStop
+			{
+				Color = colorGradient[i],
+                Offset = (i / (colorGradient.Length - 1))
+			};
+			gradStopCollection.Add( gradStop1 );
+		}
+		var linGradient = new LinearGradientBrush(gradStopCollection, angle);
+		return linGradient;
+	}
+    public static RadialGradientBrush EZRadGradient(Vector4<double> circView, Vector2<double> gradCenter, double opacity = 1, params Color[] colorGradient)
+    {
+		var radGradient = new RadialGradientBrush
+		{
+			SpreadMethod = GradientSpreadMethod.Pad,
+            Center = new Point(circView.x, circView.y),
+			RadiusX = circView.z,
+			RadiusY = circView.w,
+            GradientOrigin = new Point(gradCenter.x, gradCenter.y),
+            MappingMode = BrushMappingMode.RelativeToBoundingBox,
+            InterpolationSpace = Microsoft.UI.Composition.CompositionColorSpace.Auto,
+            Opacity = opacity,
+		};
+        foreach (var gradStop in EvenSpacedGradient(colorGradient))
+        {
+            radGradient.GradientStops.Add(gradStop);
+        }
+		return radGradient;
+	}
+    public static GradientStopCollection EvenSpacedGradientCollection(params Color[] colorGradient)
+    {
+		var gradStopCollection = new GradientStopCollection();
+        foreach (var gradStop in EvenSpacedGradient(colorGradient))
+        {
+			gradStopCollection.Add( gradStop );
+		}
+        return gradStopCollection;
+	}
+    public static IEnumerable<GradientStop> EvenSpacedGradient(params Color[] colorGradient)
+    {
+		for( int i = 0; i < colorGradient.Length; i++ )
+		{
+			var gradStop1 = new GradientStop
+			{
+				Color = colorGradient[i],
+				Offset = (i / (colorGradient.Length - 1))
+			};
+            yield return gradStop1;
+		}
+	}
+
     static ScrollViewer? GetScrollViewer(DependencyObject parent)
 	{
 		for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
