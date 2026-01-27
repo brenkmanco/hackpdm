@@ -403,3 +403,5 @@ __pycache__/
 *.egg-info
 *~
 *#
+/Src/HackPDM.Abstractions/colornames.csv
+/Src/HackPDM.Abstractions/macro.py

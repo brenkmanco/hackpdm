@@ -29,20 +29,13 @@ public sealed class SchemaGenerator : IIncrementalGenerator
 		var compilationAndClasses =
 			context.CompilationProvider.Combine(classDeclarations.Collect());
 
-		var colorCsvFiles = context.AdditionalTextsProvider.Where( f => Path.GetFileName( f.Path ).Equals( "colornames.csv", StringComparison.OrdinalIgnoreCase ) );
-
-		var colorRows = colorCsvFiles.Select((file, ct)=>
-		{
-			var text = file.GetText(ct)?.ToString() ?? "";
-			return Help.ParseCsv(text);
-		});
 		context.RegisterSourceOutput(compilationAndClasses, Generate);
-		context.RegisterSourceOutput( colorRows, ( spc, rows ) => spc.AddSource( "ColorNames.g.cs", GenerateEnum( rows ) ));
 	}
 	private static string GenerateEnum( IEnumerable<ColorCsvRow> rows )
 	{
 		var sb = new StringBuilder();
 
+		sb.AppendLine( "namespace HackPDM.UI.Types;" );
 		sb.AppendLine( "public enum ColorNames : uint" );
 		sb.AppendLine( "{" );
 

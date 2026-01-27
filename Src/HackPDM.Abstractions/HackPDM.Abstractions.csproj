@@ -6,9 +6,14 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
+
+	<ItemGroup>
+	  <None Remove="colornames.csv" />
+	  <None Remove="macro.py" />
+	</ItemGroup>
     
     <ItemGroup>
 	    <ProjectReference Include="..\HackPDM.Shared\HackPDM.Shared.csproj" />
-    </ItemGroup>
+	</ItemGroup>
 	
 </Project>

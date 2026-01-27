@@ -2,6 +2,7 @@
 
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Forms.Helper;
+using HackPDM.UI.Types;
 
 using Microsoft.UI.Xaml.Media;
 using Color = Windows.UI.Color;
@@ -20,7 +21,8 @@ public static class UIStorage
 		public static readonly Color DarkRed			= Color.FromArgb(255, 139, 0, 0);
 		public static readonly Color DarkBlue		    = Color.FromArgb(255, 0, 0, 139);
 		public static readonly Color DarkOliveGreen		= Color.FromArgb(255, 85, 107, 47);
-		public static readonly Color Test				= 
+		public static readonly Color Orange				= ToColor(TransformUIntToRGB(ColorNames.OrangeBlast));
+		
 
 		public static readonly SolidColorBrush BrushWhite				= new(White);
 		public static readonly SolidColorBrush BrushBlack				= new(Black);
@@ -32,10 +34,15 @@ public static class UIStorage
 		public static readonly SolidColorBrush BrushDarkBlue			= new(DarkBlue);
 		public static readonly SolidColorBrush BrushDarkRed				= new(DarkRed);
 
-		public static readonly LinearGradientBrush LinGradOrange		= FormHelper.EZGradient(FlowDirection.LeftToRight, [Colo]);
+	//public static readonly LinearGradientBrush LinGradOrange		= FormHelper.EZGradient(FlowDirection.LeftToRight, [Colo]);
 	#endregion
-}
-public enum ColorNames : uint
-{
-
+	private static Color ToColor((byte, byte, byte, byte) argb) => Color.FromArgb(argb.Item1, argb.Item2, argb.Item3, argb.Item4);
+	private static (byte, byte, byte, byte)  TransformUIntToRGB(ColorNames names)
+		=> (
+				(byte)(((uint)names >> 24) & 0xFF),
+				(byte)(((uint)names >> 16) & 0xFF),
+				(byte)(((uint)names >> 8) & 0xFF),
+				(byte)(((uint)names) & 0xFF)
+		);
+	
 }
