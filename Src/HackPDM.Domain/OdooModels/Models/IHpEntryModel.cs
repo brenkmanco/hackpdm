@@ -13,9 +13,9 @@ public interface IHpEntryModel : IHpOdooRecord
 	[OdooProp(OdooFieldType.Many2one, "latest_version_id")] public IMany2One? latest_version_id {get;set;}
 	[OdooProp(OdooFieldType.Many2one, "dir_id")] public IMany2One? dir_id {get;set;}
 	[OdooProp(OdooFieldType.Many2one, "type_id")] public IMany2One? type_id {get;set;}
-	[OdooProp(OdooFieldType.Many2one, "cat_id")] public IMany2One? cat_id {get;set;}
 	[OdooProp(OdooFieldType.Many2one, "checkout_user")] public IMany2One? checkout_user {get;set;}
 	[OdooProp(OdooFieldType.Many2one, "checkout_node")] public IMany2One? checkout_node {get;set;}
+	[OdooProp(OdooFieldType.Many2one, "cat_id")] public IMany2One? cat_id {get;set;}
     public bool IsLatest { get; }
 }
 public struct EntryLocalPath(string path, IHpEntryModel? entry, bool isBroken = false)

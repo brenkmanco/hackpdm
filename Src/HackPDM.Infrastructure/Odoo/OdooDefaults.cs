@@ -279,7 +279,7 @@ public class OdooDefaults : IOdooDefaults
     // like extension to Type or Category
     public Dictionary<string, IHpTypeModel> ExtToType 
     { 
-        get => field ??= HpTypes is IEnumerable<IHpPropertyModel> arr && arr.Any() 
+        get => field ??= HpTypes is IEnumerable<IHpTypeModel> arr && arr.Any() 
             ? ExtensionMapType( HpTypes )
             : [];
         set => field = value;
@@ -287,9 +287,9 @@ public class OdooDefaults : IOdooDefaults
     public Dictionary<string, IHpCategoryModel> ExtToCat
     {
         get => field ??= 
-            HpCategories is IEnumerable<IHpPropertyModel> arr && arr.Any() 
-                && ExtToType is { Count: > 0 }    
-                ? ExtensionMapCategory( HpCategories, [ .. ExtToType.Values ] )
+            HpCategories is HpCategory[] arr && arr.Length != 0
+				&& HpTypes is HpType[] arrTypes && arrTypes.Length != 0
+				? ExtensionMapCategory( arr, arrTypes )
                 : [];
         set =>field = value;
     }
@@ -302,7 +302,7 @@ public class OdooDefaults : IOdooDefaults
     }
     public Dictionary<string, IHpEntryNameFilterModel> ExtToFilter
     {
-        get => field ??= HpEntryNameFilters is IEnumerable<IHpPropertyModel> arr && arr.Any() 
+        get => field ??= HpEntryNameFilters is IEnumerable<IHpEntryNameFilterModel> arr && arr.Any() 
             ? ExtensionMapFilter( HpEntryNameFilters )
             : [];
         set => field = value;
@@ -316,7 +316,7 @@ public class OdooDefaults : IOdooDefaults
     }
     public Dictionary<int, IHpUserModel> IdToUser
     {
-        get => field ??= HpUsers is IEnumerable<IHpPropertyModel> arr && arr.Any()
+        get => field ??= HpUsers is IEnumerable<IHpUserModel> arr && arr.Any()
             ? IdMapUser(HpUsers)
             : [];
         set => field = value;
@@ -395,16 +395,16 @@ public class OdooDefaults : IOdooDefaults
 
 
 
-    public static Dictionary<string, IHpCategoryModel> ExtensionMapCategory( in IHpCategoryModel []? categories, in IHpTypeModel []? types )
+    public static Dictionary<string, IHpCategoryModel> ExtensionMapCategory( in HpCategory []? categories, in HpType []? types )
     {
         if (categories is null || types is null) return [];
 
         Dictionary<string, IHpCategoryModel> dict = [];
-        foreach ( IHpTypeModel type in types )
+        foreach ( HpType type in types )
         {
-            foreach ( IHpCategoryModel category in categories )
+            foreach ( HpCategory category in categories )
             {
-                if (category.id != type.cat_id?.id) continue;
+                if (category.id != type.cat_id?.id || type.file_ext is null) continue;
                 dict.Add( $".{type.file_ext.ToLower()}", category );
                 break;
             }

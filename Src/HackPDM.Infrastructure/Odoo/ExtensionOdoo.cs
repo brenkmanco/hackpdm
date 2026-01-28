@@ -657,7 +657,9 @@ public static class OdooFieldHelpers
 	{
 		return TryCast<string>(value, out var s) && !string.IsNullOrEmpty(s)
 			? TryNull(s, System.Convert.FromBase64String)!
-			: TryCast<byte[]>(value, out var bytes) ? bytes! : default!;
+			: TryCast<byte[]>(value, out var bytes) 
+				? bytes! 
+				: default!;
 	}
 	// Many2one -> (int id, string name)?
 	// Odoo shape: [id, "Name"]

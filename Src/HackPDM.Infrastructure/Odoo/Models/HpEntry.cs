@@ -37,12 +37,14 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 	IMany2One? IHpEntryModel.dir_id { get =>(IMany2One?)dir_id; set => dir_id = (Many2One?)value; }
 	[OdooProp(OdooFieldType.Many2one, "type_id")] public Many2One? type_id {get;set;}
 	IMany2One? IHpEntryModel.type_id { get =>(IMany2One?)type_id; set => type_id = (Many2One?)value; }
-	[OdooProp(OdooFieldType.Many2one, "cat_id")] public Many2One? cat_id {get;set;}
-	IMany2One? IHpEntryModel.cat_id { get =>(IMany2One?)cat_id; set => cat_id = (Many2One?)value; }
 	[OdooProp(OdooFieldType.Many2one, "checkout_user")] public Many2One? checkout_user {get;set;}
 	IMany2One? IHpEntryModel.checkout_user { get =>(IMany2One?)checkout_user; set => checkout_user = (Many2One?)value; }
 	[OdooProp(OdooFieldType.Many2one, "checkout_node")] public Many2One? checkout_node {get;set;}
 	IMany2One? IHpEntryModel.checkout_node { get =>(IMany2One?)checkout_node; set => checkout_node = (Many2One?)value; }
+	
+	[OdooProp(OdooFieldType.Many2one, "cat_id")] public Many2One? cat_id {get;set;}
+	IMany2One? IHpEntryModel.cat_id { get =>(IMany2One?)cat_id; set => cat_id = (Many2One?)value; }
+
 	public bool IsLatest { get; }
 
 	public HackFile? LocalFile

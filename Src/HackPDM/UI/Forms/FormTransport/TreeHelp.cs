@@ -5,10 +5,13 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Windows.Storage.Streams;
+
 using CommunityToolkit.WinUI;
+using CommunityToolkit.WinUI.UI.Controls;
+
 using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
@@ -23,16 +26,21 @@ using HackPDM.UI.Compatibility;
 using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Hack;
 using HackPDM.UI.Forms.Helper;
+
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-using EntryRow = HackPDM.UI.Types.EntryRow;
-using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
-using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
-using Image = Microsoft.UI.Xaml.Controls.Image;
 
+using Windows.Storage.Streams;
+
+using static System.Runtime.InteropServices.JavaScript.JSType;
 using static HackPDM.UI.Controls.UISettings;
-using CommunityToolkit.WinUI.UI.Controls;
+
+using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
+using EntryRow = HackPDM.UI.Types.EntryRow;
+using Image = Microsoft.UI.Xaml.Controls.Image;
+using String = System.String;
+using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
 
 namespace HackPDM.UI.Forms.FormTransport
 {
@@ -70,7 +78,7 @@ namespace HackPDM.UI.Forms.FormTransport
 				{
 					await CreateTreeHash(tree, OdooDefaults.Instance.HpDirectoryRoot as HpDirectory);
 
-					CreateLocalTree(tree);
+					await CreateLocalTree(tree);
 
 					if (_HFM.LastSelectedNode != null)
 					{
@@ -181,27 +189,92 @@ namespace HackPDM.UI.Forms.FormTransport
 		{
 			await AddDirectoriesToTree(tree, directoryModel.GetSubdirectories(false));
 		}
-		internal static void CreateLocalTree(in TreeView treeView)
+		internal static async Task CreateLocalTree(TreeView treeView)
 		{
-			Dictionary<string, TreeViewNode>? treeDict = FormHelper.ConvertTreeToDictionary(treeView);
+			Dictionary<string, TreeViewNode>? vNodes = new();//FormHelper.ConvertTreeToDictionary(treeView);
 			IEnumerable<string> pathways = Directory.EnumerateDirectories(HackDefaults.Instance.PwaPathAbsolute, "*", SearchOption.AllDirectories);
 			pathways = Help.FastSlice(pathways, HackDefaults.Instance.PwaPathAbsolute.Length, prependText: "root");
 
 			foreach (string pathway in pathways)
 			{
 				string[] paths = pathway.Split('\\');
-				(int, TreeViewNode?) validIndexNode = FormHelper.LastValidTreeIndex(in pathway, in paths, treeDict);
-				// the last valid index does not go to the end meaning it didn't find the
-				// remaining paths
-				if (validIndexNode.Item1 != paths.Length - 1)
+				await AddLocalDirectoriesTest(treeView, paths, vNodes);
+				//(int, TreeViewNode?) validIndexNode = FormHelper.LastValidTreeIndex(in pathway, in paths, treeDict);
+				//// the last valid index does not go to the end meaning it didn't find the
+				//// remaining paths
+				//if (validIndexNode.Item1 != paths.Length - 1)
+				//{
+				//	AddLocalDirectories(treeView, validIndexNode.Item2, paths[(validIndexNode.Item1 + 1) .. ], treeDict);
+				//}
+			}
+			Debug.WriteLine("stop");
+		}
+		internal async static Task AddLocalDirectoriesTest(TreeView tree, string[] paths, Dictionary<string, TreeViewNode> vNodes)
+		{
+			TreeViewNode? node = null;
+			IList<TreeViewNode> nodeList;
+			bool IsFound;
+			StringBuilder pathUpTo = new();
+			for (int i = 0; i < paths.Length; i++)
+			{
+				IsFound = false;
+				string pathway = paths[i];
+
+				if (i == 0)
 				{
-					AddLocalDirectories(treeView, validIndexNode.Item2, paths[(validIndexNode.Item1 + 1) .. ], treeDict);
+					nodeList = tree.RootNodes;
+					pathUpTo.Append(pathway);
+				}
+				else 
+				{
+					nodeList = node?.Children ?? [];
+					pathUpTo.Append(@$"\{pathway}");
+				}
+
+				if (vNodes.TryGetValue(pathUpTo.ToString(), out TreeViewNode? foundNode))
+				{
+					IsFound = true;
+					node = foundNode;
+				}
+				foreach (TreeViewNode evalNode in nodeList)
+				{
+					var data = evalNode?.Content<TreeData>();
+					if (data?.Name == pathway) 
+					{ 
+						IsFound = true; 
+						node = evalNode;
+						break; 
+					}
+				}
+
+				if (!IsFound)
+				{
+					if ((node ??= tree.RootNodes?[0]) == null)
+					{
+						node = new();
+						tree.RootNodes?.Add(node);
+					}
+					await AddLocalDirectory(node, pathway, vNodes);
 				}
 			}
 		}
+		internal async static Task AddLocalDirectory(TreeViewNode? parent, string namePath, Dictionary<string, TreeViewNode> vNodes)
+		{
+			await SafeHelper.SafeInvokerAsync(async () =>
+			{
+				TreeViewNode tNode = new();
+				var newNodeData = tNode.LinkedData;
+				newNodeData.Name = namePath;
+				newNodeData.Icon = await (AssetsProvider?.GetImageAsync("fo_loc"));
+				newNodeData.DirectoryId = 0;
+
+				parent?.Children.Add(tNode);
+				if (!string.IsNullOrEmpty(newNodeData.FullPath)) vNodes.TryAdd(newNodeData.FullPath, tNode);
+			});
+		}
 		internal async static void AddLocalDirectories(TreeView tree, TreeViewNode node, string[] pathway, Dictionary<string, TreeViewNode> treeDict)
 		{
-			tree.DispatcherQueue.TryEnqueue(async () =>
+			await SafeHelper.SafeInvokerAsync(async () =>
 			{
 				for (int i = 0; i < pathway.Length; i++)
 				{

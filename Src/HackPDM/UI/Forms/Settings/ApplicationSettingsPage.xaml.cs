@@ -23,27 +23,11 @@ public sealed partial class ApplicationSettingsPage : Page
         InitializeComponent();
 
 #if DEBUG
-        // ShowIconLibrary();
+        
 #endif
     }
 
 #if DEBUG
-	private void ShowIconLibrary()
-    {
-        Symbol[] storedSymbols = Enum.GetValues<Symbol>();
-        ObservableCollection<MyIco> icons = [];
-        foreach( var Symbol in storedSymbols )
-        {
-            icons.Add( new() { Icon = new SymbolIcon( Symbol ) } );
-        }
-
-        ItemsViewRoot.ItemsSource = icons;
-        
-	}
-
-    private class MyIco
-    {
-        public IconElement? Icon { get; set; }
-    }
+	
 #endif
 }

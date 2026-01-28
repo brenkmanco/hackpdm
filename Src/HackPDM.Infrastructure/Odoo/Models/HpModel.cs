@@ -46,6 +46,11 @@ public class Many2One : HpModel
 		id = this.id;
 	}
 
+	public static implicit operator IMany2One(Many2One? model)
+	{
+
+	}
+
 	public static implicit operator int?(Many2One? model) => model?.id;
 	public static implicit operator Many2One?(int? id) => id is null ? null : new() { id = id };
 

@@ -510,9 +510,9 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 			// result = await OClient.SmartSearchAsync(modelName, searchFilters, [], fields, 90000);
 		}
 
-		if (result.Count == 0) return null;
-
-		return RecordsPopulation(result.Select<Hashtable, Hashtable>(h => h), excludedFields);
+		return result.Count == 0 
+			? null 
+			: RecordsPopulation(result.Select<Hashtable, Hashtable>(h => h), excludedFields);
 	}
 
 }

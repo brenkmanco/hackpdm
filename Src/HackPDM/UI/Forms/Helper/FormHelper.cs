@@ -258,8 +258,24 @@ public static class FormHelper
             _ => 0,
         }, colorGradient );
     }
-    // angle in degrees mod 360
-    public static LinearGradientBrush EZGradient( double angle, params Color[] colorGradient )
+    public static ref Color ChangeColor(this ref Color color, byte? A = null, byte? R = null, byte? G = null, byte? B = null)
+    {
+        if (A is { } a) color.A = a;
+		if (R is { } r) color.R = r;
+		if (G is { } g) color.G = g;
+		if (B is { } b) color.B = b;
+        return ref color;
+	}
+    public static Color ModifyColor(this Color color, byte? A = null, byte? R = null, byte? G = null, byte? B = null)
+	{
+		if (A is { } a) color.A = a;
+		if (R is { } r) color.R = r;
+		if (G is { } g) color.G = g;
+		if (B is { } b) color.B = b;
+		return color;
+	}
+	// angle in degrees mod 360
+	public static LinearGradientBrush EZGradient( double angle, params Color[] colorGradient )
     {
 		var gradStopCollection = new GradientStopCollection();
 
@@ -268,7 +284,7 @@ public static class FormHelper
 			var gradStop1 = new GradientStop
 			{
 				Color = colorGradient[i],
-                Offset = (i / (colorGradient.Length - 1))
+                Offset = ((double)i / (colorGradient.Length - 1))
 			};
 			gradStopCollection.Add( gradStop1 );
 		}

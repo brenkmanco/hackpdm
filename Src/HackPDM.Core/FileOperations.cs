@@ -20,8 +20,10 @@ public static class FileOperations
 {
     public static string ConvertToBase64(string filePath)
         => Convert.ToBase64String(ReadFileInChunks(filePath));
-    public static byte[] ConvertFromBase64(string base64String )
-        => Convert.FromBase64String( base64String );
+    public static byte[]? ConvertFromBase64(string? base64String )
+        => !string.IsNullOrEmpty(base64String) 
+            ? Convert.FromBase64String( base64String )
+            : null;
 	
 	public static bool InPWAFolder(string? fullFileName) => fullFileName?.StartsWith(HackDefaults.Instance.PwaPathAbsolute) ?? false;
 
@@ -62,13 +64,14 @@ public static class FileOperations
         }
         try
         {
-            string combinedPath = Path.Combine(HackDefaults.Instance.PwaPathAbsolute, file.DirectoryName);
-            if (!Directory.Exists(combinedPath))
+            if (file.DirectoryName is null) return false;
+
+            string combinedPath = Path.Combine(HackDefaults.Instance?.PwaPathAbsolute ?? "", file.DirectoryName);
+			DirectoryInfo dirInfo = new(Path.GetDirectoryName(combinedPath) ?? "");
+            if (!dirInfo.Exists)
             {
-				//CreateDirectory(combinedPath);
-                Directory.CreateDirectory(combinedPath);
+                dirInfo.Create();
             }
-            combinedPath = Path.Combine(combinedPath, file.Name);
 
             await WriteBytes(combinedPath, file.FileContents);
             file.ApplyModifiedDateToLocal();
@@ -136,7 +139,10 @@ public static class FileOperations
             // opens the file and computes the checksum
             // and converts it to lowercase string
             // checks it against the version checksum
-            using (FileStream stream = File.OpenRead(filePath))
+            FileInfo file = new(filePath);
+            if (!file.Exists) return null;
+
+            using (FileStream stream = file.OpenRead())
             {
                 if (stream.Length != 0) 
                     fileChecksum = string.Join("", alg.ComputeHash(stream)
@@ -146,11 +152,11 @@ public static class FileOperations
         }
         catch (Exception e) when (e is DirectoryNotFoundException || e is FileNotFoundException)
         {
-            Console.WriteLine($"file or directory not found: {e.Message}");
+            Debug.WriteLine($"file or directory not found: {e.Message}");
         }
         catch (Exception e)
         {
-            Console.WriteLine(e.Message);
+			Debug.WriteLine(e.Message);
         }
         return null;
     }

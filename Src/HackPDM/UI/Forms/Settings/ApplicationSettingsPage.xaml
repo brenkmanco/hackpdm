@@ -9,6 +9,15 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
     <Frame>
-        <ItemsView x:Name="ItemsViewRoot" />
+        <StackPanel x:Name="RootStack">
+            <ColorPicker
+                x:Name="ColorPick"
+                ColorSpectrumShape="Box"
+                IsAlphaEnabled="True"
+                IsAlphaSliderVisible="True"
+                IsColorChannelTextInputVisible="True"
+                IsColorPreviewVisible="True"
+                IsHexInputVisible="True" />
+        </StackPanel>
     </Frame>
 </Page>

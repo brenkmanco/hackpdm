@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -37,6 +38,8 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
 	IMany2One? IHpVersionModel.node_id { get =>(IMany2One?)node_id; set => node_id = (Many2One?)value; }
 	[OdooProp(OdooFieldType.Many2one, "dir_id")] public Many2One? dir_id { get; set; }
 	IMany2One? IHpVersionModel.dir_id { get =>(IMany2One?)dir_id; set => dir_id = (Many2One?)value; }
+	[OdooProp(OdooFieldType.Many2one, "checkout_user")] public Many2One? checkout_user { get; set; }
+	IMany2One? IHpVersionModel.checkout_user { get => (IMany2One?)checkout_user; set => checkout_user = (Many2One?)value; }
 	[OdooProp(OdooFieldType.Many2one, "attachment_id")] public Many2One? attachment_id { get; set; }
 	IMany2One? IHpVersionModel.attachment_id { get =>(IMany2One?)attachment_id; set => attachment_id = (Many2One?)value; }
 
@@ -44,8 +47,8 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
 
 	[OdooProp(OdooFieldType.Integer, "file_size")] public int? file_size { get; set; }
 
-	[OdooProp(OdooFieldType.Binary, "preview_image")] public string? preview_image { get; set; }
-	[OdooProp(OdooFieldType.Binary, "file_contents")] public string? file_contents { get; set; }
+	[OdooProp(OdooFieldType.Binary, "preview_image")] public byte[]? preview_image { get; set; }
+	[OdooProp(OdooFieldType.Binary, "file_contents")] public byte[]? file_contents { get; set; }
 	public string? FileContentsBase64 { get; private set; }
     public string? WinPathway { get => field ??= windows_complete_name?[OdooDefaultsConstants.ODOO_PATH_PREFIX_LENGTH..]; set; }
     
@@ -82,14 +85,14 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
 
     public async Task<bool> GetPreviewImage()
 	{
-		if (preview_image is null or "" && id != 0) 
+		if (preview_image is { Length: > 0 } && id != 0) 
 		{
 			// reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
 			// which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
 			ArrayList list = await OClient.ReadAsync(HpModel, [this.id], ["preview_image"]);
-			preview_image = (list[0] as Hashtable)?["preview_image"] as string;									
+			preview_image = FileOperations.ConvertFromBase64((list[0] as Hashtable)?["preview_image"] as string);									
 		}
-		return preview_image is not null and not "";
+		return preview_image is { Length: > 0 };
 	}
 }
 public partial class HpVersion : HpBaseModelTransport<HpVersion>
@@ -117,7 +120,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         }
     public async static Task<(int, long)?> BatchDownloadFiles(List<HpVersion> processVersions)
     {
-        HackFile[] datas = DownloadFilesData(processVersions);
+        HackFile[] datas = await DownloadFilesData(processVersions);
                 
         if (datas == null || datas.Length < 1) return null;
                 
@@ -138,7 +141,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         this.WinPathway = toPath;
         return true;
     }
-    public string DownloadContents()
+    public byte[]? DownloadContents()
     {
         const string fileContents = "file_contents";
     
@@ -148,23 +151,29 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
             // which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
             if (file_size != 0)
             {
-                return (string)((Hashtable)OClient.Read(HpModel, [this.id], [fileContents])[0])[fileContents];
+                return ((OClient.Read(HpModel, [this.id], [fileContents])?[0] as Hashtable)?[fileContents]) as byte[];
             }
         }
         return null;
     }
-    public static List<HpVersion> DownloadContentsAll(List<HpVersion> versions)
+    public static async Task<List<HpVersion>> DownloadContentsAll(List<HpVersion> versions)
     {
-        string[] fileContents = ["file_contents", "dir_id", "name", "file_modify_stamp", "file_size"];
-        List<HpVersion> processVersions = [.. versions.TakeAndRemove(version =>
-        {
-            return version.file_contents is null or ""; 
-        })];
+        string[] fileContents = [
+            nameof(file_contents), 
+            nameof(dir_id), 
+            nameof(name), 
+            nameof(file_modify_stamp), 
+            nameof(file_size), 
+            nameof(checkout_user), 
+            nameof(windows_complete_name)];
+
+        List<HpVersion> processVersions = [.. versions.TakeAndRemove(version 
+            => version.file_contents is not { Length: 0 })];
                 
         ArrayList ids = new(processVersions.Select(v => v.id).ToArray());
         //string[] fileContentsBase64 = 
         //ArrayList results = OClient.Read(GetHpModel(), ids, [fileContents], 60000);
-        HpVersion[] readyVersions = HpVersion.GetRecordsByIds(ids, includedFields: fileContents, insertFields: ["checkout_user"]);
+        HpVersion[]? readyVersions = await GetRecordsByIdsAsync(ids, includedFields: fileContents);
         if (readyVersions is not null && readyVersions.Length > 0)
             versions.AddRange(readyVersions);
     
@@ -184,30 +193,32 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         HackFile file = new(name, null);
         if (file_contents == null) return file;
     
-        byte[] fileContents = Convert.FromBase64String(file_contents);
-        file.FileContents = fileContents;
+        file.FileContents = file_contents;
     
         return file;
     }
-    public static HackFile[] DownloadFilesData(List<HpVersion> versions)
+    public static async Task<HackFile[]> DownloadFilesData(List<HpVersion> versions)
     {
-        versions = DownloadContentsAll(versions);
+        versions = await DownloadContentsAll(versions);
         //string[] fileContentsBase64 = DownloadContentsAll(versions).ToArray();
         //if (versions.Count() != fileContentsBase64.Length) return null;
         if (versions is null) return null;
                 
-        int vLen = versions.Count();
+        int vLen = versions.Count;
         var hackFiles = new HackFile[vLen];
     
         for (int i = 0; i < vLen; i++)
         {
             HackFile hack = new(versions[i].name, null);
-            var checkUser = versions[i].HashedValues["checkout_user"];
+            var checkUser = versions[i].checkout_user;
                     
-            hack.Owner = checkUser is int id && OdooDefaults.Instance.OdooId == id;
-            if (versions[i] != null && versions[i].file_contents is not null and not "")
+            hack.Owner = (checkUser?.id is not null)
+                ? OdooDefaults.Instance?.OdooId == checkUser?.id
+				: null;
+
+            if (versions[i] != null && versions[i].file_contents is { Length: > 0 })
             {
-                hack.FileContents = Convert.FromBase64String(versions[i].file_contents);
+                hack.FileContents = versions[i].file_contents;
                 hack.Name = versions[i].name;
                 hack.DirectoryName = versions[i].WinPathway;
                 hack.SetModifiedDate(versions[i]?.file_modify_stamp ?? default);
@@ -306,11 +317,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
     {
         if (OdooDefaults.Instance.RestrictTypes is true & !OdooDefaults.Instance.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
             return null;
-    
-        string fileBase64 = hackFile.FileContents != null
-            ? Convert.ToBase64String(hackFile.FileContents)
-            : FileOperations.ConvertToBase64(hackFile.FullPath);
-    
+        
         HpVersion newVersion = new()
         {
             name = $"{entry.id}.{hackFile.Name}",
@@ -319,10 +326,19 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
             file_ext = hackFile.TypeExt[1..].ToLower(),
             WinPathway = hackFile.FullPath,
         };
-        if (fileBase64 is not null and not "")
+        newVersion.file_contents = hackFile.FileContents;
+        if (newVersion.file_contents is null)
         {
-            newVersion.file_contents = fileBase64;
+            try
+            {
+                newVersion.file_contents ??= File.ReadAllBytes(hackFile?.FullPath ?? "");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+            }
         }
+
         return newVersion;
     }
     public static async Task<HpVersion> CreateNew(HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType = HashedValueStoring.None )

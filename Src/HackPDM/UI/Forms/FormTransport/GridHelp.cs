@@ -388,8 +388,7 @@ namespace HackPDM.UI.Forms.FormTransport
 			if (version is null) return;
 			if (!await version.GetPreviewImage()) return;
 
-			byte[] previewImageBytes = Convert.FromBase64String(version.preview_image!);
-			MemoryStream ms = new(previewImageBytes)
+			MemoryStream ms = new(version.preview_image ?? [])
 			{
 				Position = 0
 			};
@@ -401,8 +400,8 @@ namespace HackPDM.UI.Forms.FormTransport
 			const string previewImage = "preview_image";
 			if (hpVersionId is null || hpVersionId == 0) return;
 
-			HpVersion? version = (await HpVersion.GetRecordsByIdsAsync([hpVersionId], includedFields: [previewImage])).FirstOrDefault();
-			PreviewImage(version);
+			HpVersion? version = (await HpVersion.GetRecordsByIdsAsync([hpVersionId], includedFields: [previewImage]))?.FirstOrDefault();
+			await PreviewImage(version);
 		}
 		#endregion
 

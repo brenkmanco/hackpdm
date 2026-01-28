@@ -152,9 +152,28 @@ public sealed partial class HackFileManager : Page
 		DebugTest();
 #endif
 	}
-	
-	public void LoadHackMan()
+	public static async Task LoadOdooDefaults()
 	{
+		_ = OdooDefaults.Instance?.HpNodes;
+		_ = OdooDefaults.Instance?.MyNode;
+		_ = OdooDefaults.Instance?.HpSettings;
+		_ = OdooDefaults.Instance?.HpDirectoryRoot;
+		//_ = OdooDefaults.Instance?.HpEntryNameFilters;
+		//_ = OdooDefaults.Instance?.HpTypes;
+		//_ = OdooDefaults.Instance?.HpProperties;
+		//_ = OdooDefaults.Instance?.HpCategories;
+		//_ = OdooDefaults.Instance?.HpUsers;
+
+		_ = OdooDefaults.Instance?.ExtToFilter; //
+		_ = OdooDefaults.Instance?.ExtToType; //
+		_ = OdooDefaults.Instance?.ExtToProp;
+		_ = OdooDefaults.Instance?.ExtToCat; //
+		_ = OdooDefaults.Instance?.IdToProp;
+		_ = OdooDefaults.Instance?.IdToUser; //
+	}
+	public async void LoadHackMan()
+	{
+		await LoadOdooDefaults();
 		_treeHelper = HackApp.Services.GetRequiredService<TreeHelp>();
 		_treeHelper.InjectHFM(this);
 		_gridHelper = HackApp.Services.GetRequiredService<GridHelp>();
@@ -306,59 +325,62 @@ public sealed partial class HackFileManager : Page
 		{
 			case FileStatus.Lo:
 			{
-				
+				row.Background = UIStorage.OrangeBrush;
 				break;
 			}
 			case FileStatus.Ro:
 			{
+				row.Background = UIStorage.BlueBrush;
 				break;
 			}
 			case FileStatus.Ok:
 			{
-
+				goto default;
 				break;
 			}
 			case FileStatus.Nv:
 			{
-
+				goto default;
 				break;
 			}
 			case FileStatus.Lm:
 			{
+				goto default;
 				break;
 			}
 			case FileStatus.Dt:
 			{
-
+				row.Background = UIStorage.RedBrush;
 				break;
 			}
 			case FileStatus.Ds:
 			{
-
+				row.Background = UIStorage.RedBrush;
 				break;
 			}
 			case FileStatus.If:
 			{
-
+				goto default;
 				break;
 			}
 			case FileStatus.Ft:
 			{
-
+				goto default;
 				break;
 			}
 			case FileStatus.Cm:
 			{
-
+				row.Background = UIStorage.GreenBrush;
 				break;
 			}
 			case FileStatus.Co:
 			{
+				row.Background = UIStorage.GreenBrush;
 				break;
 			}
 			default:
 			{
-
+				row.Background = null;
 				break;
 			}
 		}
@@ -927,7 +949,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	public async Task ProcessDownloadsAsync(IEnumerable<IEnumerable<HpVersion>> versionBatches, CancellationToken cToken, int maxConcurrency = 2)
 	{
 		SemaphoreSlim throttler = new(maxConcurrency);
-        int size = versionBatches.TryGetNonEnumeratedCount(out int count) ? count : versionBatches?.Count() ?? 0;
+        int size = versionBatches.Count();
         List<Task> allTasks = new(size);
 
 		Dialog?.UpdateStatusDialogLoop(cToken);
@@ -1329,7 +1351,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		WindowHelper.CreateWindowAndPage<StatusDialog>(out var Dialog, out _);
 		HackFileManager.Dialog = Dialog;
 
-		var entryItem = OdooEntryList.SelectedItems as List<EntryRow>;
+		var entryItem = (OdooEntryList.SelectedItems as IList)?.Cast<EntryRow>().ToList() ?? [];
 		HashSet<HackFile> hackFiles = [];
 		hackFiles.AddAll(ProcessHacks(entryItem));
 		await CommitInternal(hackFiles);
