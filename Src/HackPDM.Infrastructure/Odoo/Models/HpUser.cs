@@ -25,6 +25,6 @@ public partial class HpUser : HpBaseModelTransport<HpUser>, IHpUserModel
 
 	[OdooProp(OdooFieldType.Boolean, "active")] public bool? active { get; set; }
 
-	[OdooProp(OdooFieldType.Many2one, "company_id")] public Many2One? company_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "company_id")] public Many2One? company_id { get; set; }
 	IMany2One? IHpUserModel.company_id { get =>(IMany2One?)company_id; set => company_id = (Many2One?)value; }
 }

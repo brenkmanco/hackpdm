@@ -17,7 +17,7 @@ public abstract partial class HpBaseModel
 {
 	// (MVVM) VIEW
 	public const int ROOT_OFFSET = 5;
-	[OdooProp(OdooFieldType.Integer, "id")] public int? id { get; set; }
+	[OdooProp(OdooFieldType.Integer, "id")] public int? Id { get; set; }
 
 	public static string[] UsualExcludedFields { get; set; } = [];
 	public static string[] UsualIncludedFields { get; set; } = [];
@@ -100,7 +100,7 @@ public abstract partial class HpBaseModel
 	    if (excludeFields.Count > 0) ExcludedFields = [.. excludeFields];
 
 	    if (!isNew)
-		    ht.Add("id", id);
+		    ht.Add("id", Id);
 
 	    return ht;
     }

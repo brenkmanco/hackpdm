@@ -319,7 +319,7 @@ public class HackFile : HackBaseFile, IHackFileModel
         if (hack != null && hack.Checksum == versionModel.checksum)
         {
             hack.HasRemoteVersion = true;
-            hack.HpVersionId = versionModel.id;
+            hack.HpVersionId = versionModel.Id;
         }
         return hack;
     }

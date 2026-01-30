@@ -29,9 +29,9 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 	[OdooProp(OdooFieldType.Char, "text_value")] public string? text_value { get; set; }
 	[OdooProp(OdooFieldType.Float, "number_value")] public float? number_value { get; set; }
 	[OdooProp(OdooFieldType.Boolean, "yesno_value")] public bool? yesno_value { get; set; }
-	[OdooProp(OdooFieldType.DateTime, "date_value")] public string? date_value { get; set; }
-	[OdooProp(OdooFieldType.Many2one, "version_id")] public Many2One? version_id { get; set; }
-	[OdooProp(OdooFieldType.Many2one, "prop_id")] public Many2One? prop_id { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "date_value")] public DateTime? date_value { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "version_id")] public Many2One? version_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "prop_id")] public Many2One? prop_id { get; set; }
 
 	IMany2One? IHpVersionPropertyModel.version_id { get => (IMany2One?)version_id; set => version_id = (Many2One?)value; }
 	IMany2One? IHpVersionPropertyModel.prop_id { get => (IMany2One?)prop_id; set => prop_id = (Many2One?)value; }
@@ -42,7 +42,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
         string textValue = null,
         float numberValue = default,
         bool yesnoValue = default,
-        string dateValue = null,
+        DateTime? dateValue = null,
         int versionId = 0,
         int propId = 0)
     {
@@ -60,7 +60,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
     public PropertyType GetValueType()
     {
         if (!string.IsNullOrEmpty(text_value) && text_value != "False") return PropertyType.Text;
-        if (!string.IsNullOrEmpty(date_value) && date_value != "False") return PropertyType.Date;
+        if (date_value is not null) return PropertyType.Date;
         if (number_value != 0) return PropertyType.Number;
         if (yesno_value is true) return PropertyType.Yesno;
         return PropertyType.None;
@@ -152,15 +152,15 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
                         HpVersionProperty vProp = new()
                         {
                             sw_config_name = prop.Item1 == "" ? null : prop.Item1,
-                            version_id = version.id != 0 ? version.id : throw new Exception("version id not defined"),
+                            version_id = version.Id != 0 ? version.Id : throw new Exception("version id not defined"),
                         };
-                        if (hpProperty is not null) vProp.prop_id = hpProperty.id ?? 0; 
+                        if (hpProperty is not null) vProp.prop_id = hpProperty.Id ?? 0; 
                         switch (prop.Item3)
                         {
-                            case "text": vProp.text_value        = (string)prop.Item4; break;
-                            case "date": vProp.date_value        = (string)prop.Item4; break;
-                            case "yesno": vProp.yesno_value      = (bool)prop.Item4; break;
-                            case "number": vProp.number_value    = (float)prop.Item4; break;
+                            case "text": vProp.text_value        = (string?)prop.Item4; break;
+                            case "date": vProp.date_value        = (DateTime?)prop.Item4; break;
+                            case "yesno": vProp.yesno_value      = (bool?)prop.Item4; break;
+                            case "number": vProp.number_value    = (float?)prop.Item4; break;
                         }
                         isSuccessful = true;
                         Debug.WriteLine($"prop: {prop.Item2} | {isSuccessful}");
@@ -173,7 +173,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
             }
             catch (Exception e)
             {
-                Debug.WriteLine($"unable to create properties for {version.id}\n{e}");
+                Debug.WriteLine($"unable to create properties for {version.Id}\n{e}");
                 return;
             }
         }

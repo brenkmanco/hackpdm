@@ -15,9 +15,9 @@ public enum OdooFieldType
     Binary,        // byte[] (attachments, images)          |
     //                                                      |      
     // Relational types                                     |
-    Many2one,      // foreign key to another model ---------|
-    One2many,      // collection of related records         |
-    Many2many,     // many-to-many relation ----------------|
+    Many2One,      // foreign key to another model ---------|
+    One2Many,      // collection of related records         |
+    Many2Many,     // many-to-many relation ----------------|
     //                                                      |
     // Special / computed types                             |
     Selection,     // enum-like choice field                |

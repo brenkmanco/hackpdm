@@ -15,11 +15,11 @@ public interface IHpVersionModel : IHpOdooRecord
     [OdooProp(OdooFieldType.Char, "checksum")] public string? checksum {get;set;}
     [OdooProp(OdooFieldType.Char, "windows_complete_name")] public string? windows_complete_name { get; set; }
     
-    [OdooProp(OdooFieldType.Many2one, "entry_id")] public IMany2One? entry_id {get;set;}
-    [OdooProp(OdooFieldType.Many2one, "node_id")] public IMany2One? node_id {get;set;}
-	[OdooProp(OdooFieldType.Many2one, "dir_id")] public IMany2One? dir_id {get;set;}
-    [OdooProp(OdooFieldType.Many2one, "checkout_user")] public IMany2One? checkout_user {get;set;}
-    [OdooProp(OdooFieldType.Many2one, "attachment_id")] public IMany2One? attachment_id {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "entry_id")] public IMany2One? entry_id {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "node_id")] public IMany2One? node_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "dir_id")] public IMany2One? dir_id {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "checkout_user")] public IMany2One? checkout_user {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "attachment_id")] public IMany2One? attachment_id {get;set;}
 
     [OdooProp(OdooFieldType.DateTime, "file_modify_stamp")] public DateTime? file_modify_stamp {get;set;}
     

@@ -6,7 +6,7 @@ namespace HackPDM.Domain.OdooModels.Models;
 
 public interface IHpOdooRecord
 {
-    [OdooProp(OdooFieldType.Integer, "id")] public int? id { get; set; }
+    [OdooProp(OdooFieldType.Integer, "id")] public int? Id { get; set; }
 }
 public interface IMany2One : IHpOdooRecord { public string? name { get; set; } }
 public interface IMultiRecord { public IHpOdooRecord?[]? Ids { get; set; } }

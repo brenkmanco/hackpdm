@@ -25,8 +25,8 @@ namespace HackPDM.Infrastructure.Odoo.Models;
 [OdooModel(OdooDefaultsConstants.HP_VERSION_RELATIONSHIP_NAME, OdooDefaultsConstants.HP_VERSION_RELATIONSHIP)]
 public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelationship>, IHpVersionRelationshipModel
 {
-    [OdooField(OdooFieldType.Many2one)] public Many2One? parent_id { get; set; }
-	[OdooField(OdooFieldType.Many2one)] public Many2One? child_id { get; set; }
+    [OdooProp(OdooFieldType.Many2One, "parent_id")] public Many2One? parent_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "child_id")] public Many2One? child_id { get; set; }
 	IMany2One? IHpVersionRelationshipModel.parent_id { get => (IMany2One?)parent_id; set => parent_id = (Many2One?)value; }
 	IMany2One? IHpVersionRelationshipModel.child_id { get => (IMany2One?)child_id; set => child_id = (Many2One?)value; }
 
@@ -68,8 +68,8 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
                 hvrCreate = [.. hvrCreate, .. 
                     getVersions.Select(v => new HpVersionRelationship()
                     {
-                        parent_id = version.id ?? 0,
-                        child_id = v.id ?? 0,
+                        parent_id = version.Id ?? 0,
+                        child_id = v.Id ?? 0,
                     })
                 ];
             }

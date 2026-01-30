@@ -33,7 +33,7 @@ public static class ExtensionOdoo
     private static readonly XmlRpcResponseDeserializer Deserializer = new();
     
     public static ArrayList GetIDs(this IEnumerable<HpBaseModel> models)
-        => models.Select(model => model.id).ToArrayList();
+        => models.Select(model => model.Id).ToArrayList();
     
     public async static Task<XmlRpcResponse> SendAsync(this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null)
     {
@@ -128,7 +128,7 @@ public static class ExtensionOdoo
 		    hackFiles = [.. hackResults.SkipSelect<HackResultTree.ResultNode, HackFile>(r => (r.Value?.Hack is null, r.Value?.Hack!))];
 		    return true;
 	    }
-	    public bool GetVersionFromLocal(out HpVersion? versionModel)
+	    public async Task<(bool, HpVersion?)> GetVersionFromLocal()
 	    {
 		    string filePath = FileOperations.WindowsToOdooPath(hackFile.RelativePath);
 		    ArrayList arrList =
@@ -139,9 +139,9 @@ public static class ExtensionOdoo
 				    new ArrayList() { "directory_complete_name", "=", filePath },
 			    }
 		    ];
-		    versionModel = HpVersion.GetRecordsBySearch(arrList, ["file_contents", "preview_image"])?[0];
+		    HpVersion? versionModel = (await HpVersion.GetRecordsBySearchAsync(arrList, ["file_contents", "preview_image"]))?[0];
 
-		    return versionModel != null;
+		    return (versionModel != null, versionModel);
 	    }
 	    public static List<HackFile> FilePathsToHackWithDependencies(params string[] filePaths)
 	    {
@@ -182,14 +182,14 @@ public static class ExtensionOdoo
 		    }
 		    return hackFiles;
 	    }
-	    public bool HasLocalVersion(out HpVersion versionModel)
+	    public async Task<(bool, HpVersion?)> HasLocalVersion()
 	    {
-		    versionModel = null;
+			HpVersion? versionModel = null;
 		    if (hackFile?.HasRemoteVersion == null || !(bool)hackFile.HasRemoteVersion ||
-		        hackFile.HpVersionId == null) return false;
+		        hackFile.HpVersionId == null) return (false, versionModel);
 		    
-		    versionModel = HpVersion.GetRecordById((int)hackFile.HpVersionId, HpVersion.UsualExcludedFields);
-		    return true;
+		    versionModel = await HpVersion.GetRecordByIdAsync((int)hackFile.HpVersionId, HpVersion.UsualExcludedFields);
+		    return (true, versionModel);
 	    }
 	    public static List<HackFile> FolderPathToHackWithDependencies(string pathway, SearchOption options = SearchOption.AllDirectories)
 	    {
@@ -327,9 +327,9 @@ public static class OdooFieldExtension
 		{ OdooFieldType.Date,       new[] { typeof(DateTime) } },
 		{ OdooFieldType.DateTime,   new[] { typeof(DateTime) } },
 		{ OdooFieldType.Binary,     new[] { typeof(string), typeof(byte[]) } }, // Odoo sometimes base64 encodes
-        { OdooFieldType.Many2one,   new[] { typeof(object[]), typeof(ValueTuple<int,string>) } },
-		{ OdooFieldType.One2many,   new[] { typeof(int[]), typeof(ArrayList) } },
-		{ OdooFieldType.Many2many,  new[] { typeof(int[]), typeof(ArrayList) } },
+        { OdooFieldType.Many2One,   new[] { typeof(object[]), typeof(ValueTuple<int,string>) } },
+		{ OdooFieldType.One2Many,   new[] { typeof(int[]), typeof(ArrayList) } },
+		{ OdooFieldType.Many2Many,  new[] { typeof(int[]), typeof(ArrayList) } },
 		{ OdooFieldType.Selection,  new[] { typeof(string), typeof(int) } },
 		{ OdooFieldType.Reference,  new[] { typeof(string), typeof(object[]) } },
 		{ OdooFieldType.Serialized, new[] { typeof(Dictionary<string,object>), typeof(string) } },
@@ -359,11 +359,11 @@ public static class OdooFieldExtension
 		OdooFieldType.Binary
 			=> value is string or byte[],
 
-		OdooFieldType.Many2one
+		OdooFieldType.Many2One
 			=> value is object[],
 
-		OdooFieldType.One2many
-			or OdooFieldType.Many2many
+		OdooFieldType.One2Many
+			or OdooFieldType.Many2Many
 			=> value is int[] or System.Collections.ArrayList,
 
 		OdooFieldType.Selection
@@ -496,10 +496,10 @@ public static class OdooFieldHelpers
 				// Date
 				OdooFieldType.Date => ConvertDate(value),
 				// ValueTuple<int,string>?
-				OdooFieldType.Many2one => ConvertMany2one(value),
+				OdooFieldType.Many2One => ConvertMany2one(value),
 				// int[]
-				OdooFieldType.One2many
-					or OdooFieldType.Many2many => ConvertOne2many(value),
+				OdooFieldType.One2Many
+					or OdooFieldType.Many2Many => ConvertOne2many(value),
 				// byte[]
 				OdooFieldType.Binary => ConvertBinary(value),
 				OdooFieldType.Float => ConvertFloat(value),
@@ -551,11 +551,11 @@ public static class OdooFieldHelpers
 			OdooFieldType.Binary
 				=> value is null or string or byte[],
 
-			OdooFieldType.Many2one
+			OdooFieldType.Many2One
 				=> value is null or object[],
 
-			OdooFieldType.One2many
-				or OdooFieldType.Many2many
+			OdooFieldType.One2Many
+				or OdooFieldType.Many2Many
 				=> value is null or int[] or ArrayList,
 
 			OdooFieldType.Selection
@@ -669,12 +669,12 @@ public static class OdooFieldHelpers
 				value,
 				FromObjectArray,
 				out var arr))
-			return new Many2One { id=0, name="" };
+			return new Many2One { Id=0, name="" };
 
 		var id = ConvertInteger(arr?.Item1 ?? 0);
 		var name = ConvertString(arr?.Item2 ?? "") ?? string.Empty;
 
-		return new Many2One { id = id, name = name }; ;
+		return new Many2One { Id = id, name = name }; ;
 	}
 	// One2many/Many2many -> int[]
 	public static One2Many ConvertOne2many(object value)

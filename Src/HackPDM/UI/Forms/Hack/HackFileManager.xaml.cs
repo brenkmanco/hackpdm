@@ -744,7 +744,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 			HpDirectory[] directories = await HpDirectory.CreateNew(paths);
 			HpDirectory lastDirectoryModel = directories.Last() ?? throw new Exception($"{HpDirectory.GetHpModel()} didn't create any records");
             // create an HpEntry that doesn't exist in odoo
-            (entryReturn, HpEntry? entry) = await HpEntry.GetFallbackCreateEntryAsync(hackFile, lastDirectoryModel.id ?? 0);
+            (entryReturn, HpEntry? entry) = await HpEntry.GetFallbackCreateEntryAsync(hackFile, lastDirectoryModel.Id ?? 0);
 
 			switch (entryReturn)
 			{
@@ -778,7 +778,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 
 			// create an HpVersion that doesn't exist in odoo
 			HpVersion version = await OdooDefaults.CreateNewVersion(hackFile, entry);
-			if (version.id is 0) entryReturn = EntryReturnType.Failed;
+			if (version.Id is 0) entryReturn = EntryReturnType.Failed;
 			return (entryReturn, version);
         }
         catch (Exception e)
@@ -792,7 +792,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	{
 		foreach (HpEntry entry in entries)
 		{
-			if (entry.checkout_user?.id is null or 0)
+			if (entry.checkout_user?.Id is null or 0)
 			{
 				yield return entry;
 			}
@@ -996,13 +996,13 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		// directory only needs ID set to find that record's entries
 		HpDirectory directoryModel = new()
 		{
-			id = data?.DirectoryId ?? 0,
+			Id = data?.DirectoryId ?? 0,
 			name = data?.Name ?? "",			
 		};
 
 		lock (lockObject)
 		{
-			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Retrieving all entries and their and their associated dependencies within directory ({directoryModel.name}, id: {directoryModel.id})");
+			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Retrieving all entries and their and their associated dependencies within directory ({directoryModel.name}, id: {directoryModel.Id})");
 		}
 
 		Dialog?.IsInProcess = true;
@@ -1629,7 +1629,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 			}
 		}
 
-		HpEntry[] entries = HpEntry.GetRecordsByIds(entryIDs, excludedFields: ["type_id", "cat_id", "checkout_node"]);
+		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync(entryIDs, excludedFields: ["type_id", "cat_id", "checkout_node"]);
 		if (entries is null || entries.Length == 0)
 		{
 			MessageBox.ShowAsync("No entries to delete");
@@ -1657,7 +1657,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	//
 	private async void History_Click_Download(object sender, DoubleTappedRoutedEventArgs e)
 	{
-		var version = GetVersionFromHistory();
+		var version = await GetVersionFromHistory();
 		FileInfo file = new(Path.Combine(version.WinPathway, version.name));
 		if (FileOperations.SameChecksum(file, version.checksum))
 		{
@@ -1709,12 +1709,12 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		HpEntry entryModel = (await HpEntry.GetRecordsByIdsAsync([versionModel.entry_id])).First();
 		ArrayList versions = await GetVersionList(item.Version);
 		HashSet<int> vIds = versions.ToHashSet<int>();
-		vIds.Add(versionModel.id ?? 0);
+		vIds.Add(versionModel.Id ?? 0);
 		string vIdsText = string.Join(", ", vIds);
 		string eText = entryModel.latest_version_id == item.Version ? $"You are trying to download the latest version and dependencies. Continue?" : "You are trying to download a previous version and dependencies. Continue?";
 		string vText = $"version:\n" +
 					   $"\tName = {versionModel.name}\n" +
-					   $"\tID = {versionModel.id}\n" +
+					   $"\tID = {versionModel.Id}\n" +
 					   $"\tSize = {versionModel.file_size}\n" +
 					   $"\tChecksum = {versionModel.checksum}\n" +
 					   $"\tAttachID = {versionModel.attachment_id}\n" +
@@ -1827,17 +1827,17 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 			Debug.WriteLine("Unable to find search selection");
 		}
 	}
-	private void DownloadOpen(bool toTemp = false)
+	private async void DownloadOpen(bool toTemp = false)
 	{
-		var version = DownloadHistory(toTemp);
+		var version = await DownloadHistory(toTemp);
 		if (version == null)
 			return;
 
 		OpenLocalFile(Path.Combine(version.WinPathway, version.name));
 	}
-	private HpVersion? DownloadHistory(bool toTemp = false)
+	private async Task<HpVersion?> DownloadHistory(bool toTemp = false)
 	{
-		var version = GetVersionFromHistory();
+		var version = await GetVersionFromHistory();
 		if (version is null) return null;
 
 		if (toTemp)
@@ -1864,7 +1864,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	}
 	private async void LocalMoveEntry(bool toTemp = false)
 	{
-		var version = GetVersionFromHistory();
+		var version = await GetVersionFromHistory();
 		if (version == null) return;
 
 		string tempFilePath = Path.Combine(StorageBox.TemporaryPath ?? "", version.name ?? "");
@@ -1923,7 +1923,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		}
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
-	private HpVersion? GetVersionFromHistory()
+	private async Task<HpVersion?> GetVersionFromHistory()
 	{
 		if (OdooHistory.SelectedItems.Count < 1)
 			return null;
@@ -1932,7 +1932,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 
 		if (item?.Version is null or 0) return null;
 
-		var version = HpVersion.GetRecordById(item!.Version, HpVersion.UsualExcludedFields);
+		var version = await HpVersion.GetRecordByIdAsync(item!.Version, HpVersion.UsualExcludedFields);
 		version.WinPathway = Path.Combine(HackDefaults.Instance.PwaPathAbsolute, version.WinPathway);
 		return version;
 	}
@@ -1981,7 +1981,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		HpVersionProperty[] vProps = null;
 		bool deletedVersionProps = false;
 
-		vProps = HpVersionProperty.GetRecordsBySearch([new ArrayList() { "version_id", "in", ids }]);
+		vProps = await HpVersionProperty.GetRecordsBySearchAsync([new ArrayList() { "version_id", "in", ids }]);
 		if (vProps is not null
 			&& vProps.Count() > 0)
 		{
@@ -2017,8 +2017,8 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		bool deletedVersionRelParent = false;
 		bool deletedVersionRelChild = false;
 
-		vRelationsParent = HpVersionRelationship.GetRecordsBySearch([new ArrayList() { "parent_id", "in", ids }]);
-		vRelationsChild = HpVersionRelationship.GetRecordsBySearch([new ArrayList() { "child_id", "in", ids }]);
+		vRelationsParent = await HpVersionRelationship.GetRecordsBySearchAsync([new ArrayList() { "parent_id", "in", ids }]);
+		vRelationsChild = await HpVersionRelationship.GetRecordsBySearchAsync([new ArrayList() { "child_id", "in", ids }]);
 
 		if (vRelationsParent is not null
 			&& vRelationsParent.Count() > 0)
@@ -2096,7 +2096,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		HpVersion[] versions = HpEntry.GetRelatedRecordByIds<HpVersion>(ids, "version_ids", includedFields: ["ID"]);
 		IrAttachment[] irAttachments = null;
 
-		ArrayList vIds = versions?.Select(v => v.id).ToArrayList() ?? [];
+		ArrayList vIds = versions?.Select(v => v.Id).ToArrayList() ?? [];
 
 		bool deletedIrAttachments = false;
 		bool deletedVersions = false;
@@ -2107,7 +2107,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		{
 			deletedVersionsProps = await PermanentDeleteVersionProperty(vIds);
 			deletedVersionsRel = await PermanentDeletedVersionRelationships(vIds);
-			irAttachments = IrAttachment.GetRecordsBySearch(
+			irAttachments = await IrAttachment.GetRecordsBySearchAsync(
 			[
 				new ArrayList() { "res_id", "in", vIds },
 				new ArrayList() { "res_model", "=", HpVersion.GetHpModel()},
@@ -2157,7 +2157,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		//HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
 
 		if (entries is null || entries.Length < 1) return;
-		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entries.Select(entry => entry.latest_version_id?.id ?? 0)]);
+		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entries.Select(entry => entry.latest_version_id?.Id ?? 0)]);
 
 		newIds.AddRange(entryIDs);
 		newIds = newIds.ToHashSet<int>().ToArrayList();
@@ -2179,7 +2179,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	{
 		HpEntry[]? entriesTemp = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: ["latest_version_id"]);
 
-		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp.Select(e => e.latest_version_id?.id ?? 0)]);
+		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp.Select(e => e.latest_version_id?.Id ?? 0)]);
 
 		newIds.AddRange(entryIDs);
 		newIds = newIds.ToHashSet<int>().ToArrayList();
@@ -2200,7 +2200,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		if (entryIDs is null or { Count: < 1 }) return;
 
 		var entriesTemp = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: ["latest_version_id"]);
-		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp?.Select(e => e.latest_version_id?.id ?? 0) ?? []]);
+		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp?.Select(e => e.latest_version_id?.Id ?? 0) ?? []]);
 
 		newIds.AddRange(entryIDs);
 		newIds = newIds.ToHashSet<int>().ToArrayList();
@@ -2230,9 +2230,9 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	}
 	internal async Task LogicalDeleteInternal(ArrayList entryIDs)
 	{
-		HpEntry[]? entriesTemp = HpEntry.GetRecordsByIds(entryIDs, includedFields: ["latest_version_id"]);
+		HpEntry[]? entriesTemp = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: ["latest_version_id"]);
 
-		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp.Select(e => e.latest_version_id?.id ?? 0)]);
+		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp?.Select(e => e.latest_version_id?.Id ?? 0) ?? []]);
 
 		newIds.AddRange(entryIDs);
 		newIds = newIds.ToHashSet<int>().ToArrayList();

@@ -1,0 +1,8 @@
+{
+  "include": ["addons", "odoo-app/addons", "odoo-app/odoo"],
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "off",
+  "extraPaths": [
+    "odoo-app"
+  ]
+}

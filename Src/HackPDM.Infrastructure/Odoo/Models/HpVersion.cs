@@ -32,15 +32,15 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
 	[OdooProp(OdooFieldType.Char, "checksum")] public string? checksum { get; set; }
     [OdooProp(OdooFieldType.Char, "windows_complete_name")] public string? windows_complete_name { get; set; }
     
-	[OdooProp(OdooFieldType.Many2one, "entry_id")] public Many2One? entry_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "entry_id")] public Many2One? entry_id { get; set; }
 	IMany2One? IHpVersionModel.entry_id { get =>(IMany2One?)entry_id; set => entry_id = (Many2One?)value; }
-	[OdooProp(OdooFieldType.Many2one, "node_id")] public Many2One? node_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "node_id")] public Many2One? node_id { get; set; }
 	IMany2One? IHpVersionModel.node_id { get =>(IMany2One?)node_id; set => node_id = (Many2One?)value; }
-	[OdooProp(OdooFieldType.Many2one, "dir_id")] public Many2One? dir_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "dir_id")] public Many2One? dir_id { get; set; }
 	IMany2One? IHpVersionModel.dir_id { get =>(IMany2One?)dir_id; set => dir_id = (Many2One?)value; }
-	[OdooProp(OdooFieldType.Many2one, "checkout_user")] public Many2One? checkout_user { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "checkout_user")] public Many2One? checkout_user { get; set; }
 	IMany2One? IHpVersionModel.checkout_user { get => (IMany2One?)checkout_user; set => checkout_user = (Many2One?)value; }
-	[OdooProp(OdooFieldType.Many2one, "attachment_id")] public Many2One? attachment_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "attachment_id")] public Many2One? attachment_id { get; set; }
 	IMany2One? IHpVersionModel.attachment_id { get =>(IMany2One?)attachment_id; set => attachment_id = (Many2One?)value; }
 
 	[OdooProp(OdooFieldType.DateTime, "file_modify_stamp")] public DateTime? file_modify_stamp { get; set; }
@@ -85,11 +85,11 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
 
     public async Task<bool> GetPreviewImage()
 	{
-		if (preview_image is { Length: > 0 } && id != 0) 
+		if (preview_image is { Length: > 0 } && Id != 0) 
 		{
 			// reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
 			// which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
-			ArrayList list = await OClient.ReadAsync(HpModel, [this.id], ["preview_image"]);
+			ArrayList list = await OClient.ReadAsync(HpModel, [this.Id], ["preview_image"]);
 			preview_image = FileOperations.ConvertFromBase64((list[0] as Hashtable)?["preview_image"] as string);									
 		}
 		return preview_image is { Length: > 0 };
@@ -145,13 +145,13 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
     {
         const string fileContents = "file_contents";
     
-        if (this.IsRecord || this.id != 0)
+        if (this.IsRecord || this.Id != 0)
         {
             // reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
             // which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
             if (file_size != 0)
             {
-                return ((OClient.Read(HpModel, [this.id], [fileContents])?[0] as Hashtable)?[fileContents]) as byte[];
+                return ((OClient.Read(HpModel, [this.Id], [fileContents])?[0] as Hashtable)?[fileContents]) as byte[];
             }
         }
         return null;
@@ -170,7 +170,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         List<HpVersion> processVersions = [.. versions.TakeAndRemove(version 
             => version.file_contents is not { Length: 0 })];
                 
-        ArrayList ids = new(processVersions.Select(v => v.id).ToArray());
+        ArrayList ids = new(processVersions.Select(v => v.Id).ToArray());
         //string[] fileContentsBase64 = 
         //ArrayList results = OClient.Read(GetHpModel(), ids, [fileContents], 60000);
         HpVersion[]? readyVersions = await GetRecordsByIdsAsync(ids, includedFields: fileContents);
@@ -212,8 +212,8 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
             HackFile hack = new(versions[i].name, null);
             var checkUser = versions[i].checkout_user;
                     
-            hack.Owner = (checkUser?.id is not null)
-                ? OdooDefaults.Instance?.OdooId == checkUser?.id
+            hack.Owner = (checkUser?.Id is not null)
+                ? OdooDefaults.Instance?.OdooId == checkUser?.Id
 				: null;
 
             if (versions[i] != null && versions[i].file_contents is { Length: > 0 })
@@ -270,14 +270,14 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         }
         return version;
     }
-    public static HpVersionProperty[]? GetProperties(HpVersion version)
+    public static async Task<HpVersionProperty[]?> GetProperties(HpVersion version)
     {
         const string versionPropField = "version_property_ids";
-        if (version.IsRecord || version.id != 0)
+        if (version.IsRecord || version.Id != 0)
         {
-            ArrayList list = OClient.Read(GetHpModel(), [version.id], [versionPropField]);
+            ArrayList list = await OClient.ReadAsync(GetHpModel(), [version.Id], [versionPropField]);
             ArrayList? values = (list[0] as Hashtable)?[versionPropField] as ArrayList;
-            return HpBaseModelTransport<HpVersionProperty>.GetRecordsByIds(values);
+            return await HpBaseModelTransport<HpVersionProperty>.GetRecordsByIdsAsync(values);
         }
         return null;
     }
@@ -304,13 +304,13 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         return false;
     }
     //public static int []? GetChildren( int id ) => GetRelatedIdsById( [ id ], "child_ids" );
-    public static HpVersion [] GetChildren ( int id )
+    public static async Task<HpVersion []?> GetChildren ( int id )
     {
-        HpVersionRelationship[] versionRelationships = GetRelatedRecordByIds<HpVersionRelationship>( [id], "child_ids", includedFields: ["child_id"] );
-        if (versionRelationships is null || versionRelationships.Length == 0) return null;
+        HpVersionRelationship[]? versionRelationships = await GetRelatedRecordByIdsAsync<HpVersionRelationship>( [id], "child_ids", includedFields: ["child_id"] );
+        if (versionRelationships is not {Length: > 0 } ) return null;
     
         ArrayList ids = versionRelationships.Select(vRel => vRel.child_id).ToArrayList();
-        HpVersion[] versions = GetRecordsByIds(ids, includedFields: ["entry_id"]);
+        HpVersion[]? versions = await GetRecordsByIdsAsync(ids, includedFields: ["entry_id"]);
         return versions;
     }
     internal static HpVersion? PrepareCreation(HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType = HashedValueStoring.None)
@@ -320,9 +320,9 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         
         HpVersion newVersion = new()
         {
-            name = $"{entry.id}.{hackFile.Name}",
+            name = $"{entry.Id}.{hackFile.Name}",
             dir_id = entry.dir_id as Many2One,
-            entry_id = entry.id,
+            entry_id = entry.Id,
             file_ext = hackFile.TypeExt[1..].ToLower(),
             WinPathway = hackFile.FullPath,
         };
@@ -346,14 +346,14 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         HpVersion newVersion = PrepareCreation(hackFile, entry, hashStoreType);
         await newVersion.CreateAsync( false, ["file_ext"] );
     
-        return newVersion.id == 0 ? null : newVersion;
+        return newVersion.Id == 0 ? null : newVersion;
     }
-    internal static async Task<HpVersion[]> CreateAllNew( params (HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType)[] data)
+    internal static async Task<HpVersion[]?> CreateAllNew( params (HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType)[] data)
     {
         ArrayList versions = data.Select(d => PrepareCreation(d.hackFile, d.entry, d.hashStoreType)).ToArrayList();
     
         ArrayList ids = await MultiCreateAsync<HpVersion>(versions, false);
-        return GetRecordsByIds(ids, excludedFields: UsualExcludedFields);
+        return await GetRecordsByIdsAsync(ids, excludedFields: UsualExcludedFields);
     }
     public static HpVersion[] GetFromPaths(params string[] fullPaths)
     {

@@ -20,7 +20,7 @@ public partial class IrAttachment : HpBaseModelTransport<IrAttachment>, IIrAttac
 
 	[OdooProp(OdooFieldType.Integer, "file_size")] public int? file_size { get; set; }
 
-	[OdooProp(OdooFieldType.Many2one, "res_id")] public Many2One? res_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "res_id")] public Many2One? res_id { get; set; }
 	IMany2One? IIrAttachment.res_id { get =>(IMany2One?)res_id; set => res_id = (Many2One?)value; }
 	string IIrAttachment._fileContentsBase64 { get; set; }
 
@@ -51,11 +51,11 @@ public partial class IrAttachment : HpBaseModelTransport<IrAttachment>
     public string DownloadContents()
     {
         const string datas = "datas";
-        if (this.IsRecord || this.id != 0)
+        if (this.IsRecord || this.Id != 0)
         {
             // reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
             // which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
-            this._fileContentsBase64 = (string)((Hashtable)OdooClient<IrAttachment>.Read([this.id], [datas])[0])[datas];
+            this._fileContentsBase64 = (string)((Hashtable)OdooClient<IrAttachment>.Read([this.Id], [datas])[0])[datas];
             return this._fileContentsBase64;
         }
         return null;

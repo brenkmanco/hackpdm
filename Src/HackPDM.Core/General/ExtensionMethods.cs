@@ -649,7 +649,7 @@ public static class ExtensionConvertMethods
 		ArrayList ids = [];
 		foreach (T model in source)
 		{
-			ids.Add(model.id);
+			ids.Add(model.Id);
 		}
 		return ids;
 	}

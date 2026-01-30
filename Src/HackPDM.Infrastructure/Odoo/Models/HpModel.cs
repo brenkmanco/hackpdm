@@ -17,9 +17,9 @@ namespace HackPDM.Infrastructure.Odoo.Models;
 
 public class HpModel : IHpOdooRecord
 {
-	public int? id { get; set; }
-	public static implicit operator int?(HpModel? model) => model?.id;
-	public static implicit operator HpModel?(int? id) => id is null ? null : new() { id = id };
+	public int? Id { get; set; }
+	public static implicit operator int?(HpModel? model) => model?.Id;
+	public static implicit operator HpModel?(int? id) => id is null ? null : new() { Id = id };
 }
 public class Many2One : HpModel
 {
@@ -27,41 +27,36 @@ public class Many2One : HpModel
 
 	public void Deconstruct(out HpModel? id, out string? name)
 	{
-		id = this.id;
+		id = this.Id;
 		name = this.name;
 	}
 	public void Deconstruct(out string? name, out HpModel? id)
 	{
 		name = this.name;
-		id = this.id;
+		id = this.Id;
 	}
 	public void Deconstruct(out int? id, out string? name)
 	{
-		id = this.id;
+		id = this.Id;
 		name = this.name;
 	}
 	public void Deconstruct(out string? name, out int? id)
 	{
 		name = this.name;
-		id = this.id;
+		id = this.Id;
 	}
 
-	public static implicit operator IMany2One(Many2One? model)
-	{
-
-	}
-
-	public static implicit operator int?(Many2One? model) => model?.id;
-	public static implicit operator Many2One?(int? id) => id is null ? null : new() { id = id };
+	public static implicit operator int?(Many2One? model) => model?.Id;
+	public static implicit operator Many2One?(int? id) => id is null ? null : new() { Id = id };
 
 	public static implicit operator string?(Many2One? model) => model?.name;
 	public static implicit operator Many2One?(string? name) => name is null ? null : new() { name = name };
 
-	public static implicit operator (int? id, string? name)?(Many2One? model) => (model?.id, model?.name);
-	public static implicit operator Many2One?((int? id, string? name)? tuple) => tuple?.id is null && tuple?.name is null ? null : new() { id = tuple?.id, name = tuple?.name };
+	public static implicit operator (int? id, string? name)?(Many2One? model) => (model?.Id, model?.name);
+	public static implicit operator Many2One?((int? id, string? name)? tuple) => tuple?.id is null && tuple?.name is null ? null : new() { Id = tuple?.id, name = tuple?.name };
 
-	public static implicit operator (string? name, int? id)?(Many2One? model) => (model?.name, model?.id);
-	public static implicit operator Many2One?((string? name, int? id)? tuple) => tuple?.id is null && tuple?.name is null ? null : new() { id = tuple?.id, name = tuple?.name };
+	public static implicit operator (string? name, int? id)?(Many2One? model) => (model?.name, model?.Id);
+	public static implicit operator Many2One?((string? name, int? id)? tuple) => tuple?.id is null && tuple?.name is null ? null : new() { Id = tuple?.id, name = tuple?.name };
 }
 public class MultiRecord : IList<HpModel?>, IMultiRecord
 {
@@ -126,24 +121,28 @@ public class MultiRecord : IList<HpModel?>, IMultiRecord
 	}
 
 	public static implicit operator int?[]?(MultiRecord? multi) => [.. multi?.Ids ?? []];
-	public static implicit operator MultiRecord?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!]};
+	public static implicit operator MultiRecord?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { Id = id }))!]};
 
-	public static implicit operator int[](MultiRecord multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.id ?? 0) ?? []];
+	public static implicit operator int[](MultiRecord multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.Id ?? 0) ?? []];
 	public static implicit operator MultiRecord(int[] multi) => multi;
 }
 public class Many2Many : MultiRecord 
 {
 	public static implicit operator int?[]?(Many2Many? multi) => [.. multi?.Ids ?? []];
-	public static implicit operator Many2Many?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
+	public static implicit operator Many2Many?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { Id = id }))!] };
 
-	public static implicit operator int[](Many2Many multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.id ?? 0) ?? []];
+	public static implicit operator int[](Many2Many multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.Id ?? 0) ?? []];
 	public static implicit operator Many2Many(int[] multi) => multi;
 }
 public class One2Many : MultiRecord 
 {
 	public static implicit operator int?[]?(One2Many? multi) => [.. multi?.Ids ?? []];
-	public static implicit operator One2Many?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
+	public static implicit operator One2Many?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { Id = id }))!] };
 
-	public static implicit operator int[](One2Many multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.id ?? 0) ?? []];
+	public static implicit operator int[](One2Many multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.Id ?? 0) ?? []];
 	public static implicit operator One2Many(int[] multi) => multi;
+}
+public static class Test<T> where T : HpBaseModelTransport<T>, new()
+{
+
 }

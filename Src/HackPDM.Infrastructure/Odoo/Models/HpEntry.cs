@@ -29,20 +29,20 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 {
 	[OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
 	[OdooProp(OdooFieldType.Char, "windows_complete_name")] public string? windows_complete_name { get; set; }
-	[OdooProp(OdooFieldType.DateTime, "checkout_date")] public string? checkout_date {get;set;}
+	[OdooProp(OdooFieldType.DateTime, "checkout_date")] public DateTime? checkout_date {get;set;}
 	[OdooProp(OdooFieldType.Boolean, "deleted")] public bool? deleted {get;set;}
-	[OdooProp(OdooFieldType.Many2one, "latest_version_id")] public Many2One? latest_version_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "latest_version_id")] public Many2One? latest_version_id {get;set;}
 	IMany2One? IHpEntryModel.latest_version_id { get =>(IMany2One?)latest_version_id; set => latest_version_id = (Many2One?)value; }
-	[OdooProp(OdooFieldType.Many2one, "dir_id")] public Many2One? dir_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "dir_id")] public Many2One? dir_id {get;set;}
 	IMany2One? IHpEntryModel.dir_id { get =>(IMany2One?)dir_id; set => dir_id = (Many2One?)value; }
-	[OdooProp(OdooFieldType.Many2one, "type_id")] public Many2One? type_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "type_id")] public Many2One? type_id {get;set;}
 	IMany2One? IHpEntryModel.type_id { get =>(IMany2One?)type_id; set => type_id = (Many2One?)value; }
-	[OdooProp(OdooFieldType.Many2one, "checkout_user")] public Many2One? checkout_user {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "checkout_user")] public Many2One? checkout_user {get;set;}
 	IMany2One? IHpEntryModel.checkout_user { get =>(IMany2One?)checkout_user; set => checkout_user = (Many2One?)value; }
-	[OdooProp(OdooFieldType.Many2one, "checkout_node")] public Many2One? checkout_node {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "checkout_node")] public Many2One? checkout_node {get;set;}
 	IMany2One? IHpEntryModel.checkout_node { get =>(IMany2One?)checkout_node; set => checkout_node = (Many2One?)value; }
 	
-	[OdooProp(OdooFieldType.Many2one, "cat_id")] public Many2One? cat_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "cat_id")] public Many2One? cat_id {get;set;}
 	IMany2One? IHpEntryModel.cat_id { get =>(IMany2One?)cat_id; set => cat_id = (Many2One?)value; }
 
 	public bool IsLatest { get; }
@@ -166,21 +166,21 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 
 		return list is not null and {Count: > 0 } ? ((list[0] as Hashtable)?["latest_version_id"] as ArrayList)?[0] is int id ? id : 0 : 0;
 	}
-	public bool CanCheckOut() => (checkout_user?.id is null or 0) && deleted is false;
+	public bool CanCheckOut() => (checkout_user?.Id is null or 0) && deleted is false;
     public bool CanUnCheckOut() => (checkout_user is not null) && checkout_user == OdooDefaults.Instance.OdooId;
         
     public async Task CheckOut()
     {
         if (!CanCheckOut()) return;
         checkout_user = OdooDefaults.Instance.OdooId;
-        checkout_date = OdooDefaultsConstants.OdooDateFormat( DateTime.Now );
-        checkout_node = OdooDefaults.Instance.MyNode.id;
+        checkout_date = DateTime.Now;
+        checkout_node = OdooDefaults.Instance.MyNode.Id;
 
         await WriteChangedValuesAsync("checkout_user", "checkout_date", "checkout_node");
 		HpVersion version = new()
 		{
 			node_id = checkout_node,
-			id = latest_version_id
+			Id = latest_version_id
 		};
 		await version.WriteChangedValuesAsync("node_id");
         if (HashedValues.TryGetValue("windows_complete_name", out object objpath) && objpath is string winpath)
@@ -227,7 +227,7 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
         if (type is not null)
         {
             newEntry.cat_id = type.cat_id ?? 0;
-            newEntry.type_id = type.id;
+            newEntry.type_id = type.Id;
         }
 	
         await newEntry.CreateAsync( false );
@@ -254,8 +254,8 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 		};
 		if (type is not null)
 		{
-			newEntry.cat_id = type.cat_id?.id ?? 0;
-			newEntry.type_id = type.id;
+			newEntry.cat_id = type.cat_id?.Id ?? 0;
+			newEntry.type_id = type.Id;
 		}
 		await newEntry.CreateAsync( false );
 		return entry?.id == 0 ? (EntryReturnType.Failed, null) : (EntryReturnType.Created, entry);

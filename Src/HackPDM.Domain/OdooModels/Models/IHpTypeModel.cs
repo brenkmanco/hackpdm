@@ -19,5 +19,5 @@ public interface IHpTypeModel : IHpOdooRecord
 	
 	[OdooProp(OdooFieldType.Binary, "icon")] public string? icon {get;set;}
 	
-	[OdooProp(OdooFieldType.Many2one, "cat_id")] public IMany2One? cat_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "cat_id")] public IMany2One? cat_id {get;set;}
 }

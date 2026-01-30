@@ -15,6 +15,6 @@ public partial class HpType : HpBaseModelTransport<HpType>, IHpTypeModel
 
 	[OdooProp(OdooFieldType.Binary, "icon")] public string? icon { get; set; }
 
-	[OdooProp(OdooFieldType.Many2one, "cat_id")] public Many2One? cat_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "cat_id")] public Many2One? cat_id { get; set; }
 	IMany2One? IHpTypeModel.cat_id { get =>(IMany2One?)cat_id; set => cat_id = (Many2One?)value; }
 }

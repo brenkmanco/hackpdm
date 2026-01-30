@@ -15,7 +15,7 @@ public interface IIrAttachment : IHpOdooRecord
     
     [OdooProp(OdooFieldType.Integer, "file_size")] public int? file_size {get;set;}
 	
-    [OdooProp(OdooFieldType.Many2one, "res_id")] public IMany2One? res_id {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "res_id")] public IMany2One? res_id {get;set;}
     
     public string _fileContentsBase64 {get;set;}
 }

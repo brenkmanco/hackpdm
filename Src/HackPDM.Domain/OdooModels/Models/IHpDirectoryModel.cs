@@ -18,8 +18,8 @@ public interface IHpDirectoryModel : IHpOdooRecord
 {
 	[OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
 	[OdooProp(OdooFieldType.Char, "parent_path")] public string? parent_path {get;set;}
-	[OdooProp(OdooFieldType.Many2one, "parent_id")] public IMany2One? parent_id {get;set;}
-	[OdooProp(OdooFieldType.Many2one, "default_cat")] public IMany2One? default_cat {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "parent_id")] public IMany2One? parent_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "default_cat")] public IMany2One? default_cat {get;set;}
 	[OdooProp(OdooFieldType.Boolean, "deleted")] public bool? deleted {get;set;}
 	[OdooProp(OdooFieldType.Boolean, "sandboxed")] public bool? sandboxed {get;set;}
 }

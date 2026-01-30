@@ -9,10 +9,10 @@ namespace HackPDM.Domain.OdooModels.Models;
 [OdooModel(OdooDefaultsConstants.HP_RELEASE_REVIEW_NAME, OdooDefaultsConstants.HP_RELEASE_REVIEW)]
 public interface IHpReleaseReviewModel : IHpOdooRecord
 {
-	[OdooProp(OdooFieldType.Many2one, "review_release_version_id")] public IMany2One? review_release_version_id {get;set;}
-	[OdooProp(OdooFieldType.Many2one, "review_user_id")] public IMany2One? review_user_id {get;set;}
-	[OdooProp(OdooFieldType.Many2one, "release_id")] public IMany2One? release_id {get;set;}
-	[OdooProp(OdooFieldType.Many2one, "release_user_id")] public IMany2One? release_user_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "review_release_version_id")] public IMany2One? review_release_version_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "review_user_id")] public IMany2One? review_user_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "release_id")] public IMany2One? release_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "release_user_id")] public IMany2One? release_user_id {get;set;}
 
 	[OdooProp(OdooFieldType.DateTime, "review_stamp")] public DateTime? review_stamp {get;set;}
 	[OdooProp(OdooFieldType.DateTime, "review_deadline")] public DateTime? review_deadline {get;set;}

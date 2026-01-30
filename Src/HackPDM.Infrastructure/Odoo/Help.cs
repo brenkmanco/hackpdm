@@ -257,7 +257,7 @@ public static class HashConverter
 		var map = OdooAssignments<T>.Map;
 		
 		if (ht.TryGetValue("id", out int? id) && id is not null)
-			record.id = id ?? 0;
+			record.Id = id ?? 0;
 
 		foreach (DictionaryEntry entry in ht)
 		{
@@ -271,7 +271,7 @@ public static class HashConverter
 		var map = OdooAssignments<T>.Map;
 
 		if (ht.TryGetValue("id", out int? id) && id is not null)
-			record.id = id ?? 0;
+			record.Id = id ?? 0;
 
 		foreach (DictionaryEntry entry in ht)
 		{
@@ -289,7 +289,7 @@ public static class HashConverter
             ref (Hashtable ht, T record) record = ref values[i];
 
 			if (record.ht.TryGetValue("id", out int? id) && id is not null)
-				record.record.id = id ?? 0;
+				record.record.Id = id ?? 0;
             
 		    foreach (DictionaryEntry entry in record.ht)
 		    {

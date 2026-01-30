@@ -12,17 +12,17 @@ namespace HackPDM.Infrastructure.Odoo.Models;
 public abstract partial class HpBaseModelTransport : HpBaseModel
 {
 	// (MVVM) VIEWMODEL
-	public virtual int Create() => Create(false);
-	public virtual int Create(bool withEmpty = false)
+	public virtual Task<int> Create() => Create(false);
+	public async virtual Task<int> Create(bool withEmpty = false)
 	{
 		Hashtable ht = ComputeHashtable(true);
-		int tempId = OClient.Create(HpModel, ht, 10000);
+		var tempId = await OClient.CreateAsync(HpModel, ht, 10000);
 
-		if (tempId != 0)
+		if( tempId != 0 )
 		{
-			id = tempId;
+			Id = tempId;
 			//HashedValues = ht;
-			if (HpModel == OdooDefaultsConstants.HP_VERSION && ht.TryGetValue<string, object>("dir_id", out object? value))
+			if( HpModel == OdooDefaultsConstants.HP_VERSION && ht.TryGetValue<string, object>( "dir_id", out object? value ) )
 			{
 				HashedValues = new Hashtable
 				{
@@ -31,88 +31,47 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 			}
 			IsRecord = true;
 		}
+		
 		return tempId;
 	}
-	public virtual async Task<int> CreateAsync() => await CreateAsync(false);
-	public virtual async Task<int> CreateAsync(bool withEmpty = false, string[]? excludedFields = null)
+	public virtual Task<int> CreateAsync() => CreateAsync(false);
+	public virtual Task<int> CreateAsync(bool withEmpty = false, string[]? excludedFields = null)
 	{
 		Hashtable ht = ComputeHashtable(withEmpty, excludedFields, isNew: true);
-		int tempId = await OClient.CreateAsync(HpModel, ht, 10000);
+		var tempId = OClient.CreateAsync(HpModel, ht, 10000);
 
-		if (tempId != 0)
-		{
-			id = tempId;
-			
-			if (HpModel == OdooDefaultsConstants.HP_VERSION && ht.TryGetValue<string, object>("dir_id", out object value))
-			{
-				HashedValues = new Hashtable
-				{
-					{ "dir_id", value }
-				};
-			}
-			IsRecord = true;
-		}
+		IsRecord = true;
 		return tempId;
 	}
-	private void PopSelf(string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null)
-	{
-		Type type = GetType();
-		string modelName = HpModelDictionary[type];
+	//private void PopSelf(string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null)
+	//{
+	//	Type type = GetType();
+	//	string modelName = HpModelDictionary[type];
 
-		ArrayList fields = GetFields(type, includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
-		ArrayList result;
+	//	ArrayList fields = GetFields(type, includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
+	//	ArrayList result;
 
-		result = OClient.Read(modelName, [id], fields, 90000);
+	//	result = OClient.Read(modelName, [Id], fields, 90000);
 
-		if (result.Count == 0) return;
+	//	if (result.Count == 0) return;
 
-		Hashtable ht = result[0] as Hashtable;
+	//	Hashtable ht = result[0] as Hashtable;
 
-		if (ht is not null)
-		{
-			this.PopulateSelf(ht, MethodType.PropertyOnly);
-		}
+	//	if (ht is not null)
+	//	{
+	//		this.PopulateSelf(ht, MethodType.PropertyOnly);
+	//	}
 
-	}
-	public static async Task<ArrayList> MultiCreateAsync<T>(ArrayList records, bool withEmpty = false) where T : HpBaseModelTransport
+	//}
+	public static Task<ArrayList> MultiCreateAsync<T>(ArrayList records, bool withEmpty = false) where T : HpBaseModelTransport
 	{
 		ArrayList hts = records.Select((HpBaseModelTransport v) => v.ComputeHashtable(withEmpty, isNew: true)).ToArrayList();
 		var type = typeof(T);
 		string hpmodel = HpModelDictionary.TryGetValue(type, out hpmodel) ? hpmodel : null;
-		ArrayList tempId = await OClient.CreateAsync(hpmodel, hts);
+		var tempId = OClient.CreateAsync(hpmodel, hts);
 		return tempId;
 	}
 
-	
-	public virtual bool WriteAll()
-	{
-		Type type = GetType();
-
-		WriteInternal([.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute)))]);
-		return true;
-	}
-	public virtual bool Write(params string[] fieldNamesToWrite)
-	{
-		//List<string> fields = [];
-		//foreach (string fieldName in fieldNamesToWrite)
-		//{
-		//    PropertyInfo field = GetType().GetProperties(fieldName, BindingFlags.Public | BindingFlags.Instance);
-
-		//    fields.Add(fieldName);
-		//    //if (HashedValues.ContainsKey(fieldName) && HashedValues[fieldName] != field.GetValue(this))
-		//    //{
-		//    //    fields.Add(fieldName);
-		//    //}
-		//}
-
-		Hashtable ht = [];
-		foreach (string field in fieldNamesToWrite)
-		{
-			PropertyInfo fieldInfo = GetType().GetProperty(field, BindingFlags.Public | BindingFlags.Instance);
-			ht.Add(field, fieldInfo.GetValue(this));
-		}
-		return WriteInternal(ht);
-	}
 	public async virtual Task<bool> WriteChangedValuesAsync(params string[] fieldNamesToWrite)
 	{
 		Hashtable ht = [];
@@ -132,58 +91,8 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 			//            }
 		}
 
-		return await OClient.UpdateAsync(HpModel, id ?? 0, ht);
+		return await OClient.UpdateAsync(HpModel, Id ?? 0, ht);
 	}
-
-
-	/// <summary>
-	/// To compute any remaining fields that are based off of other field initializations
-	/// </summary>
-
-	//private bool VerifyModified()
-	//{
-	//    if (HashedValues == null || ExcludedFields == null) return false;
-	//    Type type = GetType();
-	//    PropertyInfo[] fields = (PropertyInfo[])type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p=>Attribute.IsDefined(p, typeof(OdooPropAttribute)));
-
-	//    foreach (PropertyInfo field in fields)
-	//    {
-	//        string fieldName = field.Name;
-	//        object fieldValue = field.GetValue(this);
-
-	//        if (ExcludedFields.Contains(fieldName)) continue;
-	//        if (HashedValues.ContainsKey(fieldName) && HashedValues[fieldName] != null && HashedValues[fieldName] != fieldValue)
-	//        {
-	//            return true;
-	//        }
-	//    }
-
-	//    return false;
-	//}
-	private bool WriteInternal(Hashtable ht)
-	{
-		bool wasWritten = OClient.Update(HpModel, id ?? 0, ht);
-		if (wasWritten)
-		{
-			//Refresh();
-			Console.WriteLine("record was modified");
-		}
-		else
-		{
-			Console.WriteLine("record wasn't modified");
-		}
-		return wasWritten;
-	}
-	protected bool WriteInternal(params PropertyInfo[] fields)
-	{
-		Hashtable ht = [];
-		foreach (PropertyInfo field in fields)
-		{
-			ht.Add(field.Name, field.GetValue(this));
-		}
-		return WriteInternal(ht);
-	}
-
 
 	protected ArrayList ComputeArrayList(bool includeEmpty, in string[]? excludedFieldNames = null)
 	{
@@ -193,31 +102,30 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 		{
 			al.Add((item.Item1, "=", item.Item2));
 		}
-
 		return al;
 	}
-	public static ArrayList GetFields(Type type, string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
-	{
-		ArrayList fieldNames = [];
-		PropertyInfo[] fields = [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p=>Attribute.IsDefined(p, typeof(OdooPropAttribute)))];
+	//public static ArrayList GetFields(Type type, string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
+	//{
+	//	ArrayList fieldNames = [];
+	//	PropertyInfo[] fields = [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p=>Attribute.IsDefined(p, typeof(OdooPropAttribute)))];
 
-		foreach (PropertyInfo field in fields)
-		{
-			bool isExcluded = false, isIncluded = true;
-			if (excludedFieldNames != null) isExcluded = excludedFieldNames.Contains(field.Name);
-			if (includedFieldNames != null) isIncluded = includedFieldNames.Contains(field.Name);
-			if (!isExcluded && isIncluded) fieldNames.Add(field.Name);
-		}
-		if (insertFieldNames != null)
-		{
-			foreach (string field in insertFieldNames)
-			{
-				if (!fieldNames.Contains(field))
-					fieldNames.Add(field);
-			}
-		}
-		return fieldNames;
-	}
+	//	foreach (PropertyInfo field in fields)
+	//	{
+	//		bool isExcluded = false, isIncluded = true;
+	//		if (excludedFieldNames != null) isExcluded = excludedFieldNames.Contains(field.Name);
+	//		if (includedFieldNames != null) isIncluded = includedFieldNames.Contains(field.Name);
+	//		if (!isExcluded && isIncluded) fieldNames.Add(field.Name);
+	//	}
+	//	if (insertFieldNames != null)
+	//	{
+	//		foreach (string field in insertFieldNames)
+	//		{
+	//			if (!fieldNames.Contains(field))
+	//				fieldNames.Add(field);
+	//		}
+	//	}
+	//	return fieldNames;
+	//}
 }
 public abstract partial class HpBaseModelTransport
 {
@@ -260,19 +168,18 @@ public abstract partial class HpBaseModelTransport
 }
 public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport where T : HpBaseModelTransport, new()
 {
-	public virtual T?				GetRecord()
+	public async virtual Task<T?>				GetRecord()
 	{
 		ArrayList list = ComputeArrayList(false);
-		int? recordId = OClient.Search(HpModel, list)?[0] as int?;
-		return GetRecord(recordId);
+		int? recordId = (await OClient.SearchAsync(HpModel, list))?[0] as int?;
+		return await GetRecord(recordId);
 	}
-	public virtual T?				GetRecord(int? recordId)
+	public async virtual Task<T?>				GetRecord(int? recordId)
 	{
 		if (recordId is null or 0) return null;
-		Hashtable? ht = OClient.Read(HpModel, [recordId], GetOdooFields()).FirstOrDefault<Hashtable>();
-		if (ht is null) return null;
+		Hashtable? ht = (await OClient.ReadAsync(HpModel, [recordId], GetOdooFields()))?.FirstOrDefault<Hashtable>();
 
-		return RecordPopulation(ht);
+		return  ht is null  ?     null   :  RecordPopulation(ht);
 	}
 	//public virtual ArrayList GetAllFields()
 	//{
@@ -397,7 +304,7 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 				}
 			}
 		}
-		T[] records = HashConverter.ConvertToClasses<T>(hts);
+		T[]? records = HashConverter.ConvertToClasses<T>(hts);
 		FinalizePopulations(records, excludedFields);
 		return records;
 	}
@@ -531,12 +438,21 @@ public abstract partial class HpBaseModelTransport<T>
 		HpModelDictionaryGen[typeof(T).Name] = value;
 		return value;
 	}
+	public abstract Dictionary<string, object?> ToOdoo();
+	public static string[] GetFields( 
+		string[]? excluded = null, 
+		string[]? included = null, 
+		string[]? insert = null 
+		) 
+		=> OdooFieldSelectionCache<T>.GetFields( excluded, included, insert ); 
+	
 	public static string? GetHpModel()
 	{ 
+		
 		return HpModelDictionaryGen.GetValueOrDefault(typeof(T).Name);
 	}
 
-	public static TOther[]		GetRelatedRecordByIds<TOther>(ArrayList recordIds, string relatedFieldName, string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null) 
+	public static TOther[]			GetRelatedRecordByIds<TOther>(ArrayList recordIds, string relatedFieldName, string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null) 
 		where TOther : HpBaseModelTransport<TOther>, new()
 	{
 		string modelName = GetHpModel();
@@ -554,7 +470,7 @@ public abstract partial class HpBaseModelTransport<T>
 			TOther record = HashConverter.ConvertToClass<TOther>(ht);
 
 			// set record settings
-			record.id = (int)ht["id"];
+			record.Id = (int)ht["id"];
 			//record.HashedValues = ht;
 			if (record.HpModel == OdooDefaultsConstants.HP_VERSION && ht.TryGetValue("dir_id", out ArrayList? value))
 			{
@@ -608,7 +524,7 @@ public abstract partial class HpBaseModelTransport<T>
 			TOther record = HashConverter.ConvertToClass<TOther>(ht);
 
 			// set record settings
-			record.id = (int)ht["id"];
+			record.Id = (int)ht["id"];
 			//record.HashedValues = ht;
 			if (record.HpModel == OdooDefaultsConstants.HP_VERSION && ht.TryGetValue("dir_id", out object value))
 			{
@@ -637,7 +553,7 @@ public abstract partial class HpBaseModelTransport<T>
 	}
 	public void						Refresh()
 	{
-		Hashtable ht = (Hashtable)OClient.Read(HpModel, [id], GetOdooFields())?[0];
+		Hashtable ht = (Hashtable)OClient.Read(HpModel, [Id], GetOdooFields())?[0];
 
 		if (ht != null)
 		{
@@ -674,9 +590,9 @@ public abstract partial class HpBaseModelTransport<T>
 		
 		record.CompleteConstruction();
 	}
-	public static void				FinalizePopulations(T[] records, string[]? excludedFields = null)
+	public static void				FinalizePopulations(T[]? records, string[]? excludedFields = null)
 	{
-		if (records.Length == 0) return;
+		if (records is not {Length: > 0 } ) return;
 		
 		for (int i = 0; i < records.Length; i++)
 		{
@@ -704,7 +620,7 @@ public abstract partial class HpBaseModelTransport<T>
 			if (a is null) return 0;
 			else
 			{
-				return a.id?.CompareTo(b.id) ?? 0;
+				return a.Id?.CompareTo(b.Id) ?? 0;
 			}
 		}
 	}
@@ -728,8 +644,9 @@ public abstract partial class HpBaseModelTransport<T>
 	}
 	public static ArrayList			GetAllFields() => GetOdooFields();
 	public static ArrayList			GetOdooFields(string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
-		=> GetFields(typeof(T), excludedFieldNames, includedFieldNames, insertFieldNames);
-	public override string			ToString() => id.ToString();
+		=> [.. GetFields(excludedFieldNames, includedFieldNames, insertFieldNames)];
+	public override string			ToString() => Id.ToString();
+
 	// async methods
 	public static async Task<Tval?>		GetFieldValueAsync<Tval>(int id, string fieldName) 
 		where Tval : class
@@ -771,7 +688,7 @@ public abstract partial class HpBaseModelTransport<T>
 			TOther record = HashConverter.ConvertToClass<TOther>(ht);
 
 			// set record settings
-			record.id = (int)ht["id"];
+			record.Id = (int)ht["id"];
 			//record.HashedValues = ht;
 			if (record.HpModel == OdooDefaultsConstants.HP_VERSION && ht.TryGetValue("dir_id", out int value))
 			{
@@ -804,7 +721,7 @@ public abstract partial class HpBaseModelTransport<T>
 			TOther record = HashConverter.ConvertToClass<TOther>(ht);
 
 			// set record settings
-			record.id = (int)ht["id"];
+			record.Id = (int)ht["id"];
 			//record.HashedValues = ht;
 			if (record.HpModel == OdooDefaultsConstants.HP_VERSION && ht.TryGetValue("dir_id", out object value))
 			{
@@ -848,7 +765,7 @@ public abstract partial class HpBaseModelTransport<T>
 	}
 	public async Task					RefreshAsync()
 	{
-		if ((await OClient.ReadAsync(HpModel, [id], GetOdooFields()))?[0] is Hashtable ht)
+		if ((await OClient.ReadAsync(HpModel, [Id], GetOdooFields()))?[0] is Hashtable ht)
 		{
 			HashConverter.AssignToClass(ht, this);
 

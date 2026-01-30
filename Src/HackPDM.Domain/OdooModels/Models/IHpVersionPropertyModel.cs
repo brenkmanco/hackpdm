@@ -16,8 +16,8 @@ public interface IHpVersionPropertyModel : IHpOdooRecord
 
     [OdooProp(OdooFieldType.Boolean, "yesno_value")] public bool? yesno_value {get;set;}
 
-    [OdooProp(OdooFieldType.DateTime, "date_value")] public string? date_value {get;set;}
+    [OdooProp(OdooFieldType.DateTime, "date_value")] public DateTime? date_value {get;set;}
 
-    [OdooProp(OdooFieldType.Many2one, "version_id")] public IMany2One? version_id {get;set;}
-    [OdooProp(OdooFieldType.Many2one, "prop_id")] public IMany2One? prop_id {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "version_id")] public IMany2One? version_id {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "prop_id")] public IMany2One? prop_id {get;set;}
 }

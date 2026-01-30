@@ -23,5 +23,5 @@ public interface IHpUserModel : IHpOdooRecord
 	
 	[OdooProp(OdooFieldType.Boolean, "active")] public bool? active {get;set;}
 	
-	[OdooProp(OdooFieldType.Many2one, "company_id")] public IMany2One? company_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "company_id")] public IMany2One? company_id {get;set;}
 }

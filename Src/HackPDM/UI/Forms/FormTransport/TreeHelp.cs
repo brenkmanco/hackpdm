@@ -465,8 +465,8 @@ namespace HackPDM.UI.Forms.FormTransport
 			// destroyed
 			
 			FileStatus status = table["deleted"] is bool deleted && !deleted
-				? item.Checkout?.id is not null or 0
-					? item.Checkout?.id == OdooDefaults.Instance.OdooId ? FileStatus.Cm : FileStatus.Co
+				? item.Checkout?.Id is not null or 0
+					? item.Checkout?.Id == OdooDefaults.Instance.OdooId ? FileStatus.Cm : FileStatus.Co
 					: table["latest_checksum"] switch
 					{
 						bool => FileStatus.Lo,

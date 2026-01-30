@@ -16,6 +16,11 @@ INSERT INTO hp_version_relationship (parent_id, child_id) values "
 IS_HpReleaseVersionRel="TRUNCATE hp_release_version_rel; 
 INSERT INTO hp_release_version_rel (release_id, release_version, create_uid, create_date) values "
 
+Target_DB="hackpdm"
+Target_Host="alderaan"
+To_DB="odoopdm"
+To_Host="moony"
+
 directory(){
     echo $IS_HpDirectory > directory.sql
     cat | psql -h alderaan -U hackpdm -W -t hackpdm >> directory.sql << EOL
