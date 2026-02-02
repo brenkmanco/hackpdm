@@ -7,7 +7,7 @@
     'author': 'Justin Johnson',
     'depends': [
         'base',
-        'queue_job',
+	    'queue_job',
     ],
     'data': [
         'security/ir.model.access.csv',

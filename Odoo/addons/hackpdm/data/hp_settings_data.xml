@@ -19,5 +19,69 @@
             <field name="type">char</field>
             <field name="char_value">1.0.0.27</field>
         </record>
+        <record id="hp_test_data_one" model="hp.test">
+            <!-- Binary: base64-encoded "hello" -->
+            <field name="binary">aGVsbG8=</field>
+
+            <!-- Boolean -->
+            <field name="boolean">True</field>
+
+            <!-- Char -->
+            <field name="character">Test Character Field</field>
+
+            <!-- Date -->
+            <field name="dates">2024-01-01</field>
+
+            <!-- Datetime (UTC) -->
+            <field name="datetimes">2024-01-01 12:34:56</field>
+
+            <!-- Float -->
+            <field name="floats">123.456</field>
+
+            <!-- HTML -->
+            <field name="html">
+                <![CDATA[
+                    <p><strong>Test HTML</strong> content for hp.test.</p>
+                ]]>
+            </field>
+
+            <!-- Image: base64-encoded 1×1 PNG -->
+            <field name="image">
+                iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2f8AAAAASUVORK5CYII=
+            </field>
+
+            <!-- Integer -->
+            <field name="integer">42</field>
+
+            <!-- JSON -->
+            <field name="json">
+                {"key": "value", "number": 123, "flag": true}
+            </field>
+
+            <!-- Monetary -->
+            <field name="monetary">19.99</field>
+
+            <!-- Selection -->
+            <field name="selection">option_a</field>
+
+            <!-- Text -->
+            <field name="text">This is a long text field used for testing.</field>
+
+            <!-- Many2one: reference an existing record -->
+            <field name="many2one" ref="hp_test_data_two"/>
+
+            <!-- One2many: create inline children -->
+            <field name="one2many" eval="[(0, 0, {'character': 'Child 1'})]"/>
+
+            <!-- Many2many: link to two existing records -->
+            <field name="many2many" eval="[(6, 0, [ref('base.user_admin'), ref('base.user_root')])]"/>
+        </record>
+
+        <record id="hp_test_data_two" model="hp.test">
+            <field name="character">Record Two</field>
+            <field name="many2one" ref="hp_test_data_one"/>
+            <field name="many2many" eval="[(6, 0, [ref('hp_test_data_one')])]"/>
+        </record>
+
     </data>
 </odoo>

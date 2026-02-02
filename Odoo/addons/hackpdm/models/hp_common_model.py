@@ -105,39 +105,39 @@ class hp_common_model(models.AbstractModel):
            else:
                return {"value": value, "path": arr} if len(arr) > 0 else value
 
-    def _resolve_field(self, record, parts, arr, depth): 
-        """Recursively resolve dot-notated fields into rich structures.""" 
-        field = parts[0] 
-        value = record[field] 
+    def _resolve_field(self, record, parts, arr, depth):
+        """Recursively resolve dot-notated fields into rich structures."""
+        field = parts[0]
+        value = record[field]
 
-        if len(parts) == 1: # Terminal field → return raw value 
+        if len(parts) == 1: # Terminal field → return raw value
             return self._help_gather(value, parts, arr, depth)
-        
-         # Still more parts to traverse 
-        rest = parts[1:] 
-        if value._name and len(value) == 1: # Many2one 
+
+         # Still more parts to traverse
+        rest = parts[1:]
+        if value._name and len(value) == 1: # Many2one
             return self._resolve_field(value, rest, arr + [self._form_dict(value, None, depth)], depth+1)
-        else: # One2many / Many2many 
+        else: # One2many / Many2many
             return [self._resolve_field(child, rest, arr + [self._form_dict(child, None, depth)], depth+1) for child in value]
-        
-    @api.model 
-    def smart_read(self, domain, ids, fields): 
+
+    @api.model
+    def smart_read(self, domain, ids, fields):
         # domain=None, ids=None, fields=None
         logging.info(f"\nfields: {fields}\nmodel_name: {self._name}\ndomain: {domain}\nIDs: {ids}")
 
-        Model = self 
+        Model = self
 
         records = None
 
         if not domain and not ids:
             return []
-        
+
         if fields is None or len(fields) == 0:
             fields = [field for field in fields if field in self._fields]
-        
-        
+
+
         if not domain:
-            records = Model.browse(ids) 
+            records = Model.browse(ids)
         elif not ids:
             records = Model.search(domain or [])
         else:
@@ -147,14 +147,14 @@ class hp_common_model(models.AbstractModel):
             return []
 
 
-        results = [] 
-        
-        for rec in records: 
-            data = {} 
-            for field in fields or []: 
-                parts = field.split(".") 
+        results = []
+
+        for rec in records:
+            data = {}
+            for field in fields or []:
+                parts = field.split(".")
                 data[field] = self._resolve_field(rec, parts, [], 0)
-            results.append(data) 
+            results.append(data)
         return results
 
 
@@ -214,6 +214,14 @@ class hp_common_model(models.AbstractModel):
         recordset = self.search(search)
         related_records = recordset.mapped(field_name)
         return related_records.read(fields)
+
+    @api.model
+    def create_read(self, vals, fields=None):
+        record = self.create(vals)
+        # if no fields specified return all readable fields
+        if not fields:
+            fields = record.fields_get().keys()
+        return record.read(fields)
 
     @api.model
     def _create_attachment(self, file_contents:bytes, field_name:str):

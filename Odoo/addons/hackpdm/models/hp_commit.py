@@ -1,12 +1,13 @@
 from odoo import fields, models, api, Command
-from odoo.addons.queue_job.job import job
 
 from odoo.exceptions import UserError
 
 class hp_pdm_commit(models.Model):
     _name = 'hp.pdm.commit'
     _description = 'commit collection'
-    _inherit = ['hp.common.model', 'queue.job.mixin']
+    _inherit = ['hp.common.model']
+
+    # inherit 'queue.job.mixin' obsolete
 
     name = fields.Char()
     job_uuid = fields.Char(
@@ -100,7 +101,7 @@ class hp_pdm_commit(models.Model):
             raise UserError("No staged records to commit.")
 
         #enqueue job
-        job = self.with_delay().run_commit_job()
+        job = self.with_delay(on_error='handle_commit_failure').run_commit_job()
         self.write({
             "job_uuid": job.uuid,
             "committing": True,
@@ -124,7 +125,6 @@ class hp_pdm_commit(models.Model):
     # ------------------------------------------------------------
     # BACKGROUND WORKER — runs even if client disconnects
     # ------------------------------------------------------------
-    @job(on_error='handle_commit_failure')
     def run_commit_job(self):
         self.ensure_one()
 
