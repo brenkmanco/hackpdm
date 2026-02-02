@@ -1,10 +1,15 @@
 from odoo import fields, models, api, Command
+from odoo.addons.queue_job.job import job
+
+
 from odoo.exceptions import UserError
 
 class hp_pdm_commit(models.Model):
-    _name = 'hp.pdm.commit'
-    _description = 'commit collection'
     _inherit = ['hp.common.model']
+
+    # inherit 'queue.job.mixin' obsolete
+    _inherit = ['hp.common.model', 'queue.job.mixin']
+    _inherit = ['hp.common.model', 'queue.job.mixin']
 
     name = fields.Char()
     job_uuid = fields.Char(
