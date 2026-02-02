@@ -501,7 +501,9 @@ public static class OdooFieldHelpers
 				OdooFieldType.One2Many
 					or OdooFieldType.Many2Many => ConvertOne2many(value),
 				// byte[]
-				OdooFieldType.Binary => ConvertBinary(value),
+				OdooFieldType.Binary 
+					or OdooFieldType.Image => ConvertBinary(value),
+				OdooFieldType.Json => ConvertSerializedString(value),
 				OdooFieldType.Float => ConvertFloat(value),
 				OdooFieldType.Monetary => ConvertMonetary(value),
 				OdooFieldType.Selection => ConvertSelectionString(value),

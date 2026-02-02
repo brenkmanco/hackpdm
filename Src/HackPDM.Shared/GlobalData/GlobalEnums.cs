@@ -24,6 +24,8 @@ namespace HackPDM.Shared.GlobalData
 		Date,          // DateOnly                              |
 		DateTime,      // DateTime -----------------------------|
 		Binary,        // byte[] (attachments, images)          |
+		Image,         // byte[] (image field) -----------------|
+		Json,          // JSON field                            |
 					   //                                                      |      
 					   // Relational types                                     |
 		Many2One,      // foreign key to another model ---------|

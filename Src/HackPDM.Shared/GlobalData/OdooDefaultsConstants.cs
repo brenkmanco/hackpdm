@@ -21,6 +21,8 @@ public static class OdooDefaultsConstants
 	public const string HP_SETTINGS = "hp.settings";
 	public const string HP_PROPERTY = "hp.property";
 	public const string HP_TYPE = "hp.type";
+	public const string HP_PDM_COMMIT = "hp.pdm.commit";
+	public const string HP_RECORD_STAGED = "hp.record.staged";
 	// adopted models
 	public const string RES_USERS = "res.users";
 	public const string IR_ATTACHMENT = "ir.attachment";
@@ -41,6 +43,8 @@ public static class OdooDefaultsConstants
 	public const string HP_SETTINGS_NAME = "hp_settings";
 	public const string HP_PROPERTY_NAME = "hp_property";
 	public const string HP_TYPE_NAME = "hp_type";
+	public const string HP_PDM_COMMIT_NAME = "hp_pdm_commit";
+	public const string HP_RECORD_STAGED_NAME = "hp_record_staged";
 	public const string RES_USERS_NAME = "res_users";
 	public const string IR_ATTACHMENT_NAME = "ir_attachment";
 	public const string IR_MODEL_NAME = "ir_model";
@@ -49,6 +53,10 @@ public static class OdooDefaultsConstants
 	public const string SW_KEY_NAME = "swdocmgr_key";
 	public const string RESTRICT_PROP_NAME = "restrict_properties";
 	public const string RESTRICT_TYPES_NAME = "restrict_types";
+
+	// test model
+	public const string HP_TEST = "hp.test";
+	public const string HP_TEST_NAME = "hp_test";
 
 	// "root\"
 	public const int ODOO_PATH_PREFIX_LENGTH = 5;

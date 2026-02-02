@@ -312,7 +312,9 @@ public static class OdooClient
         => await CommandAsync<int>(model, "create", [values], timeout); //
     public static async Task<ArrayList> CreateAsync(string model, ArrayList arrayValues, int? timeout = null)
         => await CommandAsync<ArrayList>(model, "create", [arrayValues], timeout); //
-    public static async Task<ArrayList> ReadAsync(string model, ArrayList ids, ArrayList fields, int? timeout = null)
+	public static async Task<ArrayList> CreateReadAsync(string model, ArrayList arrayValues, ArrayList fields, int? timeout = null)
+		=> await CommandAsync<ArrayList>(model, "create_read", [arrayValues, fields], timeout); //
+	public static async Task<ArrayList> ReadAsync(string model, ArrayList ids, ArrayList fields, int? timeout = null)
         => await CommandAsync<ArrayList>(model, "read", [ids, fields], timeout); //
     public static async Task<bool> UpdateAsync(string model, int id, Hashtable values, int? timeout = null) 
         => await CommandAsync<bool>(model, "write", [id, values], timeout); //

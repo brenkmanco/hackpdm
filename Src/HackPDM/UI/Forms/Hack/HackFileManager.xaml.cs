@@ -222,7 +222,34 @@ public sealed partial class HackFileManager : Page
 #if DEBUG
 	private static async Task DebugTest()
 	{
-
+		var create_test = new HpTest()
+		{
+			binary = Encoding.UTF8.GetBytes("This is a binary field"),
+			boolean = true,
+			character = "Test Character Field",
+			dates = DateTime.Now,
+			datetimes = DateTime.Now,
+			floats = 12345.6789f,
+			integer = 123456,
+			image = Encoding.UTF8.GetBytes(@"iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAEJ0lEQVR4AW1W3W/TVRjuXzRHVislmG20bCBbV9YsltpuI251EzDuYhcCYSR6YWJiJIoukPgVhAvuBFG4kCgkmJgYF1txY7Ubo+6zdhuUFde9j+d5256clP6SJ+/O2e88z/t13l895XIZfGgJEeFS7daTB1idO43cnyHkUnUwe2vZCZSKWdQ4LI/D6XH+Ye1/W3OWaGU6jPJqDNhMAIWYgn+XV2JYng7b97ZLOTR63AjU/pubtMTYiNeIRZGPVqDrquh63Ao9Xr6iPC5cAZOOk/piafGI6zFJ0QDiRvTknz48SkWwljlDuudTtLF4geQMvUoerUGstXD2ic2YRlvKBDD/UxPys+dsPSlgc66eb8Tw+y8JXL/Wj+vfxgmps6hff3ftKKZudwEPvFj/bZeKbG89tDXAYipcyXkxgY8nB9H+6ijaY8kaxLHiroPxUQReG4G/J4bmQAQfvd8JZH3I3X0BC3eaKhGwFek9Q6T3nfERBGOjBkM1CK2LjniSkAP9I9jbE4WvI2QQRmvXYY1CZnZrFFuP/4ZnNXNSvde8b0SxP+YKuCJJizpyK/DyKxUBzPo1itX0GDy5VLXPCwbFKHqHhhoIJBUH+4dxIDECl9wV6OrrAbJe7Ez7sJXyMgoVENvrm1EcP5WkgDjpUa87Ta4LD4/IUmZA9obiYkgJqFWE5diJLmDWK0ZATBQyf6dZVEC9z0cpIJcuD6BdBdRrWq5x8fPXWSdBLoj3JoJo6YiQFAa0uv5msl0Ftu8zTT4YAbgC2uM7a1H59MKgHD+dxLFTSRk/O4yrVweAQgIyF5Qdc5iY/DAgQ292YSDZLYNvdAs7SP5ielRAjICNwKbIvVBMl4GgqJeI5DAHKUASYJok9FStrrlfgU8LXRUISXnFHQlWBIZcmBZ6zrApUAHJCApYYvsOa/A05RVTZPHk5yd0WFWjqAng5o1+vPPuMJ5lOkhCAhe693jKh6RJ060rrbpHAXpv2/T+ODyc57l0SKeinZqbMbl546j4DiawP9yNrz9rw+xtP56mX0TRYOZHPy6eC8i+0GE0t0Xww+VWW1wK7FQvWqmYg0dEzKgI1aKggOac3fLJB/vMCOhFSyBiEK5DRHYFe/Hl+TbgQSVFrvfzd72w03T7WU7HxZOFPua81i1avKnv98iJtw7JSx29QlJid2cv3h47JOlbe8TWoNr7+V9bRIddaYXUGoEqrS9d4jyXUqYdqBywxePtLM94ZeGeH4/u+WWH4yCrxK7nUvyjBSzs5sJXz3/R+KzNnqG6mJFLb3jQFWpgfQqmpeZ5fuasuB8xFXBRyJ6nF5pHTkUephBRbUO75v9YUL7LM4W5LyyxFcDzDz8WPGCFOLhI5hKbPrfE8z8b4dKSS9z4o1//84PzfDk9Zm5kU0OspsfZiu5PHZdH7f8j48WuF/x78gAAAABJRU5ErkJggg=="),
+			html = """
+<h1>Welcome to My Simple Page</h1>
+<p>This is a paragraph of text on my page.</p>
+""",
+			json = new Hashtable()
+			{
+				{ "name", "Test JSON" },
+				{ "value", 12345 },
+				{ "isActive", true }
+			},
+			monetary = 99.987654321M,
+			text = "This is a longer block of text that can span multiple lines.\nIt is used to store larger amounts of textual data.",
+			selection = "option_a",
+			
+			many2one = 1,
+			one2many = [1, 2],
+			many2many = [1, 2],
+		};
 	}
 #endif
 	private void AssignCollections()
