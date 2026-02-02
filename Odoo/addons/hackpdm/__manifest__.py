@@ -5,7 +5,10 @@
     'summary': 'product data management',
     'description': 'engineering product data management system',
     'author': 'Justin Johnson',
-    'depends': ['base'],
+    'depends': [
+        'base',
+        'queue_job',
+    ],
     'data': [
         'security/ir.model.access.csv',
         'views/hp_directory_views.xml',
