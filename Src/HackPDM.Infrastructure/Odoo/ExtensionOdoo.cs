@@ -503,7 +503,7 @@ public static class OdooFieldHelpers
 				// byte[]
 				OdooFieldType.Binary 
 					or OdooFieldType.Image => ConvertBinary(value),
-				OdooFieldType.Json => ConvertSerializedString(value),
+				OdooFieldType.Json => ConvertJsonTable(value),
 				OdooFieldType.Float => ConvertFloat(value),
 				OdooFieldType.Monetary => ConvertMonetary(value),
 				OdooFieldType.Selection => ConvertSelectionString(value),
@@ -727,6 +727,17 @@ public static class OdooFieldHelpers
 	// Serialized -> leave as-is, or decode JSON
 	public static string ConvertSerializedString(object value)
 		=> value is string s ? s : string.Empty;
+
+	public static Hashtable ConvertJsonTable(object value)
+	{
+		Hashtable result = new Hashtable();
+		var valueDict = ConvertSerializedDict(value);
+		foreach (var item in valueDict) 
+		{
+			result[item.Key] = item.Value;
+		}
+		return result;
+	}
 	public static Dictionary<string, object> ConvertSerializedDict(object value)
 	{
 		return JsonConvert.DeserializeObject<Dictionary<string, object>>(ConvertSerializedString(value)) ?? [];

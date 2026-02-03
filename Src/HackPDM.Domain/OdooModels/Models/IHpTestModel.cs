@@ -5,7 +5,7 @@ using HackPDM.Shared.OdooAttributes;
 
 namespace HackPDM.Domain.OdooModels.Models;
 
-[OdooModel(OdooDefaultsConstants.HP_NODE_NAME, OdooDefaultsConstants.HP_NODE)]
+[OdooModel(OdooDefaultsConstants.HP_TEST_NAME, OdooDefaultsConstants.HP_TEST)]
 public interface IHpTestModel : IHpOdooRecord
 {
 	[OdooProp(OdooFieldType.Binary		, "binary"	 )] public byte[]? binary		{ get; set; }

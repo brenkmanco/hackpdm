@@ -1,13 +1,14 @@
 ﻿using System.Collections;
 
+using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Shared.OdooAttributes;
 // Resharper disable InconsistentNaming
 
-namespace HackPDM.Domain.OdooModels.Models;
+namespace HackPDM.Infrastructure.Odoo.Models;
 
-[OdooModel(OdooDefaultsConstants.HP_NODE_NAME, OdooDefaultsConstants.HP_NODE)]
+[OdooModel(OdooDefaultsConstants.HP_TEST_NAME, OdooDefaultsConstants.HP_TEST)]
 public partial class HpTest : HpBaseModelTransport<HpTest>, IHpTestModel
 {
 	[OdooProp(OdooFieldType.Binary		, "binary"	 )] public byte[]? binary		{ get; set; }

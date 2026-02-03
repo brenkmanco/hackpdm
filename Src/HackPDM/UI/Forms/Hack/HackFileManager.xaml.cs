@@ -250,6 +250,9 @@ public sealed partial class HackFileManager : Page
 			one2many = [1, 2],
 			many2many = [1, 2],
 		};
+
+		var id = await create_test.CreateAsync();
+		Debug.WriteLine($"Created HpTest with ID: {id}");
 	}
 #endif
 	private void AssignCollections()

@@ -1,8 +1,9 @@
-﻿using HackPDM.Infrastructure.Odoo.Models;
+﻿using HackPDM.Domain.OdooModels.Models;
+using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Shared.OdooAttributes;
 // Resharper disable InconsistentNaming
-namespace HackPDM.Domain.OdooModels.Models;
+namespace HackPDM.Infrastructure.Odoo.Models;
 
 [OdooModel(OdooDefaultsConstants.HP_PDM_COMMIT_NAME, OdooDefaultsConstants.HP_PDM_COMMIT)]
 public partial class HpPDMCommit : HpBaseModelTransport<HpPDMCommit>, IHpPDMCommitModel
