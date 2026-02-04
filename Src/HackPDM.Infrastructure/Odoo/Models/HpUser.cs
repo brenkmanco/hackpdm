@@ -27,4 +27,9 @@ public partial class HpUser : HpBaseModelTransport<HpUser>, IHpUserModel
 
 	[OdooProp(OdooFieldType.Many2One, "company_id")] public Many2One? company_id { get; set; }
 	IMany2One? IHpUserModel.company_id { get =>(IMany2One?)company_id; set => company_id = (Many2One?)value; }
+
+	public override string ToString()
+	{
+		return name ?? id?.ToString() ?? "";
+	}
 }

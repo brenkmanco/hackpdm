@@ -68,19 +68,23 @@
             <field name="text">This is a long text field used for testing.</field>
 
             <!-- Many2one: reference an existing record -->
-            <field name="many2one" ref="hp_test_data_two"/>
+            <field name="manytoone" ref="hp_test_data_two"/>
 
             <!-- One2many: create inline children -->
-            <field name="one2many" eval="[(0, 0, {'character': 'Child 1'})]"/>
+            <field name="one2many" eval="[(0, 0, {
+                'character': 'Child 1',
+                'manytoone': ref('hp_test_data_one')
+            })]"/>
+
 
             <!-- Many2many: link to two existing records -->
-            <field name="many2many" eval="[(6, 0, [ref('base.user_admin'), ref('base.user_root')])]"/>
+            <field name="manytomany" eval="[(6, 0, [ref('base.user_admin'), ref('base.user_root')])]"/>
         </record>
 
         <record id="hp_test_data_two" model="hp.test">
             <field name="character">Record Two</field>
-            <field name="many2one" ref="hp_test_data_one"/>
-            <field name="many2many" eval="[(6, 0, [ref('hp_test_data_one')])]"/>
+            <field name="manytoone" ref="hp_test_data_one"/>
+            <field name="manytomany" eval="[(6, 0, [ref('hp_test_data_one')])]"/>
         </record>
 
     </data>

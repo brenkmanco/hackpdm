@@ -152,9 +152,9 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
                         HpVersionProperty vProp = new()
                         {
                             sw_config_name = prop.Item1 == "" ? null : prop.Item1,
-                            version_id = version.Id != 0 ? version.Id : throw new Exception("version id not defined"),
+                            version_id = version.id != 0 ? version.id : throw new Exception("version id not defined"),
                         };
-                        if (hpProperty is not null) vProp.prop_id = hpProperty.Id ?? 0; 
+                        if (hpProperty is not null) vProp.prop_id = hpProperty.id ?? 0; 
                         switch (prop.Item3)
                         {
                             case "text": vProp.text_value        = (string?)prop.Item4; break;
@@ -173,13 +173,13 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
             }
             catch (Exception e)
             {
-                Debug.WriteLine($"unable to create properties for {version.Id}\n{e}");
+                Debug.WriteLine($"unable to create properties for {version.id}\n{e}");
                 return;
             }
         }
         if (versionProperties.Length > 0)
         {
-            await MultiCreateAsync<HpVersionProperty>(versionProperties.ToArrayList());
+            await MultiCreateAsync(versionProperties.ToArrayList());
         }
     }
 }

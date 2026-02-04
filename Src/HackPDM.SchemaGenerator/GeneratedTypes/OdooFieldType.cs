@@ -13,9 +13,11 @@ public enum OdooFieldType
     Date,          // DateOnly                              |
     DateTime,      // DateTime -----------------------------|
     Binary,        // byte[] (attachments, images)          |
-    //                                                      |      
-    // Relational types                                     |
-    Many2One,      // foreign key to another model ---------|
+    Image,         // byte[] (special optimized image) -----|
+    Json,          // JSON object / dict                    |
+				   //                                       |      
+				   // Relational types                      |
+	Many2One,      // foreign key to another model ---------|
     One2Many,      // collection of related records         |
     Many2Many,     // many-to-many relation ----------------|
     //                                                      |

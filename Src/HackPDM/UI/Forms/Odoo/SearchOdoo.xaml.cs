@@ -617,7 +617,7 @@ namespace HackPDM.UI.Forms.Odoo
 		}
 		private async Task DownloadRemoteFile(int entryID)
 		{
-			const string latest_version = "latest_version_id";
+			const string latest_version = nameof(HpEntry.latest_version_id);
 			HpVersion? version = (await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>([entryID], latest_version, excludedFields: ["preview_image"]))?.FirstOrDefault();
 
 			if (version == null)
@@ -629,7 +629,7 @@ namespace HackPDM.UI.Forms.Odoo
 		}
 		private async Task PreviewRemoteFile(int entryID)
 		{
-			const string latest_version = "latest_version_id";
+			const string latest_version = nameof(HpEntry.latest_version_id);
 			HpVersion? version = (await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>([entryID], latest_version, excludedFields: ["preview_image"]))?.FirstOrDefault();
 
 			if (version == null)

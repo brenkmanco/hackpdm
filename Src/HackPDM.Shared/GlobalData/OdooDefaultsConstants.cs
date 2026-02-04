@@ -62,5 +62,5 @@ public static class OdooDefaultsConstants
 	public const int ODOO_PATH_PREFIX_LENGTH = 5;
 	public static readonly string[] DependentExt = [".SLDPRT", ".SLDASM", ".SLDDRW"];
 	public static readonly string DependentExtRegex = "(?i)(" + string.Join("|", DependentExt.Select(s => $"(\\{s}$)")) + ")";
-	public static string OdooDateFormat(DateTime dt) => dt.ToString("yyyy-MM-dd HH:mm:ss");
+	public static string? OdooDateFormat(DateTime? dt) => dt?.ToString("yyyy-MM-dd HH:mm:ss");
 }

@@ -149,7 +149,8 @@ public sealed partial class HackFileManager : Page
 		InitializeComponent();
 		HackLoaded = false;
 #if DEBUG
-		DebugTest();
+		//DebugTest();
+		//DebugTest2();
 #endif
 	}
 	public static async Task LoadOdooDefaults()
@@ -220,6 +221,14 @@ public sealed partial class HackFileManager : Page
 		HackLoaded = true;
 	}
 #if DEBUG
+	private static async Task DebugTest2()
+	{
+		var create_test = new HpTest
+		{
+			id = 12
+		};
+		await HpTest.GetAllRecordsAsync();
+	}
 	private static async Task DebugTest()
 	{
 		var create_test = new HpTest()
@@ -231,7 +240,7 @@ public sealed partial class HackFileManager : Page
 			datetimes = DateTime.Now,
 			floats = 12345.6789f,
 			integer = 123456,
-			image = Encoding.UTF8.GetBytes(@"iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAEJ0lEQVR4AW1W3W/TVRjuXzRHVislmG20bCBbV9YsltpuI251EzDuYhcCYSR6YWJiJIoukPgVhAvuBFG4kCgkmJgYF1txY7Ubo+6zdhuUFde9j+d5256clP6SJ+/O2e88z/t13l895XIZfGgJEeFS7daTB1idO43cnyHkUnUwe2vZCZSKWdQ4LI/D6XH+Ye1/W3OWaGU6jPJqDNhMAIWYgn+XV2JYng7b97ZLOTR63AjU/pubtMTYiNeIRZGPVqDrquh63Ao9Xr6iPC5cAZOOk/piafGI6zFJ0QDiRvTknz48SkWwljlDuudTtLF4geQMvUoerUGstXD2ic2YRlvKBDD/UxPys+dsPSlgc66eb8Tw+y8JXL/Wj+vfxgmps6hff3ftKKZudwEPvFj/bZeKbG89tDXAYipcyXkxgY8nB9H+6ijaY8kaxLHiroPxUQReG4G/J4bmQAQfvd8JZH3I3X0BC3eaKhGwFek9Q6T3nfERBGOjBkM1CK2LjniSkAP9I9jbE4WvI2QQRmvXYY1CZnZrFFuP/4ZnNXNSvde8b0SxP+YKuCJJizpyK/DyKxUBzPo1itX0GDy5VLXPCwbFKHqHhhoIJBUH+4dxIDECl9wV6OrrAbJe7Ez7sJXyMgoVENvrm1EcP5WkgDjpUa87Ta4LD4/IUmZA9obiYkgJqFWE5diJLmDWK0ZATBQyf6dZVEC9z0cpIJcuD6BdBdRrWq5x8fPXWSdBLoj3JoJo6YiQFAa0uv5msl0Ftu8zTT4YAbgC2uM7a1H59MKgHD+dxLFTSRk/O4yrVweAQgIyF5Qdc5iY/DAgQ292YSDZLYNvdAs7SP5ielRAjICNwKbIvVBMl4GgqJeI5DAHKUASYJok9FStrrlfgU8LXRUISXnFHQlWBIZcmBZ6zrApUAHJCApYYvsOa/A05RVTZPHk5yd0WFWjqAng5o1+vPPuMJ5lOkhCAhe693jKh6RJ060rrbpHAXpv2/T+ODyc57l0SKeinZqbMbl546j4DiawP9yNrz9rw+xtP56mX0TRYOZHPy6eC8i+0GE0t0Xww+VWW1wK7FQvWqmYg0dEzKgI1aKggOac3fLJB/vMCOhFSyBiEK5DRHYFe/Hl+TbgQSVFrvfzd72w03T7WU7HxZOFPua81i1avKnv98iJtw7JSx29QlJid2cv3h47JOlbe8TWoNr7+V9bRIddaYXUGoEqrS9d4jyXUqYdqBywxePtLM94ZeGeH4/u+WWH4yCrxK7nUvyjBSzs5sJXz3/R+KzNnqG6mJFLb3jQFWpgfQqmpeZ5fuasuB8xFXBRyJ6nF5pHTkUephBRbUO75v9YUL7LM4W5LyyxFcDzDz8WPGCFOLhI5hKbPrfE8z8b4dKSS9z4o1//84PzfDk9Zm5kU0OspsfZiu5PHZdH7f8j48WuF/x78gAAAABJRU5ErkJggg=="),
+			image = FileOperations.ConvertFromBase64(@"iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAEJ0lEQVR4AW1W3W/TVRjuXzRHVislmG20bCBbV9YsltpuI251EzDuYhcCYSR6YWJiJIoukPgVhAvuBFG4kCgkmJgYF1txY7Ubo+6zdhuUFde9j+d5256clP6SJ+/O2e88z/t13l895XIZfGgJEeFS7daTB1idO43cnyHkUnUwe2vZCZSKWdQ4LI/D6XH+Ye1/W3OWaGU6jPJqDNhMAIWYgn+XV2JYng7b97ZLOTR63AjU/pubtMTYiNeIRZGPVqDrquh63Ao9Xr6iPC5cAZOOk/piafGI6zFJ0QDiRvTknz48SkWwljlDuudTtLF4geQMvUoerUGstXD2ic2YRlvKBDD/UxPys+dsPSlgc66eb8Tw+y8JXL/Wj+vfxgmps6hff3ftKKZudwEPvFj/bZeKbG89tDXAYipcyXkxgY8nB9H+6ijaY8kaxLHiroPxUQReG4G/J4bmQAQfvd8JZH3I3X0BC3eaKhGwFek9Q6T3nfERBGOjBkM1CK2LjniSkAP9I9jbE4WvI2QQRmvXYY1CZnZrFFuP/4ZnNXNSvde8b0SxP+YKuCJJizpyK/DyKxUBzPo1itX0GDy5VLXPCwbFKHqHhhoIJBUH+4dxIDECl9wV6OrrAbJe7Ez7sJXyMgoVENvrm1EcP5WkgDjpUa87Ta4LD4/IUmZA9obiYkgJqFWE5diJLmDWK0ZATBQyf6dZVEC9z0cpIJcuD6BdBdRrWq5x8fPXWSdBLoj3JoJo6YiQFAa0uv5msl0Ftu8zTT4YAbgC2uM7a1H59MKgHD+dxLFTSRk/O4yrVweAQgIyF5Qdc5iY/DAgQ292YSDZLYNvdAs7SP5ielRAjICNwKbIvVBMl4GgqJeI5DAHKUASYJok9FStrrlfgU8LXRUISXnFHQlWBIZcmBZ6zrApUAHJCApYYvsOa/A05RVTZPHk5yd0WFWjqAng5o1+vPPuMJ5lOkhCAhe693jKh6RJ060rrbpHAXpv2/T+ODyc57l0SKeinZqbMbl546j4DiawP9yNrz9rw+xtP56mX0TRYOZHPy6eC8i+0GE0t0Xww+VWW1wK7FQvWqmYg0dEzKgI1aKggOac3fLJB/vMCOhFSyBiEK5DRHYFe/Hl+TbgQSVFrvfzd72w03T7WU7HxZOFPua81i1avKnv98iJtw7JSx29QlJid2cv3h47JOlbe8TWoNr7+V9bRIddaYXUGoEqrS9d4jyXUqYdqBywxePtLM94ZeGeH4/u+WWH4yCrxK7nUvyjBSzs5sJXz3/R+KzNnqG6mJFLb3jQFWpgfQqmpeZ5fuasuB8xFXBRyJ6nF5pHTkUephBRbUO75v9YUL7LM4W5LyyxFcDzDz8WPGCFOLhI5hKbPrfE8z8b4dKSS9z4o1//84PzfDk9Zm5kU0OspsfZiu5PHZdH7f8j48WuF/x78gAAAABJRU5ErkJggg=="),
 			html = """
 <h1>Welcome to My Simple Page</h1>
 <p>This is a paragraph of text on my page.</p>
@@ -774,7 +783,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 			HpDirectory[] directories = await HpDirectory.CreateNew(paths);
 			HpDirectory lastDirectoryModel = directories.Last() ?? throw new Exception($"{HpDirectory.GetHpModel()} didn't create any records");
             // create an HpEntry that doesn't exist in odoo
-            (entryReturn, HpEntry? entry) = await HpEntry.GetFallbackCreateEntryAsync(hackFile, lastDirectoryModel.Id ?? 0);
+            (entryReturn, HpEntry? entry) = await HpEntry.GetFallbackCreateEntryAsync(hackFile, lastDirectoryModel.id ?? 0);
 
 			switch (entryReturn)
 			{
@@ -808,7 +817,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 
 			// create an HpVersion that doesn't exist in odoo
 			HpVersion version = await OdooDefaults.CreateNewVersion(hackFile, entry);
-			if (version.Id is 0) entryReturn = EntryReturnType.Failed;
+			if (version.id is 0) entryReturn = EntryReturnType.Failed;
 			return (entryReturn, version);
         }
         catch (Exception e)
@@ -822,7 +831,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	{
 		foreach (HpEntry entry in entries)
 		{
-			if (entry.checkout_user?.Id is null or 0)
+			if (entry.checkout_user?.id is null or 0)
 			{
 				yield return entry;
 			}
@@ -922,7 +931,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	private HpVersion[] GetLatestVersions(ArrayList entryIDs, string[]? excludedFields = null)
 	{
 		if (excludedFields == null) excludedFields = ["preview_image", "file_contents"];
-		return HpEntry.GetRelatedRecordByIds<HpVersion>(entryIDs, "latest_version_id", excludedFields);
+		return HpEntry.GetRelatedRecordByIds<HpVersion>(entryIDs, nameof(HpEntry.latest_version_id), excludedFields);
 	}
 	private async Task ProcessVersionBatchAsync(IEnumerable<HpVersion> batchVersions)
 	{
@@ -1026,13 +1035,13 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		// directory only needs ID set to find that record's entries
 		HpDirectory directoryModel = new()
 		{
-			Id = data?.DirectoryId ?? 0,
+			id = data?.DirectoryId ?? 0,
 			name = data?.Name ?? "",			
 		};
 
 		lock (lockObject)
 		{
-			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Retrieving all entries and their and their associated dependencies within directory ({directoryModel.name}, id: {directoryModel.Id})");
+			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Retrieving all entries and their and their associated dependencies within directory ({directoryModel.name}, id: {directoryModel.id})");
 		}
 
 		Dialog?.IsInProcess = true;
@@ -1739,12 +1748,12 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		HpEntry entryModel = (await HpEntry.GetRecordsByIdsAsync([versionModel.entry_id])).First();
 		ArrayList versions = await GetVersionList(item.Version);
 		HashSet<int> vIds = versions.ToHashSet<int>();
-		vIds.Add(versionModel.Id ?? 0);
+		vIds.Add(versionModel.id ?? 0);
 		string vIdsText = string.Join(", ", vIds);
 		string eText = entryModel.latest_version_id == item.Version ? $"You are trying to download the latest version and dependencies. Continue?" : "You are trying to download a previous version and dependencies. Continue?";
 		string vText = $"version:\n" +
 					   $"\tName = {versionModel.name}\n" +
-					   $"\tID = {versionModel.Id}\n" +
+					   $"\tID = {versionModel.id}\n" +
 					   $"\tSize = {versionModel.file_size}\n" +
 					   $"\tChecksum = {versionModel.checksum}\n" +
 					   $"\tAttachID = {versionModel.attachment_id}\n" +
@@ -1788,7 +1797,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	}
 	private void OpenRemoteFile(int entryId)
 	{
-		const string latestVersion = "latest_version_id";
+		const string latestVersion = nameof(HpEntry.latest_version_id);
 		HpVersion versionModel = HpEntry.GetRelatedRecordByIds<HpVersion>([entryId], latestVersion, excludedFields: ["preview_image"]).First();
 		if (versionModel == null)
 			return;
@@ -2126,7 +2135,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		HpVersion[] versions = HpEntry.GetRelatedRecordByIds<HpVersion>(ids, "version_ids", includedFields: ["ID"]);
 		IrAttachment[] irAttachments = null;
 
-		ArrayList vIds = versions?.Select(v => v.Id).ToArrayList() ?? [];
+		ArrayList vIds = versions?.Select(v => v.id).ToArrayList() ?? [];
 
 		bool deletedIrAttachments = false;
 		bool deletedVersions = false;
@@ -2183,11 +2192,11 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	internal async Task GetLatestInternal(ArrayList entryIDs)
 	{	
 		Dialog?.AddStatusLine(StatusMessage.INFO, "Finding Entry Dependencies...");
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: ["latest_version_id"]);
-		//HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: ["latest_version_id"]);
+		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: [nameof(HpEntry.latest_version_id)]);
+		//HpEntry[] entries = HpEntry.GetRecordsByIDS(entryIDs, includedFields: [nameof(HpEntry.latest_version_id)]);
 
 		if (entries is null || entries.Length < 1) return;
-		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entries.Select(entry => entry.latest_version_id?.Id ?? 0)]);
+		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entries.Select(entry => entry.latest_version_id?.id ?? 0)]);
 
 		newIds.AddRange(entryIDs);
 		newIds = newIds.ToHashSet<int>().ToArrayList();
@@ -2207,9 +2216,9 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	
 	internal async Task CheckoutInternal(ArrayList entryIDs)
 	{
-		HpEntry[]? entriesTemp = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: ["latest_version_id"]);
+		HpEntry[]? entriesTemp = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: [nameof(HpEntry.latest_version_id)]);
 
-		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp.Select(e => e.latest_version_id?.Id ?? 0)]);
+		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp.Select(e => e.latest_version_id?.id ?? 0)]);
 
 		newIds.AddRange(entryIDs);
 		newIds = newIds.ToHashSet<int>().ToArrayList();
@@ -2229,8 +2238,8 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	{
 		if (entryIDs is null or { Count: < 1 }) return;
 
-		var entriesTemp = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: ["latest_version_id"]);
-		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp?.Select(e => e.latest_version_id?.Id ?? 0) ?? []]);
+		var entriesTemp = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: [nameof(HpEntry.latest_version_id)]);
+		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp?.Select(e => e.latest_version_id?.id ?? 0) ?? []]);
 
 		newIds.AddRange(entryIDs);
 		newIds = newIds.ToHashSet<int>().ToArrayList();
@@ -2260,9 +2269,9 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 	}
 	internal async Task LogicalDeleteInternal(ArrayList entryIDs)
 	{
-		HpEntry[]? entriesTemp = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: ["latest_version_id"]);
+		HpEntry[]? entriesTemp = await HpEntry.GetRecordsByIdsAsync(entryIDs, includedFields: [nameof(HpEntry.latest_version_id)]);
 
-		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp?.Select(e => e.latest_version_id?.Id ?? 0) ?? []]);
+		ArrayList newIds = await GetAllEntriesAndDependenciesList([.. entriesTemp?.Select(e => e.latest_version_id?.id ?? 0) ?? []]);
 
 		newIds.AddRange(entryIDs);
 		newIds = newIds.ToHashSet<int>().ToArrayList();

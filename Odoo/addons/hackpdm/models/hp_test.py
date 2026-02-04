@@ -17,7 +17,7 @@ class hp_test(models.Model):
     image = fields.Image()
     integer = fields.Integer()
     json = fields.Json()
-    monetary = fields.Monetary()
+    monetary = fields.Monetary(default=1.5)
     selection = fields.Selection([
         ('option_a', 'Option A'),
         ('option_b', 'Option B'),

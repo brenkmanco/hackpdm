@@ -143,7 +143,7 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 	private static void DoNothing() { }
     public static ArrayList GetLatestIDs(ArrayList ids)
     {
-        const string latest = "latest_version_id";
+        const string latest = nameof(HpEntry.latest_version_id);
            
         ArrayList list = OClient.Read(GetHpModel(), ids, [latest], 10000);
 
@@ -151,22 +151,22 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
     }
     public static int GetLatestID(int id)
     {
-        ArrayList list = OClient.Read(GetHpModel(), [id], ["latest_version_id"], 10000);
-        return list is not null and {Count: > 0 } ? ((list[0] as Hashtable)?["latest_version_id"] as ArrayList)?[0] is int latestId ? latestId : 0 : 0;
+        ArrayList list = OClient.Read(GetHpModel(), [id], [nameof(HpEntry.latest_version_id)], 10000);
+        return list is not null and {Count: > 0 } ? ((list[0] as Hashtable)?[nameof(HpEntry.latest_version_id)] as ArrayList)?[0] is int latestId ? latestId : 0 : 0;
 	}
 	public static async Task<int> GetLatestIDAsync(int id)
 	{
-		ArrayList list = await OClient.ReadAsync(GetHpModel(), [id], ["latest_version_id"], 10000);
-		return list is not null and {Count: > 0 } ?  ((list[0] as Hashtable)?["latest_version_id"] as ArrayList)?[0] is int latestId ? latestId : 0 : 0;
+		ArrayList list = await OClient.ReadAsync(GetHpModel(), [id], [nameof(HpEntry.latest_version_id)], 10000);
+		return list is not null and {Count: > 0 } ?  ((list[0] as Hashtable)?[nameof(HpEntry.latest_version_id)] as ArrayList)?[0] is int latestId ? latestId : 0 : 0;
 	}
 	public int GetLatestID()
     {
-        if (HashedValues.TryGetValue("latest_version_id", out int latestId)) return latestId;
-		ArrayList list = OClient.Read(GetHpModel(), [this.id], ["latest_version_id"], 10000);
+        if (HashedValues.TryGetValue(nameof(HpEntry.latest_version_id), out int latestId)) return latestId;
+		ArrayList list = OClient.Read(GetHpModel(), [this.id], [nameof(HpEntry.latest_version_id)], 10000);
 
-		return list is not null and {Count: > 0 } ? ((list[0] as Hashtable)?["latest_version_id"] as ArrayList)?[0] is int id ? id : 0 : 0;
+		return list is not null and {Count: > 0 } ? ((list[0] as Hashtable)?[nameof(HpEntry.latest_version_id)] as ArrayList)?[0] is int id ? id : 0 : 0;
 	}
-	public bool CanCheckOut() => (checkout_user?.Id is null or 0) && deleted is false;
+	public bool CanCheckOut() => (checkout_user?.id is null or 0) && deleted is false;
     public bool CanUnCheckOut() => (checkout_user is not null) && checkout_user == OdooDefaults.Instance.OdooId;
         
     public async Task CheckOut()
@@ -174,13 +174,13 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
         if (!CanCheckOut()) return;
         checkout_user = OdooDefaults.Instance.OdooId;
         checkout_date = DateTime.Now;
-        checkout_node = OdooDefaults.Instance.MyNode.Id;
+        checkout_node = OdooDefaults.Instance.MyNode.id;
 
         await WriteChangedValuesAsync("checkout_user", "checkout_date", "checkout_node");
 		HpVersion version = new()
 		{
 			node_id = checkout_node,
-			Id = latest_version_id
+			id = latest_version_id
 		};
 		await version.WriteChangedValuesAsync("node_id");
         if (HashedValues.TryGetValue("windows_complete_name", out object objpath) && objpath is string winpath)
@@ -227,7 +227,7 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
         if (type is not null)
         {
             newEntry.cat_id = type.cat_id ?? 0;
-            newEntry.type_id = type.Id;
+            newEntry.type_id = type.id;
         }
 	
         await newEntry.CreateAsync( false );
@@ -254,8 +254,8 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 		};
 		if (type is not null)
 		{
-			newEntry.cat_id = type.cat_id?.Id ?? 0;
-			newEntry.type_id = type.Id;
+			newEntry.cat_id = type.cat_id?.id ?? 0;
+			newEntry.type_id = type.id;
 		}
 		await newEntry.CreateAsync( false );
 		return entry?.id == 0 ? (EntryReturnType.Failed, null) : (EntryReturnType.Created, entry);

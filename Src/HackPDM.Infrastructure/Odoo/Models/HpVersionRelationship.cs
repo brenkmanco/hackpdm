@@ -68,8 +68,8 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
                 hvrCreate = [.. hvrCreate, .. 
                     getVersions.Select(v => new HpVersionRelationship()
                     {
-                        parent_id = version.Id ?? 0,
-                        child_id = v.Id ?? 0,
+                        parent_id = version.id ?? 0,
+                        child_id = v.id ?? 0,
                     })
                 ];
             }
@@ -77,7 +77,7 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
             
         if (hvrCreate.Length > 0)
         {
-            await MultiCreateAsync<HpVersionRelationship>(hvrCreate.ToArrayList());
+            await MultiCreateAsync(hvrCreate.ToArrayList());
         }
     }
 }

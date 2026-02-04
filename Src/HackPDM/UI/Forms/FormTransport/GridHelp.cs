@@ -113,7 +113,7 @@ namespace HackPDM.UI.Forms.FormTransport
 					}
 				case { Id: not (null or 0) }:
 					{
-						versionId = await HpEntry.GetFieldValueAsync<int>(entry.Id ?? 0, "latest_version_id");
+						versionId = await HpEntry.GetFieldValueAsync<int>(entry.Id ?? 0, nameof(HpEntry.latest_version_id));
 						break;
 					}
 
@@ -149,8 +149,8 @@ namespace HackPDM.UI.Forms.FormTransport
 			childVersions =
 				await HpVersionRelationship.GetRelatedRecordsBySearchAsync<HpVersion>([new ArrayList()
 				{
-					"parent_id", "=", versionId
-				}], "child_id",
+					nameof(HpVersionRelationship.parent_id), "=", versionId
+				}], nameof(HpVersionRelationship.child_id),
 					excludedFields: ["preview_image", "node_id", "entry_id", "file_modify_stamp", "checksum", "file_contents"],
 					insertFields: ["directory_complete_name"]
 				);
@@ -169,7 +169,7 @@ namespace HackPDM.UI.Forms.FormTransport
 			versionInfo = entry?.LatestId is null
 				? (await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
 					[entry?.Id ?? 0],
-					"latest_version_id",
+					nameof(HpEntry.latest_version_id),
 					excludedFields: ["preview_image", "file_contents"]))?.First()
 				: await HpVersion.GetRecordByIdAsync(entry!.LatestId ?? 0, ["preview_image", "file_contents"]);
 
@@ -235,11 +235,11 @@ namespace HackPDM.UI.Forms.FormTransport
 
 						foreach (HpVersionProperty versionProp in versionProperties)
 						{
-							if (versionProp == null || versionProp.Id == 0) continue;
+							if (versionProp == null || versionProp.id == 0) continue;
 
 							var item = EmptyListItemInternal<PropertiesRow>(grid);
 
-							item.Version = versionProp.version_id?.Id ?? 0;
+							item.Version = versionProp.version_id?.id ?? 0;
 							item.Configuration = versionProp.sw_config_name;
 							item.Name = versionProp.prop_name;
 							item.Property = versionProp.prop_id;
@@ -276,7 +276,7 @@ namespace HackPDM.UI.Forms.FormTransport
 					foreach (HpVersion version in v)
 					{
 						var item = EmptyListItemInternal<ChildrenRow>(grid);
-						item.Version = version.Id ?? 0;
+						item.Version = version.id ?? 0;
 						item.Name = version.name;
 						item.BasePath = Path.Combine(/*HackDefaults.PWAPathAbsolute,*/ version.WinPathway);
 						grid.ItemAdd(item);
@@ -300,7 +300,7 @@ namespace HackPDM.UI.Forms.FormTransport
 					foreach (HpVersion version in v)
 					{
 						var item = EmptyListItemInternal<ParentRow>(grid);
-						item.Version = version.Id ?? 0;
+						item.Version = version.id ?? 0;
 						item.Name = version.name;
 						item.BasePath = version.WinPathway;
 
@@ -329,7 +329,7 @@ namespace HackPDM.UI.Forms.FormTransport
 					{
 						var item = EmptyListItemInternal<HistoryRow>(grid);
 
-						item.Version = version.Id ?? 0;
+						item.Version = version.id ?? 0;
 						int? moduser = null;
 						if (version.HashedValues.TryGetValue("create_uid", out ArrayList? obj))
 						{
@@ -365,7 +365,7 @@ namespace HackPDM.UI.Forms.FormTransport
 					InitListViewInternal(grid);
 					var item = EmptyListItemInternal<VersionRow>(grid);
 
-					item.Id = versionModel.Id ?? 0;
+					item.Id = versionModel.id ?? 0;
 					item.Name = versionModel.name;
 					item.Checksum = versionModel.checksum;
 					item.FileSize = versionModel.file_size;

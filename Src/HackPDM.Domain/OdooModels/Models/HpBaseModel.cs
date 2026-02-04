@@ -17,7 +17,7 @@ public abstract partial class HpBaseModel
 {
 	// (MVVM) VIEW
 	public const int ROOT_OFFSET = 5;
-	[OdooProp(OdooFieldType.Integer, "id")] public int? Id { get; set; }
+	[OdooProp(OdooFieldType.Integer, "id")] public int? id { get; set; }
 
 	public static string[] UsualExcludedFields { get; set; } = [];
 	public static string[] UsualIncludedFields { get; set; } = [];
@@ -63,45 +63,45 @@ public abstract partial class HpBaseModel
     public string[]? ExcludedFields { get; set; }
     public string[]? InsertFields { get; set; }
     
-    protected Hashtable ComputeHashtable(bool includeEmpty = true, in string[]? excludedFieldNames = null, bool isNew = false)
-    {
-	    Hashtable ht = [];
-	    Type type = GetType();
-	    List<string> excludeFields = [];
-	    PropertyInfo[] fields = [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute)))];
+    //protected virtual Hashtable ComputeHashtable(bool includeEmpty = true, in string[]? excludedFieldNames = null, bool isNew = false)
+    //{
+	   // Hashtable ht = [];
+	   // Type type = GetType();
+	   // List<string> excludeFields = [];
+	   // PropertyInfo[] fields = [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute)))];
 
-	    foreach (PropertyInfo field in fields)
-	    {
-		    if (excludedFieldNames != null && excludedFieldNames.Contains(field.Name))
-		    {
-			    excludeFields.Add(field.Name);
-			    continue;
-		    }
-		    if (!includeEmpty)
-		    {
-			    Type fType = field.PropertyType;
-			    bool valueType = fType.IsValueType;
+	   // foreach (PropertyInfo field in fields)
+	   // {
+		  //  if (excludedFieldNames != null && excludedFieldNames.Contains(field.Name))
+		  //  {
+			 //   excludeFields.Add(field.Name);
+			 //   continue;
+		  //  }
+		  //  if (!includeEmpty)
+		  //  {
+			 //   Type fType = field.PropertyType;
+			 //   bool valueType = fType.IsValueType;
 
-			    object fVal = field.GetValue(this);
-			    if (valueType && Activator.CreateInstance(fType) == fVal) continue;
-			    else if (!valueType && fVal == null) continue;
-		    }
+			 //   object fVal = field.GetValue(this);
+			 //   if (valueType && Activator.CreateInstance(fType) == fVal) continue;
+			 //   else if (!valueType && fVal == null) continue;
+		  //  }
 
-		    string fieldName = field.Name;
-		    object fieldValue = field.GetValue(this);
+		  //  string fieldName = field.Name;
+		  //  object fieldValue = field.GetValue(this);
 
-		    if (isNew && fieldValue is DateTime dt)
-		    {
-			    string date = OdooDefaultsConstants.OdooDateFormat(dt);
-			    fieldValue = date;
-		    }
-		    ht.Add(fieldName, fieldValue);
-	    }
-	    if (excludeFields.Count > 0) ExcludedFields = [.. excludeFields];
+		  //  if (isNew && fieldValue is DateTime dt)
+		  //  {
+			 //   string date = OdooDefaultsConstants.OdooDateFormat(dt);
+			 //   fieldValue = date;
+		  //  }
+		  //  ht.Add(fieldName, fieldValue);
+	   // }
+	   // if (excludeFields.Count > 0) ExcludedFields = [.. excludeFields];
 
-	    if (!isNew)
-		    ht.Add("id", Id);
+	   // if (!isNew)
+		  //  ht.Add("id", Id);
 
-	    return ht;
-    }
+	   // return ht;
+    //}
 }

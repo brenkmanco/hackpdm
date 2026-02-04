@@ -46,10 +46,10 @@ public abstract class HackBaseFile : IHackBaseFileModel
     public byte[]? FileContents { get; set; }
     public FileInfo? Info { get; set; }
 
-    public Hashtable ComputeHashtable(bool includeEmpty = true, in string[] excludedFieldNames = null)
+    public virtual Hashtable ComputeHashtable(bool includeEmpty = true, in string[]? excludedFieldNames = null)
     {
-        var ht = ReflectionHelp.ConvertToHashtable(this, MethodType.PropertyOnly, includeEmpty, excludedFieldNames);
+        // var ht = ReflectionHelp.ConvertToHashtable(this, MethodType.PropertyOnly, includeEmpty, excludedFieldNames);
             
-        return ht;
+        return [];
     }
 }

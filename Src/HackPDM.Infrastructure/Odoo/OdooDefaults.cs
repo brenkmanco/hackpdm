@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 
 using HackPDM.Abstractions;
+using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels;
@@ -351,7 +352,7 @@ public class OdooDefaults : IOdooDefaults
 
         foreach ( IHpUserModel user in hpUsers )
         {
-            dict.Add( user.Id ?? 0, user );
+            dict.Add( user.id ?? 0, user );
         }
         return dict;
     }
@@ -404,7 +405,7 @@ public class OdooDefaults : IOdooDefaults
         {
             foreach ( HpCategory category in categories )
             {
-                if (category.Id != type.cat_id?.Id || type.file_ext is null) continue;
+                if (category.id != type.cat_id?.id || type.file_ext is null) continue;
                 dict.Add( $".{type.file_ext.ToLower()}", category );
                 break;
             }
@@ -413,12 +414,12 @@ public class OdooDefaults : IOdooDefaults
     }
     public static Dictionary<int, IHpPropertyModel> IdMapProperty(in IHpPropertyModel[]? props )
     {
-        if (props is null) return [];
+		if (props is null) return [];
 		Dictionary<int, IHpPropertyModel> dict = [];
 
         foreach ( HpProperty prop in props )
         {
-            dict.Add( prop.Id ?? 0, prop );
+            dict.Add( prop.id ?? 0, prop );
         }
         return dict;
     }
@@ -429,7 +430,7 @@ public class OdooDefaults : IOdooDefaults
             // create an HpVersion that doesn't exist in odoo
             HpEntry? ent = entry as HpEntry;
             HpVersion version = await HpVersion.CreateNew(hack, entry) ?? throw new Exception( $"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}" );
-			ent?.latest_version_id = version.Id;
+			ent?.latest_version_id = version.id;
             return version;
         }
         catch (Exception e)
