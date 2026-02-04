@@ -68,8 +68,6 @@ namespace HackPDM.UI.Forms.FormTransport
 				versions = await GetVersionsForEntryAsync(entry.Id ?? 0, ["preview_image", "file_contents"], insertedFields: ["create_uid"]);
 			}
 			if (!listVersions) return versions;
-
-			token.ThrowIfCancellationRequested();
 			await SafeHelper.SafeInvokerAsync(() => PopulateHistory(grid, versions ?? []));
 			return versions;
 		}
@@ -79,7 +77,6 @@ namespace HackPDM.UI.Forms.FormTransport
 			if (entry.Id == null) return null;
 
 			HpVersion[]? versions = await GetVersionsForEntryAsync(entry.Id ?? 0, ["preview_image", "file_contents"], insertedFields: ["create_uid"]);
-			token.ThrowIfCancellationRequested();
 			return await ProcessPropertiesSelectInternalAsync(grid, versions, token, listProperties);
 		}
 		private async Task<List<HpVersionProperty[]?>> ProcessPropertiesSelectInternalAsync(DataGrid grid, HpVersion[]? versions, CancellationToken token, bool listProperties = true)
@@ -90,11 +87,7 @@ namespace HackPDM.UI.Forms.FormTransport
 				versionProperties = await HpVersion.GetAllVersionPropertiesAsync(versions.ToArrayListIDs());
 			}
 			if (!listProperties || (versionProperties is null or { Count: < 1 })) return versionProperties;
-			token.ThrowIfCancellationRequested();
-			await SafeHelper.SafeInvokerAsync(() =>
-			{
-				PopulateProperties(grid, versionProperties ?? []);
-			});
+			await SafeHelper.SafeInvokerAsync(() => PopulateProperties(grid, versionProperties ?? []));
 			return versionProperties;
 		}
 		internal async Task<HpVersion[]?> ProcessParentSelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listParents = true)
@@ -133,7 +126,6 @@ namespace HackPDM.UI.Forms.FormTransport
 					);
 			}
 			if (!listParents || (parentVersions is null or { Length: < 1 })) return parentVersions;
-			token.ThrowIfCancellationRequested();
 			await SafeHelper.SafeInvokerAsync(() => PopulateParent(grid, parentVersions ?? []));
 			return parentVersions;
 		}
@@ -156,7 +148,6 @@ namespace HackPDM.UI.Forms.FormTransport
 				);
 
 			if (!listChildren || (childVersions is null or { Length: < 1 })) return childVersions;
-			token.ThrowIfCancellationRequested();
 			await SafeHelper.SafeInvokerAsync(() => PopulateChildren(grid, childVersions ?? []));
 			return childVersions;
 		}
@@ -174,7 +165,6 @@ namespace HackPDM.UI.Forms.FormTransport
 				: await HpVersion.GetRecordByIdAsync(entry!.LatestId ?? 0, ["preview_image", "file_contents"]);
 
 			if (!listVersionInfo || versionInfo is null) return versionInfo;
-			token.ThrowIfCancellationRequested();
 			await SafeHelper.SafeInvokerAsync(() => PopulateVersionInfo(grid, versionInfo));
 			return versionInfo;
 		}

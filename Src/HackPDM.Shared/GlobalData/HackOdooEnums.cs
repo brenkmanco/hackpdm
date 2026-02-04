@@ -15,7 +15,8 @@ public enum FileStatus
     Ft, // Filter Type
     Cm, // Checked Out To Me
     Co, // Checked Out To Other
-
+    NoVersions, // 
+    Unknown,
 }
 
 public enum EntryReturnType

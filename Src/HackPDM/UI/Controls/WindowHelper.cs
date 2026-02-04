@@ -2,7 +2,10 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 
+using HackPDM.Core.Helper.Xaml;
 using HackPDM.Domain.Representation;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Forms;
@@ -29,6 +32,43 @@ public static partial class WindowHelper
     }
     
 
+    public static Task AnimateWindowSize(AppWindow appWindow, Windows.Graphics.SizeInt32 targetSize, double durationMs = 250, CancellationToken token = default)
+    {
+        return SafeHelper.SafeInvokerAsync(() =>
+        {
+			var startSize = appWindow.Size;
+	        var startTime = DateTime.Now;
+
+	        DispatcherTimer timer = new DispatcherTimer();
+	        timer.Interval = TimeSpan.FromMilliseconds(16); // ~60fps
+
+	        timer.Tick += (s, e) =>
+	        {
+		        var elapsed = (DateTime.Now - startTime).TotalMilliseconds;
+		        double progress = Math.Min(elapsed / durationMs, 1.0);
+
+		        // Optional: Add easing (Cubic Out)
+		        progress = 1 - Math.Pow(1 - progress, 3);
+
+		        int newWidth = (int)(startSize.Width + (targetSize.Width - startSize.Width) * progress);
+		        int newHeight = (int)(startSize.Height + (targetSize.Height - startSize.Height) * progress);
+
+                if (token.IsCancellationRequested)
+                {
+                    timer.Stop();
+                    return;
+				}
+				appWindow.Resize(new Windows.Graphics.SizeInt32(newWidth, newHeight));
+
+		        if (progress >= 1.0)
+		        {
+			        timer.Stop();
+		        }
+	        };
+
+	        timer.Start();
+        }, token);
+    }
     public static T CreateWindow<T>(string? configName = null, bool activated = true, bool withFrame = true) where T : Window, new()
     {
         T window = new T();
@@ -113,10 +153,14 @@ public static partial class WindowHelper
         SetWindowConfig(win, winConfig);
         return win;
     }
-    private static void SetWindowConfig(Window window, WindowConfig windowConfig)
+    private static CancellationTokenSource _animationCts = new();
+	public static void SetWindowConfig(Window window, WindowConfig windowConfig)
     {
         window.Title = windowConfig.Title;
         window.SetWindowType(windowConfig.WindowKind);
+        _animationCts.Cancel();
+        _animationCts = new CancellationTokenSource();
+		//AnimateWindowSize(window.AppWindow, new Windows.Graphics.SizeInt32(windowConfig.PositionAndSize.z, windowConfig.PositionAndSize.w), 250, _animationCts.Token);
         window.AppWindow.MoveAndResize(windowConfig.PositionAndSize);
     }
 }
@@ -124,11 +168,13 @@ public class WindowConfig(string title, Vector4<int> positionAndSize, AppWindowP
 {
     public static Dictionary<string, WindowConfig> PresetWindowConfig = new ()
 	{
-		{"ProfileManager", new WindowConfig("Profile Manager", new Vector4<int>(200, 200, 500, 200))},
+		{"ProfileManager", new WindowConfig("Profile Manager", new Vector4<int>(200, 200, 600, 600))},
         {"OdooSettings", new WindowConfig("Odoo Settings", new Vector4<int>(200, 200, 500, 500))},
-        {"HackSettings", new WindowConfig("Hack Settings", new Vector4<int>(200, 200, 700, 200))},
-        {"HackFileManager", new WindowConfig("Hack File Manager", new Vector4<int>(0, 0, 1280, 720))},
-        {"MessageBox", new WindowConfig("Info", new Vector4<int>(200, 200, 450, 250), AppWindowPresenterKind.CompactOverlay)},
+		{"HackSettings", new WindowConfig("Hack Settings", new Vector4<int>(200, 200, 700, 200))},
+		{"ConfigSettings", new WindowConfig("Configuration Settings", new Vector4<int>(200, 200, 900, 600))},
+        {"HackFileManager", new WindowConfig("Hack File Manager", new Vector4<int>(0, 0, 1600, 900))},
+		{"NotLoggedIn", new WindowConfig("Hack File Manager", new Vector4<int>(0, 0, 1280, 720))},
+		{"MessageBox", new WindowConfig("Info", new Vector4<int>(200, 200, 450, 250), AppWindowPresenterKind.CompactOverlay)},
         {"TemplateWindow", new WindowConfig("Template Window", new Vector4<int>(200, 200, 500, 300))},
     };
     public string Title { get; set; } = title;

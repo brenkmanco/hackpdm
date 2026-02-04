@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using HackPDM.UI.Controls;
+using HackPDM.UI.Forms.Hack;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -30,7 +31,26 @@ public static class InstanceManager
         }
         Register(page);
     }
-    public static T GetAPage<T>() where T : Page, new()
+    public static T GetPageSetConfig<T>(string configName, Window? window = null) where T : Page, new()
+    {
+        if (_pages.TryGetValue(typeof(T), out var page) && page?.Count > 0)
+        {
+            return (T)page[0];
+        }
+        T newPage = new();
+
+        var winconfig = GetConfig(configName);
+		if (window is not null && winconfig is not null) WindowHelper.SetWindowConfig(window, winconfig);
+
+		List<Page> newPages = [newPage];
+        _pages[typeof(T)] = newPages;
+        return newPage;
+	}
+    public static void SetWinConfig(string configName)
+        => WindowHelper.SetWindowConfig(HackApp.Window, GetConfig(configName));
+	public static WindowConfig? GetConfig(string configName)
+        => WindowConfig.PresetWindowConfig.GetValueOrDefault(configName);
+	public static T GetAPage<T>() where T : Page, new()
     {
 	    if (_pages.TryGetValue(typeof(T), out var page) && page?.Count > 0)
 	    {

@@ -469,14 +469,14 @@ namespace HackPDM.UI.Forms.FormTransport
 					? item.Checkout?.id == OdooDefaults.Instance.OdooId ? FileStatus.Cm : FileStatus.Co
 					: table["latest_checksum"] switch
 					{
-						bool => FileStatus.Lo,
+						bool => FileStatus.NoVersions,
 						string latestChecksum => hack?.Checksum switch
 						{
 							null => FileStatus.Ro,
 							_ when hack.Checksum == latestChecksum => FileStatus.Ok,
 							_ => remoteDate > hack.ModifiedDate ? FileStatus.Nv : FileStatus.Lm
 						},
-						_ => FileStatus.Lo
+						_ => FileStatus.Unknown,
 					}
 				: FileStatus.Dt;
 			item.Status = status;

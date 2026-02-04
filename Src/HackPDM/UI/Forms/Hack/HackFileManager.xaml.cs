@@ -711,57 +711,57 @@ public sealed partial class HackFileManager : Page
 	}
 	private async Task Async_ListItemChange(EntryRow item, CancellationToken token)
 	{
-		try
-		{
-			await ProcessEntrySelectionAsync(item, token);
-		}
-		catch (Exception) { }
+		await ProcessEntrySelectionAsync(item, token);
 	}
 	internal async Task ProcessEntrySelectionAsync(EntryRow? entry, CancellationToken token, bool listLatestVersionInfo = false)
 	{
 		if (entry is null) return;
 
-		switch (LowerTabIndex?.Name)
+		await SafeHelper.SafeInvokerAsync(async () =>
 		{
-			case StorageBox.HISTORY_TAB:
-				
-				await SafeHelper.SafeInvokerAsync(async () =>
+			try
+			{
+				switch (LowerTabIndex?.Name)
 				{
-					await _gridHelper.ProcessHistorySelectAsync(OdooHistory, entry, token);
-					OdooHistory.UpdateLayout();
-				});
-				break;
-			case StorageBox.PARENT_TAB:
-				await SafeHelper.SafeInvokerAsync(async () =>
-				{
-					await _gridHelper.ProcessParentSelectAsync(OdooParents, entry, token);
-					OdooParents.UpdateLayout();
-				});
-				break;
-			case StorageBox.CHILD_TAB:
-				await SafeHelper.SafeInvokerAsync(async () =>
-				{
-					await _gridHelper.ProcessChildSelectAsync(OdooChildren, entry, token);
-					OdooChildren.UpdateLayout();
-				});
-				break;
-			case StorageBox.PROPERTIES_TAB:
-				await SafeHelper.SafeInvokerAsync(async () =>
-				{
-					await _gridHelper.ProcessPropertiesSelectAsync(OdooProperties, entry, token);
-					OdooProperties.UpdateLayout();
-				});
-				break;
-			case StorageBox.INFO_TAB:
-				await SafeHelper.SafeInvokerAsync(async () =>
-				{
-					await _gridHelper.ProcessInfoSelectAsync(OdooVersionInfoList, entry, token);
-					OdooVersionInfoList.UpdateLayout();
-				});
-				break;
-		}
-
-		token.ThrowIfCancellationRequested();
+					case StorageBox.HISTORY_TAB:
+						await _gridHelper.ProcessHistorySelectAsync(OdooHistory, entry, token);
+						OdooHistory.UpdateLayout();
+						break;
+					case StorageBox.PARENT_TAB:
+						await SafeHelper.SafeInvokerAsync(async () =>
+						{
+							await _gridHelper.ProcessParentSelectAsync(OdooParents, entry, token);
+							OdooParents.UpdateLayout();
+						});
+						break;
+					case StorageBox.CHILD_TAB:
+						await SafeHelper.SafeInvokerAsync(async () =>
+						{
+							await _gridHelper.ProcessChildSelectAsync(OdooChildren, entry, token);
+							OdooChildren.UpdateLayout();
+						});
+						break;
+					case StorageBox.PROPERTIES_TAB:
+						await SafeHelper.SafeInvokerAsync(async () =>
+						{
+							await _gridHelper.ProcessPropertiesSelectAsync(OdooProperties, entry, token);
+							OdooProperties.UpdateLayout();
+						});
+						break;
+					case StorageBox.INFO_TAB:
+						await SafeHelper.SafeInvokerAsync(async () =>
+						{
+							await _gridHelper.ProcessInfoSelectAsync(OdooVersionInfoList, entry, token);
+							OdooVersionInfoList.UpdateLayout();
+						});
+						break;
+				}
+			}
+			catch (OperationCanceledException e)
+			{
+				Debug.WriteLine($"Operation cancelled: {e.Message}");
+			}
+		});
 
 		if (entry.LatestId is int id)
 		{
@@ -901,12 +901,10 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 			string filePath = FileOperations.WindowsToOdooPath(hackArr[i].RelativePath);
 			ArrayList arrList =
 			[
-
 				new ArrayList() { "name", "=", hackArr[i].Name },
-				new ArrayList() { "directory_complete_name", "=", filePath },
-                
+				new ArrayList() { "directory_complete_name", "=", filePath },   
 			];
-			HpEntry? entry = (await HpEntry.GetRecordsBySmartSearchAsync(searchFilter: arrList, includedFields: ["name", "dir_id"], insertFields: ["version_ids.checksum"]))?.FirstOrDefault();
+			HpEntry? entry = (await HpEntry.GetRecordsBySmartSearchAsync(searchFilter: arrList, includedFields: [nameof(HpEntry.name), nameof(HpEntry.dir_id)], insertFields: ["version_ids.checksum"]))?.FirstOrDefault();
 			ArrayList fields = [];
 
 			if (entry is not null && entry.HashedValues.TryGetValue("checksum", out ArrayList? arr))
@@ -1081,7 +1079,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 
 		if (_treeItemChange is null or { IsCompleted: true })
 		{
-			_cSource.Cancel();
+			_cSource?.Cancel();
 			_cTreeSource = new();
 
 			// Store the currently selected node
@@ -1197,7 +1195,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 			if (e.Column == col) continue;
 			col.SortDirection = null;
 		}
-		var modelField = column.ClipboardContentBinding.Path.Path;
+		var modelField = column.ClipboardContentBinding?.Path.Path ?? column.Header;
 		bool isDesc = false;
 		(column.SortDirection, isDesc) = column.SortDirection is not null && column.SortDirection == DataGridSortDirection.Ascending
 			? (DataGridSortDirection.Descending, true)
