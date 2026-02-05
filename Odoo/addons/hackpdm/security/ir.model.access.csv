@@ -29,3 +29,9 @@ access_hp_type_system,access_hp_type_system,model_hp_type,base.group_system,1,1,
 access_hp_version_relationship_system,access_hp_version_relationship_system,model_hp_version_relationship,base.group_system,1,1,1,1
 access_hp_settings_system,access_hp_settings_system,model_hp_settings,base.group_system,1,1,1,1
 access_hp_release_review_system,access_hp_release_review_system,model_hp_release_review,base.group_system,1,1,1,1
+
+access_hp_test_user,access_hp_test_user,model_hp_test,base.group_user,1,1,1,1
+access_hp_test_system,access_hp_test_system,model_hp_test,base.group_system,1,1,1,1
+
+access_hp_pdm_commit_user,access_hp_pdm_commit_user,model_hp_pdm_commit,base.group_user,1,1,1,0
+access_hp_pdm_commit_system,access_hp_pdm_commit_system,model_hp_pdm_commit,base.group_system,1,1,1,1

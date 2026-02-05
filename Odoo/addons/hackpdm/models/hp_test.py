@@ -5,6 +5,8 @@ class hp_test(models.Model):
     _name = 'hp.test'
     _description = 'test'
     _inherit = 'hp.common.model'
+    _parent_name = 'manytoone'
+    _parent_store = True
 
     #fields
     binary = fields.Binary()
@@ -17,7 +19,6 @@ class hp_test(models.Model):
     image = fields.Image()
     integer = fields.Integer()
     json = fields.Json()
-    monetary = fields.Monetary()
     selection = fields.Selection([
         ('option_a', 'Option A'),
         ('option_b', 'Option B'),
@@ -26,6 +27,19 @@ class hp_test(models.Model):
 
     text = fields.Text()
 
-    many2one = fields.Many2One(comodel="hp.test")
-    one2many = fields.One2Many(comodel="hp.test", inverse_name="many2one")
-    many2many = fields.Many2Many(comodel="hp.test", inverse_name="many2many")
+    parent_path = fields.Char(
+        index=True,
+        unaccent=False,
+    )
+
+    manytoone = fields.Many2one(comodel_name="hp.test", string="Parent")
+    onetomany = fields.One2many("hp.test", 'manytoone', string="Children")
+    manytomany = fields.Many2many('hp.test', 'hp_test_rel', 'left_id', 'right_id', string="many2many")
+
+    currency_id = fields.Many2one(
+        'res.currency',
+        string='Currency',
+        required=True,
+        default=lambda self: self.env.company.currency_id.id
+    )
+    monetary = fields.Monetary(currency_field='currency_id')

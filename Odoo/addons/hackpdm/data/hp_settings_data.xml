@@ -40,9 +40,7 @@
 
             <!-- HTML -->
             <field name="html">
-                <![CDATA[
-                    <p><strong>Test HTML</strong> content for hp.test.</p>
-                ]]>
+                <![CDATA[<p><strong>Test HTML</strong> content for hp.test.</p>]]>
             </field>
 
             <!-- Image: base64-encoded 1×1 PNG -->
@@ -54,9 +52,7 @@
             <field name="integer">42</field>
 
             <!-- JSON -->
-            <field name="json">
-                {"key": "value", "number": 123, "flag": true}
-            </field>
+            <field name="json"><![CDATA[{"key": "value", "number": 123, "flag": true}]]></field>
 
             <!-- Monetary -->
             <field name="monetary">19.99</field>
@@ -68,19 +64,19 @@
             <field name="text">This is a long text field used for testing.</field>
 
             <!-- Many2one: reference an existing record -->
-            <field name="many2one" ref="hp_test_data_two"/>
-
-            <!-- One2many: create inline children -->
-            <field name="one2many" eval="[(0, 0, {'character': 'Child 1'})]"/>
+            <!-- <field name="manytoone" ref="hp_test_data_two"/> -->
 
             <!-- Many2many: link to two existing records -->
-            <field name="many2many" eval="[(6, 0, [ref('base.user_admin'), ref('base.user_root')])]"/>
+            <!-- <field name="manytomany" eval="[(6, 0, [ref('hp_test_data_two')])]"/> -->
         </record>
 
         <record id="hp_test_data_two" model="hp.test">
             <field name="character">Record Two</field>
-            <field name="many2one" ref="hp_test_data_one"/>
-            <field name="many2many" eval="[(6, 0, [ref('hp_test_data_one')])]"/>
+            <field name="manytoone" ref="hp_test_data_one"/>
+            <!-- One2many: create inline children -->
+            <field name="onetomany" eval="[(0, 0, {'character': 'Child 1', 'manytoone': ref('hp_test_data_one')})]"/>
+            <field name="manytomany" eval="[(6, 0, [ref('hp_test_data_one')])]"/>
+            <field name="monetary">21.99</field>
         </record>
 
     </data>

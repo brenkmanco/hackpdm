@@ -1,15 +1,9 @@
-from odoo import fields, models, api, Command
-from odoo.addons.queue_job.job import job
-
-
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 class hp_pdm_commit(models.Model):
-    _inherit = ['hp.common.model']
-
-    # inherit 'queue.job.mixin' obsolete
-    _inherit = ['hp.common.model', 'queue.job.mixin']
-    _inherit = ['hp.common.model', 'queue.job.mixin']
+    _name = 'hp.pdm.commit'
+    _inherit = 'hp.common.model'
 
     name = fields.Char()
     job_uuid = fields.Char(
@@ -53,7 +47,7 @@ class hp_pdm_commit(models.Model):
         string="commit duration",
         compute="_compute_duration",
     )
-    
+
     node_by = fields.Many2one(
         comodel_name="hp.node",
         string="computer node",
@@ -91,10 +85,10 @@ class hp_pdm_commit(models.Model):
 
         if self.committing:
             raise UserError("Commit already in progress.")
-        
+
         if self.committed:
             raise UserError("This commit has already been completed.")
-        
+
         if not self.staged_ids:
             raise UserError("No staged records to commit.")
 
@@ -107,7 +101,7 @@ class hp_pdm_commit(models.Model):
         })
 
         return True
-    
+
     def handle_commit_failure(self, job, exc):
         self.write({
             "errored": True,
@@ -167,22 +161,3 @@ class hp_pdm_commit(models.Model):
         # wipe payloads only if everything succeeded
         self.write({"commit_summary": self._write_summary(summary_model)})
         staged.write({"payload": False})
-
-
-class hp_record_staged(models.Model):
-    _name = 'hp.record.staged'
-    
-    commit_id = fields.Many2one(
-        comodel_name="hp.pdm.commit",
-        string="associated commit",
-    )
-    target_model = fields.Char(
-        required=True,
-    )
-    target_id = fields.Integer(
-        string="Id of the record that was created",
-    )
-    payload = fields.Json(
-        required=True,
-    )
-    

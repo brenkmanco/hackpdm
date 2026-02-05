@@ -406,3 +406,4 @@ __pycache__/
 /Src/HackPDM.Abstractions/colornames.csv
 /Src/HackPDM.Abstractions/macro.py
 /Odoo/odoo-app/*
+Odoo/addons/hackpdm/models/.__init__.py.swp
