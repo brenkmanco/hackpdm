@@ -39,10 +39,10 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
     {
         for (int i = 0; i < directories.Count(); i++ )
         {
-            if ( directories [ i ].Id == 0 )
+            if ( directories [ i ].id == 0 )
             {
                 await directories [ i ].CreateAsync( false );
-                if ( directories [ i ].Id == 0 )
+                if ( directories [ i ].id == 0 )
                     return false;
             }
         }
@@ -73,11 +73,11 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
             };
             await newDirectory.CreateAsync(false);
 
-            if (newDirectory.Id == 0) throw new Exception("HpDirectory not created");
+            if (newDirectory.id == 0) throw new Exception("HpDirectory not created");
                     
             directories[nextIndex] = newDirectory;
             // for next iteration
-            lastParentId = newDirectory.Id ?? 0;
+            lastParentId = newDirectory.id ?? 0;
         }
         return directories;
     }
@@ -90,7 +90,7 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
     {
         if (this.IsRecord)
         {
-            return OClient.Command<Hashtable>(HpModel, "get_children_directories_by_id", new ArrayList(new ArrayList { this.Id, withEntries }));
+            return OClient.Command<Hashtable>(HpModel, "get_children_directories_by_id", new ArrayList(new ArrayList { this.id, withEntries }));
         }
         return null;
     }
@@ -108,9 +108,9 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
     }
     public Hashtable GetEntries()
     {
-        if (this.IsRecord || this.Id != 0)
+        if (this.IsRecord || this.id != 0)
         {
-            return GetEntries(this.Id);
+            return GetEntries(this.id);
         }
         return null;
     }
@@ -123,9 +123,9 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
             
         
     public ArrayList? GetDirectoryEntryIDs(bool withSubEntries = false, bool withDeleted = true)
-        => GetDirectoryEntryIDs( this.Id ?? 0, withSubEntries, withDeleted );
+        => GetDirectoryEntryIDs( this.id ?? 0, withSubEntries, withDeleted );
 	public async Task<ArrayList?> GetDirectoryEntryIDsAsync(bool withSubEntries = false, bool withDeleted = true)
-		=> await GetDirectoryEntryIDsAsync(this.Id ?? 0, withSubEntries, withDeleted);
+		=> await GetDirectoryEntryIDsAsync(this.id ?? 0, withSubEntries, withDeleted);
 	public static async Task<ArrayList?> GetDirectoryEntryIDsAsync( int directoryId, bool withSubEntries = false, bool withDeleted = false)
 		=> directoryId != 0 
 			?  await OClient.CommandAsync<ArrayList>(GetHpModel()!, "get_all_entry_ids", [directoryId, withDeleted, withSubEntries], 10000 ) 

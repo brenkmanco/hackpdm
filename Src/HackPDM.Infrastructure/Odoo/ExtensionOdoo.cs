@@ -33,7 +33,7 @@ public static class ExtensionOdoo
     private static readonly XmlRpcResponseDeserializer Deserializer = new();
     
     public static ArrayList GetIDs(this IEnumerable<HpBaseModel> models)
-        => models.Select(model => model.Id).ToArrayList();
+        => models.Select(model => model.id).ToArrayList();
     
     public async static Task<XmlRpcResponse> SendAsync(this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null)
     {
@@ -326,7 +326,9 @@ public static class OdooFieldExtension
 		{ OdooFieldType.Boolean,    new[] { typeof(bool) } },
 		{ OdooFieldType.Date,       new[] { typeof(DateTime) } },
 		{ OdooFieldType.DateTime,   new[] { typeof(DateTime) } },
-		{ OdooFieldType.Binary,     new[] { typeof(string), typeof(byte[]) } }, // Odoo sometimes base64 encodes
+		{ OdooFieldType.Image,      new[] { typeof(byte[]), typeof(string) }  }, // Odoo base64 encodes
+		{ OdooFieldType.Binary,     new[] { typeof(byte[]), typeof(string) } }, // Odoo base64 encodes
+		{ OdooFieldType.Json,       new[] { typeof(Hashtable), typeof(string) }  },
         { OdooFieldType.Many2One,   new[] { typeof(object[]), typeof(ValueTuple<int,string>) } },
 		{ OdooFieldType.One2Many,   new[] { typeof(int[]), typeof(ArrayList) } },
 		{ OdooFieldType.Many2Many,  new[] { typeof(int[]), typeof(ArrayList) } },
@@ -486,9 +488,15 @@ public static class OdooFieldHelpers
 				// int
 				OdooFieldType.Integer => ConvertInteger(value),
 				// string
-				OdooFieldType.Char
-					or OdooFieldType.Text
-					or OdooFieldType.Html => ConvertString(value),
+				OdooFieldType.Char => ConvertString(value),
+				OdooFieldType.Text => ConvertString(value),
+				OdooFieldType.Html => ConvertString(value),
+				OdooFieldType.Selection => ConvertSelectionString(value),
+				OdooFieldType.Reference => ConvertReferenceString(value),
+				// float
+				OdooFieldType.Float => ConvertFloat(value),
+				// decimal
+				OdooFieldType.Monetary => ConvertMonetary(value),
 				// bool
 				OdooFieldType.Boolean => ConvertBoolean(value),
 				// DateTime
@@ -498,17 +506,14 @@ public static class OdooFieldHelpers
 				// ValueTuple<int,string>?
 				OdooFieldType.Many2One => ConvertMany2one(value),
 				// int[]
-				OdooFieldType.One2Many
-					or OdooFieldType.Many2Many => ConvertOne2many(value),
-				// byte[]
-				OdooFieldType.Binary 
-					or OdooFieldType.Image => ConvertBinary(value),
+				OdooFieldType.One2Many => ConvertOne2many(value),
+				OdooFieldType.Many2Many => ConvertMany2many(value),
+				// Hashtable
 				OdooFieldType.Json => ConvertJsonTable(value),
-				OdooFieldType.Float => ConvertFloat(value),
-				OdooFieldType.Monetary => ConvertMonetary(value),
-				OdooFieldType.Selection => ConvertSelectionString(value),
-				OdooFieldType.Reference => ConvertReferenceString(value),
 				OdooFieldType.Serialized => ConvertSerializedDict(value),
+				// byte[]
+				OdooFieldType.Binary => ConvertBinary(value),
+				OdooFieldType.Image => ConvertBinary(value),
 				_ => value
 			};
 	}
@@ -671,12 +676,12 @@ public static class OdooFieldHelpers
 				value,
 				FromObjectArray,
 				out var arr))
-			return new Many2One { Id=0, name="" };
+			return new Many2One { id=0, name="" };
 
 		var id = ConvertInteger(arr?.Item1 ?? 0);
 		var name = ConvertString(arr?.Item2 ?? "") ?? string.Empty;
 
-		return new Many2One { Id = id, name = name }; ;
+		return new Many2One { id = id, name = name }; ;
 	}
 	// One2many/Many2many -> int[]
 	public static One2Many ConvertOne2many(object value)
@@ -730,7 +735,7 @@ public static class OdooFieldHelpers
 
 	public static Hashtable ConvertJsonTable(object value)
 	{
-		Hashtable result = new Hashtable();
+		Hashtable result = [];
 		var valueDict = ConvertSerializedDict(value);
 		foreach (var item in valueDict) 
 		{

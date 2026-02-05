@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 
 using HackPDM.Shared.GlobalData;
+using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Odoo;
 using HackPDM.UI.Forms.Settings;
 
@@ -35,9 +36,11 @@ public sealed partial class Home : Page
     private static NavigationViewItem? HackNav {  get; set; }
     private static NavigationViewItem? ProfileNav { get; set; }
     private static NavigationViewItem? ConfigNav { get; set; }
+    private static MainWindow? Window { get; set; }
     public Home()
     {
         InitializeComponent();
+        Window = HackApp.Window as MainWindow;
         Navigator = HomeNavigator;
         var navmenu = HomeNavigator.MenuItems;
         HackNav = navmenu[0] as NavigationViewItem;
@@ -61,7 +64,7 @@ public sealed partial class Home : Page
                 Navigator?.SelectedItem = ConfigNav;
 				break;
 			case NavigatePageMenu.Settings:
-                //Navigator?.SelectedItem
+				//Navigator?.SelectedItem
 				break;
 			default:
 				break;
@@ -84,7 +87,7 @@ public sealed partial class Home : Page
                     //var hackSetPage = InstanceManager.GetAPage<HackSettings>();
 
                     StackPanel stackSettings = new();
-                    ScrollView scrollView = new ScrollView();
+                    ScrollView scrollView = new();
 
                     Frame odooFrame = new();
                     Frame hackFrame = new();
@@ -102,19 +105,24 @@ public sealed partial class Home : Page
 
 					odooFrame.Navigate(typeof(OdooSettings));
                     hackFrame.Navigate(typeof(HackSettings));                    
+                    
+                    WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig("ConfigSettings")!);
                     break;
                 }
             case "Profile Manager":
                 {
                     NavFrame.Content = InstanceManager.GetAPage<ProfileManager>();
-                    break;
+					WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(ProfileManager)));
+
+					break;
                 }
             case "Hack File Manager":
                 {
-                    if (!ProfileManager.IsLoggedIn)
+					if (!ProfileManager.IsLoggedIn)
                     {
                         NavFrame.Content = InstanceManager.GetAPage<NotLoggedIn>();
-                        return;
+						WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(NotLoggedIn)));
+						return;
                     }
                     if (!InstanceManager.TryGet<HackFileManager>(out var manager))
                     {
@@ -122,9 +130,10 @@ public sealed partial class Home : Page
                         InstanceManager.Register(manager);
                     }
 
-                    if (!manager.HackLoaded) manager.LoadHackMan();
+                    if (manager?.HackLoaded is false) manager.LoadHackMan();
                     NavFrame.Content = manager;
-                    break;
+					WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(HackFileManager)));
+					break;
                 }
         }
 	}

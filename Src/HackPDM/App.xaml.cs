@@ -74,6 +74,10 @@ public partial class HackApp : Application
 
         HomePage = Services.GetRequiredService<Home>();
         CoreSettings = Services.GetRequiredService<ISettingsProvider>() as CoreSettings;
+
+		var rootFrame = new Frame();
+		Window?.Content = rootFrame;
+		rootFrame.Content = HomePage;
 	}
 
     /// <summary>
@@ -82,16 +86,12 @@ public partial class HackApp : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        ConfigureServices();
-
 		Window = new MainWindow();
 		Window.SetWindowType(AppWindowPresenterKind.Overlapped);
-		var rootFrame = new Frame();
         Window.Activate();
-        Window.Content = rootFrame;
 
         DispatcherQueue = Window.DispatcherQueue;
-        rootFrame.Content = HomePage;
+        ConfigureServices();
     }
     private static void Setup ()
     {

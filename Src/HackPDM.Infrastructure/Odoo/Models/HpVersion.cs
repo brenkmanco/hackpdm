@@ -85,11 +85,11 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
 
     public async Task<bool> GetPreviewImage()
 	{
-		if (preview_image is { Length: > 0 } && Id != 0) 
+		if (preview_image is { Length: > 0 } && id != 0) 
 		{
 			// reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
 			// which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
-			ArrayList list = await OClient.ReadAsync(HpModel, [this.Id], ["preview_image"]);
+			ArrayList list = await OClient.ReadAsync(HpModel, [this.id], ["preview_image"]);
 			preview_image = FileOperations.ConvertFromBase64((list[0] as Hashtable)?["preview_image"] as string);									
 		}
 		return preview_image is { Length: > 0 };
@@ -145,13 +145,13 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
     {
         const string fileContents = "file_contents";
     
-        if (this.IsRecord || this.Id != 0)
+        if (this.IsRecord || this.id != 0)
         {
             // reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
             // which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
             if (file_size != 0)
             {
-                return ((OClient.Read(HpModel, [this.Id], [fileContents])?[0] as Hashtable)?[fileContents]) as byte[];
+                return ((OClient.Read(HpModel, [this.id], [fileContents])?[0] as Hashtable)?[fileContents]) as byte[];
             }
         }
         return null;
@@ -170,7 +170,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         List<HpVersion> processVersions = [.. versions.TakeAndRemove(version 
             => version.file_contents is not { Length: 0 })];
                 
-        ArrayList ids = new(processVersions.Select(v => v.Id).ToArray());
+        ArrayList ids = new(processVersions.Select(v => v.id).ToArray());
         //string[] fileContentsBase64 = 
         //ArrayList results = OClient.Read(GetHpModel(), ids, [fileContents], 60000);
         HpVersion[]? readyVersions = await GetRecordsByIdsAsync(ids, includedFields: fileContents);
@@ -212,8 +212,8 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
             HackFile hack = new(versions[i].name, null);
             var checkUser = versions[i].checkout_user;
                     
-            hack.Owner = (checkUser?.Id is not null)
-                ? OdooDefaults.Instance?.OdooId == checkUser?.Id
+            hack.Owner = (checkUser?.id is not null)
+                ? OdooDefaults.Instance?.OdooId == checkUser?.id
 				: null;
 
             if (versions[i] != null && versions[i].file_contents is { Length: > 0 })
@@ -273,9 +273,9 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
     public static async Task<HpVersionProperty[]?> GetProperties(HpVersion version)
     {
         const string versionPropField = "version_property_ids";
-        if (version.IsRecord || version.Id != 0)
+        if (version.IsRecord || version.id != 0)
         {
-            ArrayList list = await OClient.ReadAsync(GetHpModel(), [version.Id], [versionPropField]);
+            ArrayList list = await OClient.ReadAsync(GetHpModel(), [version.id], [versionPropField]);
             ArrayList? values = (list[0] as Hashtable)?[versionPropField] as ArrayList;
             return await HpBaseModelTransport<HpVersionProperty>.GetRecordsByIdsAsync(values);
         }
@@ -320,9 +320,9 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         
         HpVersion newVersion = new()
         {
-            name = $"{entry.Id}.{hackFile.Name}",
+            name = $"{entry.id}.{hackFile.Name}",
             dir_id = entry.dir_id as Many2One,
-            entry_id = entry.Id,
+            entry_id = entry.id,
             file_ext = hackFile.TypeExt[1..].ToLower(),
             WinPathway = hackFile.FullPath,
         };
@@ -346,13 +346,13 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         HpVersion newVersion = PrepareCreation(hackFile, entry, hashStoreType);
         await newVersion.CreateAsync( false, ["file_ext"] );
     
-        return newVersion.Id == 0 ? null : newVersion;
+        return newVersion.id == 0 ? null : newVersion;
     }
     internal static async Task<HpVersion[]?> CreateAllNew( params (HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType)[] data)
     {
         ArrayList versions = data.Select(d => PrepareCreation(d.hackFile, d.entry, d.hashStoreType)).ToArrayList();
     
-        ArrayList ids = await MultiCreateAsync<HpVersion>(versions, false);
+        ArrayList ids = await MultiCreateAsync(versions, false);
         return await GetRecordsByIdsAsync(ids, excludedFields: UsualExcludedFields);
     }
     public static HpVersion[] GetFromPaths(params string[] fullPaths)
@@ -364,7 +364,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
             new ArrayList { "windows_complete_name", "in", paths }
         };
                 
-        return HpEntry.GetRelatedRecordsBySearch<HpVersion>(searchParams, "latest_version_id", excludedFields: ["preview_image", "file_contents"]);
+        return HpEntry.GetRelatedRecordsBySearch<HpVersion>(searchParams, nameof(HpEntry.latest_version_id), excludedFields: ["preview_image", "file_contents"]);
     }
     public static HpVersion[] GetFromPaths(string[] excludedFields = null, string[] includedFields = null, params string[] fullPaths)
     {
@@ -375,7 +375,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
             new ArrayList { "windows_complete_name", "in", paths }
         };
     
-        return HpEntry.GetRelatedRecordsBySearch<HpVersion>(searchParams, "latest_version_id", includedFields: includedFields, excludedFields: excludedFields);
+        return HpEntry.GetRelatedRecordsBySearch<HpVersion>(searchParams, nameof(HpEntry.latest_version_id), includedFields: includedFields, excludedFields: excludedFields);
     }
 	public bool ExistsLocally
 	{

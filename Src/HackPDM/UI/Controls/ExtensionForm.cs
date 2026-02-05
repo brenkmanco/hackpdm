@@ -5,25 +5,29 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
-using Windows.UI;
 using HackPDM.Abstractions;
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Data;
 using HackPDM.UI.Forms;
+using HackPDM.UI.Forms.Hack;
 using HackPDM.UI.Forms.Helper;
+using HackPDM.UI.Models;
+
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+
+using Windows.UI;
+
 using Control = Microsoft.UI.Xaml.Controls.Control;
 using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
 using ListViewItem = Microsoft.UI.Xaml.Controls.ListViewItem;
 using Panel = Microsoft.UI.Xaml.Controls.Panel;
 using TreeData = HackPDM.UI.Types.TreeData;
 using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
-using HackPDM.UI.Models;
 //using Microsoft.UI.Xaml.Controls;
 
 //using System.Windows.Controls;
@@ -265,6 +269,7 @@ public static class ExtensionForm
 			get => InstanceManager.GetAWindow<T, Window>(page);
 		}
 	}
+
 
 	public static IEnumerable<Control> GetAllControls(this Control control)
 	{

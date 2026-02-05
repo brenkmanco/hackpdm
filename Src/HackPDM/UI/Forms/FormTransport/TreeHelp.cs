@@ -465,18 +465,18 @@ namespace HackPDM.UI.Forms.FormTransport
 			// destroyed
 			
 			FileStatus status = table["deleted"] is bool deleted && !deleted
-				? item.Checkout?.Id is not null or 0
-					? item.Checkout?.Id == OdooDefaults.Instance.OdooId ? FileStatus.Cm : FileStatus.Co
+				? item.Checkout?.id is not null or 0
+					? item.Checkout?.id == OdooDefaults.Instance.OdooId ? FileStatus.Cm : FileStatus.Co
 					: table["latest_checksum"] switch
 					{
-						bool => FileStatus.Lo,
+						bool => FileStatus.NoVersions,
 						string latestChecksum => hack?.Checksum switch
 						{
 							null => FileStatus.Ro,
 							_ when hack.Checksum == latestChecksum => FileStatus.Ok,
 							_ => remoteDate > hack.ModifiedDate ? FileStatus.Nv : FileStatus.Lm
 						},
-						_ => FileStatus.Lo
+						_ => FileStatus.Unknown,
 					}
 				: FileStatus.Dt;
 			item.Status = status;
@@ -511,7 +511,7 @@ namespace HackPDM.UI.Forms.FormTransport
 				try
 				{
 					if (hpType.icon is null) return null;
-					byte[] imgBytes = FileOperations.ConvertFromBase64(hpType.icon);
+					byte[] imgBytes = hpType.icon;
 					writer.WriteBytes(imgBytes);
 					await writer.StoreAsync();
 					await writer.FlushAsync();

@@ -299,7 +299,6 @@ public static class ExtensionMethods
 		    value = default;
 		    return false;
 	    }
-
 	    public Hashtable TakeWhere(Predicate<DictionaryEntry> predicate)
 	    {
 		    Hashtable newHt = [];
@@ -318,6 +317,19 @@ public static class ExtensionMethods
 		    return newHt;
 	    }
     }
+	extension(DictionaryEntry entry)
+	{
+		public void Deconstruct<TK, TV>(out TK? key, out TV? value)
+		{
+			key = (TK?)entry.Key;
+			value = (TV?)entry.Value;
+		}
+		public void Deconstruct(out object key, out object value)
+		{
+			key = entry.Key;
+			value = entry.Value;
+		}
+	}
 
 	/// <param name="str">The string.</param>
 	extension(string str)
@@ -649,7 +661,7 @@ public static class ExtensionConvertMethods
 		ArrayList ids = [];
 		foreach (T model in source)
 		{
-			ids.Add(model.Id);
+			ids.Add(model.id);
 		}
 		return ids;
 	}

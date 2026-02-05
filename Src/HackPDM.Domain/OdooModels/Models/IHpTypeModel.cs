@@ -17,7 +17,7 @@ public interface IHpTypeModel : IHpOdooRecord
 	[OdooProp(OdooFieldType.Char, "file_ext")] public string? file_ext {get;set;}
 	[OdooProp(OdooFieldType.Char, "type_regex")] public string? type_regex {get;set;}
 	
-	[OdooProp(OdooFieldType.Binary, "icon")] public string? icon {get;set;}
+	[OdooProp(OdooFieldType.Binary, "icon")] public byte[]? icon {get;set;}
 	
 	[OdooProp(OdooFieldType.Many2One, "cat_id")] public IMany2One? cat_id {get;set;}
 }

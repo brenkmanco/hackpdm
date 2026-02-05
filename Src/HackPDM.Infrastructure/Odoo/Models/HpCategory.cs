@@ -14,6 +14,7 @@ public partial class HpCategory : HpBaseModelTransport<HpCategory>, IHpCategoryM
 
 	public void Test()
 	{
-		//IHpModelConvert<IHpCategoryModel, HpCategory> convert = new HpCategory();
+		var convert = new HpCategory();
+		HpCategory.GetFields();
 	}
 }

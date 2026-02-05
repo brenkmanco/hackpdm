@@ -20,7 +20,9 @@ public static class FileOperations
 {
     public static string ConvertToBase64(string filePath)
         => Convert.ToBase64String(ReadFileInChunks(filePath));
-    public static byte[]? ConvertFromBase64(string? base64String )
+    public static string? ConvertBytesToBase64(byte[]? fileBytes)
+        => fileBytes is null ? null : Convert.ToBase64String(fileBytes);
+	public static byte[]? ConvertFromBase64(string? base64String )
         => !string.IsNullOrEmpty(base64String) 
             ? Convert.FromBase64String( base64String )
             : null;

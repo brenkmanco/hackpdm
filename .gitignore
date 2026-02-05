@@ -407,3 +407,6 @@ __pycache__/
 /Src/HackPDM.Abstractions/macro.py
 /Odoo/odoo-app/*
 Odoo/addons/hackpdm/models/.__init__.py.swp
+
+/.tmp.driveupload
+/Src/.tmp.driveupload

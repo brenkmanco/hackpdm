@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using HackPDM.UI.Forms.Hack;
 using Microsoft.UI.Dispatching;
@@ -69,6 +70,23 @@ namespace HackPDM.Core.Helper.Xaml
 		//	return await tcs.Task;
 		//}
 		internal static Task SafeInvokerAsync(Action action)
+		{
+			var tcs = new TaskCompletionSource<bool>();
+			HackApp.DispatcherQueue.TryEnqueue(() =>
+			{
+				try
+				{
+					action();
+					tcs.SetResult(true);
+				}
+				catch (Exception ex)
+				{
+					tcs.SetException(ex);
+				}
+			});
+			return tcs.Task;
+		}
+		internal static Task SafeInvokerAsync(Action action, CancellationToken token)
 		{
 			var tcs = new TaskCompletionSource<bool>();
 			HackApp.DispatcherQueue.TryEnqueue(() =>
