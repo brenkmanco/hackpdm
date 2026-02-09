@@ -93,6 +93,7 @@ namespace HackPDM.UI.Forms.FormTransport
 		internal async Task<HpVersion[]?> ProcessParentSelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listParents = true)
 		{
 			HpVersion[]? parentVersions = null;
+			HpVersion? latestVersion = null;
 			int? versionId;
 
 			switch (entry)
@@ -101,12 +102,16 @@ namespace HackPDM.UI.Forms.FormTransport
 
 				case { LatestId: not (null or 0) }:
 					{
-						versionId = entry!.LatestId;
+						latestVersion = await HpVersion.GetRecordByIdAsync(entry.LatestId ?? 0,
+							includedFields: ["name", "parent_ids"]);
 						break;
 					}
 				case { Id: not (null or 0) }:
 					{
-						versionId = await HpEntry.GetFieldValueAsync<int>(entry.Id ?? 0, nameof(HpEntry.latest_version_id));
+						latestVersion = (await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>([entry.Id ?? 0],
+							nameof(HpEntry.latest_version_id),
+							includedFields: ["name", "parent_ids"]))?.FirstOrDefault();
+
 						break;
 					}
 
@@ -114,14 +119,11 @@ namespace HackPDM.UI.Forms.FormTransport
 			}
 
 
-			if (versionId != null)
+			if (latestVersion != null)
 			{
 				parentVersions =
-					await HpVersionRelationship.GetRelatedRecordsBySearchAsync<HpVersion>([new ArrayList()
-					{
-						"child_id", "=", versionId
-					}], "parent_id",
-						excludedFields: ["preview_image", "node_id", "entry_id", "file_modify_stamp", "checksum", "file_contents"],
+					await HpVersion.GetRecordsByIdsAsync(latestVersion.parent_ids,
+						includedFields: ["name"],
 						insertFields: ["directory_complete_name"]
 					);
 			}

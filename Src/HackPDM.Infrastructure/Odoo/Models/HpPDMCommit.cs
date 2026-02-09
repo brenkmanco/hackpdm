@@ -9,7 +9,7 @@ namespace HackPDM.Infrastructure.Odoo.Models;
 public partial class HpPDMCommit : HpBaseModelTransport<HpPDMCommit>, IHpPDMCommitModel
 {
 	[OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
-	[OdooProp(OdooFieldType.Char, "job_uuid")] public string? windows_complete_name { get; set; }
+	[OdooProp(OdooFieldType.Char, "job_uuid")] public string? job_uuid { get; set; }
 	[OdooProp(OdooFieldType.DateTime, "committed_at")] public DateTime? committed_at { get;set;}
 	[OdooProp(OdooFieldType.DateTime, "commit_finished_at")] public DateTime? commit_finished_at { get; set; }
 	

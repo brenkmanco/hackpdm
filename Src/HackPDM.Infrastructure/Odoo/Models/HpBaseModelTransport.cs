@@ -114,6 +114,11 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 
 		return tempId;
 	}
+	public static Task<int> CreateEmptyAsync() => OClient.CreateAsync(GetHpModel(), new Hashtable());
+	public static async Task<T[]?> CreateReadAsync() =>
+		RecordsPopulation(hts: (await OClient.CreateReadAsync(GetHpModel(), [], null))?.Select<Hashtable, Hashtable>(static h => h));
+
+	
 	public static Task<ArrayList> MultiCreateAsync(ArrayList records, bool withEmpty = false)
 	{
 		ArrayList hts = records.Select((HpBaseModelTransport<T> v) => v.ComputeHashtable(withEmpty, isNew: true)).ToArrayList();
@@ -373,10 +378,10 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 		var records = RecordsPopulation(hts: result?.Select<Hashtable, Hashtable>(static h => h), excludedFields);
 		return [.. records ?? []];
 	}
-	public static async Task<T?>		GetRecordByIdAsync(int recordId, string[] excludedFields = null)
+	public static async Task<T?>		GetRecordByIdAsync(int recordId, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
 	{
 		if (recordId == 0) return default;
-		T[] records = await GetRecordsByIdsAsync([recordId], excludedFields: excludedFields);
+		T[]? records = await GetRecordsByIdsAsync([recordId], excludedFields: excludedFields, includedFields: includedFields, insertFields: insertFields);
 		return records != null && records!.Length > 0 ? records![0] : default;
 	}
 	public async static Task<T[]?>	GetRecordsByIdsAsync(ArrayList? recordIds, ArrayList? searchFilters = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)

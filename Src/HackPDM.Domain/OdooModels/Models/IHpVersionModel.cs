@@ -21,7 +21,10 @@ public interface IHpVersionModel : IHpOdooRecord
     [OdooProp(OdooFieldType.Many2One, "checkout_user")] public IMany2One? checkout_user {get;set;}
     [OdooProp(OdooFieldType.Many2One, "attachment_id")] public IMany2One? attachment_id {get;set;}
 
-    [OdooProp(OdooFieldType.DateTime, "file_modify_stamp")] public DateTime? file_modify_stamp {get;set;}
+	[OdooProp(OdooFieldType.Many2Many, "parent_ids")] public IMany2Many? parent_ids { get; set; }
+	[OdooProp(OdooFieldType.Many2Many, "child_ids")] public IMany2Many? child_ids { get; set; }
+
+	[OdooProp(OdooFieldType.DateTime, "file_modify_stamp")] public DateTime? file_modify_stamp {get;set;}
     
     [OdooProp(OdooFieldType.Integer, "file_size")] public int? file_size {get;set;}
 

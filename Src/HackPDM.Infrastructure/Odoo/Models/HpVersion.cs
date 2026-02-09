@@ -43,6 +43,12 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
 	[OdooProp(OdooFieldType.Many2One, "attachment_id")] public Many2One? attachment_id { get; set; }
 	IMany2One? IHpVersionModel.attachment_id { get =>(IMany2One?)attachment_id; set => attachment_id = (Many2One?)value; }
 
+	[OdooProp(OdooFieldType.Many2Many, "parent_ids")] public Many2Many? parent_ids { get; set; }
+	[OdooProp(OdooFieldType.Many2Many, "child_ids")] public Many2Many? child_ids { get; set; }
+	IMany2Many? IHpVersionModel.parent_ids { get => (IMany2Many?)parent_ids; set => parent_ids = (Many2Many?)value; }
+	IMany2Many? IHpVersionModel.child_ids { get => (IMany2Many?)child_ids; set => child_ids = (Many2Many?)value; }
+
+
 	[OdooProp(OdooFieldType.DateTime, "file_modify_stamp")] public DateTime? file_modify_stamp { get; set; }
 
 	[OdooProp(OdooFieldType.Integer, "file_size")] public int? file_size { get; set; }

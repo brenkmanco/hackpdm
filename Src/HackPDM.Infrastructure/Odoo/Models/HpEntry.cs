@@ -242,9 +242,9 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 			return (EntryReturnType.InvalidType, null);
 
 		entry = (await GetRecordsBySearchAsync( [("name", "=", hackFile.Name), ("dir_id", "=", dirId), ("deleted", "=", false)] ))?.FirstOrDefault();
+		
 		if (entry is not null)
 			return (EntryReturnType.GotExisting, entry);
-
 
 		HpEntry newEntry = new()
 		{

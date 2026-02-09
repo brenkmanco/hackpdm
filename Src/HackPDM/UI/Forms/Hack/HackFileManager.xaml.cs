@@ -535,6 +535,7 @@ public sealed partial class HackFileManager : Page
 	private async Task Async_Commit(List<HackFile>? hacks)
 	{
 		object lockObject = new();
+		HpPDMCommit? startCommit = (await HpPDMCommit.CreateReadAsync())?.FirstOrDefault();
 		// section for checking if the existing remote file already has a version with the same checksum 
 		// or possibly an entry that has a newer version from that which is downloaded locally
 
@@ -552,7 +553,7 @@ public sealed partial class HackFileManager : Page
 		int index = 0;
 		while (hackFiles.TryTake(out HackFile result))
 		{
-			(EntryReturnType entryReturn, HpVersion? newVersion) = await ConvertHackFile(result);
+			(EntryReturnType entryReturn, HpVersion? newVersion) = await ConvertHackFile(result, startCommit);
 			if ((entryReturn 
 				is EntryReturnType.Created 
 				or EntryReturnType.GotExisting)
@@ -770,7 +771,7 @@ public sealed partial class HackFileManager : Page
 	}
 	
 	#endregion
-public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile hackFile)
+public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile hackFile, HpPDMCommit commit)
     {
         Hashtable ht = [];
             

@@ -73,9 +73,13 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
             };
             await newDirectory.CreateAsync(false);
 
-            if (newDirectory.id == 0) throw new Exception("HpDirectory not created");
-                    
-            directories[nextIndex] = newDirectory;
+            if (newDirectory.id == 0)
+            {
+
+                throw new Exception("HpDirectory not created");
+            }
+
+                directories[nextIndex] = newDirectory;
             // for next iteration
             lastParentId = newDirectory.id ?? 0;
         }
