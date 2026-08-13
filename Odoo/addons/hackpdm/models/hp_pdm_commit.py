@@ -78,6 +78,17 @@ class hp_pdm_commit(models.Model):
         staged.unlink()
 
     # ------------------------------------------------------------ 
+    # CLIENT CALLS THIS — resets commit records
+    # ------------------------------------------------------------
+    def clear_commit(self):
+        self.ensure_one()
+        records = self.staged_ids
+
+        if records:
+            records.unlink()
+
+
+    # ------------------------------------------------------------ 
     # CLIENT CALLS THIS — returns immediately 
     # ------------------------------------------------------------
     def start_commit(self):

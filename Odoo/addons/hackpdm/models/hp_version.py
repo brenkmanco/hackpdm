@@ -110,10 +110,7 @@ class hp_version(models.Model):
         related='entry_id.windows_complete_name',
         string='windows directory path name',
     )
-    windows_complete_path = fields.Char(
-        related='entry_id.windows_complete_path',
-        string='windows directory path',
-    )
+
     checkout_date = fields.Datetime(
         related='entry_id.checkout_date',
         string='checkout date',
@@ -180,14 +177,18 @@ class hp_version(models.Model):
         auto_join=True,
         string="Documents",
     )
-    parent_ids = fields.One2many(
-        comodel_name='hp.version.relationship',
-        inverse_name='child_id',
+    parent_ids = fields.Many2many(
+        comodel_name='hp.version',
+        relation='hp_version_relationship',
+        column1='child_id',
+        column2='parent_id',
         string='parent versions',
     )
-    child_ids = fields.One2many(
-        comodel_name='hp.version.relationship',
-        inverse_name='parent_id',
+    child_ids = fields.Many2many(
+        comodel_name='hp.version',
+        relation='hp_version_relationship',
+        column1='parent_id',
+        column2='child_id',
         string='child versions',
     )
     version_property_ids = fields.One2many(
@@ -457,20 +458,20 @@ class hp_version_property(models.Model):
     )
 
 
-class hp_version_relationship(models.Model):
-    #base fields
-    _name = 'hp.version.relationship'
-    _description = 'hp version relationship'
-    _inherit = 'hp.common.model'
+# class hp_version_relationship(models.Model):
+#     #base fields
+#     _name = 'hp.version.relationship'
+#     _description = 'hp version relationship'
+#     _inherit = 'hp.common.model'
 
-    #fields
+#     #fields
 
-    #relational fields
-    parent_id = fields.Many2one(
-        comodel_name='hp.version',
-        string='version parent',
-    )
-    child_id = fields.Many2one(
-        comodel_name='hp.version',
-        string='version child',
-    )
+#     #relational fields
+#     parent_id = fields.Many2one(
+#         comodel_name='hp.version',
+#         string='version parent',
+#     )
+#     child_id = fields.Many2one(
+#         comodel_name='hp.version',
+#         string='version child',
+#     )

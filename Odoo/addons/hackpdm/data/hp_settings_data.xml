@@ -21,7 +21,8 @@
         </record>
         <record id="hp_test_data_one" model="hp.test">
             <!-- Binary: base64-encoded "hello" -->
-            <field name="binary">aGVsbG8=</field>
+            <!-- <field name="binary" type="base64">aGVsbG8=</field> -->
+            <!-- <field name="binary" filename="file_name" widget="binary"/> -->
 
             <!-- Boolean -->
             <field name="boolean">True</field>
@@ -39,20 +40,16 @@
             <field name="floats">123.456</field>
 
             <!-- HTML -->
-            <field name="html">
-                <![CDATA[<p><strong>Test HTML</strong> content for hp.test.</p>]]>
-            </field>
+            <field name="html">&lt;p&gt;&lt;strong&gt;Test HTML&lt;/strong&gt; content for hp.test.&lt;/p&gt;</field>
 
-            <!-- Image: base64-encoded 1×1 PNG -->
-            <field name="image">
-                iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2f8AAAAASUVORK5CYII=
-            </field>
+            <!-- Image: base64-encoded 1×1 PNG (keep it on a single line) -->
+            <!-- <field name="image">iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2f8AAAAASUVORK5CYII=</field> -->
 
             <!-- Integer -->
             <field name="integer">42</field>
 
-            <!-- JSON -->
-            <field name="json"><![CDATA[{"key": "value", "number": 123, "flag": true}]]></field>
+            <!-- JSON (Use eval with a Python dictionary) -->
+            <field name="json" eval="{'key': 'value', 'number': 123, 'flag': True}"/>
 
             <!-- Monetary -->
             <field name="monetary">19.99</field>
@@ -62,12 +59,6 @@
 
             <!-- Text -->
             <field name="text">This is a long text field used for testing.</field>
-
-            <!-- Many2one: reference an existing record -->
-            <!-- <field name="manytoone" ref="hp_test_data_two"/> -->
-
-            <!-- Many2many: link to two existing records -->
-            <!-- <field name="manytomany" eval="[(6, 0, [ref('hp_test_data_two')])]"/> -->
         </record>
 
         <record id="hp_test_data_two" model="hp.test">
