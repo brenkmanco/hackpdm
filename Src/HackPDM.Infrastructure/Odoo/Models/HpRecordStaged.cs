@@ -11,9 +11,12 @@ namespace HackPDM.Infrastructure.Odoo.Models;
 public partial class HpRecordStaged : HpBaseModelTransport<HpRecordStaged>, IHpRecordStagedModel
 {
 	[OdooProp(OdooFieldType.Char, "target_model")] public string? target_model { get;set;}
-	[OdooProp(OdooFieldType.Many2One, "commit_id")] public Many2One? commit_id { get; set; }
 	[OdooProp(OdooFieldType.Integer, "target_id")] public int? target_id { get; set; }
 	[OdooProp(OdooFieldType.Json, "payload")] public Hashtable? payload { get; set; }
 
-	IMany2One? IHpRecordStagedModel.commit_id { get => (IMany2One?)commit_id; set => commit_id = (Many2One?)value; }
+	[OdooProp(OdooFieldType.Many2One, "committing_id")] public Many2One? committing_id { get; set; }
+	[OdooProp(OdooFieldType.Many2Many, "dependency_tree_ids")] public Many2Many? dependency_tree_ids { get; set; }
+
+	IMany2One? IHpRecordStagedModel.committing_id { get => (IMany2One?)committing_id; set => committing_id = (Many2One?)value; }
+	IMany2Many? IHpRecordStagedModel.dependency_tree_ids { get => (IMany2Many?)dependency_tree_ids; set => dependency_tree_ids = (Many2Many?)value; }
 }

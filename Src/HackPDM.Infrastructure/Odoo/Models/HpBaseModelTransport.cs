@@ -1,5 +1,8 @@
 ﻿using System.Collections;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
 using HackPDM.Core.General;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Shared.GlobalData;
@@ -25,13 +28,17 @@ public abstract partial class HpBaseModelTransport
 		{typeof(IHpCategoryPropertyModel),    OdooDefaultsConstants.HP_CATEGORY_PROPERTY},
 		{typeof(IHpVersionModel),             OdooDefaultsConstants.HP_VERSION},
 		{typeof(IHpVersionPropertyModel),     OdooDefaultsConstants.HP_VERSION_PROPERTY},
+
+		{typeof(IHpPDMCommitModel),     OdooDefaultsConstants.HP_PDM_COMMIT},
+		{typeof(IHpRecordStagedModel),     OdooDefaultsConstants.HP_RECORD_STAGED},
+
 		{typeof(IHpVersionRelationshipModel), OdooDefaultsConstants.HP_VERSION_RELATIONSHIP},
 		{typeof(IHpReleaseModel),             OdooDefaultsConstants.HP_RELEASE},
 		{typeof(IHpReleaseVersionRelModel),   OdooDefaultsConstants.HP_RELEASE_VERSION_REL},
 		{typeof(IHpTypeModel),                OdooDefaultsConstants.HP_TYPE},
 		{typeof(IHpPropertyModel),            OdooDefaultsConstants.HP_PROPERTY},
 		{typeof(IHpSettingModel),             OdooDefaultsConstants.HP_SETTINGS},
-		{typeof(IIrAttachment),          OdooDefaultsConstants.IR_ATTACHMENT},
+		{typeof(IIrAttachment),				  OdooDefaultsConstants.IR_ATTACHMENT},
 		{typeof(IHpUserModel),                OdooDefaultsConstants.RES_USERS},
 
 		{typeof(HpNode),                OdooDefaultsConstants.HP_NODE},
@@ -43,6 +50,10 @@ public abstract partial class HpBaseModelTransport
 		{typeof(HpVersion),             OdooDefaultsConstants.HP_VERSION},
 		{typeof(HpVersionProperty),     OdooDefaultsConstants.HP_VERSION_PROPERTY},
 		{typeof(HpVersionRelationship), OdooDefaultsConstants.HP_VERSION_RELATIONSHIP},
+
+		{typeof(HpPDMCommit),			OdooDefaultsConstants.HP_PDM_COMMIT},
+		{typeof(HpRecordStaged),		OdooDefaultsConstants.HP_RECORD_STAGED},
+
 		{typeof(HpRelease),             OdooDefaultsConstants.HP_RELEASE},
 		{typeof(HpReleaseVersionRel),   OdooDefaultsConstants.HP_RELEASE_VERSION_REL},
 		{typeof(HpType),                OdooDefaultsConstants.HP_TYPE},
@@ -77,15 +88,19 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 		{
 			table[nameof(id)] = id;
 		}
+		if (commit_id is not null and not {id: 0 })
+		{
+			table[nameof(commit_id)] = commit_id;
+		}
 
 		return table;
 	}
-	public Hashtable ComputeHashtable(bool includeEmpty = true, in string[]? excludedFieldNames = null, bool isNew = false)
-		=> ComputeHashtable(excludedFieldNames: excludedFieldNames, includedFieldNames: null, insertFieldNames: InsertFields);
+	public Hashtable ComputeHashtable(bool includeEmpty = true, in string[]? excludedFieldNames = null, bool isNew = false, in string[]? insertFieldNames = null)
+		=> ComputeHashtable(excludedFieldNames: excludedFieldNames, includedFieldNames: null, insertFieldNames: insertFieldNames);
 	public virtual Task<int> Create() => Create(false);
 	public async virtual Task<int> Create(bool withEmpty = false)
 	{
-		Hashtable ht = ComputeHashtable(true);
+		Hashtable ht = ComputeHashtable(withEmpty);
 		var tempId = await OClient.CreateAsync(HpModel, ht, 10000);
 
 		if (tempId != 0)
@@ -104,15 +119,42 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 
 		return tempId;
 	}
+	public async virtual Task<int> CreateCommitAsync()
+	{
+		return (id = await OClient.CreateCommitAsync()) ?? throw new InvalidOperationException();
+	}
 	public virtual Task<int> CreateAsync() => CreateAsync(false);
-	public virtual Task<int> CreateAsync(bool withEmpty = false, string[]? excludedFields = null)
+
+	public async virtual Task<int> CreateAsync(bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null)
 	{
 		Hashtable ht = ComputeHashtable(withEmpty, excludedFields, isNew: true);
-		var tempId = OClient.CreateAsync(HpModel, ht, 10000);
+		if (commit_id is not null and not {id: 0})
+		{
+			if (HpModel == OdooDefaultsConstants.HP_RECORD_STAGED)
+			{
+				id = await OClient.CreateAsync(HpModel, ht, 10000);
+			}
+			else
+			{
+				HpRecordStaged record = new()
+				{
+					target_model = HpModel,
+					commit_id = commit_id,
+					committing_id = (Many2One)commit_id,
+					payload = ht
+				};
+				id = await record.CreateAsync();
+			}
+			//string json = JsonSerializer.Serialize(this, this.GetType());
+		}
+		else
+		{
+			id = await OClient.CreateAsync(HpModel, ht, 10000);
+		}
 
 		IsRecord = true;
 
-		return tempId;
+		return id ?? 0;
 	}
 	public static Task<int> CreateEmptyAsync() => OClient.CreateAsync(GetHpModel(), new Hashtable());
 	public static async Task<T[]?> CreateReadAsync() =>
@@ -153,7 +195,7 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 	protected ArrayList ComputeArrayList(bool includeEmpty, in string[]? excludedFieldNames = null)
 	{
 		ArrayList al = [];
-		Hashtable ht = ComputeHashtable(includeEmpty, in excludedFieldNames);
+		Hashtable ht = ComputeHashtable(includeEmpty, excludedFieldNames);
 		foreach ( DictionaryEntry val in ht)
 		{
 			if (includeEmpty || val.Value is not null) al.Add( new ArrayList() { val.Key, "=", val.Value });

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+
 using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
@@ -13,7 +14,9 @@ using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Shared.OdooAttributes;
 
+using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swdocumentmgr;
+
 using DateTime = System.DateTime;
 
 //using static System.Net.Mime.MediaTypeNames;
@@ -323,17 +326,17 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
     {
         if (OdooDefaults.Instance.RestrictTypes is true & !OdooDefaults.Instance.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
             return null;
-        
-        HpVersion newVersion = new()
-        {
-            name = $"{entry.id}.{hackFile.Name}",
-            dir_id = entry.dir_id as Many2One,
-            entry_id = entry.id,
-            file_ext = hackFile.TypeExt[1..].ToLower(),
-            WinPathway = hackFile.FullPath,
-        };
-        newVersion.file_contents = hackFile.FileContents;
-        if (newVersion.file_contents is null)
+
+		HpVersion newVersion = new()
+		{
+			name = $"{entry.id}.{hackFile.Name}",
+			dir_id = entry.dir_id as Many2One,
+			entry_id = entry.id,
+			file_ext = hackFile.TypeExt[1..].ToLower(),
+			WinPathway = hackFile.FullPath,
+			file_contents = hackFile.FileContents
+		};
+		if (newVersion.file_contents is null)
         {
             try
             {
@@ -347,14 +350,64 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 
         return newVersion;
     }
-    public static async Task<HpVersion> CreateNew(HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType = HashedValueStoring.None )
+	internal static HpVersion? PrepareCreation(HackFile hackFile, IHpRecordStagedModel staged, HashedValueStoring hashStoreType = HashedValueStoring.None)
+	{
+		if (OdooDefaults.Instance.RestrictTypes is true & !OdooDefaults.Instance.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
+			return null;
+
+		HpVersion newVersion = new()
+		{
+			name = $"{hackFile.Name}",
+			dir_id = staged.payload?[nameof(dir_id)] as Many2One,
+			//entry_id = staged.id,
+			file_ext = hackFile.TypeExt[1..].ToLower(),
+			WinPathway = hackFile.FullPath,
+			file_contents = hackFile.FileContents
+		};
+		if (newVersion.file_contents is null)
+		{
+			try
+			{
+				newVersion.file_contents ??= File.ReadAllBytes(hackFile?.FullPath ?? "");
+			}
+			catch (Exception ex)
+			{
+				Debug.WriteLine(ex);
+			}
+		}
+
+		return newVersion;
+	}
+	public static async Task<HpVersion> CreateNew(HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType = HashedValueStoring.None )
     {
-        HpVersion newVersion = PrepareCreation(hackFile, entry, hashStoreType);
+        HpVersion? newVersion = PrepareCreation(hackFile, entry, hashStoreType);
         await newVersion.CreateAsync( false, ["file_ext"] );
     
         return newVersion.id == 0 ? null : newVersion;
     }
-    internal static async Task<HpVersion[]?> CreateAllNew( params (HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType)[] data)
+	public static async Task<HpRecordStaged?> CreateNew(HackFile hackFile, IHpRecordStagedModel staged, HashedValueStoring hashStoreType = HashedValueStoring.None)
+	{
+		HpVersion? newVersion = PrepareCreation(hackFile, staged, hashStoreType);
+
+		Hashtable? ht = newVersion?.ComputeHashtable(false);
+
+        var commit = (Many2One?)staged.commit_id;
+
+		HpRecordStaged stage = new()
+		{
+			committing_id = commit,
+			commit_id = staged.commit_id,
+			target_model = OdooDefaultsConstants.HP_VERSION,
+			payload = ht,
+			dependency_tree_ids = new int?[] { staged.id },
+		};
+        stage.HashedValues.Add("is_parent", true);
+
+		await stage.CreateAsync(false);
+
+		return stage?.id is not null and not 0 ? stage : null;
+	}
+	internal static async Task<HpVersion[]?> CreateAllNew( params (HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType)[] data)
     {
         ArrayList versions = data.Select(d => PrepareCreation(d.hackFile, d.entry, d.hashStoreType)).ToArrayList();
     

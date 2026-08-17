@@ -88,6 +88,11 @@ class hp_common_model(models.AbstractModel):
     _name = 'hp.common.model'
     _description = 'commmon model functions for hp models'
 
+    commit_id = fields.Many2one(
+        comodel_name='hp.pdm.commit',
+        string='commit id',
+    )
+
     def _form_dict(self, value, arr, depth):
        data = {"id": value.id, "name": value.name if "name" in value._fields else "", "model": value._name}
        if arr:

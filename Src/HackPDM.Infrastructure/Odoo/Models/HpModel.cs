@@ -18,6 +18,9 @@ namespace HackPDM.Infrastructure.Odoo.Models;
 public class HpModel : IHpOdooRecord
 {
 	public int? id { get; set; }
+	public Many2One? commit_id { get; set; }
+	IMany2One? IHpOdooRecord.commit_id { get => (IMany2One?)commit_id; set => commit_id = (Many2One?)value; }
+
 	public static implicit operator int?(HpModel? model) => model?.id;
 	public static implicit operator HpModel?(int? id) => id is null ? null : new() { id = id };
 }

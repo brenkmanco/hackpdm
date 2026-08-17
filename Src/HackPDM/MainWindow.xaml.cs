@@ -17,6 +17,8 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+		//this.ExtendsContentIntoTitleBar = true;
+		this.SetTitleBar(AppTitleBar);
 		WindowHelper.ResizeWindow(this, StorageBox.PROFILE_MANAGER_WIDTH, StorageBox.PROFILE_MANAGER_HEIGHT);
 	}
 }

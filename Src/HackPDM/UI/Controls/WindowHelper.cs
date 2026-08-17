@@ -162,9 +162,18 @@ public static partial class WindowHelper
         _animationCts = new CancellationTokenSource();
 		//AnimateWindowSize(window.AppWindow, new Windows.Graphics.SizeInt32(windowConfig.PositionAndSize.z, windowConfig.PositionAndSize.w), 250, _animationCts.Token);
         window.AppWindow.MoveAndResize(windowConfig.PositionAndSize);
-    }
+		var titleBar = window.AppWindow.TitleBar;
+
+		// Set system caption button backgrounds to transparent
+		titleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0,0,0,0);
+        titleBar.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+
+		// Optional: Match the hover/press states to your custom background color
+		titleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(25, 255, 255, 255);
+		titleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(50, 255, 255, 255);
+	}
 }
-public class WindowConfig(string title, Vector4<int> positionAndSize, AppWindowPresenterKind kind = AppWindowPresenterKind.Default)
+public class WindowConfig(string title, Vector4<int> positionAndSize, AppWindowPresenterKind kind = AppWindowPresenterKind.Overlapped)
 {
     public static Dictionary<string, WindowConfig> PresetWindowConfig = new ()
 	{
@@ -172,7 +181,7 @@ public class WindowConfig(string title, Vector4<int> positionAndSize, AppWindowP
         {"OdooSettings", new WindowConfig("Odoo Settings", new Vector4<int>(200, 200, 500, 500))},
 		{"HackSettings", new WindowConfig("Hack Settings", new Vector4<int>(200, 200, 700, 200))},
 		{"ConfigSettings", new WindowConfig("Configuration Settings", new Vector4<int>(200, 200, 900, 600))},
-        {"HackFileManager", new WindowConfig("Hack File Manager", new Vector4<int>(0, 0, 1600, 900))},
+        {"HackFileManager", new WindowConfig("Hack File Manager", new Vector4<int>(100, 100, 1500, 800))},
 		{"NotLoggedIn", new WindowConfig("Hack File Manager", new Vector4<int>(0, 0, 1280, 720))},
 		{"MessageBox", new WindowConfig("Info", new Vector4<int>(200, 200, 450, 250), AppWindowPresenterKind.CompactOverlay)},
         {"TemplateWindow", new WindowConfig("Template Window", new Vector4<int>(200, 200, 500, 300))},

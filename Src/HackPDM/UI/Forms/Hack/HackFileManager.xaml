@@ -420,6 +420,12 @@
                         Grid.Row="1"
                         DefaultLabelPosition="Right">
                         <AppBarToggleButton
+                            x:Name="Anchor"
+                            VerticalAlignment="Center"
+                            Checked="Anchor_Checked"
+                            Icon="Pin"
+                            Unchecked="Anchor_Checked"/>
+                        <AppBarToggleButton
                             x:Name="ShowInactive"
                             VerticalAlignment="Center"
                             Checked="ShowInactive_Checked"

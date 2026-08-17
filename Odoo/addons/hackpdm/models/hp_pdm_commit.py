@@ -55,7 +55,7 @@ class hp_pdm_commit(models.Model):
 
     staged_ids = fields.One2many(
         comodel_name="hp.record.staged",
-        inverse_name="commit_id",
+        inverse_name="committing_id",
         string="list of records staged",
     )
 

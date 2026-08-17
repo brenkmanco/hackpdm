@@ -424,20 +424,30 @@ public class OdooDefaults : IOdooDefaults
         return dict;
     }
     
-    public async static Task<HpVersion> CreateNewVersion( HackFile hack, IHpEntryModel entry )
+    public async static Task<(HpVersion?, HpRecordStaged?)> CreateNewVersion( HackFile hack, IHpEntryModel? entry, IHpRecordStagedModel? staged )
     {
-        try { 
+        try 
+        { 
             // create an HpVersion that doesn't exist in odoo
-            HpEntry? ent = entry as HpEntry;
-            HpVersion version = await HpVersion.CreateNew(hack, entry) ?? throw new Exception( $"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}" );
-			ent?.latest_version_id = version.id;
-            return version;
+            if (entry is null)
+            {
+                HpRecordStaged? entryStaged = staged as HpRecordStaged;
+				HpRecordStaged versionStaged = await HpVersion.CreateNew(hack, entryStaged) ?? throw new Exception($"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}");
+                return (null, versionStaged);
+			}
+            else
+            {
+                HpEntry? ent = entry as HpEntry;
+                HpVersion version = await HpVersion.CreateNew(hack, entry) ?? throw new Exception( $"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}" );
+			    ent?.latest_version_id = version.id;
+                return (version, null); ;
+            }
         }
         catch (Exception e)
         {
             Debug.WriteLine($"{e.Message}\n{e.StackTrace}");
         }
-        return null;
+        return (null, null);
     }
     #endregion
 }

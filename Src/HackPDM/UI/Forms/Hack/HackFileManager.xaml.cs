@@ -57,6 +57,7 @@ using HackPDM.Abstractions;
 using HackPDM.UI.Forms.FormTransport;
 using HackPDM.UI.Forms.Helper;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Windowing;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -535,7 +536,8 @@ public sealed partial class HackFileManager : Page
 	private async Task Async_Commit(List<HackFile>? hacks)
 	{
 		object lockObject = new();
-		HpPDMCommit? startCommit = (await HpPDMCommit.CreateReadAsync())?.FirstOrDefault();
+		HpPDMCommit startCommit = new HpPDMCommit { node_by = OdooDefaults.Instance?.MyNode?.id };
+		await startCommit.CreateCommitAsync();
 		// section for checking if the existing remote file already has a version with the same checksum 
 		// or possibly an entry that has a newer version from that which is downloaded locally
 
@@ -551,41 +553,45 @@ public sealed partial class HackFileManager : Page
 		//HpVersion[] localConversions = new HpVersion[hackFiles.Count];
 		List<HpVersion> localConversions = [];
 		int index = 0;
-		while (hackFiles.TryTake(out HackFile result))
-		{
-			(EntryReturnType entryReturn, HpVersion? newVersion) = await ConvertHackFile(result, startCommit);
-			if ((entryReturn 
-				is EntryReturnType.Created 
-				or EntryReturnType.GotExisting)
-				&& newVersion is { }) localConversions.Add(newVersion);
-		}
-		var localVersions = Help.BatchArray(localConversions, DownloadBatchSize);
-
-		
 		ProcessCounter = 0;
 		SkipCounter = 0;
-
-		statusToken = await statusToken.RenewTokenSourceAsync();
-		MaxCount = localVersions?.Length ?? 0;
+		MaxCount = 100;// localVersions?.Length ?? 0;
 		Dialog?.IsInProcess = true;
 
-		if (localVersions is not null)
+		statusToken = await statusToken.RenewTokenSourceAsync();
+		Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"--- Preparing to stage records ---");
+		while (hackFiles.TryTake(out HackFile result))
 		{
-			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"--- Preparing to commit versions ---");
-			for (int i = 0; i < localVersions.Length; i++)
+			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version...");
+			var (entryReturn, newVersion, recordStaged) = await ConvertHackFile(result, startCommit);
+			if ((entryReturn
+				is EntryReturnType.Created
+				or EntryReturnType.GotExisting)
+				&& newVersion is { })
 			{
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Commiting local version batch {i + 1}/{localVersions.Length}...");
-				HpVersionRelationship.Create(localVersions[i]);
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Commiting local version relationships ...");
-				HpVersionProperty.Create(localVersions[i]);
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Commiting local version properties ...");
-				Dialog?.SetProgressBar((SkipCounter + ProcessCounter) / 3, MaxCount);
-				ProcessCounter += 1;
+				// staging HpVersionRelationship's from version
+				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version relationships...");
+				if (recordStaged != null)
+				{
+					// create new parent, child hp_version_relationship's for versions
+					HpVersionRelationship.Create(recordStaged);
+					// staging HpVersionProperty's from version
+					Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version properties ...");
+					HpVersionProperty.Create(recordStaged);
+				}
+				else 
+				{
+					HpVersionRelationship.Create(newVersion);
+					Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version properties ...");
+					HpVersionProperty.Create(newVersion);
+				}
+				//Dialog?.SetProgressBar((SkipCounter + ProcessCounter) / 3, MaxCount);
+				//ProcessCounter += 1;
+				//Dialog?.SetProgressBar(MaxCount, MaxCount);
 			}
+			//localConversions.Add(newVersion);
 		}
-		// create new parent, child hp_version_relationship's for versions
-		Dialog?.SetProgressBar(MaxCount, MaxCount);
-
+		
 		await MessageBox.ShowAsync($"Completed!");
 		await _treeHelper.RestartTree(OdooDirectoryTree);
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
@@ -771,7 +777,7 @@ public sealed partial class HackFileManager : Page
 	}
 	
 	#endregion
-public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile hackFile, HpPDMCommit commit)
+public async static Task<(EntryReturnType, HpVersion?, HpRecordStaged?)> ConvertHackFile(HackFile hackFile, HpPDMCommit? commit)
     {
         Hashtable ht = [];
             
@@ -784,7 +790,7 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 			HpDirectory[] directories = await HpDirectory.CreateNew(paths);
 			HpDirectory lastDirectoryModel = directories.Last() ?? throw new Exception($"{HpDirectory.GetHpModel()} didn't create any records");
             // create an HpEntry that doesn't exist in odoo
-            (entryReturn, HpEntry? entry) = await HpEntry.GetFallbackCreateEntryAsync(hackFile, lastDirectoryModel.id ?? 0);
+            (entryReturn, HpEntry? entry, HpRecordStaged? staged) = await HpEntry.GetFallbackCreateEntryAsync(hackFile, lastDirectoryModel.id ?? 0, commit);
 
 			switch (entryReturn)
 			{
@@ -817,15 +823,15 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 			}
 
 			// create an HpVersion that doesn't exist in odoo
-			HpVersion version = await OdooDefaults.CreateNewVersion(hackFile, entry);
-			if (version.id is 0) entryReturn = EntryReturnType.Failed;
-			return (entryReturn, version);
+			(HpVersion? version, HpRecordStaged? versionStaged) = await OdooDefaults.CreateNewVersion(hackFile, entry, staged);
+			if (version?.id is null or 0 && versionStaged is null) entryReturn = EntryReturnType.Failed;
+			return (entryReturn, version, versionStaged);
         }
         catch (Exception e)
         {
             Debug.WriteLine($"{e.Message}\n{e.StackTrace}");
         }
-        return (entryReturn, null);
+        return (entryReturn, null, null);
     }
 	#region CheckOut Functions
 	private static IEnumerable<HpEntry> FilterCheckoutEntries(HpEntry[] entries)
@@ -1165,6 +1171,13 @@ public async static Task<(EntryReturnType, HpVersion?)> ConvertHackFile(HackFile
 		if (LastSelectedNode is not null)
 		{
 			await _treeHelper.TreeSelectItem(OdooDirectoryTree, LastSelectedNode!, OdooEntryList);
+		}
+	}
+	private async void Anchor_Checked(object sender, RoutedEventArgs e)
+	{
+		if (HackApp.Window?.AppWindow.Presenter is OverlappedPresenter op)
+		{
+			op.IsAlwaysOnTop = Anchor.IsChecked ?? false;
 		}
 	}
 	private void ShowHidden_Checked(object sender, RoutedEventArgs e)
