@@ -9,7 +9,8 @@ namespace HackPDM.Domain.OdooModels.Models;
 public interface IHpRecordStagedModel : IHpOdooRecord
 {
 	[OdooProp(OdooFieldType.Char, "target_model")] public string? target_model { get;set;}
-	[OdooProp(OdooFieldType.Many2One, "commit_id")] public IMany2One? commit_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "committing_id")] public IMany2One? committing_id { get; set; }
 	[OdooProp(OdooFieldType.Integer, "target_id")] public int? target_id { get; set; }
+	[OdooProp(OdooFieldType.Many2Many, "dependency_tree_ids")] public IMany2Many? dependency_tree_ids { get; set; }
 	[OdooProp(OdooFieldType.Json, "payload")] public Hashtable? payload { get; set; }
 }

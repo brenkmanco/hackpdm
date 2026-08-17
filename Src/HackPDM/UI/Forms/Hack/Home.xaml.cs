@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -136,5 +137,10 @@ public sealed partial class Home : Page
 					break;
                 }
         }
+	}
+
+	private void HomeNavigator_BackRequested(NavigationView sender, NavigationViewBackRequestedEventArgs args)
+	{
+        Debug.WriteLine("Back requested");
 	}
 }

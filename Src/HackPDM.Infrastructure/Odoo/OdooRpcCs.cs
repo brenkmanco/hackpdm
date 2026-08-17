@@ -18,6 +18,7 @@ using HackPDM.Infrastructure.Odoo.Models;
 
 
 using HackPDM.Infrastructure.XmlRpc;
+using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Infrastructure.Odoo;
 
@@ -308,6 +309,8 @@ public static class OdooClient
 
 
     // crud operations
+    public static async Task<int> CreateCommitAsync(int? timeout = null)
+        => await CommandAsync<int>(OdooDefaultsConstants.HP_PDM_COMMIT, "create", [new ArrayList { new ArrayList { "node_by", "=", OdooDefaults.Instance?.MyNode } }], timeout);
     public static async Task<int> CreateAsync(string model, Hashtable values, int? timeout = null)
         => await CommandAsync<int>(model, "create", [values], timeout); //
     public static async Task<ArrayList> CreateAsync(string model, ArrayList arrayValues, int? timeout = null)

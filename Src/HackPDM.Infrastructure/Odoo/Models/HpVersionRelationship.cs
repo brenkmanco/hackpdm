@@ -80,4 +80,43 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
             await MultiCreateAsync(hvrCreate.ToArrayList());
         }
     }
+	public async static void Create(params HpRecordStaged[] versionStaged)
+	{
+		//ArrayList ids = versions.Select(v => v.ID).ToArrayList();
+		//ArrayList versionFields = OClient.Read(HpVersion.GetHpModel(), ids, ["id", "file_ext"]);
+		HpVersionRelationship[] hvrCreate = [];
+		foreach (HpRecordStaged vStaged in versionStaged)
+		{
+			if (vStaged is not null && !OdooDefaultsConstants.DependentExt.Contains($".{vStaged.payload?["file_ext"]?.ToString().ToUpper()}")) continue;
+			string? pathway = vStaged.payload?["WinPathway"]?.ToString();
+			List<string> paths = [];
+			List<string[]> dependencies = SolidWorksUtil.DocMgr?.GetDependencies(pathway); // NoInterrupt: true
+			if (dependencies is not null && dependencies.Count > 0)
+			{
+				foreach (string[] deps in dependencies)
+				{
+					string path = deps[1];
+					string absolute = "";
+					var splitPath = path.Split([$"\\{HackDefaults.Instance.PwaPathRelative}\\"], StringSplitOptions.RemoveEmptyEntries);
+					if (splitPath.Length == 2)
+						absolute = Path.Combine([HackDefaults.Instance.PwaPathAbsolute, splitPath[1]]);
+					else continue;
+					paths.Add(absolute);
+				}
+				HpVersion[] getVersions = HpVersion.GetFromPaths(includedFields: ["name", "entry_id"], fullPaths: [.. paths]);
+				hvrCreate = [.. hvrCreate, ..
+					getVersions.Select(v => new HpVersionRelationship()
+					{
+						parent_id = vStaged.id ?? 0,
+						child_id = v.id ?? 0,
+					})
+				];
+			}
+		}
+
+		if (hvrCreate.Length > 0)
+		{
+			await MultiCreateAsync(hvrCreate.ToArrayList());
+		}
+	}
 }

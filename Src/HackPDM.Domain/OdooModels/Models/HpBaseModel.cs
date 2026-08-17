@@ -18,6 +18,8 @@ public abstract partial class HpBaseModel
 	// (MVVM) VIEW
 	public const int ROOT_OFFSET = 5;
 	[OdooProp(OdooFieldType.Integer, "id")] public int? id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "commit_id")] public virtual IMany2One? commit_id { get; set; }
+	
 
 	public static string[] UsualExcludedFields { get; set; } = [];
 	public static string[] UsualIncludedFields { get; set; } = [];
@@ -32,13 +34,15 @@ public abstract partial class HpBaseModel
         {typeof(IHpCategoryPropertyModel),    OdooDefaultsConstants.HP_CATEGORY_PROPERTY},
         {typeof(IHpVersionModel),             OdooDefaultsConstants.HP_VERSION},
         {typeof(IHpVersionPropertyModel),     OdooDefaultsConstants.HP_VERSION_PROPERTY},
-        {typeof(IHpVersionRelationshipModel), OdooDefaultsConstants.HP_VERSION_RELATIONSHIP},
+		{typeof(IHpPDMCommitModel),				OdooDefaultsConstants.HP_PDM_COMMIT},
+		{typeof(IHpRecordStagedModel),			OdooDefaultsConstants.HP_RECORD_STAGED},
+		{typeof(IHpVersionRelationshipModel), OdooDefaultsConstants.HP_VERSION_RELATIONSHIP},
         {typeof(IHpReleaseModel),             OdooDefaultsConstants.HP_RELEASE},
         {typeof(IHpReleaseVersionRelModel),   OdooDefaultsConstants.HP_RELEASE_VERSION_REL},
         {typeof(IHpTypeModel),                OdooDefaultsConstants.HP_TYPE},
         {typeof(IHpPropertyModel),            OdooDefaultsConstants.HP_PROPERTY},
         {typeof(IHpSettingModel),             OdooDefaultsConstants.HP_SETTINGS},
-        {typeof(IIrAttachment),          OdooDefaultsConstants.IR_ATTACHMENT},
+        {typeof(IIrAttachment),					OdooDefaultsConstants.IR_ATTACHMENT},
         {typeof(IHpUserModel),                OdooDefaultsConstants.RES_USERS},
     };
 

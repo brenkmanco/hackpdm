@@ -234,20 +234,24 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 
         return newEntry.id == 0 ? null : newEntry;
     }
-	public static async Task<(EntryReturnType, HpEntry?)> GetFallbackCreateEntryAsync( HackFile hackFile, int dirId )
+	public static async Task<(EntryReturnType, HpEntry?, HpRecordStaged?)> GetFallbackCreateEntryAsync( HackFile hackFile, int dirId, HpPDMCommit? commit = null)
 	{
 		HpEntry? entry = null;
 
 		if (OdooDefaults.Instance.RestrictTypes is true & !OdooDefaults.Instance.ExtToType.TryGetValue( hackFile.TypeExt.ToLower(), out IHpTypeModel type ) )
-			return (EntryReturnType.InvalidType, null);
+			return (EntryReturnType.InvalidType, null, null);
 
 		entry = (await GetRecordsBySearchAsync( [("name", "=", hackFile.Name), ("dir_id", "=", dirId), ("deleted", "=", false)] ))?.FirstOrDefault();
 		
 		if (entry is not null)
-			return (EntryReturnType.GotExisting, entry);
+			return (EntryReturnType.GotExisting, entry, null);
 
 		HpEntry newEntry = new()
 		{
+			commit_id = (IMany2One)new Many2One
+			{
+				id = commit?.id
+			},
 			name = hackFile.Name,
 			deleted = false,
 			dir_id = dirId,
@@ -257,8 +261,21 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 			newEntry.cat_id = type.cat_id?.id ?? 0;
 			newEntry.type_id = type.id;
 		}
-		await newEntry.CreateAsync( false );
-		return entry?.id == 0 ? (EntryReturnType.Failed, null) : (EntryReturnType.Created, entry);
+		Hashtable ht = newEntry.ComputeHashtable(false);
+
+		HpRecordStaged staged = new()
+		{
+			committing_id = commit?.id,
+			commit_id = (IMany2One)new Many2One
+			{
+				id = commit?.id
+			},
+			target_model = OdooDefaultsConstants.HP_ENTRY,
+			payload = ht,
+		};
+		await staged.CreateAsync(false);
+		//await newEntry.CreateAsync( false );
+		return entry?.id == 0 ? (EntryReturnType.Failed, null, null) : (EntryReturnType.Created, null, staged);
 	}
 	
     internal static async Task<ArrayList> GetEntryList(int[] entryIds, bool update = false)
