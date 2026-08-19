@@ -310,7 +310,7 @@ public static class OdooClient
 
     // crud operations
     public static async Task<int> CreateCommitAsync(int? timeout = null)
-        => await CommandAsync<int>(OdooDefaultsConstants.HP_PDM_COMMIT, "create", [new ArrayList { new ArrayList { "node_by", "=", OdooDefaults.Instance?.MyNode } }], timeout);
+        => await CommandAsync<int>(OdooDefaultsConstants.HP_PDM_COMMIT, "create", [new Hashtable { { "node_by", OdooDefaults.Instance?.MyNode?.id ?? 0} }], timeout);
     public static async Task<int> CreateAsync(string model, Hashtable values, int? timeout = null)
         => await CommandAsync<int>(model, "create", [values], timeout); //
     public static async Task<ArrayList> CreateAsync(string model, ArrayList arrayValues, int? timeout = null)
