@@ -29,11 +29,10 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
 	[OdooProp(OdooFieldType.Boolean, "deleted")] public bool? deleted { get; set; }
 	[OdooProp(OdooFieldType.Boolean, "sandboxed")] public bool? sandboxed { get; set; }
 
-	public static (int, int) LastAvailableDirectory( ArrayList paths )
+    public static Task<Hashtable> LastAvailableDirectory( ArrayList paths )
     {
-        Hashtable last = OClient.Command<Hashtable>(GetHpModel(), "last_available_directory", [paths]);
-
-        return ( (int)last [ "index" ], (int)last [ "dir_id" ]);
+        var last = OClient.CommandAsync<Hashtable>(GetHpModel(), "last_available_directory", [new ArrayList { paths }]);
+        return last;
     }
     public async static Task<bool> CreateNew( HpDirectory[] directories )
     {
@@ -50,10 +49,11 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
     }
     public async static Task<HpDirectory[]?> CreateNew( ArrayList paths )
     {
-        Hashtable last = await OClient.CommandAsync<Hashtable>(GetHpModel(), "last_available_directory", [paths]);
-
-        // this means that all directories in paths were found 
-        int nextIndex = (int)last["index"] + 1;
+        paths.Insert( 0, "root" );
+		paths.RemoveAt( paths.Count - 1 );
+		Hashtable last = await LastAvailableDirectory( paths );
+		// this means that all directories in paths were found 
+		int nextIndex = (int)last["index"] + 1;
         int lastDirId = (int)last["dir_id"];
 
         if (nextIndex >= paths.Count)
@@ -75,11 +75,10 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
 
             if (newDirectory.id == 0)
             {
-
                 throw new Exception("HpDirectory not created");
             }
 
-                directories[nextIndex] = newDirectory;
+            directories[nextIndex] = newDirectory;
             // for next iteration
             lastParentId = newDirectory.id ?? 0;
         }

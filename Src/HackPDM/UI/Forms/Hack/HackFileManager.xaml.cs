@@ -790,7 +790,7 @@ public async static Task<(EntryReturnType, HpVersion?, HpRecordStaged?)> Convert
         Hashtable ht = [];
             
         ArrayList paths = hackFile.RelativePath.Split<ArrayList>("\\", StringSplitOptions.RemoveEmptyEntries);
-
+		
 		EntryReturnType entryReturn = EntryReturnType.Failed;
 		try
         {
