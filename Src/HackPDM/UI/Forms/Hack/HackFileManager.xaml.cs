@@ -535,21 +535,28 @@ public sealed partial class HackFileManager : Page
 	}
 	private async Task Async_Commit(List<HackFile>? hacks)
 	{
+		if (hacks is null or { Count: 0 })
+			return;
+
 		object lockObject = new();
-		HpPDMCommit startCommit = new HpPDMCommit { node_by = OdooDefaults.Instance?.MyNode?.id };
+		HpPDMCommit startCommit = new()
+		{ node_by = OdooDefaults.Instance?.MyNode?.id };
 		await startCommit.CreateCommitAsync();
 		// section for checking if the existing remote file already has a version with the same checksum 
 		// or possibly an entry that has a newer version from that which is downloaded locally
 
-		ConcurrentSet<HackFile> hackFiles;
-		ConcurrentSet<HackFile> hackFilesInOdoo;
+		//ConcurrentSet<HackFile> hackFiles;
+		//ConcurrentSet<HackFile> hackFilesInOdoo;
+		ConcurrentDictionary<string, HackFile> hackFiles;
+		ConcurrentDictionary<string, HackFile> hackFilesInOdoo;
 		// testing filter hacks..
 		// entries = entries is not null && !entries.IsEmpty ? await Commit.FilterCommitEntries(entries) : [];
 
 		// section for checking if hack files have a checksum that matches the fullpath
-		(hackFiles, hackFilesInOdoo) = hacks is not null && hacks.Count > 0 ? await FilterCommitHackFiles(hacks) : ([], []);
+		var (hf, hfOdoo) = hacks is not null && hacks.Count > 0 ? await FilterCommitHackFiles(hacks) : ([], []);
 
-
+		hackFiles = new(hf.ToDictionary( h => h.FullPath ?? "", h => h ) ?? []);
+		hackFilesInOdoo = new(hfOdoo.ToDictionary( h => h.FullPath ?? "", h => h ) ?? []);
 		//HpVersion[] localConversions = new HpVersion[hackFiles.Count];
 		List<HpVersion> localConversions = [];
 		int index = 0;
@@ -560,7 +567,8 @@ public sealed partial class HackFileManager : Page
 
 		statusToken = await statusToken.RenewTokenSourceAsync();
 		Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"--- Preparing to stage records ---");
-		while (hackFiles.TryTake(out HackFile result))
+		
+		foreach(var result in hackFiles.Values)
 		{
 			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version...");
 			var (entryReturn, newVersion, recordStaged) = await ConvertHackFile(result, startCommit);
@@ -782,12 +790,12 @@ public async static Task<(EntryReturnType, HpVersion?, HpRecordStaged?)> Convert
         Hashtable ht = [];
             
         ArrayList paths = hackFile.RelativePath.Split<ArrayList>("\\", StringSplitOptions.RemoveEmptyEntries);
-
+		
 		EntryReturnType entryReturn = EntryReturnType.Failed;
 		try
         {
 			// create directories that don't exist in odoo
-			HpDirectory[] directories = await HpDirectory.CreateNew(paths);
+			HpDirectory[]? directories = await HpDirectory.CreateNew(paths.GetRange(0, paths.Count - 1));
 			HpDirectory lastDirectoryModel = directories.Last() ?? throw new Exception($"{HpDirectory.GetHpModel()} didn't create any records");
             // create an HpEntry that doesn't exist in odoo
             (entryReturn, HpEntry? entry, HpRecordStaged? staged) = await HpEntry.GetFallbackCreateEntryAsync(hackFile, lastDirectoryModel.id ?? 0, commit);
@@ -871,11 +879,11 @@ public async static Task<(EntryReturnType, HpVersion?, HpRecordStaged?)> Convert
 	#endregion
 
 	#region Commit Functions
-	private static async Task<(ConcurrentSet<HackFile>, ConcurrentSet<HackFile>)> FilterCommitHackFiles(ConcurrentSet<HackFile> hackFiles)
+	private static async Task<(HackFile[], HackFile[])> FilterCommitHackFiles(ConcurrentSet<HackFile> hackFiles)
 	{
 		List<Task<HackFile>> tasks = [];
 		object lockObject = new();
-		string combinedPattern = string.Join("|", OdooDefaults.Instance.EntryFilterPatterns);
+		string combinedPattern = string.Join("|", OdooDefaults.Instance?.EntryFilterPatterns ?? []);
 		var regex = new Regex(combinedPattern, RegexOptions.IgnoreCase);
 		//string[] filePaths = hackFiles.Select(hack => hack.FullPath).ToArray();
 
@@ -883,7 +891,7 @@ public async static Task<(EntryReturnType, HpVersion?, HpRecordStaged?)> Convert
 		foreach (HackFile hack in hackFiles)
 		{
 			regex = new Regex(combinedPattern, RegexOptions.IgnoreCase);
-			if (!regex.IsMatch($".{hack.TypeExt.ToLower()}"))
+			if (!regex.IsMatch($".{hack.TypeExt?.ToLower()}"))
 			{
 				hacks.Add(hack);
 			}
@@ -1419,7 +1427,19 @@ public async static Task<(EntryReturnType, HpVersion?, HpRecordStaged?)> Convert
 
         	if (OdooDefaultsConstants.DependentExt.Contains($".{item.Type.ToUpper()}"))
         	{
-        		hackFiles.AddAll(HackFile.GetHackFileWithDependencies(item, true, out List<HackFile> hf) ? hf : []);
+				bool success = HackFile.GetHackFileWithDependencies(item, true, out List<HackFile>? hf, out List<HackResultTree.ResultNode> results);
+				if( success )
+				{
+					hackFiles.AddAll(hf ?? []);
+				}
+				else
+				{
+					foreach ( var result in results )
+					{
+						HackFileManager.Dialog?.AddStatusLine( StatusMessage.ERROR, $"({result.Value?.Result}) file: {result.Value?.Hack?.FullPath}" );
+					}
+					Dialog?.AddStatusLine( StatusMessage.ERROR, $"Commit Terminated" );
+				}
         	}
         	else
         	{

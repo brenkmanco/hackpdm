@@ -15,27 +15,22 @@ public record ResultHackFile(bool IsBroken, bool IsTested, HackTestDepth TestDep
 		DoTest(test);
 	}
 
-	private void Init(HackFile? hack, HackTestDepth test)
-	{
-		DoTest();
-		this.Result = hack is null or { Exists: false }
-			? HackResult.MissingFile
-			: FileOperations.InPWAFolder(hack?.FullPath)
-				? HackResult.Clean
-				: HackResult.OutOfPWA;
-		this.IsBroken = this.Result is HackResult.Clean or HackResult.NotTested;
-	}
 	public void DoTest() => DoTest(TestDepth);
 	public void DoTest(HackTestDepth test)
 	{
 		if (test != TestDepth) TestDepth = test;
 
-		if (test.HasFlag(HackTestDepth.FileIsCorruptTest)) this.Result = TestFileIsCorrupt();
-		if (this.Result is HackResult.NotTested && test.HasFlag(HackTestDepth.FileExistsTest)) this.Result = TestFileExists();
-		if (this.Result is HackResult.NotTested && test.HasFlag(HackTestDepth.InPWATest)) this.Result = TestPWA();
+		if ( test.HasFlag(HackTestDepth.FileIsCorruptTest ) ) this.Result = TestFileIsCorrupt();
+		if ( this.Result.HasFlag( HackResult.NotTested ) && test.HasFlag( HackTestDepth.FileExistsTest ) ) this.Result = TestFileExists();
+		if ( this.Result.HasFlag( HackResult.NotTested ) && test.HasFlag( HackTestDepth.InPWATest ) ) this.Result = TestPWA();
 
-		this.IsBroken = this.Result is HackResult.Clean or HackResult.NotTested;
-		this.IsTested = this.Result is not HackResult.NotTested;
+		this.IsBroken = this.Result switch
+		{ 
+			HackResult.Clean => false,
+			HackResult.NotTested => false,
+			_ => true
+		};
+		this.IsTested = !this.Result.HasFlag( HackResult.NotTested );
 	}
 
 	private HackResult TestPWA()
@@ -61,7 +56,14 @@ public record ResultHackFile(bool IsBroken, bool IsTested, HackTestDepth TestDep
 		{
 			Hack.Info ??= new FileInfo(Hack.FullPath ?? "");
 		}
+
 		if (Hack!.Exists is true)
+		{
+			resultPWA &= ~HackResult.NotTested;
+			if (!resultPWA.HasFlag(HackResult.OutOfPWA))
+				resultPWA |= HackResult.Clean;
+		}
+		else
 		{
 			resultPWA &= ~HackResult.Clean;
 			resultPWA |= HackResult.MissingFile;

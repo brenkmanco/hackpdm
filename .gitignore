@@ -411,3 +411,11 @@ Odoo/addons/hackpdm/models/.__init__.py.swp
 
 /.tmp.driveupload
 /Src/.tmp.driveupload
+*.cd
+/Odoo/odoo-app
+
+*.tmp.driveupload
+
+/.vscode
+/.idea
+/desktop.ini

@@ -264,12 +264,12 @@ class hp_directory(models.Model):
         return entry_list
 
     @api.model
-    def _recurse_directories_finding(self, directory, paths:list[str], index:int, forClient:bool):
-
+    def _recurse_directories_finding(self, directory, paths:list[str], index:int, forClient:bool, directories:list):
+        directories.append(directory.id)
         if (index < len(paths) - 1):
             for dir in directory.child_ids:
                 if (paths[index + 1] == dir.name):
-                    return self._recurse_directories_finding(dir, paths, index + 1, forClient)
+                    return self._recurse_directories_finding(dir, paths, index + 1, forClient, directories)
 
         # if there are no children inside of directory equal to the name
         # in paths[index] then the previous index
@@ -278,11 +278,13 @@ class hp_directory(models.Model):
             return {
                 'index': index,
                 'dir_id': directory.id,
+                'known': directories,
             }
         else:
             return {
                 'index': index,
-                'directory': directory,
+                'directory': directory.id,
+                'known': directories,
             }
 
 
@@ -300,7 +302,7 @@ class hp_directory(models.Model):
 
         records = self.env["hp.directory"].search([("id", "=", 1)])
         root = records[0]
-        last_dir = self._recurse_directories_finding(root, paths, 0, True)
+        last_dir = self._recurse_directories_finding(root, paths, 0, True, [])
         return last_dir
 
     @api.model
@@ -310,7 +312,7 @@ class hp_directory(models.Model):
 
         records = self.env["hp.directory"].search([("id", "=", 1)])
         root = records[0]
-        details = self._recurse_directories_finding(root, paths, 0, False)
+        details = self._recurse_directories_finding(root, paths, 0, False, [])
 
 
     @api.model_create_multi
