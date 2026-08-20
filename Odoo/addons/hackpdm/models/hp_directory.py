@@ -268,9 +268,9 @@ class hp_directory(models.Model):
         directories.append(directory.id)
         logging.info(f"{directories}\n{paths}\n{index}")
         if (index < len(paths) - 1):
-            for dir in directory.child_ids:
-                if (paths[index + 1] == dir.name):
-                    return self._recurse_directories_finding(dir, paths, index + 1, forClient, directories)
+            for direct in directory.child_ids:
+                if (paths[index + 1] == direct.name):
+                    return self._recurse_directories_finding(direct, paths, index + 1, forClient, directories)
 
         # if there are no children inside of directory equal to the name
         # in paths[index] then the previous index
