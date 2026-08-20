@@ -25,6 +25,7 @@ public enum EntryReturnType
 	GotExisting,
 	Failed,
 	InvalidType,
+    Staged,
 }
 
 public enum DomainOperators

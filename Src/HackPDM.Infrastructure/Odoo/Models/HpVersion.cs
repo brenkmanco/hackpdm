@@ -399,9 +399,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 			commit_id = staged.commit_id,
 			target_model = OdooDefaultsConstants.HP_VERSION,
 			payload = ht,
-			dependency_tree_ids = new int?[] { staged.id },
 		};
-        stage.HashedValues.Add("is_parent", true);
 
 		await stage.CreateAsync(false);
 

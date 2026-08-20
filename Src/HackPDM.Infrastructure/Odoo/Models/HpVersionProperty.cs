@@ -231,8 +231,6 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 					payload = p.ComputeHashtable(false),
                     committing_id = stage.committing_id,
                     commit_id = stage.commit_id,
-                    dependency_tree_ids = [stage.id],
-                    HashedValues = {{"is_parent", true}}
 				})];
 
 				stagedProps = [.. stagedProps, .. stageProperties];

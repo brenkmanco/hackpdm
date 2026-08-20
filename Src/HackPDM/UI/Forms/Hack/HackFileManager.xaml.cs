@@ -16,48 +16,48 @@ using System.Threading.Tasks;
 
 using CommunityToolkit.WinUI.UI.Controls;
 
-using HackPDM.UI.Forms.Odoo;
-using HackPDM.UI.Forms.Settings;
-using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
-
-
-using Directory = System.IO.Directory;
-using Path = System.IO.Path;
-using Image = Microsoft.UI.Xaml.Controls.Image;
-
+using HackPDM.Abstractions;
 using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Core.Helper.Xaml;
 using HackPDM.Domain.Helper;
-using HackPDM.UI.Controls;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.FormTransport;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
+using HackPDM.UI.Controls;
 using HackPDM.UI.Data;
+using HackPDM.UI.Forms.FormTransport;
+using HackPDM.UI.Forms.Helper;
+using HackPDM.UI.Forms.Odoo;
+using HackPDM.UI.Forms.Settings;
 using HackPDM.UI.Models;
 using HackPDM.UI.Types;
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+
+using SolidWorks.Interop.sldworks;
+
 using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
+using Directory = System.IO.Directory;
 using EntryRow = HackPDM.UI.Types.EntryRow;
+using Image = Microsoft.UI.Xaml.Controls.Image;
 using ListViewItem = Microsoft.UI.Xaml.Controls.ListViewItem;
 using NotifyIcon = HackPDM.UI.Types.NotifyIcon;
+using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
+using Path = System.IO.Path;
 using TreeData = HackPDM.UI.Types.TreeData;
 using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
 using WindowHelper = HackPDM.UI.Controls.WindowHelper;
-using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
-using HackPDM.Abstractions;
-using HackPDM.UI.Forms.FormTransport;
-using HackPDM.UI.Forms.Helper;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.UI.Windowing;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -568,37 +568,37 @@ public sealed partial class HackFileManager : Page
 		statusToken = await statusToken.RenewTokenSourceAsync();
 		Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"--- Preparing to stage records ---");
 		
-		foreach(var result in hackFiles.Values)
-		{
-			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version...");
-			var (entryReturn, newVersion, recordStaged) = await ConvertHackFile(result, startCommit);
-			if ((entryReturn
-				is EntryReturnType.Created
-				or EntryReturnType.GotExisting)
-				&& newVersion is { })
-			{
-				// staging HpVersionRelationship's from version
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version relationships...");
-				if (recordStaged != null)
-				{
-					// create new parent, child hp_version_relationship's for versions
-					HpVersionRelationship.Create(recordStaged);
-					// staging HpVersionProperty's from version
-					Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version properties ...");
-					HpVersionProperty.Create(recordStaged);
-				}
-				else 
-				{
-					HpVersionRelationship.Create(newVersion);
-					Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version properties ...");
-					HpVersionProperty.Create(newVersion);
-				}
-				//Dialog?.SetProgressBar((SkipCounter + ProcessCounter) / 3, MaxCount);
-				//ProcessCounter += 1;
-				//Dialog?.SetProgressBar(MaxCount, MaxCount);
-			}
-			//localConversions.Add(newVersion);
-		}
+		//foreach(var result in hackFiles.Values)
+		//{
+		//	Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version...");
+		//	var (entryReturn, newVersion, recordStaged) = await ConvertHackFile(result, startCommit);
+		//	if ((entryReturn
+		//		is EntryReturnType.Created
+		//		or EntryReturnType.GotExisting)
+		//		&& newVersion is { })
+		//	{
+		//		// staging HpVersionRelationship's from version
+		//		Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version relationships...");
+		//		if (recordStaged != null)
+		//		{
+		//			// create new parent, child hp_version_relationship's for versions
+		//			HpVersionRelationship.Create(recordStaged);
+		//			// staging HpVersionProperty's from version
+		//			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version properties ...");
+		//			HpVersionProperty.Create(recordStaged);
+		//		}
+		//		else 
+		//		{
+		//			HpVersionRelationship.Create(newVersion);
+		//			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version properties ...");
+		//			HpVersionProperty.Create(newVersion);
+		//		}
+		//		//Dialog?.SetProgressBar((SkipCounter + ProcessCounter) / 3, MaxCount);
+		//		//ProcessCounter += 1;
+		//		//Dialog?.SetProgressBar(MaxCount, MaxCount);
+		//	}
+		//	//localConversions.Add(newVersion);
+		//}
 		
 		await MessageBox.ShowAsync($"Completed!");
 		await _treeHelper.RestartTree(OdooDirectoryTree);
@@ -783,65 +783,40 @@ public sealed partial class HackFileManager : Page
 			await _gridHelper.PreviewImage(id);
 		}
 	}
-	
+
 	#endregion
-public async static Task<(EntryReturnType, HpVersion?, HpRecordStaged?)> ConvertHackFile(HackFile hackFile, HpPDMCommit? commit)
-    {
-        Hashtable ht = [];
-            
-        ArrayList paths = hackFile.RelativePath.Split<ArrayList>("\\", StringSplitOptions.RemoveEmptyEntries);
+	public async static Task<HpDirectory?> CreateDirectories(HackFile? hack)
+	{
+		// create directories that don't exist in odoo
+		ArrayList? paths = hack?.RelativePath?.Split<ArrayList>("\\", StringSplitOptions.RemoveEmptyEntries);
+		paths?.RemoveAt( paths.Count - 1 );
+		return (await HpDirectory.CreateNew(paths))?.LastOrDefault() 
+			?? throw new Exception($"{HpDirectory.GetHpModel()} didn't create any records");
+	}
+	
+	//public async static Task<(EntryReturnType, HpEntry?, HpRecordStaged?)> ConvertHack( HackFile hackFile, HpPDMCommit? commit )
+	//{
+ //       Hashtable ht = [];
+	//	HpDirectory? direct = await CreateDirectories( paths );
+
 		
-		EntryReturnType entryReturn = EntryReturnType.Failed;
-		try
-        {
-			// create directories that don't exist in odoo
-			paths.RemoveAt( paths.Count - 1 );
-			HpDirectory[]? directories = await HpDirectory.CreateNew(paths);
-			HpDirectory lastDirectoryModel = directories.Last() ?? throw new Exception($"{HpDirectory.GetHpModel()} didn't create any records");
-            // create an HpEntry that doesn't exist in odoo
-            (entryReturn, HpEntry? entry, HpRecordStaged? staged) = await HpEntry.GetFallbackCreateEntryAsync(hackFile, lastDirectoryModel.id ?? 0, commit);
+	//	try
+ //       {
+	//		// create an HpVersion that doesn't exist in odoo
+	//		(HpVersion? version, HpRecordStaged? versionStaged) = await OdooDefaults.CreateNewVersion(hackFile, entry, staged);
+	//		if (version?.id is null or 0 && versionStaged is null) entryReturn = EntryReturnType.Failed;
+	//		return (entryReturn, version, versionStaged);
+ //       }
+ //       catch (Exception e)
+ //       {
+ //           Debug.WriteLine($"{e.Message}\n{e.StackTrace}");
+ //       }
+ //       return (entryReturn, null, null);
 
-			switch (entryReturn)
-			{
-				case EntryReturnType.Created:
-				{
-					HackFileManager.Dialog?.AddStatusLine(StatusMessage.SUCCESS, $"Created new entry for {hackFile.Name}"); 
-					break;
-				}
-				case EntryReturnType.GotExisting:
-				{
-					HackFileManager.Dialog?.AddStatusLine(StatusMessage.FOUND, $"Found existing entry for {hackFile.Name}"); 
-					break;
-				}
-				case EntryReturnType.Failed:
-				{
-					HackFileManager.Dialog?.AddStatusLine(StatusMessage.ERROR, $"Failed to create entry for {hackFile.Name}"); 
-					throw new Exception($"{hackFile.Name} was unable to create or get record");
-				}
-				case EntryReturnType.InvalidType:
-				{
-					if (OdooDefaults.Instance.RestrictTypes is true)
-					{
-						HackFileManager.Dialog?.AddStatusLine(StatusMessage.ERROR, $"Found invalid type for {hackFile.Name}, file extension {hackFile.TypeExt}");
-						throw new Exception($"found invalid type for {hackFile.Name}, file extension {hackFile.TypeExt}");
-					}
-					else
-						HackFileManager.Dialog?.AddStatusLine(StatusMessage.WARNING, $"Found invalid type for file extension {hackFile.TypeExt}, but continuing due to unrestricted types");
-					break;
-				}
-			}
-
-			// create an HpVersion that doesn't exist in odoo
-			(HpVersion? version, HpRecordStaged? versionStaged) = await OdooDefaults.CreateNewVersion(hackFile, entry, staged);
-			if (version?.id is null or 0 && versionStaged is null) entryReturn = EntryReturnType.Failed;
-			return (entryReturn, version, versionStaged);
-        }
-        catch (Exception e)
-        {
-            Debug.WriteLine($"{e.Message}\n{e.StackTrace}");
-        }
-        return (entryReturn, null, null);
-    }
+	//}
+	//public async static Task<(EntryReturnType, HpVersion?, HpRecordStaged?)> ConvertHackFile(HackFile hackFile, HpPDMCommit? commit)
+ //   {
+ //   }
 	#region CheckOut Functions
 	private static IEnumerable<HpEntry> FilterCheckoutEntries(HpEntry[] entries)
 	{

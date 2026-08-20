@@ -123,39 +123,44 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 	{
 		return (id = await OClient.CreateCommitAsync()) ?? throw new InvalidOperationException();
 	}
-	public virtual Task<int> CreateAsync() => CreateAsync(false);
-
-	public async virtual Task<int> CreateAsync(bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null)
+	public virtual Task<int> CreateAsync() => CreateAsync( false );
+	public async virtual Task<int> CreateAsync( bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
 	{
 		Hashtable ht = ComputeHashtable(withEmpty, excludedFields, isNew: true);
-		if (commit_id is not null and not {id: 0})
-		{
-			if (HpModel == OdooDefaultsConstants.HP_RECORD_STAGED)
-			{
-				id = await OClient.CreateAsync(HpModel, ht, 10000);
-			}
-			else
-			{
-				HpRecordStaged record = new()
-				{
-					target_model = HpModel,
-					commit_id = commit_id,
-					committing_id = (Many2One)commit_id,
-					payload = ht
-				};
-				id = await record.CreateAsync();
-			}
-			//string json = JsonSerializer.Serialize(this, this.GetType());
-		}
-		else
-		{
-			id = await OClient.CreateAsync(HpModel, ht, 10000);
-		}
+		id = await OClient.CreateAsync( HpModel, ht, 10000 );
 
-		IsRecord = true;
-
+		IsRecord = id != 0;
 		return id ?? 0;
 	}
+	
+	public virtual Task<int> StageAsync() => StageAsync( false );
+	public async virtual Task<int> StageAsync( bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
+		=> StageRecAsync( withEmpty, excludedFields, insertFIelds ).Id;
+	public async virtual Task<HpRecordStaged?> StageRecAsync(bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
+	{
+		Hashtable ht = ComputeHashtable(withEmpty, excludedFields, isNew: true);
+
+		if( commit_id is null or { id: 0 } )
+			return null;
+
+		if( HpModel == OdooDefaultsConstants.HP_RECORD_STAGED )
+		{
+			id = await OClient.CreateAsync( HpModel, ht, 10000 );
+			IsRecord = id != 0;
+			return this as HpRecordStaged;
+		}
+
+		HpRecordStaged record = new()
+		{
+			target_model = HpModel,
+			commit_id = commit_id,
+			committing_id = (Many2One?)commit_id,
+			payload = ht
+		};
+		return await record.StageRecAsync(false);
+	}
+	public virtual Task<HpRecordStaged?> StageRecAsync() => StageRecAsync( false );
+
 	public static Task<int> CreateEmptyAsync() => OClient.CreateAsync(GetHpModel(), new Hashtable());
 	public static async Task<T[]?> CreateReadAsync() =>
 		RecordsPopulation(hts: (await OClient.CreateReadAsync(GetHpModel(), [], null))?.Select<Hashtable, Hashtable>(static h => h));
