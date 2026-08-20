@@ -266,7 +266,6 @@ class hp_directory(models.Model):
     @api.model
     def _recurse_directories_finding(self, directory, paths:list[str], index:int, forClient:bool, directories:list):
         directories.append(directory.id)
-        logging.info(f"{directories}\n{paths}\n{index}")
         if (index < len(paths) - 1):
             for direct in directory.child_ids:
                 if (paths[index + 1] == direct.name):
@@ -288,8 +287,6 @@ class hp_directory(models.Model):
                 'known': directories,
             }
 
-
-
     # pathway will have a path that needs to be parsed to find the last available directory
     # and then return a dictionary with the index of the path where it was last available
     # and the ID of the last last available dir_id
@@ -299,7 +296,9 @@ class hp_directory(models.Model):
         # if the first array element is pwa change it to root and
         # then if the first array element doesn't equal root then
         # the beginning of the path isn't going to be found
-        paths[0] == "root"
+        if (type(paths[0]) == list):
+            paths = paths[0]
+        paths[0] = "root"
 
         records = self.env["hp.directory"].search([("id", "=", 1)])
         root = records[0]
@@ -309,6 +308,9 @@ class hp_directory(models.Model):
     @api.model
     def create_new_details(self, paths):
         details = {}
+        
+        if (type(paths[0]) == list):
+            paths = paths[0]
         paths[0] = "root"
 
         records = self.env["hp.directory"].search([("id", "=", 1)])

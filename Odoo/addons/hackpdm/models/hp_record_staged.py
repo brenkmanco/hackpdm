@@ -1,7 +1,11 @@
 from odoo import fields, models, Command
 
-class hp_record_staged(models.Model):
+class hp_record_staged(models.TransientModel):
     _name = 'hp.record.staged'
+    _inherit = 'hp.common.model'
+    # The maximum number of hours a staged record can be kept in the database before 
+    # it is automatically deleted. This is to prevent the database from being filled with stale records.
+    _transient_max_hours = 24.0
     
     committing_id = fields.Many2one(
         comodel_name="hp.pdm.commit",
@@ -15,29 +19,9 @@ class hp_record_staged(models.Model):
     target_id = fields.Integer(
         string="Id of the record",
     )
-    dependency_tree_ids = fields.Many2many(
-        "hp.record.staged",
-        "hp_record_staged_rel",
-        "parent_id",
-        "child_id",
-        string="dependency tree"
-    )
     payload = fields.Json(
         required=True,
     )
-    child_parent_ids = fields.Many2many(
-        comodel_name="hp.record.staged",
-        relation="hp_record_staged_dependency_rel",
-        column1="child_id",
-        column2="parent_id",
-        string="Depends On",
-    )
-    parent_child_ids = fields.Many2many(
-        comodel_name="hp.record.staged",
-        relation="hp_record_staged_dependency_rel",
-        column1="parent_id",
-        column2="child_id",
-        string="Required For",
-    )
+
 
     

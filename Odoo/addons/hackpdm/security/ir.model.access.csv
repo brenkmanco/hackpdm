@@ -13,7 +13,6 @@ access_hp_release_version_rel_user,access_hp_release_version_rel_user,model_hp_r
 access_hp_type_user,access_hp_type_user,model_hp_type,base.group_user,1,1,1,0
 access_hp_settings_user,access_hp_settings_user,model_hp_settings,base.group_user,1,0,0,0
 access_hp_release_review_user,access_hp_release_review_user,model_hp_release_review,base.group_user,1,0,1,0
-
 access_hp_release_system,access_hp_release_system,model_hp_release,base.group_system,1,1,1,1
 access_hp_node_system,access_hp_node_system,model_hp_node,base.group_system,1,1,1,1
 access_hp_directory_system,access_hp_directory_system,model_hp_directory,base.group_system,1,1,1,1
@@ -26,12 +25,11 @@ access_hp_entry_name_filter_system,access_hp_entry_name_filter_system,model_hp_e
 access_hp_property_system,access_hp_property_system,model_hp_property,base.group_system,1,1,1,1
 access_hp_release_version_rel_system,access_hp_release_version_rel_system,model_hp_release_version_rel,base.group_system,1,1,1,1
 access_hp_type_system,access_hp_type_system,model_hp_type,base.group_system,1,1,1,1
-
 access_hp_settings_system,access_hp_settings_system,model_hp_settings,base.group_system,1,1,1,1
 access_hp_release_review_system,access_hp_release_review_system,model_hp_release_review,base.group_system,1,1,1,1
-
 access_hp_test_user,access_hp_test_user,model_hp_test,base.group_user,1,1,1,1
 access_hp_test_system,access_hp_test_system,model_hp_test,base.group_system,1,1,1,1
-
 access_hp_pdm_commit_user,access_hp_pdm_commit_user,model_hp_pdm_commit,base.group_user,1,1,1,0
 access_hp_pdm_commit_system,access_hp_pdm_commit_system,model_hp_pdm_commit,base.group_system,1,1,1,1
+access_hp_record_staged_user,access_hp_record_staged_user,model_hp_record_staged,base.group_user,1,1,1,0
+access_hp_record_staged_system,access_hp_record_staged_system,model_hp_record_staged,base.group_system,1,1,1,1
