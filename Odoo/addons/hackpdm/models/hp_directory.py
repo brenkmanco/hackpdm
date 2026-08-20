@@ -266,6 +266,7 @@ class hp_directory(models.Model):
     @api.model
     def _recurse_directories_finding(self, directory, paths:list[str], index:int, forClient:bool, directories:list):
         directories.append(directory.id)
+        logging.info(f"{directories}\n{paths}\n{index}")
         if (index < len(paths) - 1):
             for dir in directory.child_ids:
                 if (paths[index + 1] == dir.name):
@@ -283,7 +284,7 @@ class hp_directory(models.Model):
         else:
             return {
                 'index': index,
-                'directory': directory.id,
+                'dir_id': directory.id,
                 'known': directories,
             }
 

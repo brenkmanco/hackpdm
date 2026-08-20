@@ -5,6 +5,8 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+
+using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
@@ -50,11 +52,14 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
     public async static Task<HpDirectory[]?> CreateNew( ArrayList paths )
     {
         paths.Insert( 0, "root" );
-		paths.RemoveAt( paths.Count - 1 );
+		
 		Hashtable last = await LastAvailableDirectory( paths );
-		// this means that all directories in paths were found 
-		int nextIndex = (int)last["index"] + 1;
-        int lastDirId = (int)last["dir_id"];
+        // this means that all directories in paths were found 
+        int nextIndex = 1;
+
+		if (!last.TryGetValue("index", out int index)) { index = 0; }
+        if (!last.TryGetValue("dir_id", out int lastDirId)) { lastDirId = 1; }
+		nextIndex = index + 1;
 
         if (nextIndex >= paths.Count)
             return [await GetRecordByIdAsync( lastDirId ) ?? null];

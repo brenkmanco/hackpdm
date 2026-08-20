@@ -795,7 +795,8 @@ public async static Task<(EntryReturnType, HpVersion?, HpRecordStaged?)> Convert
 		try
         {
 			// create directories that don't exist in odoo
-			HpDirectory[]? directories = await HpDirectory.CreateNew(paths.GetRange(0, paths.Count - 1));
+			paths.RemoveAt( paths.Count - 1 );
+			HpDirectory[]? directories = await HpDirectory.CreateNew(paths);
 			HpDirectory lastDirectoryModel = directories.Last() ?? throw new Exception($"{HpDirectory.GetHpModel()} didn't create any records");
             // create an HpEntry that doesn't exist in odoo
             (entryReturn, HpEntry? entry, HpRecordStaged? staged) = await HpEntry.GetFallbackCreateEntryAsync(hackFile, lastDirectoryModel.id ?? 0, commit);
