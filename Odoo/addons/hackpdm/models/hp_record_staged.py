@@ -22,6 +22,6 @@ class hp_record_staged(models.TransientModel):
     payload = fields.Json(
         required=True,
     )
-
+    
 
     
