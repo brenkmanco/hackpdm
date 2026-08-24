@@ -336,20 +336,8 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 			WinPathway = hackFile.FullPath,
 			file_contents = hackFile.FileContents
 		};
-		if (newVersion.file_contents is null)
-        {
-            try
-            {
-                newVersion.file_contents ??= File.ReadAllBytes(hackFile?.FullPath ?? "");
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-            }
-        }
-
-        return newVersion;
-    }
+		return PrepareCreation(hackFile, newVersion);
+	}
 	internal static HpVersion? PrepareCreation(HackFile hackFile, IHpRecordStagedModel staged, HashedValueStoring hashStoreType = HashedValueStoring.None)
 	{
 		if (OdooDefaults.Instance.RestrictTypes is true & !OdooDefaults.Instance.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
@@ -359,11 +347,16 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 		{
 			name = $"{hackFile.Name}",
 			dir_id = staged.payload?[nameof(dir_id)] as Many2One,
-			//entry_id = staged.id,
+			entry_id = staged.id,
 			file_ext = hackFile.TypeExt[1..].ToLower(),
 			WinPathway = hackFile.FullPath,
 			file_contents = hackFile.FileContents
 		};
+		
+		return PrepareCreation(hackFile, newVersion);
+	}
+	private static HpVersion? PrepareCreation(in HackFile hackFile, in HpVersion newVersion)
+    {
 		if (newVersion.file_contents is null)
 		{
 			try
@@ -375,43 +368,34 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 				Debug.WriteLine(ex);
 			}
 		}
-
 		return newVersion;
 	}
-	public static async Task<HpVersion> CreateNew(HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType = HashedValueStoring.None )
+    public static async Task<HpVersion?> CreateVersion(HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType = HashedValueStoring.None )
     {
         HpVersion? newVersion = PrepareCreation(hackFile, entry, hashStoreType);
-        await newVersion.CreateAsync( false, ["file_ext"] );
+        await newVersion?.CreateAsync( false, ["file_ext"] );
     
-        return newVersion.id == 0 ? null : newVersion;
-    }
-	public static async Task<HpRecordStaged?> CreateNew(HackFile hackFile, IHpRecordStagedModel staged, HashedValueStoring hashStoreType = HashedValueStoring.None)
+        return newVersion.id is not null and not 0 ? newVersion : null;
+	}
+	public static async Task<HpRecordStaged?> StageVersion(HackFile hackFile, IHpRecordStagedModel staged, HashedValueStoring hashStoreType = HashedValueStoring.None)
 	{
 		HpVersion? newVersion = PrepareCreation(hackFile, staged, hashStoreType);
+        HpRecordStaged? versionStage = await newVersion?.StageRecAsync();
 
-		Hashtable? ht = newVersion?.ComputeHashtable(false);
+		return versionStage?.id is not null and not 0 ? versionStage : null;
+	}
+	public static async Task<HpRecordStaged?> StageVersion(HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType = HashedValueStoring.None)
+	{
+		HpVersion? newVersion = PrepareCreation(hackFile, entry, hashStoreType);
+		HpRecordStaged? versionStage = await newVersion?.StageRecAsync();
 
-        var commit = (Many2One?)staged.commit_id;
-
-		HpRecordStaged stage = new()
-		{
-			committing_id = commit,
-			commit_id = staged.commit_id,
-			target_model = OdooDefaultsConstants.HP_VERSION,
-			payload = ht,
-			dependency_tree_ids = new int?[] { staged.id },
-		};
-        stage.HashedValues.Add("is_parent", true);
-
-		await stage.CreateAsync(false);
-
-		return stage?.id is not null and not 0 ? stage : null;
+		return versionStage?.id is not null and not 0 ? versionStage : null;
 	}
 	internal static async Task<HpVersion[]?> CreateAllNew( params (HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType)[] data)
     {
         ArrayList versions = data.Select(d => PrepareCreation(d.hackFile, d.entry, d.hashStoreType)).ToArrayList();
-    
         ArrayList ids = await MultiCreateAsync(versions, false);
+    
         return await GetRecordsByIdsAsync(ids, excludedFields: UsualExcludedFields);
     }
     public static HpVersion[] GetFromPaths(params string[] fullPaths)
@@ -429,10 +413,10 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
     {
         var paths = Help.FastSlice(fullPaths, HackDefaults.Instance.PwaPathAbsolute.Length + 1, "root\\").ToArrayList();
     
-        ArrayList searchParams = new()
-        {
-            new ArrayList { "windows_complete_name", "in", paths }
-        };
+        ArrayList searchParams =
+		[
+			new ArrayList { "windows_complete_name", "in", paths }
+        ];
     
         return HpEntry.GetRelatedRecordsBySearch<HpVersion>(searchParams, nameof(HpEntry.latest_version_id), includedFields: includedFields, excludedFields: excludedFields);
     }

@@ -9,6 +9,7 @@ public interface IHpOdooRecord
     [OdooProp(OdooFieldType.Integer, "id")] public int? id { get; set; }
 	[OdooProp(OdooFieldType.Many2One, "commit_id")] public IMany2One? commit_id { get; set; }
 }
+
 public interface IMany2One : IHpOdooRecord 
 { 
     public string? name { get; set; }

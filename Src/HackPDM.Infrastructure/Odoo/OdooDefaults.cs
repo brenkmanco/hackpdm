@@ -429,16 +429,17 @@ public class OdooDefaults : IOdooDefaults
         try 
         { 
             // create an HpVersion that doesn't exist in odoo
-            if (entry is null)
+            if (entry is null || entry.id == 0)
             {
                 HpRecordStaged? entryStaged = staged as HpRecordStaged;
-				HpRecordStaged versionStaged = await HpVersion.CreateNew(hack, entryStaged) ?? throw new Exception($"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}");
+				HpRecordStaged? versionStaged = await HpVersion.StageVersion(hack, entryStaged) ?? throw new Exception($"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}");
+
                 return (null, versionStaged);
 			}
             else
             {
                 HpEntry? ent = entry as HpEntry;
-                HpVersion version = await HpVersion.CreateNew(hack, entry) ?? throw new Exception( $"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}" );
+                HpVersion version = await HpVersion.CreateVersion(hack, entry) ?? throw new Exception( $"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}" );
 			    ent?.latest_version_id = version.id;
                 return (version, null); ;
             }

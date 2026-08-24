@@ -479,7 +479,7 @@ public class HackFile : HackBaseFile, IHackFileModel
 	    }
 	    return hackFile;
     }
-
+    
     private static async Task<HackFile> FileInfoToHackFile(FileInfo fileInfo) => await HackFile.GetFromFileInfo(fileInfo);
 
     public static implicit operator HackFile( FileInfo file)

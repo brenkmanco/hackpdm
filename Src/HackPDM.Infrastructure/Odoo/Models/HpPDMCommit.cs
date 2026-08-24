@@ -1,4 +1,6 @@
-﻿using HackPDM.Domain.OdooModels.Models;
+﻿using System.Collections;
+
+using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Shared.OdooAttributes;
@@ -29,4 +31,11 @@ public partial class HpPDMCommit : HpBaseModelTransport<HpPDMCommit>, IHpPDMComm
 	[OdooProp(OdooFieldType.One2Many, "staged_ids")] public One2Many? staged_ids { get;set;}
 	IMany2One? IHpPDMCommitModel.node_by { get => (IMany2One?)node_by; set => node_by = (Many2One?)value; }
 	IOne2Many? IHpPDMCommitModel.staged_ids { get => (IOne2Many?)staged_ids; set => staged_ids = (One2Many?)value; }
+}
+public partial class HpPDMCommit
+{ 
+	public async Task<bool> ServerCommit()
+		=> await OdooClient<HpPDMCommit>.CommandAsync<bool>("start_commit", [new ArrayList { new ArrayList { "id", "=", this.id } }]);
+	public async Task<bool> ServerClear()
+		=> await OdooClient<HpPDMCommit>.CommandAsync<bool>("clear_commit", [new ArrayList { new ArrayList { "id", "=", this.id } }]);
 }

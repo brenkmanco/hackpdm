@@ -182,7 +182,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
             await MultiCreateAsync(versionProperties.ToArrayList());
         }
     }
-	public static async void Create(params HpRecordStaged[] staged)
+	public static async Task<bool> StagePropertyRecords(params HpRecordStaged[] staged)
 	{
 		HpRecordStaged[] stagedProps = [];
 		foreach (HpRecordStaged stage in staged)
@@ -231,8 +231,6 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 					payload = p.ComputeHashtable(false),
                     committing_id = stage.committing_id,
                     commit_id = stage.commit_id,
-                    dependency_tree_ids = [stage.id],
-                    HashedValues = {{"is_parent", true}}
 				})];
 
 				stagedProps = [.. stagedProps, .. stageProperties];
@@ -240,12 +238,13 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 			catch (Exception e)
 			{
 				Debug.WriteLine($"unable to create properties for {stage.id}\n{e}");
-				return;
+				return false;
 			}
 		}
 		if (stagedProps.Length > 0)
 		{
 			await MultiCreateAsync(stagedProps.ToArrayList());
 		}
+        return true;
 	}
 }
