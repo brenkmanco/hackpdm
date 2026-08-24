@@ -80,32 +80,44 @@ class hp_pdm_commit(models.Model):
     # ------------------------------------------------------------ 
     # CLIENT CALLS THIS — resets commit records
     # ------------------------------------------------------------
-    def clear_commit(self):
-        self.ensure_one()
-        records = self.staged_ids
+    def clear_commit(self, id):
+        record = self.env["hp.pdm.commit"].browse([id])
+        record.ensure_one()
+        records = record.staged_ids
 
         if records:
             records.unlink()
+            record.write({
+                "committed": False, 
+                "committing": False, 
+                "errored": False, 
+                "message_exception": False, 
+                "commit_summary": False,
+                "committed_at": False,
+                "commit_finished_at": False,
+            })
+        return True
 
 
     # ------------------------------------------------------------ 
     # CLIENT CALLS THIS — returns immediately 
     # ------------------------------------------------------------
-    def start_commit(self):
-        self.ensure_one()
+    def start_commit(self, id):
+        record = self.env["hp.pdm.commit"].browse([id])
+        record.ensure_one()
 
-        if self.committing:
+        if record.committing:
             raise UserError("Commit already in progress.")
 
-        if self.committed:
+        if record.committed:
             raise UserError("This commit has already been completed.")
 
-        if not self.staged_ids:
+        if not record.staged_ids:
             raise UserError("No staged records to commit.")
 
         #enqueue job
-        job = self.with_delay(on_error='handle_commit_failure').run_commit_job()
-        self.write({
+        job = record.with_delay(on_error='handle_commit_failure').run_commit_job()
+        record.write({
             "job_uuid": job.uuid,
             "committing": True,
             "committed_at": fields.Datetime.now(),
@@ -149,7 +161,28 @@ class hp_pdm_commit(models.Model):
                 summary_text += f"\t\t- {id}\n"
         return summary_text
 
-
+    model_order = [
+        "hp.settings",
+        "hp.category",
+        "hp.entry.name.filter",
+        "hp.type",
+        "hp.property",
+        "hp.category.property",
+        "hp.directory",
+        "hp.entry",
+        "hp.version",
+        "hp.version.property",
+        "hp.version.relationship",
+        "hp.release.review",
+        "hp.release",
+    ]
+    def _create_records(self, staged, summary_model):
+        for index, row in enumerate(staged, start=1):
+            model = self.env[row.target_model]
+            rec = model.create(row.payload)
+            summary_model.setdefault(row.target_model, []).append(rec.id)
+            row.write({"target_id": rec.id})
+        
     # ------------------------------------------------------------
     # ATOMIC CREATION — ONE BIG TRANSACTION
     # ------------------------------------------------------------
@@ -163,11 +196,10 @@ class hp_pdm_commit(models.Model):
         staged = self.staged_ids
         total = len(staged)
 
-        for index, row in enumerate(staged, start=1):
-            model = self.env[row.target_model]
-            rec = model.create(row.payload)
-            summary_model.setdefault(row.target_model, []).append(rec.id)
-            row.write({"target_id": rec.id})
+        for model_name in self.model_order:
+            staged_for_model = staged.filtered(lambda r: r.target_model == model_name)
+            if staged_for_model and len(staged_for_model) > 0:
+                self._create_records(staged_for_model, summary_model)
 
         # wipe payloads only if everything succeeded
         self.write({"commit_summary": self._write_summary(summary_model)})

@@ -83,7 +83,6 @@ class WebDav():
 
         #print(f"File information: {file_info}")
 
-
 class hp_version(models.Model):
 
     _name = 'hp.version'
@@ -421,7 +420,6 @@ class hp_version(models.Model):
     @api.model
     def cleanup_filestore(self):
         attachment = self.env["ir.attachment"]
-
 
 class hp_version_property(models.Model):
     #base fields
