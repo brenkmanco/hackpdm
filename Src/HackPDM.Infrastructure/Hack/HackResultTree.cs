@@ -6,15 +6,33 @@ using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Core.Hack;
 
-public class HackResultTree(ResultHackFile? value = null)
+public class HackResultTree
 {
-	public class ResultNode( ResultHackFile? rNodeValue = null ) : IList<ResultNode>
+	public class ResultNode : IList<ResultNode>
 	{
 		public int Count { get; }
 		public bool IsReadOnly { get; }
-		public ResultNode? Parent { get; set; } = null;
-		public ResultHackFile? Value { get; set; } = rNodeValue;
-		public IList<ResultNode> Children { get; set; } = [];
+		public HackResultTree? Tree { get; set; }
+		public ResultNode? Root 
+		{
+			get => field = Tree?.Root;
+			set; 
+		}
+		public ResultNode? Parent 
+		{ 
+			get;
+			set
+			{
+				field = value;
+				if (field is not null)
+				{
+					Root = field.Root;
+					Tree = field.Tree;
+				}
+			} 
+		}
+		public ResultHackFile? Value { get; set; }
+		public List<ResultNode> Children { get; set; } = [];
 
 		public bool IsRoot => Parent is null;
 		public bool IsLeaf => Children.Count == 0;
@@ -24,21 +42,24 @@ public class HackResultTree(ResultHackFile? value = null)
 		public bool IsBrokenPropagated => IsBroken || Children.Any( c => c.IsBrokenPropagated );
 		public bool IsBrokenBranchPropagated => (IsBroken || Parent?.IsBrokenBranchPropagated is true);
 		public bool IsBrokenTreePropagated => ( GetRoot().IsBrokenPropagated );
-		public IList<ResultNode>? BrokenNodes
+		public List<ResultNode>? BrokenNodes
 		{
 			get
 			{
 				if (IsProcessed)
-					field = [ .. GetAllNodes(true) ];
+				{
+					field ??= IsRoot 
+						? [ .. GetAllNodes( true ) ]
+						: ( Parent?.BrokenNodes );
+				}
 				return field;
 			}
 		}
-		public IEnumerable<ResultNode>? AllChildren
+		public List<ResultNode>? AllChildren
 		{
 			get
 			{
-				if( IsProcessed )
-					field = [ .. GetAllNodes() ];
+				field = IsRoot ? [ .. GetAllNodes() ] : ( Parent?.AllChildren );
 				return field;
 			}
 		}
@@ -48,6 +69,23 @@ public class HackResultTree(ResultHackFile? value = null)
 			get => Children[ index ];
 			set => Children[ index ] = value;
 		}
+
+		public ResultNode( ResultHackFile? rNodeValue, ResultNode? parent = null) 
+			: this( rNodeValue, parent, [] ) {}
+		public ResultNode( ResultHackFile? rNodeValue, ResultNode? parent = null, params ResultNode[] children ) 
+			: this( rNodeValue, parent, false, children) {}
+		public ResultNode( ResultHackFile? rNodeValue, ResultNode? parent = null, bool process = false, params IEnumerable<ResultNode> children )
+		{
+			this.Value = rNodeValue;
+			this.Parent = parent;
+			this.Root = parent is not null ? ( parent?.Root ?? this ) : this;
+			this.Tree ??= parent is not null ? ( parent?.Tree ) : Tree;
+			this.Children = [ .. children ];
+
+			if( process )
+				ProcessDependencies();
+		}
+
 
 		public IEnumerator<ResultNode> GetEnumerator() => Children.GetEnumerator();
 		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -69,7 +107,7 @@ public class HackResultTree(ResultHackFile? value = null)
 
 
 
-		public void ProcessDependencies(bool stopAtBroken = true)
+		public async Task ProcessDependencies(bool stopAtBroken = true)
 		{
 			if( IsProcessed || IsBroken || (stopAtBroken && IsBrokenBranchPropagated) )
 				return;
@@ -101,7 +139,6 @@ public class HackResultTree(ResultHackFile? value = null)
 						ResultHackFile resHack = new(HackFile.GetFromPath(path, FileOperations.GetRelativePath(path)), HackTestDepth.FileExistsTest);
 						ResultNode node = [with( resHack )];
 						Children.Add(node);
-						node.Parent = this;
 					}
 				}
 				catch
@@ -113,7 +150,7 @@ public class HackResultTree(ResultHackFile? value = null)
 			foreach( var child in Children )
 			{
 				if( !child.IsBroken )
-					child.ProcessDependencies();
+					await child.ProcessDependencies();
 			}
 			IsProcessed = true;
 		}
@@ -152,6 +189,18 @@ public class HackResultTree(ResultHackFile? value = null)
 			}
 		}
 	}
-	public ResultNode? Root { get; set; } = new(value);
+	public HackResultTree( HackFile file ) : this( new ResultHackFile( file ) ) { }
+	public HackResultTree( ResultHackFile value ) : this( new ResultNode( value ) ) { }
+	public HackResultTree( ResultNode rootNode )
+	{
+		Root = rootNode;
+		rootNode.Tree = this;
+		rootNode.Root = rootNode;
+	}
+	public ResultNode Root
+	{
+		get;
+		set;
+	}
 }
 

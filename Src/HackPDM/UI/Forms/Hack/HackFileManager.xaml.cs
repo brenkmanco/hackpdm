@@ -585,7 +585,7 @@ public sealed partial class HackFileManager : Page
 			{
 				Dialog?.AddStatusLine(StatusMessage.FOUND, $"existing entry found...");
 				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version...");
-				versionStaged = await HpVersion.StageVersion(result, entry);
+				versionStaged = await HpVersion.StageVersion(result, entry, startCommit.id ?? 0);
 			}
 			if (entry.returnType is EntryReturnType.Staged)
 			{
@@ -603,15 +603,14 @@ public sealed partial class HackFileManager : Page
 			if (versionStaged is { id: not 0 })
 			{
 				// staging HpVersionRelationship's from version
-				if (versionStaged != null)
-				{
-					Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version relationships...");
-					// create new parent, child hp_version_relationship's for versions
-					HpVersionRelationship.StageRelationshipRecords(versionStaged);
-					// staging HpVersionProperty's from version
-					Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version properties ...");
-					await HpVersionProperty.StagePropertyRecords(versionStaged);
-				}
+
+				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version relationships...");
+				// create new parent, child hp_version_relationship's for versions
+				await HpVersionRelationship.StageRelationshipRecords(versionStaged);
+				// staging HpVersionProperty's from version
+				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version properties ...");
+				await HpVersionProperty.StagePropertyRecords(versionStaged);
+				
 				ProcessCounter += 1;
 				Dialog?.SetProgressBar(ProcessCounter, MaxCount);
 				//Dialog?.SetProgressBar(MaxCount, MaxCount);
@@ -1412,12 +1411,16 @@ public sealed partial class HackFileManager : Page
 		WindowHelper.CreateWindowAndPage<StatusDialog>(out var Dialog, out _);
 		HackFileManager.Dialog = Dialog;
 
+		HackFileManager.Dialog?.AddStatusLine( StatusMessage.PROCESSING, "checking entries and dependencies" );
 		var entryItem = (OdooEntryList.SelectedItems as IList)?.Cast<EntryRow>().ToList() ?? [];
 		HashSet<HackFile> hackFiles = [];
-		hackFiles.AddAll(ProcessHacks(entryItem));
-		await CommitInternal(hackFiles);
+		hackFiles.AddAll(await ProcessHacks(entryItem));
+		if (hackFiles.Count > 0) 
+			await CommitInternal(hackFiles);
+		else
+			HackFileManager.Dialog?.AddStatusLine( StatusMessage.INFO, "no valid entries to process" );
 	}
-	private static HashSet<HackFile> ProcessHacks(List<EntryRow>? entries)
+	private static async Task<HashSet<HackFile>> ProcessHacks(List<EntryRow>? entries)
 	{
 		HashSet<HackFile> hackFiles = [];
 		if (entries is null) return hackFiles;
@@ -1429,7 +1432,7 @@ public sealed partial class HackFileManager : Page
 
         	if (OdooDefaultsConstants.DependentExt.Contains($".{item.Type.ToUpper()}"))
         	{
-				bool success = HackFile.GetHackFileWithDependencies(item, true, out List<HackFile>? hf, out List<HackResultTree.ResultNode> results);
+				var (success, hf, results) = await HackFile.GetHackFileWithDependencies(item, true);
 				if( success )
 				{
 					hackFiles.AddAll(hf ?? []);

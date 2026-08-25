@@ -419,3 +419,5 @@ Odoo/addons/hackpdm/models/.__init__.py.swp
 /.vscode
 /.idea
 /desktop.ini
+
+/Odoo/updater/vers_relationship.sql
