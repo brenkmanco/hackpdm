@@ -97,7 +97,7 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 		}
 		if (commit_id is not null and not {id: 0 })
 		{
-			table[nameof(commit_id)] = commit_id;
+			table[nameof(commit_id)] = commit_id.id;
 		}
 
 		return table;
@@ -141,19 +141,19 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 	public virtual Task<int> StageAsync() => StageAsync( false );
 	public async virtual Task<int> StageAsync( bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
 		=> StageRecAsync( withEmpty, excludedFields, insertFIelds ).Id;
-	public async virtual Task<HpRecordStaged?> StageRecAsync(bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
+	public async virtual Task<HpRecordStaged?> StageRecAsync( bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
+	{
+		var rec = PreStageRec( withEmpty, excludedFields, insertFIelds ) ;
+		_ = await rec?.CreateAsync();
+		return rec;
+	}
+	public virtual Task<HpRecordStaged?> StageRecAsync() => StageRecAsync( false );
+	public virtual HpRecordStaged? PreStageRec( bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
 	{
 		Hashtable ht = ComputeHashtable(withEmpty, excludedFields);
 
-		if( commit_id is null or { id: 0 } )
-			return null;
-
-		if( HpModel == OdooDefaultsConstants.HP_RECORD_STAGED )
-		{
-			id = await OClient.CreateAsync( HpModel, ht, 10000 );
-			IsRecord = id != 0;
-			return this as HpRecordStaged;
-		}
+		if( commit_id is null or { id: 0 } ) return null;
+		if( HpModel == OdooDefaultsConstants.HP_RECORD_STAGED ) return this as HpRecordStaged;
 
 		HpRecordStaged record = new()
 		{
@@ -163,10 +163,8 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 			payload = ht,
 			HashedValues = { { "windows_complete_name", this.HashedValues.TryGetValue("windows_complete_name", out var v) ? v : null } },
 		};
-		return await record.StageRecAsync(false);
+		return record.PreStageRec( false );
 	}
-	public virtual Task<HpRecordStaged?> StageRecAsync() => StageRecAsync( false );
-
 	public static Task<int> CreateEmptyAsync() => OClient.CreateAsync(GetHpModel(), new Hashtable());
 	public static async Task<T[]?> CreateReadAsync() =>
 		RecordsPopulation(hts: (await OClient.CreateReadAsync(GetHpModel(), [], null))?.Select<Hashtable, Hashtable>(static h => h));
@@ -178,6 +176,12 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 		var type = typeof(T);
 		string hpmodel = HpModelDictionary.TryGetValue(type, out hpmodel) ? hpmodel : null;
 		var tempId = OClient.CreateAsync(hpmodel, hts);
+		return tempId;
+	}
+	public static Task<ArrayList> MultiStageAsync(HpBaseModelTransport<T>[] records, bool withEmpty = false )
+	{
+		ArrayList hts = records.Select(v => v.PreStageRec(withEmpty)?.ComputeHashtable(false)).ToArrayList();
+		var tempId = OClient.CreateAsync(OdooDefaultsConstants.HP_RECORD_STAGED, hts);
 		return tempId;
 	}
 

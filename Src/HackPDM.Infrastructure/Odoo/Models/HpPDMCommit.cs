@@ -35,7 +35,7 @@ public partial class HpPDMCommit : HpBaseModelTransport<HpPDMCommit>, IHpPDMComm
 public partial class HpPDMCommit
 { 
 	public async Task<bool> ServerCommit()
-		=> await OdooClient<HpPDMCommit>.CommandAsync<bool>("start_commit", [new ArrayList { new ArrayList { "id", "=", this.id } }]);
+		=> await OdooClient<HpPDMCommit>.CommandAsync<bool>("start_commit", [this.id]);
 	public async Task<bool> ServerClear()
-		=> await OdooClient<HpPDMCommit>.CommandAsync<bool>("clear_commit", [new ArrayList { new ArrayList { "id", "=", this.id } }]);
+		=> await OdooClient<HpPDMCommit>.CommandAsync<bool>("clear_commit", [this.id]);
 }

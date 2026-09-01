@@ -152,7 +152,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
                         HpVersionProperty vProp = new()
                         {
                             sw_config_name = prop.Item1 == "" ? null : prop.Item1,
-                            version_id = version.id != 0 ? version.id : throw new Exception("version id not defined"),
+                            version_id = (version.id ?? 0) != 0 ? version.id! : throw new Exception("version id not defined"),
                         };
                         if (hpProperty is not null) vProp.prop_id = hpProperty.id ?? 0; 
                         switch (prop.Item3)
@@ -184,16 +184,20 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
     }
 	public static async Task<bool> StagePropertyRecords(params HpRecordStaged[] staged)
 	{
-		HpRecordStaged[] stagedProps = [];
+		HpVersionProperty[] stagedProps = [];
+        
 		foreach (HpRecordStaged stage in staged)
 		{
 			try
 			{
-				if (!OdooDefaultsConstants.DependentExt.Contains($".{stage.payload?["file_ext"]?.ToString().ToUpper()}")) continue;
-				string pathway = stage.payload?["WinPathway"]?.ToString();
+				if (!OdooDefaultsConstants.DependentExt.Contains($".{stage.payload?["file_ext"]?.ToString()?.ToUpper()}")) continue;
+				string? pathway = stage.payload?["WinPathway"]?.ToString() ?? stage.HashedValues?["windows_complete_name"] as string;
+                string? filePath = Path.Combine(HackDefaults.Instance?.PwaPathAbsolute ?? "", pathway ?? "");
 				List<string> paths = [];
 
-				List<Tuple<string, string, string, object>> props = SolidWorksUtil.DocMgr.GetProperties(pathway);
+				List<Tuple<string, string, string, object>> props = SolidWorksUtil.DocMgr.GetProperties(filePath);
+
+#pragma warning disable CS8601 // Possible null reference assignment.
 				HpVersionProperty[] properties = [.. props.SkipSelect( prop =>
 				{
 					bool isSuccessful = false;
@@ -203,11 +207,12 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 
 					if (isFound || OdooDefaults.Instance.RestrictProperties is false)
 					{
-                        int id = stage.payload?["id"] is int stage_id ? stage_id : 0;
+                        int id = stage.id is int stage_id ? stage_id : 0;
 						HpVersionProperty vProp = new()
 						{
 							sw_config_name = prop.Item1 == "" ? null : prop.Item1,
-							version_id = (id) != 0 ? id : throw new Exception("version id not defined"),
+							version_id = id != 0 ? id : throw new Exception("version id not defined"),
+                            commit_id = stage.commit_id,
 						};
 						if (hpProperty is not null) vProp.prop_id = hpProperty.id ?? 0;
 						switch (prop.Item3)
@@ -224,16 +229,8 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 					Debug.WriteLine($"prop: {prop.Item2} | {isSuccessful}");
 					return (true, null);
 				}) ?? []];
-
-                HpRecordStaged[] stageProperties = [.. properties.Select(p => new HpRecordStaged
-				{
-					target_model = OdooDefaultsConstants.HP_VERSION_PROPERTY,
-					payload = p.ComputeHashtable(false),
-                    committing_id = stage.committing_id,
-                    commit_id = stage.commit_id,
-				})];
-
-				stagedProps = [.. stagedProps, .. stageProperties];
+#pragma warning restore CS8601 // Possible null reference assignment.
+				stagedProps = [.. stagedProps, .. properties];
 			}
 			catch (Exception e)
 			{
@@ -241,10 +238,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 				return false;
 			}
 		}
-		if (stagedProps.Length > 0)
-		{
-			await MultiCreateAsync(stagedProps.ToArrayList());
-		}
+		if (stagedProps.Length > 0) await MultiStageAsync( stagedProps );
         return true;
 	}
 }

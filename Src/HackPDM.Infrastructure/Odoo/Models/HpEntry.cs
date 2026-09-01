@@ -277,6 +277,7 @@ public partial class HpEntry
 			entry.cat_id = itype.cat_id?.id ?? 0;
 			entry.type_id = itype.id;
 		}
+		entry.returnType = EntryReturnType.Staged;
 		return entry;
 	}
 	public async Task<HpEntry?> FindRemoteEntry()
@@ -284,21 +285,23 @@ public partial class HpEntry
 		HpEntry? entry = (await GetRecordsBySearchAsync(
 			[
 				new ArrayList { "name", "=", name },
-				new ArrayList { "dir_id", "=", dir_id },
+				new ArrayList { "dir_id", "=", dir_id?.id },
 				new ArrayList { "deleted", "=", false }
 			]))?.FirstOrDefault();
+		if (entry is not null and { id: not 0 })
+		{
+			entry.returnType = EntryReturnType.GotExisting;
+		}
 		return entry;
 	}
 	public async Task<HpRecordStaged?> StageEntry()
 	{
-		HpEntry? entry = await FindRemoteEntry();
+		//HpEntry? entry = await FindRemoteEntry();
 		HpRecordStaged? stagedRecord = null;
-		if (entry is null or { id: 0 })
-		{
-			stagedRecord = await this.StageRecAsync(false);
-			returnType = stagedRecord?.id is null or 0 ? EntryReturnType.Failed : EntryReturnType.Staged;
-		}
-		else returnType = EntryReturnType.GotExisting;
+
+		stagedRecord = await this.StageRecAsync(false);
+		returnType = stagedRecord?.id is null or 0 ? EntryReturnType.Failed : EntryReturnType.Staged;
+
 		return stagedRecord;
 	}
 	public async Task<HpEntry?> CreateEntry()

@@ -263,6 +263,8 @@ public static class HashConverter
 		{
 			if (map.TryGetValue(entry.Key as string ?? "", out var assign))
 				assign(record, entry.Value);
+			else
+				record.HashedValues.Add( entry.Key, entry.Value );
 		}
 		return ref record;
 	}
@@ -277,6 +279,8 @@ public static class HashConverter
 		{
 			if (map.TryGetValue(entry.Key as string ?? "", out var assign))
 				assign(record, entry.Value);
+			else
+				record.HashedValues.Add( entry.Key, entry.Value );
 		}
 	}
 	public static ref Span<(Hashtable, T)> AssignToClasses<T>(ref Span<(Hashtable, T)> values) where T : HpBaseModelTransport
@@ -293,8 +297,10 @@ public static class HashConverter
             
 		    foreach (DictionaryEntry entry in record.ht)
 		    {
-			    if (map.TryGetValue(entry.Key as string ?? "", out var assign))
-				    assign(record.record, entry.Value);
+                if( map.TryGetValue( entry.Key as string ?? "", out var assign ) )
+                    assign( record.record, entry.Value );
+                else
+                    record.record.HashedValues.Add( entry.Key, entry.Value );
 		    }
 		}
         return ref values;

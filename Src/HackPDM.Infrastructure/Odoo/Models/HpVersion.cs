@@ -334,8 +334,10 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 			entry_id = entry.id,
 			file_ext = hackFile.TypeExt[1..].ToLower(),
 			WinPathway = entry.windows_complete_name,
+            node_id = OdooDefaults.Instance.MyNode?.id,
 			file_contents = hackFile.FileContents,
-            commit_id = (Many2One?)commit_id,
+			commit_id = (Many2One?)commit_id,
+            HashedValues = {{ "windows_complete_name", entry.windows_complete_name } },
 		};
 		return PrepareCreation(hackFile, newVersion);
 	}
@@ -344,15 +346,18 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 		if (OdooDefaults.Instance.RestrictTypes is true & !OdooDefaults.Instance.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
 			return null;
 
+        string? path = staged.payload?[ "windows_complete_name" ] as string;
 		HpVersion newVersion = new()
 		{
 			name = $"{hackFile.Name}",
 			dir_id = staged.payload?[nameof(dir_id)] as int?,
 			entry_id = staged.id,
 			file_ext = hackFile.TypeExt[1..].ToLower(),
-			WinPathway = staged.payload?["windows_complete_name"] as string,
+			WinPathway = path,
+            node_id = OdooDefaults.Instance.MyNode?.id,
 			file_contents = hackFile.FileContents,
             commit_id = staged.commit_id,
+            HashedValues = {{ "windows_complete_name", path } },
 		};
 		
 		return PrepareCreation(hackFile, newVersion);

@@ -225,7 +225,8 @@ public class HackFile : HackBaseFile, IHackFileModel
 		Checksum = null;
 	}
     public void InitializeHackFromPath(string? path) => AssignToSelf(GetFromPath(path));
-    private void AssignToSelf(HackFile? hack)
+    public string? GetChecksum() => Checksum ??= FileOperations.FileChecksum( FullPath, SHA1.Create() ) ;
+	private void AssignToSelf(HackFile? hack)
     {
         this.Info = hack?.Info;
         this.FullPath = hack?.FullPath;

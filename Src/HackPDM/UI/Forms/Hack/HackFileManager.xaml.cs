@@ -533,6 +533,76 @@ public sealed partial class HackFileManager : Page
 		await MessageBox.ShowAsync("Completed!");
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
+	private async Task<bool> CommitRecord( HackFile? hack, HpPDMCommit commit, bool inOdoo = false )
+	{
+		if( hack is null )
+			return false;
+
+		// commit directories
+		HpDirectory? dir = await CreateDirectories(hack);
+
+		// stage / retrieve entry record
+
+		HpEntry entry = await HpEntry.ConvertToEntry(hack, dir?.id ?? 0, commit) ?? new();
+		if (inOdoo)
+		{
+			entry = await entry?.FindRemoteEntry() ?? entry;
+		}
+
+		// stage version record
+
+		HpRecordStaged? versionStaged = null;
+		if( entry.returnType is EntryReturnType.GotExisting )
+		{
+			Dialog?.AddStatusLine( StatusMessage.FOUND, $"existing entry found..." );
+			Dialog?.AddStatusLine( StatusMessage.PROCESSING, $"staging local version..." );
+			versionStaged = await HpVersion.StageVersion( hack, entry, commit.id ?? 0 );
+		}
+		if( entry.returnType is EntryReturnType.Staged )
+		{
+			HpRecordStaged? entryStaged = await entry?.StageEntry();
+			Dialog?.AddStatusLine( StatusMessage.PROCESSING, $"staging local entry..." );
+			Dialog?.AddStatusLine( StatusMessage.PROCESSING, $"staging local version..." );
+			versionStaged = await HpVersion.StageVersion( hack, entryStaged );
+		}
+		if( entry.returnType is EntryReturnType.Failed )
+		{
+			commit.ServerClear();
+			Dialog?.AddStatusLine( StatusMessage.ERROR, $"Error creating entry {entry.name}. Rolling back records..." );
+			return false;
+		}
+
+		try
+		{
+			if( versionStaged is not { id: not 0 } )
+				throw new ArgumentException( "Version staging failed, Version is null or has an id of 0" );
+
+			// staging HpVersionRelationship's from version
+
+			Dialog?.AddStatusLine( StatusMessage.PROCESSING, $"staging local version relationships..." );
+			// create new parent, child hp_version_relationship's for versions
+			if( !await HpVersionRelationship.StageRelationshipRecords( versionStaged ) )
+				throw new ArgumentException( $"Failed to stage version relationships for {versionStaged.payload?[ "name" ]}" );
+
+			// staging HpVersionProperty's from version
+			Dialog?.AddStatusLine( StatusMessage.PROCESSING, $"staging local version properties ..." );
+			if( !await HpVersionProperty.StagePropertyRecords( versionStaged ) )
+				throw new ArgumentException( $"Failed to stage version properties for {versionStaged.payload?[ "name" ]}" );
+
+			ProcessCounter += 1;
+			Dialog?.SetProgressBar( ProcessCounter, MaxCount );
+			//Dialog?.SetProgressBar(MaxCount, MaxCount);
+
+		}
+		catch( Exception e )
+		{
+			commit.ServerClear();
+			Debug.WriteLine( e.Message );
+			Dialog?.AddStatusLine( StatusMessage.ERROR, e.Message );
+			return false;
+		}
+		return true;
+	}
 	private async Task Async_Commit(List<HackFile>? hacks)
 	{
 		if (hacks is null or { Count: 0 })
@@ -553,76 +623,24 @@ public sealed partial class HackFileManager : Page
 		// entries = entries is not null && !entries.IsEmpty ? await Commit.FilterCommitEntries(entries) : [];
 
 		// section for checking if hack files have a checksum that matches the fullpath
-		var (hf, hfOdoo) = hacks is not null && hacks.Count > 0 ? await FilterCommitHackFiles(hacks) : ([], []);
+		// var (hf, hfOdoo) = hacks is not null && hacks.Count > 0 ? await FilterCommitHackFiles(hacks) : ([], []);
+		var hfs = hacks is not null && hacks.Count > 0 ? await FilterCommitHackFiles( hacks ) : ([], []);
 
-		hackFiles = new(hf.ToDictionary( h => h.FullPath ?? "", h => h ) ?? []);
-		hackFilesInOdoo = new(hfOdoo.ToDictionary( h => h.FullPath ?? "", h => h ) ?? []);
-		//HpVersion[] localConversions = new HpVersion[hackFiles.Count];
+		// hackFiles = new(hfs.Item1.ToDictionary( h => h.FullPath ?? "", h => h ) ?? []);
+		// hackFilesInOdoo = new(hfs.Item2.ToDictionary( h => h.FullPath ?? "", h => h ) ?? []);
+		// HpVersion[] localConversions = new HpVersion[hackFiles.Count];
 		List<HpVersion> localConversions = [];
 		int index = 0;
 		ProcessCounter = 0;
 		SkipCounter = 0;
-		MaxCount = hackFiles.Count;// localVersions?.Length ?? 0;
+		MaxCount = hfs.Item1.Length + hfs.Item2.Length;// localVersions?.Length ?? 0;
 		Dialog?.IsInProcess = true;
 
 		statusToken = await statusToken.RenewTokenSourceAsync();
 		Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"--- Preparing to stage records ---");
 
-		foreach (var result in hackFiles.Values)
-		{
-			// commit directories
-			HpDirectory? dir = await CreateDirectories(result);
-			
-			// stage / retrieve entry record
-			
-			HpEntry? entry = await HpEntry.ConvertToEntry(result, dir?.id ?? 0, startCommit);
-			HpRecordStaged? entryStaged = await entry?.StageEntry();
-
-			// stage version record
-			
-			HpRecordStaged? versionStaged = null;
-			if (entry.returnType is EntryReturnType.GotExisting)
-			{
-				Dialog?.AddStatusLine(StatusMessage.FOUND, $"existing entry found...");
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version...");
-				versionStaged = await HpVersion.StageVersion(result, entry, startCommit.id ?? 0);
-			}
-			if (entry.returnType is EntryReturnType.Staged)
-			{
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local entry...");
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version...");
-				versionStaged = await HpVersion.StageVersion(result, entryStaged);
-			}
-			if (entry.returnType is EntryReturnType.Failed)
-			{
-				startCommit.ServerClear();
-				Dialog?.AddStatusLine(StatusMessage.ERROR, $"Error creating entry {entry.name}. Rolling back records...");
-				return;
-			}
-
-			if (versionStaged is { id: not 0 })
-			{
-				// staging HpVersionRelationship's from version
-
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version relationships...");
-				// create new parent, child hp_version_relationship's for versions
-				await HpVersionRelationship.StageRelationshipRecords(versionStaged);
-				// staging HpVersionProperty's from version
-				Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"staging local version properties ...");
-				await HpVersionProperty.StagePropertyRecords(versionStaged);
-				
-				ProcessCounter += 1;
-				Dialog?.SetProgressBar(ProcessCounter, MaxCount);
-				//Dialog?.SetProgressBar(MaxCount, MaxCount);
-			}
-			else
-			{
-				startCommit.ServerClear();
-				Dialog?.AddStatusLine(StatusMessage.ERROR, $"Error creating version {versionStaged?.payload?["name"]}. Rolling back records...");
-				return;
-			}
-			//localConversions.Add(newVersion);
-		}
+		foreach (var hack in hfs.Item1 ) { if (!await CommitRecord( hack, startCommit, false )) return; }
+		foreach( var hack in hfs.Item2 ) { if (!await CommitRecord( hack, startCommit, true )) return; }
 
 		await startCommit.ServerCommit();
 		await MessageBox.ShowAsync($"Completed!");
@@ -914,21 +932,23 @@ public sealed partial class HackFileManager : Page
 			string filepath = hackArr[i].TypeExt.ToLower();
 			if (OdooDefaults.Instance.RestrictTypes is true && !OdooDefaults.Instance.ExtToType.ContainsKey(filepath ?? "-=-=-")) continue;
 
+			
 			string filePath = FileOperations.WindowsToOdooPath(hackArr[i].RelativePath);
 			ArrayList arrList =
 			[
 				new ArrayList() { "name", "=", hackArr[i].Name },
-				new ArrayList() { "directory_complete_name", "=", filePath },   
+				new ArrayList() { "windows_complete_name", "=", (@"root\" + hackArr[i].RelativePath) },   
 			];
 			HpEntry? entry = (await HpEntry.GetRecordsBySmartSearchAsync(searchFilter: arrList, includedFields: [nameof(HpEntry.name), nameof(HpEntry.dir_id)], insertFields: ["version_ids.checksum"]))?.FirstOrDefault();
 			ArrayList fields = [];
 
-			if (entry is not null && entry.HashedValues.TryGetValue("checksum", out ArrayList? arr))
+			if (entry is not null && entry.HashedValues.TryGetValue("version_ids.checksum", out ArrayList? arr))
 			{
 				// this means that this hackFile is in the database so it can be skipped
-				if (arr.FirstOrDefault<string>(x => x.ToString() == hackArr[i].Checksum) is string checksum)
+				if (arr.FirstOrDefault<Hashtable>(x =>   x.TryGetValue("value", out string? checksum)  &&  checksum == hackArr[i].GetChecksum()   ) is Hashtable foundChecksum)
 				{
-					HackFileManager.Dialog?.AddStatusLine(StatusMessage.FOUND, $"checksum found remotely ({checksum}) for: {filePath}");
+
+					HackFileManager.Dialog?.AddStatusLine(StatusMessage.FOUND, $"checksum found remotely ({hackArr[ i ].Checksum}) for: {filePath}");
 					hacksFound.Add(hackArr[i]);
 					continue;
 				}
