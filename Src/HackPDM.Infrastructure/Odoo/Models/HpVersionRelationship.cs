@@ -93,8 +93,12 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
 		    foreach (HpRecordStaged vStaged in versionStaged)
 		    {
 			    if (vStaged is not null && !OdooDefaultsConstants.DependentExt.Contains($".{vStaged.payload?["file_ext"]?.ToString().ToUpper()}")) continue;
-			    string? pathway = vStaged.payload?["WinPathway"]?.ToString();
-			    List<string> paths = [];
+
+                // TODO:
+                // windows_complete_name is null
+                // find version property where this is set
+				string? pathway = ( vStaged.payload?["WinPathway"]?.ToString() ?? vStaged.HashedValues["windows_complete_name"] as string ) ?? throw new ArgumentException();
+				List<string> paths = [];
 			    List<string[]> dependencies = SolidWorksUtil.DocMgr?.GetDependencies(pathway); // NoInterrupt: true
 			    if (dependencies is not null && dependencies.Count > 0)
 			    {

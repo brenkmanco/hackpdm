@@ -420,3 +420,5 @@ Odoo/addons/queue_job
 /.vscode
 /.idea
 /desktop.ini
+
+/Odoo/updater/vers_relationship.sql

@@ -439,7 +439,7 @@ public class OdooDefaults : IOdooDefaults
             else
             {
                 HpEntry? ent = entry as HpEntry;
-                HpVersion version = await HpVersion.CreateVersion(hack, entry) ?? throw new Exception( $"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}" );
+                HpVersion version = await HpVersion.CreateVersion(hack, entry, staged?.commit_id?.id ?? 0) ?? throw new Exception( $"{HpVersion.GetHpModel()} was unable to create new version for {entry.name}" );
 			    ent?.latest_version_id = version.id;
                 return (version, null); ;
             }

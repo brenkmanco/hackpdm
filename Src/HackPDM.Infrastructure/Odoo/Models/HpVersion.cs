@@ -322,7 +322,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         HpVersion[]? versions = await GetRecordsByIdsAsync(ids, includedFields: ["entry_id"]);
         return versions;
     }
-    internal static HpVersion? PrepareCreation(HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType = HashedValueStoring.None)
+    internal static HpVersion? PrepareCreation(HackFile hackFile, IHpEntryModel entry, int commit_id, HashedValueStoring hashStoreType = HashedValueStoring.None)
     {
         if (OdooDefaults.Instance.RestrictTypes is true & !OdooDefaults.Instance.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
             return null;
@@ -333,8 +333,9 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 			dir_id = entry.dir_id as Many2One,
 			entry_id = entry.id,
 			file_ext = hackFile.TypeExt[1..].ToLower(),
-			WinPathway = hackFile.FullPath,
-			file_contents = hackFile.FileContents
+			WinPathway = entry.windows_complete_name,
+			file_contents = hackFile.FileContents,
+            commit_id = (Many2One?)commit_id,
 		};
 		return PrepareCreation(hackFile, newVersion);
 	}
@@ -346,11 +347,12 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 		HpVersion newVersion = new()
 		{
 			name = $"{hackFile.Name}",
-			dir_id = staged.payload?[nameof(dir_id)] as Many2One,
+			dir_id = staged.payload?[nameof(dir_id)] as int?,
 			entry_id = staged.id,
 			file_ext = hackFile.TypeExt[1..].ToLower(),
-			WinPathway = hackFile.FullPath,
-			file_contents = hackFile.FileContents
+			WinPathway = staged.payload?["windows_complete_name"] as string,
+			file_contents = hackFile.FileContents,
+            commit_id = staged.commit_id,
 		};
 		
 		return PrepareCreation(hackFile, newVersion);
@@ -370,9 +372,9 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 		}
 		return newVersion;
 	}
-    public static async Task<HpVersion?> CreateVersion(HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType = HashedValueStoring.None )
+    public static async Task<HpVersion?> CreateVersion(HackFile hackFile, IHpEntryModel entry, int commit_id, HashedValueStoring hashStoreType = HashedValueStoring.None )
     {
-        HpVersion? newVersion = PrepareCreation(hackFile, entry, hashStoreType);
+        HpVersion? newVersion = PrepareCreation(hackFile, entry, commit_id, hashStoreType);
         await newVersion?.CreateAsync( false, ["file_ext"] );
     
         return newVersion.id is not null and not 0 ? newVersion : null;
@@ -384,16 +386,16 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 
 		return versionStage?.id is not null and not 0 ? versionStage : null;
 	}
-	public static async Task<HpRecordStaged?> StageVersion(HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType = HashedValueStoring.None)
+	public static async Task<HpRecordStaged?> StageVersion(HackFile hackFile, IHpEntryModel entry, int commit, HashedValueStoring hashStoreType = HashedValueStoring.None)
 	{
-		HpVersion? newVersion = PrepareCreation(hackFile, entry, hashStoreType);
+		HpVersion? newVersion = PrepareCreation(hackFile, entry, commit, hashStoreType);
 		HpRecordStaged? versionStage = await newVersion?.StageRecAsync();
 
 		return versionStage?.id is not null and not 0 ? versionStage : null;
 	}
-	internal static async Task<HpVersion[]?> CreateAllNew( params (HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType)[] data)
+	internal static async Task<HpVersion[]?> CreateAllNew( params (HackFile hackFile, IHpEntryModel entry, int commit_id, HashedValueStoring hashStoreType)[] data)
     {
-        ArrayList versions = data.Select(d => PrepareCreation(d.hackFile, d.entry, d.hashStoreType)).ToArrayList();
+        ArrayList versions = data.Select(d => PrepareCreation(d.hackFile, d.entry, d.commit_id, d.hashStoreType)).ToArrayList();
         ArrayList ids = await MultiCreateAsync(versions, false);
     
         return await GetRecordsByIdsAsync(ids, excludedFields: UsualExcludedFields);

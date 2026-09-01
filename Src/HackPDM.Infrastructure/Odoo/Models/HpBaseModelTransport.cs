@@ -65,7 +65,7 @@ public abstract partial class HpBaseModelTransport
 }
 public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport where T : HpBaseModelTransport, new()
 {
-	public Hashtable ComputeHashtable(string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
+	public Hashtable ComputeHashtable(bool includeEmpty, string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
 	{
 		// 1. Get the fields we want to send
 		var fields = GetFields(excludedFieldNames, includedFieldNames, insertFieldNames);
@@ -78,10 +78,17 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 
 		foreach (var field in fields)
 		{
-			if (dict.TryGetValue(field, out var value))
-				table[field] = value;
-			else if (insertFieldNames is not null && insertFieldNames.Contains(field))
-				table[field] = HashedValues.TryGetValue(field, out var v) ? v : null;
+			if( dict.TryGetValue( field, out var value ) )
+			{
+				if( includeEmpty || value is not null )
+					table[ field ] = value;
+			}
+			else if( insertFieldNames is not null && insertFieldNames.Contains( field ) )
+			{
+				var val = HashedValues.TryGetValue(field, out var v) ? v : null;
+				if( includeEmpty || val is not null )
+					table[ field ] = val;
+			}
 		}
 
 		if (id is not null and not 0)
@@ -95,8 +102,6 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 
 		return table;
 	}
-	public Hashtable ComputeHashtable(bool includeEmpty = true, in string[]? excludedFieldNames = null, bool isNew = false, in string[]? insertFieldNames = null)
-		=> ComputeHashtable(excludedFieldNames: excludedFieldNames, includedFieldNames: null, insertFieldNames: insertFieldNames);
 	public virtual Task<int> Create() => Create(false);
 	public async virtual Task<int> Create(bool withEmpty = false)
 	{
@@ -126,7 +131,7 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 	public virtual Task<int> CreateAsync() => CreateAsync( false );
 	public async virtual Task<int> CreateAsync( bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
 	{
-		Hashtable ht = ComputeHashtable(withEmpty, excludedFields, isNew: true);
+		Hashtable ht = ComputeHashtable(withEmpty, excludedFields);
 		id = await OClient.CreateAsync( HpModel, ht, 10000 );
 
 		IsRecord = id != 0;
@@ -138,7 +143,7 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 		=> StageRecAsync( withEmpty, excludedFields, insertFIelds ).Id;
 	public async virtual Task<HpRecordStaged?> StageRecAsync(bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
 	{
-		Hashtable ht = ComputeHashtable(withEmpty, excludedFields, isNew: true);
+		Hashtable ht = ComputeHashtable(withEmpty, excludedFields);
 
 		if( commit_id is null or { id: 0 } )
 			return null;
@@ -155,7 +160,8 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 			target_model = HpModel,
 			commit_id = commit_id,
 			committing_id = (Many2One?)commit_id,
-			payload = ht
+			payload = ht,
+			HashedValues = { { "windows_complete_name", this.HashedValues.TryGetValue("windows_complete_name", out var v) ? v : null } },
 		};
 		return await record.StageRecAsync(false);
 	}
@@ -168,7 +174,7 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 	
 	public static Task<ArrayList> MultiCreateAsync(ArrayList records, bool withEmpty = false)
 	{
-		ArrayList hts = records.Select((HpBaseModelTransport<T> v) => v.ComputeHashtable(withEmpty, isNew: true)).ToArrayList();
+		ArrayList hts = records.Select((HpBaseModelTransport<T> v) => v.ComputeHashtable(withEmpty)).ToArrayList();
 		var type = typeof(T);
 		string hpmodel = HpModelDictionary.TryGetValue(type, out hpmodel) ? hpmodel : null;
 		var tempId = OClient.CreateAsync(hpmodel, hts);

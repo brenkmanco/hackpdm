@@ -95,29 +95,26 @@ public static class ExtensionOdoo
 
     extension(HackFile hackFile)
     {
-	    public static bool GetHackFileWithDependencies(HackFile file, out List<HackFile> hackFiles, out List<HackResultTree.ResultNode>? hackResults)
+	    public static async Task<(bool success, List<HackFile> hackFiles, List<HackResultTree.ResultNode> hackResults)> GetHackFileWithDependencies(HackFile file)
 	    {
-		    hackResults = [];
-			hackFiles = [];
+		    HackResultTree hackTree = new(file);
+			List<HackFile> hackFiles = [];
+			List<HackResultTree.ResultNode> hackResults = [];
 
-			HackResultTree hackTree = new(new(file));
-		    ResultHackFile rHack;
-
-		    var hackResultCode = HackResult.Clean;
-		    //= TryFilePathToHackWithDependencies(out var list, rHack);
-		    var queue = new Queue<HackResultTree.ResultNode>();
+			//= TryFilePathToHackWithDependencies(out var list, rHack);
+			// var queue = new Queue<HackResultTree.ResultNode>();
 			//list.Select(r => new HackResultTree.ResultNode(r))
-			var cDict = new ConcurrentDictionary<string, ResultHackFile>();
+			// var cDict = new ConcurrentDictionary<string, ResultHackFile>();
 
-			hackTree.Root?.ProcessDependencies();
+			await Task.Run( () => hackTree.Root?.ProcessDependencies() );
 			if (hackTree.Root?.IsBrokenPropagated is true)
 			{
-				hackResults = hackTree.Root.BrokenNodes as List<HackResultTree.ResultNode>;
-				return false;
+				hackResults = hackTree.Root.BrokenNodes as List<HackResultTree.ResultNode> ?? [];
+				return (false, hackFiles, hackResults);
 			}
 			hackFiles = hackTree.Root?.GetAllNodes().Select( r => r.Value?.Hack ).Where( h => h is not null ).ToList()!;
 			// hackFiles = [.. hackResults.SkipSelect<HackResultTree.ResultNode, HackFile>(r => (r.Value?.Hack is null, r.Value?.Hack!))];
-			return true;
+			return (true, hackFiles, hackResults);
 	    }
 	    public async Task<(bool, HpVersion?)> GetVersionFromLocal()
 	    {
@@ -199,20 +196,22 @@ public static class ExtensionOdoo
 			    [.. matchedFiles.Item2.Select(f => new HackFile(new FileInfo(f)))]
 		    );
         
-		    IEnumerable<HackFile> allHackDependencyFiles = hackSegment.Item1.SelectMany<HackFile, HackFile>(m =>
+		    IEnumerable<HackFile> allHackDependencyFiles = hackSegment.Item1.SelectMany<HackFile, HackFile>( m =>
 		    {
-			    bool failed = !GetHackFileWithDependencies(m, out List<HackFile> hf, out var results);
-			    hasErrors |= failed;
-			    return failed ? hf : Enumerable.Empty<HackFile>();
+			    var (success, hf, results) = GetHackFileWithDependencies(m).Result;
+			    hasErrors |= !success;
+			    return !success ? hf : Enumerable.Empty<HackFile>();
 		    });
 		    List<HackFile> allcombinedFiles = [.. allHackDependencyFiles, .. hackSegment.Item2.SkipWhile(hf => hf.Exists is null or false)];
 		    hackFiles = allcombinedFiles;
 		    return true;
 	    }
-	    public static bool GetHackFileWithDependencies(EntryRow? entry, bool listOutputDialog, out List<HackFile>? hackFiles, out List<HackResultTree.ResultNode> results )
-		    => ( (results = []) is { } ) & ( entry is not null & (hackFiles = null) is null) && GetHackFileWithDependencies(new HackFile(entry), out hackFiles, out results);
-	    public static bool GetHackFileWithDependencies(string? filePath, bool listOutputDialog, out List<HackFile>? hackFiles, out List<HackResultTree.ResultNode> results )
-		    => ( ( results = [] ) is { } ) & ( filePath is not null & (hackFiles = null) is null) && GetHackFileWithDependencies(new HackFile(new FileInfo(filePath)), out hackFiles, out results);
+		public static async Task<(bool success, List<HackFile>? hackFiles, List<HackResultTree.ResultNode> results)> GetHackFileWithDependencies( EntryRow? entry, bool listOutputDialog )
+			=> await GetHackFileWithDependencies(new HackFile(entry));
+		
+		public static async Task<(bool success, List<HackFile>? hackFiles, List<HackResultTree.ResultNode> results)> GetHackFileWithDependencies( string filePath, bool listOutputDialog )
+			=> await GetHackFileWithDependencies(new HackFile(new FileInfo(filePath)));
+		
 
 	    public static HackResult TryFilePathToHackWithDependencies(out List<ResultHackFile> depAllInPWAorBrokenList, ResultHackFile parentFile)
 	    {
