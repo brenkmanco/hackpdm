@@ -408,6 +408,7 @@ __pycache__/
 /Odoo/odoo-app/*
 /Odoo/odoo-venv/*
 Odoo/addons/hackpdm/models/.__init__.py.swp
+Odoo/addons/queue_job
 
 /.tmp.driveupload
 /Src/.tmp.driveupload

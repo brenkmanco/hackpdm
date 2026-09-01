@@ -1,5 +1,8 @@
+import logging
+
 from odoo import api, fields, models
 from odoo.exceptions import UserError
+#from odoo.addons import queue_job
 
 class hp_pdm_commit(models.Model):
     _name = 'hp.pdm.commit'
@@ -80,7 +83,10 @@ class hp_pdm_commit(models.Model):
     # ------------------------------------------------------------ 
     # CLIENT CALLS THIS — resets commit records
     # ------------------------------------------------------------
+    @api.model
     def clear_commit(self, id):
+        if id is list:
+            id = id[0]
         record = self.env["hp.pdm.commit"].browse([id])
         record.ensure_one()
         records = record.staged_ids
@@ -102,10 +108,18 @@ class hp_pdm_commit(models.Model):
     # ------------------------------------------------------------ 
     # CLIENT CALLS THIS — returns immediately 
     # ------------------------------------------------------------
-    def start_commit(self, id):
-        record = self.env["hp.pdm.commit"].browse([id])
+    @api.model
+    def start_commit(self, commit_id):
+        # 1. Corrected type checking and avoided shadowing Python's built-in `id`
+        if isinstance(commit_id, list):
+            commit_id = commit_id[0]
+        
+        # 2. Simplified browse call
+        record = self.browse(commit_id)
         record.ensure_one()
 
+        # 3. Cleaned up logging to match Odoo production standards
+        
         if record.committing:
             raise UserError("Commit already in progress.")
 
@@ -115,8 +129,10 @@ class hp_pdm_commit(models.Model):
         if not record.staged_ids:
             raise UserError("No staged records to commit.")
 
-        #enqueue job
-        job = record.with_delay(on_error='handle_commit_failure').run_commit_job()
+        # 4. Removed the invalid `on_error` argument
+        logging.info("Starting commit for record %s. Committing status: %s", record.id, record.committing)
+        job = record.with_delay().run_commit_job()
+        logging.info("Commit job created for record %s. Job UUID: %s", record.id, job.uuid)
         record.write({
             "job_uuid": job.uuid,
             "committing": True,
@@ -140,18 +156,25 @@ class hp_pdm_commit(models.Model):
     # ------------------------------------------------------------
     # BACKGROUND WORKER — runs even if client disconnects
     # ------------------------------------------------------------
+    #@job
     def run_commit_job(self):
-        self.ensure_one()
+        try:
+            
+            self.ensure_one()
 
-        # ATOMIC BLOCK — all or nothing
-        self._create_all_records_atomically()
+            # ATOMIC BLOCK — all or nothing
+            self._create_all_records_atomically()
 
-        # success
-        self.write({
-            "committed": True,
-            "committing": False,
-            "commit_finished_at": fields.Datetime.now(),
-        })
+            # success
+            self.write({
+                "committed": True,
+                "committing": False,
+                "commit_finished_at": fields.Datetime.now(),
+            })
+        except Exception as e:
+            logging.error("Commit job failed for record %s: %s", self.id, str(e))
+            self.handle_commit_failure(self, e)
+            raise  # Re-raise the exception to ensure the job is marked as failed
 
     def _write_summary(self, model_dict:dict):
         summary_text = "models created:\n"
@@ -178,9 +201,17 @@ class hp_pdm_commit(models.Model):
     ]
     def _create_records(self, staged, summary_model):
         for index, row in enumerate(staged, start=1):
+            logging.info("record for commit %s. id: %s", row.target_model, self.id)
+            payload = row.payload
             model = self.env[row.target_model]
-            rec = model.create(row.payload)
-            summary_model.setdefault(row.target_model, []).append(rec.id)
+            if row.target_model == "hp.version":
+                payload["entry_id"] = summary_model.get("hp.entry", {}).get(row.payload["entry_id"])
+            if row.target_model == "hp.version.property":
+                payload["version_id"] = summary_model.get("hp.version", {}).get(row.payload["version_id"])
+            logging.info("Creating record for model %s :: \nsummary: %s\n", row.target_model, summary_model)
+            
+            rec = model.create(payload)
+            summary_model.setdefault(row.target_model, {}).setdefault(row.id, rec.id)
             row.write({"target_id": rec.id})
         
     # ------------------------------------------------------------
@@ -193,14 +224,17 @@ class hp_pdm_commit(models.Model):
         No savepoints. No partial commits.
         """
         summary_model = {}
+        logging.info("Starting atomic record creation for commit %s", self.id)
         staged = self.staged_ids
         total = len(staged)
 
         for model_name in self.model_order:
+            logging.info("Processing model %s for commit %s", model_name, self.id)
             staged_for_model = staged.filtered(lambda r: r.target_model == model_name)
             if staged_for_model and len(staged_for_model) > 0:
+                logging.info("Creating %d records for model %s in commit %s", len(staged_for_model), model_name, self.id)
                 self._create_records(staged_for_model, summary_model)
 
         # wipe payloads only if everything succeeded
         self.write({"commit_summary": self._write_summary(summary_model)})
-        staged.write({"payload": False})
+        #staged.write({"payload": "{}"})  # Clear payloads after successful commit

@@ -121,7 +121,7 @@ class hp_common_model(models.AbstractModel):
          # Still more parts to traverse
         rest = parts[1:]
         if value._name and len(value) == 1: # Many2one
-            return self._resolve_field(value, rest, arr + [self._form_dict(value, None, depth)], depth+1)
+            return [self._resolve_field(value, rest, arr + [self._form_dict(value, None, depth)], depth+1)]
         else: # One2many / Many2many
             return [self._resolve_field(child, rest, arr + [self._form_dict(child, None, depth)], depth+1) for child in value]
 
