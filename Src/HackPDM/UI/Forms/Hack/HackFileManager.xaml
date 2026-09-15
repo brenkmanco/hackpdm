@@ -326,6 +326,7 @@
                             RowDetailsVisibilityMode="Collapsed">
                             <com:DataGrid.Columns>
                                 <com:DataGridTextColumn Binding="{Binding Version}" Header="Version" />
+                                <com:DataGridTextColumn Binding="{Binding Name}" Header="Name" />
                                 <com:DataGridTextColumn Binding="{Binding BasePath}" Header="BasePath" />
                             </com:DataGrid.Columns>
                         </com:DataGrid>
@@ -339,6 +340,7 @@
                             SelectionMode="Extended">
                             <com:DataGrid.Columns>
                                 <com:DataGridTextColumn Binding="{Binding Version}" Header="Version" />
+                                <com:DataGridTextColumn Binding="{Binding Name}" Header="Name" />
                                 <com:DataGridTextColumn Binding="{Binding BasePath}" Header="BasePath" />
                             </com:DataGrid.Columns>
                         </com:DataGrid>
@@ -424,7 +426,7 @@
                             VerticalAlignment="Center"
                             Checked="Anchor_Checked"
                             Icon="Pin"
-                            Unchecked="Anchor_Checked"/>
+                            Unchecked="Anchor_Checked" />
                         <AppBarToggleButton
                             x:Name="ShowInactive"
                             VerticalAlignment="Center"

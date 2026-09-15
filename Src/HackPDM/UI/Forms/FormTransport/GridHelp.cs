@@ -101,32 +101,29 @@ namespace HackPDM.UI.Forms.FormTransport
 				case null: return null;
 
 				case { LatestId: not (null or 0) }:
-					{
-						latestVersion = await HpVersion.GetRecordByIdAsync(entry.LatestId ?? 0,
-							includedFields: ["name", "parent_ids"]);
-						break;
-					}
-				case { Id: not (null or 0) }:
-					{
-						latestVersion = (await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>([entry.Id ?? 0],
-							nameof(HpEntry.latest_version_id),
-							includedFields: ["name", "parent_ids"]))?.FirstOrDefault();
+				{
+				parentVersions = await HpVersion.GetRelatedRecordByIdsAsync<HpVersion>(
+					recordIds: [ entry.LatestId ],
+					relatedFieldName: nameof( HpVersion.parent_ids ),
+					includedFields: [ "name" ],
+					insertFields: [ "directory_complete_name" ] );
 
-						break;
-					}
+					break;
+				}
+				case { Id: not (null or 0) }:
+				{
+					parentVersions = (await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
+						recordIds: [entry.Id],
+						relatedFieldName: $"{nameof(HpEntry.latest_version_id)}.{nameof(HpVersion.parent_ids)}",
+						includedFields: ["name"], 
+						insertFields: ["directory_complete_name"]));
+
+					break;
+				}
 
 				default: return null;
 			}
 
-
-			if (latestVersion != null)
-			{
-				parentVersions =
-					await HpVersion.GetRecordsByIdsAsync(latestVersion.parent_ids,
-						includedFields: ["name"],
-						insertFields: ["directory_complete_name"]
-					);
-			}
 			if (!listParents || (parentVersions is null or { Length: < 1 })) return parentVersions;
 			await SafeHelper.SafeInvokerAsync(() => PopulateParent(grid, parentVersions ?? []));
 			return parentVersions;
@@ -137,17 +134,35 @@ namespace HackPDM.UI.Forms.FormTransport
 			if (entry is null) return null;
 			if (entry.Id == null) return null;
 
-			int versionId = await HpEntry.GetLatestIDAsync(entry.Id ?? 0);
-			if (versionId == 0) return null;
+			switch( entry )
+			{
+				case null:
+					return null;
 
-			childVersions =
-				await HpVersionRelationship.GetRelatedRecordsBySearchAsync<HpVersion>([new ArrayList()
+				case { LatestId: not ( null or 0 ) }:
 				{
-					nameof(HpVersionRelationship.parent_id), "=", versionId
-				}], nameof(HpVersionRelationship.child_id),
-					excludedFields: ["preview_image", "node_id", "entry_id", "file_modify_stamp", "checksum", "file_contents"],
-					insertFields: ["directory_complete_name"]
-				);
+					childVersions = await HpVersion.GetRelatedRecordByIdsAsync<HpVersion>(
+						recordIds: [ entry.LatestId ],
+						relatedFieldName: nameof( HpVersion.child_ids ),
+						includedFields: [ "name" ],
+						insertFields: [ "directory_complete_name" ] );
+
+					break;
+				}
+				case { Id: not ( null or 0 ) }:
+				{
+					childVersions = ( await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
+						recordIds: [ entry.Id ],
+						relatedFieldName: $"{nameof( HpEntry.latest_version_id )}.{nameof( HpVersion.child_ids )}",
+						includedFields: [ "name" ],
+						insertFields: [ "directory_complete_name" ] ) );
+
+					break;
+				}
+
+				default:
+					return null;
+			}
 
 			if (!listChildren || (childVersions is null or { Length: < 1 })) return childVersions;
 			await SafeHelper.SafeInvokerAsync(() => PopulateChildren(grid, childVersions ?? []));
@@ -180,16 +195,17 @@ namespace HackPDM.UI.Forms.FormTransport
 			=> GetVersionsForEntryAsync(entryId, excludedFields, insertedFields).GetAwaiter().GetResult();
 		internal async Task<HpVersion[]?> GetVersionsForEntryAsync(int entryId, string[]? excludedFields = null, string[]? insertedFields = null)
 		{
-			HpVersion[] versions = [];
-			ArrayList ids = [entryId];
-			ArrayList al = await OClient.ReadAsync(HpEntry.GetHpModel(), ids, ["version_ids"], 10000);
-			if (al != null && al.Count > 0)
-			{
-				if (al[0] is not Hashtable ht) return null;
-				if (ht?["version_ids"] is not ArrayList result) return null;
-				excludedFields ??= ["preview_image", "file_contents"];
-				versions = await HpVersion.GetRecordsByIdsAsync(result, excludedFields: excludedFields, insertFields: insertedFields) ?? [];
-			}
+			//ArrayList ids = [entryId];
+			//ArrayList al = await OClient.ReadAsync(HpEntry.GetHpModel(), ids, ["version_ids"], 10000);
+			excludedFields ??= [ "preview_image", "file_contents" ];
+			HpVersion[]? versions = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>( [entryId], "version_ids", excludedFields: excludedFields );
+			//if (al != null && al.Count > 0)
+			//{
+			//	if (al[0] is not Hashtable ht) return null;
+			//	if (ht?["version_ids"] is not ArrayList result) return null;
+			//	excludedFields ??= ["preview_image", "file_contents"];
+			//	versions = await HpVersion.GetRecordsByIdsAsync(result, excludedFields: excludedFields, insertFields: insertedFields) ?? [];
+			//}
 			return versions;
 		}
 		internal async Task<HpRelease[]?> GetReleaseForEntryAsync(int entryId, string[]? excludedFields = null, string[]? insertedFields = null)

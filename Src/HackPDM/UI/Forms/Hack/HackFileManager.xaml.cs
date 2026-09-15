@@ -208,8 +208,8 @@ public sealed partial class HackFileManager : Page
 		this.Unloaded += (s, e) =>
 		{
 			IsClosing = true;
-			_cSource.Cancel();
-			_cTreeSource.Cancel();
+			_cSource?.Cancel();
+			_cTreeSource?.Cancel();
 			_backgroundWorker.CancelAsync();
 		};
 		if (IsLoaded)
@@ -373,21 +373,9 @@ public sealed partial class HackFileManager : Page
 				row.Background = UIStorage.BlueBrush;
 				break;
 			}
-			case FileStatus.Ok:
-			{
-				goto default;
-				break;
-			}
-			case FileStatus.Nv:
-			{
-				goto default;
-				break;
-			}
-			case FileStatus.Lm:
-			{
-				goto default;
-				break;
-			}
+			case FileStatus.Ok: goto default;
+			case FileStatus.Nv: goto default;
+			case FileStatus.Lm: goto default;
 			case FileStatus.Dt:
 			{
 				row.Background = UIStorage.RedBrush;
@@ -398,16 +386,8 @@ public sealed partial class HackFileManager : Page
 				row.Background = UIStorage.RedBrush;
 				break;
 			}
-			case FileStatus.If:
-			{
-				goto default;
-				break;
-			}
-			case FileStatus.Ft:
-			{
-				goto default;
-				break;
-			}
+			case FileStatus.If: goto default;
+			case FileStatus.Ft: goto default;
 			case FileStatus.Cm:
 			{
 				row.Background = UIStorage.GreenBrush;
@@ -615,20 +595,11 @@ public sealed partial class HackFileManager : Page
 		// section for checking if the existing remote file already has a version with the same checksum 
 		// or possibly an entry that has a newer version from that which is downloaded locally
 
-		//ConcurrentSet<HackFile> hackFiles;
-		//ConcurrentSet<HackFile> hackFilesInOdoo;
 		ConcurrentDictionary<string, HackFile> hackFiles;
 		ConcurrentDictionary<string, HackFile> hackFilesInOdoo;
-		// testing filter hacks..
-		// entries = entries is not null && !entries.IsEmpty ? await Commit.FilterCommitEntries(entries) : [];
 
-		// section for checking if hack files have a checksum that matches the fullpath
-		// var (hf, hfOdoo) = hacks is not null && hacks.Count > 0 ? await FilterCommitHackFiles(hacks) : ([], []);
 		var hfs = hacks is not null && hacks.Count > 0 ? await FilterCommitHackFiles( hacks ) : ([], []);
 
-		// hackFiles = new(hfs.Item1.ToDictionary( h => h.FullPath ?? "", h => h ) ?? []);
-		// hackFilesInOdoo = new(hfs.Item2.ToDictionary( h => h.FullPath ?? "", h => h ) ?? []);
-		// HpVersion[] localConversions = new HpVersion[hackFiles.Count];
 		List<HpVersion> localConversions = [];
 		int index = 0;
 		ProcessCounter = 0;
@@ -643,7 +614,7 @@ public sealed partial class HackFileManager : Page
 		foreach( var hack in hfs.Item2 ) { if (!await CommitRecord( hack, startCommit, true )) return; }
 
 		await startCommit.ServerCommit();
-		await MessageBox.ShowAsync($"Completed!");
+		MessageBox.ShowAsync($"Completed!");
 		await _treeHelper.RestartTree(OdooDirectoryTree);
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
@@ -837,29 +808,6 @@ public sealed partial class HackFileManager : Page
 			?? throw new Exception($"{HpDirectory.GetHpModel()} didn't create any records");
 	}
 	
-	//public async static Task<(EntryReturnType, HpEntry?, HpRecordStaged?)> ConvertHack( HackFile hackFile, HpPDMCommit? commit )
-	//{
- //       Hashtable ht = [];
-	//	HpDirectory? direct = await CreateDirectories( paths );
-
-		
-	//	try
- //       {
-	//		// create an HpVersion that doesn't exist in odoo
-	//		(HpVersion? version, HpRecordStaged? versionStaged) = await OdooDefaults.CreateNewVersion(hackFile, entry, staged);
-	//		if (version?.id is null or 0 && versionStaged is null) entryReturn = EntryReturnType.Failed;
-	//		return (entryReturn, version, versionStaged);
- //       }
- //       catch (Exception e)
- //       {
- //           Debug.WriteLine($"{e.Message}\n{e.StackTrace}");
- //       }
- //       return (entryReturn, null, null);
-
-	//}
-	//public async static Task<(EntryReturnType, HpVersion?, HpRecordStaged?)> ConvertHackFile(HackFile hackFile, HpPDMCommit? commit)
- //   {
- //   }
 	#region CheckOut Functions
 	private static IEnumerable<HpEntry> FilterCheckoutEntries(HpEntry[] entries)
 	{
@@ -941,18 +889,22 @@ public sealed partial class HackFileManager : Page
 			];
 			HpEntry? entry = (await HpEntry.GetRecordsBySmartSearchAsync(searchFilter: arrList, includedFields: [nameof(HpEntry.name), nameof(HpEntry.dir_id)], insertFields: ["version_ids.checksum"]))?.FirstOrDefault();
 			ArrayList fields = [];
-
-			if (entry is not null && entry.HashedValues.TryGetValue("version_ids.checksum", out ArrayList? arr))
+			if (entry is not null and { id: not 0 } )
 			{
-				// this means that this hackFile is in the database so it can be skipped
-				if (arr.FirstOrDefault<Hashtable>(x =>   x.TryGetValue("value", out string? checksum)  &&  checksum == hackArr[i].GetChecksum()   ) is Hashtable foundChecksum)
-				{
-
-					HackFileManager.Dialog?.AddStatusLine(StatusMessage.FOUND, $"checksum found remotely ({hackArr[ i ].Checksum}) for: {filePath}");
-					hacksFound.Add(hackArr[i]);
-					continue;
-				}
+				HackFileManager.Dialog?.AddStatusLine( StatusMessage.FOUND, $"entry found remotely for: {filePath}" );
+				hacksFound.Add(hackArr[i]);
+				continue;
 			}
+			//if (entry is not null && entry.HashedValues.TryGetValue("version_ids.checksum", out ArrayList? arr))
+			//{
+			//	// this means that this hackFile is in the database so it can be skipped
+			//	if (arr.FirstOrDefault<Hashtable>(x =>   x.TryGetValue("value", out string? checksum)  &&  checksum == hackArr[i].GetChecksum()   ) is Hashtable foundChecksum)
+			//	{
+
+			//		HackFileManager.Dialog?.AddStatusLine(StatusMessage.FOUND, $"checksum found remotely ({hackArr[ i ].Checksum}) for: {filePath}");
+			//		continue;
+			//	}
+			//}
 
 			HackFileManager.Dialog?.AddStatusLine(StatusMessage.INFO, $"Queued commit for {hackArr[i].Name} (Checksum: {hackArr [ i ].Checksum}) for: {filePath}" );
 			hacks.Add( hackArr [ i ] );
@@ -2056,20 +2008,7 @@ public sealed partial class HackFileManager : Page
 		ArrayList arr = await OClient.CommandAsync<ArrayList>(HpVersion.GetHpModel(), "get_recursive_dependency_versions", [versionIds.ToArrayList()], 1000000);
 		return arr;
 	}
-	// private PointF ScalePoint(PointF p1, PointF p2, double desiredDistance)
-	// {
-	// 	PointF p3 = new(
-	// 		p2.X - p1.X,
-	// 		p2.Y - p1.Y
-	// 	);
-	//
-	// 	double currentDist = Math.Sqrt(p3.X * p3.X + p3.Y * p3.Y);
-	// 	double scaleFactor = desiredDistance / currentDist;
-	// 	p3.X = p2.X - Convert.ToSingle(scaleFactor) * p3.X;
-	// 	p3.Y = p2.Y - Convert.ToSingle(scaleFactor) * p3.Y;
-	//
-	// 	return p3;
-	// }
+
 	private async Task<bool> PermanentDeleteVersionProperty(ArrayList ids)
 	{
 		if (ids is null || ids.Count < 1) return false;

@@ -155,6 +155,9 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 		if( commit_id is null or { id: 0 } ) return null;
 		if( HpModel == OdooDefaultsConstants.HP_RECORD_STAGED ) return this as HpRecordStaged;
 
+		if( HpModel == OdooDefaultsConstants.HP_VERSION && HashedValues.TryGetValue( "__internal__existing", out _ ) )
+			ht.Add( "__internal__existing", true );
+
 		HpRecordStaged record = new()
 		{
 			target_model = HpModel,

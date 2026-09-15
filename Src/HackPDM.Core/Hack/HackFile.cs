@@ -36,7 +36,7 @@ public class HackFile : HackBaseFile, IHackFileModel
             if (field == default)
             {
 	            field = value == default
-		            ? Info?.LastWriteTime ?? default
+		            ? Info?.LastWriteTime.ToUniversalTime() ?? default
 					: value;
             }
             else
@@ -45,7 +45,7 @@ public class HackFile : HackBaseFile, IHackFileModel
                 {
                     Info?.LastWriteTime = value;
                     field = value == default
-	                    ? Info?.LastWriteTime ?? default
+	                    ? Info?.LastWriteTime.ToUniversalTime() ?? default
 	                    : value;
                 }
                 else
@@ -143,7 +143,7 @@ public class HackFile : HackBaseFile, IHackFileModel
         DirectoryName = file?.DirectoryName;
         FullPath = file?.FullName;
         TypeExt = file?.Extension;
-        ModifiedDate = file?.LastWriteTime ?? default;
+        ModifiedDate = file?.LastWriteTime.ToUniversalTime() ?? default;
         FileSize = file?.Length;
         Checksum = FileOperations.FileChecksum( file?.FullName, SHA1.Create() );
     }
@@ -176,7 +176,7 @@ public class HackFile : HackBaseFile, IHackFileModel
 		this.Name = this.Info?.Name ?? entry.Name;
 		this.DirectoryName = this.Info?.DirectoryName ?? Path.GetDirectoryName(FullPath);
 		this.FileSize = this.Info?.Length ?? entry.Size;
-		this.ModifiedDate = this.Info?.LastWriteTime ?? entry.LocalDate ?? entry.RemoteDate ?? default;
+		this.ModifiedDate = this.Info?.LastWriteTime.ToUniversalTime() ?? entry.LocalDate ?? entry.RemoteDate ?? default;
 		this.TypeExt = this.Info?.Extension ?? entry.Type;
 		this.HpVersionId = entry.LatestId;
 		this.HpEntryId = entry.Id;
@@ -250,7 +250,7 @@ public class HackFile : HackBaseFile, IHackFileModel
 		hack.DirectoryName = file.DirectoryName;
 		hack.FullPath = file.FullName;
 		hack.TypeExt = file.Extension;
-		hack.ModifiedDate = file.LastWriteTime;
+		hack.ModifiedDate = file.LastWriteTime.ToUniversalTime();
 		hack.FileSize = file.Length;
 		hack.Checksum = await FileOperations.FileChecksumAsync( file.FullName, SHA1.Create() );
 	}
@@ -297,7 +297,7 @@ public class HackFile : HackBaseFile, IHackFileModel
 			FullPath = Path.GetFullPath(path ?? ""),
 			DirectoryName = directory ?? Path.GetDirectoryName(path),
 			TypeExt = Path.GetExtension(path),
-			ModifiedDate = File.GetLastWriteTime(path ?? ""),
+			ModifiedDate = File.GetLastWriteTime(path ?? "").ToUniversalTime(),
 		};
 		return hack;
 	}
@@ -316,7 +316,23 @@ public class HackFile : HackBaseFile, IHackFileModel
     public static HackFile GetFromVersion(IHpVersionModel versionModel)
     {
         if (versionModel.windows_complete_name == null) return null;
-        HackFile hack = GetFromPath(Path.Combine(HackDefaults.Instance.PwaPathAbsolute, versionModel.windows_complete_name[HpBaseModel.ROOT_OFFSET..]), Path.Combine(HackDefaults.Instance.PwaPathRelative, versionModel.windows_complete_name[HpBaseModel.ROOT_OFFSET..(versionModel.windows_complete_name.Length - versionModel.name.Length)]));
+        HackFile hack = GetFromPath(
+            Path.Combine(
+                HackDefaults.Instance.PwaPathAbsolute, 
+                versionModel.windows_complete_name[
+                    HpBaseModel.ROOT_OFFSET
+                    ..
+                ]
+            ), 
+            Path.Combine(
+                HackDefaults.Instance.PwaPathRelative, 
+                versionModel.windows_complete_name[
+                    HpBaseModel.ROOT_OFFSET
+                    ..
+                    (versionModel.windows_complete_name.Length - versionModel.name.Length)
+                ]
+            )
+        );
         if (hack != null && hack.Checksum == versionModel.checksum)
         {
             hack.HasRemoteVersion = true;

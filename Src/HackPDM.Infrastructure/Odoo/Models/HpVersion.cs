@@ -329,7 +329,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 
 		HpVersion newVersion = new()
 		{
-			name = $"{entry.id}.{hackFile.Name}",
+			name = $"{hackFile.Name}",
 			dir_id = entry.dir_id as Many2One,
 			entry_id = entry.id,
 			file_ext = hackFile.TypeExt[1..].ToLower(),
@@ -394,6 +394,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 	public static async Task<HpRecordStaged?> StageVersion(HackFile hackFile, IHpEntryModel entry, int commit, HashedValueStoring hashStoreType = HashedValueStoring.None)
 	{
 		HpVersion? newVersion = PrepareCreation(hackFile, entry, commit, hashStoreType);
+        newVersion?.HashedValues.Add( "__internal__existing", true );
 		HpRecordStaged? versionStage = await newVersion?.StageRecAsync();
 
 		return versionStage?.id is not null and not 0 ? versionStage : null;
