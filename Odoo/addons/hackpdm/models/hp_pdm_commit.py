@@ -204,15 +204,21 @@ class hp_pdm_commit(models.Model):
             logging.info("record for commit %s. id: %s", row.target_model, self.id)
             payload = row.payload
             model = self.env[row.target_model]
-            if row.target_model == "hp.version":
-                payload["entry_id"] = summary_model.get("hp.entry", {}).get(row.payload["entry_id"])
-            if row.target_model == "hp.version.property":
-                payload["version_id"] = summary_model.get("hp.version", {}).get(row.payload["version_id"])
-            logging.info("Creating record for model %s :: \nsummary: %s\n", row.target_model, summary_model)
             
+            if row.target_model == "hp.version":
+                if not payload.get("__internal__existing"):
+                    payload["entry_id"] = summary_model.get("hp.entry", {}).get(payload["entry_id"])
+                else:
+                    del payload["__internal__existing"]
+                    
+            if row.target_model == "hp.version.property":
+                payload["version_id"] = summary_model.get("hp.version", {}).get(payload["version_id"])
+                
+            payload["commit_id"] = row.commit_id.id
             rec = model.create(payload)
             summary_model.setdefault(row.target_model, {}).setdefault(row.id, rec.id)
-            row.write({"target_id": rec.id})
+            logging.info("\nCreated record for model %s :: summary: %s\n", row.target_model, summary_model)
+            row.write({"target_id": rec.id, "payload": {"complete": True}})  # Clear payload after successful creation
         
     # ------------------------------------------------------------
     # ATOMIC CREATION — ONE BIG TRANSACTION
@@ -232,8 +238,10 @@ class hp_pdm_commit(models.Model):
             logging.info("Processing model %s for commit %s", model_name, self.id)
             staged_for_model = staged.filtered(lambda r: r.target_model == model_name)
             if staged_for_model and len(staged_for_model) > 0:
-                logging.info("Creating %d records for model %s in commit %s", len(staged_for_model), model_name, self.id)
                 self._create_records(staged_for_model, summary_model)
+                logging.info("Created %d records for model %s in commit %s", len(staged_for_model), model_name, self.id)
+            else:
+                logging.info("No records to create for model %s in commit %s", model_name, self.id)
 
         # wipe payloads only if everything succeeded
         self.write({"commit_summary": self._write_summary(summary_model)})
