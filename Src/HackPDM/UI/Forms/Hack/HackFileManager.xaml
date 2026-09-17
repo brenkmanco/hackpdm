@@ -17,7 +17,46 @@
 
 
     <Page.Resources>
+        <!--  Converter  -->
         <help:FileSizeConverter x:Key="FileSizeFormatter" />
+        <!--  Icon Column Template  -->
+        <DataTemplate x:Key="IconCellTemplate">
+            <Canvas
+                Width="40"
+                Height="32"
+                Margin="0,0,8,0">
+                <Image
+                    Canvas.Left="0"
+                    Canvas.Top="0"
+                    Width="32"
+                    Height="32"
+                    Source="{Binding Icon}" />
+                <Image
+                    Canvas.Left="10"
+                    Canvas.Top="0"
+                    Width="24"
+                    Height="24"
+                    Source="{Binding StatusIcon}"
+                    Stretch="UniformToFill" />
+            </Canvas>
+        </DataTemplate>
+        <!--  Size Column Template  -->
+        <DataTemplate x:Key="SizeCellTemplate">
+            <TextBlock
+                Padding="5,0,5,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Text="{Binding Size, Converter={StaticResource FileSizeFormatter}}"
+                TextAlignment="Right" />
+        </DataTemplate>
+        <!--  Group Header Style  -->
+        <Style x:Key="GroupHeaderStyle" TargetType="com:DataGridRowGroupHeader">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Background" Value="Black" />
+            <Setter Property="Foreground" Value="LightGray" />
+            <Setter Property="Padding" Value="5,0,5,0" />
+        </Style>
     </Page.Resources>
 
     <Grid Margin="12" CornerRadius="10">
@@ -126,114 +165,10 @@
                     Grid.ColumnSpan="2"
                     Margin="0,0,10,0">
 
-                    <TabViewItem Header="Entries" IsClosable="False">
-                        <com:DataGrid
-                            x:Name="OdooEntryList"
-                            VerticalContentAlignment="Stretch"
-                            AutoGenerateColumns="False"
-                            CanUserSortColumns="True"
-                            IsReadOnly="True"
-                            ItemsSource="{x:Bind OEntries}"
-                            LoadingRowGroup="OdooEntryDataGrid_LoadingRowGroup"
-                            RowDetailsVisibilityMode="Collapsed"
-                            RowHeight="32"
-                            SelectionMode="Extended"
-                            Sorting="OdooEntryDataGrid_Sorting"
-                            VerticalScrollBarVisibility="Visible">
-                            <com:DataGrid.RowDetailsTemplate>
-                                <DataTemplate x:DataType="types:EntryRow">
-                                    <com:DataGrid
-                                        x:Name="OdooEntryVersionGrid"
-                                        AlternatingRowBackground="CornflowerBlue"
-                                        AutoGenerateColumns="False"
-                                        CanUserSortColumns="False"
-                                        IsReadOnly="True"
-                                        ItemsSource="{Binding History}"
-                                        RowDetailsVisibilityMode="Collapsed"
-                                        SelectionMode="Extended">
-                                        <com:DataGrid.Columns>
-                                            <com:DataGridTextColumn Binding="{Binding Name}" Header="Name" />
-                                        </com:DataGrid.Columns>
-                                    </com:DataGrid>
-                                </DataTemplate>
-                            </com:DataGrid.RowDetailsTemplate>
-                            <com:DataGrid.Columns>
-                                <com:DataGridTemplateColumn Width="40">
-                                    <com:DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <Canvas
-                                                Width="40"
-                                                Height="32"
-                                                Margin="0,0,8,0">
-                                                <Image
-                                                    Canvas.Left="0"
-                                                    Canvas.Top="0"
-                                                    Width="32"
-                                                    Height="32"
-                                                    Source="{Binding Icon}" />
-                                                <Image
-                                                    Canvas.Left="10"
-                                                    Canvas.Top="0"
-                                                    Width="24"
-                                                    Height="24"
-                                                    Source="{Binding StatusIcon}"
-                                                    Stretch="UniformToFill" />
-                                            </Canvas>
-                                        </DataTemplate>
-                                    </com:DataGridTemplateColumn.CellTemplate>
-                                </com:DataGridTemplateColumn>
-                                <com:DataGridTextColumn
-                                    Width="450"
-                                    Binding="{Binding Name}"
-                                    Header="Name" />
-                                <com:DataGridTextColumn Binding="{Binding Type}" Header="Type" />
-                                <com:DataGridTemplateColumn Header="Size">
-                                    <com:DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <TextBlock
-                                                Padding="5,0,5,0"
-                                                HorizontalAlignment="Right"
-                                                VerticalAlignment="Center"
-                                                Text="{Binding Size, Converter={StaticResource FileSizeFormatter}}"
-                                                TextAlignment="Right" />
-
-                                        </DataTemplate>
-                                    </com:DataGridTemplateColumn.CellTemplate>
-                                </com:DataGridTemplateColumn>
-                                <!--<com:DataGridTextColumn Binding="{Binding Category}" Header="Category" />-->
-                                <com:DataGridTextColumn Binding="{Binding LatestReleaseId}" Header="Release" />
-                                <com:DataGridTextColumn Binding="{Binding Status}" Header="Status" />
-                                <com:DataGridTextColumn Binding="{Binding Checkout}" Header="Checkout" />
-                                <com:DataGridTextColumn Binding="{Binding LocalDate}" Header="Local Date" />
-                                <com:DataGridTextColumn Binding="{Binding RemoteDate}" Header="Remote Date" />
-                                <com:DataGridTextColumn Binding="{Binding FullName}" Header="Full Name" />
-                            </com:DataGrid.Columns>
-                            <com:DataGrid.ContextFlyout>
-                                <MenuFlyout>
-                                    <MenuFlyoutSubItem x:Name="ListOpen" Text="Open">
-                                        <MenuFlyoutItem x:Name="ListPreview" Text="Preview Latest Remote" />
-                                        <MenuFlyoutItem x:Name="ListLocal" Text="Latest Local" />
-                                        <MenuFlyoutItem x:Name="ListFileDirectory" Text="File Directory" />
-                                    </MenuFlyoutSubItem>
-                                    <MenuFlyoutItem x:Name="ListGetLatest" Text="Download" />
-                                    <MenuFlyoutSeparator />
-                                    <MenuFlyoutItem x:Name="ListCheckout" Text="Checkout" />
-                                    <MenuFlyoutItem x:Name="ListUndoCheckout" Text="Undo Checkout" />
-                                    <MenuFlyoutSeparator />
-                                    <MenuFlyoutItem x:Name="ListCommit" Text="Commit" />
-                                    <MenuFlyoutSeparator />
-                                    <MenuFlyoutItem x:Name="ListRestore" Text="Restore" />
-                                    <MenuFlyoutItem x:Name="SaveIcon" Text="Upload Icon" />
-                                    <MenuFlyoutSeparator />
-                                    <MenuFlyoutSubItem x:Name="ListDelete" Text="Delete">
-                                        <MenuFlyoutItem x:Name="ListDeleteLocal" Text="Local" />
-                                        <MenuFlyoutItem x:Name="ListDeleteLogical" Text="Logical" />
-                                        <MenuFlyoutItem x:Name="ListDeletePermanent" Text="Permanent" />
-                                    </MenuFlyoutSubItem>
-                                </MenuFlyout>
-                            </com:DataGrid.ContextFlyout>
-                        </com:DataGrid>
-                    </TabViewItem>
+                    <TabViewItem
+                        x:Name="RootEntryList"
+                        Header="Entries"
+                        IsClosable="False" />
                     <TabViewItem Header="Changes" IsClosable="False">
                         <Grid>
                             <Grid.ColumnDefinitions>

@@ -40,6 +40,7 @@ using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
 using EntryRow = HackPDM.UI.Types.EntryRow;
 using Image = Microsoft.UI.Xaml.Controls.Image;
 using String = System.String;
+using TreeData = HackPDM.UI.Types.TreeData;
 using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
 
 namespace HackPDM.UI.Forms.FormTransport
@@ -146,6 +147,9 @@ namespace HackPDM.UI.Forms.FormTransport
 			{
 				if (node?.Content is TreeData tData)
 				{
+					_HFM.GroupedEntries?.ClearAll();
+					_HFM.GroupedEntries?.NoGrouping = _HFM.IsActive;
+
 					if (tData?.DirectoryId is null or 0)
 					{
 						// add file entries to folder
@@ -162,11 +166,17 @@ namespace HackPDM.UI.Forms.FormTransport
 
 					AddLocalEntries(grid, _HFM.LastSelectedNode, hackmap);
 
+					_HFM.GroupedEntries?.Regroup( entryrow => entryrow.Type ?? "" );
+
+					grid.ItemsSource = _HFM.GroupedEntries?.NoGrouping is true
+							? _HFM.GroupedEntries?.Master
+							: _HFM.GroupedEntries?.ViewSource.View;
+
 					_HFM.DispatcherQueue.TryEnqueue(() =>
 					{
-						_HFM.OEntries.Sort((x, y) => String.CompareOrdinal(x.Name, y.Name));
+						//_HFM.OEntries.Sort((x, y) => String.CompareOrdinal(x.Name, y.Name));
 						_HFM.IsListLoaded = true;
-						//_grid.InvalidateArrange();
+						_grid.InvalidateArrange();
 						_grid.UpdateLayout();
 					});
 				}
@@ -422,7 +432,7 @@ namespace HackPDM.UI.Forms.FormTransport
 #endif
 		}
 
-		private static async Task AddRemoteEntry(DataGrid grid, DictionaryEntry pair, Dictionary<string, Task<HackFile>> hackFileMap)
+		private async Task AddRemoteEntry(DataGrid grid, DictionaryEntry pair, Dictionary<string, Task<HackFile>> hackFileMap)
 		{
 			if (pair.Value is not Hashtable table) return;
 
@@ -493,8 +503,8 @@ namespace HackPDM.UI.Forms.FormTransport
 			if (table["category"] is string category) item.Category = OdooDefaults.Instance.HpCategories?.FirstOrDefault(c => c.name?.Equals(category) is true);
 
 			item.FullName = fullName;
-			await GridHelp.UpdateListAsync(grid, item);
-			
+			// await GridHelp.UpdateListAsync(grid, item);
+			_HFM.GroupedEntries?.AddItem( item );
 		}
 
 		internal static async Task<ImageSource?> GetRemoteImage(string? name)
@@ -616,7 +626,8 @@ namespace HackPDM.UI.Forms.FormTransport
 				ReprType = EntryReprType.Local,
 			};
 
-			await GridHelp.UpdateListAsync(grid, item);
+			// await GridHelp.UpdateListAsync(grid, item);
+			_HFM.GroupedEntries?.AddItem(item);
 		}
 
 		#endregion

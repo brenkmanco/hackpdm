@@ -38,11 +38,14 @@ using HackPDM.UI.Models;
 using HackPDM.UI.Types;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 
 using SolidWorks.Interop.sldworks;
@@ -64,15 +67,198 @@ using WindowHelper = HackPDM.UI.Controls.WindowHelper;
 
 namespace HackPDM.UI.Forms.Hack;
 
+// Form Control Constructions
+public sealed partial class HackFileManager : Page
+{
+	private DataGrid OdooEntryList;
+	private MenuFlyoutSubItem ListOpen;
+	private MenuFlyoutItem ListPreview;
+	private MenuFlyoutItem ListLocal;
+	private MenuFlyoutItem ListFileDirectory;
+	private MenuFlyoutItem ListGetLatest;
+	private MenuFlyoutItem ListCheckout;
+	private MenuFlyoutItem ListUndoCheckout;
+	private MenuFlyoutItem ListCommit;
+	private MenuFlyoutItem ListRestore;
+	private MenuFlyoutItem SaveIcon;
+	private MenuFlyoutSubItem ListDelete;
+	private MenuFlyoutItem ListDeleteLocal;
+	private MenuFlyoutItem ListDeleteLogical;
+	private MenuFlyoutItem ListDeletePermanent;
+	private void BuildDataGridProgrammatically()
+	{
+		// 1. Instantiate DataGrid
+		OdooEntryList = new DataGrid
+		{
+			Name = "OdooEntryList",
+			VerticalContentAlignment = VerticalAlignment.Stretch,
+			AutoGenerateColumns = false,
+			CanUserSortColumns = true,
+			FontSize = 10,
+			IsReadOnly = true,
+			RowDetailsVisibilityMode = DataGridRowDetailsVisibilityMode.Collapsed,
+			RowHeight = 20,
+			SelectionMode = DataGridSelectionMode.Extended,
+			VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
+			ItemsSource = GroupedEntries
+		};
+
+		// Attach Events
+		//OdooEntryList.LoadingRowGroup += OdooEntryDataGrid_LoadingRowGroup;
+		//OdooEntryList.Sorting += OdooEntryDataGrid_Sorting;
+
+		// 2. Fetch the Style from XAML and apply it
+		var headerStyle = (Style)this.Resources["GroupHeaderStyle"];
+		OdooEntryList.RowGroupHeaderStyles.Add( headerStyle );
+
+		// 3. Build Columns Using XAML Templates
+
+		// Column 1: Icon (Fetch template from Resources)
+		var iconColumn = new DataGridTemplateColumn
+		{
+			Width = new DataGridLength(40, DataGridLengthUnitType.Pixel),
+			CellTemplate = (DataTemplate)this.Resources["IconCellTemplate"]
+		};
+		OdooEntryList.Columns.Add( iconColumn );
+
+		// Column 2 & 3: Standard Text Columns
+		OdooEntryList.Columns.Add( CreateTextColumn( "Name", "Name", 450 ) );
+		OdooEntryList.Columns.Add( CreateTextColumn( "Type", "Type" ) );
+
+		// Column 4: Size (Fetch template from Resources)
+		var sizeColumn = new DataGridTemplateColumn
+		{
+			Header = "Size",
+			CellTemplate = (DataTemplate)this.Resources["SizeCellTemplate"]
+		};
+		OdooEntryList.Columns.Add( sizeColumn );
+
+		// Columns 5 - 10
+		OdooEntryList.Columns.Add( CreateTextColumn( "Release", "LatestReleaseId" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn( "Status", "Status" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn( "Checkout", "Checkout" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn( "Local Date", "LocalDate" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn( "Remote Date", "RemoteDate" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn( "Full Name", "FullName" ) );
+
+		// 4. Build Context Flyout
+		BuildContextMenu();
+
+		// 5. Add to UI
+		RootEntryList.Content = OdooEntryList;
+	}
+	private void BuildContextMenu()
+	{
+		// 6. Build Context Flyout
+		MenuFlyout flyout = new();
+
+		// Open SubItem
+		ListOpen			= new MenuFlyoutSubItem { Name = "ListOpen", Text = "Open" };
+		ListPreview			= new MenuFlyoutItem { Name = "ListPreview", Text = "Preview Latest Remote" };
+		ListLocal			= new MenuFlyoutItem { Name = "ListLocal", Text = "Latest Local" };
+		ListFileDirectory	= new MenuFlyoutItem { Name = "ListFileDirectory", Text = "File Directory" };
+		ListOpen.Items.Add( ListPreview );
+		ListOpen.Items.Add( ListLocal );
+		ListOpen.Items.Add( ListFileDirectory );
+
+		ListGetLatest		= new MenuFlyoutItem { Name = "ListGetLatest", Text = "Download" };
+		ListCheckout		= new MenuFlyoutItem { Name = "ListCheckout", Text = "Checkout" };
+		ListUndoCheckout	= new MenuFlyoutItem { Name = "ListUndoCheckout", Text = "Undo Checkout" };
+		ListCommit			= new MenuFlyoutItem { Name = "ListCommit", Text = "Commit" };
+		ListRestore			= new MenuFlyoutItem { Name = "ListRestore", Text = "Restore" };
+		SaveIcon			= new MenuFlyoutItem { Name = "SaveIcon", Text = "Upload Icon" };
+
+		// Delete SubItem
+		ListDelete			= new MenuFlyoutSubItem { Name = "ListDelete", Text = "Delete" };
+		ListDeleteLocal		= new MenuFlyoutItem { Name = "ListDeleteLocal", Text = "Local" };
+		ListDeleteLogical	= new MenuFlyoutItem { Name = "ListDeleteLogical", Text = "Logical" };
+		ListDeletePermanent = new MenuFlyoutItem { Name = "ListDeletePermanent", Text = "Permanent" };
+		ListDelete.Items.Add( ListDeleteLocal );
+		ListDelete.Items.Add( ListDeleteLogical );
+		ListDelete.Items.Add( ListDeletePermanent );
+
+		// Add everything to flyout with separators
+		flyout.Items.Add( ListOpen );
+		flyout.Items.Add( ListGetLatest );
+		flyout.Items.Add( new MenuFlyoutSeparator() );
+		flyout.Items.Add( ListCheckout );
+		flyout.Items.Add( ListUndoCheckout );
+		flyout.Items.Add( new MenuFlyoutSeparator() );
+		flyout.Items.Add( ListCommit );
+		flyout.Items.Add( new MenuFlyoutSeparator() );
+		flyout.Items.Add( ListRestore );
+		flyout.Items.Add( SaveIcon );
+		flyout.Items.Add( new MenuFlyoutSeparator() );
+		flyout.Items.Add( ListDelete );
+
+		OdooEntryList.ContextFlyout = flyout;
+	}
+	// Helper method
+	private DataGridTextColumn CreateTextColumn( string header, string bindingPath, double? width = null )
+	{
+		var col = new DataGridTextColumn
+		{
+			Header = header,
+			Binding = new Binding { Path = new PropertyPath(bindingPath) }
+		};
+		if( width.HasValue )
+			col.Width = new DataGridLength( width.Value, DataGridLengthUnitType.Pixel );
+		return col;
+	}
+}
 /// <summary>
 /// An empty page that can be used on its own or navigated to within a Frame.
 /// </summary>
-
-
 public sealed partial class HackFileManager : Page
 {
 	#region Declarations
 	public ObservableCollection<TreeData>? LastSelectedNodePaths { get; set; } = [];
+	
+	public DynamicGroupCollection<EntryRow>? GroupedEntries { get; set; } = new([
+		new("abc", [
+			new() {
+				Id=123,
+				Name="Test Name 1",
+				Type="abc",
+				Status=FileStatus.Lo,
+			},
+			new() {
+				Id=124,
+				Name="Test Name 2",
+				Type="abc",
+				Status=FileStatus.Lo,
+			},
+			new() {
+				Id=125,
+				Name="Test Name 3",
+				Type="abc",
+				Status=FileStatus.Cm,
+			},
+		]),
+		new("cba", [
+			new() {
+				Id=126,
+				Name="Test Name 4",
+				Type="cba",
+				Status=FileStatus.Lo,
+			},
+			new() {
+				Id=127,
+				Name="Test Name 5",
+				Type="cba",
+				Status=FileStatus.Ro,
+			}
+		]),
+		new("def", [
+			new() {
+				Id=128,
+				Name="Test Name 6",
+				Type="def",
+				Status=FileStatus.Ok,
+			},
+		]),
+		new("zzz", []),
+	]);
 	public ObservableCollection<EntryRow> OEntries { get; internal set; } = [];
 	public ObservableCollection<HistoryRow> OHistories { get; internal set; } = [];
 	public ObservableCollection<ParentRow> OParents { get; internal set; } = [];
@@ -148,6 +334,7 @@ public sealed partial class HackFileManager : Page
 	public HackFileManager() 
 	{ 
 		InitializeComponent();
+		BuildDataGridProgrammatically();
 		HackLoaded = false;
 #if DEBUG
 		//DebugTest();
@@ -268,7 +455,15 @@ public sealed partial class HackFileManager : Page
 	private void AssignCollections()
 	{
 		OdooDirectoryTree.ItemsSource = ONodes;
-		OdooEntryList.ItemsSource = OEntries;
+		//OdooEntryList.ItemsSource = OEntries;
+		//< CollectionViewSource
+		//	x:Name = "GroupedEntriesViewSource"
+		//	IsSourceGrouped = "True"
+		//	ItemsPath = "Items" />
+
+		GroupedEntries?.Regroup( entryrow => entryrow.Type ?? "" );
+		OdooEntryList.ItemsSource = GroupedEntries?.ViewSource.View;
+
 		OdooHistory.ItemsSource = OHistories;
 		OdooParents.ItemsSource = OParents;
 		OdooChildren.ItemsSource = OChildren;
@@ -281,7 +476,7 @@ public sealed partial class HackFileManager : Page
 	{
 		GridMap.Map = new()
 		{
-			{ OdooEntryList, OEntries },
+			{ OdooEntryList, GroupedEntries?.Master },
 			{ OdooHistory, OHistories },
 			{ OdooParents, OParents },
 			{ OdooChildren, OChildren },
@@ -405,7 +600,6 @@ public sealed partial class HackFileManager : Page
 			}
 		}
 	}
-
 	private void List_Click_SaveIcon(object sender, RoutedEventArgs e)
 	{
 		throw new NotImplementedException();
