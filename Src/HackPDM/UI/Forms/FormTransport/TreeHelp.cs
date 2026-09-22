@@ -166,7 +166,7 @@ namespace HackPDM.UI.Forms.FormTransport
 
 					AddLocalEntries(grid, _HFM.LastSelectedNode, hackmap);
 
-					_HFM.GroupedEntries?.Regroup( entryrow => entryrow.Type ?? "" );
+					_HFM.GroupedEntries?.Regroup( entryrow => entryrow.Status );
 
 					grid.ItemsSource = _HFM.GroupedEntries?.NoGrouping is true
 							? _HFM.GroupedEntries?.Master
@@ -174,7 +174,7 @@ namespace HackPDM.UI.Forms.FormTransport
 
 					_HFM.DispatcherQueue.TryEnqueue(() =>
 					{
-						//_HFM.OEntries.Sort((x, y) => String.CompareOrdinal(x.Name, y.Name));
+						//_HFM.GroupedEntries?.Master.Sort((x, y) => String.CompareOrdinal(x.Name, y.Name));
 						_HFM.IsListLoaded = true;
 						_grid.InvalidateArrange();
 						_grid.UpdateLayout();

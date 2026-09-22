@@ -110,6 +110,7 @@ public sealed partial class HackFileManager : Page
 		// 2. Fetch the Style from XAML and apply it
 		var headerStyle = (Style)this.Resources["GroupHeaderStyle"];
 		OdooEntryList.RowGroupHeaderStyles.Add( headerStyle );
+		OdooEntryList.RowGroupHeaderPropertyNameAlternative = "Items";
 
 		// 3. Build Columns Using XAML Templates
 
@@ -199,7 +200,7 @@ public sealed partial class HackFileManager : Page
 		var col = new DataGridTextColumn
 		{
 			Header = header,
-			Binding = new Binding { Path = new PropertyPath(bindingPath) }
+			Binding = new Binding { Path = new PropertyPath(bindingPath) },			
 		};
 		if( width.HasValue )
 			col.Width = new DataGridLength( width.Value, DataGridLengthUnitType.Pixel );
@@ -258,7 +259,7 @@ public sealed partial class HackFileManager : Page
 			},
 		]),
 		new("zzz", []),
-	]);
+	], e => e.Type ?? "");
 	public ObservableCollection<EntryRow> OEntries { get; internal set; } = [];
 	public ObservableCollection<HistoryRow> OHistories { get; internal set; } = [];
 	public ObservableCollection<ParentRow> OParents { get; internal set; } = [];
@@ -461,7 +462,7 @@ public sealed partial class HackFileManager : Page
 		//	IsSourceGrouped = "True"
 		//	ItemsPath = "Items" />
 
-		GroupedEntries?.Regroup( entryrow => entryrow.Type ?? "" );
+		GroupedEntries?.Regroup( entryrow => entryrow.Status );
 		OdooEntryList.ItemsSource = GroupedEntries?.ViewSource.View;
 
 		OdooHistory.ItemsSource = OHistories;
@@ -494,6 +495,7 @@ public sealed partial class HackFileManager : Page
 		OdooEntryList.SelectionChanged	+= OdooEntryList_SelectionChanged;
 		OdooEntryList.Sorting			+= List_ColumnClick;
 		OdooEntryList.LoadingRow		+= OdooEntryList_LoadingRow;
+		OdooEntryList.LoadingRowGroup	+= OdooEntryList_LoadingRowGroup;
 
 		// tree events
 		TreeAnalyze.Click				+= (sender, args) => { };
@@ -550,6 +552,20 @@ public sealed partial class HackFileManager : Page
 		HistoryMove.DoubleTapped		+= History_Click_TemporaryMove;
 		HistoryMoveTemp.Click			+= History_Click_TemporaryMove;
 		HistoryMoveOverwrite.Click		+= History_Click_OverwriteMove;
+	}
+
+	private void OdooEntryList_LoadingRowGroup(object? sender, DataGridRowGroupHeaderEventArgs e)
+	{
+		// Access the underlying grouping data
+		ICollectionViewGroup groupData = e.RowGroupHeader.CollectionViewGroup;
+
+		// Cast the group back to your specific group class
+
+		if (groupData.Group is GroupInfoList<EntryRow> myGroup)
+		{
+			// Override the text displayed in the label
+			e.RowGroupHeader.PropertyValue = $"{myGroup.Key}";
+		}
 	}
 
 	private void OdooEntryList_LoadingRow( object? sender, DataGridRowEventArgs e )
@@ -1386,82 +1402,86 @@ public sealed partial class HackFileManager : Page
 		}
 		var modelField = column.ClipboardContentBinding?.Path.Path ?? column.Header;
 		bool isDesc = false;
-		(column.SortDirection, isDesc) = column.SortDirection is not null && column.SortDirection == DataGridSortDirection.Ascending
-			? (DataGridSortDirection.Descending, true)
-			: (DataGridSortDirection.Ascending, false);
+		(column.SortDirection, isDesc) = column.SortDirection is not null 
+			&& column.SortDirection == DataGridSortDirection.Ascending
+				? (DataGridSortDirection.Descending, true)
+				: (DataGridSortDirection.Ascending, false);
 		
 		switch (modelField)
 		{
 			case null: return;
 			case nameof(EntryRow.Name):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> string.Compare(s.Name, o.Name, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
 				break;
 			}
 			case nameof(EntryRow.Id):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> s.Id.Compare(o.Id), isDesc);
 				break;
 			}
 			case nameof(EntryRow.Checkout):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> string.Compare(s.Checkout?.name, o.Checkout?.name, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.Size):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> Nullable.Compare(s.Size, o.Size), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.Type):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> string.Compare(s.Type, o.Type, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.Status):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> string.Compare(Enum.GetName(s.Status), Enum.GetName(o.Status), CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.LatestId):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=>  Nullable.Compare(s.LatestId, o.LatestId), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.RemoteDate):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> Nullable.Compare(s.RemoteDate , o.RemoteDate), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.LocalDate):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> Nullable.Compare(s.LocalDate, o.LocalDate), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.Category):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> string.Compare(s.Category?.name, o.Category?.name, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.FullName):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> string.Compare(s.FullName, o.FullName, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
 				break;	
 			}
 			default: return;
 		}
-		
+		GroupedEntries?.Regroup();
+		grid.ItemsSource = GroupedEntries?.NoGrouping is true
+							? GroupedEntries?.Master
+							: GroupedEntries?.ViewSource.View;
 		// e.Column.SortDirection = e.Column.SortDirection == DataGridSortDirection.Ascending 
 		// 	? DataGridSortDirection.Descending
 		// 	: DataGridSortDirection.Ascending;
@@ -2057,7 +2077,7 @@ public sealed partial class HackFileManager : Page
 			{
 				await Task.Delay(100);
 			}
-			EntryRow? entryItem = OEntries.FirstOrDefault(entryItem => entryItem.Name == fileName);
+			EntryRow? entryItem = GroupedEntries?.Master.FirstOrDefault(entryItem => entryItem.Name == fileName);
 			if (entryItem == null) throw new ArgumentException("entry doesn't exist", nameof(fileName));
 
 			OdooEntryList.SelectedItem = entryItem;

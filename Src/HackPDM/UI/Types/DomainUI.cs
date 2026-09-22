@@ -67,6 +67,7 @@ public partial class DynamicGroupCollection<T> : ObservableCollection<GroupInfoL
 		{
 			this.Add( group );
 		}
+		ViewSource.Source = this;
 	}
 	public void Regroup() => Regroup( _selector );
 	// Helper method to add an item to the MasterList and instantly re-apply the current grouping
@@ -106,6 +107,7 @@ public partial class DynamicGroupCollection<T> : ObservableCollection<GroupInfoL
 			var newGroup = new GroupInfoList<T>(key, [item]);
 			this.Add( newGroup );
 		}
+		this.ViewSource.Source = this;
 	}
 	public void RemoveItem( T item )
 	{

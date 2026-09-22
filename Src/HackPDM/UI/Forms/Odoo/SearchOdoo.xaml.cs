@@ -468,13 +468,17 @@ namespace HackPDM.UI.Forms.Odoo
 				await MessageBox.ShowAsync("Add Property Name and Comparator");
 				return;
 			}
-
+			
 			// NOTE: InitListViewPercentage is removed.
 
 			if (OdooSearchProperty.SelectedItem is not SearchPropertiesRow listItem) return;
-
 			// Add a new SearchPropertyItem to our bound collection
-			PropertiesActive.Add(listItem.Clone());
+			PropertiesActive.Add(new() { 
+				ID=listItem.ID, 
+				Comparer=(OdooSearchPropEqual.SelectedValue as OperatorsRow)?.Operator ?? Operators.Equal, 
+				Value=OdooSearchPropValue.SelectedText, 
+				Name=listItem.Name, 
+				Text=listItem.Text});
 		}
 		private void OdooPropertyReset_Click(object sender, RoutedEventArgs e)
 		{
