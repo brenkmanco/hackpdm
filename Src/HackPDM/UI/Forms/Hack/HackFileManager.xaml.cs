@@ -78,6 +78,8 @@ public sealed partial class HackFileManager : Page
 	private MenuFlyoutItem ListGetLatest;
 	private MenuFlyoutItem ListCheckout;
 	private MenuFlyoutItem ListUndoCheckout;
+	private MenuFlyoutSubItem ListGroup;
+	private List<MenuFlyoutItem> GroupByProp;
 	private MenuFlyoutItem ListCommit;
 	private MenuFlyoutItem ListRestore;
 	private MenuFlyoutItem SaveIcon;
@@ -165,6 +167,17 @@ public sealed partial class HackFileManager : Page
 		ListGetLatest		= new MenuFlyoutItem { Name = "ListGetLatest", Text = "Download" };
 		ListCheckout		= new MenuFlyoutItem { Name = "ListCheckout", Text = "Checkout" };
 		ListUndoCheckout	= new MenuFlyoutItem { Name = "ListUndoCheckout", Text = "Undo Checkout" };
+
+		ListGroup			= new MenuFlyoutSubItem { Name = "ListGroup", Text = "Group By" };
+		GroupByProp			= [];
+		foreach (var prop in typeof(HackPDM.Domain.Representation.EntryRow).GetProperties())
+		{
+			var item = new MenuFlyoutItem { Name = $"Field_{prop.Name}", Text = prop.Name };
+			item.Click += Group_Field_Menu_Item_Click;
+			GroupByProp.Add(item);
+			ListGroup.Items.Add(item);
+		}
+
 		ListCommit			= new MenuFlyoutItem { Name = "ListCommit", Text = "Commit" };
 		ListRestore			= new MenuFlyoutItem { Name = "ListRestore", Text = "Restore" };
 		SaveIcon			= new MenuFlyoutItem { Name = "SaveIcon", Text = "Upload Icon" };
@@ -184,6 +197,9 @@ public sealed partial class HackFileManager : Page
 		flyout.Items.Add( new MenuFlyoutSeparator() );
 		flyout.Items.Add( ListCheckout );
 		flyout.Items.Add( ListUndoCheckout );
+		flyout.Items.Add( new MenuFlyoutSeparator() );
+		flyout.Items.Add( ListGroup );
+		
 		flyout.Items.Add( new MenuFlyoutSeparator() );
 		flyout.Items.Add( ListCommit );
 		flyout.Items.Add( new MenuFlyoutSeparator() );
@@ -205,6 +221,12 @@ public sealed partial class HackFileManager : Page
 		if( width.HasValue )
 			col.Width = new DataGridLength( width.Value, DataGridLengthUnitType.Pixel );
 		return col;
+	}
+
+	private void ToggleGroups_Checked(object sender, RoutedEventArgs e)
+	{
+		GroupedEntries?.NoGrouping = !ToggleGroups.IsChecked ?? false;
+		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
 }
 /// <summary>
@@ -553,7 +575,30 @@ public sealed partial class HackFileManager : Page
 		HistoryMoveTemp.Click			+= History_Click_TemporaryMove;
 		HistoryMoveOverwrite.Click		+= History_Click_OverwriteMove;
 	}
+	private void Group_Field_Menu_Item_Click(object? sender, RoutedEventArgs e)
+	{
+		var item = sender as MenuFlyoutItem;
+		if (item is null) return;
 
+		// property name is stored in Text or encoded in Name as "Field_<Prop>"
+		var propName = !string.IsNullOrEmpty(item.Text) ? item.Text : item.Name?.Replace("Field_", "");
+
+		if (string.IsNullOrEmpty(propName) || GroupedEntries is null) return;
+
+		// Use reflection to read the EntryRow property value and group by its string representation
+		GroupedEntries.Regroup(entry =>
+		{
+			var pi = typeof(EntryRow).GetProperty(propName);
+			if (pi is null) return string.Empty;
+			var v = pi.GetValue(entry);
+			return v is DateTime dt 
+				? dt.ToShortDateString() 
+				: v?.ToString() ?? string.Empty;
+		});
+
+		// Refresh ItemsSource to reflect grouping change
+		OdooEntryList.ItemsSource = GroupedEntries.NoGrouping ? GroupedEntries.Master : GroupedEntries.ViewSource.View;
+	}
 	private void OdooEntryList_LoadingRowGroup(object? sender, DataGridRowGroupHeaderEventArgs e)
 	{
 		// Access the underlying grouping data
@@ -1361,6 +1406,7 @@ public sealed partial class HackFileManager : Page
 		IsActive = ShowInactive.IsChecked ?? false;
 		if (LastSelectedNode is not null)
 		{
+			GroupedEntries?.ClearAll();
 			await _treeHelper.TreeSelectItem(OdooDirectoryTree, LastSelectedNode!, OdooEntryList);
 		}
 	}
@@ -1402,8 +1448,8 @@ public sealed partial class HackFileManager : Page
 		}
 		var modelField = column.ClipboardContentBinding?.Path.Path ?? column.Header;
 		bool isDesc = false;
-		(column.SortDirection, isDesc) = column.SortDirection is not null 
-			&& column.SortDirection == DataGridSortDirection.Ascending
+		(column.SortDirection, isDesc) = column.SortDirection is not null
+			and DataGridSortDirection.Ascending
 				? (DataGridSortDirection.Descending, true)
 				: (DataGridSortDirection.Ascending, false);
 		

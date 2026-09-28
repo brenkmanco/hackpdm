@@ -148,7 +148,6 @@ namespace HackPDM.UI.Forms.FormTransport
 				if (node?.Content is TreeData tData)
 				{
 					_HFM.GroupedEntries?.ClearAll();
-					_HFM.GroupedEntries?.NoGrouping = _HFM.IsActive;
 
 					if (tData?.DirectoryId is null or 0)
 					{

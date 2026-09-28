@@ -170,7 +170,7 @@
                     </ScrollViewer>
                 </Grid>
             </SplitView.Pane>
-            <Grid>
+            <Grid x:Name="EntryContentGrid">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -179,7 +179,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
                     <RowDefinition Height="*" MaxHeight="15" />
-                    <RowDefinition Height="*" MaxHeight="400" />
+                    <RowDefinition Height="*" MaxHeight="250" />
                     <RowDefinition Height="*" MaxHeight="30" />
                 </Grid.RowDefinitions>
                 <!--  TabView for file lists  -->
@@ -381,6 +381,13 @@
                         x:Name="MoreTools"
                         Grid.Row="1"
                         DefaultLabelPosition="Right">
+                        <AppBarToggleButton
+                            x:Name="ToggleGroups"
+                            VerticalAlignment="Center"
+                            Checked="ToggleGroups_Checked"
+                            Icon="Orientation"
+                            Label="Grouped"
+                            Unchecked="ToggleGroups_Checked" />
                         <AppBarToggleButton
                             x:Name="Anchor"
                             VerticalAlignment="Center"

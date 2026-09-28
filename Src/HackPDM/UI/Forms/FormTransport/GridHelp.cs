@@ -23,6 +23,10 @@ using EntryRow = HackPDM.Domain.Representation.EntryRow;
 using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
 using ListView = Microsoft.UI.Xaml.Controls.ListView;
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
+using HackPDM.UI.Compatibility;
+using Windows.Storage.Streams;
+using System.Runtime.InteropServices.WindowsRuntime;
+using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace HackPDM.UI.Forms.FormTransport
 {
@@ -394,14 +398,17 @@ namespace HackPDM.UI.Forms.FormTransport
 		internal async Task PreviewImage(HpVersion? version)
 		{
 			if (version is null) return;
-			if (!await version.GetPreviewImage()) return;
+			if (version.preview_image is null && !await version.GetPreviewImage()) return;
 
-			MemoryStream ms = new(version.preview_image ?? [])
-			{
-				Position = 0
-			};
-			
-			// OdooEntryImage.Source = Assets.GetBitmapFromBytes(previewImageBytes);
+			using InMemoryRandomAccessStream stream = new();
+			await stream.WriteAsync(version.preview_image.AsBuffer());
+
+			stream.Seek(0);
+
+			BitmapImage bitImage = new();
+			await bitImage.SetSourceAsync(stream);
+			_HFM.GetOdooEntryImage().Source = bitImage;
+
 		}
 		internal async Task PreviewImage(int? hpVersionId)
 		{
