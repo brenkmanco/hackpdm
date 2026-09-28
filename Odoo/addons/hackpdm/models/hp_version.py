@@ -10,12 +10,18 @@ import magic
 import pdb
 
 import sqlalchemy
-from sqlalchemy import MetaData, Table, create_engine, select, update
-from sqlalchemy.orm import Mapped, sessionmaker, relationship
+from sqlalchemy import Connection, Engine, MetaData, Table, create_engine, select, text, update
+from sqlalchemy.orm import Mapped, Session, sessionmaker, relationship
 
 _logger = logging.getLogger(__name__)
 
 class Database:
+    sessionURL = ""
+    engine:Engine = None
+    connection:Connection = None
+    metadata:MetaData = None
+    session:Session = None
+    
     def __init__(self, db_username:str, db_password:str, db_name:str, db_hostname:str, db_port):
         self.sessionURL = f'postgresql://{db_username}:{db_password}@{db_hostname}:{db_port}/{db_name}'
 
@@ -30,8 +36,8 @@ class Database:
     def start_session(self):
         self.session = self._Session()
 
-    def execute(self, statement):
-        return self.session.execute(statement)
+    # def execute(self, statement):
+    #     return self.session.execute(statement)
 class WebDav():
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
@@ -343,9 +349,8 @@ class hp_version(models.Model):
     def _get_attachments(self, record, field_name):
         attachment_model = self.env['ir.attachment']
         attachments = attachment_model.search([
-            ('res_model', '=', self._name),
             ('res_id', '=', record.id),
-            ('res_field', '=', field_name)
+            ('res_field', '=', field_name),
         ])
         return attachments
 
@@ -372,10 +377,21 @@ class hp_version(models.Model):
                 logging.warning(f"didn't create attachment {record.id}.{record.name}")
             self.env.cr.commit()
 
+
     def getImageBytes(self, database1:Database, record):
-        table1 = database1.get_table("hp_version")
-        stmt = select(table1.c.preview_image).where(table1.c.version_id == record.id)
-        return database1.execute(stmt).first()[0]
+        lost_on_step = 0
+        try:
+            # Use raw SQL to bypass SQLAlchemy Table reflection entirely
+            stmt = text(f"SELECT preview_image FROM hp_version WHERE version_id = {record.id}")
+            lost_on_step = 1
+
+            result = database1.connection.execute(stmt).first()
+
+            lost_on_step = 2
+            return result[0] if result else None
+        except Exception as e:
+            logging.error(f"query error on step: {lost_on_step} | error: {e}")
+            return None
 
     @api.model
     @api.depends('name')
@@ -392,8 +408,9 @@ class hp_version(models.Model):
 
             try:
                 image = self.getImageBytes(hackpdm, record)
-                if image != None and image != b'':
-                    attachment = record._create_attachment(image, "preview_image")
+                if image != None:
+                    raw_image = bytes(image)
+                    attachment = record._create_attachment(raw_image, "preview_image")
                     if (attachment != None):
                         logging.info(f"attachment id {attachment.id} created for version record {attachment.res_id} named: {attachment.name}")
                     else:

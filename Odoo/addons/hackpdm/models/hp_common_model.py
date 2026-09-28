@@ -348,6 +348,6 @@ class hp_common_model(models.AbstractModel):
         web_dav = WebDav()
         hackpdm = Database("hackpdm", "hackpdm", "hackpdm", "alderaan", 5432)
         #odoopdm = Database("moony", "moony", "odoopdm", "10.0.0.52", 5432)
-        self._import_versions(web_dav)
+        #self._import_versions(web_dav)
         hackpdm.start_session()
         self._import_versions_image(hackpdm)
