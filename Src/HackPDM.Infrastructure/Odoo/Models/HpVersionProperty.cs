@@ -192,7 +192,8 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 			{
 				if (!OdooDefaultsConstants.DependentExt.Contains($".{stage.payload?["file_ext"]?.ToString()?.ToUpper()}")) continue;
 				string? pathway = stage.payload?["WinPathway"]?.ToString() ?? stage.HashedValues?["windows_complete_name"] as string;
-                string? filePath = Path.Combine(HackDefaults.Instance?.PwaPathAbsolute ?? "", pathway ?? "");
+				pathway = pathway?.StartsWith( "root\\", StringComparison.InvariantCultureIgnoreCase ) is true ? pathway[ 5.. ] : pathway;
+				string? filePath = Path.Combine(HackDefaults.Instance?.PwaPathAbsolute ?? "", pathway ?? "");
 				List<string> paths = [];
 
 				List<Tuple<string, string, string, object>> props = SolidWorksUtil.DocMgr.GetProperties(filePath);

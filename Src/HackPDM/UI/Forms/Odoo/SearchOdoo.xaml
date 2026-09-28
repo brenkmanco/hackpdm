@@ -5,14 +5,18 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:com="using:CommunityToolkit.WinUI.UI.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:globalData="using:HackPDM.Shared.GlobalData"
+    xmlns:helper="using:HackPDM.UI.Types"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:odoo="using:HackPDM.Infrastructure.Odoo"
     xmlns:rep="using:HackPDM.Domain.Representation"
+    xmlns:x1="using:System"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     mc:Ignorable="d">
 
     <Page.Resources>
         <globalData:OperatorConverter x:Key="OperationConverter" />
+        <!--  Create list of enumeration values  -->
     </Page.Resources>
 
     <Grid Margin="16">
@@ -146,16 +150,20 @@
             x:Name="OdooSearchPropList"
             Grid.Row="1"
             Height="120"
-            Margin="0,16,0,0">
+            Margin="0,16,0,0"
+            AutoGenerateColumns="False"
+            ItemsSource="{x:Bind PropertiesActive}">
             <com:DataGrid.Columns>
-                <com:DataGridTextColumn
+                <com:DataGridComboBoxColumn
                     Width="2*"
                     Binding="{Binding Name}"
-                    Header="Property" />
+                    Header="Property Name" />
+
                 <com:DataGridComboBoxColumn
                     Width="1*"
                     Binding="{Binding Comparer}"
                     Header="Comparer" />
+
                 <com:DataGridTextColumn
                     Width="2*"
                     Binding="{Binding Value}"

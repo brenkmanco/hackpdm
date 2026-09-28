@@ -98,7 +98,8 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
                 // windows_complete_name is null
                 // find version property where this is set
 				string? pathway = ( vStaged.payload?["WinPathway"]?.ToString() ?? vStaged.HashedValues?["windows_complete_name"] as string ) ?? throw new ArgumentException();
-                string? filePathway = Path.Combine(HackDefaults.Instance?.PwaPathAbsolute ?? string.Empty, pathway ?? string.Empty);
+                pathway = pathway.StartsWith( "root\\", StringComparison.InvariantCultureIgnoreCase ) ? pathway[ 5.. ] : pathway;
+				string ? filePathway = Path.Combine(HackDefaults.Instance?.PwaPathAbsolute ?? string.Empty, pathway ?? string.Empty);
 				List<string> paths = [];
 			    List<string[]> dependencies = SolidWorksUtil.DocMgr?.GetDependencies(filePathway); // NoInterrupt: true
 			    if (dependencies is not null && dependencies.Count > 0)

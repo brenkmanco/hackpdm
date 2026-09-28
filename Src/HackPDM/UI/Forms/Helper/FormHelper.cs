@@ -94,6 +94,7 @@ public static class FormHelper
             }
         }
     }
+
     public static string GetBaseName(string path)
     {
         try
@@ -132,7 +133,7 @@ public static class FormHelper
         }
     }
 
-
+    
     public static (int, TreeViewNode?) LastValidTreeIndex(in string combinedPath, in string[] paths, in Dictionary<string, TreeViewNode> nodeMap)
     {
         ReadOnlySpan<char> strArray = combinedPath.AsSpan();

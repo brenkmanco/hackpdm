@@ -38,11 +38,14 @@ using HackPDM.UI.Models;
 using HackPDM.UI.Types;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 
 using SolidWorks.Interop.sldworks;
@@ -64,15 +67,221 @@ using WindowHelper = HackPDM.UI.Controls.WindowHelper;
 
 namespace HackPDM.UI.Forms.Hack;
 
+// Form Control Constructions
+public sealed partial class HackFileManager : Page
+{
+	private DataGrid OdooEntryList;
+	private MenuFlyoutSubItem ListOpen;
+	private MenuFlyoutItem ListPreview;
+	private MenuFlyoutItem ListLocal;
+	private MenuFlyoutItem ListFileDirectory;
+	private MenuFlyoutItem ListGetLatest;
+	private MenuFlyoutItem ListCheckout;
+	private MenuFlyoutItem ListUndoCheckout;
+	private MenuFlyoutSubItem ListGroup;
+	private List<MenuFlyoutItem> GroupByProp;
+	private MenuFlyoutItem ListCommit;
+	private MenuFlyoutItem ListRestore;
+	private MenuFlyoutItem SaveIcon;
+	private MenuFlyoutSubItem ListDelete;
+	private MenuFlyoutItem ListDeleteLocal;
+	private MenuFlyoutItem ListDeleteLogical;
+	private MenuFlyoutItem ListDeletePermanent;
+	private void BuildDataGridProgrammatically()
+	{
+		// 1. Instantiate DataGrid
+		OdooEntryList = new DataGrid
+		{
+			Name = "OdooEntryList",
+			VerticalContentAlignment = VerticalAlignment.Stretch,
+			AutoGenerateColumns = false,
+			CanUserSortColumns = true,
+			FontSize = 10,
+			IsReadOnly = true,
+			RowDetailsVisibilityMode = DataGridRowDetailsVisibilityMode.Collapsed,
+			RowHeight = 20,
+			SelectionMode = DataGridSelectionMode.Extended,
+			VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
+			ItemsSource = GroupedEntries
+		};
+
+		// Attach Events
+		//OdooEntryList.LoadingRowGroup += OdooEntryDataGrid_LoadingRowGroup;
+		//OdooEntryList.Sorting += OdooEntryDataGrid_Sorting;
+
+		// 2. Fetch the Style from XAML and apply it
+		var headerStyle = (Style)this.Resources["GroupHeaderStyle"];
+		OdooEntryList.RowGroupHeaderStyles.Add( headerStyle );
+		OdooEntryList.RowGroupHeaderPropertyNameAlternative = "Items";
+
+		// 3. Build Columns Using XAML Templates
+
+		// Column 1: Icon (Fetch template from Resources)
+		var iconColumn = new DataGridTemplateColumn
+		{
+			Width = new DataGridLength(40, DataGridLengthUnitType.Pixel),
+			CellTemplate = (DataTemplate)this.Resources["IconCellTemplate"]
+		};
+		OdooEntryList.Columns.Add( iconColumn );
+
+		// Column 2 & 3: Standard Text Columns
+		OdooEntryList.Columns.Add( CreateTextColumn( "Name", "Name", 450 ) );
+		OdooEntryList.Columns.Add( CreateTextColumn( "Type", "Type" ) );
+
+		// Column 4: Size (Fetch template from Resources)
+		var sizeColumn = new DataGridTemplateColumn
+		{
+			Header = "Size",
+			CellTemplate = (DataTemplate)this.Resources["SizeCellTemplate"]
+		};
+		OdooEntryList.Columns.Add( sizeColumn );
+
+		// Columns 5 - 10
+		OdooEntryList.Columns.Add( CreateTextColumn( "Release", "LatestReleaseId" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn( "Status", "Status" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn( "Checkout", "Checkout" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn( "Local Date", "LocalDate" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn( "Remote Date", "RemoteDate" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn( "Full Name", "FullName" ) );
+
+		// 4. Build Context Flyout
+		BuildContextMenu();
+
+		// 5. Add to UI
+		RootEntryList.Content = OdooEntryList;
+	}
+	private void BuildContextMenu()
+	{
+		// 6. Build Context Flyout
+		MenuFlyout flyout = new();
+
+		// Open SubItem
+		ListOpen			= new MenuFlyoutSubItem { Name = "ListOpen", Text = "Open" };
+		ListPreview			= new MenuFlyoutItem { Name = "ListPreview", Text = "Preview Latest Remote" };
+		ListLocal			= new MenuFlyoutItem { Name = "ListLocal", Text = "Latest Local" };
+		ListFileDirectory	= new MenuFlyoutItem { Name = "ListFileDirectory", Text = "File Directory" };
+		ListOpen.Items.Add( ListPreview );
+		ListOpen.Items.Add( ListLocal );
+		ListOpen.Items.Add( ListFileDirectory );
+
+		ListGetLatest		= new MenuFlyoutItem { Name = "ListGetLatest", Text = "Download" };
+		ListCheckout		= new MenuFlyoutItem { Name = "ListCheckout", Text = "Checkout" };
+		ListUndoCheckout	= new MenuFlyoutItem { Name = "ListUndoCheckout", Text = "Undo Checkout" };
+
+		ListGroup			= new MenuFlyoutSubItem { Name = "ListGroup", Text = "Group By" };
+		GroupByProp			= [];
+		foreach (var prop in typeof(HackPDM.Domain.Representation.EntryRow).GetProperties())
+		{
+			var item = new MenuFlyoutItem { Name = $"Field_{prop.Name}", Text = prop.Name };
+			item.Click += Group_Field_Menu_Item_Click;
+			GroupByProp.Add(item);
+			ListGroup.Items.Add(item);
+		}
+
+		ListCommit			= new MenuFlyoutItem { Name = "ListCommit", Text = "Commit" };
+		ListRestore			= new MenuFlyoutItem { Name = "ListRestore", Text = "Restore" };
+		SaveIcon			= new MenuFlyoutItem { Name = "SaveIcon", Text = "Upload Icon" };
+
+		// Delete SubItem
+		ListDelete			= new MenuFlyoutSubItem { Name = "ListDelete", Text = "Delete" };
+		ListDeleteLocal		= new MenuFlyoutItem { Name = "ListDeleteLocal", Text = "Local" };
+		ListDeleteLogical	= new MenuFlyoutItem { Name = "ListDeleteLogical", Text = "Logical" };
+		ListDeletePermanent = new MenuFlyoutItem { Name = "ListDeletePermanent", Text = "Permanent" };
+		ListDelete.Items.Add( ListDeleteLocal );
+		ListDelete.Items.Add( ListDeleteLogical );
+		ListDelete.Items.Add( ListDeletePermanent );
+
+		// Add everything to flyout with separators
+		flyout.Items.Add( ListOpen );
+		flyout.Items.Add( ListGetLatest );
+		flyout.Items.Add( new MenuFlyoutSeparator() );
+		flyout.Items.Add( ListCheckout );
+		flyout.Items.Add( ListUndoCheckout );
+		flyout.Items.Add( new MenuFlyoutSeparator() );
+		flyout.Items.Add( ListGroup );
+		
+		flyout.Items.Add( new MenuFlyoutSeparator() );
+		flyout.Items.Add( ListCommit );
+		flyout.Items.Add( new MenuFlyoutSeparator() );
+		flyout.Items.Add( ListRestore );
+		flyout.Items.Add( SaveIcon );
+		flyout.Items.Add( new MenuFlyoutSeparator() );
+		flyout.Items.Add( ListDelete );
+
+		OdooEntryList.ContextFlyout = flyout;
+	}
+	// Helper method
+	private DataGridTextColumn CreateTextColumn( string header, string bindingPath, double? width = null )
+	{
+		var col = new DataGridTextColumn
+		{
+			Header = header,
+			Binding = new Binding { Path = new PropertyPath(bindingPath) },			
+		};
+		if( width.HasValue )
+			col.Width = new DataGridLength( width.Value, DataGridLengthUnitType.Pixel );
+		return col;
+	}
+
+	private void ToggleGroups_Checked(object sender, RoutedEventArgs e)
+	{
+		GroupedEntries?.NoGrouping = !ToggleGroups.IsChecked ?? false;
+		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
+	}
+}
 /// <summary>
 /// An empty page that can be used on its own or navigated to within a Frame.
 /// </summary>
-
-
 public sealed partial class HackFileManager : Page
 {
 	#region Declarations
 	public ObservableCollection<TreeData>? LastSelectedNodePaths { get; set; } = [];
+	
+	public DynamicGroupCollection<EntryRow>? GroupedEntries { get; set; } = new([
+		new("abc", [
+			new() {
+				Id=123,
+				Name="Test Name 1",
+				Type="abc",
+				Status=FileStatus.Lo,
+			},
+			new() {
+				Id=124,
+				Name="Test Name 2",
+				Type="abc",
+				Status=FileStatus.Lo,
+			},
+			new() {
+				Id=125,
+				Name="Test Name 3",
+				Type="abc",
+				Status=FileStatus.Cm,
+			},
+		]),
+		new("cba", [
+			new() {
+				Id=126,
+				Name="Test Name 4",
+				Type="cba",
+				Status=FileStatus.Lo,
+			},
+			new() {
+				Id=127,
+				Name="Test Name 5",
+				Type="cba",
+				Status=FileStatus.Ro,
+			}
+		]),
+		new("def", [
+			new() {
+				Id=128,
+				Name="Test Name 6",
+				Type="def",
+				Status=FileStatus.Ok,
+			},
+		]),
+		new("zzz", []),
+	], e => e.Type ?? "");
 	public ObservableCollection<EntryRow> OEntries { get; internal set; } = [];
 	public ObservableCollection<HistoryRow> OHistories { get; internal set; } = [];
 	public ObservableCollection<ParentRow> OParents { get; internal set; } = [];
@@ -148,6 +357,7 @@ public sealed partial class HackFileManager : Page
 	public HackFileManager() 
 	{ 
 		InitializeComponent();
+		BuildDataGridProgrammatically();
 		HackLoaded = false;
 #if DEBUG
 		//DebugTest();
@@ -208,8 +418,8 @@ public sealed partial class HackFileManager : Page
 		this.Unloaded += (s, e) =>
 		{
 			IsClosing = true;
-			_cSource.Cancel();
-			_cTreeSource.Cancel();
+			_cSource?.Cancel();
+			_cTreeSource?.Cancel();
 			_backgroundWorker.CancelAsync();
 		};
 		if (IsLoaded)
@@ -268,7 +478,15 @@ public sealed partial class HackFileManager : Page
 	private void AssignCollections()
 	{
 		OdooDirectoryTree.ItemsSource = ONodes;
-		OdooEntryList.ItemsSource = OEntries;
+		//OdooEntryList.ItemsSource = OEntries;
+		//< CollectionViewSource
+		//	x:Name = "GroupedEntriesViewSource"
+		//	IsSourceGrouped = "True"
+		//	ItemsPath = "Items" />
+
+		GroupedEntries?.Regroup( entryrow => entryrow.Status );
+		OdooEntryList.ItemsSource = GroupedEntries?.ViewSource.View;
+
 		OdooHistory.ItemsSource = OHistories;
 		OdooParents.ItemsSource = OParents;
 		OdooChildren.ItemsSource = OChildren;
@@ -281,7 +499,7 @@ public sealed partial class HackFileManager : Page
 	{
 		GridMap.Map = new()
 		{
-			{ OdooEntryList, OEntries },
+			{ OdooEntryList, GroupedEntries?.Master },
 			{ OdooHistory, OHistories },
 			{ OdooParents, OParents },
 			{ OdooChildren, OChildren },
@@ -299,6 +517,7 @@ public sealed partial class HackFileManager : Page
 		OdooEntryList.SelectionChanged	+= OdooEntryList_SelectionChanged;
 		OdooEntryList.Sorting			+= List_ColumnClick;
 		OdooEntryList.LoadingRow		+= OdooEntryList_LoadingRow;
+		OdooEntryList.LoadingRowGroup	+= OdooEntryList_LoadingRowGroup;
 
 		// tree events
 		TreeAnalyze.Click				+= (sender, args) => { };
@@ -356,6 +575,43 @@ public sealed partial class HackFileManager : Page
 		HistoryMoveTemp.Click			+= History_Click_TemporaryMove;
 		HistoryMoveOverwrite.Click		+= History_Click_OverwriteMove;
 	}
+	private void Group_Field_Menu_Item_Click(object? sender, RoutedEventArgs e)
+	{
+		var item = sender as MenuFlyoutItem;
+		if (item is null) return;
+
+		// property name is stored in Text or encoded in Name as "Field_<Prop>"
+		var propName = !string.IsNullOrEmpty(item.Text) ? item.Text : item.Name?.Replace("Field_", "");
+
+		if (string.IsNullOrEmpty(propName) || GroupedEntries is null) return;
+
+		// Use reflection to read the EntryRow property value and group by its string representation
+		GroupedEntries.Regroup(entry =>
+		{
+			var pi = typeof(EntryRow).GetProperty(propName);
+			if (pi is null) return string.Empty;
+			var v = pi.GetValue(entry);
+			return v is DateTime dt 
+				? dt.ToShortDateString() 
+				: v?.ToString() ?? string.Empty;
+		});
+
+		// Refresh ItemsSource to reflect grouping change
+		OdooEntryList.ItemsSource = GroupedEntries.NoGrouping ? GroupedEntries.Master : GroupedEntries.ViewSource.View;
+	}
+	private void OdooEntryList_LoadingRowGroup(object? sender, DataGridRowGroupHeaderEventArgs e)
+	{
+		// Access the underlying grouping data
+		ICollectionViewGroup groupData = e.RowGroupHeader.CollectionViewGroup;
+
+		// Cast the group back to your specific group class
+
+		if (groupData.Group is GroupInfoList<EntryRow> myGroup)
+		{
+			// Override the text displayed in the label
+			e.RowGroupHeader.PropertyValue = $"{myGroup.Key}";
+		}
+	}
 
 	private void OdooEntryList_LoadingRow( object? sender, DataGridRowEventArgs e )
 	{
@@ -373,21 +629,9 @@ public sealed partial class HackFileManager : Page
 				row.Background = UIStorage.BlueBrush;
 				break;
 			}
-			case FileStatus.Ok:
-			{
-				goto default;
-				break;
-			}
-			case FileStatus.Nv:
-			{
-				goto default;
-				break;
-			}
-			case FileStatus.Lm:
-			{
-				goto default;
-				break;
-			}
+			case FileStatus.Ok: goto default;
+			case FileStatus.Nv: goto default;
+			case FileStatus.Lm: goto default;
 			case FileStatus.Dt:
 			{
 				row.Background = UIStorage.RedBrush;
@@ -398,16 +642,8 @@ public sealed partial class HackFileManager : Page
 				row.Background = UIStorage.RedBrush;
 				break;
 			}
-			case FileStatus.If:
-			{
-				goto default;
-				break;
-			}
-			case FileStatus.Ft:
-			{
-				goto default;
-				break;
-			}
+			case FileStatus.If: goto default;
+			case FileStatus.Ft: goto default;
 			case FileStatus.Cm:
 			{
 				row.Background = UIStorage.GreenBrush;
@@ -425,7 +661,6 @@ public sealed partial class HackFileManager : Page
 			}
 		}
 	}
-
 	private void List_Click_SaveIcon(object sender, RoutedEventArgs e)
 	{
 		throw new NotImplementedException();
@@ -615,20 +850,11 @@ public sealed partial class HackFileManager : Page
 		// section for checking if the existing remote file already has a version with the same checksum 
 		// or possibly an entry that has a newer version from that which is downloaded locally
 
-		//ConcurrentSet<HackFile> hackFiles;
-		//ConcurrentSet<HackFile> hackFilesInOdoo;
 		ConcurrentDictionary<string, HackFile> hackFiles;
 		ConcurrentDictionary<string, HackFile> hackFilesInOdoo;
-		// testing filter hacks..
-		// entries = entries is not null && !entries.IsEmpty ? await Commit.FilterCommitEntries(entries) : [];
 
-		// section for checking if hack files have a checksum that matches the fullpath
-		// var (hf, hfOdoo) = hacks is not null && hacks.Count > 0 ? await FilterCommitHackFiles(hacks) : ([], []);
 		var hfs = hacks is not null && hacks.Count > 0 ? await FilterCommitHackFiles( hacks ) : ([], []);
 
-		// hackFiles = new(hfs.Item1.ToDictionary( h => h.FullPath ?? "", h => h ) ?? []);
-		// hackFilesInOdoo = new(hfs.Item2.ToDictionary( h => h.FullPath ?? "", h => h ) ?? []);
-		// HpVersion[] localConversions = new HpVersion[hackFiles.Count];
 		List<HpVersion> localConversions = [];
 		int index = 0;
 		ProcessCounter = 0;
@@ -643,7 +869,7 @@ public sealed partial class HackFileManager : Page
 		foreach( var hack in hfs.Item2 ) { if (!await CommitRecord( hack, startCommit, true )) return; }
 
 		await startCommit.ServerCommit();
-		await MessageBox.ShowAsync($"Completed!");
+		MessageBox.ShowAsync($"Completed!");
 		await _treeHelper.RestartTree(OdooDirectoryTree);
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
@@ -837,29 +1063,6 @@ public sealed partial class HackFileManager : Page
 			?? throw new Exception($"{HpDirectory.GetHpModel()} didn't create any records");
 	}
 	
-	//public async static Task<(EntryReturnType, HpEntry?, HpRecordStaged?)> ConvertHack( HackFile hackFile, HpPDMCommit? commit )
-	//{
- //       Hashtable ht = [];
-	//	HpDirectory? direct = await CreateDirectories( paths );
-
-		
-	//	try
- //       {
-	//		// create an HpVersion that doesn't exist in odoo
-	//		(HpVersion? version, HpRecordStaged? versionStaged) = await OdooDefaults.CreateNewVersion(hackFile, entry, staged);
-	//		if (version?.id is null or 0 && versionStaged is null) entryReturn = EntryReturnType.Failed;
-	//		return (entryReturn, version, versionStaged);
- //       }
- //       catch (Exception e)
- //       {
- //           Debug.WriteLine($"{e.Message}\n{e.StackTrace}");
- //       }
- //       return (entryReturn, null, null);
-
-	//}
-	//public async static Task<(EntryReturnType, HpVersion?, HpRecordStaged?)> ConvertHackFile(HackFile hackFile, HpPDMCommit? commit)
- //   {
- //   }
 	#region CheckOut Functions
 	private static IEnumerable<HpEntry> FilterCheckoutEntries(HpEntry[] entries)
 	{
@@ -941,18 +1144,22 @@ public sealed partial class HackFileManager : Page
 			];
 			HpEntry? entry = (await HpEntry.GetRecordsBySmartSearchAsync(searchFilter: arrList, includedFields: [nameof(HpEntry.name), nameof(HpEntry.dir_id)], insertFields: ["version_ids.checksum"]))?.FirstOrDefault();
 			ArrayList fields = [];
-
-			if (entry is not null && entry.HashedValues.TryGetValue("version_ids.checksum", out ArrayList? arr))
+			if (entry is not null and { id: not 0 } )
 			{
-				// this means that this hackFile is in the database so it can be skipped
-				if (arr.FirstOrDefault<Hashtable>(x =>   x.TryGetValue("value", out string? checksum)  &&  checksum == hackArr[i].GetChecksum()   ) is Hashtable foundChecksum)
-				{
-
-					HackFileManager.Dialog?.AddStatusLine(StatusMessage.FOUND, $"checksum found remotely ({hackArr[ i ].Checksum}) for: {filePath}");
-					hacksFound.Add(hackArr[i]);
-					continue;
-				}
+				HackFileManager.Dialog?.AddStatusLine( StatusMessage.FOUND, $"entry found remotely for: {filePath}" );
+				hacksFound.Add(hackArr[i]);
+				continue;
 			}
+			//if (entry is not null && entry.HashedValues.TryGetValue("version_ids.checksum", out ArrayList? arr))
+			//{
+			//	// this means that this hackFile is in the database so it can be skipped
+			//	if (arr.FirstOrDefault<Hashtable>(x =>   x.TryGetValue("value", out string? checksum)  &&  checksum == hackArr[i].GetChecksum()   ) is Hashtable foundChecksum)
+			//	{
+
+			//		HackFileManager.Dialog?.AddStatusLine(StatusMessage.FOUND, $"checksum found remotely ({hackArr[ i ].Checksum}) for: {filePath}");
+			//		continue;
+			//	}
+			//}
 
 			HackFileManager.Dialog?.AddStatusLine(StatusMessage.INFO, $"Queued commit for {hackArr[i].Name} (Checksum: {hackArr [ i ].Checksum}) for: {filePath}" );
 			hacks.Add( hackArr [ i ] );
@@ -1199,6 +1406,7 @@ public sealed partial class HackFileManager : Page
 		IsActive = ShowInactive.IsChecked ?? false;
 		if (LastSelectedNode is not null)
 		{
+			GroupedEntries?.ClearAll();
 			await _treeHelper.TreeSelectItem(OdooDirectoryTree, LastSelectedNode!, OdooEntryList);
 		}
 	}
@@ -1240,82 +1448,86 @@ public sealed partial class HackFileManager : Page
 		}
 		var modelField = column.ClipboardContentBinding?.Path.Path ?? column.Header;
 		bool isDesc = false;
-		(column.SortDirection, isDesc) = column.SortDirection is not null && column.SortDirection == DataGridSortDirection.Ascending
-			? (DataGridSortDirection.Descending, true)
-			: (DataGridSortDirection.Ascending, false);
+		(column.SortDirection, isDesc) = column.SortDirection is not null
+			and DataGridSortDirection.Ascending
+				? (DataGridSortDirection.Descending, true)
+				: (DataGridSortDirection.Ascending, false);
 		
 		switch (modelField)
 		{
 			case null: return;
 			case nameof(EntryRow.Name):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> string.Compare(s.Name, o.Name, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
 				break;
 			}
 			case nameof(EntryRow.Id):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> s.Id.Compare(o.Id), isDesc);
 				break;
 			}
 			case nameof(EntryRow.Checkout):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> string.Compare(s.Checkout?.name, o.Checkout?.name, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.Size):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> Nullable.Compare(s.Size, o.Size), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.Type):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> string.Compare(s.Type, o.Type, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.Status):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> string.Compare(Enum.GetName(s.Status), Enum.GetName(o.Status), CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.LatestId):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=>  Nullable.Compare(s.LatestId, o.LatestId), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.RemoteDate):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> Nullable.Compare(s.RemoteDate , o.RemoteDate), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.LocalDate):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> Nullable.Compare(s.LocalDate, o.LocalDate), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.Category):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> string.Compare(s.Category?.name, o.Category?.name, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
 				break;	
 			}
 			case nameof(EntryRow.FullName):
 			{
-				OEntries.Sort((s, o) 
+				GroupedEntries?.Master.Sort((s, o) 
 					=> string.Compare(s.FullName, o.FullName, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
 				break;	
 			}
 			default: return;
 		}
-		
+		GroupedEntries?.Regroup();
+		grid.ItemsSource = GroupedEntries?.NoGrouping is true
+							? GroupedEntries?.Master
+							: GroupedEntries?.ViewSource.View;
 		// e.Column.SortDirection = e.Column.SortDirection == DataGridSortDirection.Ascending 
 		// 	? DataGridSortDirection.Descending
 		// 	: DataGridSortDirection.Ascending;
@@ -1911,7 +2123,7 @@ public sealed partial class HackFileManager : Page
 			{
 				await Task.Delay(100);
 			}
-			EntryRow? entryItem = OEntries.FirstOrDefault(entryItem => entryItem.Name == fileName);
+			EntryRow? entryItem = GroupedEntries?.Master.FirstOrDefault(entryItem => entryItem.Name == fileName);
 			if (entryItem == null) throw new ArgumentException("entry doesn't exist", nameof(fileName));
 
 			OdooEntryList.SelectedItem = entryItem;
@@ -2056,20 +2268,7 @@ public sealed partial class HackFileManager : Page
 		ArrayList arr = await OClient.CommandAsync<ArrayList>(HpVersion.GetHpModel(), "get_recursive_dependency_versions", [versionIds.ToArrayList()], 1000000);
 		return arr;
 	}
-	// private PointF ScalePoint(PointF p1, PointF p2, double desiredDistance)
-	// {
-	// 	PointF p3 = new(
-	// 		p2.X - p1.X,
-	// 		p2.Y - p1.Y
-	// 	);
-	//
-	// 	double currentDist = Math.Sqrt(p3.X * p3.X + p3.Y * p3.Y);
-	// 	double scaleFactor = desiredDistance / currentDist;
-	// 	p3.X = p2.X - Convert.ToSingle(scaleFactor) * p3.X;
-	// 	p3.Y = p2.Y - Convert.ToSingle(scaleFactor) * p3.Y;
-	//
-	// 	return p3;
-	// }
+
 	private async Task<bool> PermanentDeleteVersionProperty(ArrayList ids)
 	{
 		if (ids is null || ids.Count < 1) return false;
