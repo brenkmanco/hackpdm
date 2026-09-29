@@ -355,6 +355,40 @@ class hp_version(models.Model):
         return attachments
 
     @api.model
+    def checkout_entry(self, version_id, node):
+        if not isinstance(version_id, int):
+            return
+        node_rec = None
+        if isinstance(node, int):
+            node_rec = self.env["hp.node"].browse(node)
+        elif isinstance(node, str):
+            node_rec = self.env["hp.node"].search([("name", "=", node)], limit=1)
+        
+        # node found    
+        node_rec.ensure_one()
+        v_model = self.env["hp.version"]
+        v_rec = v_model.browse(version_id)
+        # version found
+        v_rec.ensure_one()
+        
+        entry = v_rec.entry_id
+        date = fields.Datetime.now()
+        
+        # check out only if it isn't checked out or if same user
+        if (not entry.checkout_user or entry.checkout_user.id == self.env.uid) and entry.deleted != True:
+            entry.checkout_user = self.env.uid
+            entry.checkout_date = date
+            entry.checkout_node = node_rec.id
+            v_rec.node_id = node_rec.id
+        else:
+            raise Exception(f"already checked out to user {entry.checkout_user.id}")
+        
+    @api.model
+    def checkout_entries(self, version_ids, node):
+        for version_id in version_ids:
+            self.checkout_entry(version_id, node)
+
+    @api.model
     @api.depends('entry_id', 'file_ext', 'name')
     def migrate_webdav_files_to_records(self):
         web_dav = WebDav()
