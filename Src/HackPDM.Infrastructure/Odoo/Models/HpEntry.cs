@@ -217,14 +217,15 @@ public partial class HpEntry
 		checkout_date = DateTime.Now;
 		checkout_node = OdooDefaults.Instance.MyNode.id;
 
-		await WriteChangedValuesAsync("checkout_user", "checkout_date", "checkout_node");
-		HpVersion version = new()
-		{
-			node_id = checkout_node,
-			id = latest_version_id
-		};
-		await version.WriteChangedValuesAsync("node_id");
-		if (HashedValues.TryGetValue("windows_complete_name", out object objpath) && objpath is string winpath)
+		bool success = await OdooClient<HpVersion>.CommandAsync<bool>( "checkout_entry", [ new ArrayList() { latest_version_id?.id ?? 0 } ] );
+		//await WriteChangedValuesAsync("checkout_user", "checkout_date", "checkout_node");
+		//HpVersion version = new()
+		//{
+		//	node_id = checkout_node,
+		//	id = latest_version_id
+		//};
+		//await version.WriteChangedValuesAsync("node_id");
+		if (success && HashedValues.TryGetValue("windows_complete_name", out object objpath) && objpath is string winpath)
 		{
 			string absPath = Path.Combine(HackDefaults.Instance.PwaPathAbsolute, winpath[5..]);
 			FileInfo file = new(absPath);

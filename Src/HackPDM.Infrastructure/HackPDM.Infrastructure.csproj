@@ -14,6 +14,7 @@
 
 	<ItemGroup>
 	  <PackageReference Include="Meziantou.Framework.Win32.CredentialManager" Version="1.7.15" />
+	  <PackageReference Include="RestSharp" Version="114.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>

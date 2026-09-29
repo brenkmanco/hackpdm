@@ -197,14 +197,6 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 		{
 			PropertyInfo field = type.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance);
 			ht.Add(fieldName, field.GetValue(this));
-			//if ( HashedValues.TryGetValue( fieldName, out object value ) )
-			//            {                
-			//                object val = field.GetValue( this );
-			//                if ( value != val )
-			//                {
-			//                    ht.Add( fieldName, val );
-			//                }
-			//            }
 		}
 
 		return await OClient.UpdateAsync(HpModel, id ?? 0, ht);

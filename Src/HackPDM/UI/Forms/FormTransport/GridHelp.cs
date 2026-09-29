@@ -413,7 +413,7 @@ namespace HackPDM.UI.Forms.FormTransport
 		internal async Task PreviewImage(int? hpVersionId)
 		{
 			const string previewImage = "preview_image";
-			if (hpVersionId is null || hpVersionId == 0) return;
+			if (hpVersionId is null or 0 ) return;
 
 			HpVersion? version = (await HpVersion.GetRecordsByIdsAsync([hpVersionId], includedFields: [previewImage]))?.FirstOrDefault();
 			await PreviewImage(version);

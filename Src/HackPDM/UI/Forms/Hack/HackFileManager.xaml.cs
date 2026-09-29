@@ -740,7 +740,7 @@ public sealed partial class HackFileManager : Page
 			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Retrieving all latest versions associated with entries...");
 		}
 
-		var versions = GetLatestVersions(entryIDs, ["preview_image", "entry_id", "node_id", "file_modify_stamp", "attachment_id", "file_contents"]);
+		var versions = await GetLatestVersions(entryIDs, ["preview_image", "entry_id", "node_id", "file_modify_stamp", "attachment_id", "file_contents"]);
 
 		IEnumerable<IEnumerable<HpVersion>>? versionBatches = Help.BatchArray(versions, DownloadBatchSize);
 
@@ -1169,10 +1169,10 @@ public sealed partial class HackFileManager : Page
 	#endregion
 
 	#region Latest Functions
-	private HpVersion[] GetLatestVersions(ArrayList entryIDs, string[]? excludedFields = null)
+	private async Task<HpVersion[]> GetLatestVersions(ArrayList entryIDs, string[]? excludedFields = null)
 	{
 		if (excludedFields == null) excludedFields = ["preview_image", "file_contents"];
-		return HpEntry.GetRelatedRecordByIds<HpVersion>(entryIDs, nameof(HpEntry.latest_version_id), excludedFields);
+		return await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(entryIDs, nameof(HpEntry.latest_version_id), excludedFields);
 	}
 	private async Task ProcessVersionBatchAsync(IEnumerable<HpVersion> batchVersions)
 	{
@@ -1719,7 +1719,7 @@ public sealed partial class HackFileManager : Page
 		if (entryIDs.Count < 1) return;
 		await UnCheckoutInternal(entryIDs);
 	}
-	private void List_Click_Open(object sender, RoutedEventArgs e)
+	private async void List_Click_Open(object sender, RoutedEventArgs e)
 	{
 		// open local if lm, co
 		// open remote if ro, dt
@@ -1739,7 +1739,7 @@ public sealed partial class HackFileManager : Page
 				case FileStatus.Ro:
 				case FileStatus.Nv:
 					{
-						OpenRemoteFile(viewItem.Id ?? 0);
+						await OpenRemoteFile(viewItem.Id ?? 0);
 						continue;
 					}
 
@@ -1760,7 +1760,7 @@ public sealed partial class HackFileManager : Page
 
 		}
 	}
-	private void List_Click_OpenLatestRemote(object sender, RoutedEventArgs e)
+	private async void List_Click_OpenLatestRemote(object sender, RoutedEventArgs e)
 	{
 		StringBuilder errors = new();
 		foreach (EntryRow viewItem in OdooEntryList.SelectedItems)
@@ -1784,7 +1784,7 @@ public sealed partial class HackFileManager : Page
 				case FileStatus.If:
 				case FileStatus.Cm:
 					{
-						OpenRemoteFile(viewItem.Id ?? 0);
+						await OpenRemoteFile(viewItem.Id ?? 0);
 						continue;
 					}
 
@@ -2064,10 +2064,10 @@ public sealed partial class HackFileManager : Page
 	{
 		FileOperations.OpenFile(path);
 	}
-	private void OpenRemoteFile(int entryId)
+	private async Task OpenRemoteFile(int entryId)
 	{
 		const string latestVersion = nameof(HpEntry.latest_version_id);
-		HpVersion versionModel = HpEntry.GetRelatedRecordByIds<HpVersion>([entryId], latestVersion, excludedFields: ["preview_image"]).First();
+		HpVersion? versionModel = (await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>([entryId], latestVersion, excludedFields: ["preview_image"])).FirstOrDefault();
 		if (versionModel == null)
 			return;
 
@@ -2080,7 +2080,7 @@ public sealed partial class HackFileManager : Page
 		switch (item)
 		{
 			case null: break;
-			case EntryRow er: if (er.Id is not null) await _gridHelper.PreviewImage(er.Id); break;
+			case EntryRow er: if (er.LatestId is not null) await _gridHelper.PreviewImage(er.LatestId); break;
 			case ChildrenRow cr: await _gridHelper.PreviewImage(cr.Version); break;
 			case ParentRow pr: await _gridHelper.PreviewImage(pr.Version); break;
 			default: break;
@@ -2320,7 +2320,7 @@ public sealed partial class HackFileManager : Page
 		{
 			ArrayList newIds = vRelationsParent.GetIDs();
 			Dialog?.AddStatusLine(StatusMessage.PROCESSING, $"Deleting parent version relationships...");
-			deletedVersionRelParent = OClient.Delete(HpVersionRelationship.GetHpModel(), [newIds], 100000);
+			deletedVersionRelParent = await OdooClient<HpVersionRelationship>.DeleteAsync( [newIds], 100000);
 			if (deletedVersionRelParent)
 			{
 				Dialog?.AddStatusLine(StatusMessage.SUCCESS, $"Deleted parent version relationships: {string.Join(", ", newIds.ToArray())}");
@@ -2388,7 +2388,7 @@ public sealed partial class HackFileManager : Page
 	{
 		if (ids is null || ids.Count < 1) return false;
 
-		HpVersion[] versions = HpEntry.GetRelatedRecordByIds<HpVersion>(ids, "version_ids", includedFields: ["ID"]);
+		HpVersion[]? versions = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(ids, "version_ids", includedFields: ["ID"]);
 		IrAttachment[] irAttachments = null;
 
 		ArrayList vIds = versions?.Select(v => v.id).ToArrayList() ?? [];

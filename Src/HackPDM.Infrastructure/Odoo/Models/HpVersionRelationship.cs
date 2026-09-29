@@ -66,7 +66,7 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
                     else continue;
                     paths.Add(absolute);
                 }
-                HpVersion[] getVersions = HpVersion.GetFromPaths(includedFields: ["name", "entry_id"], fullPaths: [.. paths]);
+                HpVersion[] getVersions = await HpVersion.GetFromPaths(includedFields: ["name", "entry_id"], fullPaths: [.. paths]);
                 hvrCreate = [.. hvrCreate, .. 
                     getVersions.Select(v => new HpVersionRelationship()
                     {

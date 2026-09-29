@@ -15,7 +15,6 @@ public interface IOdooDefaultBase
 	string? OdooUrl { get; set; }
 	string? OdooSwKey { get; set; }
 	decimal? OdooAreaFactor { get; set; }
-
 	string? OdooCredentialTarget
 	{
 		// Settings.Get<string?>("OdooCredentialTarget", StorageBox.DEFAULT_ODOO_CREDENTIALS)
@@ -47,6 +46,7 @@ public interface IOdooDefaultBase
 	Dictionary<string, IHpEntryNameFilterModel> ExtToFilter { get; set; }
 	Dictionary<int, IHpPropertyModel> IdToProp { get; set; }
 	Dictionary<int, IHpUserModel> IdToUser { get; set; }
+	Task InitializeAsync();
 }
 public interface IOdooDefaults : IOdooDefaultBase
 {

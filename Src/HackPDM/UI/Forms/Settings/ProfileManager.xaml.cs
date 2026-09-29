@@ -89,7 +89,7 @@ public sealed partial class ProfileManager : Page
 		{
 			List<string> errors = [];
 
-
+			await OdooDefaults.Instance!.InitializeAsync();
 			if( !await OdooClient.CorrectOdooAddress() )
 			{
 				errors.Add( "invalid odoo address or unreachable host" );

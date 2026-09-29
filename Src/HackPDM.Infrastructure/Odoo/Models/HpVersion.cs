@@ -406,18 +406,18 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
     
         return await GetRecordsByIdsAsync(ids, excludedFields: UsualExcludedFields);
     }
-    public static HpVersion[] GetFromPaths(params string[] fullPaths)
+    public static async Task<HpVersion[]> GetFromPaths(params string[] fullPaths)
     {
         var paths = Help.FastSlice(fullPaths, HackDefaults.Instance.PwaPathAbsolute.Length+1, "root\\").ToArrayList();
     
-        ArrayList searchParams = new() 
-        {
-            new ArrayList { "windows_complete_name", "in", paths }
-        };
+        ArrayList searchParams =
+		[
+			new ArrayList { "windows_complete_name", "in", paths }
+        ];
                 
-        return HpEntry.GetRelatedRecordsBySearch<HpVersion>(searchParams, nameof(HpEntry.latest_version_id), excludedFields: ["preview_image", "file_contents"]);
+        return await HpEntry.GetRelatedRecordsBySearchAsync<HpVersion>(searchParams, nameof(HpEntry.latest_version_id), excludedFields: ["preview_image", "file_contents"]);
     }
-    public static HpVersion[] GetFromPaths(string[] excludedFields = null, string[] includedFields = null, params string[] fullPaths)
+    public static async Task<HpVersion[]> GetFromPaths(string[] excludedFields = null, string[] includedFields = null, params string[] fullPaths)
     {
         var paths = Help.FastSlice(fullPaths, HackDefaults.Instance.PwaPathAbsolute.Length + 1, "root\\").ToArrayList();
     
@@ -426,7 +426,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 			new ArrayList { "windows_complete_name", "in", paths }
         ];
     
-        return HpEntry.GetRelatedRecordsBySearch<HpVersion>(searchParams, nameof(HpEntry.latest_version_id), includedFields: includedFields, excludedFields: excludedFields);
+        return await HpEntry.GetRelatedRecordsBySearchAsync<HpVersion>(searchParams, nameof(HpEntry.latest_version_id), includedFields: includedFields, excludedFields: excludedFields);
     }
 	public bool ExistsLocally
 	{
