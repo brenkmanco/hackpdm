@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using HackPDM.Core.General;
 using HackPDM.Domain.OdooModels.Models;
+using RestSharp;
 
 
 //
@@ -19,13 +20,18 @@ using HackPDM.Infrastructure.Odoo.Models;
 
 using HackPDM.Infrastructure.XmlRpc;
 using HackPDM.Shared.GlobalData;
+using HackPDM.Infrastructure.RPC;
+using RestSharp.Serializers;
+using System.Text.Json;
 
 namespace HackPDM.Infrastructure.Odoo;
 
 public static class OdooClient
 {
     public static readonly string XmlrpcEndpoint = "/xmlrpc";
+    public const string JsonRPCEndpoint = "/jsonrpc";
     public static readonly string AuthenticationEndpoint = "/common";
+
     public static readonly string ObjectEndpoint = "/object";
 
 
@@ -98,91 +104,131 @@ public static class OdooClient
         catch {}
 		return false;
     }
-    public static int? Login(int? timeout = null)
+    public async static Task<int?> LoginJson(int? timeout = null)
     {
-		if (string.IsNullOrEmpty(OdooDefaults.Instance.OdooDb)
-			|| string.IsNullOrEmpty(OdooDefaults.Instance.OdooUser)
-			|| string.IsNullOrEmpty(OdooDefaults.Instance.OdooPass)) return 0;
-		
+		if( string.IsNullOrEmpty( OdooDefaults.Instance?.OdooDb )
+			|| string.IsNullOrEmpty( OdooDefaults.Instance.OdooUser )
+			|| string.IsNullOrEmpty( OdooDefaults.Instance.OdooPass ) )
+			return 0;
+
 		_latestException = "";
-        int userTimeout = timeout == null ? _commonTimeout : (int)timeout;
-
-        XmlRpcRequest client = new()
+		int userTimeout = timeout == null ? _commonTimeout : (int)timeout;
+        
+        JsonRpcRequest request = new()
         {
-            MethodName = "login",
+            Params = new()
+            {
+                Service = "common",
+                Method = "login",
+                Args = 
+                [
+                    OdooDefaults.Instance.OdooDb,
+					OdooDefaults.Instance.OdooUser,
+					OdooDefaults.Instance.OdooPass,
+				],
+            }
         };
-        client.Params.Clear();
-        client.Params.Add(OdooDefaults.Instance.OdooDb);
-        client.Params.Add(OdooDefaults.Instance.OdooUser);
-        client.Params.Add(OdooDefaults.Instance.OdooPass);
-        int ui;
-        try
-        {
-            XmlRpcResponse response = client.Send(OdooDefaults.Instance.OdooUrl + XmlrpcEndpoint + AuthenticationEndpoint, timeout: userTimeout);
-            if (response is null)
-            {
-                _latestException = "web request exception";
-                return 0;
-            }
-            else if (response?.IsFault == true)
-            {
-                _latestException = response.Value.ToString();
-                return 0;
-            }
-            else if (response?.Value is bool)
-            {
-                _latestException = "login username or password failed";
-                return 0;
-            }
-            ui = (int)response.Value;
-        }
-        catch (Exception exc)
-        {
-            _latestException = exc.Message;
-            return 0;
-        }
 
-        OdooDefaults.Instance.OdooId = ui;
-        return OdooDefaults.Instance.OdooId;
-    }
+		int ui = 0;
+		try
+		{
+			var response = await request.SendJsonAsync(OdooDefaults.Instance.OdooUrl + JsonRPCEndpoint, timeout: userTimeout);
+            
+			if( response is null )
+			{
+				_latestException = "web request exception";
+				return 0;
+			}
+			else if( response?.Error is not null )
+			{
+				_latestException = response?.Error?.Message ?? "unknown exception";
+				return 0;
+			}
+            switch( response?.Result?.ValueKind )
+            {
+                case JsonValueKind.Number:
+                    ui = response?.Result?.GetInt32() ?? 0;
+                    break;
+                case JsonValueKind.String:
+					ui = int.Parse(response?.Result?.GetString() ?? "0");
+					break;
+                case JsonValueKind.True:
+				case JsonValueKind.False:
+                case JsonValueKind.Array:
+                case JsonValueKind.Null:
+				case JsonValueKind.Undefined:
+                default:
+					_latestException = "login username or password failed";
+                    return 0;
+			}			
+		}
+		catch( Exception exc )
+		{
+			_latestException = exc.Message;
+			return 0;
+		}
 
+		OdooDefaults.Instance.OdooId = ui;
+		return OdooDefaults.Instance.OdooId;
+	}
+    // switch( response?.Result?.ValueKind )
+   //         {
+   //             case JsonValueKind.Number:
+   //                 break;
+   //             case JsonValueKind.Array:
+   //                 break;
+   //             case JsonValueKind.String:
+   //                 break;
+   //             case JsonValueKind.True:
+   //                 break;
+			//	case JsonValueKind.False:
+			//		break;
+   //             case JsonValueKind.Null:
+			//	case JsonValueKind.Undefined:
+   //             default:
+			//		break;
+			//}
     //  [("res_model", "=", "hp.version"), ("res_id", "=", 1)]
     public static object? Execute(string model, string method, ArrayList parameters, int? timeout = null)
     {
         _latestException = "";
         int userTimeout = timeout == null ? _objectTimeout : (int)timeout;
 
-        XmlRpcRequest objectClient = new()
-        {
-            MethodName = "execute"
-        };
-        objectClient.Params.Clear();
-        objectClient.Params.Add(OdooDefaults.Instance.OdooDb);
-        objectClient.Params.Add(OdooDefaults.Instance.OdooId);
-        objectClient.Params.Add(OdooDefaults.Instance.OdooPass);
-        objectClient.Params.Add(model);
-        objectClient.Params.Add(method);
-
-        foreach (object obj in parameters)
-            objectClient.Params.Add(obj);
-
-        object resVal;
+		JsonRpcRequest request = new()
+		{
+			Params = new()
+			{
+				Service = "object",
+				Method = "execute",
+				Args =
+				[
+					OdooDefaults.Instance.OdooDb,
+					OdooDefaults.Instance.OdooId,
+					OdooDefaults.Instance.OdooPass,
+                    model,
+                    method,
+                    .. parameters
+				],
+			}
+		};
+		
+        object? resVal;
         try
         {
-            XmlRpcResponse? objectResponse = objectClient.Send(OdooDefaults.Instance.OdooUrl + XmlrpcEndpoint + ObjectEndpoint, userTimeout);
-            if (objectResponse is null)
+            //XmlRpcResponse? objectResponse = request.Send(OdooDefaults.Instance.OdooUrl + XmlrpcEndpoint + ObjectEndpoint, userTimeout);
+			var response = request.SendJsonAsync(OdooDefaults.Instance.OdooUrl + JsonRPCEndpoint, timeout: userTimeout).Result;
+			if ( response is null)
             {
                 throw new Exception("web exception");
             }
-            else if (objectResponse?.IsFault == true)
+            else if ( response?.Error is not null)
             {
                 // possible for faultCode to have a null value
-                string faultCode = (string)((Hashtable)objectResponse.Value)["faultCode"];
-                throw new Exception(faultCode);
+                throw new Exception( response.Error.Message );
                 //latestException = objectResponse.Value.ToString();
                 //return null;
             }
-            resVal = objectResponse?.Value ?? "no response";
+            resVal = response?.Result;
         }
         catch (Exception exc)
         {
@@ -257,8 +303,6 @@ public static class OdooClient
         _latestException = "";
         int userTimeout = timeout == null ? _objectTimeout : (int)timeout;
 
-        int[] test = [1, 2, 3, .. Enumerable.Range(0, 1)];
-
 		XmlRpcRequest objectClient = new()
         {
             MethodName = "execute",
@@ -275,7 +319,7 @@ public static class OdooClient
         object resVal;
         try
         {
-            XmlRpcResponse objectResponseAsync = await objectClient.SendAsync(OdooDefaults.Instance.OdooUrl + XmlrpcEndpoint + ObjectEndpoint, userTimeout);
+            XmlRpcResponse objectResponseAsync = await objectClient.SendXMLAsync(OdooDefaults.Instance.OdooUrl + XmlrpcEndpoint + ObjectEndpoint, userTimeout);
 
             if (objectResponseAsync.IsFault)
             {
@@ -294,10 +338,59 @@ public static class OdooClient
 
         return resVal;
     }
+	public static async Task<object?> ExecuteJsonAsync( string model, string method, ArrayList parameters, int? timeout = null )
+	{
+		_latestException = "";
+		int userTimeout = timeout == null ? _objectTimeout : (int)timeout;
 
-    public static async Task<T> CommandAsync<T>(string model, string method, ArrayList execParams, int? timeout = null) where T : new()
+		JsonRpcRequest request = new()
+		{
+			Params = new()
+			{
+				Service = "object",
+				Method = "execute",
+				Args =
+				[
+					OdooDefaults.Instance.OdooDb,
+					OdooDefaults.Instance.OdooId,
+					OdooDefaults.Instance.OdooPass,
+					model,
+					method,
+					.. parameters
+				],
+			}
+		};
+
+		object? resVal;
+		try
+		{
+			//XmlRpcResponse? objectResponse = request.Send(OdooDefaults.Instance.OdooUrl + XmlrpcEndpoint + ObjectEndpoint, userTimeout);
+			var response = await request.SendJsonAsync(OdooDefaults.Instance.OdooUrl + JsonRPCEndpoint, timeout: userTimeout);
+			if( response is null )
+			{
+				throw new Exception( "web exception" );
+			}
+			else if( response?.Error is not null )
+			{
+				// possible for faultCode to have a null value
+				throw new Exception( response.Error.Message );
+				//latestException = objectResponse.Value.ToString();
+				//return null;
+			}
+			resVal = response?.Result;
+		}
+		catch( Exception exc )
+		{
+			_latestException = exc.Message;
+			return null;
+		}
+
+		return resVal;
+	}
+
+	public static async Task<T> CommandAsync<T>(string model, string method, ArrayList execParams, int? timeout = null) where T : new()
     {
-        object response = await ExecuteAsync(model, method, execParams, timeout);
+        object? response = await ExecuteJsonAsync(model, method, execParams, timeout);
 
         if (typeof(T).IsValueType)
         {
@@ -362,8 +455,8 @@ public static class OdooClient<T> where T : HpBaseModelTransport<T>, new()
         => OdooClient.Execute(_model, method, parameters, timeout);
 
     // generic execute command that'll return the response or the default/empty type
-    public static TReturn Command<TReturn>(string method, ArrayList execParams, int? timeout = null) where TReturn : new()
-        => Command<TReturn>(method, execParams, timeout, false);
+    //public static TReturn Command<TReturn>(string method, ArrayList execParams, int? timeout = null) where TReturn : new()
+    //    => Command<TReturn>(method, execParams, timeout, false);
     private static TReturn Command<TReturn>(string method, ArrayList execParams, int? timeout = null, bool isPrivate = true) where TReturn : new()
     {
         object response = Execute(method, execParams, timeout);
@@ -413,52 +506,15 @@ public static class OdooClient<T> where T : HpBaseModelTransport<T>, new()
 
 
     // asynchronous commands
-    public static async Task<object> ExecuteAsync(string method, ArrayList parameters, int? timeout = null)
+
+    public static async Task<object> ExecuteAsync( string method, ArrayList parameters, int? timeout = null )
+        => OdooClient.ExecuteAsync( _model, method, parameters, timeout );
+	public static async Task<object> ExecuteJsonAsync( string method, ArrayList parameters, int? timeout = null )
+		=> OdooClient.ExecuteJsonAsync( _model, method, parameters, timeout );
+
+	public static async Task<TReturn> CommandAsync<TReturn>(string method, ArrayList execParams, int? timeout = null) where TReturn : new()
     {
-        OdooClient.LatestException = "";
-        int userTimeout = timeout == null ? OdooClient.ObjectTimeout : (int)timeout;
-
-        XmlRpcRequest objectClient = new()
-        {
-            MethodName = "execute"
-        };
-        objectClient.Params.Clear();
-        objectClient.Params.Add(OdooDefaults.Instance.OdooDb);
-        objectClient.Params.Add(OdooDefaults.Instance.OdooId);
-        objectClient.Params.Add(OdooDefaults.Instance.OdooPass);
-        objectClient.Params.Add(_model);
-        objectClient.Params.Add(method);
-
-        foreach (object obj in parameters)
-            objectClient.Params.Add(obj);
-
-        object resVal;
-        try
-        {
-            XmlRpcResponse objectResponseAsync = await objectClient.SendAsync(OdooDefaults.Instance.OdooUrl + OdooClient.XmlrpcEndpoint + OdooClient.ObjectEndpoint, userTimeout);
-
-            if (objectResponseAsync.IsFault)
-            {
-                // possible for faultCode to have a null value
-                string faultCode = (string)((Hashtable)objectResponseAsync.Value)["faultCode"];
-                throw new Exception(faultCode);
-                //latestException = objectResponse.Value.ToString();
-                //return null;
-            }
-            resVal = objectResponseAsync.Value;
-        }
-        catch (Exception exc)
-        {
-            OdooClient.LatestException = exc.Message;
-            return null;
-        }
-
-        return resVal;
-    }
-
-    public static async Task<TReturn> CommandAsync<TReturn>(string method, ArrayList execParams, int? timeout = null) where TReturn : new()
-    {
-        object response = await ExecuteAsync(method, execParams, timeout);
+        object response = await ExecuteJsonAsync(method, execParams, timeout);
 
         if (typeof(TReturn).IsValueType)
         {
@@ -505,5 +561,6 @@ public static class OdooClient<T> where T : HpBaseModelTransport<T>, new()
         => await CommandAsync<Hashtable>("default_get", execParams, timeout); //
     public static async Task<ArrayList> DuplicateAsync(ArrayList execParams, int? timeout = null)
         => await CommandAsync<ArrayList>("copy_data", execParams, timeout); //
+    
 
 }

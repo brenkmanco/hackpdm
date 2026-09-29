@@ -132,19 +132,7 @@ public class OdooDefaults : IOdooDefaults
     }
     public int OdooId
     {
-        get
-        {
-            try
-            {
-                if (field is not 0) return field;
-                field = OClient.Login(7000) ?? 0;
-                return field;
-            }
-            catch 
-            {
-            }
-            return 0;
-        }
+        get;
         set
         {
             if (value != field) field = value;
@@ -152,34 +140,27 @@ public class OdooDefaults : IOdooDefaults
     } = 0;
     public string[] EntryFilterPatterns
     {
-        get => [.. HpEntryNameFilters?.SkipNullSelect(eFilter => eFilter.name_regex) ?? []];
+        get;
+        set;
     }
     // lock asynchronous operations
     private readonly object MLockObject = new();
 	
     public IHpNodeModel? MyNode
     {
-        get => field ??= HpNodes?.FirstOrDefault(node => node.name.Equals(Environment.MachineName.ToLower()))
-	            ?? TryAssignNewHpNode().Result 
-                ?? throw new ArgumentNullException(nameof(HpNode), @"Unable to register new node");
+        get;
+        set;
     }
 
     public IHpDirectoryModel? HpDirectoryRoot
     {
-        get => field ??= HpDirectory.GetRecordById(1);
-        set => field = value;
+        get;
+        set;
     }
    
     public int DownloadBatchSize
     {
-        get
-        {
-            if (field == 0)
-            {
-                field = MaxBatchSize ?? 5;
-            }
-            return field;
-        }
+        get;
         set
         {
             if (field == 0)
@@ -191,14 +172,7 @@ public class OdooDefaults : IOdooDefaults
     }
     public int ConcurrencySize
     {
-        get
-        {
-            if (field == 0)
-            {
-                field = MaxConcurrency ?? 2;
-            }
-            return field;
-        }
+        get;
         internal set
         {
             if (field == 0)
@@ -210,123 +184,190 @@ public class OdooDefaults : IOdooDefaults
     }
     public int? MaxConcurrency
     {
-        get
-        {
-            field ??= HpSettings?.First(setting => setting.name == "max_concurrency").int_value;
-            return field;
-        }
+        get;
+        set;
     }
     public int? MaxBatchSize
     {
-        get
-        {
-            field ??= HpSettings?.First(setting => setting.name == "max_batch_size").int_value;
-            return field;
-        }
+        get;
+        set;
     }
     // low enough number of records to get before
     public IHpSettingModel []? HpSettings
     {
-        get => field ??= HpSetting.GetAllRecords();
-        set => field = value;
+        get;
+        set;
     }
     public string? SwApi
     {
-        get => !string.IsNullOrEmpty(field) ? field : HpSettings?.First(sett => sett.name == OdooDefaultsConstants.SW_KEY_NAME).char_value;
-        set => field = value;
+        get;
+        set;
     }
     public bool? RestrictProperties
 	{
-		get => field ??= HpSettings?.First(sett => sett.name == OdooDefaultsConstants.RESTRICT_PROP_NAME).bool_value ?? true;
-		set => field = value;
+        get;
+        set;
 	} 
     public bool? RestrictTypes
 	{
-		get => field ??= HpSettings?.First(sett => sett.name == OdooDefaultsConstants.RESTRICT_TYPES_NAME).bool_value ?? true;
-		set => field = value;
+        get;
+        set;
 	}
     public IHpEntryNameFilterModel[]? HpEntryNameFilters
     {
-        get => field ??= HpEntryNameFilter.GetAllRecords();
-        set => field = value;
+        get;
+        set;
     }
     public IHpCategoryModel[]? HpCategories
     {
-        get => field ??= HpCategory.GetAllRecords();
-        set => field = value;
+        get;
+        set;
     }
     public IHpTypeModel[]? HpTypes
     {
-        get => field ??= HpType.GetAllRecords();
-        set => field = value;
+        get;
+        set;
     }
     public IHpPropertyModel[]? HpProperties
     {
-        get => field ??= HpProperty.GetAllRecords();
-        set => field = value;
+        get;
+        set;
     }
     public IHpNodeModel[]? HpNodes
     {
-        get => field ??= HpNode.GetAllRecords();
-        set => field = value;
+        get;
+        set;
     }
     public IHpUserModel[]? HpUsers
     {
-        get => field ??= HpUser.GetAllRecords();
-        set => field = value;
-    }
+        get;
+		set;
+	}
 
     // dictionary mapping some field type to the HpModel
     // like extension to Type or Category
     public Dictionary<string, IHpTypeModel> ExtToType 
-    { 
-        get => field ??= HpTypes is IEnumerable<IHpTypeModel> arr && arr.Any() 
-            ? ExtensionMapType( HpTypes )
-            : [];
-        set => field = value;
+    {
+        get;
+        set;
     }
     public Dictionary<string, IHpCategoryModel> ExtToCat
     {
-        get => field ??= 
-            HpCategories is HpCategory[] arr && arr.Length != 0
-				&& HpTypes is HpType[] arrTypes && arrTypes.Length != 0
-				? ExtensionMapCategory( arr, arrTypes )
-                : [];
-        set =>field = value;
+        get;
+        set;
     }
     public Dictionary<string, IHpPropertyModel> ExtToProp
     {
-        get => field ??= HpProperties is IEnumerable<IHpPropertyModel> arr && arr.Any() 
-            ? new(arr.Select(prop => new KeyValuePair<string, IHpPropertyModel>(prop?.name ?? "", prop)))
-            : [];
-        set => field = value;
+        get;
+        set;
     }
     public Dictionary<string, IHpEntryNameFilterModel> ExtToFilter
     {
-        get => field ??= HpEntryNameFilters is IEnumerable<IHpEntryNameFilterModel> arr && arr.Any() 
-            ? ExtensionMapFilter( HpEntryNameFilters )
-            : [];
-        set => field = value;
+        get;
+        set;
     }
     public Dictionary<int, IHpPropertyModel> IdToProp
     {
-        get => field ??= HpProperties is IEnumerable<IHpPropertyModel> arr && arr.Any()
-            ? IdMapProperty(HpProperties)
-            : [];
-        set => field = value;
+        get;
+        set;
     }
     public Dictionary<int, IHpUserModel> IdToUser
     {
-        get => field ??= HpUsers is IEnumerable<IHpUserModel> arr && arr.Any()
-            ? IdMapUser(HpUsers)
-            : [];
-        set => field = value;
+        get;
+        set;
     }
     #endregion
     
     #region Functions
+    public async Task InitializeAsync()
+    {
+        // OdooId
+        await TryAsync( async () => OdooId = OdooId is 0 ? (await OdooClient.LoginJson( 7000 ) ?? 0) : OdooId );
+        // HpNodes && MyNode
+        await TryAsync( async () => HpNodes                 = await HpNode.GetAllRecordsAsync() )
+            .ContinueWith( async ( success ) => MyNode      = await success ? HpNodes?.FirstOrDefault( node => node.name.Equals( Environment.MachineName.ToLower() ) )
+				?? TryAssignNewHpNode().Result
+				?? throw new ArgumentNullException( nameof( HpNode ), @"Unable to register new node" ) : null);
+		// HpDirectoryRoot
+		await TryAsync( async () => HpDirectoryRoot         = await HpDirectory.GetRecordByIdAsync( 1 ) );
+		// HpUsers && IdToUser
+		await TryAsync( async () => HpUsers                 = await HpUser.GetAllRecordsAsync() )
+            .ContinueWith( async ( success ) => IdToUser    = await success ? IdMapUser( HpUsers ) : [] );
+        // HpProperties && ExtToProp && IdToProp
+        await TryAsync( async () => HpProperties = await HpProperty.GetAllRecordsAsync() )
+             .ContinueWith( async ( success ) =>
+             {
+                 ExtToProp = await success 
+					 ?     HpProperties is IEnumerable<IHpPropertyModel> arr && arr.Any()
+						 ?     new( arr.Select( prop => new KeyValuePair<string, IHpPropertyModel>( prop?.name ?? "", prop ) ) )
+						 :     []  
+					 :     [];
+				 IdToProp = HpProperties is IEnumerable<IHpPropertyModel> arr2 && arr2.Any()
+			        ? IdMapProperty( HpProperties )
+			        : [];
+			 } );
+		// HpTypes && ExtToType
+		await TryAsync( async () => HpTypes                 = await HpType.GetAllRecordsAsync() )
+            .ContinueWith( async ( success ) => ExtToType   = await success ? ExtensionMapType( HpTypes ) : [] );
+        // HpCategories
+		await TryAsync( async () => HpCategories            = await HpCategory.GetAllRecordsAsync() );
+		// HpEntryNameFilters && EntryFilterPatterns && ExtToFilter
+		await TryAsync( async () => HpEntryNameFilters      = await HpEntryNameFilter.GetAllRecordsAsync() )
+			.ContinueWith( async ( success ) =>
+            {
+                if( !await success )
+                    return;
 
-    public async Task<HpNode?> TryAssignNewHpNode()
+				EntryFilterPatterns = await success ? [ .. HpEntryNameFilters?.SkipNullSelect( eFilter => eFilter.name_regex! ) ?? []] : [];
+				ExtToFilter         = HpEntryNameFilters is IEnumerable<IHpEntryNameFilterModel> arr && arr.Any()
+			        ? ExtensionMapFilter( HpEntryNameFilters )
+			        : [];
+			} );
+		// HpSettings && RestrictTypes && RestrictProperties && SwApi &&
+        // MaxBatchSize && MaxConcurrency && ConcurrencySize && DownloadBatchSize
+		await TryAsync( async () => HpSettings              = await HpSetting.GetAllRecordsAsync() )
+			.ContinueWith( async ( success ) =>
+            {
+                if( !await success )
+                    return;
+                
+				RestrictTypes       = ( HpSettings?.First( sett => sett.name == OdooDefaultsConstants.RESTRICT_TYPES_NAME ).bool_value ?? true );
+				RestrictProperties  = ( HpSettings?.First( sett => sett.name == OdooDefaultsConstants.RESTRICT_PROP_NAME ).bool_value ?? true );
+				SwApi               = ( HpSettings?.First( sett => sett.name == OdooDefaultsConstants.SW_KEY_NAME ).char_value ?? "" );
+				MaxBatchSize        = ( HpSettings?.First( sett => sett.name == "max_batch_size" ).int_value ?? 0 );
+				MaxConcurrency      = ( HpSettings?.First( sett => sett.name == "max_concurrency" ).int_value ?? 0 );
+				ConcurrencySize     = ( Math.Min( MaxConcurrency ?? 2, ConcurrencySize ) );
+				DownloadBatchSize   = ( Math.Min( MaxBatchSize ?? 5, DownloadBatchSize ) );
+                
+			} );
+        // ExtToCat
+        Try( () =>
+        {
+            ExtToCat = HpCategories is HpCategory[] arr && arr.Length != 0
+                && HpTypes is HpType[] arrTypes && arrTypes.Length != 0
+                ? ExtensionMapCategory( arr, arrTypes )
+                : [];
+        } );
+	}
+    public static bool Try( Action act )
+    {
+        try
+        {
+            act();
+            return true;
+        }
+        catch { return false; }
+    }
+	public static async Task<bool> TryAsync( Func<Task> act )
+	{
+		try
+		{
+			await act();
+			return true;
+		}
+		catch { return false; }
+	}
+	public async Task<HpNode?> TryAssignNewHpNode()
 	{
 		HpNode? node = null;
 		HpNode createdNode = new() { name = Environment.MachineName.ToLower(), };

@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -17,6 +18,7 @@ using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo.Models;
+using HackPDM.Infrastructure.RPC;
 using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Infrastructure.XmlRpc;
 using HackPDM.Shared.GlobalData;
@@ -35,8 +37,35 @@ public static class ExtensionOdoo
     
     public static ArrayList GetIDs(this IEnumerable<HpBaseModel> models)
         => models.Select(model => model.id).ToArrayList();
-    
-    public async static Task<XmlRpcResponse> SendAsync(this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null)
+
+
+	public async static Task<JsonRpcResponse?> SendJsonAsync( this JsonRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null )
+	{
+		var handler = new HttpClientHandler();
+		if( proxy is not null )
+		{
+			handler.Proxy = proxy;
+			handler.UseProxy = true;
+		}
+
+		using var httpClient = new HttpClient(handler);
+
+		if( timeout > 0 )
+		{
+			httpClient.Timeout = TimeSpan.FromMilliseconds( timeout );
+		}
+
+		// PostAsJsonAsync handles body serialization, sets Content-Type to application/json, 
+		// and defaults to UTF-8 encoding automatically under the hood.
+		using var response = await httpClient.PostAsJsonAsync(url, request);
+		response.EnsureSuccessStatusCode();
+
+		// ReadFromJsonAsync automatically streams and deserializes the JSON response body
+		JsonRpcResponse? result = await response.Content.ReadFromJsonAsync<JsonRpcResponse>();
+		return result;
+	}
+
+	public async static Task<XmlRpcResponse> SendXMLAsync(this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null)
     {
 	    //HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
 	    var handler = new HttpClientHandler();

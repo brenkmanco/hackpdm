@@ -655,7 +655,7 @@ public static class HashConverter
         };
     }
     
-    public static ArrayList FilesNotInOdoo(string[] filePaths)
+    public static async Task<ArrayList> FilesNotInOdoo(string[] filePaths)
     {
         // key: checksum, value: filepath
         Dictionary<string, string> checkFiles = new(filePaths.Length);
@@ -666,7 +666,7 @@ public static class HashConverter
 
         ArrayList domain = ["checksum", "in", checkFiles.Keys.ToArray()];
         ArrayList fields = ["checksum"];
-        ArrayList result = OClient.Browse(HpVersion.GetHpModel(), [domain, fields], 10000);
+        ArrayList? result = await OClient.BrowseAsync(HpVersion.GetHpModel(), [domain, fields], 10000);
 
         // Hashtable of all results
         // might have array or value
