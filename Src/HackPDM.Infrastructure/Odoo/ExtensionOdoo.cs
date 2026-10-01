@@ -8,6 +8,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
@@ -38,7 +39,7 @@ public static class ExtensionOdoo
     public static ArrayList GetIDs(this IEnumerable<HpBaseModel> models)
         => models.Select(model => model.id).ToArrayList();
 
-
+	
 	public async static Task<JsonRpcResponse?> SendJsonAsync( this JsonRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null )
 	{
 		var handler = new HttpClientHandler();
@@ -64,7 +65,6 @@ public static class ExtensionOdoo
 		JsonRpcResponse? result = await response.Content.ReadFromJsonAsync<JsonRpcResponse>();
 		return result;
 	}
-
 	public async static Task<XmlRpcResponse> SendXMLAsync(this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null)
     {
 	    //HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
@@ -107,7 +107,8 @@ public static class ExtensionOdoo
 	    XmlRpcResponse result = Deserializer.DeserializeResponse(reader);
 	    return result;
     }
-    public static bool DownloadAll(this HpVersion[] versions, out List<HpVersion> failedDownloads)
+    
+	public static bool DownloadAll(this HpVersion[] versions, out List<HpVersion> failedDownloads)
     {
         failedDownloads = [];
         bool isSuccess = true;
@@ -392,7 +393,51 @@ public static class OdooFieldExtension
 }
 public static class OdooFieldHelpers
 {
+	public static object? ToNativeObject( this JsonElement element )
+	{
+		switch( element.ValueKind )
+		{
+			case JsonValueKind.Object:
+				var dict = new Hashtable();
+				foreach( JsonProperty property in element.EnumerateObject() )
+				{
+					dict[ property.Name ] = ToNativeObject( property.Value );
+				}
+				return dict;
 
+			case JsonValueKind.Array:
+				var list = new ArrayList();
+				foreach( JsonElement item in element.EnumerateArray() )
+				{
+					list.Add( ToNativeObject( item ) );
+				}
+				return list;
+
+			case JsonValueKind.String:
+				// If it's a DateTime format you expect, you can handle it here, otherwise:
+				return element.GetString();
+
+			case JsonValueKind.Number:
+				if( element.TryGetInt32( out int iVal ) )
+					return iVal;
+				if( element.TryGetInt64( out long lVal ) )
+					return lVal;
+				return element.GetDouble();
+
+			case JsonValueKind.True:
+				return true;
+
+			case JsonValueKind.False:
+				return false;
+
+			case JsonValueKind.Null:
+			case JsonValueKind.Undefined:
+				return null;
+
+			default:
+				return element.GetRawText();
+		}
+	}
 	public static bool TryCast<T>(object? value, out T? result)
 	{
 		if (value is T t)

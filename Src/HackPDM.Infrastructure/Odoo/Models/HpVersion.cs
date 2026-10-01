@@ -243,53 +243,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         }
         return hackFiles;
     }
-    public static string[] GetDirectoryPath(ArrayList ids)
-    {
-        const string directory = "dir_id";
-        const string name = "name";
-    
-        ArrayList list = OClient.Read(GetHpModel(), ids, [directory, name]);
-    
-        List<string> pathways = [];
-        pathways.Capacity = ids.Count;
-                
-        foreach (Hashtable ht in list)
-        {
-            // Documents\\dev\\hackpdm\\HackPDM_CSharp\\pwa\\
-            string nam = (string)ht[name];
-            string dir = (string)((ArrayList)ht[directory])[1];
-    
-            pathways.Add(FileOperations.ConvertToWindowsPath($"{dir} / {nam}", false));
-        }
-        return [.. pathways];
-    }
-    internal static HpVersion MostRecent(HpVersion[] versions)
-    {
-        HpVersion version = Default();
-        if (versions.Count() < 1) return version;
-    
-        DateTime? mostRecent = DateTime.MinValue;
-        foreach ( HpVersion v in versions)
-        {
-            if (mostRecent < v?.file_modify_stamp)
-            {
-                mostRecent = v?.file_modify_stamp;
-                version = v;
-            }
-        }
-        return version;
-    }
-    public static async Task<HpVersionProperty[]?> GetProperties(HpVersion version)
-    {
-        const string versionPropField = "version_property_ids";
-        if (version.IsRecord || version.id != 0)
-        {
-            ArrayList list = await OClient.ReadAsync(GetHpModel(), [version.id], [versionPropField]);
-            ArrayList? values = (list[0] as Hashtable)?[versionPropField] as ArrayList;
-            return await HpBaseModelTransport<HpVersionProperty>.GetRecordsByIdsAsync(values);
-        }
-        return null;
-    }
+   
     public static async Task<List<HpVersionProperty[]>> GetAllVersionPropertiesAsync(ArrayList ids)
     {
     	const string versionPropField = "version_property_ids";
@@ -302,26 +256,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
     	}
     	return versionProperties;
     }
-    public static List<HpVersionProperty[]> GetAllVersionProperties(ArrayList ids) 
-    	=> GetAllVersionPropertiesAsync(ids).GetAwaiter().GetResult();
-    public static bool HasChecksum(string checksum, params HpVersion[] versions)
-    {
-        foreach (HpVersion version in versions)
-        {
-            if (version.checksum == checksum) return true;
-        }
-        return false;
-    }
-    //public static int []? GetChildren( int id ) => GetRelatedIdsById( [ id ], "child_ids" );
-    public static async Task<HpVersion []?> GetChildren ( int id )
-    {
-        HpVersionRelationship[]? versionRelationships = await GetRelatedRecordByIdsAsync<HpVersionRelationship>( [id], "child_ids", includedFields: ["child_id"] );
-        if (versionRelationships is not {Length: > 0 } ) return null;
-    
-        ArrayList ids = versionRelationships.Select(vRel => vRel.child_id).ToArrayList();
-        HpVersion[]? versions = await GetRecordsByIdsAsync(ids, includedFields: ["entry_id"]);
-        return versions;
-    }
+
     internal static HpVersion? PrepareCreation(HackFile hackFile, IHpEntryModel entry, int commit_id, HashedValueStoring hashStoreType = HashedValueStoring.None)
     {
         if (OdooDefaults.Instance.RestrictTypes is true & !OdooDefaults.Instance.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
@@ -399,24 +334,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 
 		return versionStage?.id is not null and not 0 ? versionStage : null;
 	}
-	internal static async Task<HpVersion[]?> CreateAllNew( params (HackFile hackFile, IHpEntryModel entry, int commit_id, HashedValueStoring hashStoreType)[] data)
-    {
-        ArrayList versions = data.Select(d => PrepareCreation(d.hackFile, d.entry, d.commit_id, d.hashStoreType)).ToArrayList();
-        ArrayList ids = await MultiCreateAsync(versions, false);
-    
-        return await GetRecordsByIdsAsync(ids, excludedFields: UsualExcludedFields);
-    }
-    public static async Task<HpVersion[]> GetFromPaths(params string[] fullPaths)
-    {
-        var paths = Help.FastSlice(fullPaths, HackDefaults.Instance.PwaPathAbsolute.Length+1, "root\\").ToArrayList();
-    
-        ArrayList searchParams =
-		[
-			new ArrayList { "windows_complete_name", "in", paths }
-        ];
-                
-        return await HpEntry.GetRelatedRecordsBySearchAsync<HpVersion>(searchParams, nameof(HpEntry.latest_version_id), excludedFields: ["preview_image", "file_contents"]);
-    }
+	
     public static async Task<HpVersion[]> GetFromPaths(string[] excludedFields = null, string[] includedFields = null, params string[] fullPaths)
     {
         var paths = Help.FastSlice(fullPaths, HackDefaults.Instance.PwaPathAbsolute.Length + 1, "root\\").ToArrayList();
@@ -428,14 +346,6 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
     
         return await HpEntry.GetRelatedRecordsBySearchAsync<HpVersion>(searchParams, nameof(HpEntry.latest_version_id), includedFields: includedFields, excludedFields: excludedFields);
     }
-	public bool ExistsLocally
-	{
-		get
-		{
-			FileInfo fileInfo = new(Path.Combine(WinPathway, name));
-			return fileInfo.Exists;
-		}
-	}
 
 	public override string ToString()
     {

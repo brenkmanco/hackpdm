@@ -108,13 +108,10 @@ public class SimpleHttpRequest
 
 	private void GetRequestMethod()
 	{
-		string text = Input.ReadLine();
-		if ( text == null )
-		{
-			throw new ApplicationException( "Void request." );
-		}
+		string text =  Input.ReadLine()  
+			?? throw new ApplicationException( "Void request." );
 
-		if ( string.Compare( "GET ", text.Substring( 0, 4 ), StringComparison.Ordinal ) == 0 )
+		if( string.Compare( "GET ", text.Substring( 0, 4 ), StringComparison.Ordinal ) == 0 )
 		{
 			HttpMethod = "GET";
 		}

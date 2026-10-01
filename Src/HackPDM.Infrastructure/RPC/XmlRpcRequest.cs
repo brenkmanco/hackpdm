@@ -81,14 +81,11 @@ public class XmlRpcRequest
 		//{
 		//	Proxy = proxy,
 		//	UseProxy = proxy != null,
-			
+
 		//};
 		//using var request = new HttpRequestMessage(HttpMethod.Post, url);
-		HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
-		if ( httpWebRequest == null )
-		{
-			throw new XmlRpcException( -32300, "Transport Layer Error: Could not create request with " + url );
-		}
+		HttpWebRequest httpWebRequest =  (HttpWebRequest)WebRequest.Create(url)  
+			?? throw new XmlRpcException( -32300, "Transport Layer Error: Could not create request with " + url );
 
 		httpWebRequest.Proxy = proxy;
 		httpWebRequest.Method = "POST";

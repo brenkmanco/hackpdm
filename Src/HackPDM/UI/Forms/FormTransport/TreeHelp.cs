@@ -132,7 +132,7 @@ namespace HackPDM.UI.Forms.FormTransport
 		internal async Task<(Hashtable? entries, Dictionary<string, Task<HackFile>>? hackmap)> GetHackAndEntry(int? directoryId)
 		{
 			if (directoryId is null) return (null, null);
-			Hashtable entries = await Task.Run(() => HpDirectory.GetEntries(directoryId, _HFM.IsActive));
+			Hashtable? entries = await HpDirectory.GetEntriesAsync(directoryId, _HFM.IsActive);
 			Dictionary<string, Task<HackFile>> hackFileMap = await GridHelp.GetFileMap(entries);
 			return (entries, hackFileMap);
 		}
@@ -196,7 +196,7 @@ namespace HackPDM.UI.Forms.FormTransport
 		}
 		internal static async Task CreateTreeHash(TreeView tree, HpDirectory directoryModel)
 		{
-			await AddDirectoriesToTree(tree, directoryModel.GetSubdirectories(false));
+			await AddDirectoriesToTree(tree, await directoryModel.GetSubdirectoriesAsync(false));
 		}
 		internal static async Task CreateLocalTree(TreeView treeView)
 		{
@@ -351,8 +351,6 @@ namespace HackPDM.UI.Forms.FormTransport
 				}
 			}
 		}
-		public static void RefreshTree(TreeView tree)
-			=> SafeHelper.SafeInvoker(tree.UpdateLayout);
 		public async Task RestartTree(TreeView tree)
 			=> await CreateTreeViewBackground(tree);
 		public void RestartEntries(TreeView tree, DataGrid grid)

@@ -55,7 +55,6 @@ using Directory = System.IO.Directory;
 using EntryRow = HackPDM.UI.Types.EntryRow;
 using Image = Microsoft.UI.Xaml.Controls.Image;
 using ListViewItem = Microsoft.UI.Xaml.Controls.ListViewItem;
-using NotifyIcon = HackPDM.UI.Types.NotifyIcon;
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 using Path = System.IO.Path;
 using TreeData = HackPDM.UI.Types.TreeData;
@@ -236,7 +235,6 @@ public sealed partial class HackFileManager : Page
 {
 	#region Declarations
 	public ObservableCollection<TreeData>? LastSelectedNodePaths { get; set; } = [];
-	
 	public DynamicGroupCollection<EntryRow>? GroupedEntries { get; set; } = new([
 		new("abc", [
 			new() {
@@ -291,24 +289,15 @@ public sealed partial class HackFileManager : Page
 	public ObservableCollection<TreeData> ONodes { get; internal set; } = [];
 
 	public static ConcurrentQueue<(StatusMessage action, string description)> QueueAsyncStatus = new();
-
-	public static NotifyIcon Notify { get; } = Notifier.Notify;
 	public static StatusDialog? Dialog { get; set; }
-	public static ListDetail ActiveList { get; set; }
 	public static readonly Dictionary<object, TreeViewNode> ItemToContainerMap = new();
 	private static Task? _entryListChange;
 	private static Task? _treeItemChange;
 	private static (object? sender, SelectionChangedEventArgs? e) _queuedEntryChange = (null, null);
 	private static (TreeView? sender, TreeViewSelectionChangedEventArgs? args) _queuedTreeChange = (null, null);
-
-	private static readonly BackgroundWorker _backgroundWorker = new()
-	{
-		WorkerSupportsCancellation = true
-	};
 	private static CancellationTokenSource? _cSource = new();
 	private static CancellationTokenSource? _cTreeSource = new();
 	public static CancellationTokenSource? statusToken = new();
-
 	private static ImageSource? _previewImage = null;
 
 	public static int DownloadBatchSize
@@ -337,11 +326,7 @@ public sealed partial class HackFileManager : Page
 	public bool IsTreeLoaded { get; set; } = false;
 	public bool IsListLoaded { get; set; } = false;
 
-	public HpDirectory root;
 	public static bool IsClosing = false;
-	public string SWKey;
-	internal delegate void BackgroundMethodDel(object sender, DoWorkEventArgs e);
-	internal delegate void BackgroundCompleteDel(object sender, RunWorkerCompletedEventArgs e);
 	public static DispatcherQueue HackDispatcherQueue;
 	internal TabViewItem? LowerTabIndex
 	{
@@ -349,8 +334,6 @@ public sealed partial class HackFileManager : Page
 		set => VersionTabs.SelectedItem = value;
 	}
 
-	// temp
-	//public ListView OdooEntryList = new();
 	#endregion
 	#region Initializers
 
@@ -420,7 +403,6 @@ public sealed partial class HackFileManager : Page
 			IsClosing = true;
 			_cSource?.Cancel();
 			_cTreeSource?.Cancel();
-			_backgroundWorker.CancelAsync();
 		};
 		if (IsLoaded)
 		{
@@ -612,7 +594,6 @@ public sealed partial class HackFileManager : Page
 			e.RowGroupHeader.PropertyValue = $"{myGroup.Key}";
 		}
 	}
-
 	private void OdooEntryList_LoadingRow( object? sender, DataGridRowEventArgs e )
 	{
 		var row = e.Row;
@@ -621,12 +602,12 @@ public sealed partial class HackFileManager : Page
 		{
 			case FileStatus.Lo:
 			{
-				row.Background = UIStorage.OrangeBrush;
+				row.Background = UIStorage.OrangeBrush.Value;
 				break;
 			}
 			case FileStatus.Ro:
 			{
-				row.Background = UIStorage.BlueBrush;
+				row.Background = UIStorage.BlueBrush.Value;
 				break;
 			}
 			case FileStatus.Ok: goto default;
@@ -634,24 +615,24 @@ public sealed partial class HackFileManager : Page
 			case FileStatus.Lm: goto default;
 			case FileStatus.Dt:
 			{
-				row.Background = UIStorage.RedBrush;
+				row.Background = UIStorage.RedBrush.Value;
 				break;
 			}
 			case FileStatus.Ds:
 			{
-				row.Background = UIStorage.RedBrush;
+				row.Background = UIStorage.RedBrush.Value;
 				break;
 			}
 			case FileStatus.If: goto default;
 			case FileStatus.Ft: goto default;
 			case FileStatus.Cm:
 			{
-				row.Background = UIStorage.GreenBrush;
+				row.Background = UIStorage.GreenBrush.Value;
 				break;
 			}
 			case FileStatus.Co:
 			{
-				row.Background = UIStorage.GreenBrush;
+				row.Background = UIStorage.GreenBrush.Value;
 				break;
 			}
 			default:
@@ -689,13 +670,10 @@ public sealed partial class HackFileManager : Page
 	public DataGrid GetOdooEntryList()
 			=> OdooEntryList;
 	public Image GetOdooEntryImage() => OdooEntryImage;
-	public ProgressRing GetProgressRing() => LoadRing;
 	public TextBlock GetEntriesLabel() => EntryListStatus;
 	public TextBlock GetEntriesLocalLabel() => EntryListLocalOnly;
 	public TextBlock GetEntriesRemoteLabel() => EntryListRemoteOnly;
 	public (Image, ProgressRing) GetVisualizer() => (OdooEntryImage, LoadRing);
-	internal void RestartEntries() => _treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
-	internal async Task RestartTree() => await _treeHelper.RestartTree(OdooDirectoryTree);
 #endregion
 	#region TEST_VARIABLES
 #if DEBUG
@@ -843,7 +821,6 @@ public sealed partial class HackFileManager : Page
 		if (hacks is null or { Count: 0 })
 			return;
 
-		object lockObject = new();
 		HpPDMCommit startCommit = new()
 		{ node_by = OdooDefaults.Instance?.MyNode?.id };
 		await startCommit.CreateCommitAsync();
@@ -2123,8 +2100,8 @@ public sealed partial class HackFileManager : Page
 			{
 				await Task.Delay(100);
 			}
-			EntryRow? entryItem = GroupedEntries?.Master.FirstOrDefault(entryItem => entryItem.Name == fileName);
-			if (entryItem == null) throw new ArgumentException("entry doesn't exist", nameof(fileName));
+			EntryRow? entryItem = ( GroupedEntries?.Master.FirstOrDefault(entryItem => entryItem.Name == fileName) ) 
+				?? throw new ArgumentException("entry doesn't exist", nameof(fileName));
 
 			OdooEntryList.SelectedItem = entryItem;
 			OdooEntryList.Focus(FocusState.Programmatic);
@@ -2546,25 +2523,21 @@ public sealed partial class HackFileManager : Page
 	}
 
 #endregion
-
 	private void TreeViewItem_Loaded(object sender, RoutedEventArgs e)
 	{
 		var tvi = sender as TreeViewItem;
 		var data = tvi?.DataContext as TreeData;
 	}
-
 	private void TreeViewItem_Unloaded(object sender, RoutedEventArgs e)
 	{
 		var tvi = sender as TreeViewItem;
 		var data = tvi?.DataContext;
 		ItemToContainerMap.Remove(data);
 	}
-
 	private void OdooEntryDataGrid_LoadingRowGroup(object sender, CommunityToolkit.WinUI.UI.Controls.DataGridRowGroupHeaderEventArgs e)
 	{
 
 	}
-
 	private void OdooEntryDataGrid_Sorting(object sender, CommunityToolkit.WinUI.UI.Controls.DataGridColumnEventArgs e)
 	{
 

@@ -146,67 +146,7 @@ public partial class HpEntry
 
 		return dependentPaths is not null and { Count: > 0 } ? dependentPaths : null;
 	}
-	public IEnumerable<EntryLocalPath> GetDependentPathways()
-	{
-		HackFile? hack = null;
-		string? thisPath = null;
-		HashSet<string>? dependentPaths = [];
-		if (HashedValues.TryGetValue("windows_complete_name", out string? path))
-		{
-			thisPath = FileOperations.NodePathToWindowsPath(path, true);
-			hack = new HackFile(thisPath);
-		}
-		else if (HashedValues.TryGetValue(nameof(dir_id), out ArrayList? arr2))
-		{
-			string? path2 = arr2?[1] as string;
-			thisPath = FileOperations.ConvertToWindowsPath(path2, true);
-			hack = new HackFile(thisPath);
-		}
-		else goto EndEmpty;
 
-		if (OdooDefaultsConstants.DependentExt.Contains(hack.Info.Extension))
-		{
-			var dependencies = SolidWorksUtil.DocMgr?.GetDependencies(thisPath);
-			if (dependencies is not null && dependencies.Count > 0)
-			{
-				foreach (string[] deps in dependencies)
-				{
-					string dpath = deps[1];
-					bool insidePwa = dpath.StartsWith(HackDefaults.Instance.PwaPathAbsolute);
-
-					yield return insidePwa ? new(dpath, this) : new(dpath, this, true);
-				}
-			}
-		}
-	EndEmpty:
-		DoNothing();
-	}
-	private static void DoNothing() { }
-	public static ArrayList GetLatestIDs(ArrayList ids)
-	{
-		const string latest = nameof(HpEntry.latest_version_id);
-
-		ArrayList list = OClient.Read(GetHpModel(), ids, [latest], 10000);
-
-		return list;
-	}
-	public static int GetLatestID(int id)
-	{
-		ArrayList list = OClient.Read(GetHpModel(), [id], [nameof(HpEntry.latest_version_id)], 10000);
-		return list is not null and { Count: > 0 } ? ((list[0] as Hashtable)?[nameof(HpEntry.latest_version_id)] as ArrayList)?[0] is int latestId ? latestId : 0 : 0;
-	}
-	public static async Task<int> GetLatestIDAsync(int id)
-	{
-		ArrayList list = await OClient.ReadAsync(GetHpModel(), [id], [nameof(HpEntry.latest_version_id)], 10000);
-		return list is not null and { Count: > 0 } ? ((list[0] as Hashtable)?[nameof(HpEntry.latest_version_id)] as ArrayList)?[0] is int latestId ? latestId : 0 : 0;
-	}
-	public int GetLatestID()
-	{
-		if (HashedValues.TryGetValue(nameof(HpEntry.latest_version_id), out int latestId)) return latestId;
-		ArrayList list = OClient.Read(GetHpModel(), [this.id], [nameof(HpEntry.latest_version_id)], 10000);
-
-		return list is not null and { Count: > 0 } ? ((list[0] as Hashtable)?[nameof(HpEntry.latest_version_id)] as ArrayList)?[0] is int id ? id : 0 : 0;
-	}
 	public bool CanCheckOut() => (checkout_user?.id is null or 0) && deleted is false;
 	public bool CanUnCheckOut() => (checkout_user is not null) && checkout_user == OdooDefaults.Instance.OdooId;
 
@@ -305,33 +245,7 @@ public partial class HpEntry
 
 		return stagedRecord;
 	}
-	public async Task<HpEntry?> CreateEntry()
-	{
-		// look for an existing entry with the same name and directory id
-		HpEntry? entry = await FindRemoteEntry();
-		if (entry is null or { id: 0 })
-		{
-			await entry?.CreateAsync(false);
-			returnType = entry?.id is null or 0 ? EntryReturnType.Failed : EntryReturnType.Created;
-		}
-		else
-			returnType = EntryReturnType.GotExisting;
 
-
-		//string output = entryReturn switch
-		//{
-		//	EntryReturnType.Created => $"Created new entry for {hack?.Name}",
-		//	EntryReturnType.GotExisting => $"Found existing entry for {hack?.Name}",
-		//	EntryReturnType.Failed => $"Failed to create entry for {hack?.Name}",
-		//	EntryReturnType.Staged => $"Staged entry commit for {hack?.Name}",
-		//	EntryReturnType.InvalidType => OdooDefaults.Instance?.RestrictTypes is true
-		//		? $"Found invalid type for {hack?.Name}, file extension {hack?.TypeExt}"
-		//		: $"Found invalid type for file extension {hack?.TypeExt}, but continuing due to unrestricted types",
-		//	_ => "Unknown entry return type"
-		//};
-
-		return entry;
-	}
 	//public static async Task<(EntryReturnType, HpEntry?, HpRecordStaged?)> GetFallbackCreateEntryAsync( HackFile hackFile, int dirId, HpPDMCommit? commit = null)
 	//{
 	//}

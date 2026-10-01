@@ -84,7 +84,6 @@ public class AsyncHelper
         }
         yield return ((this, default));
     }
-
     private async Task<T> IterationInternal<T>(DateTime timeout, Func<T> func, bool indefinite = false, bool wantTrue = true)
     {
         TimeSpan leftOver = timeout - DateTime.UtcNow;
@@ -129,15 +128,6 @@ public class AsyncHelper
     /// <param name="token">async cancellation token</param>
     public static async Task<bool> WaitUntil(Func<bool> eval, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
         => await WaitInternal(eval, true, msTimeout, pollingMs, token);
-    public static async Task<bool> WaitWhile(Func<bool> eval, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
-        => await WaitInternal(eval, false, msTimeout, pollingMs, token);
-    public static async Task<bool> WaitForMilliseconds(int milliseconds, CancellationToken token = default)
-        => await WaitTimeInternal(milliseconds, token);
-
-    public static async Task<bool> DoWhileWaitUntil(Func<bool> eval, Action action, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
-        => await DoWhileWaitInternal(eval, action, true, pollingMs, msTimeout, token);
-    public static async Task<bool> DoWhileWaitWhile(Func<bool> eval, Action action, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
-        => await DoWhileWaitInternal(eval, action, false, pollingMs, msTimeout, token);
     public static async Task<bool> AsyncRunner(Func<Task> function, string statusHeader = "Status", CancellationTokenSource tokenSource = default)
     {
         tokenSource ??= new();
@@ -163,30 +153,10 @@ public class AsyncHelper
         await task;
         return true;
     }
-
-    private static async Task<bool> DoWhileWaitInternal(Func<bool> eval, Action action, bool wantTrue = true, int pollingMsEval = 1000, int msTimeout = -1, CancellationToken token = default)
-    {
-        var wait = new AsyncHelper(eval, msTimeout, pollingMsEval, token);
-        var iterableReturn = wait.InitializeAsync(() => action, wantTrue);
-        await foreach (var item in iterableReturn)
-        {
-            if (item.Item1 is not null)
-            {
-                return !item.Item1._timedOut && !item.Item1._wasCancelled && item.Item1._signal;
-            }
-        }
-        return false;
-    }
     private static async Task<bool> WaitInternal(Func<bool> eval, bool wantTrue = true, int msTimeout = -1, int pollingMs = 1000, CancellationToken token = default)
     {
         var wait = new AsyncHelper(eval, msTimeout, pollingMs, token);
         AsyncHelper helper = await wait.InitializeAsync(wantTrue);
         return !helper._wasCancelled && !helper._timedOut && helper._signal;
-    }
-    private static async Task<bool> WaitTimeInternal(int milliseconds = 1000, CancellationToken token = default)
-    {
-        var wait = new AsyncHelper(()=>false, milliseconds, milliseconds + 1000, token);
-        AsyncHelper helper = await wait.InitializeAsync(true);
-        return !helper._wasCancelled && helper._timedOut;
     }
 }

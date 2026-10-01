@@ -16,91 +16,6 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace HackPDM.UI.Types;
 
-public class NotifyIcon
-{
-    public string? BalloonTipText;
-    public string? BalloonTipTitle;
-    public string? Text;
-    //public Icon? Icon;
-    public void ShowBalloonTip(int timeout) { }
-}
-public class Notifier
-{
-    private static CancellationTokenSource _fileSystemCancel = new();
-    public static ConcurrentQueue<FileCheck> QueueFileCheck = new();
-    public static DirectoryInfo? Directory;
-    public static FileSystemWatcher? FileWatcher { get; set; }
-    public static NotifyIcon Notify { get; set; } = new();
-    public static bool IsRunning { get; private set; } = false;
-    public static bool IsInvalidDirectory  { get; private set; } = true;
-    static Notifier()
-    {
-        try
-        {
-            FileWatcher = null;
-            FileWatcher = new()
-            {
-                IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.CreationTime | NotifyFilters.Attributes,
-                Path = HackDefaults.Instance.PwaPathAbsolute ?? "",
-                EnableRaisingEvents = true,
-            };
-            FileWatcher.Created += (s, e) => QueueFileCheck.Enqueue(new FileCheck(e));
-            FileWatcher.Deleted += (s, e) => QueueFileCheck.Enqueue(new FileCheck(e));
-            FileWatcher.Changed += (s, e) => QueueFileCheck.Enqueue(new FileCheck(e));
-            FileWatcher.Renamed += (s, e) => QueueFileCheck.Enqueue(new FileCheck(e));
-            FileWatcher.EnableRaisingEvents = true;
-            Directory = new(HackDefaults.Instance.PwaPathAbsolute ?? "");
-            IsInvalidDirectory = Directory?.Exists ?? false;
-        }
-        catch (Exception e)
-        {
-            Debug.WriteLine(e);
-        }
-    }
-    public static void CancelCheckLoop()
-    {
-        if (IsRunning)
-        {
-            _fileSystemCancel.Cancel();
-        }
-    }
-    public async static void FileCheckLoop()
-    {
-        if (IsRunning) return;
-        Debug.WriteLine("file check loop was started");
-
-        CancellationToken cToken = _fileSystemCancel.Token;
-        IsRunning = true;
-        try
-        {
-            while (!cToken.IsCancellationRequested)
-            {
-                // Notify is not null &&
-                if (QueueFileCheck.Count == 1)
-                {
-                    if (QueueFileCheck.TryDequeue(out FileCheck fileCheck)) fileCheck.Notify();
-                }
-                // Notify is not null &&
-                else if (QueueFileCheck.Count > 1)
-                {
-                    //string commonPath = FileCheck.FindCommonPath(QueueFileCheck);
-                    FileCheck.Notify("Files Changed", $"{QueueFileCheck.Count} files were changed");
-                }
-
-                QueueFileCheck = new(); // clear the queue
-                await Task.Delay(2000, cToken);
-            }
-        }
-        catch
-        {
-            Debug.WriteLine("file check loop was cancelled");
-        }
-        _fileSystemCancel.Dispose();
-        _fileSystemCancel = new();
-        IsRunning = false;
-    }
-}
 
 public class ListDetail
 {
@@ -158,7 +73,6 @@ public class ListDetail
         }
     }
 }
-public class ColumnInfo<T> { }
 public class ColumnInfo
 {
     public const int DEFAULT_WIDTH = 75;
@@ -307,16 +221,7 @@ public struct FileCheck
     {
         return !(left == right);
     }
-    public void Notify()
-        => Notify($"File {Enum.GetName(typeof(WatcherChangeTypes), ChangeType)}", $"File: {Name}");
-    public static void Notify(string title, string text)
-    {
-        Notifier.Notify.BalloonTipTitle = title;
-        Notifier.Notify.BalloonTipText = text;
-        Notifier.Notify.Text = text[0..Math.Min(text.Length, 62)];
-            
-        Notifier.Notify.ShowBalloonTip(2000); // Show for 3 seconds
-    }
+
     public static string FindCommonPath(IEnumerable<FileCheck> fileChecks)
     {
         if (fileChecks == null || !fileChecks.Any())

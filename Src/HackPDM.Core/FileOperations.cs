@@ -87,7 +87,6 @@ public static class FileOperations
             return false;
         }
     }
-        
     public static bool SameChecksum(IHpVersionModel versionModel, ChecksumType cType=ChecksumType.Sha1)
         => SameChecksum(
             Path.Combine(
@@ -99,32 +98,12 @@ public static class FileOperations
     {
         return file.Exists && SameChecksum( file.FullName, compareChecksum, GetHashAlgorithm( cType ) );
     }
-	public static DirectoryInfo CreateDirectory(string path)
-	{
-		List<DirectoryInfo> directories = [];
-		for (int i = 0; i < path.Length; i++)
-		{
-			if (path[i] == '/' || path[i] == '\\')
-			{
-				string subPath = path[..i];
-				if (!Directory.Exists(subPath))
-				{
-					directories.Add(Directory.CreateDirectory(subPath));
-				}
-			}
-		}
-
-		return directories.Last();
-	}
 	public static bool SameChecksum( string directoryPath, string compareChecksum, HashAlgorithm alg )
     {
-        string fileChecksum = FileChecksum(directoryPath, alg);
-        if ( fileChecksum != null && fileChecksum != "" && fileChecksum == compareChecksum )
-            return true;
-        return false;
-    }
-
-    public static HashAlgorithm GetHashAlgorithm(ChecksumType cType) => cType switch
+        string? fileChecksum = FileChecksum(directoryPath, alg);
+		return fileChecksum != null && fileChecksum != "" && fileChecksum == compareChecksum;
+	}
+	public static HashAlgorithm GetHashAlgorithm(ChecksumType cType) => cType switch
     {
         ChecksumType.Md5        => MD5.Create(),
         ChecksumType.Sha256     => SHA256.Create(),
@@ -208,7 +187,6 @@ public static class FileOperations
 
         return fileInfo.ToHackArray();
     }
-
     public static HackFile[]? FilesInDirectory(
         string path, 
         Dictionary<string, Task<HackFile>>? hackFileMap,
@@ -242,7 +220,6 @@ public static class FileOperations
 		return hackFiles;
     }
     
-    
     public static string? GetRelativePath( string fullPath )
     {
         // Get the directory of the full path
@@ -266,7 +243,7 @@ public static class FileOperations
 
     public static bool IsFileLocked(FileInfo file)
     {
-        FileStream stream = null;
+        FileStream? stream = null;
 
         if (file.Exists)
         {
@@ -284,7 +261,7 @@ public static class FileOperations
             }
             finally
             {
-                if (stream != null) stream.Close();
+                stream?.Close();
             }
         }
 

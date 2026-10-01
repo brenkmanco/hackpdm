@@ -14,13 +14,10 @@ public class XmlRpcExposedAttribute : Attribute
 	public static bool ExposedMethod( object obj, string methodName )
 	{
 		Type type = obj.GetType();
-		MethodInfo method = type.GetMethod(methodName);
-		if ( method == null )
-		{
-			throw new MissingMethodException( "Method " + methodName + " not found." );
-		}
+		MethodInfo method =  type.GetMethod(methodName)  
+			?? throw new MissingMethodException( "Method " + methodName + " not found." );
 
-		if ( !IsExposed( type ) )
+		if( !IsExposed( type ) )
 		{
 			return true;
 		}

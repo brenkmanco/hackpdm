@@ -143,8 +143,6 @@ public class OdooDefaults : IOdooDefaults
         get;
         set;
     }
-    // lock asynchronous operations
-    private readonly object MLockObject = new();
 	
     public IHpNodeModel? MyNode
     {
@@ -279,12 +277,23 @@ public class OdooDefaults : IOdooDefaults
     #endregion
     
     #region Functions
-    public async Task InitializeAsync()
+    public async Task InitializeLoginAsync()
+	{
+		await TryAsync( async () => OdooId = OdooId is 0 ? ( await OdooClient.LoginJson( 7000 ) ?? 0 ) : OdooId );
+	}
+	public async Task InitializeAsync()
     {
         // OdooId
-        await TryAsync( async () => OdooId = OdooId is 0 ? (await OdooClient.LoginJson( 7000 ) ?? 0) : OdooId );
-        // HpNodes && MyNode
-        await TryAsync( async () => HpNodes                 = await HpNode.GetAllRecordsAsync() )
+        if (OdooId is 0)
+        {
+            await InitializeLoginAsync();
+        }
+        if (OdooId is 0 )
+		{
+			throw new Exception( "OdooId is 0 after login attempt" );
+		}
+		// HpNodes && MyNode
+		await TryAsync( async () => HpNodes                 = await HpNode.GetAllRecordsAsync() )
             .ContinueWith( async ( success ) => MyNode      = await success ? HpNodes?.FirstOrDefault( node => node.name.Equals( Environment.MachineName.ToLower() ) )
 				?? TryAssignNewHpNode().Result
 				?? throw new ArgumentNullException( nameof( HpNode ), @"Unable to register new node" ) : null);

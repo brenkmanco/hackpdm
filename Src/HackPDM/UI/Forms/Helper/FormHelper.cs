@@ -28,88 +28,6 @@ namespace HackPDM.UI.Forms.Helper;
 
 public static class FormHelper
 {
-    /// <summary>
-    /// Returns an absolute or relative path for the parent of the passed argument
-    /// </summary>
-    /// <param name="path"></param>
-    /// <returns></returns>
-    /// 
-    public static string GetParentDirectory(string path)
-    {
-        // Check if path is a relative or absolute path:
-        if (System.IO.Path.IsPathRooted(path))
-        {
-            // This is an absolute path:
-            try
-            {
-                System.IO.DirectoryInfo directoryInfo = System.IO.Directory.GetParent(path);
-                return (directoryInfo.FullName);
-            }
-            catch (ArgumentNullException)
-            {
-                MessageBox.ShowAsync("Path is a null reference.  Could not find its parent.",
-                    "Path Error",
-                    buttons: MessageBoxButtons.OK,
-                    icon: MessageBoxIcon.Error);
-                return ("");
-            }
-            catch (ArgumentException)
-            {
-                MessageBox.ShowAsync("Path is an empty string.  Could not find its parent.",
-                    "Path Error",
-                    buttons: MessageBoxButtons.OK,
-                    icon: MessageBoxIcon.Error);
-                return ("");
-            }
-            catch (System.IO.DirectoryNotFoundException)
-            {
-                MessageBox.ShowAsync("The parent directory for path \"" + path + "\" could not be found.",
-                    "Path Error",
-                    buttons: MessageBoxButtons.OK,
-                    icon: MessageBoxIcon.Error);
-                return ("");
-            }
-            catch
-            {
-                MessageBox.ShowAsync("Could not find the parent directory for \"" + path + "\".",
-                    "Path Error",
-                    buttons: MessageBoxButtons.OK,
-                    icon: MessageBoxIcon.Error);
-                return ("");
-            }
-        }
-        else
-        {
-            // This is a relative path.  Check if there are any slashes:
-            if (path.Contains("\\"))
-            {
-                return (path.Substring(0, path.LastIndexOf("\\")));
-            }
-            else
-            {
-                // This is the last parent directory
-                // TODO: Correct code to be more consisent (Some code may expect this method to return "pwa")
-                // Return the empty string:
-                return ("");
-            }
-        }
-    }
-
-    public static string GetBaseName(string path)
-    {
-        try
-        {
-            return (System.IO.Path.GetFileName(path));
-        }
-        catch
-        {
-            MessageBox.ShowAsync("Error getting Base Name from \"" + path + "\".",
-                "Path Error",
-                buttons: MessageBoxButtons.OK,
-                icon: MessageBoxIcon.Error);
-            return ("");
-        }
-    }
     public static void GetAllFilesInDir(string dirpath, ref List<string> filesfound)
     {
         try
@@ -133,22 +51,6 @@ public static class FormHelper
         }
     }
 
-    
-    public static (int, TreeViewNode?) LastValidTreeIndex(in string combinedPath, in string[] paths, in Dictionary<string, TreeViewNode> nodeMap)
-    {
-        ReadOnlySpan<char> strArray = combinedPath.AsSpan();
-        int pathLength = combinedPath.Length;
-
-        for (int i = paths.Length - 1; i >= 0; i--)
-        {
-            if (nodeMap.TryGetValue(strArray.Slice(0, pathLength).ToString(), out TreeViewNode? node))
-            {
-                return (i, node);
-            }
-            pathLength -= paths[i].Length + 1;
-        }
-        return (-1, null);
-    }
     private static (int, TreeViewNode?) RecurseNodePath(in TreeViewNode currentNode, string[] nodes, int index)
     {
         if (currentNode == null)
@@ -177,15 +79,6 @@ public static class FormHelper
             } 
         }
         return (index, currentNode);
-    }
-    public static Dictionary<string, TreeViewNode>? ConvertTreeToDictionary(in TreeView tree)
-    {
-        if (tree.RootNodes.Count == 0) return null;
-
-        Dictionary<string, TreeViewNode> treeDictionary = [];
-        foreach (var node in tree.RootNodes) RecurseNodesConvert(node, in treeDictionary);
-
-        return treeDictionary;
     }
     private static void RecurseNodesConvert(in TreeViewNode node, in Dictionary<string, TreeViewNode>? nodeMap)
     {
@@ -259,14 +152,6 @@ public static class FormHelper
             _ => 0,
         }, colorGradient );
     }
-    public static ref Color ChangeColor(this ref Color color, byte? A = null, byte? R = null, byte? G = null, byte? B = null)
-    {
-        if (A is { } a) color.A = a;
-		if (R is { } r) color.R = r;
-		if (G is { } g) color.G = g;
-		if (B is { } b) color.B = b;
-        return ref color;
-	}
     public static Color ModifyColor(this Color color, byte? A = null, byte? R = null, byte? G = null, byte? B = null)
 	{
 		if (A is { } a) color.A = a;
@@ -292,34 +177,6 @@ public static class FormHelper
 		var linGradient = new LinearGradientBrush(gradStopCollection, angle);
 		return linGradient;
 	}
-    public static RadialGradientBrush EZRadGradient(Vector4<double> circView, Vector2<double> gradCenter, double opacity = 1, params Color[] colorGradient)
-    {
-		var radGradient = new RadialGradientBrush
-		{
-			SpreadMethod = GradientSpreadMethod.Pad,
-            Center = new Point(circView.x, circView.y),
-			RadiusX = circView.z,
-			RadiusY = circView.w,
-            GradientOrigin = new Point(gradCenter.x, gradCenter.y),
-            MappingMode = BrushMappingMode.RelativeToBoundingBox,
-            InterpolationSpace = Microsoft.UI.Composition.CompositionColorSpace.Auto,
-            Opacity = opacity,
-		};
-        foreach (var gradStop in EvenSpacedGradient(colorGradient))
-        {
-            radGradient.GradientStops.Add(gradStop);
-        }
-		return radGradient;
-	}
-    public static GradientStopCollection EvenSpacedGradientCollection(params Color[] colorGradient)
-    {
-		var gradStopCollection = new GradientStopCollection();
-        foreach (var gradStop in EvenSpacedGradient(colorGradient))
-        {
-			gradStopCollection.Add( gradStop );
-		}
-        return gradStopCollection;
-	}
     public static IEnumerable<GradientStop> EvenSpacedGradient(params Color[] colorGradient)
     {
 		for( int i = 0; i < colorGradient.Length; i++ )
@@ -332,7 +189,6 @@ public static class FormHelper
             yield return gradStop1;
 		}
 	}
-
     static ScrollViewer? GetScrollViewer(DependencyObject parent)
 	{
 		for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)

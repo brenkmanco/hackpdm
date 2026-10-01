@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+﻿using System;
+using System.Drawing;
 
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Forms.Helper;
@@ -24,31 +25,32 @@ public static class UIStorage
 		public static readonly Color OrangeEntry		= ToColor(TransformUIntToRGB(ColorNames.OrangeBlast));
 		public static readonly Color BlueEntry			= ToColor(TransformUIntToRGB(ColorNames.BluishWater));
 
-		public static readonly SolidColorBrush BrushWhite				= new(White);
-		public static readonly SolidColorBrush BrushBlack				= new(Black);
-		public static readonly SolidColorBrush BrushLightGray			= new(LightGray);
-		public static readonly SolidColorBrush BrushGray				= new(Gray);
-		public static readonly SolidColorBrush BrushMustardYellow		= new(MustardYellow);
-		public static readonly SolidColorBrush BrushDarkGray			= new(DarkGray);
-		public static readonly SolidColorBrush BrushDarkOliveGreen		= new(DarkOliveGreen);
-		public static readonly SolidColorBrush BrushDarkBlue			= new(DarkBlue);
-		public static readonly SolidColorBrush BrushDarkRed				= new(DarkRed);
+		public static readonly Lazy<SolidColorBrush> BrushWhite				= new(() => new(White));
+		public static readonly Lazy<SolidColorBrush> BrushBlack				= new(() => new(Black));
+		public static readonly Lazy<SolidColorBrush> BrushLightGray			= new(() => new(LightGray));
+		public static readonly Lazy<SolidColorBrush> BrushGray				= new(() => new(Gray));
+		public static readonly Lazy<SolidColorBrush> BrushMustardYellow		= new(() => new(MustardYellow));
+		public static readonly Lazy<SolidColorBrush> BrushDarkGray			= new(() => new(DarkGray));
+		public static readonly Lazy<SolidColorBrush> BrushDarkOliveGreen	= new(() => new(DarkOliveGreen));
+		public static readonly Lazy<SolidColorBrush> BrushDarkBlue			= new(() => new(DarkBlue));
+		public static readonly Lazy<SolidColorBrush> BrushDarkRed			= new(() => new(DarkRed));
 
-		public static readonly LinearGradientBrush OrangeBrush = FormHelper.EZGradient(
+		public static readonly Lazy<LinearGradientBrush> OrangeBrush = new(()=>FormHelper.EZGradient(
 			FlowDirection.LeftToRight, 
-			[OrangeEntry.ModifyColor(40), OrangeEntry.ModifyColor(10), OrangeEntry.ModifyColor(0)]);
+			[OrangeEntry.ModifyColor(40), OrangeEntry.ModifyColor(10), OrangeEntry.ModifyColor(0)]));
 
-		public static readonly LinearGradientBrush BlueBrush = FormHelper.EZGradient(
+		public static readonly Lazy<LinearGradientBrush> BlueBrush = new(()=>FormHelper.EZGradient(
 			FlowDirection.LeftToRight,
-			[BlueEntry.ModifyColor(40), BlueEntry.ModifyColor(10), BlueEntry.ModifyColor(0)]);
+			[BlueEntry.ModifyColor(40), BlueEntry.ModifyColor(10), BlueEntry.ModifyColor(0)]));
 
-		public static readonly LinearGradientBrush RedBrush = FormHelper.EZGradient(
+		public static readonly Lazy<LinearGradientBrush> RedBrush = new(()=>FormHelper.EZGradient(
 			FlowDirection.LeftToRight,
-			[DarkRed.ModifyColor(55), DarkRed.ModifyColor(10), DarkRed.ModifyColor(0)]);		
+			[DarkRed.ModifyColor(55), DarkRed.ModifyColor(10), DarkRed.ModifyColor(0)]));		
 
-		public static readonly LinearGradientBrush GreenBrush = FormHelper.EZGradient(
+		public static readonly Lazy<LinearGradientBrush> GreenBrush = new(()=>FormHelper.EZGradient(
 			FlowDirection.LeftToRight,
-			[DarkOliveGreen.ModifyColor(40), DarkOliveGreen.ModifyColor(10), DarkOliveGreen.ModifyColor(0)]);	
+			[DarkOliveGreen.ModifyColor(40), DarkOliveGreen.ModifyColor(10), DarkOliveGreen.ModifyColor(0)]));	
+
 	//public static readonly LinearGradientBrush LinGradOrange		= FormHelper.EZGradient(FlowDirection.LeftToRight, [Colo]);
 	#endregion
 	private static Color ToColor((byte, byte, byte, byte) argb) => Color.FromArgb(argb.Item1, argb.Item2, argb.Item3, argb.Item4);

@@ -76,7 +76,7 @@ public static class ExtensionForm
 		public void SetAlternatingRowColors()
 		{
 			grid.RowBackground = _brush;
-			grid.AlternatingRowBackground = UIStorage.BrushWhite;
+			grid.AlternatingRowBackground = UIStorage.BrushWhite.Value;
 		}
 		public void ItemAdd<T>(T item)
 		{

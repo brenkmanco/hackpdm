@@ -13,10 +13,8 @@ namespace HackPDM.Core.Helper.Xaml
 		{
 			HackFileManager.HackDispatcherQueue.TryEnqueue(() => action.Invoke(data));
 		}
-
 		internal static void SafeInvoker(Action action)
 			=> SafeInvokerInternal(action, DispatcherQueue.GetForCurrentThread());
-		
 		internal static Task<T> SafeInvoker<T>(Func<T> func)
 		{
 			var tcs = new TaskCompletionSource<T>();

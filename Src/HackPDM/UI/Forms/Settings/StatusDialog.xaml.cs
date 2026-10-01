@@ -37,14 +37,14 @@ public sealed partial class StatusDialog : Page
     public ObservableCollection<BasicStatusMessage> OStatus { get; internal set; } = [];
     public ObservableCollection<BasicStatusMessage> OInfo { get; internal set; } = [];
     public ObservableCollection<BasicStatusMessage> OError { get; internal set; } = [];
-    public static Brush ColorProcessing { get; set; } = UIStorage.BrushDarkBlue;
-    public static Brush ColorSkip { get; set; } = UIStorage.BrushDarkGray;
-    public static Brush ColorFound { get; set; } = UIStorage.BrushDarkGray;
-    public static Brush ColorSuccess { get; set; } = UIStorage.BrushDarkOliveGreen;
-    public static Brush ColorWarning { get; set; } = UIStorage.BrushMustardYellow;
-    public static Brush ColorError { get; set; } = UIStorage.BrushDarkRed;
-    public static Brush ColorDefaultFore { get; set; } = UIStorage.BrushBlack;
-    public static Brush ColorDefaultBack { get; set; } = UIStorage.BrushWhite;
+    public static Brush ColorProcessing { get; set; } = UIStorage.BrushDarkBlue.Value;
+    public static Brush ColorSkip { get; set; } = UIStorage.BrushDarkGray.Value;
+    public static Brush ColorFound { get; set; } = UIStorage.BrushDarkGray.Value;
+    public static Brush ColorSuccess { get; set; } = UIStorage.BrushDarkOliveGreen.Value;
+    public static Brush ColorWarning { get; set; } = UIStorage.BrushMustardYellow.Value;
+    public static Brush ColorError { get; set; } = UIStorage.BrushDarkRed.Value;
+    public static Brush ColorDefaultFore { get; set; } = UIStorage.BrushBlack.Value;
+    public static Brush ColorDefaultBack { get; set; } = UIStorage.BrushWhite.Value;
     
 	private int _errorCount = 0;
     

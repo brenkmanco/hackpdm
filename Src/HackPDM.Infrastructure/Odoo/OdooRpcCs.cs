@@ -189,6 +189,7 @@ public static class OdooClient
 			//		break;
 			//}
     //  [("res_model", "=", "hp.version"), ("res_id", "=", 1)]
+    
     public static object? Execute(string model, string method, ArrayList parameters, int? timeout = null)
     {
         _latestException = "";
@@ -228,7 +229,7 @@ public static class OdooClient
                 //latestException = objectResponse.Value.ToString();
                 //return null;
             }
-            resVal = response?.Result;
+            resVal = response?.Result?.ToNativeObject();
         }
         catch (Exception exc)
         {
@@ -338,6 +339,7 @@ public static class OdooClient
 
         return resVal;
     }
+	
 	public static async Task<object?> ExecuteJsonAsync( string model, string method, ArrayList parameters, int? timeout = null )
 	{
 		_latestException = "";
@@ -377,7 +379,7 @@ public static class OdooClient
 				//latestException = objectResponse.Value.ToString();
 				//return null;
 			}
-			resVal = response?.Result;
+			resVal = response?.Result?.ToNativeObject();
 		}
 		catch( Exception exc )
 		{

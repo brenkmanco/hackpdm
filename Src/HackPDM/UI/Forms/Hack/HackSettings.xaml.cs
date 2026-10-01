@@ -29,7 +29,6 @@ namespace HackPDM.UI.Forms.Hack;
 public sealed partial class HackSettings : Page
 {
 	Assembly assembly;
-	private static CoreSettings? Sett;
 	string documents;
 
 	public HackSettings()

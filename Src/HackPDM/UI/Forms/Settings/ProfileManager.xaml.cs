@@ -51,7 +51,18 @@ public sealed partial class ProfileManager : Page
 {
 	public static bool IsLoggedIn { get; private set; }
 	public static ObservableCollection<BasicStatusMessage> OStatus { get; internal set; } = [];
-	private static readonly object LockObject = new();
+	private readonly SavedData _templateData = new()
+	{
+		OdooAddress = "10.0.0.68",
+		OdooCredentialTarget = StorageBox.DEFAULT_ODOO_CREDENTIALS,
+		OdooDb = "odoopdm",
+		OdooPort = "8069",
+		PWAPathAbsolute = @"C:\path\to\pwa",
+		Username = "{username}",
+		Password = "{password} -leave password blank if you dont want to save password to file. " +
+			"Windows Credential Manager will pick it up with OdooCredentialTarget and Odoo Settings Window" +
+			"Allows for saving to Windows Credential Manager directly"
+	};
 
 	public ProfileManager()
 	{
@@ -156,49 +167,6 @@ public sealed partial class ProfileManager : Page
 
 		Home.NavigateToPage(NavigatePageMenu.HackFileManager);
 	}
-	private void LoadFromJson( string json )
-	{
-
-	}
-#if DEBUG
-	public static async void TestMessageBox()
-	{
-		string rawText = """
-				// buttons on bottom / text box on top
-				//		XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-				//		X																	X
-				//		X																	X
-				//		X																	X
-				//		X							TEXTBOX									X
-				//		X																	X
-				//		X																	X
-				//		X																	X
-				//		XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-				//		X                 			Buttons									X
-				//		XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-				// AHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
-				private void DefaultImpl()
-				{
-					ScrollContainer = new();
-					TextBlockImpl = new()
-					{
-						Text = $"- {_message}",
-						TextAlignment = TextAlignment.Justify,
-						TextWrapping = TextWrapping.Wrap,
-					};
-					ScrollContainer.Content = TextBlockImpl;
-					gridRoot.Children.Add( ScrollContainer );
-					ScrollContainer.SetGrid(0, 0, 3, 3);
-					var (primary, secondary, close) = DefaultButtons();
-				}
-				// buttons on bottom / list above
-		//		
-		//		XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-		""";
-
-		DialogResult result = await MessageBox.ShowAsync(rawText, MessageBoxButtons.YesNoCancel);
-	}
-#endif
 
 	public class SavedData
 	{
@@ -310,18 +278,6 @@ public sealed partial class ProfileManager : Page
 			file.Path,
 			JsonSerializer.Serialize( data ) );
 	}
-	private readonly SavedData _templateData = new()
-	{
-		OdooAddress = "10.0.0.68",
-		OdooCredentialTarget = StorageBox.DEFAULT_ODOO_CREDENTIALS,
-		OdooDb = "odoopdm",
-		OdooPort = "8069",
-		PWAPathAbsolute = @"C:\path\to\pwa",
-		Username = "{username}",
-		Password = "{password} -leave password blank if you dont want to save password to file. " +
-			"Windows Credential Manager will pick it up with OdooCredentialTarget and Odoo Settings Window" +
-			"Allows for saving to Windows Credential Manager directly"
-	};
 	private async void CreateTemplateSettingsJson_Click( object sender, RoutedEventArgs e )
 		=> await SaveSettings( _templateData );
 

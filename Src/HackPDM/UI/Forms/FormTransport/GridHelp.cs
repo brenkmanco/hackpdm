@@ -212,20 +212,6 @@ namespace HackPDM.UI.Forms.FormTransport
 			//}
 			return versions;
 		}
-		internal async Task<HpRelease[]?> GetReleaseForEntryAsync(int entryId, string[]? excludedFields = null, string[]? insertedFields = null)
-		{
-			HpRelease[] releases = [];
-			ArrayList ids = [entryId];
-			ArrayList al = await OClient.ReadAsync(HpEntry.GetHpModel(), ids, ["release_ids"], 10000);
-			if (al != null && al.Count > 0)
-			{
-				if (al[0] is not Hashtable ht) return null;
-				if (ht?["release_ids"] is not ArrayList result) return null;
-				// excludedFields ??= ["preview_image", "file_contents"];
-				releases = await HpRelease.GetRecordsByIdsAsync(result, excludedFields: excludedFields, insertFields: insertedFields) ?? [];
-			}
-			return releases;
-		}
 		private void PopulateProperties(DataGrid grid, in List<HpVersionProperty[]> allProperties)
 		{
 			//"Version", 50
@@ -503,7 +489,6 @@ namespace HackPDM.UI.Forms.FormTransport
 			//Task.WaitAll(hackTasks.ToArray());
 			return hackFileMap;
 		}
-		internal static void InitGridView(ItemsControl control) => InitListView(control, null);
 		internal static void InitListView(ItemsControl control, ListDetail? rows)
 			=> SafeHelper.SafeInvoker(() =>
 			{

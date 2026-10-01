@@ -228,16 +228,16 @@
                         Padding="5,0,5,0"
                         VerticalAlignment="Center"
                         FontWeight="Bold"
-                        Text="Local Only: None" />
+                        Text="LO: None" />
                     <TextBlock
                         x:Name="EntryListRemoteOnly"
                         Grid.Column="2"
                         Padding="5,0,5,0"
                         VerticalAlignment="Center"
                         FontWeight="Bold"
-                        Text="Remote Only: None" />
+                        Text="RO: None" />
                 </Grid>
-                <!--  Right-side controls (image, version tabs)  -->
+
                 <TabView
                     x:Name="VersionTabs"
                     Grid.Row="2"
