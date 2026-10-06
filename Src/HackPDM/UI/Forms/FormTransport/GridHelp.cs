@@ -393,8 +393,13 @@ namespace HackPDM.UI.Forms.FormTransport
 
 			BitmapImage bitImage = new();
 			await bitImage.SetSourceAsync(stream);
-			_HFM.GetOdooEntryImage().Source = bitImage;
+			await SetEntryImageView(bitImage);
 
+		}
+		public async Task SetEntryImageView(BitmapImage image )
+		{
+			await SafeHelper.SafeInvokerAsync( () 
+				=> _HFM.GetOdooEntryImage().Source = image );
 		}
 		internal async Task PreviewImage(int? hpVersionId)
 		{

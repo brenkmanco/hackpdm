@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="HackPDM.UI.Forms.Helper.PipWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:HackPDM.UI.Forms.Helper"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="PipWindow"
+    mc:Ignorable="d">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <!--  1. The root slot that holds your active player/control component  -->
+        <Grid x:Name="PipContentRoot" />
+
+        <!--  2. Overlay controls layer (visible when hovering)  -->
+        <Grid
+            Margin="10"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top">
+            <Button
+                x:Name="ExitPipButton"
+                Padding="8"
+                Background="#80000000"
+                BorderThickness="0"
+                Click="OnExitPipClicked"
+                ToolTipService.ToolTip="Return to Main Window">
+                <!--  Segoe MDL2 Assets code for 'Back to Window' icon  -->
+                <FontIcon
+                    FontSize="16"
+                    Foreground="White"
+                    Glyph="&#xE73F;" />
+            </Button>
+        </Grid>
+    </Grid>
+</Window>

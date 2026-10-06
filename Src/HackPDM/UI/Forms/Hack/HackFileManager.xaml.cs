@@ -46,9 +46,15 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Markup;
+using Microsoft.UI.Xaml.Navigation;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 
 using SolidWorks.Interop.sldworks;
+
+using Windows.Storage;
+using Windows.Storage.FileProperties;
+using Windows.UI.WindowManagement;
 
 using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
 using Directory = System.IO.Directory;
@@ -61,8 +67,6 @@ using TreeData = HackPDM.UI.Types.TreeData;
 using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
 using WindowHelper = HackPDM.UI.Controls.WindowHelper;
 
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
 
 namespace HackPDM.UI.Forms.Hack;
 
@@ -88,6 +92,7 @@ public sealed partial class HackFileManager : Page
 	private MenuFlyoutItem ListDeletePermanent;
 	private void BuildDataGridProgrammatically()
 	{
+		var info = UIStorage.ColumnsInfo;
 		// 1. Instantiate DataGrid
 		OdooEntryList = new DataGrid
 		{
@@ -95,10 +100,10 @@ public sealed partial class HackFileManager : Page
 			VerticalContentAlignment = VerticalAlignment.Stretch,
 			AutoGenerateColumns = false,
 			CanUserSortColumns = true,
-			FontSize = 10,
+			FontSize = info.FontSize,
 			IsReadOnly = true,
-			RowDetailsVisibilityMode = DataGridRowDetailsVisibilityMode.Collapsed,
-			RowHeight = 20,
+			RowDetailsVisibilityMode = info.GroupCollapsed ? DataGridRowDetailsVisibilityMode.VisibleWhenSelected : DataGridRowDetailsVisibilityMode.Collapsed,
+			RowHeight = info.RowHeight,
 			SelectionMode = DataGridSelectionMode.Extended,
 			VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
 			ItemsSource = GroupedEntries
@@ -113,35 +118,45 @@ public sealed partial class HackFileManager : Page
 		OdooEntryList.RowGroupHeaderStyles.Add( headerStyle );
 		OdooEntryList.RowGroupHeaderPropertyNameAlternative = "Items";
 
+		// fetch saved configurations
+		var columns = UIStorage.Columns.Value;
 		// 3. Build Columns Using XAML Templates
 
 		// Column 1: Icon (Fetch template from Resources)
 		var iconColumn = new DataGridTemplateColumn
 		{
-			Width = new DataGridLength(40, DataGridLengthUnitType.Pixel),
-			CellTemplate = (DataTemplate)this.Resources["IconCellTemplate"]
+			Width = new DataGridLength(32, DataGridLengthUnitType.Pixel),
+			CellTemplate = (DataTemplate)this.Resources["IconCellTemplate"],
+			CanUserReorder = true,
+			CanUserResize = true,
 		};
 		OdooEntryList.Columns.Add( iconColumn );
 
 		// Column 2 & 3: Standard Text Columns
-		OdooEntryList.Columns.Add( CreateTextColumn( "Name", "Name", 450 ) );
-		OdooEntryList.Columns.Add( CreateTextColumn( "Type", "Type" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn(columns[ nameof(EntryRow.Name) ]) ?? CreateTextColumn( "Name", "Name", 350 ) );
+		OdooEntryList.Columns.Add( CreateTextColumn(columns[ nameof(EntryRow.Type) ]) ?? CreateTextColumn( "Type", "Type" ) );
 
 		// Column 4: Size (Fetch template from Resources)
+		var sCol = columns[ nameof( EntryRow.Size ) ];
+
 		var sizeColumn = new DataGridTemplateColumn
 		{
-			Header = "Size",
-			CellTemplate = (DataTemplate)this.Resources["SizeCellTemplate"]
+			Header = sCol?.Column.Value.Header ?? "Size",
+			CellTemplate = ( DataTemplate )this.Resources[ "SizeCellTemplate" ],
+			Width = sCol?.Column.Value.AutoSize is true 
+				? DataGridLength.Auto 
+				: new DataGridLength( sCol?.Column.Value.Width ?? 100, DataGridLengthUnitType.Pixel ),
+			DisplayIndex = sCol?.Column.Value.DisplayIndex ?? -1,
 		};
 		OdooEntryList.Columns.Add( sizeColumn );
 
 		// Columns 5 - 10
-		OdooEntryList.Columns.Add( CreateTextColumn( "Release", "LatestReleaseId" ) );
-		OdooEntryList.Columns.Add( CreateTextColumn( "Status", "Status" ) );
-		OdooEntryList.Columns.Add( CreateTextColumn( "Checkout", "Checkout" ) );
-		OdooEntryList.Columns.Add( CreateTextColumn( "Local Date", "LocalDate" ) );
-		OdooEntryList.Columns.Add( CreateTextColumn( "Remote Date", "RemoteDate" ) );
-		OdooEntryList.Columns.Add( CreateTextColumn( "Full Name", "FullName" ) );
+		// OdooEntryList.Columns.Add( CreateTextColumn( "Release", "LatestReleaseId" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn(columns[ nameof(EntryRow.Status) ]) ?? CreateTextColumn( "Status", "Status" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn(columns[ nameof(EntryRow.Checkout) ]) ?? CreateTextColumn( "Checkout", "Checkout" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn(columns[ nameof(EntryRow.LocalDate) ]) ?? CreateTextColumn( "Local Date", "LocalDate" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn(columns[ nameof(EntryRow.RemoteDate) ]) ?? CreateTextColumn( "Remote Date", "RemoteDate" ) );
+		OdooEntryList.Columns.Add( CreateTextColumn(columns[ nameof(EntryRow.FullName) ]) ?? CreateTextColumn( "Full Name", "FullName" ) );
 
 		// 4. Build Context Flyout
 		BuildContextMenu();
@@ -221,7 +236,26 @@ public sealed partial class HackFileManager : Page
 			col.Width = new DataGridLength( width.Value, DataGridLengthUnitType.Pixel );
 		return col;
 	}
+	private DataGridTextColumn? CreateTextColumn( OdooEntryColumnID? column )
+	{
+		if( column is null )
+			return null;
 
+		var columnConfig = column.Column.Value;
+		var col = new DataGridTextColumn
+		{
+			Header = columnConfig.Header,
+			DisplayIndex = columnConfig.DisplayIndex,
+			Binding = new Binding { Path = new PropertyPath( column.BindingPath ) },
+			Width = columnConfig.AutoSize
+				? new DataGridLength( 1, DataGridLengthUnitType.Auto )
+				: new DataGridLength( columnConfig.Width is 0D
+					? 100
+					: columnConfig.Width, DataGridLengthUnitType.Pixel )
+		};
+
+		return col;
+	}
 	private void ToggleGroups_Checked(object sender, RoutedEventArgs e)
 	{
 		GroupedEntries?.NoGrouping = !ToggleGroups.IsChecked ?? false;
@@ -234,59 +268,16 @@ public sealed partial class HackFileManager : Page
 public sealed partial class HackFileManager : Page
 {
 	#region Declarations
-	public ObservableCollection<TreeData>? LastSelectedNodePaths { get; set; } = [];
-	public DynamicGroupCollection<EntryRow>? GroupedEntries { get; set; } = new([
-		new("abc", [
-			new() {
-				Id=123,
-				Name="Test Name 1",
-				Type="abc",
-				Status=FileStatus.Lo,
-			},
-			new() {
-				Id=124,
-				Name="Test Name 2",
-				Type="abc",
-				Status=FileStatus.Lo,
-			},
-			new() {
-				Id=125,
-				Name="Test Name 3",
-				Type="abc",
-				Status=FileStatus.Cm,
-			},
-		]),
-		new("cba", [
-			new() {
-				Id=126,
-				Name="Test Name 4",
-				Type="cba",
-				Status=FileStatus.Lo,
-			},
-			new() {
-				Id=127,
-				Name="Test Name 5",
-				Type="cba",
-				Status=FileStatus.Ro,
-			}
-		]),
-		new("def", [
-			new() {
-				Id=128,
-				Name="Test Name 6",
-				Type="def",
-				Status=FileStatus.Ok,
-			},
-		]),
-		new("zzz", []),
-	], e => e.Type ?? "");
-	public ObservableCollection<EntryRow> OEntries { get; internal set; } = [];
-	public ObservableCollection<HistoryRow> OHistories { get; internal set; } = [];
-	public ObservableCollection<ParentRow> OParents { get; internal set; } = [];
-	public ObservableCollection<ChildrenRow> OChildren { get; internal set; } = [];
-	public ObservableCollection<PropertiesRow> OProperties { get; internal set; } = [];
-	public ObservableCollection<VersionRow> OVersions { get; internal set; } = [];
-	public ObservableCollection<TreeData> ONodes { get; internal set; } = [];
+	public HFM_VM ViewModel => InstanceManager.HFM;
+
+	public DynamicGroupCollection<EntryRow>? GroupedEntries => ViewModel.GroupedEntries;
+	public ObservableCollection<HistoryRow> OHistories => ViewModel.OHistories;
+	public ObservableCollection<ParentRow> OParents => ViewModel.OParents;
+	public ObservableCollection<ChildrenRow> OChildren => ViewModel.OChildren;
+	public ObservableCollection<PropertiesRow> OProperties => ViewModel.OProperties;
+	public ObservableCollection<VersionRow> OVersions => ViewModel.OVersions;
+	public ObservableCollection<TreeData> ONodes => ViewModel.ONodes;
+	public ObservableCollection<TreeData>? LastSelectedNodePaths => ViewModel.LastSelectedNodePaths;
 
 	public static ConcurrentQueue<(StatusMessage action, string description)> QueueAsyncStatus = new();
 	public static StatusDialog? Dialog { get; set; }
@@ -342,10 +333,23 @@ public sealed partial class HackFileManager : Page
 		InitializeComponent();
 		BuildDataGridProgrammatically();
 		HackLoaded = false;
+		Loaded += (_, _) =>
+		{
+			if (!HackLoaded) LoadHackMan();
+		};
 #if DEBUG
 		//DebugTest();
 		//DebugTest2();
 #endif
+	}
+
+	protected override void OnNavigatedTo(NavigationEventArgs e)
+	{
+		base.OnNavigatedTo(e);
+		if (!HackLoaded)
+		{
+			LoadHackMan();
+		}
 	}
 	public static async Task LoadOdooDefaults()
 	{
@@ -683,6 +687,9 @@ public sealed partial class HackFileManager : Page
 }
 public sealed partial class HackFileManager : Page
 {
+	private bool _isComponentInPip = false;
+	private PipWindow? _pipWindow;
+
 	private void OdooDirectoryBreadcrumb_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
 	{
 		var tData = args.Item as TreeData;
@@ -746,6 +753,77 @@ public sealed partial class HackFileManager : Page
 		await MessageBox.ShowAsync("Completed!");
 		_treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
 	}
+	private void OnTogglePipClicked( object sender, RoutedEventArgs e )
+	{
+		if( !_isComponentInPip )
+		{
+			ImageSlot.Children.Remove( OdooEntryImage );
+
+			_pipWindow = new PipWindow();
+			_pipWindow.HostComponent( OdooEntryImage );
+
+			// Wire up your custom return callback event here!
+			_pipWindow.ReturnRequested += ( s, args ) => ReturnComponentToMain();
+			_pipWindow.Closed += OnPipWindowClosed;
+
+			_pipWindow.Activate();
+			_isComponentInPip = true;
+		}
+		else
+		{
+			ReturnComponentToMain();
+		}
+	}
+
+	private void ReturnComponentToMain()
+	{
+		if( _pipWindow != null )
+		{
+			var component = _pipWindow.ReleaseComponent();
+			if( component != null )
+			{
+				ImageSlot.Children.Add( component );
+			}
+
+			_pipWindow.Closed -= OnPipWindowClosed;
+			_pipWindow.Close();
+			_pipWindow = null;
+		}
+		_isComponentInPip = false;
+	}
+
+	private void OnPipWindowClosed( object sender, WindowEventArgs args )
+	{
+		// 1. Break the closed window reference immediately to avoid memory leaks
+		if( _pipWindow != null )
+		{
+			// Unsubscribe from our custom callback to allow the window to be garbage collected
+			_pipWindow.Closed -= OnPipWindowClosed;
+			_pipWindow = null;
+		}
+
+		// 2. Safely rescue your UI component and re-anchor it to MainWindow
+		// Note: We use the UI Dispatcher to prevent threading exceptions during window destruction
+		this.DispatcherQueue.TryEnqueue( () =>
+		{
+			// Check if the component was already reclaimed (to prevent duplication)
+			if( !ImageSlot.Children.Contains( OdooEntryImage ) )
+			{
+				// If MyVideoPlayer still has a parent element, clear it out first
+				if( OdooEntryImage.Parent is Panel parentPanel )
+				{
+					parentPanel.Children.Remove( OdooEntryImage );
+				}
+
+				// Snap it back home into your main layout
+				ImageSlot.Children.Add( OdooEntryImage );
+			}
+
+			// 3. Reset the structural state variable
+			_isComponentInPip = false;
+		} );
+	}
+
 	private async Task<bool> CommitRecord( HackFile? hack, HpPDMCommit commit, bool inOdoo = false )
 	{
 		if( hack is null )
@@ -1027,9 +1105,48 @@ public sealed partial class HackFileManager : Page
 		if (entry.LatestId is int id)
 		{
 			await _gridHelper.PreviewImage(id);
+		} 
+		else if (entry.Status is FileStatus.Lo)
+		{
+			BitmapImage? icon = await GetFileIconAsync( entry.LocalFile?.FullName ?? "", 512 );
+			if (icon != null)
+			{
+				_gridHelper.SetEntryImageView(icon);
+			}
 		}
 	}
+	public async Task<BitmapImage?> GetFileIconAsync( string filePath, uint dynamicSize = 64 )
+	{
+		try
+		{
+			if (!File.Exists(filePath))
+				return null;
 
+			// 1. Get the file handle using WinRT Storage API
+			StorageFile file = await StorageFile.GetFileFromPathAsync(filePath);
+
+			// 2. Extract the system thumbnail icon (32x32 requested here)
+			// Returns a crisp asset using a modern system scaling strategy
+			using var thumbnail = await file.GetThumbnailAsync(
+				ThumbnailMode.SingleItem,
+				dynamicSize,
+				ThumbnailOptions.ResizeThumbnail ); // Ensures Windows targets exact scale bounding
+			if( thumbnail != null )
+			{
+				// 3. Convert it directly into a WinUI 3 compatible BitmapImage
+				BitmapImage bitmapImage = new();
+				await bitmapImage.SetSourceAsync( thumbnail );
+				return bitmapImage;
+			}
+		}
+		catch( Exception ex )
+		{
+			// Handle file missing or access restriction exceptions
+			System.Diagnostics.Debug.WriteLine( $"Failed to get icon: {ex.Message}" );
+		}
+
+		return null;
+	}
 	#endregion
 	public async static Task<HpDirectory?> CreateDirectories(HackFile? hack)
 	{
@@ -1429,87 +1546,82 @@ public sealed partial class HackFileManager : Page
 			and DataGridSortDirection.Ascending
 				? (DataGridSortDirection.Descending, true)
 				: (DataGridSortDirection.Ascending, false);
-		
-		switch (modelField)
-		{
-			case null: return;
-			case nameof(EntryRow.Name):
-			{
-				GroupedEntries?.Master.Sort((s, o) 
-					=> string.Compare(s.Name, o.Name, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
-				break;
-			}
-			case nameof(EntryRow.Id):
-			{
-				GroupedEntries?.Master.Sort((s, o) 
-					=> s.Id.Compare(o.Id), isDesc);
-				break;
-			}
-			case nameof(EntryRow.Checkout):
-			{
-				GroupedEntries?.Master.Sort((s, o) 
-					=> string.Compare(s.Checkout?.name, o.Checkout?.name, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
-				break;	
-			}
-			case nameof(EntryRow.Size):
-			{
-				GroupedEntries?.Master.Sort((s, o) 
-					=> Nullable.Compare(s.Size, o.Size), isDesc);
-				break;	
-			}
-			case nameof(EntryRow.Type):
-			{
-				GroupedEntries?.Master.Sort((s, o) 
-					=> string.Compare(s.Type, o.Type, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
-				break;	
-			}
-			case nameof(EntryRow.Status):
-			{
-				GroupedEntries?.Master.Sort((s, o) 
-					=> string.Compare(Enum.GetName(s.Status), Enum.GetName(o.Status), CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
-				break;	
-			}
-			case nameof(EntryRow.LatestId):
-			{
-				GroupedEntries?.Master.Sort((s, o) 
-					=>  Nullable.Compare(s.LatestId, o.LatestId), isDesc);
-				break;	
-			}
-			case nameof(EntryRow.RemoteDate):
-			{
-				GroupedEntries?.Master.Sort((s, o) 
-					=> Nullable.Compare(s.RemoteDate , o.RemoteDate), isDesc);
-				break;	
-			}
-			case nameof(EntryRow.LocalDate):
-			{
-				GroupedEntries?.Master.Sort((s, o) 
-					=> Nullable.Compare(s.LocalDate, o.LocalDate), isDesc);
-				break;	
-			}
-			case nameof(EntryRow.Category):
-			{
-				GroupedEntries?.Master.Sort((s, o) 
-					=> string.Compare(s.Category?.name, o.Category?.name, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
-				break;	
-			}
-			case nameof(EntryRow.FullName):
-			{
-				GroupedEntries?.Master.Sort((s, o) 
-					=> string.Compare(s.FullName, o.FullName, CultureInfo.InvariantCulture, CompareOptions.IgnoreCase), isDesc);
-				break;	
-			}
-			default: return;
-		}
+
+		SortLogic<string>( modelField as string ?? "", isDesc );
 		GroupedEntries?.Regroup();
-		grid.ItemsSource = GroupedEntries?.NoGrouping is true
+		grid?.ItemsSource = GroupedEntries?.NoGrouping is true
 							? GroupedEntries?.Master
 							: GroupedEntries?.ViewSource.View;
 		// e.Column.SortDirection = e.Column.SortDirection == DataGridSortDirection.Ascending 
 		// 	? DataGridSortDirection.Descending
 		// 	: DataGridSortDirection.Ascending;
 	}
+	private void SortLogic<T>( string fieldName, bool isDesc )
+	{
+		switch( fieldName )
+		{
+			case null:
+				return;
 
+			case nameof( EntryRow.Name ):
+			{
+				GroupedEntries?.Master.Sort( (item) => item.Name ?? "", isDesc );
+				break;
+			}
+			case nameof( EntryRow.Id ):
+			{
+				GroupedEntries?.Master.Sort( (item) => item.Id ?? 0, isDesc );
+				break;
+			}
+			case nameof( EntryRow.Checkout ):
+			{
+				GroupedEntries?.Master.Sort( (item) => item.Checkout?.name ?? "", isDesc );
+				break;
+			}
+			case nameof( EntryRow.Size ):
+			{
+				GroupedEntries?.Master.Sort( (item) => item.Size, isDesc );
+				break;
+			}
+			case nameof( EntryRow.Type ):
+			{
+				GroupedEntries?.Master.Sort( (item) => item.Type ?? "", isDesc );
+				break;
+			}
+			case nameof( EntryRow.Status ):
+			{
+				GroupedEntries?.Master.Sort( (item) => Enum.GetName(item.Status) ?? "", isDesc );
+				break;
+			}
+			case nameof( EntryRow.LatestId ):
+			{
+				GroupedEntries?.Master.Sort( (item) => item.LatestId, isDesc );
+				break;
+			}
+			case nameof( EntryRow.RemoteDate ):
+			{
+				GroupedEntries?.Master.Sort( (item) => item.RemoteDate, isDesc );
+				break;
+			}
+			case nameof( EntryRow.LocalDate ):
+			{
+				GroupedEntries?.Master.Sort( (item) => item.LocalDate, isDesc );
+				break;
+			}
+			case nameof( EntryRow.Category ):
+			{
+				GroupedEntries?.Master.Sort( (item) => item.Category?.name ?? "", isDesc );
+				break;
+			}
+			case nameof( EntryRow.FullName ):
+			{
+				GroupedEntries?.Master.Sort( (item) => item.FullName ?? "", isDesc );
+				break;
+			}
+			default:
+				return;
+		}
+	}
 	//
 	private void Tree_Click_GetLatest(object sender, RoutedEventArgs e)
 		=> GetLatestFromTreeNode(true);

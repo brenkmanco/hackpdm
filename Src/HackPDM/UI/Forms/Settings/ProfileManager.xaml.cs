@@ -49,8 +49,13 @@ namespace HackPDM.UI.Forms.Settings;
 /// </summary>
 public sealed partial class ProfileManager : Page
 {
-	public static bool IsLoggedIn { get; private set; }
-	public static ObservableCollection<BasicStatusMessage> OStatus { get; internal set; } = [];
+	public PM_VM ViewModel => InstanceManager.PM;
+	public static bool IsLoggedIn 
+	{ 
+		get => InstanceManager.PM.IsLoggedIn; 
+		set => InstanceManager.PM.IsLoggedIn = value; 
+	}
+	public static ObservableCollection<BasicStatusMessage> OStatus => InstanceManager.PM.OStatus;
 	private readonly SavedData _templateData = new()
 	{
 		OdooAddress = "10.0.0.68",

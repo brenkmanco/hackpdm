@@ -24,6 +24,7 @@ using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Hack;
 using HackPDM.UI.Forms.Helper;
 using HackPDM.UI.Forms.Settings;
+using HackPDM.UI.Models;
 using HackPDM.UI.Types;
 
 using Microsoft.UI.Xaml;
@@ -43,24 +44,19 @@ namespace HackPDM.UI.Forms.Odoo;
 /// </summary>
 public sealed partial class SearchOdoo : Page
 {
-	// NOTE: The SearchWidths and SearchPropWidths dictionaries are no longer needed.
-	// All column widths are now defined directly in the XAML.
-	
+	public SearchOdoo_VM ViewModel => InstanceManager.SearchOdoo;
+
 	private HackFileManager hackman;
 
-	// --- WinForms Control Dependencies ---
-	// NOTE: These variables are System.Windows.Forms controls.
-	// If 'hackman' is also being migrated to WinUI 3, these should be
-	// changed to Microsoft.UI.Xaml.Controls.TreeView and .ListView.
 	private TreeView OdooDirectoryTree;
 	private DataGrid OdooEntryList;
 
 	private Window ParentWindow;
 	// --- Data collections for WinUI 3 ListView Binding ---
-	private ObservableCollection<SearchRow> SearchResultsList = new();
-	private ObservableCollection<SearchPropertiesRow> PropertiesActive = new();
-	private ObservableCollection<OperatorsRow> OperatorList = new();
-	private ObservableCollection<SearchPropertiesRow> PropertiesSearchable = new();
+	public ObservableCollection<SearchRow> SearchResultsList => ViewModel.SearchResultsList;
+	public ObservableCollection<SearchPropertiesRow> PropertiesActive => ViewModel.PropertiesActive;
+	public ObservableCollection<OperatorsRow> OperatorList => ViewModel.OperatorList;
+	public ObservableCollection<SearchPropertiesRow> PropertiesSearchable => ViewModel.PropertiesSearchable;
 
 	public SearchOdoo()
 	{
@@ -93,31 +89,42 @@ public sealed partial class SearchOdoo : Page
 
 	private void SetPropertyDropdown()
 	{
-		foreach (var values in OdooDefaults.Instance.IdToProp)
+		if (PropertiesSearchable.Count == 0 && OdooDefaults.Instance?.IdToProp != null)
 		{
-			PropertiesSearchable.Add(
-				new SearchPropertiesRow()
-				{
-					Name = values.Value.name,
-					ID = values.Key,
-					IsTextOrDate = values.Value.prop_type == "text",
-				}
-			);
+			foreach (var values in OdooDefaults.Instance.IdToProp)
+			{
+				PropertiesSearchable.Add(
+					new SearchPropertiesRow()
+					{
+						Name = values.Value.name,
+						ID = values.Key,
+						IsTextOrDate = values.Value.prop_type == "text",
+					}
+				);
+			}
 		}
 		OdooSearchProperty.ItemsSource = PropertiesSearchable;
-		OdooSearchPropList.ItemsSource = PropertiesSearchable;
+		OdooSearchPropList.ItemsSource = PropertiesActive;
 	}
 	private void SetPropertyEqualDropdown()
 	{
 		OperatorsRow? defSearchCompare = null;
 		OperatorsRow? defSearchProp = null;
-		foreach (var op in Enum.GetValues<Operators>())
+		if (OperatorList.Count == 0)
 		{
-			OperatorsRow opRow = new() { Operator = op };
-			if (op == Operators.ILike) defSearchCompare = opRow;
-			else if (op == Operators.Equal) defSearchProp = opRow;
-			
-			OperatorList.Add(opRow);
+			foreach (var op in Enum.GetValues<Operators>())
+			{
+				OperatorsRow opRow = new() { Operator = op };
+				if (op == Operators.ILike) defSearchCompare = opRow;
+				else if (op == Operators.Equal) defSearchProp = opRow;
+				
+				OperatorList.Add(opRow);
+			}
+		}
+		else
+		{
+			defSearchCompare = OperatorList.FirstOrDefault(o => o.Operator == Operators.ILike);
+			defSearchProp = OperatorList.FirstOrDefault(o => o.Operator == Operators.Equal);
 		}
 
 		OdooSearchPropEqual.ItemsSource = OperatorList;

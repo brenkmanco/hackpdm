@@ -2,12 +2,14 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
 using HackPDM.Core.Helper.Xaml;
 using HackPDM.Domain.Representation;
 using HackPDM.Shared.GlobalData;
+using HackPDM.UI.Data;
 using HackPDM.UI.Forms;
 
 using Microsoft.UI.Windowing;
@@ -71,7 +73,7 @@ public static partial class WindowHelper
     }
     public static T CreateWindow<T>(string? configName = null, bool activated = true, bool withFrame = true) where T : Window, new()
     {
-        T window = new T();
+        T window = new();
         if (activated) window.Activate();
 
         if (withFrame)
@@ -173,20 +175,11 @@ public static partial class WindowHelper
 		titleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(50, 255, 255, 255);
 	}
 }
-public class WindowConfig(string title, Vector4<int> positionAndSize, AppWindowPresenterKind kind = AppWindowPresenterKind.Overlapped)
+public class WindowConfig
 {
-    public static Dictionary<string, WindowConfig> PresetWindowConfig = new ()
-	{
-		{"ProfileManager", new WindowConfig("Profile Manager", new Vector4<int>(200, 200, 600, 600))},
-        {"OdooSettings", new WindowConfig("Odoo Settings", new Vector4<int>(200, 200, 500, 500))},
-		{"HackSettings", new WindowConfig("Hack Settings", new Vector4<int>(200, 200, 700, 200))},
-		{"ConfigSettings", new WindowConfig("Configuration Settings", new Vector4<int>(200, 200, 900, 600))},
-        {"HackFileManager", new WindowConfig("Hack File Manager", new Vector4<int>(100, 100, 1500, 800))},
-		{"NotLoggedIn", new WindowConfig("Hack File Manager", new Vector4<int>(0, 0, 1280, 720))},
-		{"MessageBox", new WindowConfig("Info", new Vector4<int>(200, 200, 450, 250), AppWindowPresenterKind.CompactOverlay)},
-        {"TemplateWindow", new WindowConfig("Template Window", new Vector4<int>(200, 200, 500, 300))},
-    };
-    public string Title { get; set; } = title;
-    public Vector4<int> PositionAndSize { get; set; } = positionAndSize;
-    public AppWindowPresenterKind WindowKind { get; set; } = kind;
+    [JsonIgnore]
+    public static Dictionary<string, WindowConfig> PresetWindowConfig = UIStorage.GlobalData.Win.PresetWindowConfig;
+    public string Title { get; set; } = "Window";
+    public Vector4<int> PositionAndSize { get; set; } = (0, 0, 500, 350);
+    public AppWindowPresenterKind WindowKind { get; set; } = AppWindowPresenterKind.Overlapped;
 }

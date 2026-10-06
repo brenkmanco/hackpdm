@@ -15,6 +15,7 @@ using HackPDM.UI.Data;
 using HackPDM.UI.Forms.FormTransport;
 using HackPDM.UI.Forms.Hack;
 using HackPDM.UI.Forms.Helper;
+using HackPDM.UI.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -32,11 +33,13 @@ namespace HackPDM.UI.Forms.Settings;
 /// </summary>
 public sealed partial class StatusDialog : Page
 {
+    public StatusDialog_VM ViewModel => InstanceManager.StatusDialog;
+
     public Window? ParentWindow { get; set; }
 
-    public ObservableCollection<BasicStatusMessage> OStatus { get; internal set; } = [];
-    public ObservableCollection<BasicStatusMessage> OInfo { get; internal set; } = [];
-    public ObservableCollection<BasicStatusMessage> OError { get; internal set; } = [];
+    public ObservableCollection<BasicStatusMessage> OStatus => ViewModel.OStatus;
+    public ObservableCollection<BasicStatusMessage> OInfo => ViewModel.OInfo;
+    public ObservableCollection<BasicStatusMessage> OError => ViewModel.OError;
     public static Brush ColorProcessing { get; set; } = UIStorage.BrushDarkBlue.Value;
     public static Brush ColorSkip { get; set; } = UIStorage.BrushDarkGray.Value;
     public static Brush ColorFound { get; set; } = UIStorage.BrushDarkGray.Value;
@@ -75,9 +78,9 @@ public sealed partial class StatusDialog : Page
         }
     }
     public bool DoubleBuff { get; set; } = true;
-    public bool Canceled { get; private set; }
-    public bool HasLoaded { get; set; }
-	internal bool IsInProcess { get; set; }
+    public bool Canceled { get => ViewModel.Canceled; private set => ViewModel.Canceled = value; }
+    public bool HasLoaded { get => ViewModel.HasLoaded; set => ViewModel.HasLoaded = value; }
+	internal bool IsInProcess { get => ViewModel.IsInProcess; set => ViewModel.IsInProcess = value; }
 
     public bool ShowStatusDialog(string titleText)
     {

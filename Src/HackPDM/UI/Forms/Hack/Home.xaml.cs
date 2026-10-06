@@ -112,7 +112,7 @@ public sealed partial class Home : Page
                 }
             case "Profile Manager":
                 {
-                    NavFrame.Content = InstanceManager.GetAPage<ProfileManager>();
+                    NavFrame.Navigate(typeof(ProfileManager));
 					WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(ProfileManager)));
 
 					break;
@@ -121,18 +121,12 @@ public sealed partial class Home : Page
                 {
 					if (!ProfileManager.IsLoggedIn)
                     {
-                        NavFrame.Content = InstanceManager.GetAPage<NotLoggedIn>();
+                        NavFrame.Navigate(typeof(NotLoggedIn));
 						WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(NotLoggedIn)));
 						return;
                     }
-                    if (!InstanceManager.TryGet<HackFileManager>(out var manager))
-                    {
-                        manager = HackApp.Services?.GetRequiredService<HackFileManager>();
-                        InstanceManager.Register(manager);
-                    }
 
-                    if (manager?.HackLoaded is false) manager.LoadHackMan();
-                    NavFrame.Content = manager;
+                    NavFrame.Navigate(typeof(HackFileManager));
 					WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(HackFileManager)));
 					break;
                 }

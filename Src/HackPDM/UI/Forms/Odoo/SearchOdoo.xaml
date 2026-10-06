@@ -176,6 +176,7 @@
             Grid.Row="2"
             Margin="0,16,0,0"
             DoubleTapped="OdooSearchResults_DoubleTapped"
+            ItemsSource="{x:Bind ViewModel.SearchResultsList, Mode=OneWay}"
             SelectionMode="Extended">
 
             <com:DataGrid.Columns>

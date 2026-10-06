@@ -119,6 +119,7 @@
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch"
             AutoGenerateColumns="False"
+            ItemsSource="{x:Bind ViewModel.OStatus, Mode=OneWay}"
             BorderThickness="1,1,1,1">
             <!--  FIX: Remove ListView.View, use ListView.ItemTemplate for UWP/WinUI  -->
             <com:DataGrid.Columns>

@@ -236,7 +236,11 @@ public static class ExtensionMethods
 	extension<T>(ObservableCollection<T> oc)
     {
         public void Sort(Comparison<T> comparer, bool reverse = false) => oc.SortInternal(comparer, reverse);
+		public void Sort<TKey>(Func<T, TKey> keySelector, bool reverse = false) => oc.SortInternal(keySelector, reverse);
+		
 		public void ReverseSort(Comparison<T> comparer) => oc.SortInternal(comparer, true);
+		public void ReverseSort<TKey>( Func<T, TKey> keySelector ) => oc.SortInternal( keySelector, true );
+
 		private void SortInternal(Comparison<T> comparer, bool reverse = false)
 		{
 			// Step 1: Create a sorted snapshot
@@ -259,6 +263,21 @@ public static class ExtensionMethods
 			}
 
 			Debug.WriteLine("Finished Sorting");
+		}
+		private void SortInternal<TKey>(Func<T, TKey> keySelector, bool reverse = false)
+		{
+			var ocSort = reverse ? oc.OrderByDescending(keySelector).ToList() :
+			oc.OrderBy( keySelector ).ToList();
+
+			ocSort.ForEach( item =>
+			{
+				int currentIndex = oc.IndexOf(item);
+				int targetIndex = oc.IndexOf(item);
+				if( currentIndex != targetIndex )
+				{
+					oc.Move( currentIndex, targetIndex );
+				}
+			} );
 		}
     }
 	extension<T>(IEnumerable<T?> array)

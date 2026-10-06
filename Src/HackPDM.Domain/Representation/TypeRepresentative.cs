@@ -45,7 +45,7 @@ namespace HackPDM.Domain.Representation
 				_ => throw new IndexOutOfRangeException(),
 			};
 		}
-
+		public static implicit operator Vector2<T>( (T, T) v ) => new( v.Item1, v.Item2);
 		public override readonly string? ToString() => $"({x}, {y})";
 	}
 	public struct Vector3<T>(T x, T y, T z) : IVectorize3<T>
@@ -73,6 +73,7 @@ namespace HackPDM.Domain.Representation
 			};
 		}
 
+		public static implicit operator Vector3<T>( (T, T, T) v ) => new( v.Item1, v.Item2, v.Item3 );
 		public override readonly string? ToString() => $"({x}, {y}, {z})";
 	}
 	public struct Vector4<T>(T x, T y, T z, T w) : IVectorize4<T>
@@ -106,6 +107,9 @@ namespace HackPDM.Domain.Representation
 		//public static Vector4<T> operator +(Vector4<T> a, Vector4<T> b) => new(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
 		//public static Vector4<T> operator -(Vector4<T> a, Vector4<T> b) => new(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);
 		public static implicit operator RectInt32(Vector4<T> xyzw)		=> xyzw is Vector4<int> vec ? new RectInt32(vec.x, vec.y, vec.z, vec.w) : default;
+
+		public static implicit operator Vector4<T>( (T, T, T, T) v ) => new (v.Item1, v.Item2, v.Item3, v.Item4);
+
 		//public static implicit operator Vector4<T>(RectInt32 wxyz)		=> new (wxyz.X, wxyz.Y, wxyz.Width, wxyz.Height);
 		public override readonly string? ToString() => $"({x}, {y}, {z}, {w})";
 	}

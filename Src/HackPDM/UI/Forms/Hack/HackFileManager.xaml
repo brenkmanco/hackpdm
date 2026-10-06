@@ -375,6 +375,24 @@
                             Height="0"
                             Source="ms-appx:///Assets/placeholder.png"
                             Stretch="UniformToFill" />
+                        <Grid
+                            Margin="10"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top">
+                            <Button
+                                x:Name="EnterPipButton"
+                                Padding="8"
+                                Background="#80000000"
+                                BorderThickness="0"
+                                Click="OnTogglePipClicked"
+                                ToolTipService.ToolTip="Enter Picture-in-Picture Mode">
+                                <!--  Segoe MDL2 Assets code for 'Back to Window' icon  -->
+                                <FontIcon
+                                    FontSize="16"
+                                    Foreground="White"
+                                    Glyph="&#xE73F;" />
+                            </Button>
+                        </Grid>
 
                     </StackPanel>
                     <CommandBar

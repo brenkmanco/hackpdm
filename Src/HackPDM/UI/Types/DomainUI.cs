@@ -212,7 +212,6 @@ public class EntryRow : HackPDM.Domain.Representation.EntryRow
 	public override bool? IsOnlyLocal => IsRemote is false & IsLocal is true;
 	public override bool? IsOnlyRemote => IsRemote is true & IsLocal is false;
 }
-
 public partial class TreeData(string? name) : HackPDM.Domain.Representation.TreeData, IEnumerable<TreeData>
 {
 	public TreeView? ParentTree { get; internal set; }

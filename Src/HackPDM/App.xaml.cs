@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using HackPDM.Abstractions;
 using HackPDM.Core.Configuration;
@@ -21,6 +21,9 @@ using HackPDM.Domain.Hack;
 using HackPDM.UI.Forms.FormTransport;
 using HackPDM.UI.Forms.Helper;
 using Microsoft.UI.Dispatching;
+using HackPDM.UI.Data;
+using HackPDM.UI.Models;
+using System.Diagnostics;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -63,6 +66,9 @@ public partial class HackApp : Application
         services.AddSingleton<TreeHelp>();
         services.AddSingleton<GridHelp>();
 
+        services.AddSingleton<VMEnv>();
+        services.AddSingleton(provider => provider.GetRequiredService<VMEnv>().HFM);
+
 	    services.AddTransient<ProfileManager>();
         services.AddTransient<MessageBox>();
         services.AddTransient<HackFileManager>();
@@ -88,12 +94,20 @@ public partial class HackApp : Application
     {
 		Window = new MainWindow();
 		Window.SetWindowType(AppWindowPresenterKind.Overlapped);
+		Window.Closed += Window_Closed;
         Window.Activate();
 
         DispatcherQueue = Window.DispatcherQueue;
+        Debug.WriteLine( $"Global data loaded from file: {UIStorage.GlobalData.IsLoadedFromFile}" );
         ConfigureServices();
     }
-    private static void Setup ()
+
+	private void Window_Closed( object sender, WindowEventArgs args )
+	{
+        UIStorage.GlobalData.SaveToFile();
+	}
+
+	private static void Setup ()
     {
 		if (StorageBox.TemporaryPath == null) return;
         if (!Directory.Exists(StorageBox.TemporaryPath)) Directory.CreateDirectory(StorageBox.TemporaryPath);
