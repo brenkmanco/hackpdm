@@ -279,7 +279,7 @@ public class OdooDefaults : IOdooDefaults
     #region Functions
     public async Task InitializeLoginAsync()
 	{
-		await TryAsync( async () => OdooId = OdooId is 0 ? ( await OdooClient.LoginJson( 7000 ) ?? 0 ) : OdooId );
+		await TryHelper.TryAsync( async () => OdooId = OdooId is 0 ? ( await OdooClient.LoginJson( 7000 ) ?? 0 ) : OdooId );
 	}
 	public async Task InitializeAsync()
     {
@@ -293,17 +293,17 @@ public class OdooDefaults : IOdooDefaults
 			throw new Exception( "OdooId is 0 after login attempt" );
 		}
 		// HpNodes && MyNode
-		await TryAsync( async () => HpNodes                 = await HpNode.GetAllRecordsAsync() )
+		await TryHelper.TryAsync( async () => HpNodes                 = await HpNode.GetAllRecordsAsync() )
             .ContinueWith( async ( success ) => MyNode      = await success ? HpNodes?.FirstOrDefault( node => node.name.Equals( Environment.MachineName.ToLower() ) )
 				?? TryAssignNewHpNode().Result
 				?? throw new ArgumentNullException( nameof( HpNode ), @"Unable to register new node" ) : null);
 		// HpDirectoryRoot
-		await TryAsync( async () => HpDirectoryRoot         = await HpDirectory.GetRecordByIdAsync( 1 ) );
+		await TryHelper.TryAsync( async () => HpDirectoryRoot         = await HpDirectory.GetRecordByIdAsync( 1 ) );
 		// HpUsers && IdToUser
-		await TryAsync( async () => HpUsers                 = await HpUser.GetAllRecordsAsync() )
+		await TryHelper.TryAsync( async () => HpUsers                 = await HpUser.GetAllRecordsAsync() )
             .ContinueWith( async ( success ) => IdToUser    = await success ? IdMapUser( HpUsers ) : [] );
         // HpProperties && ExtToProp && IdToProp
-        await TryAsync( async () => HpProperties = await HpProperty.GetAllRecordsAsync() )
+        await TryHelper.TryAsync( async () => HpProperties = await HpProperty.GetAllRecordsAsync() )
              .ContinueWith( async ( success ) =>
              {
                  ExtToProp = await success 
@@ -316,12 +316,12 @@ public class OdooDefaults : IOdooDefaults
 			        : [];
 			 } );
 		// HpTypes && ExtToType
-		await TryAsync( async () => HpTypes                 = await HpType.GetAllRecordsAsync() )
+		await TryHelper.TryAsync( async () => HpTypes                 = await HpType.GetAllRecordsAsync() )
             .ContinueWith( async ( success ) => ExtToType   = await success ? ExtensionMapType( HpTypes ) : [] );
         // HpCategories
-		await TryAsync( async () => HpCategories            = await HpCategory.GetAllRecordsAsync() );
+		await TryHelper.TryAsync( async () => HpCategories            = await HpCategory.GetAllRecordsAsync() );
 		// HpEntryNameFilters && EntryFilterPatterns && ExtToFilter
-		await TryAsync( async () => HpEntryNameFilters      = await HpEntryNameFilter.GetAllRecordsAsync() )
+		await TryHelper.TryAsync( async () => HpEntryNameFilters      = await HpEntryNameFilter.GetAllRecordsAsync() )
 			.ContinueWith( async ( success ) =>
             {
                 if( !await success )
@@ -334,7 +334,7 @@ public class OdooDefaults : IOdooDefaults
 			} );
 		// HpSettings && RestrictTypes && RestrictProperties && SwApi &&
         // MaxBatchSize && MaxConcurrency && ConcurrencySize && DownloadBatchSize
-		await TryAsync( async () => HpSettings              = await HpSetting.GetAllRecordsAsync() )
+		await TryHelper.TryAsync( async () => HpSettings              = await HpSetting.GetAllRecordsAsync() )
 			.ContinueWith( async ( success ) =>
             {
                 if( !await success )
@@ -349,8 +349,9 @@ public class OdooDefaults : IOdooDefaults
 				DownloadBatchSize   = ( Math.Min( MaxBatchSize ?? 5, DownloadBatchSize ) );
                 
 			} );
-        // ExtToCat
-        Try( () =>
+		TryHelper.
+				// ExtToCat
+				Try( () =>
         {
             ExtToCat = HpCategories is HpCategory[] arr && arr.Length != 0
                 && HpTypes is HpType[] arrTypes && arrTypes.Length != 0
@@ -358,24 +359,7 @@ public class OdooDefaults : IOdooDefaults
                 : [];
         } );
 	}
-    public static bool Try( Action act )
-    {
-        try
-        {
-            act();
-            return true;
-        }
-        catch { return false; }
-    }
-	public static async Task<bool> TryAsync( Func<Task> act )
-	{
-		try
-		{
-			await act();
-			return true;
-		}
-		catch { return false; }
-	}
+
 	public async Task<HpNode?> TryAssignNewHpNode()
 	{
 		HpNode? node = null;

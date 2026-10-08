@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using CommunityToolkit.WinUI.UI.Controls;
 
 using HackPDM.Domain.Representation;
+using HackPDM.Infrastructure.Odoo;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Hack;
@@ -142,6 +143,14 @@ public static class CustomSerializers
 }
 public class GlobalSerializedData
 {
+	private const string DefaultFileName = "AppConfig.json";
+	[JsonIgnore]
+	private static readonly string DefaultFilePath = TryHelper
+			.TryGet(() => Path.Combine(
+					Environment.GetFolderPath(Environment.SpecialFolder.Personal),
+					DefaultFileName), out string? path) 
+						? path ?? ""
+						: "";
 	[JsonIgnore]
 	public static JsonSerializerOptions Options = new()
 	{
@@ -151,9 +160,10 @@ public class GlobalSerializedData
 			new CustomSerializers.Vector4Serializer(),
 		}
 	};
-	
+
 	[JsonIgnore]
-	public static string FilePath { get; set; } = Path.Combine( AppContext.BaseDirectory, "AppConfig.json" );
+	public static string? FilePath { get; set; } = GetFilePathDirectory();
+
 	[JsonIgnore]
 	public bool IsLoadedFromFile { get; set; } = false;
 
@@ -164,6 +174,46 @@ public class GlobalSerializedData
 	[JsonPropertyName( "ColumnSettings" )]
 	public OdooEntryColumns ColumnsSettings { get; set; } = new();
 
+	public static string? GetFilePathDirectory()
+	{
+		FileInfo file;
+		try
+		{
+			if (FilePath is null)
+			{
+				;
+				if (!TryHelper.Try(() => SetFilePath(FilePath = DefaultFilePath)))
+				{
+					HackApp.CoreSettings.Set("AppConfigFilePath", FilePath);
+				}
+				return FilePath;
+			}
+
+			file = new(string.IsNullOrEmpty(FilePath) 
+				? HackApp.CoreSettings.Get("AppConfigFilePath", "") ?? DefaultFilePath 
+				: FilePath);
+		}
+		finally
+		{
+			FilePath = DefaultFilePath;
+			file = new(FilePath);
+		}
+		
+		if (file is { Exists: false } or { Extension: not ".json" })
+			SetFilePath(file);
+
+		return FilePath;
+	}
+	public static void SetFilePath(FileInfo fileInfo)
+	{
+		if (fileInfo is { Exists: false } or { Extension: not ".json" })
+			FilePath = DefaultFilePath;
+
+		HackApp.CoreSettings.Set("AppConfigFilePath", FilePath);
+	}
+	public static void SetFilePath(string? filePath)
+		=> SetFilePath(new FileInfo(string.IsNullOrEmpty(filePath) ? DefaultFilePath : filePath));
+	
 	public static GlobalSerializedData LoadFromFile( string filePath )
 	{
 		if( !File.Exists( filePath ) )
@@ -190,6 +240,7 @@ public class GlobalSerializedData
 	{
 		string json = JsonSerializer.Serialize( this, Options );
 		File.WriteAllText( FilePath, json );
+		HackApp.CoreSettings.Set("AppConfigFilePath", FilePath);
 	}
 }
 public class WindowSettings
@@ -200,6 +251,7 @@ public class WindowSettings
 		{ nameof(ProfileManager),		new () { Title = "Profile Manager",     PositionAndSize = (0, 0, 500, 350) }},
 		{ nameof(OdooSettings),			new () { Title = "Odoo Settings",		PositionAndSize = (0, 0, 600, 500) }},
 		{ nameof(HackSettings),			new () { Title = "Hack Settings",		PositionAndSize = (0, 0, 500, 500) }},
+		{ nameof(DynamicJsonForm),      new () { Title = "Json Editor",			PositionAndSize = (0, 0, 1600, 900) }},
 		{ "ConfigSettings",				new () { Title = "Configuration Settings", PositionAndSize = (0, 0, 700, 400) }},
 		{ nameof(HackFileManager),		new () { Title = "Hack File Manager",	PositionAndSize = (0, 0, 1600, 900) }},
 		{ nameof(NotLoggedIn),			new () { Title = "Not Logged In",		PositionAndSize = (0, 0, 1600, 900) }},

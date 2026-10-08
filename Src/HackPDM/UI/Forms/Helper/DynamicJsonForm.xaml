@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="HackPDM.UI.Forms.Helper.DynamicJsonForm"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:HackPDM.UI.Forms.Helper"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    d:DataContext="{d:DesignInstance Type=local:JsonNodeViewModel}"
+    mc:Ignorable="d">
+
+    <Grid
+        Padding="32,24"
+        Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+        RowDefinitions="Auto,*">
+
+        <!--  Header Command Bar & View Switcher  -->
+        <Grid
+            Grid.Row="0"
+            Margin="0,0,0,20"
+            ColumnDefinitions="*,Auto,Auto">
+            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="JSON Schema Editor" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Text="Hierarchical payload builder and interactive editor" />
+            </StackPanel>
+
+            <!--  View Mode Switcher  -->
+            <SelectorBar
+                Grid.Column="1"
+                Margin="0,0,16,0"
+                VerticalAlignment="Center"
+                SelectionChanged="OnViewModeChanged">
+                <SelectorBarItem
+                    IsSelected="True"
+                    Tag="Tree"
+                    Text="Visual Tree">
+                    <SelectorBarItem.Icon>
+                        <FontIcon Glyph="&#xE81E;" />
+                    </SelectorBarItem.Icon>
+                </SelectorBarItem>
+
+                <SelectorBarItem Tag="Code" Text="Code IDE">
+                    <SelectorBarItem.Icon>
+                        <FontIcon Glyph="&#xE943;" />
+                    </SelectorBarItem.Icon>
+                </SelectorBarItem>
+            </SelectorBar>
+
+            <StackPanel
+                Grid.Column="2"
+                VerticalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="8">
+                <Button Click="OnLoadJsonClick" Style="{StaticResource AccentButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="16" Glyph="&#xE8E5;" />
+                        <TextBlock Text="Load Sample" />
+                    </StackPanel>
+                </Button>
+
+                <Button Click="OnExportJsonClick">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="16" Glyph="&#xE78C;" />
+                        <TextBlock Text="Export JSON" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!--  Main Content Area: Visual Tree Container  -->
+        <Border
+            x:Name="VisualTreeBorder"
+            Grid.Row="1"
+            Padding="16"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Visibility="Visible">
+
+            <TreeView
+                x:Name="JsonTreeView"
+                ItemsSource="{x:Bind RootNodes, Mode=OneWay}"
+                SelectionMode="None">
+                <TreeView.Resources>
+                    <Thickness x:Key="TreeViewItemPresenterPadding">0,0,0,0</Thickness>
+                    <Thickness x:Key="TreeViewItemPresenterMargin">0,0,0,0</Thickness>
+                    <x:Double x:Key="TreeViewItemIndent">24</x:Double>
+                    <x:Double x:Key="TreeViewItemExpandCollapseChevronFontSize">12</x:Double>
+                    <x:Double x:Key="TreeViewItemMinHeight">38</x:Double>
+                </TreeView.Resources>
+
+                <TreeView.ItemTemplate>
+                    <DataTemplate x:DataType="local:JsonNodeViewModel">
+                        <TreeViewItem IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}" ItemsSource="{x:Bind Children}">
+
+                            <Grid VerticalAlignment="Stretch" ColumnDefinitions="Auto,Auto">
+
+                                <!--  Continuous Branch Line  -->
+                                <Grid
+                                    Grid.Column="0"
+                                    Width="20"
+                                    Margin="-2,0,4,0"
+                                    VerticalAlignment="Stretch"
+                                    Visibility="{x:Bind IsChildNode, Mode=OneWay}">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+
+                                    <Rectangle
+                                        Grid.Row="0"
+                                        Width="2"
+                                        Margin="4,0,0,0"
+                                        HorizontalAlignment="Left"
+                                        Fill="{x:Bind TypeColorHex, Mode=OneWay}"
+                                        Opacity="0.75" />
+
+                                    <Rectangle
+                                        Grid.Row="1"
+                                        Width="2"
+                                        Margin="4,0,0,0"
+                                        HorizontalAlignment="Left"
+                                        Fill="{x:Bind TypeColorHex, Mode=OneWay}"
+                                        Opacity="0.75"
+                                        Visibility="{x:Bind HasNextSibling, Mode=OneWay}" />
+
+                                    <Rectangle
+                                        Grid.Row="0"
+                                        Height="2"
+                                        Margin="4,0,0,0"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Bottom"
+                                        Fill="{x:Bind TypeColorHex, Mode=OneWay}"
+                                        Opacity="0.75" />
+                                </Grid>
+
+                                <!--  Node Card  -->
+                                <Border
+                                    Grid.Column="1"
+                                    Margin="0,2"
+                                    Padding="8,4"
+                                    HorizontalAlignment="Left"
+                                    Background="{x:Bind CardBackgroundHex, Mode=OneWay}"
+                                    BorderBrush="{x:Bind TypeColorHex, Mode=OneWay}"
+                                    BorderThickness="2,1,1,1"
+                                    CornerRadius="6">
+
+                                    <StackPanel
+                                        VerticalAlignment="Center"
+                                        Orientation="Horizontal"
+                                        Spacing="10">
+                                        <FontIcon
+                                            VerticalAlignment="Center"
+                                            FontSize="16"
+                                            Foreground="{x:Bind TypeColorHex, Mode=OneWay}"
+                                            Glyph="{x:Bind TypeGlyph, Mode=OneWay}" />
+
+                                        <TextBox
+                                            Width="140"
+                                            VerticalAlignment="Center"
+                                            PlaceholderText="Key name"
+                                            Text="{x:Bind Key, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                                        <ComboBox
+                                            Width="110"
+                                            VerticalAlignment="Center"
+                                            ItemsSource="{x:Bind local:JsonNodeViewModel.AllNodeTypes}"
+                                            SelectedItem="{x:Bind NodeType, Mode=TwoWay}" />
+
+                                        <Grid Width="220" VerticalAlignment="Center">
+                                            <TextBox
+                                                PlaceholderText="String value..."
+                                                Text="{x:Bind RawValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                Visibility="{x:Bind IsString, Mode=OneWay}" />
+
+                                            <NumberBox
+                                                SmallChange="1"
+                                                SpinButtonPlacementMode="Inline"
+                                                Visibility="{x:Bind IsNumber, Mode=OneWay}"
+                                                Value="{x:Bind NumberValue, Mode=TwoWay}" />
+
+                                            <ToggleSwitch
+                                                MinWidth="0"
+                                                IsOn="{x:Bind BoolValue, Mode=TwoWay}"
+                                                OffContent="False"
+                                                OnContent="True"
+                                                Visibility="{x:Bind IsBoolean, Mode=OneWay}" />
+
+                                            <TextBlock
+                                                VerticalAlignment="Center"
+                                                FontStyle="Italic"
+                                                Foreground="{ThemeResource TextFillColorDisabledBrush}"
+                                                Text="null"
+                                                Visibility="{x:Bind IsNull, Mode=OneWay, FallbackValue=Collapsed}" />
+
+                                            <StackPanel
+                                                VerticalAlignment="Center"
+                                                Orientation="Horizontal"
+                                                Spacing="6"
+                                                Visibility="{x:Bind IsContainer, Mode=OneWay}">
+                                                <InfoBadge Value="{x:Bind ChildCount, Mode=OneWay}" />
+                                                <TextBlock
+                                                    VerticalAlignment="Center"
+                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                                    Text="items" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <StackPanel
+                                            VerticalAlignment="Center"
+                                            Orientation="Horizontal"
+                                            Spacing="2">
+                                            <Button
+                                                Padding="6"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Click="OnAddChildClick"
+                                                ToolTipService.ToolTip="Add Child Node"
+                                                Visibility="{x:Bind IsContainer, Mode=OneWay}">
+                                                <FontIcon FontSize="13" Glyph="&#xE109;" />
+                                            </Button>
+
+                                            <Button
+                                                Padding="6"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Click="OnDeleteNodeClick"
+                                                ToolTipService.ToolTip="Delete Node">
+                                                <FontIcon
+                                                    FontSize="13"
+                                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                    Glyph="&#xE74D;" />
+                                            </Button>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </TreeViewItem>
+                    </DataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+        </Border>
+
+        <!--  Main Content Area: Code IDE Text Box Container  -->
+        <Grid
+            x:Name="CodeEditorGrid"
+            Grid.Row="1"
+            RowDefinitions="Auto,*"
+            Visibility="Collapsed">
+
+            <!--  Validation Error Alert Banner  -->
+            <InfoBar
+                x:Name="JsonParseInfoBar"
+                Grid.Row="0"
+                Margin="0,0,0,12"
+                IsOpen="False"
+                Severity="Error" />
+
+            <!--  Syntax-Highlighted Code Editor Card  -->
+            <Border
+                Grid.Row="1"
+                Padding="12"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+
+                <RichEditBox
+                    x:Name="CodeEditor"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    AcceptsReturn="True"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    FontFamily="Consolas, Cascadia Code, Courier New"
+                    FontSize="14"
+                    IsSpellCheckEnabled="False" />
+            </Border>
+        </Grid>
+    </Grid>
+</Page>

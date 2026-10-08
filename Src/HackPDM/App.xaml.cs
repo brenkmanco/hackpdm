@@ -78,8 +78,9 @@ public partial class HackApp : Application
         Services.GetRequiredService<IHackDefaults>();
         Services.GetRequiredService<IOdooDefaults>();
 
-        HomePage = Services.GetRequiredService<Home>();
         CoreSettings = Services.GetRequiredService<ISettingsProvider>() as CoreSettings;
+        Debug.WriteLine( $"Global data loaded from file: {UIStorage.GlobalData.IsLoadedFromFile}" );
+        HomePage = Services.GetRequiredService<Home>();
 
 		var rootFrame = new Frame();
 		Window?.Content = rootFrame;
@@ -98,7 +99,6 @@ public partial class HackApp : Application
         Window.Activate();
 
         DispatcherQueue = Window.DispatcherQueue;
-        Debug.WriteLine( $"Global data loaded from file: {UIStorage.GlobalData.IsLoadedFromFile}" );
         ConfigureServices();
     }
 

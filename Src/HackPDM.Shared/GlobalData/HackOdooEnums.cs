@@ -173,5 +173,6 @@ public enum NavigatePageMenu
     HackFileManager,
     ProfileManager,
     Configuration,
+    JsonEditor,
     Settings,
 }

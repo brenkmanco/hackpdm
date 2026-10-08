@@ -55,8 +55,8 @@ public static class InstanceManager
             if (HackApp.Services?.GetService<T>() is { } diService)
                 return diService;
 
-			return  factory != null 
-				?     factory()  
+			return  factory != null
+				?     factory()
 				:     Activator.CreateInstance<T>()
 				?? throw new InvalidOperationException($"Unable to create instance of {typeof(T).FullName}");
 		} );

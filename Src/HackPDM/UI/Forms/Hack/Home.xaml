@@ -11,6 +11,7 @@
     <NavigationView
         x:Name="HomeNavigator"
         AlwaysShowHeader="False"
+        BackRequested="HomeNavigator_BackRequested"
         ExpandedModeThresholdWidth="900"
         Header="HackPDM"
         IsBackButtonVisible="Auto"
@@ -20,12 +21,11 @@
         PaneDisplayMode="LeftCompact"
         PaneTitle="Pane"
         SelectionChanged="HomeNavigator_SelectionChanged"
-        BackRequested="HomeNavigator_BackRequested"
         SelectionFollowsFocus="Disabled">
 
         <NavigationView.MenuItems>
             <NavigationViewItem
-                x:Name="HackFMNavItem"
+                x:Name="HackNav"
                 Content="Hack File Manager"
                 Tag="HackFileManager">
                 <NavigationViewItem.Icon>
@@ -36,7 +36,7 @@
             <NavigationViewItemHeader Content="Settings" />
 
             <NavigationViewItem
-                x:Name="ProfileManagerNavItem"
+                x:Name="ProfileNav"
                 Content="Profile Manager"
                 Tag="ProfileManager">
                 <NavigationViewItem.Icon>
@@ -45,7 +45,16 @@
             </NavigationViewItem>
 
             <NavigationViewItem
-                x:Name="HackOdoo"
+                x:Name="JsonEditNav"
+                Content="Json Editor"
+                Tag="Json Editor">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Attach" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+
+            <NavigationViewItem
+                x:Name="HackOdooNav"
                 Content="Configurations"
                 Tag="HackOdoo">
                 <NavigationViewItem.Icon>

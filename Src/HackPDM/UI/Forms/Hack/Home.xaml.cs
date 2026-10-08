@@ -8,6 +8,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Controls;
+using HackPDM.UI.Forms.Helper;
 using HackPDM.UI.Forms.Odoo;
 using HackPDM.UI.Forms.Settings;
 
@@ -33,36 +34,47 @@ namespace HackPDM.UI.Forms.Hack;
 /// </summary>
 public sealed partial class Home : Page
 {
-    private static NavigationView? Navigator { get; set; }
-    private static NavigationViewItem? HackNav {  get; set; }
-    private static NavigationViewItem? ProfileNav { get; set; }
-    private static NavigationViewItem? ConfigNav { get; set; }
+    private static NavigationView? _Navigator { get; set; }
+    private static Dictionary<NavigatePageMenu, NavigationViewItem?> _NavItems { get; set; } = [];
+    private static NavigationViewItem? _SelectNav { get; set; }
     private static MainWindow? Window { get; set; }
     public Home()
     {
         InitializeComponent();
         Window = HackApp.Window as MainWindow;
-        Navigator = HomeNavigator;
-        var navmenu = HomeNavigator.MenuItems;
-        HackNav = navmenu[0] as NavigationViewItem;
-        // navmenu[1] is the settings header
-        ProfileNav = navmenu[2] as NavigationViewItem;
-        ConfigNav = navmenu[3] as NavigationViewItem;
-
-        Navigator.SelectedItem = ProfileNav;
+        _Navigator = HomeNavigator;
+        _SelectNav = ProfileNav;
+        _NavItems = new Dictionary<NavigatePageMenu, NavigationViewItem?>(
+            HomeNavigator.MenuItems.OfType<NavigationViewItem?>().Select(navItem =>
+            {
+                return navItem?.Name switch
+                {
+                    nameof(HackNav) => new KeyValuePair<NavigatePageMenu, NavigationViewItem?>(NavigatePageMenu.HackFileManager, HackNav),
+                    nameof(ProfileNav) => new KeyValuePair<NavigatePageMenu, NavigationViewItem?>(NavigatePageMenu.ProfileManager, ProfileNav),
+                    nameof(HackOdooNav) => new KeyValuePair<NavigatePageMenu, NavigationViewItem?>(NavigatePageMenu.Configuration, HackOdooNav),
+                    nameof(JsonEditNav) => new KeyValuePair<NavigatePageMenu, NavigationViewItem?>(NavigatePageMenu.JsonEditor, JsonEditNav),
+                    _ => new KeyValuePair<NavigatePageMenu, NavigationViewItem?>(NavigatePageMenu.Settings, null!),
+                };
+            })
+        );
+        
+        _Navigator.SelectedItem = _NavItems[NavigatePageMenu.ProfileManager];
     }
     public static void NavigateToPage(NavigatePageMenu pageMenu)
     {
 		switch (pageMenu)
 		{
 			case NavigatePageMenu.HackFileManager:
-                Navigator?.SelectedItem = HackNav;
+				_SelectNav = _NavItems[NavigatePageMenu.HackFileManager];
 				break;
 			case NavigatePageMenu.ProfileManager:
-                Navigator?.SelectedItem = ProfileNav;
+				_SelectNav = _NavItems[NavigatePageMenu.ProfileManager];
 				break;
 			case NavigatePageMenu.Configuration:
-                Navigator?.SelectedItem = ConfigNav;
+				_SelectNav = _NavItems[NavigatePageMenu.Configuration];
+				break;
+			case NavigatePageMenu.JsonEditor:
+				_SelectNav = _NavItems[NavigatePageMenu.JsonEditor];
 				break;
 			case NavigatePageMenu.Settings:
 				//Navigator?.SelectedItem
@@ -70,6 +82,7 @@ public sealed partial class Home : Page
 			default:
 				break;
 		}
+        _Navigator?.SelectedItem = _SelectNav ?? _NavItems[NavigatePageMenu.ProfileManager];
 	}
 	private void HomeNavigator_SelectionChanged( NavigationView sender, NavigationViewSelectionChangedEventArgs args )
 	{
@@ -80,9 +93,9 @@ public sealed partial class Home : Page
         }
         if (args.SelectedItem is not NavigationViewItem nvi) return;
 
-        switch (nvi.Content)
+        switch (nvi.Name)
         {
-            case "Configurations":
+            case nameof(HackOdooNav):
                 {
                     //var odooSetPage = InstanceManager.GetAPage<OdooSettings>();
                     //var hackSetPage = InstanceManager.GetAPage<HackSettings>();
@@ -110,26 +123,32 @@ public sealed partial class Home : Page
                     WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig("ConfigSettings")!);
                     break;
                 }
-            case "Profile Manager":
-                {
-                    NavFrame.Navigate(typeof(ProfileManager));
-					WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(ProfileManager)));
+            case nameof(ProfileNav):
+            {
+                NavFrame.Navigate(typeof(ProfileManager));
+				WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(ProfileManager)));
 
-					break;
-                }
-            case "Hack File Manager":
+				break;
+            }
+            case nameof(HackNav):
+            {
+				if (!ProfileManager.IsLoggedIn)
                 {
-					if (!ProfileManager.IsLoggedIn)
-                    {
-                        NavFrame.Navigate(typeof(NotLoggedIn));
-						WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(NotLoggedIn)));
-						return;
-                    }
-
-                    NavFrame.Navigate(typeof(HackFileManager));
-					WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(HackFileManager)));
-					break;
+                    NavFrame.Navigate(typeof(NotLoggedIn));
+					WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(NotLoggedIn)));
+					return;
                 }
+
+                NavFrame.Navigate(typeof(HackFileManager));
+				WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(HackFileManager)));
+				break;
+            }
+            case nameof(JsonEditNav):
+            {
+                NavFrame.Navigate(typeof(DynamicJsonForm));
+                WindowHelper.SetWindowConfig(HackApp.Window, InstanceManager.GetConfig(nameof(DynamicJsonForm)));
+                break;
+            }
         }
 	}
 
