@@ -56,7 +56,7 @@ public class HackDefaults : IHackDefaults
 	} = null;
 	public string? CurrentPath { get; set; } = null;
 
-	public static IHackDefaults? Instance { get; set; } = new HackDefaults();
+	public static IHackDefaults Instance { get; set; } = new HackDefaults();
 
 	public HackDefaults() { }
 	public HackDefaults(ISettingsProvider settingsProvider)

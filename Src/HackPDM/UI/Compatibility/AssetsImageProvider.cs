@@ -67,7 +67,7 @@ public class AssetsImageProvider : IImageProvider
 			Debug.WriteLine("Can't create image");
 		}
 	}
-	public async void SetImage(string key, SoftwareBitmap softwareBitmap)
+	public static async void SetImage(string key, SoftwareBitmap softwareBitmap)
 	{
 		try
 		{

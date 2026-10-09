@@ -594,8 +594,7 @@ public sealed partial class MessageBox : Page
 				] );
 			} );
 		}
-		catch( Exception ex )
-		{
+		catch( Exception ) {
 			tcs.SetResult(TryShowNative(
 				HackApp.Window?.IntPtrHandle ?? 0,
 				message,

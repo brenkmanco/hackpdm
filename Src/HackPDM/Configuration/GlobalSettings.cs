@@ -29,7 +29,7 @@ namespace HackPDM.Configuration;
 public class GlobalSettings
 {
 
-	public async void test()
+	public static async void test()
 	{
 		var hwnd = HackApp.Window?.IntPtrHandle ?? 0;
 		var windowId = HackApp.Window?.AppWindow.Id ?? Win32Interop.GetWindowIdFromWindow(hwnd);

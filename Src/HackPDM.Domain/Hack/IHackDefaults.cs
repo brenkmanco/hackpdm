@@ -9,6 +9,6 @@ namespace HackPDM.Domain.Hack
 {
 	public interface IHackDefaults : IHackDefaultBase
 	{
-		static virtual IHackDefaults? Instance { get; set; }
+		static virtual IHackDefaults Instance { get; set; }
 	}
 }

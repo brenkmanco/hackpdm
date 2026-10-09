@@ -69,7 +69,7 @@ namespace HackPDM.UI.Forms.FormTransport
 			if (entry is null) return null;
 			if (entry.Id != null)
 			{
-				versions = await GetVersionsForEntryAsync(entry.Id ?? 0, ["preview_image", "file_contents"], insertedFields: ["create_uid"]);
+				versions = await GetVersionsForEntryAsync( entry.Id ?? 0, ["preview_image", "file_contents"], insertedFields: ["create_uid"]);
 			}
 			if (!listVersions) return versions;
 			await SafeHelper.SafeInvokerAsync(() => PopulateHistory(grid, versions ?? []));
@@ -97,8 +97,6 @@ namespace HackPDM.UI.Forms.FormTransport
 		internal async Task<HpVersion[]?> ProcessParentSelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listParents = true)
 		{
 			HpVersion[]? parentVersions = null;
-			HpVersion? latestVersion = null;
-			int? versionId;
 
 			switch (entry)
 			{
@@ -186,7 +184,7 @@ namespace HackPDM.UI.Forms.FormTransport
 				: await HpVersion.GetRecordByIdAsync(entry!.LatestId ?? 0, ["preview_image", "file_contents"]);
 
 			if (!listVersionInfo || versionInfo is null) return versionInfo;
-			await SafeHelper.SafeInvokerAsync(() => PopulateVersionInfo(grid, versionInfo));
+			await SafeHelper.SafeInvokerAsync(() => PopulateVersionInfo( grid, versionInfo));
 			return versionInfo;
 		}
 		
@@ -196,8 +194,8 @@ namespace HackPDM.UI.Forms.FormTransport
 			await SafeHelper.SafeInvokerAsync(() => list.ItemAdd(item));
 		}
 		internal HpVersion[]? GetVersionsForEntry(int entryId, string[]? excludedFields = null, string[]? insertedFields = null)
-			=> GetVersionsForEntryAsync(entryId, excludedFields, insertedFields).GetAwaiter().GetResult();
-		internal async Task<HpVersion[]?> GetVersionsForEntryAsync(int entryId, string[]? excludedFields = null, string[]? insertedFields = null)
+			=> GetVersionsForEntryAsync( entryId, excludedFields, insertedFields).GetAwaiter().GetResult();
+		internal static async Task<HpVersion[]?> GetVersionsForEntryAsync(int entryId, string[]? excludedFields = null, string[]? insertedFields = null)
 		{
 			//ArrayList ids = [entryId];
 			//ArrayList al = await OClient.ReadAsync(HpEntry.GetHpModel(), ids, ["version_ids"], 10000);
@@ -348,7 +346,7 @@ namespace HackPDM.UI.Forms.FormTransport
 				});
 			}
 		}
-		private void PopulateVersionInfo(DataGrid grid, HpVersion versionModel)
+		private static void PopulateVersionInfo(DataGrid grid, HpVersion versionModel)
 		{
 			// int CheckoutColumnIndex = OdooEntryList.Columns["Checkout"].Index;
 			// item.SubItems [ CheckoutColumnIndex ].Text == ""

@@ -116,7 +116,6 @@ public static class Help
         }
         return results;
     }
-    
     public static Hashtable OdooIdBecomesKey(ArrayList arr)
     {
         Hashtable newHt = [];
@@ -132,7 +131,6 @@ public static class Help
         }
         return newHt;
     }
-    
 	public static bool ConvertSWFile<T>(HpVersion versionModel, out T file) where T : new()
 	{
 		file = new T();
@@ -152,10 +150,8 @@ public static class Help
 		if (model == null) return false;
 		return false;
 	}
-
     public static ResultHackFile ValidateDependency(string path)
 		=> new(HackFile.GetFromPath(path, FileOperations.GetRelativePath(path)));
-
     public static (StatusMessage status, string message) GetStatusMessage(HackResult result, ResultHackFile? parentFile, List<ResultHackFile> list)
 		=> result switch
 		{
@@ -174,72 +170,11 @@ public static class Help
             _ => SwDmDocumentType.swDmDocumentUnknown,
         };
 }
-
-public class Kwargs<T>(T obj)
-{
-    T _obj = obj;
-    Dictionary<string, object> _kwargs;
-
-    public Kwargs(T obj, Dictionary<string, object> kwargs) : this(obj)
-    {
-        this._kwargs = kwargs;
-    }
-
-    public T ApplyKwargsToObject()
-    {
-        Type type = _obj.GetType();
-        FieldInfo[] fields = [.. type.GetFields(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooFieldAttribute)))];
-		PropertyInfo[] properties = [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute)))];
-
-        string[] memberNames = [.. fields.Select(x => x.Name), .. properties.Select(x => x.Name)];
-
-        foreach (KeyValuePair<string, object> entry in _kwargs)
-        {
-            if (memberNames.Contains(entry.Key))
-            {
-                object memberInfo = type.GetFields(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooFieldAttribute))).ToArray();
-                Type mType;
-                bool isField = true;
-
-                if (memberInfo == null)
-                {
-                    memberInfo = type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute))).ToArray();
-                    mType = ((PropertyInfo)memberInfo).PropertyType;
-                    isField = false;
-                }
-                else mType = ((FieldInfo)memberInfo).FieldType;
-
-                if (entry.Value == null || mType.IsAssignableFrom(entry.Value.GetType()))
-                {
-                    if (isField) ((FieldInfo)memberInfo).SetValue(_obj, entry.Value);
-                    else ((PropertyInfo)memberInfo).SetValue(_obj, entry.Value);
-                }
-                else if (mType.IsEnum)
-                {
-                    if (isField) ((FieldInfo)memberInfo).SetValue(_obj, Enum.Parse(mType, entry.Value.ToString()));
-                    else ((PropertyInfo)memberInfo).SetValue(_obj, Enum.Parse(mType, entry.Value.ToString()));
-                }
-                else
-                {
-                    try
-                    {
-                        if (isField) ((FieldInfo)memberInfo).SetValue(_obj, Convert.ChangeType(entry.Value, mType));
-                        else ((PropertyInfo)memberInfo).SetValue(_obj, Convert.ChangeType(entry.Value, mType));
-                    }
-                    catch { }
-                }
-            }
-        }
-        return _obj;
-    }
-
-}
 public static class HashConverter
 {
 	static readonly Type boolType = typeof(bool);
 	static readonly Type arrType = typeof(ArrayList);
 
-    //
     public static T? ConvertToClass<T>(in Hashtable ht) where T : HpBaseModelTransport, new()
     {
 		T record = new();
@@ -305,274 +240,6 @@ public static class HashConverter
 		}
         return ref values;
 	}
-	//
-	//
-	public static T ConvertToClassFallback<T>(in Hashtable ht, MethodType mType = MethodType.PropertyOnly) 
-        where T : HpBaseModelTransport, new()
-    {
-        T obj = new();
-        AssignToClassFallback(ht, ref obj, mType);
-        return obj;
-    }
-    public static T[]? ConvertToClassesFallback<T>(in IEnumerable<Hashtable>? hts, MethodType mType = MethodType.PropertyOnly) where T : HpBaseModelTransport, new()
-    {
-        //T[] objs = new T[hts.TryGetNonEnumeratedCount(out int len) ? len : hts.Count()].PopulateZip(() => new());
-        IEnumerable<(Hashtable, T)>? objs = hts?.PopulateZip(obj => new T());
-        return AssignToClassesFallback(ref objs, mType);
-    }
-    public static T AssignToClassFallback<T>(in Hashtable ht, T obj, MethodType mType = MethodType.PropertyOnly)
-        where T : HpBaseModel
-    {
-        Type type = typeof(T);
-
-        PropertyInfo[]? properties = mType is MethodType.PropertyAndField or MethodType.PropertyOnly ? [.. type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => Attribute.IsDefined(p, typeof(OdooPropAttribute)))] : null;
-        FieldInfo[]? fields = mType is MethodType.PropertyAndField or MethodType.FieldOnly ? [.. type?.GetFields(BindingFlags.Public | BindingFlags.Instance).Where(f=>Attribute.IsDefined(f, typeof(OdooFieldAttribute)))] : null;
-		
-        foreach (DictionaryEntry entry in ht)
-        {
-            if (mType is MethodType.PropertyOnly or MethodType.PropertyAndField)
-            {
-                PropertyInfo? prop = properties?.FirstOrDefault(p => p.Name == entry.Key.ToString());
-				// type?.GetProperty(entry.Key?.ToString() ?? "", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-				if (prop != null && prop.CanWrite)
-                {
-                    object value = ConvertValue(entry.Value, prop.PropertyType);
-                    prop.SetValue(obj, value);
-                }
-                else
-                {
-                    obj.HashedValues[entry.Key.ToString()] = entry.Value;
-                }
-            }
-            if (mType is MethodType.FieldOnly or MethodType.PropertyAndField)
-            {
-                FieldInfo? field = fields?.FirstOrDefault(f => f.Name == entry.Key.ToString());
-				// type.GetField(entry.Key.ToString(), BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-				if (field != null)
-                {
-                    object value = ConvertValue(entry.Value, field.FieldType);
-                    field.SetValue(obj, value);
-                }
-                else
-                {
-                    obj.HashedValues[entry.Key.ToString()] = entry.Value;
-                }
-            }
-        }
-        return obj;
-    }
-    public static T[]? AssignToClassesFallback<T>(ref IEnumerable<(Hashtable, T)>? hts, MethodType mType = MethodType.PropertyOnly)
-        where T : HpBaseModelTransport
-    {
-        if (hts is null || hts.FirstOrDefault().Item1 is not Hashtable hashFirst) return null;
-
-        Type type = typeof(T);
-        string[] firstKeys = [.. hashFirst.Keys.Cast<string>()];
-
-        List<PropertyInfo>? properties = null;
-        //mType is MethodType.PropertyAndField or MethodType.PropertyOnly
-        //    ? type?.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-        //    : null;
-        List<FieldInfo>? fields = null;
-        //= mType is MethodType.PropertyAndField or MethodType.FieldOnly 
-        //    ? type?.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-        //    : null;
-        bool IsProp = mType is MethodType.PropertyOnly or MethodType.PropertyAndField;
-        bool IsField = mType is MethodType.FieldOnly or MethodType.PropertyAndField;
-        
-		//(PropertyInfo?, ValueConversion?)[]? propInfos
-  //          = IsProp
-		//		? new (PropertyInfo?, ValueConversion?)[firstKeys.Length]
-  //              : null;
-  //      (FieldInfo?, ValueConversion?)[]? fieldInfos
-  //          = IsField
-		//		? new (FieldInfo?, ValueConversion?)[firstKeys.Length]
-  //              : null;
-
-        bool IsFlagged;
-
-		(IEnumerable<ReflectionInfo.PropInfoEntry> propInfos, 
-            IEnumerable<ReflectionInfo.FieldInfoEntry> fieldInfos) = firstKeys.SegmentSelectDiffWhere(
-                (key, index) =>
-        {
-			IsFlagged = false;
-            
-            ReflectionInfo.PropInfoEntry? propReturn = null;
-            ReflectionInfo.FieldInfoEntry? fieldReturn = null;
-
-			if (mType is MethodType.PropertyOnly or MethodType.PropertyAndField)
-			{
-                var prop = type?.GetProperty(key!, BindingFlags.Public | BindingFlags.Instance);
-                IsFlagged = prop is null;
-                propReturn = new (!IsFlagged
-                    ? (prop, key, null)
-                    : (null, key, ValueConversion.DoNothing));
-			}
-			if (mType is MethodType.FieldOnly or MethodType.PropertyAndField)
-			{
-                if (!IsFlagged && mType is MethodType.PropertyAndField)
-                {
-                    fieldReturn = new (null, key, ValueConversion.Skip);
-                }
-                else
-                {
-				    var field = type?.GetField(key!, BindingFlags.Public | BindingFlags.Instance);
-                
-                    fieldReturn = new(field is not null 
-                        ? (field, key, null) 
-                        : (null, key, ValueConversion.DoNothing));
-                }
-			}
-            return (!(IsField && fieldReturn.Conversion is not ValueConversion.Skip), propReturn, fieldReturn);
-		});
-
-        
-        foreach ((Hashtable hashtable, T obj) in hts)
-        {
-            if (hashtable is null) continue;
-
-   //          if (hashtable.TryGetValue("id", out int? id) && id is not null)
-   //          {
-   //              obj.id = id ?? 0;
-			// }
-			
-			if (mType is MethodType.PropertyOnly or MethodType.PropertyAndField)
-            {
-                foreach (var propEntry in propInfos)
-                {
-					if (!hashtable.TryGetValue(propEntry.Name, out object? val) || val is null) continue;
-
-                    if (propEntry.Conversion is ValueConversion.Skip) continue;
-
-					if (propEntry.PropInfo?.Name is "dir_id" && (obj.HpModel is OdooDefaultsConstants.HP_VERSION or OdooDefaultsConstants.HP_ENTRY))
-					{
-						obj.HashedValues.Add("dir_id", val);
-					}
-
-					if (propEntry.Conversion is ValueConversion.DoNothing || propEntry.PropInfo is null || !propEntry.PropInfo.CanWrite)
-					{
-						obj.HashedValues[propEntry.Name!] = val;
-                        propEntry.Conversion = ValueConversion.DoNothing;
-						continue;
-					}
-
-                    if (propEntry.Conversion is ValueConversion.Null && val is not null)
-                    {
-                        propEntry.Conversion = ConvertValueMethod(val, propEntry.PropInfo.PropertyType);
-					}
-                    propEntry.PropInfo?.SetValue(obj, ConvertValue(val, propEntry.PropInfo.PropertyType, propEntry.Conversion ?? ValueConversion.Null));
-					obj.CompleteConstruction();
-					obj.IsRecord = true;
-				}
-            }
-            if (mType is MethodType.FieldOnly or MethodType.PropertyAndField)
-            {
-                foreach(var fieldEntry in fieldInfos)
-                {
-					if (!hashtable.TryGetValue(fieldEntry.Name, out object? val) || val is null) continue;
-
-                    if (fieldEntry.Conversion is ValueConversion.Skip) continue;
-
-					if (fieldEntry.Name is "dir_id" && (obj.HpModel is OdooDefaultsConstants.HP_VERSION or OdooDefaultsConstants.HP_ENTRY))
-					{
-						obj.HashedValues.Add("dir_id", val);
-					}
-
-					if (fieldEntry.Conversion is ValueConversion.DoNothing || fieldEntry.FieldInfo is null)
-                    {
-						obj.HashedValues[fieldEntry.Name!] = val;
-                        fieldEntry.Conversion = ValueConversion.DoNothing;
-						continue;
-					}
-
-					if (fieldEntry.Conversion is null or ValueConversion.Null && val is not null)
-					{
-						fieldEntry.Conversion = ConvertValueMethod(val, fieldEntry.FieldInfo.FieldType);
-					}
-
-					fieldEntry.FieldInfo?.SetValue(obj, ConvertValue(val, fieldEntry.FieldInfo.FieldType, fieldEntry.Conversion ?? ValueConversion.Null));
-                    obj.CompleteConstruction();
-                    obj.IsRecord = true;
-				}
-			}
-
-			
-		}
-
-		return [.. hts.Select(i => i.Item2)];
-    }
-    //
-
-    public static void PopulateSelf<T>(this T hprecord, in Hashtable ht, MethodType mType = MethodType.PropertyOnly) where T : HpBaseModel
-        => AssignToClassFallback(ht, hprecord, mType);
-    public static void AssignToClassFallback<T>( in Hashtable ht, ref T obj, MethodType mType = MethodType.PropertyOnly )
-        where T : HpBaseModel, new()
-        => AssignToClassFallback( ht, obj, mType );
-    public static Hashtable ConvertToHashtable<T>(T obj, MethodType mType = MethodType.PropertyAndField, bool includeEmpty = true, in string[] excludedFieldNames = null)
-    {
-        Hashtable ht = [];
-
-        switch (mType)
-        {
-            case MethodType.PropertyOnly:
-            {
-                GetProperties(obj, ref ht);
-                break;
-            }
-            case MethodType.FieldOnly:
-            {
-                GetFields(obj, ref ht);
-                break;
-            }
-            case MethodType.PropertyAndField:
-            {
-                GetProperties(obj, ref ht);
-                GetFields(obj, ref ht);
-                break;
-            }
-        }
-        return ht;
-    }
-    private static void GetProperties<T>(T obj, ref Hashtable ht, bool includeEmpty = true, in string[] excludedFieldNames = null)
-    {
-        Type type = typeof(T);
-        PropertyInfo[] properties = (PropertyInfo[])type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => System.Attribute.IsDefined(p, typeof(OdooPropAttribute)));
-        foreach (PropertyInfo prop in properties)
-        {
-            if (!prop.CanRead) continue;
-            if (!includeEmpty)
-            {
-                Type pType = prop.PropertyType;
-                bool valueType = pType.IsValueType;
-                if (valueType && Activator.CreateInstance(pType) == prop.GetValue(obj)) continue;
-                else if (!valueType && prop.GetValue(obj) == null) continue;
-            }
-
-            string propertyName = prop.Name;
-            object propertyValue = prop.GetValue(obj);
-            ht.Add(propertyName, propertyValue);
-        }
-    }
-    private static void GetFields<T>(T obj, ref Hashtable ht, bool includeEmpty = true, in string[] excludedFieldNames = null)
-    {
-        Type type = typeof(T);
-        FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
-        foreach (FieldInfo field in fields)
-        {
-            if (!includeEmpty)
-            {
-                Type fType = field.FieldType;
-                bool valueType = fType.IsValueType;
-                if (valueType && Activator.CreateInstance(fType) == field.GetValue(obj)) continue;
-                else if (!valueType && field.GetValue(obj) == null) continue;
-            }
-
-            string fieldName = field.Name;
-            object fieldValue = field.GetValue(obj);
-            ht.Add(fieldName, fieldValue);
-        }
-    }
-
     // first case: value is nullable but target type isn't
     // second case: target type is nullable but value isn't
     // 
@@ -640,37 +307,5 @@ public static class HashConverter
         bool isEqual = underType == valueOfType;
 
         return valueOfType == typeof(bool) && !isEqual ? ValueConversion.Null : isEqual ? ValueConversion.Nullable : ValueConversion.OtherConvert;
-    }
-    internal static object? ConvertValue(object? value, Type targetType, ValueConversion conversion)
-    {
-        return conversion switch
-        {
-            ValueConversion.Null => null,
-            ValueConversion.Assignable => value,
-            ValueConversion.Nullable => value,
-            ValueConversion.Enum => Enum.Parse(targetType, value?.ToString() ?? ""),
-            ValueConversion.DateTime => DateTime.TryParse(value?.ToString() ?? "", out DateTime dt) ? dt : null,
-            ValueConversion.OtherConvert => Convert.ChangeType(value, targetType),
-            _ => null,
-        };
-    }
-    
-    public static async Task<ArrayList> FilesNotInOdoo(string[] filePaths)
-    {
-        // key: checksum, value: filepath
-        Dictionary<string, string> checkFiles = new(filePaths.Length);
-        foreach (string filePath in filePaths)
-        {
-            checkFiles.Add(FileOperations.FileChecksum(filePath, SHA1.Create()), filePath);
-        }
-
-        ArrayList domain = ["checksum", "in", checkFiles.Keys.ToArray()];
-        ArrayList fields = ["checksum"];
-        ArrayList? result = await OClient.BrowseAsync(HpVersion.GetHpModel(), [domain, fields], 10000);
-
-        // Hashtable of all results
-        // might have array or value
-        ArrayList values = Help.GetResults(result, "checksum", true);
-        return values;
     }
 }

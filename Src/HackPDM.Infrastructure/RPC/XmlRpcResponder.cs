@@ -69,16 +69,10 @@ public class XmlRpcResponder
 
 	public void Close()
 	{
-		if ( HttpReq != null )
-		{
-			HttpReq.Close();
-			HttpReq = null;
-		}
+		HttpReq?.Close();
+		HttpReq = null;
 
-		if ( _client != null )
-		{
-			_client.Close();
-			_client = null;
-		}
+		_client?.Close();
+		_client = null;
 	}
 }

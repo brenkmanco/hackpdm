@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 using HackPDM.UI.Controls;
+using HackPDM.UI.Forms.FormTransport;
 using HackPDM.UI.Models;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -93,12 +94,15 @@ public static class InstanceManager
     public static HFM_VM HFM => Env.HFM ??= Get<HFM_VM>();
     public static PM_VM PM => Env.PM ??= Get<PM_VM>();
     public static SearchOdoo_VM SearchOdoo => Env.SearchOdoo ??= Get<SearchOdoo_VM>();
-    public static StatusDialog_VM StatusDialog => Env.StatusDialog ??= Get<StatusDialog_VM>();
+	public static (StatusDialog_VM Dialog, StatusLogSession Session) Logger => Env.Logger;
+	public static StatusDialog_VM Dialog => Logger.Dialog;
+	public static StatusLogSession Session => Logger.Session;
     public static OdooSettings_VM OdooSettings => Env.OdooSettings ??= Get<OdooSettings_VM>();
     public static HackSettings_VM HackSettings => Env.HackSettings ??= Get<HackSettings_VM>();
     public static AppSettings_VM AppSettings => Env.AppSettings ??= Get<AppSettings_VM>();
     public static Home_VM Home => Env.Home ??= Get<Home_VM>();
     public static NotLoggedIn_VM NotLoggedIn => Env.NotLoggedIn ??= Get<NotLoggedIn_VM>();
+
 
     #endregion
 

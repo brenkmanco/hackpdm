@@ -57,8 +57,8 @@ public sealed partial class HackSettings : Page
 	{
 		StringBuilder errors = new();
 
-		if (!TryCreateDirectory(txtPwaInput.Text)) errors.AppendLine("invalid pwa directory path");
-		if (!TryCreateDirectory(HackTempFolderPath.Text)) errors.AppendLine("invalid temporary directory path");
+		if (!TryCreateDirectory( txtPwaInput.Text)) errors.AppendLine("invalid pwa directory path");
+		if (!TryCreateDirectory( HackTempFolderPath.Text)) errors.AppendLine("invalid temporary directory path");
 
 		if (errors.Length > 0)
 		{
@@ -73,7 +73,7 @@ public sealed partial class HackSettings : Page
 		this.Window?.Close();
 	}
 
-	private bool TryCreateDirectory(string path)
+	private static bool TryCreateDirectory(string path)
 	{
 		if (Directory.Exists(path)) return true;
 

@@ -26,7 +26,7 @@ namespace HackPDM.Infrastructure.Odoo;
 
 public class OdooDefaults : IOdooDefaults
 {
-    public static IOdooDefaults? Instance { get; set; } = new OdooDefaults();
+    public static IOdooDefaults Instance { get; set; } = new OdooDefaults();
     public ISettingsProvider Settings { get; set; }
 
     private OdooDefaults() {}

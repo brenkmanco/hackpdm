@@ -21,8 +21,7 @@ public class SwDocMgr
             var swClassFact = new SwDMClassFactory();
             _swDocMgr = swClassFact.GetApplication(strLicenseKey);
         }
-        catch (Exception ex)
-        {
+        catch( Exception ) {
             // DialogResult dr = MessageBox.Show("Failed to get an instance of the SolidWorks Document Manager API: " + ex.Message,
             //     "Loading SW",
             //     buttons: MessageBoxButtons.OK,

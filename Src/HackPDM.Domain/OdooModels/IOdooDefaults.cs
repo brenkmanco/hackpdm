@@ -50,5 +50,5 @@ public interface IOdooDefaultBase
 }
 public interface IOdooDefaults : IOdooDefaultBase
 {
-    public static virtual IOdooDefaults? Instance { get; set; }
+    public static virtual IOdooDefaults Instance { get; set; }
 }

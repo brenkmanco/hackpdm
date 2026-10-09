@@ -143,14 +143,14 @@ public sealed partial class DynamicJsonForm : Page
 		JsonTreeView.Resources["TreeViewItemIndent"] = calculatedIndent;
 	}
 
-	private int GetMaxExpandedDepth(IEnumerable<JsonNodeViewModel> nodes, int currentDepth)
+	private static int GetMaxExpandedDepth(IEnumerable<JsonNodeViewModel> nodes, int currentDepth)
 	{
 		int max = currentDepth;
 		foreach (var node in nodes)
 		{
 			if (node.IsContainer && node.IsExpanded && node.Children.Count > 0)
 			{
-				max = Math.Max(max, GetMaxExpandedDepth(node.Children, currentDepth + 1));
+				max = Math.Max(max, GetMaxExpandedDepth( node.Children, currentDepth + 1));
 			}
 		}
 		return max;

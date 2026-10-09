@@ -51,7 +51,7 @@ public partial class HackApp : Application
         Setup();
     }
 
-    private void ConfigureServices()
+    private static void ConfigureServices()
     {
 	    var services = new ServiceCollection();
 
@@ -99,7 +99,7 @@ public partial class HackApp : Application
         Window.Activate();
 
         DispatcherQueue = Window.DispatcherQueue;
-        ConfigureServices();
+		ConfigureServices();
     }
 
 	private void Window_Closed( object sender, WindowEventArgs args )

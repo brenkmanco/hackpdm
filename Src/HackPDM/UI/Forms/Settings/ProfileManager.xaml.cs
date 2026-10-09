@@ -265,7 +265,7 @@ public sealed partial class ProfileManager : Page
 		};
 		await SaveSettings( saveData );
 	}
-	private async Task SaveSettings( SavedData data )
+	private static async Task SaveSettings( SavedData data )
 	{
 		var hwnd = HackApp.Window?.IntPtrHandle ?? 0;
 		var windowId = HackApp.Window?.AppWindow.Id ?? Win32Interop.GetWindowIdFromWindow(hwnd);

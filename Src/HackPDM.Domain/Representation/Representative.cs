@@ -8,6 +8,7 @@ public class BasicStatusMessage : IRowData<BasicStatusMessage>
 	// // (MVVM) VIEW
 	public StatusMessage Status { get; set; } = StatusMessage.OTHER;
 	public string? Message { get; set; }
+	public DateTime Timestamp { get; set; } = DateTime.Now;
 
 	public BasicStatusMessage Clone() => new()
 	{

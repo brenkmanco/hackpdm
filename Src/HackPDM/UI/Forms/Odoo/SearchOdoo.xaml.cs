@@ -48,8 +48,8 @@ public sealed partial class SearchOdoo : Page
 
 	private HackFileManager hackman;
 
-	private TreeView OdooDirectoryTree;
-	private DataGrid OdooEntryList;
+	private TreeView _odooDirectoryTree;
+	private DataGrid _odooEntryList;
 
 	private Window ParentWindow;
 	// --- Data collections for WinUI 3 ListView Binding ---
@@ -79,8 +79,8 @@ public sealed partial class SearchOdoo : Page
 	public void SetHackInstance(HackFileManager hackman)
 	{
 		this.hackman = hackman;
-		this.OdooDirectoryTree = hackman.GetOdooDirectoryTree();
-		this.OdooEntryList = hackman.GetOdooEntryList();
+		this._odooDirectoryTree = hackman.GetOdooDirectoryTree();
+		this._odooEntryList = hackman.GetOdooEntryList();
 	}
 	public void StoreWindowInstance(Window window)
 	{
@@ -230,7 +230,6 @@ public sealed partial class SearchOdoo : Page
 	}
 	private void DisplayLocal(ArrayList results, string filename, int limit = 100, bool isNotOnlyLocal = false)
 	{
-		const string Empty = "-";
 		// NOTE: InitListViewPercentage is removed.
 
 		DirectoryInfo directoryInfo = new DirectoryInfo(HackDefaults.Instance.PwaPathAbsolute);
@@ -277,7 +276,7 @@ public sealed partial class SearchOdoo : Page
 			});
 		}
 	}
-	private Dictionary<string, List<string>> GetNamePathwaysDict(ArrayList result)
+	private static Dictionary<string, List<string>> GetNamePathwaysDict(ArrayList result)
 	{
 		var dict = new Dictionary<string, List<string>>();
 		foreach (Hashtable ht in result)
@@ -331,7 +330,7 @@ public sealed partial class SearchOdoo : Page
 		}
 		return null;
 	}
-	private ConcurrentSet<int> FilterCandidates(ArrayList[] lists)
+	private static ConcurrentSet<int> FilterCandidates(ArrayList[] lists)
 	{
 		ConcurrentSet<int> candidates = [];
 
@@ -411,7 +410,7 @@ public sealed partial class SearchOdoo : Page
 		{
 			for (int i = 0; i < paths.Length; i++)
 			{
-				if (i == 0) nodes = OdooDirectoryTree.RootNodes;
+				if (i == 0) nodes = _odooDirectoryTree.RootNodes;
 				else nodes = node?.Children;
 
 				bool wasFound = false;
@@ -427,15 +426,15 @@ public sealed partial class SearchOdoo : Page
 				}
 				if (!wasFound) throw new ArgumentException();
 			}
-			OdooDirectoryTree.Collapse(node);
+			_odooDirectoryTree.Collapse(node);
 			foreach (var item1 in node?.Parent.Children ?? [])
 			{
-				OdooDirectoryTree.Collapse(item1);
+				_odooDirectoryTree.Collapse(item1);
 			}
 			hackman.LastSelectedNode = node;
 			//hackman.lastSelectedNode.Expand();
-			hackman.LastSelectedNode?.LinkedData.EnsureVisible(OdooDirectoryTree);
-			OdooDirectoryTree.SelectedNode = hackman.LastSelectedNode;
+			hackman.LastSelectedNode?.LinkedData.EnsureVisible(_odooDirectoryTree);
+			_odooDirectoryTree.SelectedNode = hackman.LastSelectedNode;
 
 			while (!hackman.IsListLoaded)
 			{
@@ -443,7 +442,7 @@ public sealed partial class SearchOdoo : Page
 			}
 			EntryRow? entryItem = null;
 			// string index = NameConfig.SearchName.Name;
-			foreach (var entry in OdooEntryList.ItemsSource as ObservableCollection<EntryRow> ?? [])
+			foreach (var entry in _odooEntryList.ItemsSource as ObservableCollection<EntryRow> ?? [])
 			{
 				if (entry.Name == fileName)
 				{
@@ -453,9 +452,9 @@ public sealed partial class SearchOdoo : Page
 			}
 			if (entryItem == null) throw new ArgumentException();
 
-			OdooEntryList.SelectedItem = entryItem;
-			OdooEntryList.Focus(FocusState.Programmatic);
-			OdooEntryList.ScrollIntoView(entryItem, null);
+			_odooEntryList.SelectedItem = entryItem;
+			_odooEntryList.Focus(FocusState.Programmatic);
+			_odooEntryList.ScrollIntoView(entryItem, null);
 
 		}
 		catch
@@ -609,14 +608,14 @@ public sealed partial class SearchOdoo : Page
 			foreach (var item in selectedItems ?? [])
 			{
 				string path = item.Directory; // Assuming this is correct from original
-				OpenLocalFile(path);
+				OpenLocalFile( path);
 			}
 		}
 		else
 		{
 			foreach (var item in selectedItems ?? [])
 			{
-				await DownloadRemoteFile(item.Id ?? 0);
+				await DownloadRemoteFile( item.Id ?? 0);
 			}
 		}
 
@@ -628,11 +627,11 @@ public sealed partial class SearchOdoo : Page
 		openToolStripMenuItem_Click(sender, e);
 	}
 
-	private void OpenLocalFile(string path)
+	private static void OpenLocalFile(string path)
 	{
 		FileOperations.OpenFile(path);
 	}
-	private async Task DownloadRemoteFile(int entryID)
+	private static async Task DownloadRemoteFile(int entryID)
 	{
 		const string latest_version = nameof(HpEntry.latest_version_id);
 		HpVersion? version = (await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>([entryID], latest_version, excludedFields: ["preview_image"]))?.FirstOrDefault();
@@ -644,7 +643,7 @@ public sealed partial class SearchOdoo : Page
 		version.DownloadFile();
 		FileOperations.OpenFile(Path.Combine(version.WinPathway, version.name));
 	}
-	private async Task PreviewRemoteFile(int entryID)
+	private static async Task PreviewRemoteFile(int entryID)
 	{
 		const string latest_version = nameof(HpEntry.latest_version_id);
 		HpVersion? version = (await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>([entryID], latest_version, excludedFields: ["preview_image"]))?.FirstOrDefault();
@@ -656,5 +655,5 @@ public sealed partial class SearchOdoo : Page
 		version.DownloadFile(StorageBox.TemporaryPath);
 		FileOperations.OpenFile(Path.Combine(version.WinPathway, version.name));
 	}
-	public IHpPropertyModel[]? GetPropNames() => OdooDefaults.Instance?.HpProperties;
+	public static IHpPropertyModel[]? GetPropNames() => OdooDefaults.Instance?.HpProperties;
 }
