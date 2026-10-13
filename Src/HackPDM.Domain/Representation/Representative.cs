@@ -10,6 +10,8 @@ public class BasicStatusMessage : IRowData<BasicStatusMessage>
 	public string? Message { get; set; }
 	public DateTime Timestamp { get; set; } = DateTime.Now;
 
+	public static implicit operator BasicStatusMessage( (StatusMessage status, string message) log ) => new() { Message = log.message, Status = log.status };
+
 	public BasicStatusMessage Clone() => new()
 	{
 		Status = this.Status,

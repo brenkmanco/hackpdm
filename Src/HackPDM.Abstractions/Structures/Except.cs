@@ -7,31 +7,22 @@ namespace HackPDM.Abstractions.Structures;
 
 public class Except
 {
-	public static Except IsNull<T>( T? value, string? paramName = null )
-	{
-		return value is null
-			? throw new ArgumentNullException( paramName ?? nameof( value ) )
-			: new Except();
-	}
-	public Except IsNulled<T>( T? value, string? paramName = null ) {
+	public Except IsNull<T>( T? value, string? paramName = null ) {
 		return value is null  
 			? throw new ArgumentNullException( paramName ?? nameof( value ) ) 
 			:  this;
 	}
-
 	public Except IsNotNull<T>( T? value, string? paramName = null )
 	{
 		return value is not null  
 			? throw new ArgumentNullException( paramName ?? nameof( value ) ) 
 			:  this;
 	}
-
 	public Except HasCapacity<T>( IEnumerable<T> collection, int capacity ) {
 		return  collection is not null && collection.Count() > capacity 
 			? throw new ArgumentOutOfRangeException( nameof( collection ), "Collection has more elements than the specified capacity." )
 			:  this;
 	}
-
 	public Except OutOfRange<T>( T[] arr, int index)
 	{
 		return index < 0 || index >= arr.Length  
