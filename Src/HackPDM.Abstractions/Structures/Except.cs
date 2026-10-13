@@ -7,31 +7,22 @@ namespace HackPDM.Abstractions.Structures;
 
 public class Except
 {
-	public static Except IsNull<T>( T? value, string? paramName = null )
-	{
-		return value is null
-			? throw new ArgumentNullException( paramName ?? nameof( value ) )
-			: new Except();
-	}
-	public Except IsNulled<T>( T? value, string? paramName = null ) {
+	public Except IsNull<T>( T? value, string? paramName = null ) {
 		return value is null  
 			? throw new ArgumentNullException( paramName ?? nameof( value ) ) 
 			:  this;
 	}
-
 	public Except IsNotNull<T>( T? value, string? paramName = null )
 	{
 		return value is not null  
 			? throw new ArgumentNullException( paramName ?? nameof( value ) ) 
 			:  this;
 	}
-
 	public Except HasCapacity<T>( IEnumerable<T> collection, int capacity ) {
 		return  collection is not null && collection.Count() > capacity 
 			? throw new ArgumentOutOfRangeException( nameof( collection ), "Collection has more elements than the specified capacity." )
 			:  this;
 	}
-
 	public Except OutOfRange<T>( T[] arr, int index)
 	{
 		return index < 0 || index >= arr.Length  
@@ -41,8 +32,8 @@ public class Except
 
 	public static Except Run() => new();
 	public static Except<T> Run<T>( T arg ) => new( arg );
-	public static Except<T, T2> Run<T, T2>( T arg, T2 arg2 ) => new( arg, arg2 );
-	public static Except<T, T2, T3> Run<T, T2, T3>( T arg, T2 arg2, T3 arg3 ) => new( arg, arg2, arg3 );
+	public static Except<T, T2> Run<T, T2>( T arg, T2 arg2 ) => new( ref arg, ref arg2 );
+	public static Except<T, T2, T3> Run<T, T2, T3>( T arg, T2 arg2, T3 arg3 ) => new( ref arg, ref arg2, ref arg3 );
 	public static Except<T, T2, T3, T4> Run<T, T2, T3, T4>( T arg, T2 arg2, T3 arg3, T4 arg4 ) => new( arg, arg2, arg3, arg4 );
 
 	protected internal Except() { }
@@ -98,7 +89,7 @@ public class Except<T1, T2, T3> : Except<T1, T2>
 public class Except<T1, T2, T3, T4> : Except<T1, T2, T3>
 {
 	protected internal T4 _arg4 { get; init; }
-	protected internal Except( T1 arg1, T2 arg2, T3 arg3, T4 arg4 ) : base(arg1, arg2, arg3) 
+	protected internal Except( T1 arg1, T2 arg2, T3 arg3, T4 arg4 ) : base(ref arg1, ref arg2, ref arg3) 
 		=> _arg4 = arg4;
 
 	public Except<T1, T2, T3, T4> Exec( params Action<T1, T2, T3, T4>[] actions )
@@ -112,7 +103,6 @@ public class Except<T1, T2, T3, T4> : Except<T1, T2, T3>
 public class Helper
 {
 	public static Except<T2, T1> R2x1<T1, T2>( ref T1 dat1, ref T2 dat2 ) => new(ref dat2, ref dat1);
-	public static Except
 }
 public class ExceptAdapt<T1, T2>
 {

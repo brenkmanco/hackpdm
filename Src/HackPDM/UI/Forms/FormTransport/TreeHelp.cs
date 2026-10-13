@@ -26,6 +26,7 @@ using HackPDM.UI.Compatibility;
 using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Hack;
 using HackPDM.UI.Forms.Helper;
+using HackPDM.UI.Models;
 
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -48,6 +49,7 @@ namespace HackPDM.UI.Forms.FormTransport;
 public class TreeHelp
 {
 	private HackFileManager _HFM { get; set; }
+	private HFM_VM HFM_VM => _HFM.ViewModel;
 	private TreeView _tree { get; set; }
 	private DataGrid _grid { get; set; }
 	private static AssetsImageProvider? AssetsProvider { get => field ??= ImageProvider; }
@@ -69,7 +71,7 @@ public class TreeHelp
 
 	private async Task LoadOdooDirectoryTree(TreeView tree)
 	{
-		_HFM.IsTreeLoaded = false;
+		HFM_VM.IsTreeLoaded = false;
 		var (img, ring) = _HFM.GetVisualizer();
 		LoadingVisualized(img, ring);
 
@@ -83,7 +85,7 @@ public class TreeHelp
 
 				if (_HFM.LastSelectedNode != null)
 				{
-					_HFM.LastSelectedNode = tree.FindTreeNode(_HFM.LastSelectedNodePath)?.Node;
+					_HFM.LastSelectedNode = tree.FindTreeNode( HFM_VM.LastSelectedNodePath)?.Node;
 				}
 
 				var tData = tree.RootNodes;
@@ -95,7 +97,7 @@ public class TreeHelp
 				_HFM.LastSelectedNode?.LinkedData.EnsureVisible(tree);
 									
 			});
-			_HFM.IsTreeLoaded = true;
+			HFM_VM.IsTreeLoaded = true;
 		}
 		catch (Exception exception)
 		{
@@ -132,14 +134,14 @@ public class TreeHelp
 	internal async Task<(Hashtable? entries, Dictionary<string, Task<HackFile>>? hackmap)> GetHackAndEntry(int? directoryId)
 	{
 		if (directoryId is null) return (null, null);
-		Hashtable? entries = await HpDirectory.GetEntriesAsync(directoryId, _HFM.IsActive);
+		Hashtable? entries = await HpDirectory.GetEntriesAsync(directoryId, HFM_VM.IsActive);
 		Dictionary<string, Task<HackFile>> hackFileMap = await GridHelp.GetFileMap(entries);
 		return (entries, hackFileMap);
 	}
 	internal async Task TreeSelectItem(TreeView tree, TreeViewNode node, DataGrid grid, CancellationToken token = default)
 	{
-		_HFM.IsListLoaded = false;
-		await AsyncHelper.WaitUntil(() => _HFM.IsTreeLoaded, 100, -1, token);
+		HFM_VM.IsListLoaded = false;
+		await AsyncHelper.WaitUntil(() => HFM_VM.IsTreeLoaded, 100, -1, token);
 		node.LinkedData.EnsureVisible(tree);
 		GridHelp.InitGridView(grid);
 
@@ -174,7 +176,7 @@ public class TreeHelp
 				_HFM.DispatcherQueue.TryEnqueue(() =>
 				{
 					//_HFM.GroupedEntries?.Master.Sort((x, y) => String.CompareOrdinal(x.Name, y.Name));
-					_HFM.IsListLoaded = true;
+					HFM_VM.IsListLoaded = true;
 					_grid.InvalidateArrange();
 					_grid.UpdateLayout();
 				});
@@ -184,13 +186,13 @@ public class TreeHelp
 	}
 	internal async Task<bool> TreeItemsChangedPolling(int timeout = -1, CancellationToken token = default)
 	{
-		while (!token.IsCancellationRequested && _HFM.EntryPollingMs > 0)
+		while (!token.IsCancellationRequested && HFM_VM.EntryPollingMs > 0)
 		{
-			bool isLoaded = await AsyncHelper.WaitUntil(() => _HFM.IsTreeLoaded && _HFM.IsListLoaded, 1000, -1, token);
+			bool isLoaded = await AsyncHelper.WaitUntil(() => HFM_VM.IsTreeLoaded && HFM_VM.IsListLoaded, 1000, -1, token);
 
 			if (!isLoaded || _HFM.LastSelectedNode is null) continue;
 
-			await Task.Delay(_HFM.EntryPollingMs, token);
+			await Task.Delay( HFM_VM.EntryPollingMs, token);
 		}
 		return false;
 	}
@@ -355,12 +357,12 @@ public class TreeHelp
 		=> await CreateTreeViewBackground(tree);
 	public void RestartEntries(TreeView tree, DataGrid grid)
 	{
-		if (_HFM.LastSelectedNode is null) return;
+		if (LastSelectedNode is null) return;
 		
 		SafeHelper.SafeInvoker(async () =>
 		{
 			await TreeSelectItem(tree, _HFM.LastSelectedNode!, grid);
-			await AsyncHelper.WaitUntil(() => _HFM.IsListLoaded);
+			await AsyncHelper.WaitUntil(() => HFM_VM.IsListLoaded);
 			if (grid.SelectedItems is not null and { Count: > 0 } items)
 			{
 				var entry = items[0] as EntryRow;
@@ -546,12 +548,12 @@ public class TreeHelp
 		int localOnly = files?.Length ?? 0;
 		int remoteOnly = totalFiles - lRC;
 
-		_HFM.GetEntriesRemoteLabel().Text = $"Remote Only: {(remoteOnly == 0 ? "None" : remoteOnly)}";
+		_HFM.GetEntriesRemoteLabel().Text = $"RO: {(remoteOnly == 0 ? "None" : remoteOnly)}";
 		switch (files)
 		{
 			case null:
 			{
-				_HFM.GetEntriesLocalLabel().Text = "Local Only: None";
+				_HFM.GetEntriesLocalLabel().Text = "LO: None";
 				if (totalFiles == 0)
 				{
 					_HFM.GetEntriesLabel().Text = $"Entries: {(remoteOnly == 0 ? "None" : remoteOnly)}";
@@ -565,7 +567,7 @@ public class TreeHelp
 			default:
 			{
 				_HFM.GetEntriesLabel().Text = $"Entries: {totalFiles+localOnly}";
-				_HFM.GetEntriesLocalLabel().Text = $"Local Only: {files.Length}";
+				_HFM.GetEntriesLocalLabel().Text = $"LO: {files.Length}";
 				break;
 			}
 		}
@@ -588,7 +590,7 @@ public class TreeHelp
 
 
 
-		if ((OdooDefaults.Instance.RestrictTypes is true || _HFM.IsFiltered) & !OdooDefaults.Instance.ExtToType.TryGetValue(type, out var hpType))
+		if ((OdooDefaults.Instance.RestrictTypes is true || HFM_VM.IsFiltered) & !OdooDefaults.Instance.ExtToType.TryGetValue(type, out var hpType))
 		{
 			status = "ft";
 		}

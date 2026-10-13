@@ -13,11 +13,16 @@ using HackPDM.Domain.Helper;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
+using HackPDM.UI.Models;
 
 namespace HackPDM.UI.Forms.Hack;
 
 internal static class Commit
 {
+	private static HFM_VM HFM_VM => InstanceManager.HFM;
+	private static Action<StatusMessage, string> Logger => InstanceManager.Session.Logger;
+	private static StatusDialog_VM Dialog => InstanceManager.Dialog;
+
 	internal async static Task<HpDirectory?> CreateDirectories( HackFile? hack )
 	{
 		// create directories that don't exist in odoo
@@ -52,7 +57,7 @@ internal static class Commit
 			ArrayList fields = [];
 			if( entry is not null and { id: not 0 } )
 			{
-				HackFileManager.Dialog?.AddStatusLine( StatusMessage.FOUND, $"entry found remotely for: {filePath}" );
+				Logger( StatusMessage.FOUND, $"entry found remotely for: {filePath}" );
 				hacksFound.Add( hackArr[ i ] );
 				continue;
 			}
@@ -67,7 +72,7 @@ internal static class Commit
 			//	}
 			//}
 
-			HackFileManager.Dialog?.AddStatusLine( StatusMessage.INFO, $"Queued commit for {hackArr[ i ].Name} (Checksum: {hackArr[ i ].Checksum}) for: {filePath}" );
+			Logger( StatusMessage.INFO, $"Queued commit for {hackArr[ i ].Name} (Checksum: {hackArr[ i ].Checksum}) for: {filePath}" );
 			hacks.Add( hackArr[ i ] );
 		}
 		return ([ .. hacks ], [ .. hacksFound ]);
@@ -94,21 +99,21 @@ internal static class Commit
 		HpRecordStaged? versionStaged = null;
 		if( entry.returnType is EntryReturnType.GotExisting )
 		{
-			HackFileManager.Dialog?.AddStatusLine( StatusMessage.FOUND, $"existing entry found..." );
-			HackFileManager.Dialog?.AddStatusLine( StatusMessage.PROCESSING, $"staging local version..." );
+			Logger( StatusMessage.FOUND, $"existing entry found..." );
+			Logger( StatusMessage.PROCESSING, $"staging local version..." );
 			versionStaged = await HpVersion.StageVersion( hack, entry, commit.id ?? 0 );
 		}
 		if( entry.returnType is EntryReturnType.Staged )
 		{
 			HpRecordStaged? entryStaged = await entry?.StageEntry();
-			HackFileManager.Dialog?.AddStatusLine( StatusMessage.PROCESSING, $"staging local entry..." );
-			HackFileManager.Dialog?.AddStatusLine( StatusMessage.PROCESSING, $"staging local version..." );
+			Logger( StatusMessage.PROCESSING, $"staging local entry..." );
+			Logger( StatusMessage.PROCESSING, $"staging local version..." );
 			versionStaged = await HpVersion.StageVersion( hack, entryStaged );
 		}
 		if( entry.returnType is EntryReturnType.Failed )
 		{
 			commit.ServerClear();
-			HackFileManager.Dialog?.AddStatusLine( StatusMessage.ERROR, $"Error creating entry {entry.name}. Rolling back records..." );
+			Logger( StatusMessage.ERROR, $"Error creating entry {entry.name}. Rolling back records..." );
 			return false;
 		}
 
@@ -116,23 +121,15 @@ internal static class Commit
 		{
 			if( versionStaged is not { id: not 0 } )
 				throw new ArgumentException( "Version staging failed, Version is null or has an id of 0" );
-			HackFileManager.
-
-						// staging HpVersionRelationship's from version
-
-						Dialog?.AddStatusLine( StatusMessage.PROCESSING, $"staging local version relationships..." );
+			Logger( StatusMessage.PROCESSING, $"staging local version relationships..." );
 			// create new parent, child hp_version_relationship's for versions
 			if( !await HpVersionRelationship.StageRelationshipRecords( versionStaged ) )
 				throw new ArgumentException( $"Failed to stage version relationships for {versionStaged.payload?[ "name" ]}" );
-			HackFileManager.
-
-						// staging HpVersionProperty's from version
-						Dialog?.AddStatusLine( StatusMessage.PROCESSING, $"staging local version properties ..." );
+			Logger( StatusMessage.PROCESSING, $"staging local version properties ..." );
 			if( !await HpVersionProperty.StagePropertyRecords( versionStaged ) )
 				throw new ArgumentException( $"Failed to stage version properties for {versionStaged.payload?[ "name" ]}" );
-			Latest.
-						ProcessCounter += 1;
-			HackFileManager.Dialog?.SetProgressBar( Latest.ProcessCounter, Latest.MaxCount );
+			Dialog.ProcessCounter += 1;
+			Dialog?.SetProgressBar( Dialog.ProcessCounter, Dialog.MaxCount );
 			//Dialog?.SetProgressBar(MaxCount, MaxCount);
 
 		}
@@ -140,7 +137,7 @@ internal static class Commit
 		{
 			commit.ServerClear();
 			Debug.WriteLine( e.Message );
-			HackFileManager.Dialog?.AddStatusLine( StatusMessage.ERROR, e.Message );
+			Logger( StatusMessage.ERROR, e.Message );
 			return false;
 		}
 		return true;
