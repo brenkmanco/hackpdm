@@ -19,7 +19,6 @@ public static class ExtensionMethods
 {
 	
 	public static int Compare(this int? a, int? b) => Nullable.Compare(a, b);
-	
     public static IList AddRange(this IList list, IEnumerable items)
     {
         foreach (var item in items)

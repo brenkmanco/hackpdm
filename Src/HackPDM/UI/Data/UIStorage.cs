@@ -81,9 +81,9 @@ public static class CustomSerializers
 		public override Color Read( ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options )
 		{
 			string colorString = reader.GetString() ?? throw new JsonException("Color string is null");
-			if( colorString.StartsWith( "#" ) )
+			if( colorString.StartsWith( '#' ) )
 			{
-				colorString = colorString.Substring( 1 );
+				colorString = colorString[ 1.. ];
 			}
 			if( colorString.Length == 6 )
 			{

@@ -97,6 +97,7 @@ public static class InstanceManager
 	public static (StatusDialog_VM Dialog, StatusLogSession Session) Logger => Env.Logger;
 	public static StatusDialog_VM Dialog => Logger.Dialog;
 	public static StatusLogSession Session => Logger.Session;
+	
     public static OdooSettings_VM OdooSettings => Env.OdooSettings ??= Get<OdooSettings_VM>();
     public static HackSettings_VM HackSettings => Env.HackSettings ??= Get<HackSettings_VM>();
     public static AppSettings_VM AppSettings => Env.AppSettings ??= Get<AppSettings_VM>();

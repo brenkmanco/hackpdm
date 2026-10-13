@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Numerics;
 
 namespace HackPDM.Core.General;
 
@@ -86,7 +87,14 @@ public class MathUtility
         }
         return val.CompareTo(max) > 0 ? max : val;
     }
-    
+
+	public static T Add<T>( T? x, T? y ) where T : IAdditionOperators<T?, T?, T>
+		=> ( x ?? default ) + ( y ?? default );
+	public static T Subtract<T>( T? x, T? y ) where T : ISubtractionOperators<T?, T?, T>
+		=> ( x ?? default ) - ( y ?? default );
+	public static T Mult<T>( T? x, T? y ) where T : IMultiplyOperators<T?, T?, T>
+		=> ( x ?? default ) * ( y ?? default );
+
 	public static void If(bool condition, Action @true, Action @false)
 	{
 		if (condition) @true(); else @false();

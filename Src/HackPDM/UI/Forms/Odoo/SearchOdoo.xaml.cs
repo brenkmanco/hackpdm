@@ -436,7 +436,7 @@ public sealed partial class SearchOdoo : Page
 			hackman.LastSelectedNode?.LinkedData.EnsureVisible(_odooDirectoryTree);
 			_odooDirectoryTree.SelectedNode = hackman.LastSelectedNode;
 
-			while (!hackman.IsListLoaded)
+			while (!hackman.ViewModel.IsListLoaded)
 			{
 				await Task.Delay(100);
 			}
@@ -592,7 +592,7 @@ public sealed partial class SearchOdoo : Page
 		}
 		// get latest status
 		WindowHelper.CreateWindowAndPage<StatusDialog>(out var Dialog, out _);
-		HackFileManager.Dialog = Dialog;
+		//HackFileManager.Dialog = Dialog;
 		await hackman.GetLatestInternal(ids);
 		//
 		await hackman.CheckoutInternal(ids);

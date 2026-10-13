@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Messaging;
 
 using HackPDM.Abstractions.Structures;
 using HackPDM.Core.Hack;
+using HackPDM.Core.Helper.Xaml;
 using HackPDM.Domain.Representation;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Forms.FormTransport;
@@ -26,7 +27,9 @@ public class VMEnv
 	public HFM_VM HFM { get; set; } = new();
 	public PM_VM PM { get; set; } = new();
 	public SearchOdoo_VM SearchOdoo { get; set; } = new();
+	public Dictionary<Guid, WeakReference<Tuple<StatusDialog_VM, StatusLogSession>>> Dialogs { get; } = [];
 	public (StatusDialog_VM StatusDialog, StatusLogSession Session) Logger { get; set; } = StatusDialog_VM.CreateSessionPair();
+
 	public OdooSettings_VM OdooSettings { get; set; } = new();
 	public HackSettings_VM HackSettings { get; set; } = new();
 	public AppSettings_VM AppSettings { get; set; } = new();
@@ -51,6 +54,10 @@ public class HFM_VM
 	public int ProcessCounter { get; set; }
 	public int MaxCount { get; set; }
 	public int EntryPollingMs { get; set; } = 5000;
+
+	public string EntriesLabel { get; set; } = "Entries: None";
+	public string EntriesLabelLocal { get; set; } = "LO: None";
+	public string EntriesLabelRemote { get; set; } = "RO: None";
 
 	public ObservableCollection<TreeData>? LastSelectedNodePaths { get; set; } = [];
 	public DynamicGroupCollection<EntryRow>? GroupedEntries { get; set; } = new( [
@@ -175,7 +182,6 @@ public partial class StatusDialog_VM : ObservableObject, IRecipient<BasicStatusM
 	} = HackDefaults.Instance?.SettingsProvider?.Get( "HistoryLength", 10000 ) ?? 10000;
 	public bool DoubleBuff { get; set; } = true;
 
-
 	public void Register(Guid sessionId)
 	{
 		SessionId = sessionId;
@@ -189,7 +195,6 @@ public partial class StatusDialog_VM : ObservableObject, IRecipient<BasicStatusM
 	{
 		// Automatically filtered by token — messages from other tasks will never hit this method
 		//string formattedEntry = $"[{message.Timestamp:HH:mm:ss}] {message.Message}";
-
 		AddLog( message );
 	}
 	public ObservableRingBuffer<BasicStatusMessage> GetCollection( StatusMessage action )
@@ -206,14 +211,12 @@ public partial class StatusDialog_VM : ObservableObject, IRecipient<BasicStatusM
 			_ => OInfo,
 		};
 	}
-	public async Task AddStatusLine( BasicStatusMessage message )
-	{
 		
-	}
 	public void AddLog( BasicStatusMessage message )
 	{
 		//MessageQueue.Enqueue( message );
-		GetCollection( message.Status).Add( message );
+		SafeHelper.SafeInvokerAsync( () 
+			=> GetCollection( message.Status ).Add( message ) );
 	}
 	public async Task AddStatusLines( BasicStatusMessage[] messages )
 	{
@@ -231,7 +234,7 @@ public partial class StatusDialog_VM : ObservableObject, IRecipient<BasicStatusM
 	{
 		Downloaded = downloadBytes;
 	}
-	public async Task SetTotalDownloaded( long sessionDownloadBytes )
+	public static async Task SetTotalDownloaded( long sessionDownloadBytes )
 	{
 		SessionDownloaded = sessionDownloadBytes;
 	}

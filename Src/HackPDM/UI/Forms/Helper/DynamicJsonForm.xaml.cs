@@ -77,19 +77,20 @@ public sealed partial class DynamicJsonForm : Page
 			}
 		}
 	}
-
-	private async void OnExportJsonClick(object sender, RoutedEventArgs e)
+	private JsonObject? GetRootObject()
 	{
 		var rootObj = new JsonObject();
-		foreach (var node in RootNodes)
-		{
-			rootObj[node.Key] = node.ToJsonNode();
+		foreach( var node in RootNodes ) {
+			rootObj[ node.Key ] = node.ToJsonNode();
 		}
-
+		return rootObj;
+	}
+	private async void OnExportJsonClick( object sender, RoutedEventArgs e )
+	{
+		var rootObj = GetRootObject() ?? [];
 		string exportedJson = rootObj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
 
-		ContentDialog dialog = new ContentDialog
-		{
+		ContentDialog dialog = new() {
 			Title = "Exported JSON Output",
 			Content = new ScrollViewer
 			{
@@ -101,11 +102,18 @@ public sealed partial class DynamicJsonForm : Page
 				},
 				MaxHeight = 400
 			},
+			PrimaryButtonText = "Save",
 			CloseButtonText = "Close",
 			XamlRoot = this.XamlRoot
 		};
-
-		await dialog.ShowAsync();
+		switch( await dialog.ShowAsync() ) {
+			case ContentDialogResult.Primary:
+			GlobalSerializedData.LoadFromJson( exportedJson ).SaveToFile();
+			break;
+			case ContentDialogResult.Secondary:
+			case ContentDialogResult.None:
+			break;
+		}
 	}
 
 	private void OnAddChildClick(object sender, RoutedEventArgs e)
@@ -190,11 +198,7 @@ public sealed partial class DynamicJsonForm : Page
 
 	private void SyncTreeToCodeView()
 	{
-		var rootObj = new JsonObject();
-		foreach (var node in RootNodes)
-		{
-			rootObj[node.Key] = node.ToJsonNode();
-		}
+		var rootObj = GetRootObject() ?? [];
 
 		string rawJson = rootObj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
 		ApplyJsonSyntaxHighlighting(rawJson);

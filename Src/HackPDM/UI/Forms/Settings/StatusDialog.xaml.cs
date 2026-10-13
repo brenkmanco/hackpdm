@@ -104,7 +104,7 @@ public sealed partial class StatusDialog : Page
                 {
                     token.ThrowIfCancellationRequested();
 					await (ViewModel.SetDownloaded( ViewModel.Downloaded));
-					await (ViewModel.SetTotalDownloaded( StatusDialog_VM.SessionDownloaded));
+					await ( StatusDialog_VM.SetTotalDownloaded( StatusDialog_VM.SessionDownloaded));
 					await (ViewModel.SetProgressBar( ViewModel.SkipCounter + ViewModel.ProcessCounter, ViewModel.MaxCount));
 					await Task.Delay(100, token);
 			    }

@@ -11,6 +11,7 @@ using HackPDM.Core.General;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
+using HackPDM.UI.Forms.Helper;
 
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 using Path = System.IO.Path;
@@ -24,21 +25,54 @@ internal static class Latest
 		get => OdooDefaults.Instance.DownloadBatchSize;
 		set => OdooDefaults.Instance.DownloadBatchSize = value;
 	}
-	
 
+	internal static async Task Async_GetLatest( (ArrayList, CancellationToken?) arguements )
+	{
+		object lockObject = new();
+		ArrayList entryIDs = arguements.Item1;
+
+		// add status lines for entry id and upcoming versions
+		lock( lockObject ) {
+			InstanceManager.Session.Log( StatusMessage.FOUND, $"{entryIDs.Count} entries" );
+			InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Retrieving all latest versions associated with entries..." );
+		}
+
+		var versions = await Latest.GetLatestVersions(entryIDs, ["preview_image", "entry_id", "node_id", "file_modify_stamp", "attachment_id", "file_contents"]);
+
+		IEnumerable<IEnumerable<HpVersion>>? versionBatches = Help.BatchArray(versions, Latest.DownloadBatchSize);
+		InstanceManager.Dialog.MaxCount = versions.Length;
+		InstanceManager.Dialog.SkipCounter = 0;
+		InstanceManager.Dialog.ProcessCounter = 0;
+		InstanceManager.Dialog.Downloaded = 0;
+
+		if( versionBatches is null ) {
+			MessageBox.ShowAsync( "Cancelled Download... No Versions to Process" );
+			return;
+		}
+		try {
+			await Latest.ProcessDownloadsAsync( versionBatches, arguements.Item2, OdooDefaults.Instance.ConcurrencySize );
+		} catch {
+			await MessageBox.ShowAsync( "Cancelled Download" );
+		}
+
+		InstanceManager.Dialog?.SetProgressBar( versions.Length, versions.Length );
+
+		await MessageBox.ShowAsync( "Completed!" );
+		//TreeHelper.RestartEntries( ViewModel, OdooDirectoryTree, OdooEntryList );
+	}
 	public static async Task ProcessDownloadsAsync( IEnumerable<IEnumerable<HpVersion>> versionBatches, CancellationToken? cToken, int maxConcurrency = 2 )
 	{
 		SemaphoreSlim throttler = new(maxConcurrency);
 		int size = versionBatches.Count();
 		List<Task> allTasks = new(size);
-		Dialog?.UpdateStatusDialogLoop( cToken );
+		//Dialog?.UpdateStatusDialogLoop( cToken );
 
 		foreach( var batch in versionBatches ?? [] )
 		{
 			Task task = Task.Run(async () =>
 			{
-				await throttler.WaitAsync(cToken);
-				cToken.ThrowIfCancellationRequested();
+				await throttler.WaitAsync(cToken ??= new());
+				cToken?.ThrowIfCancellationRequested();
 				try
 				{
 					await Latest.ProcessVersionBatchAsync(batch);
@@ -47,13 +81,13 @@ internal static class Latest
 				{
 					throttler.Release();
 				}
-			}, cToken);
+			}, cToken ??= new());
 
 			allTasks.Add( task );
 		}
 
 		await Task.WhenAll( allTasks );
-		Dialog?.EndStatusDialogLoop();
+		//Dialog?.EndStatusDialogLoop();
 	}
 	internal static async Task<ArrayList> GetAllEntriesAndDependenciesList( int[] entryIds, bool update = false )
 	{
@@ -90,17 +124,14 @@ internal static class Latest
 			// ==============================================================
 			if( version.checksum == null || version.checksum.Length == 0 || version.checksum == "False" )
 			{
-				HackFileManager.QueueAsyncStatus.Enqueue( (StatusMessage.ERROR, $"Checksum not found for version: {version.name}") );
-				SkipCounter++;
+				InstanceManager.Session.Log( StatusMessage.ERROR, $"Checksum not found for version: {version.name}" );
+				InstanceManager.HFM.SkipCounter++;
 				willProcess = false;
 			}
 			if( willProcess && FileOperations.SameChecksum( version, ChecksumType.Sha1 ) )
 			{
-				HackFileManager.
-
-								//unprocessedVersions.Add(version.ID);
-								QueueAsyncStatus.Enqueue( (StatusMessage.FOUND, $"Skipping version download: {version.name}") );
-				SkipCounter++;
+				InstanceManager.Session.Log( StatusMessage.FOUND, $"Skipping version download: {version.name}") ;
+				InstanceManager.HFM.SkipCounter++;
 				willProcess = false;
 			}
 			// ==============================================================
@@ -108,14 +139,13 @@ internal static class Latest
 			{
 				string fileName = Path.Combine(version.WinPathway, version.name);
 				processVersions.Add( version );
-				HackFileManager.
-								QueueAsyncStatus.Enqueue( (StatusMessage.PROCESSING, $"Downloading latest version: {fileName}") );
-				ProcessCounter++;
+				InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Downloading latest version: {fileName}") ;
+				InstanceManager.HFM.ProcessCounter++;
 			}
 
-			TotalProcessed = SkipCounter + ProcessCounter;
+			InstanceManager.HFM.TotalProcessed = InstanceManager.HFM.SkipCounter + InstanceManager.HFM.ProcessCounter;
 		}
-
+		InstanceManager.HFM.statusToken ??= new();
 		await Task.Run( async () =>
 		{
 			if( !processVersions.IsEmpty )
@@ -125,6 +155,6 @@ internal static class Latest
 				//return finishSuccesses.Result[0];
 			}
 			return 0;
-		}, HackFileManager.statusToken.Token );
+		}, InstanceManager.HFM.statusToken.Token );
 	}
 }
