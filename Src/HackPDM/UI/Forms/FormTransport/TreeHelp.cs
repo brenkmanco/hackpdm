@@ -186,7 +186,6 @@ public class TreeHelp
 	{
 		while (!token.IsCancellationRequested && _HFM.ViewModel.EntryPollingMs > 0)
 		{
-			bool isLoaded = await AsyncHelper.WaitUntil(() => HFM_VM.IsTreeLoaded && HFM_VM.IsListLoaded, 1000, -1, token);
 			bool isLoaded = await AsyncHelper.WaitUntil(() => _HFM.ViewModel.IsTreeLoaded && _HFM.ViewModel.IsListLoaded, 1000, -1, token);
 
 			if (!isLoaded || _HFM.LastSelectedNode is null) continue;

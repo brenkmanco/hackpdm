@@ -1,8 +1,9 @@
+
 import logging
+import re
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
-#from odoo.addons import queue_job
 
 class hp_pdm_commit(models.Model):
     _name = 'hp.pdm.commit'
@@ -84,10 +85,10 @@ class hp_pdm_commit(models.Model):
     # CLIENT CALLS THIS — resets commit records
     # ------------------------------------------------------------
     @api.model
-    def clear_commit(self, id):
-        if id is list:
-            id = id[0]
-        record = self.env["hp.pdm.commit"].browse([id])
+    def clear_commit(self, rec_id: int | list[int]):
+        if isinstance(rec_id, list):
+            rec_id = rec_id[0]
+        record = self.browse([rec_id])
         record.ensure_one()
         records = record.staged_ids
 
@@ -105,43 +106,45 @@ class hp_pdm_commit(models.Model):
         return True
 
 
-    # ------------------------------------------------------------ 
-    # CLIENT CALLS THIS — returns immediately 
-    # ------------------------------------------------------------
     @api.model
-    def start_commit(self, commit_id):
-        # 1. Corrected type checking and avoided shadowing Python's built-in `id`
-        if isinstance(commit_id, list):
-            commit_id = commit_id[0]
-        
-        # 2. Simplified browse call
-        record = self.browse(commit_id)
-        record.ensure_one()
+    def start_commit(self, commit_ids: int | list[int]):
+        if isinstance(commit_ids, int):
+            commit_ids = [commit_ids]
+        records = self.browse(commit_ids)
 
-        # 3. Cleaned up logging to match Odoo production standards
-        
-        if record.committing:
-            raise UserError("Commit already in progress.")
+        for record in records:
+            if record.committing or record.committed or not record.staged_ids:
+                continue
 
-        if record.committed:
-            raise UserError("This commit has already been completed.")
-
-        if not record.staged_ids:
-            raise UserError("No staged records to commit.")
-
-        # 4. Removed the invalid `on_error` argument
-        logging.info("Starting commit for record %s. Committing status: %s", record.id, record.committing)
-        job = record.with_delay().run_commit_job()
-        logging.info("Commit job created for record %s. Job UUID: %s", record.id, job.uuid)
-        record.write({
-            "job_uuid": job.uuid,
-            "committing": True,
-            "committed_at": fields.Datetime.now(),
-        })
+            try:
+                # Savepoint isolates this record and rolls back all its children if it fails
+                with self.env.cr.savepoint():
+                    record.write({
+                        "committing": True,
+                        "committed_at": fields.Datetime.now(),
+                    })
+                    record.run_commit_job()
+            except Exception as exc:
+                logging.exception("Commit failed for record %s", record.id)
+                record.handle_commit_failure(exc)
 
         return True
 
-    def handle_commit_failure(self, job, exc):
+    def run_commit_job(self):
+        self.ensure_one()
+
+        # ATOMIC BLOCK — all or nothing
+        self._create_all_records_atomically()
+
+        # Mark success
+        self.write({
+            "committed": True,
+            "committing": False,
+            "commit_finished_at": fields.Datetime.now(),
+        })
+
+
+    def handle_commit_failure(self, exc):
         self.write({
             "errored": True,
             "message_exception": str(exc),
@@ -150,31 +153,8 @@ class hp_pdm_commit(models.Model):
             "commit_finished_at": fields.Datetime.now(),
         })
 
-        # cleanup staged records
         self._rollback_records_staged(self.staged_ids.ids)
 
-    # ------------------------------------------------------------
-    # BACKGROUND WORKER — runs even if client disconnects
-    # ------------------------------------------------------------
-    #@job
-    def run_commit_job(self):
-        try:
-            
-            self.ensure_one()
-
-            # ATOMIC BLOCK — all or nothing
-            self._create_all_records_atomically()
-
-            # success
-            self.write({
-                "committed": True,
-                "committing": False,
-                "commit_finished_at": fields.Datetime.now(),
-            })
-        except Exception as e:
-            logging.error("Commit job failed for record %s: %s", self.id, str(e))
-            self.handle_commit_failure(self, e)
-            raise  # Re-raise the exception to ensure the job is marked as failed
 
     def _write_summary(self, model_dict:dict):
         summary_text = "models created:\n"
@@ -202,32 +182,158 @@ class hp_pdm_commit(models.Model):
     def _create_records(self, staged, summary_model):
         for index, row in enumerate(staged, start=1):
             logging.info("record for commit %s. id: %s", row.target_model, self.id)
-            payload = row.payload
-            model = self.env[row.target_model]
-            
-            if row.target_model == "hp.version":
+            payload = row.payload or {}
+            target_model = row.target_model
+
+            # Clean audit fields from payload if present
+            for f in ("create_uid", "create_date", "write_uid", "write_date"):
+                payload.pop(f, None)
+
+            # --------------------------------------------------------
+            # 1. VALIDATIONS FOR hp.entry
+            # --------------------------------------------------------
+            if target_model == "hp.entry":
+                entry_name = payload.get("name")
+                dir_id = payload.get("dir_id")
+
+                if not entry_name:
+                    raise UserError("Cannot commit an entry without a file name.")
+
+                # Check 1a: Directory existence and status
+                if dir_id:
+                    dir_rec = self.env["hp.directory"].browse(dir_id)
+                    if not dir_rec.exists():
+                        raise UserError(f"Directory with ID {dir_id} for entry '{entry_name}' does not exist.")
+                    if dir_rec.deleted:
+                        raise UserError(f"Directory '{dir_rec.complete_name}' for entry '{entry_name}' has been deleted.")
+
+                # Check 1b: Entry name filter check (If / Ft)
+                filters = self.env["hp.entry.name.filter"].search([])
+                for flt in filters:
+                    if flt.name_regex:
+                        try:
+                            if re.search(flt.name_regex, entry_name, re.IGNORECASE):
+                                desc = flt.description or flt.name_regex
+                                raise UserError(f"Entry '{entry_name}' matches filter pattern '{desc}' and cannot be committed.")
+                        except re.error as e:
+                            logging.warning("Invalid regex filter ID %s (%s): %s", flt.id, flt.name_regex, e)
+
+                # Check 1c: Collision check (Lo vs existing)
+                if dir_id and entry_name:
+                    existing_entry = self.env["hp.entry"].search([
+                        ("name", "=", entry_name),
+                        ("dir_id", "=", dir_id),
+                    ], limit=1)
+                    if existing_entry:
+                        if existing_entry.deleted:
+                            raise UserError(
+                                f"Entry '{entry_name}' already exists in directory '{dir_rec.complete_name}' "
+                                f"but is marked as deleted (Dt)."
+                            )
+                        else:
+                            raise UserError(
+                                f"Entry '{entry_name}' already exists in directory '{dir_rec.complete_name}'. "
+                                f"A version should be committed for the existing entry instead of creating a duplicate."
+                            )
+
+            # --------------------------------------------------------
+            # 2. VALIDATIONS FOR hp.version
+            # --------------------------------------------------------
+            elif target_model == "hp.version":
+                # Resolve entry_id (from summary_model if new entry, or from existing entry)
                 if not payload.get("__internal__existing"):
-                    payload["entry_id"] = summary_model.get("hp.entry", {}).get(payload["entry_id"])
+                    staged_entry_id = payload.get("entry_id")
+                    resolved_entry_id = summary_model.get("hp.entry", {}).get(staged_entry_id)
+                    if not resolved_entry_id:
+                        raise UserError(
+                            f"Cannot commit version '{payload.get('name')}': Associated staged entry ID "
+                            f"{staged_entry_id} was not created."
+                        )
+                    payload["entry_id"] = resolved_entry_id
                 else:
                     del payload["__internal__existing"]
-                    
-            if row.target_model == "hp.version.property":
-                payload["version_id"] = summary_model.get("hp.version", {}).get(payload["version_id"])
-                
-            payload["commit_id"] = row.commit_id.id
+
+                entry_id = payload.get("entry_id")
+                entry_rec = self.env["hp.entry"].browse(entry_id)
+                if not entry_rec.exists():
+                    raise UserError(f"Target entry ID {entry_id} does not exist.")
+
+                # Check 2a: Deleted check (Dt)
+                if entry_rec.deleted:
+                    raise UserError(f"Cannot commit version: entry '{entry_rec.name}' is marked as deleted (Dt).")
+
+                # Check 2b: Checkout check (Co vs Cm vs No checkout)
+                # If entry is checked out to someone else, reject (Co)
+                if entry_rec.checkout_user and entry_rec.checkout_user.id != self.env.uid:
+                    raise UserError(
+                        f"Cannot commit version for '{entry_rec.name}': "
+                        f"The file is checked out to another user '{entry_rec.checkout_user.name}' ({entry_rec.checkout_user.login}) [Co]."
+                    )
+                # If entry is not checked out, allow commit and populate node_id if missing
+                if not entry_rec.checkout_user:
+                    if not payload.get("node_id") and self.node_by:
+                        payload["node_id"] = self.node_by.id
+
+            # --------------------------------------------------------
+            # 3. VALIDATIONS FOR hp.version.property
+            # --------------------------------------------------------
+            elif target_model == "hp.version.property":
+                staged_version_id = payload.get("version_id")
+                resolved_version_id = summary_model.get("hp.version", {}).get(staged_version_id)
+                if not resolved_version_id:
+                    if not staged_version_id or not self.env["hp.version"].browse(staged_version_id).exists():
+                        raise UserError(
+                            f"Cannot create version property: Associated version ID {staged_version_id} was not found."
+                        )
+                    resolved_version_id = staged_version_id
+                payload["version_id"] = resolved_version_id
+
+            # --------------------------------------------------------
+            # 4. SPECIAL HANDLING FOR hp.version.relationship
+            # --------------------------------------------------------
+            if target_model == "hp.version.relationship" and target_model not in self.env:
+                version_info = payload.get("version", {})
+                parent_staged_id = version_info.get("version_staged_id")
+                parent_version_id = summary_model.get("hp.version", {}).get(parent_staged_id)
+                dep_path = payload.get("path")
+
+                if parent_version_id and dep_path:
+                    parent_version = self.env["hp.version"].browse(parent_version_id)
+                    dep_filename = dep_path.replace("\\", "/").split("/")[-1]
+                    child_entry = self.env["hp.entry"].search([("name", "=", dep_filename), ("deleted", "=", False)], limit=1)
+                    if child_entry and child_entry.latest_version_id:
+                        parent_version.write({"child_ids": [(4, child_entry.latest_version_id.id)]})
+                row.write({"payload": {"complete": True}})
+                continue
+
+            model = self.env[target_model]
+            payload["commit_id"] = row.commit_id.id if row.commit_id else self.id
             rec = model.create(payload)
-            summary_model.setdefault(row.target_model, {}).setdefault(row.id, rec.id)
-            logging.info("\nCreated record for model %s :: summary: %s\n", row.target_model, summary_model)
-            row.write({"target_id": rec.id, "payload": {"complete": True}})  # Clear payload after successful creation
+            summary_model.setdefault(target_model, {}).setdefault(row.id, rec.id)
+            logging.info("\nCreated record for model %s :: summary: %s\n", target_model, summary_model)
+            row.write({"target_id": rec.id, "payload": {"complete": True}})
+
+            # --------------------------------------------------------
+            # POST-CREATION: Un-checkout / Check-in the entry
+            # --------------------------------------------------------
+            if target_model == "hp.version":
+                entry_rec = rec.entry_id
+                if entry_rec:
+                    entry_vals = {
+                        "checkout_user": False,
+                        "checkout_date": False,
+                        "checkout_node": False,
+                    }
+                    if "is_checked_in" in entry_rec._fields:
+                        entry_vals["is_checked_in"] = True
+                    entry_rec.write(entry_vals)
         
     # ------------------------------------------------------------
     # ATOMIC CREATION — ONE BIG TRANSACTION
     # ------------------------------------------------------------
     def _create_all_records_atomically(self):
         """
-        This method runs inside the queue job's transaction.
         If ANY record creation fails, the entire transaction rolls back.
-        No savepoints. No partial commits.
         """
         summary_model = {}
         logging.info("Starting atomic record creation for commit %s", self.id)

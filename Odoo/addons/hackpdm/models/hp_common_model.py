@@ -4,15 +4,20 @@ from odoo import fields, models, api
 import datetime as dt
 import numpy as np
 
+# pyrefly: ignore [missing-import]
 from webdav3.client import Client
 import hashlib as hash
 import base64
 import logging
 import urllib.parse
+# pyrefly: ignore [missing-import]
 import magic
 
+# pyrefly: ignore [missing-import]
 import sqlalchemy
+# pyrefly: ignore [missing-import]
 from sqlalchemy import MetaData, Table, create_engine, select, update
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Mapped, sessionmaker, relationship
 
 class Database:
@@ -80,7 +85,6 @@ class WebDav():
             else:
                 logging.error(f"file version '{version_id}' doesn't exist")
         return b''
-
         #print(f"File information: {file_info}")
 
 class hp_common_model(models.AbstractModel):
@@ -161,7 +165,6 @@ class hp_common_model(models.AbstractModel):
                 data[field] = self._resolve_field(rec, parts, [], 0)
             results.append(data)
         return results
-
 
     @api.model
     def fast_read(self, ids, fields):
