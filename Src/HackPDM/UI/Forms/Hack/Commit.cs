@@ -31,7 +31,10 @@ internal static class Commit
 
 		var hfs = hacks is not null && hacks.Count > 0 ? await Commit.FilterCommitHackFiles( hacks ) : ([], []);
 
-		if ( hfs is (null or [], null or []) )
+		if ( hfs is (null or [], null or []) ) {
+			InstanceManager.Session.Log( StatusMessage.ERROR, $"--- No entries to commit ---" );
+			return;
+		}
 
 		await startCommit.CreateCommitAsync();
 
@@ -83,7 +86,10 @@ internal static class Commit
 				new ArrayList() { "name", "=", hackArr[i].Name },
 				new ArrayList() { "windows_complete_name", "=", (@"root\" + hackArr[i].RelativePath) },
 			];
-			HpEntry? entry = (await HpEntry.GetRecordsBySmartSearchAsync(searchFilter: arrList, includedFields: [nameof(HpEntry.name), nameof(HpEntry.dir_id), nameof(HpEntry.checkout_user)], insertFields: ["version_ids.checksum"]))?.FirstOrDefault();
+			HpEntry? entry = (await HpEntry.GetRecordsBySmartSearchAsync(
+				searchFilter: arrList, 
+				includedFields: [nameof(HpEntry.id), nameof(HpEntry.name), nameof(HpEntry.dir_id), nameof(HpEntry.checkout_user)], 
+				insertFields: ["version_ids.checksum"]))?.FirstOrDefault();
 
 			if( entry is not null and { id: not null and not 0 } )
 			{

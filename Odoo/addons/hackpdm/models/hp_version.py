@@ -379,6 +379,7 @@ class hp_version(models.Model):
             entry.checkout_user = self.env.uid
             entry.checkout_date = date
             entry.checkout_node = node_rec.id
+            entry.is_checked_in = False
             v_rec.node_id = node_rec.id
         else:
             raise Exception(f"already checked out to user {entry.checkout_user.id}")

@@ -775,8 +775,6 @@ public sealed partial class HackFileManager : Page
 	
 	private async Task Async_PermDelete( HpEntry[] entries )
 	{
-		var logger = InstanceManager.Session.Logger;
-		var dialog = InstanceManager.Dialog;
 		ArrayList ids = entries.Select(e => e.id).ToArrayList();
 		bool vDeleted = false;
 
@@ -806,8 +804,6 @@ public sealed partial class HackFileManager : Page
 	private async Task Async_LogicalDelete( HpEntry[] entries )
 	{
 		object lockObject = new();
-		var logger = InstanceManager.Session.Logger;
-		var dialog = InstanceManager.Dialog;
 		foreach( var entry in entries )
 		{
 			lock( lockObject )
@@ -825,8 +821,6 @@ public sealed partial class HackFileManager : Page
 	private async Task Async_LogicalUnDelete( HpEntry[] entries )
 	{
 		object lockObject = new();
-		var logger = InstanceManager.Session.Logger;
-		var dialog = InstanceManager.Dialog;
 		foreach( var entry in entries )
 		{
 			lock( lockObject )
@@ -847,8 +841,6 @@ public sealed partial class HackFileManager : Page
 	}
 	private async void GetLatestFromTreeNode( bool withSubdirectories = false )
 	{
-		var logger = InstanceManager.Session.Logger;
-		var dialog = InstanceManager.Dialog;
 		WindowHelper.CreateWindowAndPage<StatusDialog>( out var Dialog, out _ );
 		this.Dialog = Dialog;
 
@@ -1992,7 +1984,6 @@ public sealed partial class HackFileManager : Page
 			deletedVersionProps = await OClient.DeleteAsync( HpVersionProperty.GetHpModel(), [ newIds ], 100000 );
 			if( deletedVersionProps )
 			{
-				InstanceManager.Session.Logger( StatusMessage.SUCCESS, $"Deleted version properties: {string.Join( ", ", newIds.ToArray() )}" );
 				InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted version properties: {string.Join( ", ", newIds.ToArray() )}" );
 			}
 			else
@@ -2025,14 +2016,13 @@ public sealed partial class HackFileManager : Page
 		vRelationsChild = await HpVersionRelationship.GetRecordsBySearchAsync( [ new ArrayList() { "child_id", "in", ids } ] );
 
 		if( vRelationsParent is not null
-			&& vRelationsParent.Count() > 0 )
+			&& vRelationsParent.Length > 0 )
 		{
 			ArrayList newIds = vRelationsParent.GetIDs();
 			InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting parent version relationships..." );
 			deletedVersionRelParent = await OdooClient<HpVersionRelationship>.DeleteAsync( [ newIds ], 100000 );
 			if( deletedVersionRelParent )
 			{
-				InstanceManager.Session.Logger( StatusMessage.SUCCESS, $"Deleted parent version relationships: {string.Join( ", ", newIds.ToArray() )}" );
 				InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted parent version relationships: {string.Join( ", ", newIds.ToArray() )}" );
 			}
 			else
@@ -2054,7 +2044,6 @@ public sealed partial class HackFileManager : Page
 			deletedVersionRelChild = await OClient.DeleteAsync( HpVersionRelationship.GetHpModel(), [ newIds ], 100000 );
 			if( deletedVersionRelChild )
 			{
-				InstanceManager.Session.Logger( StatusMessage.SUCCESS, $"Deleted child version relationships: {string.Join( ", ", newIds.ToArray() )}" );
 				InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted child version relationships: {string.Join( ", ", newIds.ToArray() )}" );
 			}
 			else
@@ -2085,7 +2074,6 @@ public sealed partial class HackFileManager : Page
 		bool deletedEntries = deletedVersions && OClient.Delete(HpEntry.GetHpModel(), [ids]);
 		if( deletedEntries )
 		{
-			InstanceManager.Session.Logger( StatusMessage.SUCCESS, $"Deleted entries" );
 			InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted entries" );
 		}
 		else
@@ -2136,7 +2124,6 @@ public sealed partial class HackFileManager : Page
 		}
 		else
 		{
-			InstanceManager.Session.Logger( StatusMessage.INFO, $"unable to delete IR Attachments" );
 			InstanceManager.Session.Log( StatusMessage.INFO, $"unable to delete IR Attachments" );
 		}
 		InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting versions..." );

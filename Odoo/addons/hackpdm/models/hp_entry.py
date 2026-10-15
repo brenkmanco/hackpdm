@@ -43,10 +43,14 @@ class hp_entry(models.Model):
         string='latest date',
     )
 
-    #active = fields.Boolean(string='active')
     deleted = fields.Boolean(
         default=False,
         store=True,
+    )
+    is_checked_in = fields.Boolean(
+        default=True,
+        string='is checked in',
+        help='Indicates whether the latest version is checked in',
     )
 
     latest_file_size = fields.Integer(
@@ -136,7 +140,9 @@ class hp_entry(models.Model):
     def _compute_latest_version(self):
         for record in self:
             if record.version_ids:
-                record.latest_version_id = record.version_ids.sorted(key=lambda x: x.id, reverse=True)[0]
+                record.latest_version_id = record.version_ids.sorted(
+                    key=lambda x: x.id, reverse=True
+                    )[0]
             else:
                 record.latest_version_id = False
 
