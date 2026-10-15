@@ -131,10 +131,9 @@ class hp_pdm_commit(models.Model):
 
         # 4. Removed the invalid `on_error` argument
         logging.info("Starting commit for record %s. Committing status: %s", record.id, record.committing)
-        job = record.with_delay().run_commit_job()
-        logging.info("Commit job created for record %s. Job UUID: %s", record.id, job.uuid)
+        record.run_commit_job()
+        logging.info("Commit completed for record %s.", record.id)
         record.write({
-            "job_uuid": job.uuid,
             "committing": True,
             "committed_at": fields.Datetime.now(),
         })
@@ -153,10 +152,6 @@ class hp_pdm_commit(models.Model):
         # cleanup staged records
         self._rollback_records_staged(self.staged_ids.ids)
 
-    # ------------------------------------------------------------
-    # BACKGROUND WORKER — runs even if client disconnects
-    # ------------------------------------------------------------
-    #@job
     def run_commit_job(self):
         try:
             

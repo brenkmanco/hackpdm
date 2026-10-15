@@ -155,7 +155,7 @@ class hp_common_model(models.AbstractModel):
         results = []
 
         for rec in records:
-            data = {}
+            data = { "id": rec.id }
             for field in fields or []:
                 parts = field.split(".")
                 data[field] = self._resolve_field(rec, parts, [], 0)
