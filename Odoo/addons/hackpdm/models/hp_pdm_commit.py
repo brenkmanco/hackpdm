@@ -3,16 +3,13 @@ import logging
 import re
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo_app.exceptions import UserError
 
 class hp_pdm_commit(models.Model):
     _name = 'hp.pdm.commit'
     _inherit = 'hp.common.model'
 
     name = fields.Char()
-    job_uuid = fields.Char(
-        string="job id",
-    )
 
     committed_at = fields.Datetime(
         string="time commit was initiated",
@@ -21,11 +18,6 @@ class hp_pdm_commit(models.Model):
         string="when the commit finished",
     )
 
-    committing = fields.Boolean(
-        string="currently being committed",
-        default=False,
-        readonly=True,
-    )
     committed = fields.Boolean(
         string="have these files been committed?",
         default=False,
@@ -41,15 +33,6 @@ class hp_pdm_commit(models.Model):
     )
     commit_summary = fields.Text(
         string="commit summary",
-    )
-
-    progress_total = fields.Integer(
-        compute="_compute_total_files",
-        string="commit total",
-    )
-    duration_seconds = fields.Float(
-        string="commit duration",
-        compute="_compute_duration",
     )
 
     node_by = fields.Many2one(
@@ -96,7 +79,6 @@ class hp_pdm_commit(models.Model):
             records.unlink()
             record.write({
                 "committed": False, 
-                "committing": False, 
                 "errored": False, 
                 "message_exception": False, 
                 "commit_summary": False,
@@ -113,14 +95,13 @@ class hp_pdm_commit(models.Model):
         records = self.browse(commit_ids)
 
         for record in records:
-            if record.committing or record.committed or not record.staged_ids:
+            if record.committed or not record.staged_ids:
                 continue
 
             try:
                 # Savepoint isolates this record and rolls back all its children if it fails
                 with self.env.cr.savepoint():
                     record.write({
-                        "committing": True,
                         "committed_at": fields.Datetime.now(),
                     })
                     record.run_commit_job()
@@ -128,7 +109,17 @@ class hp_pdm_commit(models.Model):
                 logging.exception("Commit failed for record %s", record.id)
                 record.handle_commit_failure(exc)
 
-        return True
+        return records.read([
+            "name", 
+            "committed", 
+            "committed_at", 
+            "commit_finished_at",
+            "errored",
+            "message_exception",
+            "commit_summary",
+            "node_by",
+            "staged_ids.target_model",
+        ])
 
     def run_commit_job(self):
         self.ensure_one()
@@ -139,7 +130,6 @@ class hp_pdm_commit(models.Model):
         # Mark success
         self.write({
             "committed": True,
-            "committing": False,
             "commit_finished_at": fields.Datetime.now(),
         })
 
@@ -148,7 +138,6 @@ class hp_pdm_commit(models.Model):
         self.write({
             "errored": True,
             "message_exception": str(exc),
-            "committing": False,
             "committed": False,
             "commit_finished_at": fields.Datetime.now(),
         })
@@ -179,6 +168,133 @@ class hp_pdm_commit(models.Model):
         "hp.release.review",
         "hp.release",
     ]
+    # ------------------------------------------------------------
+    # MODEL VALIDATION & PREPARATION HELPERS
+    # ------------------------------------------------------------
+    def _validate_entry_payload(self, payload: dict):
+        """Validates payload before creating an hp.entry record."""
+        entry_name = payload.get("name")
+        dir_id = payload.get("dir_id")
+
+        if not entry_name:
+            raise UserError("Cannot commit an entry without a file name.")
+
+        # Check: Directory existence and status
+        if dir_id:
+            dir_rec = self.env["hp.directory"].browse(dir_id)
+            if not dir_rec.exists():
+                raise UserError(f"Directory with ID {dir_id} for entry '{entry_name}' does not exist.")
+            if dir_rec.deleted:
+                raise UserError(f"Directory '{dir_rec.complete_name}' for entry '{entry_name}' has been deleted.")
+
+        # Check: Entry name filter check (If / Ft)
+        filters = self.env["hp.entry.name.filter"].search([])
+        for flt in filters:
+            if flt.name_regex:
+                try:
+                    if re.search(flt.name_regex, entry_name, re.IGNORECASE):
+                        desc = flt.description or flt.name_regex
+                        raise UserError(f"Entry '{entry_name}' matches filter pattern '{desc}' and cannot be committed.")
+                except re.error as e:
+                    logging.warning("Invalid regex filter ID %s (%s): %s", flt.id, flt.name_regex, e)
+
+        # Check: Collision check (Lo vs existing)
+        if dir_id and entry_name:
+            existing_entry = self.env["hp.entry"].search([
+                ("name", "=", entry_name),
+                ("dir_id", "=", dir_id),
+            ], limit=1)
+            if existing_entry:
+                dir_name = dir_rec.complete_name if dir_id and dir_rec.exists() else str(dir_id)
+                if existing_entry.deleted:
+                    raise UserError(
+                        f"Entry '{entry_name}' already exists in directory '{dir_name}' "
+                        f"but is marked as deleted (Dt)."
+                    )
+                else:
+                    raise UserError(
+                        f"Entry '{entry_name}' already exists in directory '{dir_name}'. "
+                        f"A version should be committed for the existing entry instead of creating a duplicate."
+                    )
+
+    def _validate_version_payload(self, payload: dict, summary_model: dict):
+        """Validates and resolves references for an hp.version payload."""
+        # Resolve entry_id (from summary_model if new entry, or from existing entry)
+        if not payload.get("__internal__existing"):
+            staged_entry_id = payload.get("entry_id")
+            resolved_entry_id = summary_model.get("hp.entry", {}).get(staged_entry_id)
+            if not resolved_entry_id:
+                raise UserError(
+                    f"Cannot commit version '{payload.get('name')}': Associated staged entry ID "
+                    f"{staged_entry_id} was not created."
+                )
+            payload["entry_id"] = resolved_entry_id
+        else:
+            del payload["__internal__existing"]
+
+        entry_id = payload.get("entry_id")
+        entry_rec = self.env["hp.entry"].browse(entry_id)
+        if not entry_rec.exists():
+            raise UserError(f"Target entry ID {entry_id} does not exist.")
+
+        # Check: Deleted check (Dt)
+        if entry_rec.deleted:
+            raise UserError(f"Cannot commit version: entry '{entry_rec.name}' is marked as deleted (Dt).")
+
+        # Check: Checkout check (Co vs Cm vs No checkout)
+        if entry_rec.checkout_user and entry_rec.checkout_user.id != self.env.uid:
+            raise UserError(
+                f"Cannot commit version for '{entry_rec.name}': "
+                f"The file is checked out to another user '{entry_rec.checkout_user.name}' ({entry_rec.checkout_user.login}) [Co]."
+            )
+
+        # If not checked out, allow commit and populate node_id if missing
+        if not entry_rec.checkout_user:
+            if not payload.get("node_id") and self.node_by:
+                payload["node_id"] = self.node_by.id
+
+        return entry_rec
+
+    def _validate_version_property_payload(self, payload: dict, summary_model: dict):
+        """Validates and resolves references for an hp.version.property payload."""
+        staged_version_id = payload.get("version_id")
+        resolved_version_id = summary_model.get("hp.version", {}).get(staged_version_id)
+        if not resolved_version_id:
+            if not staged_version_id or not self.env["hp.version"].browse(staged_version_id).exists():
+                raise UserError(
+                    f"Cannot create version property: Associated version ID {staged_version_id} was not found."
+                )
+            resolved_version_id = staged_version_id
+        payload["version_id"] = resolved_version_id
+
+    def _handle_version_relationship(self, row, payload: dict, summary_model: dict):
+        """Handles staged CAD relationships by linking parent and child versions."""
+        version_info = payload.get("version", {})
+        parent_staged_id = version_info.get("version_staged_id")
+        parent_version_id = summary_model.get("hp.version", {}).get(parent_staged_id)
+        dep_path = payload.get("path")
+
+        if parent_version_id and dep_path:
+            parent_version = self.env["hp.version"].browse(parent_version_id)
+            dep_filename = dep_path.replace("\\", "/").split("/")[-1]
+            child_entry = self.env["hp.entry"].search([("name", "=", dep_filename), ("deleted", "=", False)], limit=1)
+            if child_entry and child_entry.latest_version_id:
+                parent_version.write({"child_ids": [(4, child_entry.latest_version_id.id)]})
+        row.write({"payload": {"complete": True}})
+
+    def _post_create_version(self, version_rec):
+        """Post-creation hook for hp.version to uncheckout/check-in the entry."""
+        entry_rec = version_rec.entry_id
+        if entry_rec:
+            entry_vals = {
+                "checkout_user": False,
+                "checkout_date": False,
+                "checkout_node": False,
+            }
+            if "is_checked_out" in entry_rec._fields:
+                entry_vals["is_checked_out"] = False
+            entry_rec.write(entry_vals)
+
     def _create_records(self, staged, summary_model):
         for index, row in enumerate(staged, start=1):
             logging.info("record for commit %s. id: %s", row.target_model, self.id)
@@ -189,121 +305,15 @@ class hp_pdm_commit(models.Model):
             for f in ("create_uid", "create_date", "write_uid", "write_date"):
                 payload.pop(f, None)
 
-            # --------------------------------------------------------
-            # 1. VALIDATIONS FOR hp.entry
-            # --------------------------------------------------------
+            # Dispatch model-specific validations and reference resolution
             if target_model == "hp.entry":
-                entry_name = payload.get("name")
-                dir_id = payload.get("dir_id")
-
-                if not entry_name:
-                    raise UserError("Cannot commit an entry without a file name.")
-
-                # Check 1a: Directory existence and status
-                if dir_id:
-                    dir_rec = self.env["hp.directory"].browse(dir_id)
-                    if not dir_rec.exists():
-                        raise UserError(f"Directory with ID {dir_id} for entry '{entry_name}' does not exist.")
-                    if dir_rec.deleted:
-                        raise UserError(f"Directory '{dir_rec.complete_name}' for entry '{entry_name}' has been deleted.")
-
-                # Check 1b: Entry name filter check (If / Ft)
-                filters = self.env["hp.entry.name.filter"].search([])
-                for flt in filters:
-                    if flt.name_regex:
-                        try:
-                            if re.search(flt.name_regex, entry_name, re.IGNORECASE):
-                                desc = flt.description or flt.name_regex
-                                raise UserError(f"Entry '{entry_name}' matches filter pattern '{desc}' and cannot be committed.")
-                        except re.error as e:
-                            logging.warning("Invalid regex filter ID %s (%s): %s", flt.id, flt.name_regex, e)
-
-                # Check 1c: Collision check (Lo vs existing)
-                if dir_id and entry_name:
-                    existing_entry = self.env["hp.entry"].search([
-                        ("name", "=", entry_name),
-                        ("dir_id", "=", dir_id),
-                    ], limit=1)
-                    if existing_entry:
-                        if existing_entry.deleted:
-                            raise UserError(
-                                f"Entry '{entry_name}' already exists in directory '{dir_rec.complete_name}' "
-                                f"but is marked as deleted (Dt)."
-                            )
-                        else:
-                            raise UserError(
-                                f"Entry '{entry_name}' already exists in directory '{dir_rec.complete_name}'. "
-                                f"A version should be committed for the existing entry instead of creating a duplicate."
-                            )
-
-            # --------------------------------------------------------
-            # 2. VALIDATIONS FOR hp.version
-            # --------------------------------------------------------
+                self._validate_entry_payload(payload)
             elif target_model == "hp.version":
-                # Resolve entry_id (from summary_model if new entry, or from existing entry)
-                if not payload.get("__internal__existing"):
-                    staged_entry_id = payload.get("entry_id")
-                    resolved_entry_id = summary_model.get("hp.entry", {}).get(staged_entry_id)
-                    if not resolved_entry_id:
-                        raise UserError(
-                            f"Cannot commit version '{payload.get('name')}': Associated staged entry ID "
-                            f"{staged_entry_id} was not created."
-                        )
-                    payload["entry_id"] = resolved_entry_id
-                else:
-                    del payload["__internal__existing"]
-
-                entry_id = payload.get("entry_id")
-                entry_rec = self.env["hp.entry"].browse(entry_id)
-                if not entry_rec.exists():
-                    raise UserError(f"Target entry ID {entry_id} does not exist.")
-
-                # Check 2a: Deleted check (Dt)
-                if entry_rec.deleted:
-                    raise UserError(f"Cannot commit version: entry '{entry_rec.name}' is marked as deleted (Dt).")
-
-                # Check 2b: Checkout check (Co vs Cm vs No checkout)
-                # If entry is checked out to someone else, reject (Co)
-                if entry_rec.checkout_user and entry_rec.checkout_user.id != self.env.uid:
-                    raise UserError(
-                        f"Cannot commit version for '{entry_rec.name}': "
-                        f"The file is checked out to another user '{entry_rec.checkout_user.name}' ({entry_rec.checkout_user.login}) [Co]."
-                    )
-                # If entry is not checked out, allow commit and populate node_id if missing
-                if not entry_rec.checkout_user:
-                    if not payload.get("node_id") and self.node_by:
-                        payload["node_id"] = self.node_by.id
-
-            # --------------------------------------------------------
-            # 3. VALIDATIONS FOR hp.version.property
-            # --------------------------------------------------------
+                self._validate_version_payload(payload, summary_model)
             elif target_model == "hp.version.property":
-                staged_version_id = payload.get("version_id")
-                resolved_version_id = summary_model.get("hp.version", {}).get(staged_version_id)
-                if not resolved_version_id:
-                    if not staged_version_id or not self.env["hp.version"].browse(staged_version_id).exists():
-                        raise UserError(
-                            f"Cannot create version property: Associated version ID {staged_version_id} was not found."
-                        )
-                    resolved_version_id = staged_version_id
-                payload["version_id"] = resolved_version_id
-
-            # --------------------------------------------------------
-            # 4. SPECIAL HANDLING FOR hp.version.relationship
-            # --------------------------------------------------------
-            if target_model == "hp.version.relationship" and target_model not in self.env:
-                version_info = payload.get("version", {})
-                parent_staged_id = version_info.get("version_staged_id")
-                parent_version_id = summary_model.get("hp.version", {}).get(parent_staged_id)
-                dep_path = payload.get("path")
-
-                if parent_version_id and dep_path:
-                    parent_version = self.env["hp.version"].browse(parent_version_id)
-                    dep_filename = dep_path.replace("\\", "/").split("/")[-1]
-                    child_entry = self.env["hp.entry"].search([("name", "=", dep_filename), ("deleted", "=", False)], limit=1)
-                    if child_entry and child_entry.latest_version_id:
-                        parent_version.write({"child_ids": [(4, child_entry.latest_version_id.id)]})
-                row.write({"payload": {"complete": True}})
+                self._validate_version_property_payload(payload, summary_model)
+            elif target_model == "hp.version.relationship" and target_model not in self.env:
+                self._handle_version_relationship(row, payload, summary_model)
                 continue
 
             model = self.env[target_model]
@@ -313,20 +323,9 @@ class hp_pdm_commit(models.Model):
             logging.info("\nCreated record for model %s :: summary: %s\n", target_model, summary_model)
             row.write({"target_id": rec.id, "payload": {"complete": True}})
 
-            # --------------------------------------------------------
-            # POST-CREATION: Un-checkout / Check-in the entry
-            # --------------------------------------------------------
+            # Dispatch post-creation actions
             if target_model == "hp.version":
-                entry_rec = rec.entry_id
-                if entry_rec:
-                    entry_vals = {
-                        "checkout_user": False,
-                        "checkout_date": False,
-                        "checkout_node": False,
-                    }
-                    if "is_checked_in" in entry_rec._fields:
-                        entry_vals["is_checked_in"] = True
-                    entry_rec.write(entry_vals)
+                self._post_create_version(rec)
         
     # ------------------------------------------------------------
     # ATOMIC CREATION — ONE BIG TRANSACTION

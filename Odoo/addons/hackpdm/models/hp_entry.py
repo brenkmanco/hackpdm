@@ -37,6 +37,8 @@ class hp_entry(models.Model):
 
     checkout_date = fields.Datetime(
         string='checkout date',
+        compute='_compute_checkout_info',
+        store=True,
     )
     latest_date = fields.Datetime(
         related='latest_version_id.file_modify_stamp',
@@ -47,12 +49,11 @@ class hp_entry(models.Model):
         default=False,
         store=True,
     )
-    is_checked_in = fields.Boolean(
-        default=True,
-        string='is checked in',
-        help='Indicates whether the latest version is checked in',
+    is_checked_out = fields.Boolean(
+        default=False,
+        string='is checked out',
+        help='Indicates whether the entry is currently checked out',
     )
-
     latest_file_size = fields.Integer(
         related='latest_version_id.file_size',
         string='latest file size',
@@ -88,10 +89,14 @@ class hp_entry(models.Model):
     checkout_user = fields.Many2one(
         comodel_name='res.users',
         string='checkout user',
+        compute='_compute_checkout_info',
+        store=True,
     )
     checkout_node = fields.Many2one(
         comodel_name='hp.node',
         string='checkout node',
+        compute='_compute_checkout_info',
+        store=True,
     )
 
     version_ids = fields.One2many(
@@ -115,6 +120,22 @@ class hp_entry(models.Model):
             return next(x for x in self if key(x))
         except:
             return False
+
+    @api.depends('is_checked_out',
+                 'latest_version_id',
+                 'latest_version_id.checkout_date',
+                 'latest_version_id.checkout_node',
+                 'latest_version_id.checkout_user')
+    def _compute_checkout_info(self):
+        for record in self:
+            if record.is_checked_out:
+                record.checkout_date = record.latest_version_id.checkout_date
+                record.checkout_node = record.latest_version_id.checkout_node
+                record.checkout_user = record.latest_version_id.checkout_user
+            else:
+                record.checkout_date = False
+                record.checkout_node = False
+                record.checkout_user = False
 
     @api.depends('directory_complete_name', 'name')
     def _compute_windows_path(self):

@@ -6,8 +6,7 @@
     'description': 'engineering product data management system',
     'author': 'Justin Johnson',
     'depends': [
-        'base',
-	    'queue_job',
+        'base'
     ],
     'data': [
         'security/ir.model.access.csv',

@@ -143,6 +143,18 @@ class hp_version(models.Model):
         related='entry_id.deleted',
         string='entry deleted',
     )
+    is_checked_out = fields.Boolean(
+        related='entry_id.is_checked_out',
+        string='is checked out',
+    )
+    is_checkout_version = fields.Boolean(
+        compute='_compute_is_checkout_version',
+        string='if entry is checked out, is this the checked out version?',
+    )
+    is_latest_version = fields.Boolean(
+        compute='_compute_is_latest_version',
+        string='is this the latest version?',
+    )
 
     dir_id = fields.Many2one(
         comodel_name='hp.directory',
@@ -205,6 +217,16 @@ class hp_version(models.Model):
     node_latest_ids = fields.Many2many(
         comodel_name='hp.node',
     )
+
+    @api.depends('entry_id.is_checked_out', 'entry_id.latest_version_id')
+    def _compute_is_checkout_version(self):
+        for record in self:
+            record.is_checkout_version = record.entry_id.is_checked_out and record.id == record.entry_id.latest_version_id.id
+
+    @api.depends('entry_id.latest_version_id')
+    def _compute_is_latest_version(self):
+        for record in self:
+            record.is_latest_version = record.entry_id.latest_version_id.id == record.id
 
     @api.depends('file_contents')
     def _compute_attachment(self):
@@ -379,7 +401,7 @@ class hp_version(models.Model):
             entry.checkout_user = self.env.uid
             entry.checkout_date = date
             entry.checkout_node = node_rec.id
-            entry.is_checked_in = False
+            entry.is_checked_out = True
             v_rec.node_id = node_rec.id
         else:
             raise Exception(f"already checked out to user {entry.checkout_user.id}")

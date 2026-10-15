@@ -423,3 +423,4 @@ Odoo/addons/queue_job
 
 /Odoo/updater/vers_relationship.sql
 LATER_USE_READ.md
+/Odoo/.venv

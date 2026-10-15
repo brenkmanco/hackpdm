@@ -1,6 +1,7 @@
 import logging
 
 from odoo import fields, models, api
+
 import datetime as dt
 import numpy as np
 
@@ -125,9 +126,24 @@ class hp_common_model(models.AbstractModel):
          # Still more parts to traverse
         rest = parts[1:]
         if value._name and len(value) == 1: # Many2one
-            return [self._resolve_field(value, rest, arr + [self._form_dict(value, None, depth)], depth+1)]
+            return [    
+                    self._resolve_field(
+                        value, 
+                        rest, 
+                        arr + [self._form_dict(value, None, depth)], 
+                        depth+1
+                    )
+                ]
         else: # One2many / Many2many
-            return [self._resolve_field(child, rest, arr + [self._form_dict(child, None, depth)], depth+1) for child in value]
+            return [
+                    self._resolve_field(
+                        child, 
+                        rest, 
+                        arr + [self._form_dict(child, None, depth)], 
+                        depth+1
+                    ) 
+                    for child in value
+                ]
 
     @api.model
     def smart_read(self, domain, ids, fields):
@@ -156,12 +172,12 @@ class hp_common_model(models.AbstractModel):
             return []
 
 
-        results = []
+        results:list[dict[str, Any]] = []
 
         for rec in records:
-            data = {}
+            data:dict[str, Any] = {}
             for field in fields or []:
-                parts = field.split(".")
+                parts:list[str] = field.split(".")
                 data[field] = self._resolve_field(rec, parts, [], 0)
             results.append(data)
         return results
