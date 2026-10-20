@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using HackPDM.Core;
@@ -12,14 +12,16 @@ namespace HackPDM.Infrastructure.SldWrks
 		{
 			get
 			{
+				if (!OperatingSystem.IsWindows()) return null;
 				return field ??= !string.IsNullOrEmpty(OdooDefaults.Instance.SwApi) ? new(OdooDefaults.Instance.SwApi) : null;
 			}
 			set;
 		}
-		public static SwHelper SwHelper
+		public static SwHelper? SwHelper
 		{
 			get
 			{
+				if (!OperatingSystem.IsWindows()) return null;
 				return field ??= new();
 			}
 			set;

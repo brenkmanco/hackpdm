@@ -19,6 +19,7 @@ using HackPDM.Domain.Representation;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Hack;
+using HackPDM.UI.Helpers;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
@@ -605,7 +606,12 @@ public sealed partial class MessageBox : Page
 				| (uint)GetDefaultButton(buttons) 
 				| (uint)MessageBoxModal.AppModal 
 				| (uint)MessageBoxTypeFallback.TopMost,
-				MsgBox));
+#if WINDOWS
+				MsgBox
+#else
+				null
+#endif
+				));
 		}	
 		return tcs.Task;
 	}
@@ -614,26 +620,37 @@ public sealed partial class MessageBox : Page
 		string message, 
 		string title, 
 		uint type,
-		Func<nint, string, string, uint, int> mboxNativeMethod)
+		Func<nint, string, string, uint, int>? mboxNativeMethod)
 	{
 		try
 		{
-			return ( DialogResult )mboxNativeMethod( hwnd, message, title, type);
+#if WINDOWS
+			if (mboxNativeMethod != null)
+			{
+				return ( DialogResult )mboxNativeMethod( hwnd, message, title, type);
+			}
+			throw new Exception( "Invalid data or functions" );
+#else
+			Debug.WriteLine( $"[Native MessageBox Fallback] {title}: {message}" );
+			return DialogResult.OK;
+#endif
 		}
 		catch 
 		{
-			Debug.WriteLine( $"{mboxNativeMethod.Method.Name} failed." );
+			Debug.WriteLine( $"{mboxNativeMethod?.Method.Name ?? "Native method"} failed." );
 		}
 		
 		throw new Exception( "Invalid data or functions" );
 	}
 
+#if WINDOWS
 	[LibraryImport( "User32.dll", EntryPoint = "MessageBoxW", StringMarshalling = StringMarshalling.Utf16 )]
 	private static partial int MsgBox(
 	IntPtr hWnd,
 	string lpText,
 	string lpCaption,
 	uint uType );
+#endif
 
 }		
 public record MessageBoxDetails(

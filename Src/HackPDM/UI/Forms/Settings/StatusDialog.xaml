@@ -171,7 +171,7 @@
         </StackPanel>
         <Grid.Resources>
 
-            <xaml:Style TargetType="ListViewItem">
+            <xaml:Style TargetType="xaml:ListViewItem">
                 <xaml:Setter Property="HorizontalContentAlignment" Value="Stretch" />
             </xaml:Style>
 

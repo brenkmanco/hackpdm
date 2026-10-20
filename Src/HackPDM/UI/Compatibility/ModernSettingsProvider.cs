@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.Versioning;
 using Windows.Storage;
 using HackPDM.Abstractions;
@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 namespace HackPDM.UI.Compatibility;
 
-[SupportedOSPlatform("windows10.0.17763.0")]
+
 public class ModernSettingsProvider : ISettingsProvider
 {
     private static ApplicationDataContainer Settings => ApplicationData.Current.LocalSettings;

@@ -16,6 +16,7 @@ using HackPDM.UI.Data;
 using HackPDM.UI.Forms.FormTransport;
 using HackPDM.UI.Forms.Hack;
 using HackPDM.UI.Forms.Helper;
+using HackPDM.UI.Helpers;
 using HackPDM.UI.Models;
 
 using Microsoft.UI.Windowing;

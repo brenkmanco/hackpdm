@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Net.Mime;
@@ -18,6 +18,7 @@ public class SwDocMgr
     {
         try
         {
+            if (!OperatingSystem.IsWindows()) return;
             var swClassFact = new SwDMClassFactory();
             _swDocMgr = swClassFact.GetApplication(strLicenseKey);
         }

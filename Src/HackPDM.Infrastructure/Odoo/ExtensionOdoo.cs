@@ -116,10 +116,8 @@ public static class ExtensionOdoo
 		return isSuccess;
 	}
 
-	extension( HackFile hackFile )
-	{
 
-		public static async Task<(bool success, List<HackFile> hackFiles, List<HackResultTree.ResultNode> hackResults)> GetHackFileWithDependencies( HackFile file )
+	public static async Task<(bool success, List<HackFile> hackFiles, List<HackResultTree.ResultNode> hackResults)> GetHackFileWithDependencies( this HackFile file )
 	{
 		HackResultTree hackTree = new(file);
 		List<HackFile> hackFiles = [];
@@ -139,17 +137,17 @@ public static class ExtensionOdoo
 		// hackFiles = [.. hackResults.SkipSelect<HackResultTree.ResultNode, HackFile>(r => (r.Value?.Hack is null, r.Value?.Hack!))];
 		return (true, hackFiles, hackResults);
 	}
-	public async Task<(bool, HpVersion?)> GetVersionFromLocal()
+	public static async Task<(bool, HpVersion?)> GetVersionFromLocal( this HackFile hackFile )
 	{
-		string filePath = FileOperations.WindowsToOdooPath(hackFile.RelativePath);
+		string filePath = FileOperations.WindowsToOdooPath(hackFile.RelativePath ?? "");
 		ArrayList arrList =
-			[
-				new ArrayList()
-				{
-					new ArrayList() { "name", "=", hackFile.Name },
-					new ArrayList() { "directory_complete_name", "=", filePath },
-				}
-			];
+				[
+					new ArrayList()
+					{
+						new ArrayList() { "name", "=", hackFile.Name },
+						new ArrayList() { "directory_complete_name", "=", filePath },
+					}
+				];
 		HpVersion? versionModel = (await HpVersion.GetRecordsBySearchAsync(arrList, ["file_contents", "preview_image"]))?[0];
 
 		return (versionModel != null, versionModel);
@@ -186,7 +184,7 @@ public static class ExtensionOdoo
 		}
 		return hackFiles;
 	}
-	public async Task<(bool, HpVersion?)> HasLocalVersion()
+	public static async Task<(bool, HpVersion?)> HasLocalVersion( this HackFile hackFile )
 	{
 		HpVersion? versionModel = null;
 		if( hackFile?.HasRemoteVersion == null || !( bool )hackFile.HasRemoteVersion ||
@@ -295,19 +293,18 @@ public static class ExtensionOdoo
 		parentFile = new( fInfo );
 		return TryFilePathToHackWithDependencies( out depAllInPWAorBrokenList, parentFile );
 	}
-    }
-    extension( IEnumerable<HpEntry> entries )
-	{
 
-		public IEnumerable<HpEntry> TakeOutLatest( out IEnumerable<HpEntry> latestEntries )
+
+	public static IEnumerable<HpEntry> TakeOutLatest( this IEnumerable<HpEntry> entries, out IEnumerable<HpEntry> latestEntries )
 	{
 		latestEntries = entries.TakeWhile( entry => entry.IsLatest );
 		entries = entries.Except( latestEntries );
 
 		return entries;
 	}
+
 }
-}
+
 public static class OdooFieldExtension
 {
 	public static readonly Dictionary<OdooFieldType, Type[]> Schema = new()
