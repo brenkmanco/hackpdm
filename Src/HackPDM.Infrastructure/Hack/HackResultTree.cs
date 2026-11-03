@@ -137,7 +137,7 @@ public class HackResultTree
 					foreach( var path in dependencies.Select( deps => deps[ 1 ] ) )
 					{
 						ResultHackFile resHack = new(HackFile.GetFromPath(path, FileOperations.GetRelativePath(path)), HackTestDepth.FileExistsTest);
-						ResultNode node = [with( resHack )];
+						ResultNode node = new ResultNode(resHack);
 						Children.Add(node);
 					}
 				}

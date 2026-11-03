@@ -31,28 +31,26 @@ namespace HackPDM.Infrastructure.Odoo;
 
 public static class ExtensionOdoo
 {
-    // xmlrpc
-    private static readonly Encoding Encoding = new ASCIIEncoding();
-    private static readonly XmlRpcRequestSerializer Serializer = new();
-    private static readonly XmlRpcResponseDeserializer Deserializer = new();
-    
-    public static ArrayList GetIDs(this IEnumerable<HpBaseModel> models)
-        => models.Select(model => model.id).ToArrayList();
+	// xmlrpc
+	private static readonly Encoding Encoding = new ASCIIEncoding();
+	private static readonly XmlRpcRequestSerializer Serializer = new();
+	private static readonly XmlRpcResponseDeserializer Deserializer = new();
 
-	
+	public static ArrayList GetIDs( this IEnumerable<HpBaseModel> models )
+		=> models.Select( model => model.id ).ToArrayList();
+
+
 	public async static Task<JsonRpcResponse?> SendJsonAsync( this JsonRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null )
 	{
 		var handler = new HttpClientHandler();
-		if( proxy is not null )
-		{
+		if( proxy is not null ) {
 			handler.Proxy = proxy;
 			handler.UseProxy = true;
 		}
 
 		using var httpClient = new HttpClient(handler);
 
-		if( timeout > 0 )
-		{
+		if( timeout > 0 ) {
 			httpClient.Timeout = TimeSpan.FromMilliseconds( timeout );
 		}
 
@@ -65,263 +63,250 @@ public static class ExtensionOdoo
 		JsonRpcResponse? result = await response.Content.ReadFromJsonAsync<JsonRpcResponse>();
 		return result;
 	}
-	public async static Task<XmlRpcResponse> SendXMLAsync(this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null)
-    {
-	    //HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
-	    var handler = new HttpClientHandler();
-	    if (proxy is not null)
-	    {
-		    handler.Proxy = proxy;
-		    handler.UseProxy = true;
-	    }
-	    using var httpClient = new HttpClient(handler);
+	public async static Task<XmlRpcResponse> SendXMLAsync( this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null )
+	{
+		//HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
+		var handler = new HttpClientHandler();
+		if( proxy is not null ) {
+			handler.Proxy = proxy;
+			handler.UseProxy = true;
+		}
+		using var httpClient = new HttpClient(handler);
 
-	    if (timeout > 0)
-	    {
-		    httpClient.Timeout = TimeSpan.FromMilliseconds(timeout);
-	    }
+		if( timeout > 0 ) {
+			httpClient.Timeout = TimeSpan.FromMilliseconds( timeout );
+		}
 
-	    // Serialize into a MemoryStream with UTF-8
-	    using var ms = new MemoryStream();
-	    var xmlWriter = new XmlTextWriter(ms, Encoding.UTF8);
-	    Serializer.Serialize(xmlWriter, request);
-	    xmlWriter.Flush();
-	    ms.Position = 0;
+		// Serialize into a MemoryStream with UTF-8
+		using var ms = new MemoryStream();
+		var xmlWriter = new XmlTextWriter(ms, Encoding.UTF8);
+		Serializer.Serialize( xmlWriter, request );
+		xmlWriter.Flush();
+		ms.Position = 0;
 
-	    var httpRequest = new HttpRequestMessage(HttpMethod.Post, url)
-	    {
-		    Content = new StreamContent(ms)
-	    };
-	    httpRequest.Content.Headers.ContentType =
-		    new System.Net.Http.Headers.MediaTypeHeaderValue("text/xml")
-		    {
-			    CharSet = "utf-8"
-		    };
+		var httpRequest = new HttpRequestMessage(HttpMethod.Post, url)
+		{
+			Content = new StreamContent(ms)
+		};
+		httpRequest.Content.Headers.ContentType =
+			new System.Net.Http.Headers.MediaTypeHeaderValue( "text/xml" ) {
+				CharSet = "utf-8"
+			};
 
-	    using var response = await httpClient.SendAsync(httpRequest);
-	    response.EnsureSuccessStatusCode();
+		using var response = await httpClient.SendAsync(httpRequest);
+		response.EnsureSuccessStatusCode();
 
-	    using var responseStream = await response.Content.ReadAsStreamAsync();
-	    using var reader = new StreamReader(responseStream);
+		using var responseStream = await response.Content.ReadAsStreamAsync();
+		using var reader = new StreamReader(responseStream);
 
-	    XmlRpcResponse result = Deserializer.DeserializeResponse(reader);
-	    return result;
-    }
-    
-	public static bool DownloadAll(this HpVersion[] versions, out List<HpVersion> failedDownloads)
-    {
-        failedDownloads = [];
-        bool isSuccess = true;
-        foreach (var version in versions)
-        {
-            if (!version.DownloadFile())
-            {
-                isSuccess = false;
-                failedDownloads.Add(version);
-            }
-        }
-        return isSuccess;
-    }
+		XmlRpcResponse result = Deserializer.DeserializeResponse(reader);
+		return result;
+	}
 
-    extension(HackFile hackFile)
-    {
-	    public static async Task<(bool success, List<HackFile> hackFiles, List<HackResultTree.ResultNode> hackResults)> GetHackFileWithDependencies(HackFile file)
-	    {
-		    HackResultTree hackTree = new(file);
-			List<HackFile> hackFiles = [];
-			List<HackResultTree.ResultNode> hackResults = [];
-
-			//= TryFilePathToHackWithDependencies(out var list, rHack);
-			// var queue = new Queue<HackResultTree.ResultNode>();
-			//list.Select(r => new HackResultTree.ResultNode(r))
-			// var cDict = new ConcurrentDictionary<string, ResultHackFile>();
-
-			await Task.Run( () => hackTree.Root?.ProcessDependencies() );
-			if (hackTree.Root?.IsBrokenPropagated is true)
-			{
-				hackResults = hackTree.Root.BrokenNodes as List<HackResultTree.ResultNode> ?? [];
-				return (false, hackFiles, hackResults);
+	public static bool DownloadAll( this HpVersion[] versions, out List<HpVersion> failedDownloads )
+	{
+		failedDownloads = [];
+		bool isSuccess = true;
+		foreach( var version in versions ) {
+			if( !version.DownloadFile() ) {
+				isSuccess = false;
+				failedDownloads.Add( version );
 			}
-			hackFiles = hackTree.Root?.GetAllNodes().Select( r => r.Value?.Hack ).Where( h => h is not null ).ToList()!;
-			// hackFiles = [.. hackResults.SkipSelect<HackResultTree.ResultNode, HackFile>(r => (r.Value?.Hack is null, r.Value?.Hack!))];
-			return (true, hackFiles, hackResults);
-	    }
-	    public async Task<(bool, HpVersion?)> GetVersionFromLocal()
-	    {
-		    string filePath = FileOperations.WindowsToOdooPath(hackFile.RelativePath);
-		    ArrayList arrList =
-		    [
-			    new ArrayList()
-			    {
-				    new ArrayList() { "name", "=", hackFile.Name },
-				    new ArrayList() { "directory_complete_name", "=", filePath },
-			    }
-		    ];
-		    HpVersion? versionModel = (await HpVersion.GetRecordsBySearchAsync(arrList, ["file_contents", "preview_image"]))?[0];
+		}
+		return isSuccess;
+	}
 
-		    return (versionModel != null, versionModel);
-	    }
-	    public static List<HackFile> FilePathsToHackWithDependencies(params string[] filePaths)
-	    {
-		    HashSet<string> newFiles = [.. filePaths];
-		    List<HackFile> hackFiles = [];
-		    // find all dependencies
-		    foreach (string file in filePaths)
-		    {
-			    try
-			    {
-				    var fInfo = new FileInfo(file);
-				    if (OdooDefaultsConstants.DependentExt.Contains(fInfo.Extension))
-				    {
-					    var dependencies = SolidWorksUtil.DocMgr?.GetDependencies(file);
-					    if (dependencies is null || dependencies.Count <= 0) continue;
-					    foreach (string[] deps in dependencies)
-					    {
-						    string path = deps[1];
-						    var splitPath = path.Split([$"\\{HackDefaults.Instance?.PwaPathRelative}\\"], StringSplitOptions.RemoveEmptyEntries);
-						    if (splitPath.Length == 2)
-						    {
-							    newFiles.Add(Path.Combine([HackDefaults.Instance.PwaPathAbsolute, splitPath[1]]));
-						    }
-					    }
-				    }
-			    }
-			    catch (Exception e)
-			    {
-				    Console.WriteLine(e);
-				    throw;
-			    }
-		    }
-		    foreach (string item in newFiles)
-		    {
-			    HackFile? hack = HackFile.GetFromPath(item, FileOperations.GetRelativePath(item));
-			    if (hack != null)
-				    hackFiles.Add(hack);
-		    }
-		    return hackFiles;
-	    }
-	    public async Task<(bool, HpVersion?)> HasLocalVersion()
-	    {
-			HpVersion? versionModel = null;
-		    if (hackFile?.HasRemoteVersion == null || !(bool)hackFile.HasRemoteVersion ||
-		        hackFile.HpVersionId == null) return (false, versionModel);
-		    
-		    versionModel = await HpVersion.GetRecordByIdAsync((int)hackFile.HpVersionId, HpVersion.UsualExcludedFields);
-		    return (true, versionModel);
-	    }
-	    public static List<HackFile> FolderPathToHackWithDependencies(string pathway, SearchOption options = SearchOption.AllDirectories)
-	    {
-		    // get all files in folder path to commit.
-		    string[] files = [.. Directory.EnumerateFiles(pathway, "*", options)];
-		    return FilePathsToHackWithDependencies(files);
-	    }
-	    public static bool GetHackFolderWithDependencies(string folderPath, bool listOutputDialog, out List<HackFile>? hackFiles)
-	    {
-		    bool hasErrors = false;
-		    Regex rxSearch = new Regex(OdooDefaultsConstants.DependentExtRegex, RegexOptions.IgnoreCase);
-		    var filesInDir = Directory.EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly);
-		    var matchedFiles = filesInDir.SegmentWhere(file => rxSearch.IsMatch(file ?? ""));
-		    (List<HackFile>, List<HackFile>) hackSegment = (
-			    [.. matchedFiles.Item1.Select(f => new HackFile(new FileInfo(f)))],
-			    [.. matchedFiles.Item2.Select(f => new HackFile(new FileInfo(f)))]
-		    );
-        
-		    IEnumerable<HackFile> allHackDependencyFiles = hackSegment.Item1.SelectMany<HackFile, HackFile>( m =>
-		    {
-			    var (success, hf, results) = GetHackFileWithDependencies(m).Result;
-			    hasErrors |= !success;
-			    return !success ? hf : Enumerable.Empty<HackFile>();
-		    });
-		    List<HackFile> allcombinedFiles = [.. allHackDependencyFiles, .. hackSegment.Item2.SkipWhile(hf => hf.Exists is null or false)];
-		    hackFiles = allcombinedFiles;
-		    return true;
-	    }
-		public static async Task<(bool success, List<HackFile>? hackFiles, List<HackResultTree.ResultNode> results)> GetHackFileWithDependencies( EntryRow? entry, bool listOutputDialog )
-			=> await GetHackFileWithDependencies(new HackFile(entry));
-		
-		public static async Task<(bool success, List<HackFile>? hackFiles, List<HackResultTree.ResultNode> results)> GetHackFileWithDependencies( string filePath, bool listOutputDialog )
-			=> await GetHackFileWithDependencies(new HackFile(new FileInfo(filePath)));
-		
+	extension( HackFile hackFile )
+	{
 
-	    public static HackResult TryFilePathToHackWithDependencies(out List<ResultHackFile> depAllInPWAorBrokenList, ResultHackFile parentFile)
-	    {
-		    List<string> newFiles = [];
-		    depAllInPWAorBrokenList = [];
-		    HackResult hackResultCode = parentFile.Result;
+		public static async Task<(bool success, List<HackFile> hackFiles, List<HackResultTree.ResultNode> hackResults)> GetHackFileWithDependencies( HackFile file )
+	{
+		HackResultTree hackTree = new(file);
+		List<HackFile> hackFiles = [];
+		List<HackResultTree.ResultNode> hackResults = [];
 
-		    // if parent file is not clean, return its result
-		    if (parentFile is not { Result: HackResult.Clean }) 
-		    {
-			    return hackResultCode;
-		    }
+		//= TryFilePathToHackWithDependencies(out var list, rHack);
+		// var queue = new Queue<HackResultTree.ResultNode>();
+		//list.Select(r => new HackResultTree.ResultNode(r))
+		// var cDict = new ConcurrentDictionary<string, ResultHackFile>();
 
-		    // if parent file is not a dependent type, return clean
-		    if (!(parentFile.Hack?.TypeExt is { } ext && OdooDefaultsConstants.DependentExt.Contains($"{ext}")))
-		    {
-			    return hackResultCode = HackResult.Clean;
-		    }
-		
-		    // find all dependencies
+		await Task.Run( () => hackTree.Root?.ProcessDependencies() );
+		if( hackTree.Root?.IsBrokenPropagated is true ) {
+			hackResults = hackTree.Root.BrokenNodes as List<HackResultTree.ResultNode> ?? [];
+			return (false, hackFiles, hackResults);
+		}
+		hackFiles = hackTree.Root?.GetAllNodes().Select( r => r.Value?.Hack ).Where( h => h is not null ).ToList()!;
+		// hackFiles = [.. hackResults.SkipSelect<HackResultTree.ResultNode, HackFile>(r => (r.Value?.Hack is null, r.Value?.Hack!))];
+		return (true, hackFiles, hackResults);
+	}
+	public async Task<(bool, HpVersion?)> GetVersionFromLocal()
+	{
+		string filePath = FileOperations.WindowsToOdooPath(hackFile.RelativePath);
+		ArrayList arrList =
+			[
+				new ArrayList()
+				{
+					new ArrayList() { "name", "=", hackFile.Name },
+					new ArrayList() { "directory_complete_name", "=", filePath },
+				}
+			];
+		HpVersion? versionModel = (await HpVersion.GetRecordsBySearchAsync(arrList, ["file_contents", "preview_image"]))?[0];
+
+		return (versionModel != null, versionModel);
+	}
+	public static List<HackFile> FilePathsToHackWithDependencies( params string[] filePaths )
+	{
+		HashSet<string> newFiles = [.. filePaths];
+		List<HackFile> hackFiles = [];
+		// find all dependencies
+		foreach( string file in filePaths ) {
+			try {
+				var fInfo = new FileInfo(file);
+				if( OdooDefaultsConstants.DependentExt.Contains( fInfo.Extension ) ) {
+					var dependencies = SolidWorksUtil.DocMgr?.GetDependencies(file);
+					if( dependencies is null || dependencies.Count <= 0 )
+						continue;
+					foreach( string[] deps in dependencies ) {
+						string path = deps[1];
+						var splitPath = path.Split([$"\\{HackDefaults.Instance?.PwaPathRelative}\\"], StringSplitOptions.RemoveEmptyEntries);
+						if( splitPath.Length == 2 ) {
+							newFiles.Add( Path.Combine( [ HackDefaults.Instance.PwaPathAbsolute, splitPath[ 1 ] ] ) );
+						}
+					}
+				}
+			} catch( Exception e ) {
+				Console.WriteLine( e );
+				throw;
+			}
+		}
+		foreach( string item in newFiles ) {
+			HackFile? hack = HackFile.GetFromPath(item, FileOperations.GetRelativePath(item));
+			if( hack != null )
+				hackFiles.Add( hack );
+		}
+		return hackFiles;
+	}
+	public async Task<(bool, HpVersion?)> HasLocalVersion()
+	{
+		HpVersion? versionModel = null;
+		if( hackFile?.HasRemoteVersion == null || !( bool )hackFile.HasRemoteVersion ||
+			hackFile.HpVersionId == null )
+			return (false, versionModel);
+
+		versionModel = await HpVersion.GetRecordByIdAsync( ( int )hackFile.HpVersionId, HpVersion.UsualExcludedFields );
+		return (true, versionModel);
+	}
+	public static List<HackFile> FolderPathToHackWithDependencies( string pathway, SearchOption options = SearchOption.AllDirectories )
+	{
+		// get all files in folder path to commit.
+		string[] files = [.. Directory.EnumerateFiles(pathway, "*", options)];
+		return FilePathsToHackWithDependencies( files );
+	}
+	public static bool GetHackFolderWithDependencies( string folderPath, bool listOutputDialog, out List<HackFile>? hackFiles )
+	{
+		bool hasErrors = false;
+		Regex rxSearch = new Regex(OdooDefaultsConstants.DependentExtRegex, RegexOptions.IgnoreCase);
+		var filesInDir = Directory.EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly);
+		var matchedFiles = filesInDir.SegmentWhere(file => rxSearch.IsMatch(file ?? ""));
+		(List<HackFile>, List<HackFile>) hackSegment = (
+				[.. matchedFiles.Item1.Select(f => new HackFile(new FileInfo(f)))],
+				[.. matchedFiles.Item2.Select(f => new HackFile(new FileInfo(f)))]
+			);
+
+		IEnumerable<HackFile> allHackDependencyFiles = hackSegment.Item1.SelectMany<HackFile, HackFile>( m =>
+			{
+				var (success, hf, results) = GetHackFileWithDependencies(m).Result;
+				hasErrors |= !success;
+				return !success ? hf : Enumerable.Empty<HackFile>();
+			});
+		List<HackFile> allcombinedFiles = [.. allHackDependencyFiles, .. hackSegment.Item2.SkipWhile(hf => hf.Exists is null or false)];
+		hackFiles = allcombinedFiles;
+		return true;
+	}
+	public static async Task<(bool success, List<HackFile>? hackFiles, List<HackResultTree.ResultNode> results)> GetHackFileWithDependencies( EntryRow? entry, bool listOutputDialog )
+		=> await GetHackFileWithDependencies( new HackFile( entry ) );
+
+	public static async Task<(bool success, List<HackFile>? hackFiles, List<HackResultTree.ResultNode> results)> GetHackFileWithDependencies( string filePath, bool listOutputDialog )
+		=> await GetHackFileWithDependencies( new HackFile( new FileInfo( filePath ) ) );
 
 
-		  //  List<string[]>? dependencies;
-		  //  try
-		  //  {
-				//dependencies = SolidWorksUtil.DocMgr?.GetDependencies(parentFile.Hack.FullPath!);
-		  //  }
-		  //  catch
-		  //  {
-			 //   return hackResultCode;
-		  //  }
+	public static HackResult TryFilePathToHackWithDependencies( out List<ResultHackFile> depAllInPWAorBrokenList, ResultHackFile parentFile )
+	{
+		List<string> newFiles = [];
+		depAllInPWAorBrokenList = [];
+		HackResult hackResultCode = parentFile.Result;
 
-		  //  // if no dependencies, return clean
-		  //  if (dependencies is not { Count: > 0 })
-		  //  {
-			 //   return hackResultCode;
-		  //  }
-		
-		  //  foreach (var path in dependencies.Select(deps => deps[1]))
-		  //  {
-				//ResultHackFile resHack = new(HackFile.GetFromPath(path, FileOperations.GetRelativePath(path)), HackTestDepth.FileExistsTest);
-				//resHack.DoTest();
-				//depAllInPWAorBrokenList.Add( resHack );
-				//if( resHack.Result is not HackResult.Clean )
-				//{
-				//	hackResultCode = resHack.Result;
-				//	break;
-			 //   }
-		  //  }
+		// if parent file is not clean, return its result
+		if( parentFile is not { Result: HackResult.Clean } ) {
 			return hackResultCode;
-	    }
-	    public static bool TryFilePathsToHackWithDependencies(out (List<ResultHackFile> depAllInPWAorBrokenList, ResultHackFile parentFile)[] hackFiles, params string[] filePaths)
-	    {
-		    hackFiles = new (List<ResultHackFile>, ResultHackFile)[filePaths.Length];
-		    bool hasErrors = false;
-		    for (int i = 0; i < filePaths.Length; i++)
-		    {
-			    // once true, always true
-			    hasErrors |= TryFilePathToHackWithDependencies(out var hd, out var pf, filePaths[i]) is not HackResult.Clean;
-			    hackFiles[i] = (hd, pf);
-		    }
-		    return hasErrors;
-	    }
-	    public static HackResult TryFilePathToHackWithDependencies(out List<ResultHackFile> depAllInPWAorBrokenList, out ResultHackFile parentFile, string filePath)
-	    {
-		    var fInfo = new HackFile(new FileInfo(filePath));
-		    parentFile = new(fInfo);
-		    return TryFilePathToHackWithDependencies(out depAllInPWAorBrokenList, parentFile);
-	    }
-    }
-    extension(IEnumerable<HpEntry> entries)
-    {
-	    public IEnumerable<HpEntry> TakeOutLatest(out IEnumerable<HpEntry> latestEntries)
-	    {
-		    latestEntries = entries.TakeWhile(entry => entry.IsLatest);
-		    entries = entries.Except(latestEntries);
+		}
 
-		    return entries;
-	    }
+		// if parent file is not a dependent type, return clean
+		if( !( parentFile.Hack?.TypeExt is { } ext && OdooDefaultsConstants.DependentExt.Contains( $"{ext}" ) ) ) {
+			return hackResultCode = HackResult.Clean;
+		}
+
+		// find all dependencies
+
+
+		//  List<string[]>? dependencies;
+		//  try
+		//  {
+		//dependencies = SolidWorksUtil.DocMgr?.GetDependencies(parentFile.Hack.FullPath!);
+		//  }
+		//  catch
+		//  {
+		//   return hackResultCode;
+		//  }
+
+		//  // if no dependencies, return clean
+		//  if (dependencies is not { Count: > 0 })
+		//  {
+		//   return hackResultCode;
+		//  }
+
+		//  foreach (var path in dependencies.Select(deps => deps[1]))
+		//  {
+		//ResultHackFile resHack = new(HackFile.GetFromPath(path, FileOperations.GetRelativePath(path)), HackTestDepth.FileExistsTest);
+		//resHack.DoTest();
+		//depAllInPWAorBrokenList.Add( resHack );
+		//if( resHack.Result is not HackResult.Clean )
+		//{
+		//	hackResultCode = resHack.Result;
+		//	break;
+		//   }
+		//  }
+		return hackResultCode;
+	}
+	public static bool TryFilePathsToHackWithDependencies( out (List<ResultHackFile> depAllInPWAorBrokenList, ResultHackFile parentFile)[] hackFiles, params string[] filePaths )
+	{
+		hackFiles = new (List<ResultHackFile>, ResultHackFile)[ filePaths.Length ];
+		bool hasErrors = false;
+		for( int i = 0; i < filePaths.Length; i++ ) {
+			// once true, always true
+			hasErrors |= TryFilePathToHackWithDependencies( out var hd, out var pf, filePaths[ i ] ) is not HackResult.Clean;
+			hackFiles[ i ] = (hd, pf);
+		}
+		return hasErrors;
+	}
+	public static HackResult TryFilePathToHackWithDependencies( out List<ResultHackFile> depAllInPWAorBrokenList, out ResultHackFile parentFile, string filePath )
+	{
+		var fInfo = new HackFile(new FileInfo(filePath));
+		parentFile = new( fInfo );
+		return TryFilePathToHackWithDependencies( out depAllInPWAorBrokenList, parentFile );
+	}
     }
+    extension( IEnumerable<HpEntry> entries )
+	{
+
+		public IEnumerable<HpEntry> TakeOutLatest( out IEnumerable<HpEntry> latestEntries )
+	{
+		latestEntries = entries.TakeWhile( entry => entry.IsLatest );
+		entries = entries.Except( latestEntries );
+
+		return entries;
+	}
+}
 }
 public static class OdooFieldExtension
 {
@@ -339,16 +324,15 @@ public static class OdooFieldExtension
 		{ OdooFieldType.Image,      new[] { typeof(byte[]), typeof(string) }  }, // Odoo base64 encodes
 		{ OdooFieldType.Binary,     new[] { typeof(byte[]), typeof(string) } }, // Odoo base64 encodes
 		{ OdooFieldType.Json,       new[] { typeof(Hashtable), typeof(string) }  },
-        { OdooFieldType.Many2One,   new[] { typeof(object[]), typeof(ValueTuple<int,string>) } },
+		{ OdooFieldType.Many2One,   new[] { typeof(object[]), typeof(ValueTuple<int,string>) } },
 		{ OdooFieldType.One2Many,   new[] { typeof(int[]), typeof(ArrayList) } },
 		{ OdooFieldType.Many2Many,  new[] { typeof(int[]), typeof(ArrayList) } },
 		{ OdooFieldType.Selection,  new[] { typeof(string), typeof(int) } },
 		{ OdooFieldType.Reference,  new[] { typeof(string), typeof(object[]) } },
 		{ OdooFieldType.Serialized, new[] { typeof(Dictionary<string,object>), typeof(string) } },
 	};
-	private static bool IsValidShape(this OdooFieldType type, object? value) =>
-	type switch
-	{
+	private static bool IsValidShape( this OdooFieldType type, object? value ) =>
+	type switch {
 		OdooFieldType.Char
 			or OdooFieldType.Text
 			or OdooFieldType.Html
@@ -395,53 +379,49 @@ public static class OdooFieldHelpers
 {
 	public static object? ToNativeObject( this JsonElement element )
 	{
-		switch( element.ValueKind )
-		{
+		switch( element.ValueKind ) {
 			case JsonValueKind.Object:
-				var dict = new Hashtable();
-				foreach( JsonProperty property in element.EnumerateObject() )
-				{
-					dict[ property.Name ] = ToNativeObject( property.Value );
-				}
-				return dict;
+			var dict = new Hashtable();
+			foreach( JsonProperty property in element.EnumerateObject() ) {
+				dict[ property.Name ] = ToNativeObject( property.Value );
+			}
+			return dict;
 
 			case JsonValueKind.Array:
-				var list = new ArrayList();
-				foreach( JsonElement item in element.EnumerateArray() )
-				{
-					list.Add( ToNativeObject( item ) );
-				}
-				return list;
+			var list = new ArrayList();
+			foreach( JsonElement item in element.EnumerateArray() ) {
+				list.Add( ToNativeObject( item ) );
+			}
+			return list;
 
 			case JsonValueKind.String:
-				// If it's a DateTime format you expect, you can handle it here, otherwise:
-				return element.GetString();
+			// If it's a DateTime format you expect, you can handle it here, otherwise:
+			return element.GetString();
 
 			case JsonValueKind.Number:
-				if( element.TryGetInt32( out int iVal ) )
-					return iVal;
-				if( element.TryGetInt64( out long lVal ) )
-					return lVal;
-				return element.GetDouble();
+			if( element.TryGetInt32( out int iVal ) )
+				return iVal;
+			if( element.TryGetInt64( out long lVal ) )
+				return lVal;
+			return element.GetDouble();
 
 			case JsonValueKind.True:
-				return true;
+			return true;
 
 			case JsonValueKind.False:
-				return false;
+			return false;
 
 			case JsonValueKind.Null:
 			case JsonValueKind.Undefined:
-				return null;
+			return null;
 
 			default:
-				return element.GetRawText();
+			return element.GetRawText();
 		}
 	}
-	public static bool TryCast<T>(object? value, out T? result)
+	public static bool TryCast<T>( object? value, out T? result )
 	{
-		if (value is T t)
-		{
+		if( value is T t ) {
 			result = t;
 			return true;
 		}
@@ -452,11 +432,10 @@ public static class OdooFieldHelpers
 	public static bool TryCast<TIn, TOut>(
 		object? value,
 		in Func<TIn, TOut> func,
-		out TOut? result)
+		out TOut? result )
 	{
-		if (value is TIn t)
-		{
-			result = func(t);
+		if( value is TIn t ) {
+			result = func( t );
 			return true;
 		}
 		result = default;
@@ -466,13 +445,12 @@ public static class OdooFieldHelpers
 		object? value,
 		in Func<T1, TOut> f1,
 		in Func<T2, TOut> f2,
-		out TOut result)
+		out TOut result )
 	{
-		return value switch
-		{
-			T1 t1 => ReturnTrue(result = f1(t1)),
-			T2 t2 => ReturnTrue(result = f2(t2)),
-			_ => ReturnFalse(result = default!),
+		return value switch {
+			T1 t1 => ReturnTrue( result = f1( t1 ) ),
+			T2 t2 => ReturnTrue( result = f2( t2 ) ),
+			_ => ReturnFalse( result = default! ),
 		};
 	}
 	public static bool TryCastAny<T1, T2, T3, TOut>(
@@ -480,14 +458,13 @@ public static class OdooFieldHelpers
 		in Func<T1, TOut> f1,
 		in Func<T2, TOut> f2,
 		in Func<T3, TOut> f3,
-		out TOut result)
+		out TOut result )
 	{
-		return value switch
-		{
-			T1 t1 => ReturnTrue(result = f1(t1)),
-			T2 t2 => ReturnTrue(result = f2(t2)),
-			T3 t3 => ReturnTrue(result = f3(t3)),
-			_ => ReturnFalse(result = default!),
+		return value switch {
+			T1 t1 => ReturnTrue( result = f1( t1 ) ),
+			T2 t2 => ReturnTrue( result = f2( t2 ) ),
+			T3 t3 => ReturnTrue( result = f3( t3 ) ),
+			_ => ReturnFalse( result = default! ),
 		};
 	}
 	public static bool TryCastAny<T1, T2, T3, T4, TOut>(
@@ -496,78 +473,70 @@ public static class OdooFieldHelpers
 		in Func<T2, TOut> f2,
 		in Func<T3, TOut> f3,
 		in Func<T4, TOut> f4,
-		out TOut result)
+		out TOut result )
 	{
-		return value switch
-		{
-			T1 t1 => ReturnTrue(result = f1(t1)),
-			T2 t2 => ReturnTrue(result = f2(t2)),
-			T3 t3 => ReturnTrue(result = f3(t3)),
-			T4 t4 => ReturnTrue(result = f4(t4)),
-			_ => ReturnFalse(result = default!),
+		return value switch {
+			T1 t1 => ReturnTrue( result = f1( t1 ) ),
+			T2 t2 => ReturnTrue( result = f2( t2 ) ),
+			T3 t3 => ReturnTrue( result = f3( t3 ) ),
+			T4 t4 => ReturnTrue( result = f4( t4 ) ),
+			_ => ReturnFalse( result = default! ),
 		};
 	}
-	private static bool ReturnTrue<T>(in T _) => true;
-	private static bool ReturnFalse<T>(in T _) => false;
-	private static bool TryNull<TIn, TOut>(TIn input, Func<TIn, TOut> func, out TOut? result)
+	private static bool ReturnTrue<T>( in T _ ) => true;
+	private static bool ReturnFalse<T>( in T _ ) => false;
+	private static bool TryNull<TIn, TOut>( TIn input, Func<TIn, TOut> func, out TOut? result )
 	{
-		try
-		{
-			result = func(input);
-		}
-		finally
-		{
+		try {
+			result = func( input );
+		} finally {
 			result = default!;
 		}
 		return false;
 	}
-	private static TOut? TryNull<TIn, TOut>(TIn input, Func<TIn, TOut> func)
+	private static TOut? TryNull<TIn, TOut>( TIn input, Func<TIn, TOut> func )
 	{
-		try
-		{
-			return func(input);
-		}
-		catch
-		{
+		try {
+			return func( input );
+		} catch {
 			return default;
 		}
 	}
-	public static object? Convert(OdooFieldType type, object? value)
+	public static object? Convert( OdooFieldType type, object? value )
 	{
-		value = Normalize(type, value);
+		value = Normalize( type, value );
 		return value is null
 			? null
-			: type switch
-			{
+			: type switch {
 				// int
-				OdooFieldType.Integer => ConvertInteger(value),
+				OdooFieldType.Integer => ConvertInteger( value ),
 				// string
-				OdooFieldType.Char => ConvertString(value),
-				OdooFieldType.Text => ConvertString(value),
-				OdooFieldType.Html => ConvertString(value),
-				OdooFieldType.Selection => ConvertSelectionString(value),
-				OdooFieldType.Reference => ConvertReferenceString(value),
+				OdooFieldType.Char => ConvertString( value ),
+				OdooFieldType.Text => ConvertString( value ),
+				OdooFieldType.Html => ConvertString( value ),
+				OdooFieldType.Selection => ConvertSelectionString( value ),
+				OdooFieldType.Reference => ConvertReferenceString( value ),
 				// float
-				OdooFieldType.Float => ConvertFloat(value),
+				OdooFieldType.Float => ConvertFloat( value ),
 				// decimal
-				OdooFieldType.Monetary => ConvertMonetary(value),
+				OdooFieldType.Monetary => ConvertMonetary( value ),
 				// bool
-				OdooFieldType.Boolean => ConvertBoolean(value),
+				OdooFieldType.Boolean => ConvertBoolean( value ),
 				// DateTime
-				OdooFieldType.DateTime => ConvertDateTime(value),
+				OdooFieldType.DateTime => ConvertDateTime( value ),
 				// Date
-				OdooFieldType.Date => ConvertDate(value),
+				OdooFieldType.Date => ConvertDate( value ),
 				// ValueTuple<int,string>?
-				OdooFieldType.Many2One => ConvertMany2one(value),
+				OdooFieldType.Many2One => ConvertMany2one( value ),
 				// int[]
-				OdooFieldType.One2Many => ConvertOne2many(value),
-				OdooFieldType.Many2Many => ConvertMany2many(value),
+				OdooFieldType.One2Many => ConvertOne2many( value ),
+				OdooFieldType.Many2Many => ConvertMany2many( value ),
 				// Hashtable
-				OdooFieldType.Json => ConvertJsonTable(value),
-				OdooFieldType.Serialized => ConvertSerializedDict(value),
+				OdooFieldType.Json => ConvertJsonTable( value ),
+				OdooFieldType.Serialized => ConvertSerializedDict( value ),
 				// byte[]
-				OdooFieldType.Binary => ConvertBinary(value),
-				OdooFieldType.Image => ConvertBinary(value),
+				OdooFieldType.Binary => ConvertBinary( value ),
+				OdooFieldType.Image => ConvertBinary( value ),
 				_ => value
 			};
 	}
@@ -576,18 +545,17 @@ public static class OdooFieldHelpers
 	// Normalization + shape validation
 	// --------------------------------------------------------------------
 
-	private static object? Normalize(OdooFieldType type, object? value)
+	private static object? Normalize( OdooFieldType type, object? value )
 	{
 		// Global Odoo rule: non-boolean fields use False for null
-		if (value is bool b && b == false && type != OdooFieldType.Boolean)
+		if( value is bool b && b == false && type != OdooFieldType.Boolean )
 			return null;
 
 		return value;
 	}
 
-	private static bool IsValidShape(OdooFieldType type, object? value) =>
-		type switch
-		{
+	private static bool IsValidShape( OdooFieldType type, object? value ) =>
+		type switch {
 			OdooFieldType.Char
 				or OdooFieldType.Text
 				or OdooFieldType.Html
@@ -633,150 +601,148 @@ public static class OdooFieldHelpers
 			_ => true
 		};
 
-	private static int FromInt(int i) => i;
-	private static int FromLong(long l) => (int)l;
-	private static float FromFloat(float f) => f;
-	private static float FromDouble(double d) => (float)d;
-	private static float FromDecimal(decimal m) => (float)m;
-	private static decimal FromDecimalMonetary(decimal m) => m;
-	private static decimal FromDoubleMonetary(double d) => (decimal)d;
-	private static (int id, string name)? FromObjectArray(object value)
+	private static int FromInt( int i ) => i;
+	private static int FromLong( long l ) => ( int )l;
+	private static float FromFloat( float f ) => f;
+	private static float FromDouble( double d ) => ( float )d;
+	private static float FromDecimal( decimal m ) => ( float )m;
+	private static decimal FromDecimalMonetary( decimal m ) => m;
+	private static decimal FromDoubleMonetary( double d ) => ( decimal )d;
+	private static (int id, string name)? FromObjectArray( object value )
 		=> value is IList list && list.Count >= 2
-			? (list[0] as int? ?? 0, list[1] as string ?? "")
+			? (list[ 0 ] as int? ?? 0, list[ 1 ] as string ?? "")
 			: null;
-	private static (int id, string name)? FromArrayList(object value)
-		=> FromObjectArray(value);
+	private static (int id, string name)? FromArrayList( object value )
+		=> FromObjectArray( value );
 
 	// Char/Text/Html -> string?
-	public static string ConvertString(object value)
+	public static string ConvertString( object value )
 	{
-		if (TryCast<string>(value, out var s))
+		if( TryCast<string>( value, out var s ) )
 			return s!;
 
 		return value.ToString()!;
 	}
 	// Integer -> int
-	public static int ConvertInteger(object value)
+	public static int ConvertInteger( object value )
 	{
 		// Allowed shapes: int, long, string (validated by IsValidShape)
-		if (TryCastAny<int, long, int>(
+		if( TryCastAny<int, long, int>(
 				value,
 				FromInt,
 				FromLong,
-				out var result))
+				out var result ) )
 			return result;
 
 		return default;
 	}
 	// Float -> double
-	public static float ConvertFloat(object value)
+	public static float ConvertFloat( object value )
 	{
 		// Allowed shapes: double, decimal, string
-		if (TryCastAny<float, double, decimal, float>(
+		if( TryCastAny<float, double, decimal, float>(
 				value,
 				FromFloat,
 				FromDouble,
 				FromDecimal,
-				out var result))
+				out var result ) )
 			return result;
 
 		return default;
 	}
 	// Monetary -> decimal
-	public static decimal ConvertMonetary(object value)
+	public static decimal ConvertMonetary( object value )
 	{
 		// Allowed shapes: decimal, double, string
-		if (TryCastAny<decimal, double, decimal>(
+		if( TryCastAny<decimal, double, decimal>(
 				value,
 				FromDecimalMonetary,
 				FromDoubleMonetary,
-				out var result))
+				out var result ) )
 			return result;
 
 		return default;
 	}
 	// Boolean -> bool
-	public static bool ConvertBoolean(object value)
-		=> TryCast<bool>(value, out var b) && b;
+	public static bool ConvertBoolean( object value )
+		=> TryCast<bool>( value, out var b ) && b;
 	// Date -> DateTime (date-only)
-	public static DateTime ConvertDate(object value)
-		=> ConvertDateTime(value).Date;
+	public static DateTime ConvertDate( object value )
+		=> ConvertDateTime( value ).Date;
 	// DateTime -> DateTime
-	public static DateTime ConvertDateTime(object value)
+	public static DateTime ConvertDateTime( object value )
 	{
-		if (value is DateTime dt)
+		if( value is DateTime dt )
 			return dt;
 
-		if (TryCast<string>(value, out var s) &&
-			DateTime.TryParse(s, out var parsed))
+		if( TryCast<string>( value, out var s ) &&
+			DateTime.TryParse( s, out var parsed ) )
 			return parsed;
 
 		return default;
 	}
 	// Binary -> byte[]?
-	public static byte[] ConvertBinary(object value)
+	public static byte[] ConvertBinary( object value )
 	{
-		return TryCast<string>(value, out var s) && !string.IsNullOrEmpty(s)
-			? TryNull(s, System.Convert.FromBase64String)!
-			: TryCast<byte[]>(value, out var bytes) 
-				? bytes! 
+		return TryCast<string>( value, out var s ) && !string.IsNullOrEmpty( s )
+			? TryNull( s, System.Convert.FromBase64String )!
+			: TryCast<byte[]>( value, out var bytes )
+				? bytes!
 				: default!;
 	}
 	// Many2one -> (int id, string name)?
 	// Odoo shape: [id, "Name"]
-	public static Many2One ConvertMany2one(object value)
+	public static Many2One ConvertMany2one( object value )
 	{
-		if (!TryCast<object, ValueTuple<int, string>?>(
+		if( !TryCast<object, ValueTuple<int, string>?>(
 				value,
 				FromObjectArray,
-				out var arr))
-			return new Many2One { id=0, name="" };
+				out var arr ) )
+			return new Many2One { id = 0, name = "" };
 
 		var id = ConvertInteger(arr?.Item1 ?? 0);
 		var name = ConvertString(arr?.Item2 ?? "") ?? string.Empty;
 
-		return new Many2One { id = id, name = name }; ;
+		return new Many2One { id = id, name = name };
+		;
 	}
 	// One2many/Many2many -> int[]
-	public static One2Many ConvertOne2many(object value)
+	public static One2Many ConvertOne2many( object value )
 	{
-		if (TryCast<int[]>(value, out var ids))
+		if( TryCast<int[]>( value, out var ids ) )
 			return ids!;
 
-		if (TryCast<IList>(value, out var al))
-			return new One2Many { Ids = [.. al?.Cast<int>() ?? []] };
+		if( TryCast<IList>( value, out var al ) )
+			return new One2Many { Ids = [ .. al?.Cast<int>() ?? [] ] };
 
 		return [];
 	}
-	public static Many2Many ConvertMany2many(object value)
+	public static Many2Many ConvertMany2many( object value )
 	{
-		if (TryCast<int[]>(value, out var ids))
+		if( TryCast<int[]>( value, out var ids ) )
 			return ids!;
 
-		if (TryCast<IList>(value, out var al))
-			return [.. al?.Cast<int>() ?? []];
+		if( TryCast<IList>( value, out var al ) )
+			return [ .. al?.Cast<int>() ?? [] ];
 
 		return [];
 	}
 	// Selection -> preserve as string or int (you can refine as needed)
-	public static string ConvertSelectionString(object value)
+	public static string ConvertSelectionString( object value )
 		=> value is string s ? s : value.ToString()!;
-	public static int ConvertSelectionInt(object value)
-		=> value is int id ? ConvertInteger(value) : 0;
+	public static int ConvertSelectionInt( object value )
+		=> value is int id ? ConvertInteger( value ) : 0;
 	// Reference -> typically "model_name,ID" or [model, id]
-	public static string ConvertReferenceString(object value)
-		=> ConvertString(value);
-	public static (string model, int id) ConvertReferenceToTuple(object value)
+	public static string ConvertReferenceString( object value )
+		=> ConvertString( value );
+	public static (string model, int id) ConvertReferenceToTuple( object value )
 	{
-		if (value is string s)
-		{
+		if( value is string s ) {
 			var parts = s.Split(',');
-			if (parts.Length == 2 && int.TryParse(parts[1], out var id))
-				return (parts[0], id);
+			if( parts.Length == 2 && int.TryParse( parts[ 1 ], out var id ) )
+				return (parts[ 0 ], id);
 			return ("", 0);
-		}
-		else if (value is object[] arr && arr.Length >= 2)
-		{
+		} else if( value is object[] arr && arr.Length >= 2 ) {
 			var model = arr[0]?.ToString() ?? string.Empty;
 			var id = ConvertInteger(arr[1]!);
 			return (model, id);
@@ -784,21 +750,20 @@ public static class OdooFieldHelpers
 		return ("", 0);
 	}
 	// Serialized -> leave as-is, or decode JSON
-	public static string ConvertSerializedString(object value)
+	public static string ConvertSerializedString( object value )
 		=> value is string s ? s : string.Empty;
 
-	public static Hashtable ConvertJsonTable(object value)
+	public static Hashtable ConvertJsonTable( object value )
 	{
 		Hashtable result = [];
 		var valueDict = ConvertSerializedDict(value);
-		foreach (var item in valueDict) 
-		{
-			result[item.Key] = item.Value;
+		foreach( var item in valueDict ) {
+			result[ item.Key ] = item.Value;
 		}
 		return result;
 	}
-	public static Dictionary<string, object> ConvertSerializedDict(object value)
+	public static Dictionary<string, object> ConvertSerializedDict( object value )
 	{
-		return JsonConvert.DeserializeObject<Dictionary<string, object>>(ConvertSerializedString(value)) ?? [];
+		return JsonConvert.DeserializeObject<Dictionary<string, object>>( ConvertSerializedString( value ) ) ?? [];
 	}
 }

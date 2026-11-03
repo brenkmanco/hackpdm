@@ -1,33 +1,44 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Uno.Sdk">
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-	<TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
-	<TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <UnoSingleProject>true</UnoSingleProject>
+    <UnoDisableResizetizer>true</UnoDisableResizetizer>
+    <UnoResizetizerEnabled>false</UnoResizetizerEnabled>
+    <DisableDefaultUnoResizetizerItems>true</DisableDefaultUnoResizetizerItems>
+    <NoWarn>$(NoWarn);NU1605;NU1903;NU1202;CA1416</NoWarn>
+    <PackageConflictResolution>false</PackageConflictResolution>
+    <OutputType Condition="$(TargetFramework.Contains('windows'))">WinExe</OutputType>
+    <OutputType Condition="!$(TargetFramework.Contains('windows'))">Exe</OutputType>
+    <TargetFrameworks>net10.0-windows10.0.26100.0;net10.0-desktop</TargetFrameworks>
+    <TargetPlatformMinVersion Condition="$(TargetFramework.Contains('windows'))">10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>HackPDM</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platform>x64</Platform>
     <Platforms>x86;x64;ARM64</Platforms>
-    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
-    <UseWinUI>true</UseWinUI>
+
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
-	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
-    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-    <DefineConstants Condition="!('$(WindowsTargetPlatformVersion)' &gt;= '10.0.10240.0')">WINDOWS_LEGACY</DefineConstants>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableWindowsTargeting Condition="$(TargetFramework.Contains('windows'))">true</EnableWindowsTargeting>
+    <WindowsTargetPlatformVersion Condition="$(TargetFramework.Contains('windows'))">10.0.26100.0</WindowsTargetPlatformVersion>
+    <WindowsAppSDKSelfContained Condition="$(TargetFramework.Contains('windows'))">true</WindowsAppSDKSelfContained>
+    <RuntimeIdentifier Condition="('$(Platform)' == 'AnyCPU' or '$(Platform)' == 'Any CPU') and '$(RuntimeIdentifier)' == '' and $(TargetFramework.Contains('windows'))">win-x64</RuntimeIdentifier>
+    <Win2DWarnNoPlatform Condition="'$(Platform)' == 'AnyCPU' or '$(Platform)' == 'Any CPU'">true</Win2DWarnNoPlatform>
   </PropertyGroup>
+
   <ItemGroup>
+    <Using Include="Microsoft.UI.Xaml.Controls" />
     <None Remove="UI\Forms\Hack\home.xaml" />
     <None Remove="UI\Forms\Helper\DynamicJsonForm.xaml" />
     <None Remove="UI\Forms\Helper\MessageBoxWindow.xaml" />
     <None Remove="UI\Forms\Helper\PipWindow.xaml" />
     <None Remove="UI\Forms\Settings\NotLoggedIn.xaml" />
   </ItemGroup>
-    <ItemGroup>
-		<ProjectReference Include="..\HackPDM.Infrastructure\HackPDM.Infrastructure.csproj" />
-    </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HackPDM.Infrastructure\HackPDM.Infrastructure.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
@@ -41,19 +52,27 @@
   <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <ProjectCapability Include="Msix" />
   </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="CommunityToolkit.WinUI.Controls.Sizers" Version="8.2.251219" />
-    <PackageReference Include="CommunityToolkit.WinUI.Extensions" Version="8.2.251219" />
-    <PackageReference Include="CommunityToolkit.WinUI.UI.Controls.DataGrid" Version="7.1.2" />
     <PackageReference Include="Meziantou.Framework.Win32.CredentialManager" Version="1.7.15" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
-    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.3.2" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.251106002" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.5-beta1" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.1" />
     <PackageReference Include="System.Reactive" Version="7.0.0-preview.1" />
   </ItemGroup>
+
+  <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+    <PackageReference Include="CommunityToolkit.WinUI.UI.Controls.DataGrid" Version="7.1.2" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Sizers" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Extensions" Version="8.2.251219" />
+    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.3.2" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">
+    <PackageReference Include="Uno.CommunityToolkit.WinUI.UI.Controls.DataGrid" Version="7.1.206" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Update="Properties\Resources.Designer.cs.backup">
       <DesignTime>True</DesignTime>
@@ -66,17 +85,20 @@
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
   </ItemGroup>
+
   <ItemGroup>
-	  <Content Include="Assets\**\*.*">
-		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
+    <Content Include="Assets\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
+
   <ItemGroup>
     <EmbeddedResource Update="Properties\Resources.resx.backup">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
+
   <ItemGroup>
     <None Update="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
@@ -101,6 +123,7 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>
+
   <ItemGroup>
     <Page Update="Forms\Hack\HackFileManager.xaml">
       <Generator>MSBuild:Compile</Generator>
@@ -154,6 +177,7 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>
+
   <ItemGroup>
     <Reference Include="SolidWorks.Interop.sldworks">
       <HintPath>..\HackPDM.Infrastructure\lib\SolidWorks.Interop.sldworks.dll</HintPath>
@@ -187,7 +211,7 @@
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
-    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$(TargetFramework.Contains('windows'))">10.0.17763.0</SupportedOSPlatformVersion>
     <ApplicationIcon>Assets\hackpdm-icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ProjectExtensions><VisualStudio><UserProperties properties_4launchsettings_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>

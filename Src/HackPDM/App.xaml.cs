@@ -47,7 +47,7 @@ public partial class HackApp : Application
 
 	public HackApp()
     {
-        InitializeComponent();
+		LoadComponent( this, new Uri("ms-appx:///App.xaml"));
         Setup();
     }
 

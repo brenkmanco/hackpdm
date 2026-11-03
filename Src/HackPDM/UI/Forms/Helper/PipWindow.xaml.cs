@@ -17,7 +17,7 @@ using Windows.Foundation;
 using Windows.Foundation.Collections;
 using Windows.UI;
 
-using WinRT.Interop;
+
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -40,10 +40,10 @@ public sealed partial class PipWindow : Window
 
 	private void ConfigureCompactOverlay()
 	{
-		IntPtr hWnd = WindowNative.GetWindowHandle(this);
-		var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hWnd);
-		var appWindow = AppWindow.GetFromWindowId(windowId);
-		appWindow.SetPresenter( AppWindowPresenterKind.CompactOverlay );
+		this.AppWindow?.SetPresenter( AppWindowPresenterKind.CompactOverlay );
+
+
+
 	}
 
 	private void OnExitPipClicked( object sender, RoutedEventArgs e )

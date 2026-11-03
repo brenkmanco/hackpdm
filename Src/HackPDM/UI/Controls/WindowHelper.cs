@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -29,8 +29,18 @@ public static partial class WindowHelper
 	
 	public static void ResizeWindow(Window window, int width, int height)
     {
+        if (window.AppWindow != null)
+        {
+            window.AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
+            return;
+        }
+#if WINDOWS
         IntPtr hwnd = window.IntPtrHandle;
-        MoveWindow(hwnd, 100, 100, width, height, true);
+        if (hwnd != IntPtr.Zero)
+        {
+            MoveWindow(hwnd, 100, 100, width, height, true);
+        }
+#endif
     }
     
 
@@ -163,8 +173,10 @@ public static partial class WindowHelper
         _animationCts.Cancel();
         _animationCts = new CancellationTokenSource();
 		//AnimateWindowSize(window.AppWindow, new Windows.Graphics.SizeInt32(windowConfig.PositionAndSize.z, windowConfig.PositionAndSize.w), 250, _animationCts.Token);
-        window.AppWindow.MoveAndResize(windowConfig.PositionAndSize);
-		var titleBar = window.AppWindow.TitleBar;
+        var pos = windowConfig.PositionAndSize;
+        window.AppWindow?.MoveAndResize(new Windows.Graphics.RectInt32(pos.x, pos.y, pos.z, pos.w));
+		var titleBar = window.AppWindow?.TitleBar;
+		if (titleBar == null) return;
 
 		// Set system caption button backgrounds to transparent
 		titleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0,0,0,0);

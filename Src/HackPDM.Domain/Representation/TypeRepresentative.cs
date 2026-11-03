@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Numerics;
-using Windows.Graphics;
 
 namespace HackPDM.Domain.Representation
 {
@@ -106,7 +105,7 @@ namespace HackPDM.Domain.Representation
 		
 		//public static Vector4<T> operator +(Vector4<T> a, Vector4<T> b) => new(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
 		//public static Vector4<T> operator -(Vector4<T> a, Vector4<T> b) => new(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);
-		public static implicit operator RectInt32(Vector4<T> xyzw)		=> xyzw is Vector4<int> vec ? new RectInt32(vec.x, vec.y, vec.z, vec.w) : default;
+		//public static implicit operator RectInt32(Vector4<T> xyzw)		=> xyzw is Vector4<int> vec ? new RectInt32(vec.x, vec.y, vec.z, vec.w) : default;
 
 		public static implicit operator Vector4<T>( (T, T, T, T) v ) => new (v.Item1, v.Item2, v.Item3, v.Item4);
 

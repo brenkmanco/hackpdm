@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -9,7 +9,7 @@ using HackPDM.UI.Forms.Helper;
 
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
-using Microsoft.Windows.Storage.Pickers;
+using Windows.Storage.Pickers;
 
 using static HackPDM.UI.Forms.Settings.ProfileManager;
 
@@ -31,11 +31,15 @@ public class GlobalSettings
 
 	public static async void test()
 	{
-		var hwnd = HackApp.Window?.IntPtrHandle ?? 0;
-		var windowId = HackApp.Window?.AppWindow.Id ?? Win32Interop.GetWindowIdFromWindow(hwnd);
-		var picker = new FileOpenPicker(windowId);
+		var picker = new FileOpenPicker();
 		picker.FileTypeFilter.Add( ".json" );
 		picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+#if WINDOWS
+		if (HackApp.Window != null)
+		{
+			WinRT.Interop.InitializeWithWindow.Initialize(picker, HackApp.Window.IntPtrHandle);
+		}
+#endif
 
 		var file = await picker.PickSingleFileAsync().AsTask();
 
@@ -54,12 +58,17 @@ public class GlobalSettings
 	}
 	public async void SaveSettingsJson_Click( object sender, RoutedEventArgs e )
 	{
-		var hwnd = HackApp.Window?.IntPtrHandle ?? 0;
-		var windowId = HackApp.Window?.AppWindow.Id ?? Win32Interop.GetWindowIdFromWindow(hwnd);
-		var picker = new FileSavePicker(windowId);
+		var picker = new FileSavePicker();
 		picker.FileTypeChoices.Add( "JSON", new List<string>() { ".json" } );
 		picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
 		picker.SuggestedFileName = "HackPDM_Settings";
+		picker.DefaultFileExtension = ".json";
+#if WINDOWS
+		if (HackApp.Window != null)
+		{
+			WinRT.Interop.InitializeWithWindow.Initialize(picker, HackApp.Window.IntPtrHandle);
+		}
+#endif
 		var file = await picker.PickSaveFileAsync().AsTask();
 		if( string.IsNullOrEmpty( file?.Path ) )
 			return;

@@ -116,16 +116,6 @@ public static class ExtensionMethods
     
     extension(ArrayList source)
     {
-		public IEnumerable this[Range range]
-		{
-			get
-			{
-				for( int i = range.Start.Value; i < range.End.Value; i++ )
-				{
-					yield return source[ i ];
-				}
-			}
-		}
 		public bool Any<T>(Func<T, bool> predicate)
 	    {
 		    foreach (T obj in source.OfType<T>())
@@ -213,7 +203,7 @@ public static class ExtensionMethods
 			return true;
 		}
 
-		public FileInfo CopyFile(string toPath)
+		public FileInfo? CopyFile(string toPath)
 		{
 			try
 			{
@@ -221,11 +211,7 @@ public static class ExtensionMethods
 
 				string toFilePath = Path.Combine(toPath, file.Name);
 
-				if (file.Exists)
-				{
-					return file.CopyTo(toFilePath, true);
-				}
-				else return null;
+				return  file.Exists  ?  file.CopyTo(toFilePath, true)  :     null;
 			}
 			catch { }
 			return null;

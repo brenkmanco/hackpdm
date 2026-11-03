@@ -66,7 +66,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
         return PropertyType.None;
     }
         
-    public bool IsText( out string text )
+    public bool IsText( out string? text )
     {
         PropertyType pType = GetValueType();
         text = null;
@@ -99,7 +99,7 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
         }
         return false;
     }
-    public bool IsDate(out string date)
+    public bool IsDate(out string? date)
     {
         PropertyType pType = GetValueType();
         date = null;

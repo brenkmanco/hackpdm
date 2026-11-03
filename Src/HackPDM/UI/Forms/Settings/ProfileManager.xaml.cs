@@ -30,7 +30,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.Windows.Storage.Pickers;
+using Windows.Storage.Pickers;
 
 using Windows.UI.Composition;
 
@@ -190,7 +190,13 @@ public sealed partial class ProfileManager : Page
 		// invalid cast?
 		var hwnd = HackApp.Window?.IntPtrHandle ?? 0;
 		var windowId = HackApp.Window?.AppWindow.Id ?? Win32Interop.GetWindowIdFromWindow(hwnd);
-		var picker = new FileOpenPicker(windowId);
+		var picker = new FileOpenPicker();
+#if WINDOWS
+		if (HackApp.Window != null)
+		{
+			WinRT.Interop.InitializeWithWindow.Initialize(picker, HackApp.Window.IntPtrHandle);
+		}
+#endif
 		picker.FileTypeFilter.Add( ".json" );
 		picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
 
@@ -269,10 +275,16 @@ public sealed partial class ProfileManager : Page
 	{
 		var hwnd = HackApp.Window?.IntPtrHandle ?? 0;
 		var windowId = HackApp.Window?.AppWindow.Id ?? Win32Interop.GetWindowIdFromWindow(hwnd);
-		var picker = new FileSavePicker(windowId);
+		var picker = new FileSavePicker();
+#if WINDOWS
+		if (HackApp.Window != null)
+		{
+			WinRT.Interop.InitializeWithWindow.Initialize(picker, HackApp.Window.IntPtrHandle);
+		}
+#endif
 		picker.FileTypeChoices.Add( "Json file", [ ".json" ] );
 
-		picker.SuggestedFolder = StorageBox.TemporaryPath;
+		picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
 		picker.SuggestedFileName = "hack-odoo";
 		picker.DefaultFileExtension = ".json";
 

@@ -9,8 +9,6 @@ using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Shared.OdooAttributes;
 
-using Windows.Media.Protection.PlayReady;
-
 namespace HackPDM.Infrastructure.Odoo.Models;
 
 [OdooModel(OdooDefaultsConstants.RES_USERS_NAME, OdooDefaultsConstants.RES_USERS)]
