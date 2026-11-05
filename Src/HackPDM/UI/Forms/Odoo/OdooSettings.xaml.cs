@@ -25,7 +25,6 @@ namespace HackPDM.UI.Forms.Odoo;
 /// </summary>
 public sealed partial class OdooSettings : Page
 {
-    private static CoreSettings? Sett;
     readonly string credTarget = StorageBox.DEFAULT_ODOO_CREDENTIALS;
     public OdooSettings()
     {

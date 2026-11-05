@@ -89,7 +89,3 @@ public static class Help
 
 }
 public sealed record ColorCsvRow( string Name, string Hex, bool GoodName );
-public struct Except<T>(Expression<Func<T>> expr)
-{
-
-}

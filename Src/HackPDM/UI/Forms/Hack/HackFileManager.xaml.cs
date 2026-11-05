@@ -26,6 +26,8 @@ using HackPDM.Domain.Helper;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo;
+
+using HackPDM.Infrastructure.Operations;
 using HackPDM.Infrastructure.Odoo.FormTransport;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
@@ -778,7 +780,6 @@ public sealed partial class HackFileManager : Page
 	private async Task Async_PermDelete( HpEntry[] entries )
 	{
 		ArrayList ids = entries.Select(e => e.id).ToArrayList();
-		bool vDeleted = false;
 
 		// using DeleteEntry also deletes entries, versions, version props, version relationships, and ir attachment records
 		DialogResult result = await MessageBox.ShowAsync($"Are you sure you want to permanently delete {ids.Count} entries from the database?\n" +
@@ -787,7 +788,7 @@ public sealed partial class HackFileManager : Page
 		if( result is not DialogResult.Yes and not DialogResult.OK )
 			return;
 
-		vDeleted = await PermanentDeleteEntry( ids );
+		bool vDeleted = await PdmDeleteOperations.PermanentDeleteEntry( ids, (status, msg) => InstanceManager.Session.Log(status, msg) );
 
 		if( vDeleted )
 		{
@@ -795,7 +796,7 @@ public sealed partial class HackFileManager : Page
 		}
 		else
 		{
-			MessageBox.ShowAsync( "Was unable to delete entries", "Error", buttons: MessageBoxButtons.OKCancel, icon: MessageBoxIcon.Error );
+			await MessageBox.ShowAsync( "Was unable to delete entries", "Error", buttons: MessageBoxButtons.OKCancel, icon: MessageBoxIcon.Error );
 			return;
 		}
 
@@ -805,16 +806,7 @@ public sealed partial class HackFileManager : Page
 	}
 	private async Task Async_LogicalDelete( HpEntry[] entries )
 	{
-		object lockObject = new();
-		foreach( var entry in entries )
-		{
-			lock( lockObject )
-			{
-				InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Setting InActive {entry.name}: {entry.id}" );
-			}
-			await entry.LogicalDelete();
-
-		}
+		await PdmDeleteOperations.LogicalDeleteEntries( entries, (status, msg) => InstanceManager.Session.Log(status, msg) );
 
 		await MessageBox.ShowAsync( $"Completed!" );
 		await _treeHelper.RestartTree( OdooDirectoryTree );
@@ -822,15 +814,7 @@ public sealed partial class HackFileManager : Page
 	}
 	private async Task Async_LogicalUnDelete( HpEntry[] entries )
 	{
-		object lockObject = new();
-		foreach( var entry in entries )
-		{
-			lock( lockObject )
-			{
-				InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Setting Active {entry.name}: {entry.id}" );
-			}
-			await entry.LogicalUnDelete();
-		}
+		await PdmDeleteOperations.LogicalUnDeleteEntries( entries, (status, msg) => InstanceManager.Session.Log(status, msg) );
 
 		InstanceManager.Dialog?.SetProgressBar( 5, 5 );
 		await MessageBox.ShowAsync( $"Completed!" );
@@ -1973,185 +1957,8 @@ public sealed partial class HackFileManager : Page
 		}
 	}
 
-	private static async Task<bool> PermanentDeleteVersionProperty( ArrayList ids )
-	{
-		if( ids is null || ids.Count < 1 )
-			return false;
+	// Permanent delete routines delegated to PdmDeleteOperations
 
-		HpVersionProperty[] vProps = null;
-		bool deletedVersionProps = false;
-
-		vProps = await HpVersionProperty.GetRecordsBySearchAsync( [ new ArrayList() { "version_id", "in", ids } ] );
-		if( vProps is not null
-			&& vProps.Count() > 0 )
-		{
-			ArrayList newIds = vProps.GetIDs();
-			InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting version properties..." );
-			deletedVersionProps = await OClient.DeleteAsync( HpVersionProperty.GetHpModel(), [ newIds ], 100000 );
-			if( deletedVersionProps )
-			{
-				InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted version properties: {string.Join( ", ", newIds.ToArray() )}" );
-			}
-			else
-			{
-				InstanceManager.Session.Log( StatusMessage.ERROR, $"Unable to delete version properties" );
-			}
-		}
-		else
-		{
-			deletedVersionProps = true;
-			InstanceManager.Session.Log( StatusMessage.SKIP, $"No version properties to delete" );
-		}
-#if DEBUG
-		Debug.WriteLine( $"version properties deleted = {deletedVersionProps}" );
-#endif
-		return deletedVersionProps;
-	}
-	private static async Task<bool> PermanentDeletedVersionRelationships( ArrayList ids )
-	{
-		if( ids is null || ids.Count < 1 )
-			return false;
-
-		HpVersionRelationship[] vRelationsParent = null;
-		HpVersionRelationship[] vRelationsChild = null;
-
-		bool deletedVersionRelParent = false;
-		bool deletedVersionRelChild = false;
-
-		vRelationsParent = await HpVersionRelationship.GetRecordsBySearchAsync( [ new ArrayList() { "parent_id", "in", ids } ] );
-		vRelationsChild = await HpVersionRelationship.GetRecordsBySearchAsync( [ new ArrayList() { "child_id", "in", ids } ] );
-
-		if( vRelationsParent is not null
-			&& vRelationsParent.Length > 0 )
-		{
-			ArrayList newIds = vRelationsParent.GetIDs();
-			InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting parent version relationships..." );
-			deletedVersionRelParent = await OdooClient<HpVersionRelationship>.DeleteAsync( [ newIds ], 100000 );
-			if( deletedVersionRelParent )
-			{
-				InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted parent version relationships: {string.Join( ", ", newIds.ToArray() )}" );
-			}
-			else
-			{
-				InstanceManager.Session.Log( StatusMessage.ERROR, $"Unable to delete parent version relationships" );
-			}
-		}
-		else
-		{
-			deletedVersionRelParent = true;
-			InstanceManager.Session.Log( StatusMessage.SKIP, $"No version relationship parents to delete" );
-		}
-
-		if( vRelationsChild is not null
-			&& vRelationsChild.Any() )
-		{
-			ArrayList newIds = vRelationsChild.GetIDs();
-			InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting child version relationships..." );
-			deletedVersionRelChild = await OClient.DeleteAsync( HpVersionRelationship.GetHpModel(), [ newIds ], 100000 );
-			if( deletedVersionRelChild )
-			{
-				InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted child version relationships: {string.Join( ", ", newIds.ToArray() )}" );
-			}
-			else
-			{
-				InstanceManager.Session.Log( StatusMessage.ERROR, $"Unable to delete child version relationships" );
-			}
-		}
-		else
-		{
-			deletedVersionRelChild = true;
-			InstanceManager.Session.Log( StatusMessage.SKIP, $"No version relationship children to delete" );
-		}
-
-#if DEBUG
-		Debug.WriteLine( $"version parents deleted = {deletedVersionRelParent}" );
-		Debug.WriteLine( $"version child deleted = {deletedVersionRelChild}" );
-#endif
-
-		return deletedVersionRelChild && deletedVersionRelParent;
-	}
-	private async Task<bool> PermanentDeleteEntry( ArrayList ids )
-	{
-		if( ids is null || ids.Count < 1 )
-			return false;
-
-		bool deletedVersions = await PermanentDeleteVersions(ids);
-		InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting entries..." );
-		bool deletedEntries = deletedVersions && OClient.Delete(HpEntry.GetHpModel(), [ids]);
-		if( deletedEntries )
-		{
-			InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted entries" );
-		}
-		else
-		{
-			InstanceManager.Session.Log( StatusMessage.ERROR, $"Unable to delete entries" );
-		}
-#if DEBUG
-		Debug.WriteLine( $"Entries deleted = {deletedEntries}" );
-#endif
-		return deletedVersions && deletedEntries;
-	}
-	private async Task<bool> PermanentDeleteVersions( ArrayList ids )
-	{
-		if( ids is null || ids.Count < 1 )
-			return false;
-
-		HpVersion[]? versions = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(ids, "version_ids", includedFields: ["ID"]);
-		IrAttachment[] irAttachments = null;
-
-		ArrayList vIds = versions?.Select(v => v.id).ToArrayList() ?? [];
-
-		bool deletedIrAttachments = false;
-		bool deletedVersions = false;
-		bool deletedVersionsProps = false;
-		bool deletedVersionsRel = false;
-
-		if( vIds.Count > 0 )
-		{
-			deletedVersionsProps = await PermanentDeleteVersionProperty( vIds );
-			deletedVersionsRel = await PermanentDeletedVersionRelationships( vIds );
-			irAttachments = await IrAttachment.GetRecordsBySearchAsync(
-			[
-				new ArrayList() { "res_id", "in", vIds },
-				new ArrayList() { "res_model", "=", HpVersion.GetHpModel()},
-				new ArrayList() { "res_field", "=", "file_contents"},
-			] );
-		}
-		InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting IR Attachments..." );
-		deletedIrAttachments = deletedVersionsProps
-							   && deletedVersionsRel
-							   && ( irAttachments is null
-								   || !irAttachments.Any()
-								   || await OClient.DeleteAsync( IrAttachment.GetHpModel(), [ irAttachments.GetIDs() ], 100000 ) );
-
-		if( deletedIrAttachments )
-		{
-			InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted IR Attachments" );
-		}
-		else
-		{
-			InstanceManager.Session.Log( StatusMessage.INFO, $"unable to delete IR Attachments" );
-		}
-		InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting versions..." );
-		deletedVersions = deletedIrAttachments
-						  && ( vIds.Count <= 0
-							   || await OClient.DeleteAsync( HpVersion.GetHpModel(), [ vIds ], 100000 ) );
-
-		if( deletedVersions )
-		{
-			InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted versions" );
-		}
-		else
-		{
-			InstanceManager.Session.Log( StatusMessage.ERROR, $"Unable to delete versions" );
-		}
-
-#if DEBUG
-		Debug.WriteLine( $"ir attachments deleted = {deletedIrAttachments}" );
-		Debug.WriteLine( $"versions deleted = {deletedVersions}" );
-#endif
-		return deletedIrAttachments && deletedVersions;
-	}
 	//
 	internal async Task GetLatestInternal( ArrayList entryIDs )
 	{
@@ -2168,13 +1975,17 @@ public sealed partial class HackFileManager : Page
 
 		(ArrayList, CancellationToken?) arguments = (newIds, ViewModel.statusToken?.Token);
 
-		ViewModel.statusToken.Token.Register( CancelledOperation );
+		if( ViewModel.statusToken is not null )
+		{
+			ViewModel.statusToken.Token.Register( CancelledOperation );
+		}
 		await AsyncHelper.AsyncRunner(() => Latest.Async_GetLatest( arguments ), "Get Latest", ViewModel.statusToken );
 	}
 	internal static void CancelledOperation()
 	{
-		InstanceManager.Dialog?.IsInProcess = false;
-		MessageBox.ShowAsync( "Cancelled Operation" );
+		if( InstanceManager.Dialog is not null )
+			InstanceManager.Dialog.IsInProcess = false;
+		_ = MessageBox.ShowAsync( "Cancelled Operation" );
 	}
 	internal async Task CommitInternal( IEnumerable<HackFile> hackFiles )
 		=> await AsyncHelper.AsyncRunner( () => Commit.Async_Commit( [ .. hackFiles ] ), "Commit Files" );

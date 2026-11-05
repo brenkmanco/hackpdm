@@ -41,12 +41,14 @@ internal static class Commit
 		InstanceManager.HFM.ProcessCounter = 0;
 		InstanceManager.HFM.SkipCounter = 0;
 		InstanceManager.HFM.MaxCount = (hfs.Item1?.Length ?? 0) + (hfs.Item2?.Length ?? 0);
-		InstanceManager.Dialog.IsInProcess = true;
+		if( InstanceManager.Dialog is not null )
+			InstanceManager.Dialog.IsInProcess = true;
 
 		InstanceManager.HFM.statusToken = await InstanceManager.HFM.statusToken.RenewTokenSourceAsync();
 		InstanceManager.Session.Log( StatusMessage.PROCESSING, "--- Preparing to stage records ---" );
 
-		foreach( var hack in hfs.Item1 )
+		if( hfs.Item1 is not null )
+		foreach( var hack in hfs.Item1 )
 		{
 			if( !await PdmCommitOperations.CommitRecordAsync(
 				hack,
@@ -61,7 +63,8 @@ internal static class Commit
 				return;
 		}
 
-		foreach( var hack in hfs.Item2 )
+		if( hfs.Item2 is not null )
+		foreach( var hack in hfs.Item2 )
 		{
 			if( !await PdmCommitOperations.CommitRecordAsync(
 				hack,
