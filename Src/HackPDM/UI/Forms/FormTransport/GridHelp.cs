@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -20,7 +20,7 @@ using HackPDM.UI.Models;
 using HackPDM.UI.Types;
 using Microsoft.UI.Xaml.Controls;
 using EntryRow = HackPDM.Domain.Representation.EntryRow;
-using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
+using TableView = WinUI.TableView.TableView;
 using ListView = Microsoft.UI.Xaml.Controls.ListView;
 using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 using HackPDM.UI.Compatibility;
@@ -43,8 +43,8 @@ namespace HackPDM.UI.Forms.FormTransport
 		}
 
 		#region ListView / DataGrid Functions
-		public static void InitGridView(DataGrid grid) => InitListViewInternal(grid);
-		private static void InitListViewInternal(DataGrid grid)
+		public static void InitGridView(TableView grid) => InitListViewInternal(grid);
+		private static void InitListViewInternal(TableView grid)
 		{
 			var collect = grid.ItemsSource as IList;
 			collect?.Clear();
@@ -52,7 +52,7 @@ namespace HackPDM.UI.Forms.FormTransport
 		private static void InitListViewInternal(ListView list, ListDetail rows)
 			=> InitListView(list, rows);
 
-		public static void ResetListViews(IEnumerable<DataGrid> grids)
+		public static void ResetListViews(IEnumerable<TableView> grids)
 		{
 			foreach (var grid in grids)
 			{
@@ -63,7 +63,7 @@ namespace HackPDM.UI.Forms.FormTransport
 		#endregion
 
 		#region List Item Selection
-		internal async Task<HpVersion[]?> ProcessHistorySelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listVersions = true)
+		internal async Task<HpVersion[]?> ProcessHistorySelectAsync(TableView grid, EntryRow? entry, CancellationToken token, bool listVersions = true)
 		{
 			HpVersion[]? versions = null;
 			if (entry is null) return null;
@@ -75,7 +75,7 @@ namespace HackPDM.UI.Forms.FormTransport
 			await SafeHelper.SafeInvokerAsync(() => PopulateHistory(grid, versions ?? []));
 			return versions;
 		}
-		internal async Task<List<HpVersionProperty[]?>?> ProcessPropertiesSelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listProperties = true)
+		internal async Task<List<HpVersionProperty[]?>?> ProcessPropertiesSelectAsync(TableView grid, EntryRow? entry, CancellationToken token, bool listProperties = true)
 		{
 			if (entry is null) return null;
 			if (entry.Id == null) return null;
@@ -83,7 +83,7 @@ namespace HackPDM.UI.Forms.FormTransport
 			HpVersion[]? versions = await GetVersionsForEntryAsync(entry.Id ?? 0, ["preview_image", "file_contents"], insertedFields: ["create_uid"]);
 			return await ProcessPropertiesSelectInternalAsync(grid, versions, token, listProperties);
 		}
-		private async Task<List<HpVersionProperty[]?>> ProcessPropertiesSelectInternalAsync(DataGrid grid, HpVersion[]? versions, CancellationToken token, bool listProperties = true)
+		private async Task<List<HpVersionProperty[]?>> ProcessPropertiesSelectInternalAsync(TableView grid, HpVersion[]? versions, CancellationToken token, bool listProperties = true)
 		{
 			List<HpVersionProperty[]>? versionProperties = null;
 			if (versions != null && versions.Length > 0)
@@ -94,7 +94,7 @@ namespace HackPDM.UI.Forms.FormTransport
 			await SafeHelper.SafeInvokerAsync(() => PopulateProperties(grid, versionProperties ?? []));
 			return versionProperties;
 		}
-		internal async Task<HpVersion[]?> ProcessParentSelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listParents = true)
+		internal async Task<HpVersion[]?> ProcessParentSelectAsync(TableView grid, EntryRow? entry, CancellationToken token, bool listParents = true)
 		{
 			HpVersion[]? parentVersions = null;
 
@@ -130,7 +130,7 @@ namespace HackPDM.UI.Forms.FormTransport
 			await SafeHelper.SafeInvokerAsync(() => PopulateParent(grid, parentVersions ?? []));
 			return parentVersions;
 		}
-		internal async Task<HpVersion[]?> ProcessChildSelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listChildren = true)
+		internal async Task<HpVersion[]?> ProcessChildSelectAsync(TableView grid, EntryRow? entry, CancellationToken token, bool listChildren = true)
 		{
 			HpVersion[]? childVersions = null;
 			if (entry is null) return null;
@@ -170,7 +170,7 @@ namespace HackPDM.UI.Forms.FormTransport
 			await SafeHelper.SafeInvokerAsync(() => PopulateChildren(grid, childVersions ?? []));
 			return childVersions;
 		}
-		internal async Task<HpVersion?> ProcessInfoSelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listVersionInfo = true)
+		internal async Task<HpVersion?> ProcessInfoSelectAsync(TableView grid, EntryRow? entry, CancellationToken token, bool listVersionInfo = true)
 		{
 			HpVersion? versionInfo = null;
 			if (entry is null) return null;
@@ -188,7 +188,7 @@ namespace HackPDM.UI.Forms.FormTransport
 			return versionInfo;
 		}
 		
-		internal static async Task UpdateListAsync<T>(DataGrid list, T item)
+		internal static async Task UpdateListAsync<T>(TableView list, T item)
 		{
 			await Task.Yield();
 			await SafeHelper.SafeInvokerAsync(() => list.ItemAdd(item));
@@ -210,7 +210,7 @@ namespace HackPDM.UI.Forms.FormTransport
 			//}
 			return versions;
 		}
-		private void PopulateProperties(DataGrid grid, in List<HpVersionProperty[]> allProperties)
+		private void PopulateProperties(TableView grid, in List<HpVersionProperty[]> allProperties)
 		{
 			//"Version", 50
 			//"Configuration", 100
@@ -257,7 +257,7 @@ namespace HackPDM.UI.Forms.FormTransport
 				});
 			}
 		}
-		private void PopulateChildren(DataGrid grid, in HpVersion[] versions)
+		private void PopulateChildren(TableView grid, in HpVersion[] versions)
 		{
 			// "Version", 50
 			// "Name", 600
@@ -281,7 +281,7 @@ namespace HackPDM.UI.Forms.FormTransport
 				});
 			}
 		}
-		private void PopulateParent(DataGrid grid, in HpVersion[] versions)
+		private void PopulateParent(TableView grid, in HpVersion[] versions)
 		{
 			// "Version", 50
 			// "Name", 600
@@ -306,7 +306,7 @@ namespace HackPDM.UI.Forms.FormTransport
 				});
 			}
 		}
-		private void PopulateHistory(DataGrid grid, in HpVersion[] versions)
+		private void PopulateHistory(TableView grid, in HpVersion[] versions)
 		{
 			// "Version", 50
 			// "ModUser", 140
@@ -346,7 +346,7 @@ namespace HackPDM.UI.Forms.FormTransport
 				});
 			}
 		}
-		private static void PopulateVersionInfo(DataGrid grid, HpVersion versionModel)
+		private static void PopulateVersionInfo(TableView grid, HpVersion versionModel)
 		{
 			// int CheckoutColumnIndex = OdooEntryList.Columns["Checkout"].Index;
 			// item.SubItems [ CheckoutColumnIndex ].Text == ""
@@ -418,7 +418,7 @@ namespace HackPDM.UI.Forms.FormTransport
 		//	SafeHelper.SafeInvoker(() => list.ItemsSource ??= new ObservableCollection<T>());
 		//	return entry;
 		//}
-		internal static T EmptyListItem<T>(DataGrid grid) where T : new()
+		internal static T EmptyListItem<T>(TableView grid) where T : new()
 		{
 			T entry = new();
 			SafeHelper.SafeInvoker(() =>
@@ -467,7 +467,7 @@ namespace HackPDM.UI.Forms.FormTransport
 		//}
 		//internal static T EmptyListItemInternal<T>(ListView list) where T : new()
 		//	=> EmptyListItem<T>(list);
-		internal static T EmptyListItemInternal<T>(DataGrid grid) where T : new()
+		internal static T EmptyListItemInternal<T>(TableView grid) where T : new()
 			=> EmptyListItem<T>(grid);
 
 		internal static async Task<Dictionary<string, Task<HackFile>>> GetFileMap(Hashtable entries)

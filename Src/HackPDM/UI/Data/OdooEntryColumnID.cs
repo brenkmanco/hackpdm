@@ -5,7 +5,6 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-using CommunityToolkit.WinUI.UI.Controls;
 
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo;

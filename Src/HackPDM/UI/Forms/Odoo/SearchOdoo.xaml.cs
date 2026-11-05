@@ -8,7 +8,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-using CommunityToolkit.WinUI.UI.Controls;
 
 using HackPDM.Core;
 using HackPDM.Core.Configuration;
@@ -49,7 +48,7 @@ public sealed partial class SearchOdoo : Page
 	private HackFileManager hackman;
 
 	private TreeView _odooDirectoryTree;
-	private DataGrid _odooEntryList;
+	private WinUI.TableView.TableView _odooEntryList;
 
 	private Window ParentWindow;
 	// --- Data collections for WinUI 3 ListView Binding ---
@@ -389,7 +388,7 @@ public sealed partial class SearchOdoo : Page
 	{
 		if (OdooSearchResults.SelectedItems.Count > 0)
 		{
-			FindSearchSelection((sender as DataGrid)?.SelectedItem as SearchRow);
+			FindSearchSelection((sender as WinUI.TableView.TableView)?.SelectedItem as SearchRow);
 			// ParentWindow?.Close();
 		}
 	}
@@ -454,7 +453,7 @@ public sealed partial class SearchOdoo : Page
 
 			_odooEntryList.SelectedItem = entryItem;
 			_odooEntryList.Focus(FocusState.Programmatic);
-			_odooEntryList.ScrollIntoView(entryItem, null);
+			_odooEntryList.ScrollIntoView(entryItem);
 
 		}
 		catch

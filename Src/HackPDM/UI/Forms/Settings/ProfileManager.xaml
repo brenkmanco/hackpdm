@@ -3,7 +3,7 @@
     x:Class="HackPDM.UI.Forms.Settings.ProfileManager"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:com="using:CommunityToolkit.WinUI.UI.Controls"
+    xmlns:tv="using:WinUI.TableView"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="using:HackPDM.UI.Forms.Hack"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -110,7 +110,7 @@
             </CommandBar>
         </Canvas>
         <!--  Status List View  -->
-        <com:DataGrid
+        <tv:TableView
             x:Name="ProfileManStatusList"
             Grid.Row="0"
             Grid.Column="0"
@@ -122,19 +122,19 @@
             ItemsSource="{x:Bind ViewModel.OStatus, Mode=OneWay}"
             BorderThickness="1,1,1,1">
             <!--  FIX: Remove ListView.View, use ListView.ItemTemplate for UWP/WinUI  -->
-            <com:DataGrid.Columns>
+            <tv:TableView.Columns>
                 <!--<TextBlock Grid.Column="0" Text="{data:Binding Status}" />
 				<TextBlock Grid.Column="1" Text="{data:Binding Message}" />-->
-                <com:DataGridTextColumn
+                <tv:TableViewTextColumn
                     Width="Auto"
                     Binding="{Binding Status}"
                     Header="Action" />
-                <com:DataGridTextColumn
+                <tv:TableViewTextColumn
                     Width="*"
                     Binding="{Binding Message}"
                     Header="Description" />
 
-            </com:DataGrid.Columns>
-        </com:DataGrid>
+            </tv:TableView.Columns>
+        </tv:TableView>
     </Grid>
 </Page>

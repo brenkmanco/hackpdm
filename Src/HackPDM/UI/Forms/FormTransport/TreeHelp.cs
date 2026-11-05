@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -10,7 +10,6 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using CommunityToolkit.WinUI;
-using CommunityToolkit.WinUI.UI.Controls;
 
 using HackPDM.Core;
 using HackPDM.Core.General;
@@ -37,7 +36,7 @@ using Windows.Storage.Streams;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using static HackPDM.UI.Controls.UISettings;
 
-using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
+using TableView = WinUI.TableView.TableView;
 using EntryRow = HackPDM.UI.Types.EntryRow;
 using Image = Microsoft.UI.Xaml.Controls.Image;
 using String = System.String;
@@ -51,7 +50,7 @@ public class TreeHelp
 	private HackFileManager _HFM { get; set; }
 	private HFM_VM HFM_VM => _HFM.ViewModel;
 	private TreeView _tree { get; set; }
-	private DataGrid _grid { get; set; }
+	private TableView _grid { get; set; }
 	private static AssetsImageProvider? AssetsProvider { get => field ??= ImageProvider; }
 	
 	public TreeHelp() { }
@@ -136,7 +135,7 @@ public class TreeHelp
 		Dictionary<string, Task<HackFile>> hackFileMap = await GridHelp.GetFileMap(entries);
 		return (entries, hackFileMap);
 	}
-	internal static async Task TreeSelectItem(HFM_VM vm, TreeView tree, TreeViewNode node, DataGrid grid, CancellationToken token = default)
+	internal static async Task TreeSelectItem(HFM_VM vm, TreeView tree, TreeViewNode node, TableView grid, CancellationToken token = default)
 	{
 		//_HFM.IsListLoaded = false;
 		await AsyncHelper.WaitUntil(() => vm.IsTreeLoaded, 100, -1, token);
@@ -354,7 +353,7 @@ public class TreeHelp
 	public async Task RestartTree(TreeView tree)
 		=> await CreateTreeViewBackground(_HFM.ViewModel, tree);
 
-	public void RestartEntries(HFM_VM vm, TreeView tree, DataGrid grid)
+	public void RestartEntries(HFM_VM vm, TreeView tree, TableView grid)
 	{
 		//if (_HFM.LastSelectedNode is null) return;
 		if( tree.SelectedNode is null )
@@ -367,14 +366,14 @@ public class TreeHelp
 			if (grid.SelectedItems is not null and { Count: > 0 } items)
 			{
 				var entry = items[0] as EntryRow;
-				if (entry is not null) grid.ScrollIntoView(entry, grid.Columns.First());
+				if (entry is not null) grid.ScrollIntoView(entry);
 			}
 			grid.UpdateLayout();
 		});
 	}
 	#endregion
 	#region Tree Item Selection
-	private static void FindUpdatedEntries(DataGrid grid, TreeViewNode node, Hashtable entries, Dictionary<string, Task<HackFile>> hackFileMap)
+	private static void FindUpdatedEntries(TableView grid, TreeViewNode node, Hashtable entries, Dictionary<string, Task<HackFile>> hackFileMap)
 	{
 		// things to check for:
 		// 1. if the entry is in the entries hashtable
@@ -416,7 +415,7 @@ public class TreeHelp
 		else files = FileOperations.FilesInDirectory(path);
 		return files;
 	}
-	internal static async void AddRemoteEntries(HFM_VM vm, DataGrid grid, Hashtable entries, Dictionary<string, Task<HackFile>> hackFileMap)
+	internal static async void AddRemoteEntries(HFM_VM vm, TableView grid, Hashtable entries, Dictionary<string, Task<HackFile>> hackFileMap)
 	{
 #if DEBUG
 		//_HFM.TimerStopwatch = Stopwatch.StartNew();
@@ -432,7 +431,7 @@ public class TreeHelp
 #endif
 	}
 
-	private static async Task AddRemoteEntry(HFM_VM vm, DataGrid grid, DictionaryEntry pair, Dictionary<string, Task<HackFile>> hackFileMap)
+	private static async Task AddRemoteEntry(HFM_VM vm, TableView grid, DictionaryEntry pair, Dictionary<string, Task<HackFile>> hackFileMap)
 	{
 		if (pair.Value is not Hashtable table) return;
 
@@ -539,7 +538,7 @@ public class TreeHelp
 		return imgExt;
 	}
 	
-	internal static async void AddLocalEntries(HFM_VM vm, DataGrid grid, TreeViewNode? node, Dictionary<string, Task<HackFile>>? hackFileMap = null)
+	internal static async void AddLocalEntries(HFM_VM vm, TableView grid, TreeViewNode? node, Dictionary<string, Task<HackFile>>? hackFileMap = null)
 	{
 #if DEBUG
 		//_HFM.TimerStopwatch = Stopwatch.StartNew();
@@ -584,7 +583,7 @@ public class TreeHelp
 		//Console.WriteLine($"local entries time: {_HFM.TimerStopwatch.Elapsed}");
 #endif
 	}
-	private static async Task AddLocalEntry(HFM_VM vm, DataGrid grid, TreeViewNode node, HackFile file)
+	private static async Task AddLocalEntry(HFM_VM vm, TableView grid, TreeViewNode node, HackFile file)
 	{
 		if (file is null) return;
 		string type = file.TypeExt.ToLower();

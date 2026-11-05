@@ -3,7 +3,7 @@
 	x:Class="HackPDM.UI.Forms.Hack.HackFileManager"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-	xmlns:com="using:CommunityToolkit.WinUI.UI.Controls"
+	xmlns:tv="using:WinUI.TableView"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:help="using:HackPDM.UI.Forms.Helper"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -50,7 +50,7 @@
 				TextAlignment="Right" />
 		</DataTemplate>
 		<!--  Group Header Style  -->
-		<Style x:Key="GroupHeaderStyle" TargetType="com:DataGridRowGroupHeader">
+		<!-- <Style x:Key="GroupHeaderStyle" TargetType="tv:TableViewHeaderRow">
 			<Setter Property="FontSize" Value="14" />
 			<Setter Property="FontWeight" Value="Bold" />
 			<Setter Property="Background" Value="Black" />
@@ -58,25 +58,11 @@
 			<Setter Property="Padding" Value="2,0,2,0" />
 			<Setter Property="Height" Value="35" />
 			<Setter Property="MinHeight" Value="25" />
-		</Style>
+		</Style> -->
 		<Style TargetType="TextBlock">
 			<Setter Property="FontSize" Value="11" />
 			<Setter Property="FontWeight" Value="Light" />
 			<Setter Property="Foreground" Value="White" />
-		</Style>
-		<Style TargetType="com:DataGridRow">
-			<Setter Property="MinHeight" Value="25" />
-			<Setter Property="Height" Value="30" />
-			<Setter Property="VerticalAlignment" Value="Center" />
-			<Setter Property="VerticalContentAlignment" Value="Center" />
-			<Setter Property="Padding" Value="2,0,2,0" />
-		</Style>
-		<Style TargetType="com:DataGrid">
-			<Setter Property="HorizontalScrollBarVisibility" Value="Hidden" />
-		</Style>
-		<Style TargetType="com:DataGridCell">
-			<Setter Property="VerticalAlignment" Value="Center" />
-			<Setter Property="VerticalContentAlignment" Value="Center" />
 		</Style>
 	</Page.Resources>
 
@@ -247,19 +233,19 @@
 					SelectionChanged="VersionTabs_SelectionChanged">
 					<TabViewItem x:Name="HistoryTab" Header="History">
 
-						<com:DataGrid
+						<tv:TableView
 							x:Name="OdooHistory"
 							AutoGenerateColumns="False"
 							ItemsSource="{x:Bind OHistories}"
-							LoadingRowGroup="OdooEntryDataGrid_LoadingRowGroup">
-							<com:DataGrid.Columns>
-								<com:DataGridTextColumn Binding="{Binding Version}" Header="Version" />
-								<com:DataGridTextColumn Binding="{Binding ModUser}" Header="Mod User" />
-								<com:DataGridTextColumn Binding="{Binding ModDate}" Header="Mod Date" />
-								<com:DataGridTextColumn Binding="{Binding Size}" Header="Size" />
-								<com:DataGridTextColumn Binding="{Binding RelDate}" Header="Rel Date" />
-							</com:DataGrid.Columns>
-							<com:DataGrid.ContextFlyout>
+							>
+							<tv:TableView.Columns>
+								<tv:TableViewTextColumn Binding="{Binding Version}" Header="Version" />
+								<tv:TableViewTextColumn Binding="{Binding ModUser}" Header="Mod User" />
+								<tv:TableViewTextColumn Binding="{Binding ModDate}" Header="Mod Date" />
+								<tv:TableViewTextColumn Binding="{Binding Size}" Header="Size" />
+								<tv:TableViewTextColumn Binding="{Binding RelDate}" Header="Rel Date" />
+							</tv:TableView.Columns>
+							<tv:TableView.ContextFlyout>
 								<MenuFlyout x:Name="HistoryContextMenu">
 									<MenuFlyoutSubItem x:Name="HistoryDownload" Text="Download">
 										<MenuFlyoutItem x:Name="HistoryDownloadTemp" Text="Temporary" />
@@ -274,71 +260,71 @@
 										<MenuFlyoutItem x:Name="HistoryMoveOverwrite" Text="Overwrite" />
 									</MenuFlyoutSubItem>
 								</MenuFlyout>
-							</com:DataGrid.ContextFlyout>
-						</com:DataGrid>
+							</tv:TableView.ContextFlyout>
+						</tv:TableView>
 					</TabViewItem>
 					<TabViewItem x:Name="ParentTab" Header="Where Used">
-						<com:DataGrid
+						<tv:TableView
 							x:Name="OdooParents"
 							AutoGenerateColumns="False"
-							CanUserSortColumns="False"
+							CanSortColumns="False"
 							ItemsSource="{x:Bind OParents}"
 							RowDetailsVisibilityMode="Collapsed">
-							<com:DataGrid.Columns>
-								<com:DataGridTextColumn Binding="{Binding Version}" Header="Version" />
-								<com:DataGridTextColumn Binding="{Binding Name}" Header="Name" />
-								<com:DataGridTextColumn Binding="{Binding BasePath}" Header="BasePath" />
-							</com:DataGrid.Columns>
-						</com:DataGrid>
+							<tv:TableView.Columns>
+								<tv:TableViewTextColumn Binding="{Binding Version}" Header="Version" />
+								<tv:TableViewTextColumn Binding="{Binding Name}" Header="Name" />
+								<tv:TableViewTextColumn Binding="{Binding BasePath}" Header="BasePath" />
+							</tv:TableView.Columns>
+						</tv:TableView>
 					</TabViewItem>
 					<TabViewItem x:Name="ChildTab" Header="Dependents">
-						<com:DataGrid
+						<tv:TableView
 							x:Name="OdooChildren"
 							AutoGenerateColumns="False"
 							ItemsSource="{x:Bind OChildren}"
 							RowDetailsVisibilityMode="Collapsed"
 							SelectionMode="Extended">
-							<com:DataGrid.Columns>
-								<com:DataGridTextColumn Binding="{Binding Version}" Header="Version" />
-								<com:DataGridTextColumn Binding="{Binding Name}" Header="Name" />
-								<com:DataGridTextColumn Binding="{Binding BasePath}" Header="BasePath" />
-							</com:DataGrid.Columns>
-						</com:DataGrid>
+							<tv:TableView.Columns>
+								<tv:TableViewTextColumn Binding="{Binding Version}" Header="Version" />
+								<tv:TableViewTextColumn Binding="{Binding Name}" Header="Name" />
+								<tv:TableViewTextColumn Binding="{Binding BasePath}" Header="BasePath" />
+							</tv:TableView.Columns>
+						</tv:TableView>
 					</TabViewItem>
 					<TabViewItem x:Name="PropertiesTab" Header="Properties">
-						<com:DataGrid
+						<tv:TableView
 							x:Name="OdooProperties"
 							AutoGenerateColumns="False"
 							ItemsSource="{x:Bind OProperties}"
 							RowDetailsVisibilityMode="Collapsed">
-							<com:DataGrid.Columns>
-								<com:DataGridTextColumn Binding="{Binding Version}" Header="Version" />
-								<com:DataGridTextColumn Binding="{Binding Name}" Header="Property" />
-								<com:DataGridTextColumn Binding="{Binding Configuration}" Header="Configuration" />
-								<com:DataGridTextColumn Binding="{Binding Type}" Header="Type" />
-								<com:DataGridTextColumn Binding="{Binding ValueData}" Header="Value" />
-							</com:DataGrid.Columns>
-						</com:DataGrid>
+							<tv:TableView.Columns>
+								<tv:TableViewTextColumn Binding="{Binding Version}" Header="Version" />
+								<tv:TableViewTextColumn Binding="{Binding Name}" Header="Property" />
+								<tv:TableViewTextColumn Binding="{Binding Configuration}" Header="Configuration" />
+								<tv:TableViewTextColumn Binding="{Binding Type}" Header="Type" />
+								<tv:TableViewTextColumn Binding="{Binding ValueData}" Header="Value" />
+							</tv:TableView.Columns>
+						</tv:TableView>
 					</TabViewItem>
 					<TabViewItem x:Name="InfoTab" Header="Info">
-						<com:DataGrid
+						<tv:TableView
 							x:Name="OdooVersionInfoList"
 							AutoGenerateColumns="False"
 							IsReadOnly="True"
 							ItemsSource="{x:Bind OVersions}"
 							RowDetailsVisibilityMode="Collapsed">
-							<com:DataGrid.Columns>
-								<com:DataGridTextColumn Binding="{Binding Id}" Header="Version Id" />
-								<com:DataGridTextColumn Binding="{Binding FileSize}" Header="File Size" />
-								<com:DataGridTextColumn Binding="{Binding DirectoryId}" Header="Directory Id" />
-								<com:DataGridTextColumn Binding="{Binding NodeId}" Header="Node Id" />
-								<com:DataGridTextColumn Binding="{Binding EntryId}" Header="Entry Id" />
-								<com:DataGridTextColumn Binding="{Binding AttachmentId}" Header="Attachment Id" />
-								<com:DataGridTextColumn Binding="{Binding ModifyDate}" Header="Modify Date" />
-								<com:DataGridTextColumn Binding="{Binding Checksum}" Header="Checksum" />
-								<com:DataGridTextColumn Binding="{Binding OdooCompletePath}" Header="Odoo Complete Path" />
-							</com:DataGrid.Columns>
-						</com:DataGrid>
+							<tv:TableView.Columns>
+								<tv:TableViewTextColumn Binding="{Binding Id}" Header="Version Id" />
+								<tv:TableViewTextColumn Binding="{Binding FileSize}" Header="File Size" />
+								<tv:TableViewTextColumn Binding="{Binding DirectoryId}" Header="Directory Id" />
+								<tv:TableViewTextColumn Binding="{Binding NodeId}" Header="Node Id" />
+								<tv:TableViewTextColumn Binding="{Binding EntryId}" Header="Entry Id" />
+								<tv:TableViewTextColumn Binding="{Binding AttachmentId}" Header="Attachment Id" />
+								<tv:TableViewTextColumn Binding="{Binding ModifyDate}" Header="Modify Date" />
+								<tv:TableViewTextColumn Binding="{Binding Checksum}" Header="Checksum" />
+								<tv:TableViewTextColumn Binding="{Binding OdooCompletePath}" Header="Odoo Complete Path" />
+							</tv:TableView.Columns>
+						</tv:TableView>
 					</TabViewItem>
 				</TabView>
 

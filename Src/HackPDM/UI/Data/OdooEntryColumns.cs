@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-using CommunityToolkit.WinUI.UI.Controls;
+using WinUI.TableView;
 
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo;
@@ -35,7 +35,7 @@ public class OdooEntryColumns
 	public GroupByField GroupBy { get; set; } = new()
 	{
 		FieldName = "Status",
-		SortDirection = DataGridSortDirection.Ascending
+		SortDirection = SortDirection.Ascending
 	};
 	public bool InactivesEnabled { get; set; } = false;
 	public bool IgnoreFilters { get; set; } = false;

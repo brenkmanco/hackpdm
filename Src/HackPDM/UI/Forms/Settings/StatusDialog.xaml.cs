@@ -24,7 +24,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
 using Brush = Microsoft.UI.Xaml.Media.Brush;
-using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
+using TableView = WinUI.TableView.TableView;
 using ListViewItem = Microsoft.UI.Xaml.Controls.ListViewItem;
 
 // To learn more about WinUI, the WinUI project structure,
@@ -156,7 +156,7 @@ public sealed partial class StatusDialog : Page
 		});
     }
 
-    internal DataGrid GetList(StatusMessage action) => action switch
+    internal TableView GetList(StatusMessage action) => action switch
     {
         StatusMessage.PROCESSING    => StatusList,
         StatusMessage.SUCCESS       => StatusList,
@@ -181,7 +181,7 @@ public sealed partial class StatusDialog : Page
             default: break;
         }
     }
-    internal void GetDataGrid(StatusMessage action, out ObservableRingBuffer<BasicStatusMessage> collection, out DataGrid? dataGrid)
+    internal void GetDataGrid(StatusMessage action, out ObservableRingBuffer<BasicStatusMessage> collection, out TableView? dataGrid)
     {
         switch (action)
         {

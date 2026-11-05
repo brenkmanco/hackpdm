@@ -3,7 +3,7 @@
     x:Class="HackPDM.UI.Forms.Settings.StatusDialog"
     xmlns="using:Microsoft.UI.Xaml.Controls"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:com="using:CommunityToolkit.WinUI.UI.Controls"
+    xmlns:tv="using:WinUI.TableView"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:rep="using:HackPDM.Domain.Representation"
@@ -25,30 +25,30 @@
         </Grid.ColumnDefinitions>
 
         <!--  Main Status List  -->
-        <com:DataGrid
+        <tv:TableView
             x:Name="StatusList"
             Grid.Row="0"
             Grid.ColumnSpan="2"
             Margin="0,0,0,5"
             AutoGenerateColumns="False"
-            CanUserSortColumns="True"
+            CanSortColumns="True"
             IsReadOnly="True"
             ItemsSource="{x:Bind OStatus, Mode=OneWay}"
             RowDetailsVisibilityMode="Collapsed">
             
-            <com:DataGrid.Columns>
-                <com:DataGridTextColumn
+            <tv:TableView.Columns>
+                <tv:TableViewTextColumn
                     Width="120"
                     Binding="{xaml:Binding Status}"
                     Header="Action"
                     SortDirection="Descending"/>
-                <com:DataGridTextColumn
+                <tv:TableViewTextColumn
                     Width="1158"
                     Binding="{xaml:Binding Message}"
                     Header="Description" 
                     SortDirection="Descending"/>
-            </com:DataGrid.Columns>
-        </com:DataGrid>
+            </tv:TableView.Columns>
+        </tv:TableView>
 
         <!--  Splitter between StatusList and the two lower lists  -->
         <SplitView
@@ -59,54 +59,54 @@
             Background="Gray" />
 
         <!--  Info List  -->
-        <com:DataGrid
+        <tv:TableView
             x:Name="InfoList"
             Grid.Row="2"
             Grid.Column="0"
             Margin="0,5,5,5"
             AutoGenerateColumns="False"
-            CanUserSortColumns="True"
+            CanSortColumns="True"
             IsReadOnly="True"
             ItemsSource="{x:Bind OInfo, Mode=OneWay}"
             RowDetailsVisibilityMode="Collapsed">
-            <com:DataGrid.Columns>
-                <com:DataGridTextColumn
+            <tv:TableView.Columns>
+                <tv:TableViewTextColumn
                     Width="120"
                     Binding="{xaml:Binding Status}"
                     Header="Action" 
                     SortDirection="Descending"/>
-                <com:DataGridTextColumn
+                <tv:TableViewTextColumn
                     Width="1158"
                     Binding="{xaml:Binding Message}"
                     Header="Description" 
                     SortDirection="Descending"/>
-            </com:DataGrid.Columns>
-        </com:DataGrid>
+            </tv:TableView.Columns>
+        </tv:TableView>
 
         <!--  Error List  -->
-        <com:DataGrid
+        <tv:TableView
             x:Name="ErrorList"
             Grid.Row="2"
             Grid.Column="1"
             Margin="5,5,0,5"
             AutoGenerateColumns="False"
-            CanUserSortColumns="True"
+            CanSortColumns="True"
             IsReadOnly="True"
             ItemsSource="{x:Bind OError, Mode=OneWay}"
             RowDetailsVisibilityMode="Collapsed">
-            <com:DataGrid.Columns>
-                <com:DataGridTextColumn
+            <tv:TableView.Columns>
+                <tv:TableViewTextColumn
                     Width="120"
                     Binding="{xaml:Binding Status}"
                     Header="Action" 
                     SortDirection="Descending"/>
-                <com:DataGridTextColumn
+                <tv:TableViewTextColumn
                     Width="1158"
                     Binding="{xaml:Binding Message}"
                     Header="Description" 
                     SortDirection="Descending"/>
-            </com:DataGrid.Columns>
-        </com:DataGrid>
+            </tv:TableView.Columns>
+        </tv:TableView>
 
         <!--  Progress Bar  -->
         <ProgressBar

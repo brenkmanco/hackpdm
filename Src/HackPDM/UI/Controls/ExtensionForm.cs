@@ -23,7 +23,7 @@ using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 
 using Control = Microsoft.UI.Xaml.Controls.Control;
-using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
+using TableView = WinUI.TableView.TableView;
 using ListViewItem = Microsoft.UI.Xaml.Controls.ListViewItem;
 using Panel = Microsoft.UI.Xaml.Controls.Panel;
 using TreeData = HackPDM.UI.Types.TreeData;
@@ -75,12 +75,12 @@ public static class ExtensionForm
 		public IntPtr IntPtrHandle => IntPtr.Zero;
 #endif
 	}
-	extension (DataGrid grid)
+	extension (TableView grid)
 	{
 		public void SetAlternatingRowColors()
 		{
-			grid.RowBackground = _brush;
-			grid.AlternatingRowBackground = UIStorage.BrushWhite.Value;
+			grid.Background = _brush;
+			grid.AlternateRowBackground = UIStorage.BrushWhite.Value;
 		}
 		public void ItemAdd<T>(T item)
 		{

@@ -15,7 +15,6 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using CommunityToolkit.WinUI;
-using CommunityToolkit.WinUI.UI.Controls;
 
 using HackPDM.Abstractions;
 using HackPDM.Core;
@@ -61,7 +60,8 @@ using Windows.Storage;
 using Windows.Storage.FileProperties;
 using Windows.UI.WindowManagement;
 
-using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
+using TableView = WinUI.TableView.TableView;
+using WinUI.TableView;
 using Directory = System.IO.Directory;
 using EntryRow = HackPDM.UI.Types.EntryRow;
 using Image = Microsoft.UI.Xaml.Controls.Image;
@@ -78,7 +78,7 @@ namespace HackPDM.UI.Forms.Hack;
 // Form Control Constructions
 public sealed partial class HackFileManager : Page
 {
-	private DataGrid OdooEntryList;
+	private TableView OdooEntryList;
 	private MenuFlyoutSubItem ListOpen;
 	private MenuFlyoutItem ListPreview;
 	private MenuFlyoutItem ListLocal;
@@ -99,18 +99,17 @@ public sealed partial class HackFileManager : Page
 	{
 		var info = UIStorage.ColumnsInfo;
 		// 1. Instantiate DataGrid
-		OdooEntryList = new DataGrid
+		OdooEntryList = new TableView
 		{
 			Name = "OdooEntryList",
 			VerticalContentAlignment = VerticalAlignment.Stretch,
 			AutoGenerateColumns = false,
-			CanUserSortColumns = true,
+			CanSortColumns = true,
 			FontSize = info.FontSize,
 			IsReadOnly = true,
-			RowDetailsVisibilityMode = info.GroupCollapsed ? DataGridRowDetailsVisibilityMode.VisibleWhenSelected : DataGridRowDetailsVisibilityMode.Collapsed,
+			RowDetailsVisibilityMode = info.GroupCollapsed ? TableViewRowDetailsVisibilityMode.VisibleWhenSelected : TableViewRowDetailsVisibilityMode.Collapsed,
 			RowHeight = info.RowHeight,
-			SelectionMode = DataGridSelectionMode.Extended,
-			VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
+			SelectionMode = ListViewSelectionMode.Extended,
 			ItemsSource = GroupedEntries
 		};
 
@@ -119,21 +118,19 @@ public sealed partial class HackFileManager : Page
 		//OdooEntryList.Sorting += OdooEntryDataGrid_Sorting;
 
 		// 2. Fetch the Style from XAML and apply it
-		var headerStyle = (Style)this.Resources["GroupHeaderStyle"];
-		OdooEntryList.RowGroupHeaderStyles.Add( headerStyle );
-		OdooEntryList.RowGroupHeaderPropertyNameAlternative = "Items";
+		// Grouping is handled natively by TableView
 
 		// fetch saved configurations
 		var columns = UIStorage.Columns.Value;
 		// 3. Build Columns Using XAML Templates
 
 		// Column 1: Icon (Fetch template from Resources)
-		var iconColumn = new DataGridTemplateColumn
+		var iconColumn = new TableViewTemplateColumn
 		{
-			Width = new DataGridLength(32, DataGridLengthUnitType.Pixel),
+			Width = new GridLength(32),
 			CellTemplate = (DataTemplate)this.Resources["IconCellTemplate"],
-			CanUserReorder = true,
-			CanUserResize = true,
+			CanReorder = true,
+			CanResize = true,
 		};
 		OdooEntryList.Columns.Add( iconColumn );
 
@@ -144,14 +141,13 @@ public sealed partial class HackFileManager : Page
 		// Column 4: Size (Fetch template from Resources)
 		var sCol = columns[ nameof( EntryRow.Size ) ];
 
-		var sizeColumn = new DataGridTemplateColumn
+		var sizeColumn = new TableViewTemplateColumn
 		{
 			Header = sCol?.Column.Value.Header ?? "Size",
 			CellTemplate = ( DataTemplate )this.Resources[ "SizeCellTemplate" ],
 			Width = sCol?.Column.Value.AutoSize is true
-				? DataGridLength.Auto
-				: new DataGridLength( sCol?.Column.Value.Width ?? 100, DataGridLengthUnitType.Pixel ),
-			DisplayIndex = sCol?.Column.Value.DisplayIndex ?? -1,
+				? GridLength.Auto
+				: new GridLength( sCol?.Column.Value.Width ?? 100 ),
 		};
 		OdooEntryList.Columns.Add( sizeColumn );
 
@@ -230,34 +226,30 @@ public sealed partial class HackFileManager : Page
 		OdooEntryList.ContextFlyout = flyout;
 	}
 	// Helper method
-	private static DataGridTextColumn CreateTextColumn( string header, string bindingPath, double? width = null )
+	private static TableViewTextColumn CreateTextColumn( string header, string bindingPath, double? width = null )
 	{
-		var col = new DataGridTextColumn
+		var col = new TableViewTextColumn
 		{
 			Header = header,
 			Binding = new Binding { Path = new PropertyPath(bindingPath) },
 		};
 		if( width.HasValue )
-			col.Width = new DataGridLength( width.Value, DataGridLengthUnitType.Pixel );
+			col.Width = new GridLength( width.Value );
 		return col;
 	}
-	private static DataGridTextColumn? CreateTextColumn( OdooEntryColumnID? column )
+	private static TableViewTextColumn? CreateTextColumn( OdooEntryColumnID? column )
 	{
 		if( column is null )
 			return null;
 
 		var columnConfig = column.Column.Value;
-		var col = new DataGridTextColumn
+		var col = new TableViewTextColumn
 		{
 			Header = columnConfig.Header,
-			DisplayIndex = columnConfig.DisplayIndex,
 			Binding = new Binding { Path = new PropertyPath( column.BindingPath ) },
-			FontSize = UIStorage.ColumnsInfo.FontSize,
 			Width = columnConfig.AutoSize
-				? new DataGridLength( 1, DataGridLengthUnitType.Auto )
-				: new DataGridLength( columnConfig.Width is 0D
-					? 100
-					: columnConfig.Width, DataGridLengthUnitType.Pixel )
+				? GridLength.Auto
+				: new GridLength( columnConfig.Width is 0D ? 100 : columnConfig.Width )
 		};
 
 		return col;
@@ -484,8 +476,8 @@ public sealed partial class HackFileManager : Page
 
 		OdooEntryList.SelectionChanged += OdooEntryList_SelectionChanged;
 		OdooEntryList.Sorting += List_ColumnClick;
-		OdooEntryList.LoadingRow += OdooEntryList_LoadingRow;
-		OdooEntryList.LoadingRowGroup += OdooEntryList_LoadingRowGroup;
+		// // OdooEntryList.LoadingRow += OdooEntryList_LoadingRow;
+		// // OdooEntryList.LoadingRowGroup += OdooEntryList_LoadingRowGroup;
 
 		// tree events
 		TreeAnalyze.Click += ( sender, args ) => { };
@@ -570,75 +562,8 @@ public sealed partial class HackFileManager : Page
 		// Refresh ItemsSource to reflect grouping change
 		OdooEntryList.ItemsSource = GroupedEntries.NoGrouping ? GroupedEntries.Master : GroupedEntries.ViewSource.View;
 	}
-	private void OdooEntryList_LoadingRowGroup( object? sender, DataGridRowGroupHeaderEventArgs e )
-	{
-		// Access the underlying grouping data
-		ICollectionViewGroup groupData = e.RowGroupHeader.CollectionViewGroup;
-
-		// Cast the group back to your specific group class
-
-		if( groupData.Group is GroupInfoList<EntryRow> myGroup )
-		{
-			// Override the text displayed in the label
-			e.RowGroupHeader.PropertyValue = $"{myGroup.Key}";
-			e.RowGroupHeader.FontSize = UIStorage.ColumnsInfo.FontSize;
-		}
-	}
-	private void OdooEntryList_LoadingRow( object? sender, DataGridRowEventArgs e )
-	{
-		var row = e.Row;
-		row.FontSize = UIStorage.ColumnsInfo.FontSize;
-		row.Height = UIStorage.ColumnsInfo.RowHeight;
-		var item = row.DataContext as EntryRow;
-		switch( item?.Status )
-		{
-			case FileStatus.Lo:
-			{
-				row.Background = UIStorage.OrangeBrush.Value;
-				break;
-			}
-			case FileStatus.Ro:
-			{
-				row.Background = UIStorage.BlueBrush.Value;
-				break;
-			}
-			case FileStatus.Ok:
-			goto default;
-			case FileStatus.Nv:
-			goto default;
-			case FileStatus.Lm:
-			goto default;
-			case FileStatus.Dt:
-			{
-				row.Background = UIStorage.RedBrush.Value;
-				break;
-			}
-			case FileStatus.Ds:
-			{
-				row.Background = UIStorage.RedBrush.Value;
-				break;
-			}
-			case FileStatus.If:
-			goto default;
-			case FileStatus.Ft:
-			goto default;
-			case FileStatus.Cm:
-			{
-				row.Background = UIStorage.GreenBrush.Value;
-				break;
-			}
-			case FileStatus.Co:
-			{
-				row.Background = UIStorage.GreenBrush.Value;
-				break;
-			}
-			default:
-			{
-				row.Background = null;
-				break;
-			}
-		}
-	}
+	// LoadingRowGroup removed for TableView
+	// LoadingRow removed for TableView
 	private void List_Click_SaveIcon( object sender, RoutedEventArgs e )
 	{
 		throw new NotImplementedException();
@@ -665,7 +590,7 @@ public sealed partial class HackFileManager : Page
 	}
 	public TreeView GetOdooDirectoryTree()
 		=> OdooDirectoryTree;
-	public DataGrid GetOdooEntryList()
+	public TableView GetOdooEntryList()
 			=> OdooEntryList;
 	public Image GetOdooEntryImage() => OdooEntryImage;
 	public TextBlock GetEntriesLabel() => EntryListStatus;
@@ -1102,22 +1027,22 @@ public sealed partial class HackFileManager : Page
 		}
 	}
 	// click events
-	private void List_ColumnClick( object? sender, DataGridColumnEventArgs e )
+	private void List_ColumnClick( object? sender, TableViewSortingEventArgs e )
 	{
-		var grid = sender as DataGrid;
+		var grid = sender as TableView;
 		var column = e.Column;
-		foreach( var col in grid?.Columns ?? [] )
+		if (grid?.Columns != null) foreach( var col in grid.Columns )
 		{
 			if( e.Column == col )
 				continue;
 			col.SortDirection = null;
 		}
-		var modelField = column.ClipboardContentBinding?.Path.Path ?? column.Header;
+		var modelField = column.SortMemberPath ?? column.Header?.ToString();
 		bool isDesc = false;
 		(column.SortDirection, isDesc) = column.SortDirection is not null
-			and DataGridSortDirection.Ascending
-				? (DataGridSortDirection.Descending, true)
-				: (DataGridSortDirection.Ascending, false);
+			and SortDirection.Ascending
+				? (SortDirection.Descending, true)
+				: (SortDirection.Ascending, false);
 
 		SortLogic<string>( modelField as string ?? "", isDesc );
 		GroupedEntries?.Regroup();
@@ -1819,7 +1744,7 @@ public sealed partial class HackFileManager : Page
 
 			OdooEntryList.SelectedItem = entryItem;
 			OdooEntryList.Focus( FocusState.Programmatic );
-			OdooEntryList.ScrollIntoView( entryItem, null );
+			OdooEntryList.ScrollIntoView( entryItem );
 		}
 		catch
 		{
@@ -2080,14 +2005,8 @@ public sealed partial class HackFileManager : Page
 		var data = tvi?.DataContext;
 		ItemToContainerMap.Remove( data );
 	}
-	private void OdooEntryDataGrid_LoadingRowGroup( object sender, CommunityToolkit.WinUI.UI.Controls.DataGridRowGroupHeaderEventArgs e )
-	{
-
-	}
-	private void OdooEntryDataGrid_Sorting( object sender, CommunityToolkit.WinUI.UI.Controls.DataGridColumnEventArgs e )
-	{
-
-	}
+	
+	
 
 
 }
