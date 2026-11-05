@@ -16,8 +16,11 @@ public static class CrossPlatformCredentialManager
     private static readonly string FallbackFile = Path.Combine(FallbackDir, "credentials.dat");
 
     public static (string? UserName, string? Password)? ReadCredential(string target)
+        => ReadCredential(target, forceFallback: false);
+
+    internal static (string? UserName, string? Password)? ReadCredential(string target, bool forceFallback, string? customFilePath = null)
     {
-        if (OperatingSystem.IsWindows())
+        if (!forceFallback && OperatingSystem.IsWindows())
         {
             try
             {
@@ -33,12 +36,15 @@ public static class CrossPlatformCredentialManager
             }
         }
 
-        return ReadFallback(target);
+        return ReadFallback(target, customFilePath);
     }
 
     public static void WriteCredential(string target, string username, string password)
+        => WriteCredential(target, username, password, forceFallback: false);
+
+    internal static void WriteCredential(string target, string username, string password, bool forceFallback, string? customFilePath = null)
     {
-        if (OperatingSystem.IsWindows())
+        if (!forceFallback && OperatingSystem.IsWindows())
         {
             try
             {
@@ -51,15 +57,16 @@ public static class CrossPlatformCredentialManager
             }
         }
 
-        WriteFallback(target, username, password);
+        WriteFallback(target, username, password, customFilePath);
     }
 
-    private static (string? UserName, string? Password)? ReadFallback(string target)
+    internal static (string? UserName, string? Password)? ReadFallback(string target, string? customFilePath = null)
     {
+        string filePath = customFilePath ?? FallbackFile;
         try
         {
-            if (!File.Exists(FallbackFile)) return null;
-            byte[] encrypted = File.ReadAllBytes(FallbackFile);
+            if (!File.Exists(filePath)) return null;
+            byte[] encrypted = File.ReadAllBytes(filePath);
             string json = Decrypt(encrypted);
             var dict = JsonSerializer.Deserialize<Dictionary<string, CredentialEntry>>(json);
             if (dict != null && dict.TryGetValue(target, out var entry))
@@ -74,21 +81,23 @@ public static class CrossPlatformCredentialManager
         return null;
     }
 
-    private static void WriteFallback(string target, string username, string password)
+    internal static void WriteFallback(string target, string username, string password, string? customFilePath = null)
     {
+        string filePath = customFilePath ?? FallbackFile;
+        string dirPath = Path.GetDirectoryName(filePath) ?? FallbackDir;
         try
         {
-            if (!Directory.Exists(FallbackDir))
+            if (!string.IsNullOrEmpty(dirPath) && !Directory.Exists(dirPath))
             {
-                Directory.CreateDirectory(FallbackDir);
+                Directory.CreateDirectory(dirPath);
             }
 
             Dictionary<string, CredentialEntry> dict = [];
-            if (File.Exists(FallbackFile))
+            if (File.Exists(filePath))
             {
                 try
                 {
-                    byte[] existingEncrypted = File.ReadAllBytes(FallbackFile);
+                    byte[] existingEncrypted = File.ReadAllBytes(filePath);
                     string existingJson = Decrypt(existingEncrypted);
                     dict = JsonSerializer.Deserialize<Dictionary<string, CredentialEntry>>(existingJson) ?? [];
                 }
@@ -98,7 +107,7 @@ public static class CrossPlatformCredentialManager
             dict[target] = new CredentialEntry(username, password);
             string newJson = JsonSerializer.Serialize(dict);
             byte[] encrypted = Encrypt(newJson);
-            File.WriteAllBytes(FallbackFile, encrypted);
+            File.WriteAllBytes(filePath, encrypted);
         }
         catch (Exception ex)
         {
@@ -106,9 +115,9 @@ public static class CrossPlatformCredentialManager
         }
     }
 
-    private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("HackPDM-Secure-Key-Entropy-v1");
+    internal static readonly byte[] Entropy = Encoding.UTF8.GetBytes("HackPDM-Secure-Key-Entropy-v1");
 
-    private static byte[] Encrypt(string plainText)
+    internal static byte[] Encrypt(string plainText)
     {
         byte[] data = Encoding.UTF8.GetBytes(plainText);
         using var aes = Aes.Create();
@@ -123,7 +132,7 @@ public static class CrossPlatformCredentialManager
         return result;
     }
 
-    private static string Decrypt(byte[] encrypted)
+    internal static string Decrypt(byte[] encrypted)
     {
         using var aes = Aes.Create();
         using var sha = SHA256.Create();
