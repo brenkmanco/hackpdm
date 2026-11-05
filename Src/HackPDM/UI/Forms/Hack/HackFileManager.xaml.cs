@@ -51,7 +51,9 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
 
+#if WINDOWS
 using SolidWorks.Interop.sldworks;
+#endif
 
 using Windows.Storage;
 using Windows.Storage.FileProperties;
@@ -952,9 +954,9 @@ public sealed partial class HackFileManager : Page
 			// 2. Extract the system thumbnail icon (32x32 requested here)
 			// Returns a crisp asset using a modern system scaling strategy
 			using var thumbnail = await file.GetThumbnailAsync(
-				ThumbnailMode.SingleItem,
+				Windows.Storage.FileProperties.ThumbnailMode.SingleItem,
 				dynamicSize,
-				ThumbnailOptions.ResizeThumbnail ); // Ensures Windows targets exact scale bounding
+				Windows.Storage.FileProperties.ThumbnailOptions.ResizeThumbnail ); // Ensures Windows targets exact scale bounding
 			if( thumbnail != null )
 			{
 				// 3. Convert it directly into a WinUI 3 compatible BitmapImage
@@ -1231,7 +1233,7 @@ public sealed partial class HackFileManager : Page
 		if( ViewModel.statusToken.IsCancellationRequested )
 			return;
 
-		HackFile.GetHackFolderWithDependencies( pathway, true, out List<HackFile> hf );
+		ExtensionOdoo.GetHackFolderWithDependencies( pathway, true, out List<HackFile>? hf );
 		await CommitInternal( hf );
 	}
 	private async void Tree_Click_Checkout( object sender, RoutedEventArgs e )
@@ -1343,7 +1345,7 @@ public sealed partial class HackFileManager : Page
 
 			if( OdooDefaultsConstants.DependentExt.Contains( $".{item.Type.ToUpper()}" ) )
 			{
-				var (success, hf, results) = await HackFile.GetHackFileWithDependencies( item, true );
+				var (success, hf, results) = await ExtensionOdoo.GetHackFileWithDependencies( item, true );
 				if( success )
 				{
 					hackFiles.AddAll( hf ?? [] );
@@ -1862,7 +1864,11 @@ public sealed partial class HackFileManager : Page
 
 			string tempPath = Path.Combine(StorageBox.TemporaryPath, path);
 			version.DownloadFile( tempPath );
+#if WINDOWS
 			if( version.FileTypeExt != SolidWorks.Interop.swdocumentmgr.SwDmDocumentType.swDmDocumentUnknown )
+#else
+			if( false )
+#endif
 			{
 #if Debug
 				HackDefaults.DocMgr.GetDependencies(path);

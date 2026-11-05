@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -15,11 +15,11 @@ namespace HackPDM.UI.Controls
 	{
 		private static AssetsImageProvider GetProvider( Dictionary<string, string>? assetmap = null )
 		{
-			var os = Environment.OSVersion.Version;
+			
 
-			return os.Major >= 10
-				? new AssetsImageProvider(assetmap)
-				: throw new NotSupportedException();
+			return new AssetsImageProvider(assetmap);
+				
+				
 		}
 
 		public static AssetsImageProvider? ImageProvider 

@@ -11,13 +11,13 @@
     <TargetFrameworks>net10.0-windows10.0.26100.0;net10.0-desktop</TargetFrameworks>
     <TargetPlatformMinVersion Condition="$(TargetFramework.Contains('windows'))">10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>HackPDM</RootNamespace>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationManifest Condition="$(TargetFramework.Contains('windows'))">app.manifest</ApplicationManifest>
     <Platform>x64</Platform>
     <Platforms>x86;x64;ARM64</Platforms>
 
-    <PublishProfile>win-$(Platform).pubxml</PublishProfile>
+    <PublishProfile Condition="$(TargetFramework.Contains('windows'))">win-$(Platform).pubxml</PublishProfile>
 
-    <EnableMsixTooling>true</EnableMsixTooling>
+    <EnableMsixTooling Condition="$(TargetFramework.Contains('windows'))">true</EnableMsixTooling>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableWindowsTargeting Condition="$(TargetFramework.Contains('windows'))">true</EnableWindowsTargeting>
@@ -40,7 +40,7 @@
     <ProjectReference Include="..\HackPDM.Infrastructure\HackPDM.Infrastructure.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="$(TargetFramework.Contains('windows'))">
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
@@ -55,11 +55,14 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="Meziantou.Framework.Win32.CredentialManager" Version="1.7.15" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.5-beta1" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.1" />
     <PackageReference Include="System.Reactive" Version="7.0.0-preview.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <UnoImage Remove="**\*.svg" />
   </ItemGroup>
 
   <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
@@ -67,6 +70,7 @@
     <PackageReference Include="CommunityToolkit.WinUI.Controls.Sizers" Version="8.2.251219" />
     <PackageReference Include="CommunityToolkit.WinUI.Extensions" Version="8.2.251219" />
     <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.3.2" />
+    <PackageReference Include="Meziantou.Framework.Win32.CredentialManager" Version="1.7.15" />
   </ItemGroup>
 
   <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">
@@ -124,6 +128,12 @@
     </Page>
   </ItemGroup>
 
+  <ItemGroup Condition="!$(TargetFramework.Contains('windows'))">
+    <ApplicationDefinition Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </ApplicationDefinition>
+  </ItemGroup>
+
   <ItemGroup>
     <Page Update="Forms\Hack\HackFileManager.xaml">
       <Generator>MSBuild:Compile</Generator>
@@ -178,7 +188,7 @@
     </Page>
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="$(TargetFramework.Contains('windows'))">
     <Reference Include="SolidWorks.Interop.sldworks">
       <HintPath>..\HackPDM.Infrastructure\lib\SolidWorks.Interop.sldworks.dll</HintPath>
     </Reference>
@@ -195,6 +205,18 @@
       <HintPath>..\HackPDM.Infrastructure\lib\XmlRpcCs.dll</HintPath>
     </Reference>
   </ItemGroup>
+
+  <Target Name="RemoveTransitiveWindowsDesktopDependenciesForExe"
+          AfterTargets="ResolvePackageAssets"
+          BeforeTargets="_CheckForTransitiveWindowsDesktopDependencies"
+          Condition="!$(TargetFramework.Contains('windows'))">
+    <ItemGroup>
+      <TransitiveFrameworkReference Remove="@(TransitiveFrameworkReference)"
+        Condition="'%(Identity)' == 'Microsoft.WindowsDesktop.App' Or
+                   '%(Identity)' == 'Microsoft.WindowsDesktop.App.WPF' Or
+                   '%(Identity)' == 'Microsoft.WindowsDesktop.App.WindowsForms'" />
+    </ItemGroup>
+  </Target>
 
   <!--
     Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution

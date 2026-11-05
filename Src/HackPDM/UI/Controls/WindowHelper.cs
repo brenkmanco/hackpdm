@@ -2,16 +2,14 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-
 using HackPDM.Core.Helper.Xaml;
 using HackPDM.Domain.Representation;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Data;
 using HackPDM.UI.Forms;
-
+using HackPDM.UI.Models;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -19,19 +17,20 @@ using Microsoft.UI.Xaml.Navigation;
 
 namespace HackPDM.UI.Controls;
 
-
 public static partial class WindowHelper
 {
+#if WINDOWS
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool MoveWindow(IntPtr hWnd, int x, int y, int nWidth, int nHeight, [MarshalAs(UnmanagedType.Bool)] bool bRepaint);
-	// Declares managed prototypes for unmanaged functions.
-	
-	public static void ResizeWindow(Window window, int width, int height)
+#endif
+    // Declares managed prototypes for unmanaged functions.
+
+    public static void ResizeWindow(Window window, int width, int height)
     {
         if (window.AppWindow != null)
         {
-            window.AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
+            window.AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = width, Height = height });
             return;
         }
 #if WINDOWS
@@ -42,45 +41,45 @@ public static partial class WindowHelper
         }
 #endif
     }
-    
 
     public static Task AnimateWindowSize(AppWindow appWindow, Windows.Graphics.SizeInt32 targetSize, double durationMs = 250, CancellationToken token = default)
     {
         return SafeHelper.SafeInvokerAsync(() =>
         {
-			var startSize = appWindow.Size;
-	        var startTime = DateTime.Now;
+            var startSize = appWindow.Size;
+            var startTime = DateTime.Now;
 
-	        DispatcherTimer timer = new DispatcherTimer();
-	        timer.Interval = TimeSpan.FromMilliseconds(16); // ~60fps
+            DispatcherTimer timer = new DispatcherTimer();
+            timer.Interval = TimeSpan.FromMilliseconds(16); // ~60fps
 
-	        timer.Tick += (s, e) =>
-	        {
-		        var elapsed = (DateTime.Now - startTime).TotalMilliseconds;
-		        double progress = Math.Min(elapsed / durationMs, 1.0);
+            timer.Tick += (s, e) =>
+            {
+                var elapsed = (DateTime.Now - startTime).TotalMilliseconds;
+                double progress = Math.Min(elapsed / durationMs, 1.0);
 
-		        // Optional: Add easing (Cubic Out)
-		        progress = 1 - Math.Pow(1 - progress, 3);
+                // Optional: Add easing (Cubic Out)
+                progress = 1 - Math.Pow(1 - progress, 3);
 
-		        int newWidth = (int)(startSize.Width + (targetSize.Width - startSize.Width) * progress);
-		        int newHeight = (int)(startSize.Height + (targetSize.Height - startSize.Height) * progress);
+                int newWidth = (int)(startSize.Width + (targetSize.Width - startSize.Width) * progress);
+                int newHeight = (int)(startSize.Height + (targetSize.Height - startSize.Height) * progress);
 
                 if (token.IsCancellationRequested)
                 {
                     timer.Stop();
                     return;
-				}
-				appWindow.Resize(new Windows.Graphics.SizeInt32(newWidth, newHeight));
+                }
+                appWindow.Resize(new Windows.Graphics.SizeInt32 { Width = newWidth, Height = newHeight });
 
-		        if (progress >= 1.0)
-		        {
-			        timer.Stop();
-		        }
-	        };
+                if (progress >= 1.0)
+                {
+                    timer.Stop();
+                }
+            };
 
-	        timer.Start();
+            timer.Start();
         }, token);
     }
+
     public static T CreateWindow<T>(string? configName = null, bool activated = true, bool withFrame = true) where T : Window, new()
     {
         T window = new();
@@ -97,101 +96,109 @@ public static partial class WindowHelper
         }
         return window;
     }
+
     public static Window CreateWindowPage<T>(bool activated = true, ArrayList? parameters = null) where T : Page, new()
     {
         CreateWindowAndPage<T>(out _, out var window, activated, parameters);
         return window;
     }
+
     public static Window CreateWindowFromPage<TPage>(TPage page, bool activated = true, ArrayList? parameters = null)
         where TPage : Page
     {
         CreateWindowFromPageInternal(page, out Window window, activated, parameters);
         return window;
     }
+
     public static void CreateWindowFromPage<TPage, TWindow>(TPage page, out TWindow window, bool activated = true, ArrayList? parameter = null)
         where TPage : Page
         where TWindow : Window, new()
     {
         CreateWindowFromPageInternal(page, out window, activated, parameter);
-	}
-	public static void CreateWindowAndPage<T>(out T page, out Window window, bool activated = true, ArrayList? parameters = null) 
+    }
+
+    public static void CreateWindowAndPage<T>(out T page, out Window window, bool activated = true, ArrayList? parameters = null) 
         where T : Page, new() 
         => CreateWindowAndPageInternal(out page, out window, activated, parameters);
+
     public static void CreateWindowAndPage<TPage, TWindow>(out TPage page, out TWindow window, bool activated = true, ArrayList? parameters = null) 
         where TPage : Page, new()
         where TWindow : Window, new()
-		=> CreateWindowAndPageInternal(out page, out window, activated, parameters);
-	private static void CreateWindowFromPageInternal<TPage, TWindow>(TPage page, out TWindow window, bool activated = true, ArrayList? parameters = null)
+        => CreateWindowAndPageInternal(out page, out window, activated, parameters);
+
+    private static void CreateWindowFromPageInternal<TPage, TWindow>(TPage page, out TWindow window, bool activated = true, ArrayList? parameters = null)
         where TPage : Page
         where TWindow : Window, new()
-	{
+    {
         window = new TWindow();
-		if (activated) window.Activate();
+        if (activated) window.Activate();
 
         Frame rootFrame = new();
-		if (parameters is not null)
+        if (parameters is not null)
         {
-            parameters.Add( window );
+            parameters.Add(window);
             rootFrame.Navigate(typeof(TPage), parameters);
             page = rootFrame.Content as TPage;
-        } else 
+        }
+        else 
         {
             rootFrame.Content = page;
         }
         
-		window.Content = rootFrame;
-        
+        window.Content = rootFrame;
 
-        
-		if (WindowConfig.PresetWindowConfig.TryGetValue(typeof(TPage).Name, out WindowConfig? value))
-		{
-			SetWindowConfig(window, value);
-		}
-		if (page != null)
-		{
-			InstanceManager.RegisterWindow(page, window);
-		}
-	}
-	private static void CreateWindowAndPageInternal<TPage, TWindow>(out TPage? page, out TWindow window, bool activated = true, ArrayList? parameters = null)
+        if (WindowConfig.PresetWindowConfig.TryGetValue(typeof(TPage).Name, out WindowConfig? value))
+        {
+            SetWindowConfig(window, value);
+        }
+        if (page != null)
+        {
+            InstanceManager.RegisterWindow(page, window);
+        }
+    }
+
+    private static void CreateWindowAndPageInternal<TPage, TWindow>(out TPage? page, out TWindow window, bool activated = true, ArrayList? parameters = null)
         where TPage : Page, new()
         where TWindow : Window, new()
     {
         page = parameters is null ? new() : null;
         CreateWindowFromPageInternal(page, out window, activated, parameters);
-	}
-	public static Window CreateWindowPage<T>(WindowConfig winConfig) where T : Page, new()
+    }
+
+    public static Window CreateWindowPage<T>(WindowConfig winConfig) where T : Page, new()
     {
         Window win = CreateWindowPage<T>();
         SetWindowConfig(win, winConfig);
         return win;
     }
+
     private static CancellationTokenSource _animationCts = new();
-	public static void SetWindowConfig(Window window, WindowConfig windowConfig)
+
+    public static void SetWindowConfig(Window window, WindowConfig windowConfig)
     {
         window.Title = windowConfig.Title;
         window.SetWindowType(windowConfig.WindowKind);
         _animationCts.Cancel();
         _animationCts = new CancellationTokenSource();
-		//AnimateWindowSize(window.AppWindow, new Windows.Graphics.SizeInt32(windowConfig.PositionAndSize.z, windowConfig.PositionAndSize.w), 250, _animationCts.Token);
-        var pos = windowConfig.PositionAndSize;
-        window.AppWindow?.MoveAndResize(new Windows.Graphics.RectInt32(pos.x, pos.y, pos.z, pos.w));
-		var titleBar = window.AppWindow?.TitleBar;
-		if (titleBar == null) return;
+        window.AppWindow?.MoveAndResize(new Windows.Graphics.RectInt32 { X = windowConfig.PositionAndSize.x, Y = windowConfig.PositionAndSize.y, Width = windowConfig.PositionAndSize.z, Height = windowConfig.PositionAndSize.w });
+        var titleBar = window.AppWindow?.TitleBar;
+        if (titleBar == null) return;
 
-		// Set system caption button backgrounds to transparent
-		titleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0,0,0,0);
+        // Set system caption button backgrounds to transparent
+        titleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
         titleBar.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
 
-		// Optional: Match the hover/press states to your custom background color
-		titleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(25, 255, 255, 255);
-		titleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(50, 255, 255, 255);
-	}
+        // Optional: Match the hover/press states to your custom background color
+        titleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(25, 255, 255, 255);
+        titleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(50, 255, 255, 255);
+    }
 }
+
 public class WindowConfig
 {
-    [JsonIgnore]
+    [System.Text.Json.Serialization.JsonIgnore]
     public static Dictionary<string, WindowConfig> PresetWindowConfig = UIStorage.GlobalData.Win.PresetWindowConfig;
     public string Title { get; set; } = "Window";
-    public Vector4<int> PositionAndSize { get; set; } = (0, 0, 500, 350);
+    public HackPDM.Domain.Representation.Vector4<int> PositionAndSize { get; set; } = (0, 0, 500, 350);
     public AppWindowPresenterKind WindowKind { get; set; } = AppWindowPresenterKind.Overlapped;
 }

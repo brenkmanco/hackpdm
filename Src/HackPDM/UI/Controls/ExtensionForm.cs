@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -69,7 +69,11 @@ public static class ExtensionForm
 		{
 			try { window.AppWindow.SetPresenter(kind); return true; } catch { return false; }
 		}
+#if WINDOWS
 		public IntPtr IntPtrHandle { get { return WinRT.Interop.WindowNative.GetWindowHandle( window ); } }
+#else
+		public IntPtr IntPtrHandle => IntPtr.Zero;
+#endif
 	}
 	extension (DataGrid grid)
 	{
@@ -296,7 +300,7 @@ public static class ExtensionForm
 				return paths.Length == 1 ? node : node.RecurseNode(paths[1..]);
 			}
 		}
-		return null;
+		return default;
 	}
 	public static TreeData? FindTreeNode(this TreeView view, string path)
 	{
@@ -313,9 +317,21 @@ public static class ExtensionForm
 				return pathSpan.Length == 1 ? treeData : treeData.RecurseNode(pathSpan[1..]);
 			}
 		}
-		return null;        
+		return default;        
 	}
 	
+	public static T? FindParent<T>(this DependencyObject? child) where T : DependencyObject
+	{
+		DependencyObject? parent = child != null ? VisualTreeHelper.GetParent(child) : null;
+		while (parent != null)
+		{
+			if (parent is T typedParent)
+				return typedParent;
+			parent = VisualTreeHelper.GetParent(parent);
+		}
+		return default;
+	}
+
 	private class HolderValues
 	{
 		public bool IsSingleton { get; set; }=false;

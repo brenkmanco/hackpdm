@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -47,7 +47,7 @@ public class OdooDefaults : IOdooDefaults
         get 
         {
 			if (!string.IsNullOrEmpty(field)) return field;
-			var cm = CredentialManager.ReadCredential(OdooCredentialTarget ?? StorageBox.DEFAULT_ODOO_CREDENTIALS, CredentialType.Generic);
+			var cm = CrossPlatformCredentialManager.ReadCredential(OdooCredentialTarget ?? StorageBox.DEFAULT_ODOO_CREDENTIALS);
 			field = cm?.UserName;
             return field;
         }
@@ -62,7 +62,7 @@ public class OdooDefaults : IOdooDefaults
         {
 			if (field is not null) return field;
 			// read from windows credential manager
-			var cm = CredentialManager.ReadCredential(OdooCredentialTarget ?? StorageBox.DEFAULT_ODOO_CREDENTIALS, CredentialType.Generic);
+			var cm = CrossPlatformCredentialManager.ReadCredential(OdooCredentialTarget ?? StorageBox.DEFAULT_ODOO_CREDENTIALS);
             field = cm?.Password;
             return field;
         }
@@ -77,7 +77,7 @@ public class OdooDefaults : IOdooDefaults
         if( string.IsNullOrEmpty( password ) || string.IsNullOrEmpty( username ))
             return false;
 
-		CredentialManager.WriteCredential( credentialName ?? StorageBox.DEFAULT_ODOO_CREDENTIALS, username, password, CredentialPersistence.LocalMachine );
+		CrossPlatformCredentialManager.WriteCredential( credentialName ?? StorageBox.DEFAULT_ODOO_CREDENTIALS, username, password );
         return true;
 	}
     public string? OdooAddress

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -276,7 +276,22 @@ public static class FileOperations
             FileInfo fileInfo = new(fullpath);
             if (!fileInfo.Exists) throw new Exception();
 
-            Process.Start(fileInfo.FullName);
+            if (OperatingSystem.IsWindows())
+            {
+                Process.Start(new ProcessStartInfo(fileInfo.FullName) { UseShellExecute = true });
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                Process.Start("xdg-open", fileInfo.FullName);
+            }
+            else if (OperatingSystem.IsMacOS())
+            {
+                Process.Start("open", fileInfo.FullName);
+            }
+            else
+            {
+                Process.Start(new ProcessStartInfo(fileInfo.FullName) { UseShellExecute = true });
+            }
             return true;
         }
         catch
@@ -291,7 +306,22 @@ public static class FileOperations
             DirectoryInfo folderInfo = new DirectoryInfo(folderPath);
             if (!folderInfo.Exists) throw new Exception();
 
-            Process.Start("explorer.exe", folderPath);
+            if (OperatingSystem.IsWindows())
+            {
+                Process.Start("explorer.exe", folderPath);
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                Process.Start("xdg-open", folderPath);
+            }
+            else if (OperatingSystem.IsMacOS())
+            {
+                Process.Start("open", folderPath);
+            }
+            else
+            {
+                Process.Start(new ProcessStartInfo(folderPath) { UseShellExecute = true });
+            }
             return true;
         }
         catch
@@ -301,6 +331,10 @@ public static class FileOperations
     }
         
     
+    public static string? ConvertToLocalPath(string? pathway, bool withAbsolutePath) => ConvertToWindowsPath(pathway, withAbsolutePath);
+    public static string? NodePathToLocalPath(string? pathway, bool withAbsolutePath = true) => NodePathToWindowsPath(pathway, withAbsolutePath);
+    public static string LocalToOdooPath(string pathway, bool fromFullPath = false) => WindowsToOdooPath(pathway, fromFullPath);
+
     public static string? ConvertToWindowsPath(string? pathway, bool withAbsolutePath)
     {
         if (pathway is null) return null;
@@ -309,19 +343,19 @@ public static class FileOperations
         {
             pathwaySegmented = pathwaySegmented[1..];
         }
-        string relativePath = string.Join(@"\", pathwaySegmented);
+        string relativePath = string.Join(Path.DirectorySeparatorChar.ToString(), pathwaySegmented);
 
         return withAbsolutePath ? Path.Combine(HackDefaults.Instance.PwaPathAbsolute, relativePath) : relativePath;
     }
     public static string? NodePathToWindowsPath(string? pathway, bool withAbsolutePath = true)
     {
         if (pathway is null) return null;
-        string[] pathwaySegmented = pathway.Split(["\\"], StringSplitOptions.RemoveEmptyEntries);
+        string[] pathwaySegmented = pathway.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
         if (pathwaySegmented[0] == "root" || pathwaySegmented[0] == HackDefaults.Instance.PwaPathRelative)
         {
             pathwaySegmented = pathwaySegmented[1..];
         }
-        string relativePath = string.Join(@"\", pathwaySegmented);
+        string relativePath = string.Join(Path.DirectorySeparatorChar.ToString(), pathwaySegmented);
 
         return withAbsolutePath ? Path.Combine(HackDefaults.Instance.PwaPathAbsolute, relativePath) : relativePath;
     }
@@ -331,7 +365,7 @@ public static class FileOperations
         {
             pathway = pathway[(HackDefaults.Instance.PwaPathAbsolute.Length - HackDefaults.Instance.PwaPathRelative.Length)..];
         }
-        string[] pathwaySegmented = pathway.Split('\\');
+        string[] pathwaySegmented = pathway.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
         if (pathwaySegmented[0] == HackDefaults.Instance.PwaPathRelative)
         {
             pathwaySegmented[0] = "root";
