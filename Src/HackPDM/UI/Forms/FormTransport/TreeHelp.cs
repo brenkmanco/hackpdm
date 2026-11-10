@@ -166,9 +166,7 @@ public class TreeHelp
 
 				vm.GroupedEntries?.Regroup( entryrow => entryrow.Status );
 
-				grid.ItemsSource = vm.GroupedEntries?.NoGrouping is true
-						? vm.GroupedEntries?.Master
-						: vm.GroupedEntries?.ViewSource.View;
+				vm.GroupedEntries?.BindTo( grid );
 
 				//_HFM.DispatcherQueue.TryEnqueue(() =>
 				//{
