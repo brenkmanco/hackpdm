@@ -591,6 +591,7 @@ public sealed partial class HackFileManager : Page
 	}
 	public TreeView GetOdooDirectoryTree()
 		=> OdooDirectoryTree;
+	internal TabViewItem HistoryTabItem => HistoryTab;
 	public TableView GetOdooEntryList()
 			=> OdooEntryList;
 	public Image GetOdooEntryImage() => OdooEntryImage;
@@ -835,6 +836,10 @@ public sealed partial class HackFileManager : Page
 			catch( OperationCanceledException e )
 			{
 				Debug.WriteLine( $"Operation cancelled: {e.Message}" );
+			}
+			catch( Exception e )
+			{
+				Debug.WriteLine( $"loading {LowerTabIndex?.Name} for {entry.Name} failed: {e}" );
 			}
 		} );
 
@@ -2006,8 +2011,9 @@ public sealed partial class HackFileManager : Page
 	private void TreeViewItem_Unloaded( object sender, RoutedEventArgs e )
 	{
 		var tvi = sender as TreeViewItem;
-		var data = tvi?.DataContext;
-		ItemToContainerMap.Remove( data );
+		// DataContext is null for recycled containers; Dictionary.Remove(null) throws on the UI thread
+		if( tvi?.DataContext is { } data )
+			ItemToContainerMap.Remove( data );
 	}
 	
 	

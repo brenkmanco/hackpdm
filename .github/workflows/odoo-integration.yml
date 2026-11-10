@@ -1,7 +1,9 @@
 name: Odoo integration
 
 # Spins up PostgreSQL 15 + Odoo 16.0, installs the hackpdm addon, then runs
-# HackPDM.Tests (unit tests + live JSON-RPC integration tests) against it.
+# HackPDM.Tests (unit tests + live JSON-RPC integration tests) against it, then
+# launches the real desktop client under Xvfb in smoke-test mode (login, navigation,
+# directory tree, entries, history) against the same server.
 
 on:
   push:
@@ -73,6 +75,7 @@ jobs:
           test "$state" = "installed"
 
       - name: Start Odoo server
+        id: odoo
         run: |
           docker run -d --name odoo --network host \
             -e HOST=localhost -e USER=odoo -e PASSWORD=odoo \
@@ -87,6 +90,10 @@ jobs:
           done
           echo "Odoo did not become healthy"; docker logs odoo; exit 1
 
+      # root / Projects / Parts (3 entries with versions) / Library
+      - name: Seed client test data
+        run: python3 Odoo/ci/seed_smoke_data.py "$ODOO_URL" "$ODOO_DB" "$ODOO_USER" "$ODOO_PASSWORD"
+
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
@@ -97,6 +104,32 @@ jobs:
           --logger "console;verbosity=normal"
           --logger "trx;LogFileName=test-results.trx"
           --results-directory TestResults
+
+      # ---- client smoke test: the real app (Uno desktop/X11 head) under a virtual display
+      - name: Build desktop client
+        id: client
+        if: ${{ !cancelled() && steps.odoo.outcome == 'success' }}
+        run: dotnet build Src/HackPDM/HackPDM.csproj -f net10.0-desktop -p:Platform=x64 -c Debug
+
+      - name: Client smoke test (login -> file manager -> tree -> entries -> history)
+        if: ${{ !cancelled() && steps.client.outcome == 'success' }}
+        env:
+          HACKPDM_SMOKE_TEST: "1"
+          HACKPDM_ODOO_ADDRESS: localhost
+          HACKPDM_ODOO_PORT: "8069"
+          HACKPDM_ODOO_DB: ${{ env.ODOO_DB }}
+          HACKPDM_ODOO_USER: ${{ env.ODOO_USER }}
+          HACKPDM_ODOO_PASSWORD: ${{ env.ODOO_PASSWORD }}
+          HACKPDM_SMOKE_DIRECTORY: Parts
+          HACKPDM_SMOKE_MIN_ENTRIES: "3"
+          HACKPDM_SMOKE_REPORT: ${{ github.workspace }}/TestResults/smoke-report.json
+          HACKPDM_SMOKE_TIMEOUT: "240"
+        run: |
+          command -v xvfb-run >/dev/null || { sudo apt-get update && sudo apt-get install -y xvfb; }
+          mkdir -p TestResults
+          timeout 300 xvfb-run -a -s "-screen 0 1600x1000x24" \
+            dotnet Src/HackPDM/bin/x64/Debug/net10.0-desktop/HackPDM.dll 2>&1 | tee TestResults/smoke.log
+          exit "${PIPESTATUS[0]}"
 
       - name: Odoo server log
         if: always()

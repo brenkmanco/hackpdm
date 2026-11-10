@@ -52,14 +52,21 @@ public class JsonRpcResponse
 }
 public class JsonRpcError
 {
+	// Odoo sends an integer (e.g. 200); JsonElement accepts either form
 	[JsonPropertyName( "code" )]
-	public string? Code { get; set; }
+	public JsonElement? Code { get; set; }
 
 	[JsonPropertyName( "message" )]
 	public string? Message { get; set; }
 
 	[JsonPropertyName( "data" )]
 	public JsonRpcData? Data { get; set; }
+
+	/// <summary>The most specific message available: Odoo puts the real one in data.message.</summary>
+	public string Describe()
+		=> !string.IsNullOrEmpty( Data?.Message )
+			? ( string.IsNullOrEmpty( Data?.Name ) ? Data!.Message! : $"{Data!.Name}: {Data.Message}" )
+			: Message ?? "unknown error";
 }
 public class JsonRpcData
 {
@@ -76,5 +83,5 @@ public class JsonRpcData
 	public List<object>? Args { get; set; }
 
 	[JsonPropertyName( "context" )]
-	public Dictionary<object, object>? Context { get; set; }
+	public Dictionary<string, JsonElement>? Context { get; set; }
 }

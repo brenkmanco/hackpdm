@@ -115,6 +115,18 @@ public class OdooIntegrationTests
 	}
 
 	[OdooFact]
+	public async Task ServerError_IsReportedWithOdooMessage()
+	{
+		await LoginAsync();
+
+		object? result = await OdooClient.ExecuteJsonAsync( "hp.settings", "no_such_method", [] );
+
+		Assert.Null( result );
+		// Odoo's JSON-RPC error has an integer code and the real text in data.message
+		Assert.Contains( "no_such_method", OdooClient.LatestException );
+	}
+
+	[OdooFact]
 	public async Task HackPdmAddon_SeedSettings_AreReadable()
 	{
 		await LoginAsync();

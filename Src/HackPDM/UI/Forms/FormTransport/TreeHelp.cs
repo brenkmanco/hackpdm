@@ -118,11 +118,14 @@ public class TreeHelp
 				_HFM.LastSelectedNode?.LinkedData.EnsureVisible(tree);
 									
 			});
-			vm.IsTreeLoaded = true;
 		}
 		catch (Exception exception)
 		{
-			Debug.WriteLine(exception.Message);
+			Debug.WriteLine($"directory tree failed to load: {exception}");
+		}
+		finally
+		{
+			vm.IsTreeLoaded = true;
 		}
 		//ResetImagePreview(img, ring);
 	}
@@ -258,6 +261,7 @@ public class TreeHelp
 				if ((node ??= tree.RootNodes?[0]) == null)
 				{
 					node = new();
+					_ = node.LinkedData; // content must be set before the node joins the tree
 					tree.RootNodes?.Add(node);
 				}
 				await AddLocalDirectory(node, pathway, vNodes);
@@ -317,15 +321,17 @@ public class TreeHelp
 		{
 			var (parent, node) = queue.Dequeue();
 
+			// give the node its content before it joins the tree: TreeView indexes nodes by
+			// content, and a null content throws on Uno (ArgumentNullException 'key')
 			var myNode = new TreeViewNode();
+			var dat = myNode.LinkedData;
+			dat.Name = node["name"] as string;
+			dat.DirectoryId = node["id"] as int?;
+
 			if (parent is null)
 				tree.RootNodes.Add(myNode);
 			else
 				parent.Children.Add(myNode);
-
-			var dat = myNode.LinkedData;
-			dat.Name = node["name"] as string;
-			dat.DirectoryId = node["id"] as int?;
 
 			string? fullPath = dat.FullPath ?? dat.Name;
 			string path = HackDefaults.DefaultPath(fullPath ?? "root", true);
