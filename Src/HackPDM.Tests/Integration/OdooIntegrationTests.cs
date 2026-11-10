@@ -17,6 +17,27 @@ internal static class OdooTestServer
 	public static string User => Environment.GetEnvironmentVariable( "ODOO_USER" ) ?? "admin";
 	public static string Password => Environment.GetEnvironmentVariable( "ODOO_PASSWORD" ) ?? "admin";
 	public static bool IsConfigured => !string.IsNullOrWhiteSpace( Url );
+
+	/// <summary>Points the shared <see cref="OdooDefaults.Instance"/> at the test server.</summary>
+	public static void ConfigureClient()
+	{
+		if( !IsConfigured )
+			return;
+
+		var defaults = OdooDefaults.Instance;
+		defaults.Settings ??= new InMemorySettingsProvider();
+		defaults.OdooUrl = Url!.TrimEnd( '/' );
+		defaults.OdooDb = Db;
+		defaults.OdooUser = User;
+		defaults.OdooPass = Password;
+	}
+
+	public static async Task<int> LoginAsync()
+	{
+		int uid = await OdooClient.LoginJson( 30_000 ) ?? 0;
+		Assert.True( uid > 0, $"Odoo login failed: {OdooClient.LatestException}" );
+		return uid;
+	}
 }
 
 /// <summary>A [Fact] that is skipped unless a live Odoo server is configured.</summary>
@@ -39,6 +60,16 @@ internal sealed class InMemorySettingsProvider : ISettingsProvider
 	public void Remove( string key ) => _values.TryRemove( key, out _ );
 }
 
+/// <summary>A [Theory] that is skipped unless a live Odoo server is configured.</summary>
+public sealed class OdooTheoryAttribute : TheoryAttribute
+{
+	public OdooTheoryAttribute()
+	{
+		if( !OdooTestServer.IsConfigured )
+			Skip = "ODOO_URL not set; live Odoo integration tests skipped.";
+	}
+}
+
 [CollectionDefinition( Name, DisableParallelization = true )]
 public sealed class OdooCollection
 {
@@ -55,25 +86,9 @@ public class OdooIntegrationTests
 	private const string Settings = "hp.settings";
 	private const string Category = "hp.category";
 
-	public OdooIntegrationTests()
-	{
-		if( !OdooTestServer.IsConfigured )
-			return;
+	public OdooIntegrationTests() => OdooTestServer.ConfigureClient();
 
-		var defaults = OdooDefaults.Instance;
-		defaults.Settings ??= new InMemorySettingsProvider();
-		defaults.OdooUrl = OdooTestServer.Url!.TrimEnd( '/' );
-		defaults.OdooDb = OdooTestServer.Db;
-		defaults.OdooUser = OdooTestServer.User;
-		defaults.OdooPass = OdooTestServer.Password;
-	}
-
-	private static async Task<int> LoginAsync()
-	{
-		int uid = await OdooClient.LoginJson( 30_000 ) ?? 0;
-		Assert.True( uid > 0, $"Odoo login failed: {OdooClient.LatestException}" );
-		return uid;
-	}
+	private static Task<int> LoginAsync() => OdooTestServer.LoginAsync();
 
 	[OdooFact]
 	public async Task Login_WithAdminCredentials_ReturnsUserId()
