@@ -1,0 +1,111 @@
+name: Odoo integration
+
+# Spins up PostgreSQL 15 + Odoo 16.0, installs the hackpdm addon, then runs
+# HackPDM.Tests (unit tests + live JSON-RPC integration tests) against it.
+
+on:
+  push:
+    paths:
+      - "Odoo/**"
+      - "Src/**"
+      - "global.json"
+      - "Directory.Build.props"
+      - ".github/workflows/odoo-integration.yml"
+  pull_request:
+    paths:
+      - "Odoo/**"
+      - "Src/**"
+      - "global.json"
+      - "Directory.Build.props"
+      - ".github/workflows/odoo-integration.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: odoo-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  odoo-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U odoo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      ODOO_IMAGE: hackpdm-odoo:16.0
+      ODOO_DB: hackpdm_ci
+      ODOO_URL: http://localhost:8069
+      ODOO_USER: admin
+      ODOO_PASSWORD: admin
+      PGPASSWORD: odoo
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Odoo 16.0 image with addon dependencies
+        run: docker build -t "$ODOO_IMAGE" Odoo/ci
+
+      # The odoo image entrypoint reads the DB connection from HOST/USER/PASSWORD.
+      - name: Create database and install hackpdm addon
+        run: |
+          docker run --rm --network host \
+            -e HOST=localhost -e USER=odoo -e PASSWORD=odoo \
+            -v "$GITHUB_WORKSPACE/Odoo/addons:/mnt/extra-addons:ro" \
+            "$ODOO_IMAGE" \
+            odoo -d "$ODOO_DB" -i hackpdm --without-demo=all --stop-after-init
+          state=$(psql -h localhost -U odoo -d "$ODOO_DB" -tAc "select state from ir_module_module where name = 'hackpdm'")
+          echo "hackpdm module state: $state"
+          test "$state" = "installed"
+
+      - name: Start Odoo server
+        run: |
+          docker run -d --name odoo --network host \
+            -e HOST=localhost -e USER=odoo -e PASSWORD=odoo \
+            -v "$GITHUB_WORKSPACE/Odoo/addons:/mnt/extra-addons:ro" \
+            "$ODOO_IMAGE" \
+            odoo -d "$ODOO_DB" --db-filter="^${ODOO_DB}\$"
+          for i in $(seq 1 60); do
+            if curl -fsS "$ODOO_URL/web/health" >/dev/null 2>&1; then
+              echo "Odoo is up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "Odoo did not become healthy"; docker logs odoo; exit 1
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Run tests against Odoo
+        run: >-
+          dotnet test Src/HackPDM.Tests/HackPDM.Tests.csproj
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory TestResults
+
+      - name: Odoo server log
+        if: always()
+        run: docker logs odoo 2>&1 | tail -n 300 || true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+          if-no-files-found: ignore

@@ -64,8 +64,8 @@ public static class OdooClient
     private static string _latestException = "";
     public static string? LatestException
     {
-        get;
-        set;
+        get => _latestException;
+        set => _latestException = value ?? "";
     }
     public static async Task<int> CorrectUserId()
     {
