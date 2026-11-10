@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 using HackPDM.Core.Hack;
@@ -85,6 +86,7 @@ internal static class SmokeTestRunner
 			Finish( 2 );
 		} );
 
+		StartUiStallProbe();
 		HackApp.DispatcherQueue.TryEnqueue( async () =>
 		{
 			int code;
@@ -196,9 +198,12 @@ internal static class SmokeTestRunner
 				await WaitUntil( () => master.Count >= min && vm._treeItemChange is { IsCompleted: true },
 					$">= {min} entries listed", () => $"{master.Count} listed" );
 				await WaitStable( () => master.Count );
+				// RestartEntries / SearchOdoo / the entry locator wait on this flag
+				await WaitUntil( () => vm.IsListLoaded, "IsListLoaded set after the directory loaded" );
 
 				var grid = page.GetOdooEntryList();
-				return $"{master.Count} entries ({string.Join( ", ", master.Take( 10 ).Select( e => e.Name ) )}); grid rows={( grid.ItemsSource as System.Collections.ICollection )?.Count}";
+				string statuses = string.Join( " ", master.GroupBy( e => $"{e.Status}/{e.ReprType}" ).OrderBy( g => g.Key ).Select( g => $"{g.Key}={g.Count()}" ) );
+				return $"{master.Count} entries [{statuses}] grid rows={( grid.ItemsSource as System.Collections.ICollection )?.Count}; first: {string.Join( ", ", master.Take( 5 ).Select( e => e.Name ) )}";
 			} )
 			&& await Step( "select entry (history)", async () =>
 			{
@@ -257,20 +262,48 @@ internal static class SmokeTestRunner
 	private static async Task<bool> Step( string name, Func<Task<string>> body )
 	{
 		var sw = Stopwatch.StartNew();
+		Interlocked.Exchange( ref _maxUiStallMs, 0 );
 		try
 		{
 			string detail = await body();
-			_steps.Add( new( name, true, sw.ElapsedMilliseconds, detail ) );
-			Log( $"PASS {name} ({sw.ElapsedMilliseconds} ms): {detail}" );
+			long stall = Interlocked.Read( ref _maxUiStallMs );
+			_steps.Add( new( name, true, sw.ElapsedMilliseconds, stall, detail ) );
+			Log( $"PASS {name} ({sw.ElapsedMilliseconds} ms, max UI stall {stall} ms): {detail}" );
 			return _unhandled.Count == 0;
 		}
 		catch( Exception ex )
 		{
-			_steps.Add( new( name, false, sw.ElapsedMilliseconds, ex.Message ) );
-			Log( $"FAIL {name} ({sw.ElapsedMilliseconds} ms): {ex}" );
+			long stall = Interlocked.Read( ref _maxUiStallMs );
+			_steps.Add( new( name, false, sw.ElapsedMilliseconds, stall, ex.Message ) );
+			Log( $"FAIL {name} ({sw.ElapsedMilliseconds} ms, max UI stall {stall} ms): {ex}" );
 			return false;
 		}
 	}
+
+	private static long _maxUiStallMs;
+
+	/// <summary>
+	/// Measures UI responsiveness: every 16 ms a background loop posts a no-op to the UI
+	/// dispatcher and records how long it waited to run. The worst wait during a step is
+	/// the longest time the UI thread was blocked (a frozen window from the user's view).
+	/// </summary>
+	private static void StartUiStallProbe()
+		=> _ = Task.Run( async () =>
+		{
+			while( Volatile.Read( ref _finished ) == 0 )
+			{
+				var sw = Stopwatch.StartNew();
+				var ran = new TaskCompletionSource( TaskCreationOptions.RunContinuationsAsynchronously );
+				if( !HackApp.DispatcherQueue.TryEnqueue( () => ran.TrySetResult() ) )
+					return;
+				await ran.Task;
+				long waited = sw.ElapsedMilliseconds;
+				long current;
+				while( waited > ( current = Interlocked.Read( ref _maxUiStallMs ) )
+					&& Interlocked.CompareExchange( ref _maxUiStallMs, waited, current ) != current ) { }
+				await Task.Delay( 16 );
+			}
+		} );
 
 	private static void Log( string message )
 	{
@@ -280,7 +313,7 @@ internal static class SmokeTestRunner
 
 	private static void Finish( int exitCode )
 	{
-		if( System.Threading.Interlocked.Exchange( ref _finished, 1 ) == 1 )
+		if( Interlocked.Exchange( ref _finished, 1 ) == 1 )
 			return;
 
 		string path = Env( "HACKPDM_SMOKE_REPORT", Path.Combine( Environment.CurrentDirectory, "smoke-report.json" ) );
@@ -305,5 +338,5 @@ internal static class SmokeTestRunner
 		Environment.Exit( exitCode );
 	}
 
-	private sealed record StepResult( string Name, bool Passed, long DurationMs, string Detail );
+	private sealed record StepResult( string Name, bool Passed, long DurationMs, long MaxUiStallMs, string Detail );
 }

@@ -160,7 +160,13 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
             // which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
             if (file_size != 0)
             {
-                return ((OClient.Read(HpModel, [this.id], [fileContents])?[0] as Hashtable)?[fileContents]) as byte[];
+                // JSON-RPC returns binary fields as base64 strings; the old `as byte[]` cast was always null
+                return ((OClient.Read(HpModel, [this.id], [fileContents])?[0] as Hashtable)?[fileContents]) switch
+                {
+                    byte[] bytes => bytes,
+                    string base64 when base64.Length > 0 => Convert.FromBase64String(base64),
+                    _ => null,
+                };
             }
         }
         return null;

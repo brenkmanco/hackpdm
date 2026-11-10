@@ -193,7 +193,8 @@ public static class FileOperations
 		//out Dictionary<string, Hashtable> dividedEntries, 
 		out int localAndRemoteCount,
 
-		SearchOption searchOption = SearchOption.TopDirectoryOnly)
+		SearchOption searchOption = SearchOption.TopDirectoryOnly,
+		bool computeChecksums = true)
     {
 		localAndRemoteCount = 0;
         if (!Directory.Exists(path))
@@ -213,7 +214,9 @@ public static class FileOperations
                 }
             }
             return false;
-        }, filePath => new HackFile(filePath))];
+        }, filePath => computeChecksums
+			? new HackFile(filePath)
+			: HackFile.GetFromPath(filePath, computeChecksum: false)!)];
 
 		localAndRemoteCount = filePaths.Length - hackFiles.Length;
 

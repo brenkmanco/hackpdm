@@ -110,7 +110,7 @@ public static class PdmDeleteOperations
         if (ids is null || ids.Count < 1)
             return false;
 
-        HpVersion[]? versions = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(ids, "version_ids", includedFields: ["ID"]);
+        HpVersion[]? versions = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(ids, "version_ids", includedFields: ["id"]); // field names are case-sensitive: "ID" selected nothing, i.e. every field incl. binaries
         ArrayList vIds = versions?.Select(v => v.id).ToArrayList() ?? [];
 
         bool deletedVersionsProps = false;

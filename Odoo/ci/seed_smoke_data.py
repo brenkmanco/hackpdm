@@ -50,14 +50,12 @@ for name in ("bracket.txt", "plate.txt", "readme.txt"):
     if call("hp.version", "search_count", [("entry_id", "=", entry)]):
         continue
     content = f"hackpdm smoke test file {name}\n".encode()
-    version = call("hp.version", "create", {"entry_id": entry, "dir_id": parts})
-    attachment = call("ir.attachment", "create", {
-        "name": name,
-        "datas": base64.b64encode(content).decode(),
-        "res_model": "hp.version",
-        "res_id": version,
+    # same as the client: write file_contents and let the server compute attachment_id / checksum
+    call("hp.version", "create", {
+        "entry_id": entry,
+        "dir_id": parts,
+        "file_contents": base64.b64encode(content).decode(),
     })
-    call("hp.version", "write", [version], {"attachment_id": attachment})
 
 summary = {
     "directories": call("hp.directory", "search_count", []),

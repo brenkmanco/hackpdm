@@ -89,10 +89,11 @@ public class HackDefaults : IHackDefaults
 	public static string DefaultPath(string? pathway, bool withAbsolute = false)
 	{
 		if (pathway is null || pathway == "") return withAbsolute ? Instance.PwaPathAbsolute : "root";
-		string[] paths = pathway.Split('\\');
+		// tree paths use '\\'; accept '/' too and join with the platform separator so this works off Windows
+		string[] paths = pathway.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
 		paths = [.. paths.Skip(1)];
 
-		string relativePath = string.Join(@"\", paths);
+		string relativePath = string.Join(Path.DirectorySeparatorChar, paths);
 
 		if (withAbsolute) return Path.Combine(Instance.PwaPathAbsolute, relativePath);
 

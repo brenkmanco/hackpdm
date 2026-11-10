@@ -131,7 +131,11 @@ public class HackFile : HackBaseFile, IHackFileModel
         this.HasRemoteVersion = hasRemoteVersion;
         this.FileSize = fileSize;
     }
-    public HackFile(FileInfo? file)
+    public HackFile(FileInfo? file) : this(file, computeChecksum: true) {}
+    /// <param name="computeChecksum">
+    /// false skips reading and hashing the whole file; <see cref="GetChecksum"/> computes it on demand.
+    /// </param>
+    public HackFile(FileInfo? file, bool computeChecksum)
     {
 		if (file is null)
 		{
@@ -145,7 +149,8 @@ public class HackFile : HackBaseFile, IHackFileModel
         TypeExt = file?.Extension;
         ModifiedDate = file?.LastWriteTime.ToUniversalTime() ?? default;
         FileSize = file?.Length;
-        Checksum = FileOperations.FileChecksum( file?.FullName, SHA1.Create() );
+        if (computeChecksum)
+            Checksum = FileOperations.FileChecksum( file?.FullName, SHA1.Create() );
     }
 	public HackFile(EntryRow entry)
 	{
@@ -271,14 +276,14 @@ public class HackFile : HackBaseFile, IHackFileModel
         hack?.RelativePath = Path.Combine("root", hack?.DirectoryName?[Math.Min(HackDefaults.Instance.PwaPathAbsolute.Length+1, hack.DirectoryName.Length)..] ?? "");
         return hack;
     }
-	public static HackFile? GetFromPath(string? path, string? directory = null, bool initWithFileInfo=true)
+	public static HackFile? GetFromPath(string? path, string? directory = null, bool initWithFileInfo=true, bool computeChecksum=true)
     {
 		if (path is null) return null;
         HackFile? hack;
 		if (initWithFileInfo)
 		{
 			FileInfo file = new(path);
-			hack = new(file);
+			hack = new(file, computeChecksum);
 			if (!file.Exists) return hack;
 		}
 		else

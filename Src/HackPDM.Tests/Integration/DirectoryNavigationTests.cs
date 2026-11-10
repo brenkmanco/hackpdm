@@ -96,6 +96,41 @@ public class DirectoryNavigationTests
 		Assert.Empty( entries! );
 	}
 
+	private static async Task<int> LatestVersionIdAsync( string entryName )
+	{
+		int parts = await PartsDirectoryIdAsync();
+		Hashtable entries = ( await HpDirectory.GetEntriesAsync( parts ) )!;
+		return Convert.ToInt32( ( (Hashtable)entries[ entryName ]! )[ "latest" ] );
+	}
+
+	[OdooFact]
+	public async Task VersionFromLocal_ReturnsMetadataWithoutBlobs()
+	{
+		int latest = await LatestVersionIdAsync( "bracket.txt" );
+		var local = new HackPDM.Core.Hack.HackFile { Name = "bracket.txt", RelativePath = @"root\Projects\Parts" };
+
+		var (found, version) = await local.GetVersionFromLocal();
+
+		Assert.True( found, $"no version found: {OdooClient.LatestException}" );
+		// it used to request *only* file_contents + preview_image, so the metadata was missing
+		Assert.Equal( latest, version!.id );
+		Assert.Equal( "bracket.txt", version.name );
+		Assert.Null( version.file_contents );
+	}
+
+	[OdooFact]
+	public async Task DownloadContents_DecodesBase64FileContents()
+	{
+		int latest = await LatestVersionIdAsync( "bracket.txt" );
+		var version = ( await HpVersion.GetRecordByIdAsync( latest, excludedFields: [ "file_contents", "preview_image" ] ) )!;
+
+		byte[]? contents = version.DownloadContents();
+
+		// JSON-RPC returns base64 text; the old `as byte[]` cast always produced null
+		Assert.NotNull( contents );
+		Assert.Equal( "hackpdm smoke test file bracket.txt\n", System.Text.Encoding.UTF8.GetString( contents! ) );
+	}
+
 	[OdooFact]
 	public async Task EntryVersions_AreReadable()
 	{

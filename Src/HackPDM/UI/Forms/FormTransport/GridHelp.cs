@@ -470,27 +470,44 @@ namespace HackPDM.UI.Forms.FormTransport
 		internal static T EmptyListItemInternal<T>(TableView grid) where T : new()
 			=> EmptyListItem<T>(grid);
 
-		internal static async Task<Dictionary<string, Task<HackFile>>> GetFileMap(Hashtable entries)
-		{
-			// need to check local files
-			List<Task<HackFile>> hackTasks = new(entries.Count);
-			Dictionary<string, Task<HackFile>> hackFileMap = new(entries.Count);
+		// how many local files are read + hashed at once; IO bound, so a small multiple of the cores
+		private static readonly int HashConcurrency = Math.Clamp(Environment.ProcessorCount, 2, 8);
 
-			foreach (DictionaryEntry pair in entries)
+		/// <summary>
+		/// Maps each remote entry's Odoo path to its local file (read and SHA1-hashed for the
+		/// status column). Runs on the thread pool with bounded parallelism: hashing used to run
+		/// one file at a time on the UI thread, freezing the window for the whole folder.
+		/// </summary>
+		internal static Task<Dictionary<string, Task<HackFile>>> GetFileMap(Hashtable entries)
+			=> Task.Run(async () =>
 			{
-				string? filepath = (pair.Value as Hashtable)?["fullname"] as string;
+				Dictionary<string, Task<HackFile>> hackFileMap = new(entries.Count);
+				using SemaphoreSlim throttle = new(HashConcurrency);
 
-				if (filepath is null) continue;
-				Task<HackFile> hackTask = HackFile
-					.GetHackFileAsync(FileOperations
-						.ConvertToWindowsPath(filepath, true));
+				foreach (DictionaryEntry pair in entries)
+				{
+					string? filepath = (pair.Value as Hashtable)?["fullname"] as string;
+					if (filepath is null) continue;
 
-				hackFileMap.Add(filepath, hackTask);
-				hackTasks.Add(hackTask);
+					string? localPath = FileOperations.ConvertToWindowsPath(filepath, true);
+					hackFileMap.Add(filepath, HashLocalAsync(localPath, throttle));
+				}
+				await Task.WhenAll(hackFileMap.Values);
+				return hackFileMap;
+			});
+
+		private static async Task<HackFile> HashLocalAsync(string? localPath, SemaphoreSlim throttle)
+		{
+			await throttle.WaitAsync();
+			try
+			{
+				// GetHackFileAsync hashes synchronously; Task.Run makes the files actually run in parallel
+				return (await Task.Run(() => HackFile.GetHackFileAsync(localPath)))!;
 			}
-			await Task.WhenAll(hackTasks);
-			//Task.WaitAll(hackTasks.ToArray());
-			return hackFileMap;
+			finally
+			{
+				throttle.Release();
+			}
 		}
 		internal static void InitListView(ItemsControl control, ListDetail? rows)
 			=> SafeHelper.SafeInvoker(() =>
