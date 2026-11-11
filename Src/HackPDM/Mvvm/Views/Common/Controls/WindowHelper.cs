@@ -42,43 +42,6 @@ public static partial class WindowHelper
 #endif
     }
 
-    public static Task AnimateWindowSize(AppWindow appWindow, Windows.Graphics.SizeInt32 targetSize, double durationMs = 250, CancellationToken token = default)
-    {
-        return SafeHelper.SafeInvokerAsync(() =>
-        {
-            var startSize = appWindow.Size;
-            var startTime = DateTime.Now;
-
-            DispatcherTimer timer = new DispatcherTimer();
-            timer.Interval = TimeSpan.FromMilliseconds(16); // ~60fps
-
-            timer.Tick += (s, e) =>
-            {
-                var elapsed = (DateTime.Now - startTime).TotalMilliseconds;
-                double progress = Math.Min(elapsed / durationMs, 1.0);
-
-                // Optional: Add easing (Cubic Out)
-                progress = 1 - Math.Pow(1 - progress, 3);
-
-                int newWidth = (int)(startSize.Width + (targetSize.Width - startSize.Width) * progress);
-                int newHeight = (int)(startSize.Height + (targetSize.Height - startSize.Height) * progress);
-
-                if (token.IsCancellationRequested)
-                {
-                    timer.Stop();
-                    return;
-                }
-                appWindow.Resize(new Windows.Graphics.SizeInt32 { Width = newWidth, Height = newHeight });
-
-                if (progress >= 1.0)
-                {
-                    timer.Stop();
-                }
-            };
-
-            timer.Start();
-        }, token);
-    }
 
     public static T CreateWindow<T>(string? configName = null, bool activated = true, bool withFrame = true) where T : Window, new()
     {
@@ -103,19 +66,7 @@ public static partial class WindowHelper
         return window;
     }
 
-    public static Window CreateWindowFromPage<TPage>(TPage page, bool activated = true, ArrayList? parameters = null)
-        where TPage : Page
-    {
-        CreateWindowFromPageInternal(page, out Window window, activated, parameters);
-        return window;
-    }
 
-    public static void CreateWindowFromPage<TPage, TWindow>(TPage page, out TWindow window, bool activated = true, ArrayList? parameter = null)
-        where TPage : Page
-        where TWindow : Window, new()
-    {
-        CreateWindowFromPageInternal(page, out window, activated, parameter);
-    }
 
     public static void CreateWindowAndPage<T>(out T page, out Window window, bool activated = true, ArrayList? parameters = null) 
         where T : Page, new() 
@@ -165,12 +116,6 @@ public static partial class WindowHelper
         CreateWindowFromPageInternal(page, out window, activated, parameters);
     }
 
-    public static Window CreateWindowPage<T>(WindowConfig winConfig) where T : Page, new()
-    {
-        Window win = CreateWindowPage<T>();
-        SetWindowConfig(win, winConfig);
-        return win;
-    }
 
     private static CancellationTokenSource _animationCts = new();
 

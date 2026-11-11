@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -21,6 +21,11 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- UI-free app models compiled in directly (the app itself targets Uno and can't be referenced) -->
+  <ItemGroup>
+    <Compile Include="..\HackPDM\Mvvm\Models\Odoo\EntrySearchService.cs" Link="Linked\EntrySearchService.cs" />
   </ItemGroup>
 
   <ItemGroup>

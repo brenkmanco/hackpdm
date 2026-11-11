@@ -41,7 +41,6 @@ public sealed partial class OdooSettingsView : Page
     {
         txtOdooAddress.Text = OdooDefaults.Instance?.OdooAddress;
         txtOdooPort.Text = OdooDefaults.Instance?.OdooPort;
-        changeURL();
 
         txtOdooDb.Text          = OdooDefaults.Instance?.OdooDb;
         txtSwKey.Text           = OdooDefaults.Instance?.OdooSwKey;
@@ -76,24 +75,4 @@ public sealed partial class OdooSettingsView : Page
         OdooDefaults.Instance?.OdooUrl = sb.ToString();
     }
 
-    private void textBox1_TextChanged(object sender, EventArgs e) => changeURL();
-    private void txtOdooUrl_TextChanged(object sender, EventArgs e) => changeURL();
-    private void changeURL()
-    {
-        StringBuilder sb = new();
-        sb.Append($"Odoo Url: \thttp://");
-        if (txtOdooAddress.Text is not null and not "")
-        {
-            sb.Append($"{txtOdooAddress.Text}");
-        }
-        else
-        {
-            sb.Append("<address>");
-        }
-        if (txtOdooPort.Text is not null and not "")
-        {
-            sb.Append($":{txtOdooPort.Text}");
-        }
-        // label2.Text = sb.ToString();
-    }
 }

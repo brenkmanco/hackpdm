@@ -84,7 +84,8 @@ public sealed class EntrySearchService : IEntrySearchService
 		return relative == "." ? [] : relative.Split( [ '\\', '/' ], StringSplitOptions.RemoveEmptyEntries );
 	}
 
-	private static async Task<ArrayList> BuildDomainAsync( EntrySearchQuery query )
+	// internal: covered by HackPDM.Tests (Characterization/EntrySearchDomainTests), which compiles this file in
+	internal static async Task<ArrayList> BuildDomainAsync( EntrySearchQuery query )
 	{
 		ArrayList domain = [];
 		if( query.FileName.Length > 0 )

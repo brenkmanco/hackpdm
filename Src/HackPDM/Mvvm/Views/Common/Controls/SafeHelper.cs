@@ -9,10 +9,6 @@ namespace HackPDM.Mvvm.Views.Common.Controls
 {
 	internal static class SafeHelper
 	{
-		internal static void SafeInvokeGen<T>(T data, Action<T> action)
-		{
-			HackFileManagerView.HackDispatcherQueue.TryEnqueue(() => action.Invoke(data));
-		}
 		internal static void SafeInvoker(Action action)
 			=> SafeInvokerInternal(action, DispatcherQueue.GetForCurrentThread());
 		internal static Task<T> SafeInvoker<T>(Func<T> func)

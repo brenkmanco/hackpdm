@@ -18,9 +18,3 @@ public interface IHpEntryModel : IHpOdooRecord
 	[OdooProp(OdooFieldType.Many2One, "cat_id")] public IMany2One? cat_id {get;set;}
     public bool IsLatest { get; }
 }
-public struct EntryLocalPath(string path, IHpEntryModel? entry, bool isBroken = false)
-{
-	public IHpEntryModel? Entry { get; set; } = entry;
-	public string Path { get; set; } = path;
-	public bool IsBroken { get; set; } = isBroken;
-}

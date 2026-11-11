@@ -1,4 +1,4 @@
-<Project Sdk="Uno.Sdk">
+﻿<Project Sdk="Uno.Sdk">
   <PropertyGroup>
     <UnoSingleProject>true</UnoSingleProject>
     <UnoDisableResizetizer>true</UnoDisableResizetizer>
@@ -31,7 +31,6 @@
     <Using Include="Microsoft.UI.Xaml.Controls" />
     <None Remove="Mvvm\Views\Hack\HomeView.xaml" />
     <None Remove="Mvvm\Views\Tools\JsonEditorView.xaml" />
-    <None Remove="Mvvm\Views\Dialogs\MessageBoxWindow.xaml" />
     <None Remove="Mvvm\Views\Dialogs\PipWindow.xaml" />
     <None Remove="Mvvm\Views\Settings\NotLoggedInView.xaml" />
   </ItemGroup>
@@ -120,9 +119,6 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Update="UI\Forms\Helper\MessageBox.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Update="UI\Forms\Helper\MessageBoxWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>

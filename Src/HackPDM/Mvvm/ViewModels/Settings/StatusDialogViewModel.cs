@@ -16,7 +16,6 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 {
 	public Guid SessionId { get; private set; }
 
-	public ConcurrentQueue<BasicStatusMessage> MessageQueue { get; } = new();
 	public ObservableRingBuffer<BasicStatusMessage> OStatus { get; } = new( HistoryLength );
 	public ObservableRingBuffer<BasicStatusMessage> OInfo { get; } = new( HistoryLength );
 	public ObservableRingBuffer<BasicStatusMessage> OError { get; } = new( HistoryLength );
@@ -48,7 +47,6 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 		}
 	} = HackDefaults.Instance?.SettingsProvider?.Get( "HistoryLength", 10000 ) ?? 10000;
 
-	public bool DoubleBuff { get; set; } = true;
 
 	public void Register(Guid sessionId)
 	{
@@ -84,29 +82,9 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 		UiDispatcher.Post( () => GetCollection( message.Status ).Add( message ) );
 	}
 
-	public async Task AddStatusLines( BasicStatusMessage[] messages )
-	{
-		foreach (var message in messages ) {
-			AddLog( message );
-		}
-	}
 
-	public async Task SetProgressBar( int value, int max )
-	{
-		ProcessCounter = value;
-		TotalProcessed = ProcessCounter + SkipCounter;
-		MaxCount = max;
-	}
 
-	public async Task SetDownloaded( long downloadBytes )
-	{
-		Downloaded = downloadBytes;
-	}
 
-	public static async Task SetTotalDownloaded( long sessionDownloadBytes )
-	{
-		SessionDownloaded = sessionDownloadBytes;
-	}
 
 	internal StatusLogSession CreateSession()
 	{

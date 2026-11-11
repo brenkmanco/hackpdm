@@ -21,19 +21,7 @@ public enum TaskProgress
     Cancelling,
 }
 
-public enum NullChangeType
-{
-	NoAssign,
-	ModifyWithFunction,
-	AssignNull,
-}
 
-public enum NullFixType
-{
-	Pass,
-	Error,
-	Success,
-}
 
 public enum ChangeType
 {
@@ -47,9 +35,3 @@ public enum ChangeType
 	Hovered,
 }
 
-public enum ReasonForCall
-{
-	EndOfUpdate,
-	BeginningOfUpdate,
-	Other,
-}

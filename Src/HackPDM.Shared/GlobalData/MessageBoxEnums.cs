@@ -83,15 +83,7 @@ public enum MessageBoxModal : uint
 	TaskModal	= 0x00002000,
 }
 
-public enum MessageBoxAFeature : uint
-{
-	HelpButton = 0x00004000
-}
 
-public enum MessageBoxWFeature : uint
-{
-	HelpButton = 0x00004000
-}
 
 public enum MessageBoxTypeFallback : uint
 {

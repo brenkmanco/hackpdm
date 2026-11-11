@@ -16,7 +16,6 @@ using HackPDM.Core.Hack;
 using HackPDM.Mvvm.Views.Common.Controls;
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo;
-using HackPDM.Infrastructure.Odoo.FormTransport;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Mvvm.Models.Settings;
 using HackPDM.Mvvm.Views.Dialogs;
@@ -98,65 +97,6 @@ public sealed partial class ProfileManagerView : Page
 
 		//HackSettings hSettings = HackApp.Services?.GetRequiredService<HackSettings>();
 		//WindowHelper.CreateWindowFromPage<HackSettings>( hSettings );
-	}
-	private async Task<bool> AbleToLogin()
-	{
-		try
-		{
-			List<string> errors = [];
-
-			await OdooDefaults.Instance!.InitializeAsync();
-			if( !await OdooClient.CorrectOdooAddress() )
-			{
-				errors.Add( "invalid odoo address or unreachable host" );
-			}
-			else if( !await OdooClient.CorrectOdooPort() )
-			{
-				errors.Add( "invalid odoo port or server is down" );
-			}
-			else if( await OdooClient.CorrectUserId() is int status )
-			{
-				switch( status )
-				{
-					case 1:
-						return true;
-					case 0:
-					{
-						errors.Add( "invalid odoo credentials" );
-						break;
-					}
-					default:
-					{
-						errors.Add( "odoo server isn't running" );
-						break;
-					}
-				}
-			}
-			else if( !await HackUpdater.EnsureUpdated( true ) )
-			{
-				errors.Add( "running outdated client version" );
-			}
-
-			if( errors.Count > 0 )
-			{
-				foreach( string message in errors )
-				{
-					var listItem = GridHelp.EmptyListItem<BasicStatusMessage>(ProfileManStatusList);
-
-					listItem.Status = StatusMessage.ERROR;
-					listItem.Message = message;
-
-					OStatus.Add( listItem );
-				}
-				return false;
-			}
-			return true;
-		}
-		catch
-		{
-			return false;
-		}
-
 	}
 	private async void AttemptLogin( object sender, RoutedEventArgs e )
 	{

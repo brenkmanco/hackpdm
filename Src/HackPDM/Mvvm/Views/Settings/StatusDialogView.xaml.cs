@@ -9,7 +9,6 @@ using HackPDM.Abstractions.Structures;
 using HackPDM.Core;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.Representation;
-using HackPDM.Infrastructure.Odoo.FormTransport;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Mvvm.Views.Common.Controls;
 using HackPDM.Mvvm.Views.Common.Settings;
@@ -57,23 +56,11 @@ public sealed partial class StatusDialogView : Page
 	public bool HasLoaded { get => ViewModel.HasLoaded; set => ViewModel.HasLoaded = value; }
 	internal bool IsInProcess { get => ViewModel.IsInProcess; set => ViewModel.IsInProcess = value; }
 
-	public bool ShowStatusDialog(string titleText)
-    {
-        //var dlg = new StatusDialog(TitleText);
-
-        ParentWindow ??= WindowHelper.CreateWindowPage<StatusDialogView>();
-        return this.Canceled;
-    }
-    public async Task<bool> ShowWait(string titleText)
-    {
-        return await AsyncHelper.WaitUntil(() => ParentWindow?.Visible ?? true, 100, 10000);
-    }
 
     public StatusDialogView()
     {
         //HackFileManager.QueueAsyncStatus = new();
         InitializeComponent();
-		ClearStatus();
         this.Loaded += new((s, e)=> HasLoaded = true);
 		ParentWindow?.AppWindow.Closing += AppWindow_Closing;
 		this.Unloaded += StatusDialog_Unloaded;
@@ -86,14 +73,6 @@ public sealed partial class StatusDialogView : Page
 
 	
 
-    public static void ClearStatus()
-    {
-
-    }
-    public void EndStatusDialogLoop()
-    {
-        Canceled = true;
-    }
     public async Task UpdateStatusDialogLoop(CancellationToken token)
     {;
         try
@@ -143,72 +122,7 @@ public sealed partial class StatusDialogView : Page
         });
     }
     
-	internal async Task AddStatusLineInternal((StatusMessage action, string description) statusMessage)
-    {
-        await this.DispatcherQueue.ExecuteUIAsync(()=>
-        {
-            // we are executing in the UI thread
-            GetDataGrid(statusMessage.action, out var collection, out var messageLog);
-            var lvItem = GridHelp.EmptyListItem<BasicStatusMessage>(messageLog);
-            lvItem.Status = statusMessage.action;
-            lvItem.Message = statusMessage.description;
-            // set background color, based on status action
-            collection.Insert(0, lvItem);
-		});
-    }
 
-    internal TableView GetList(StatusMessage action) => action switch
-    {
-        StatusMessage.PROCESSING    => StatusList,
-        StatusMessage.SUCCESS       => StatusList,
-        StatusMessage.SKIP          => InfoList,
-        StatusMessage.FOUND         => InfoList,
-        StatusMessage.INFO          => InfoList,
-        StatusMessage.OTHER         => InfoList,
-        StatusMessage.WARNING       => ErrorList,
-        StatusMessage.ERROR         => ErrorList,
-        _                           => InfoList,
-    };
-    internal void ColorizeStatus((StatusMessage action, string description) values, ListViewItem item)
-    {
-        switch (values.action)
-        {
-            case StatusMessage.PROCESSING: item.Foreground = ColorProcessing; break;
-            case StatusMessage.SKIP: item.Foreground = ColorSkip; break;
-            case StatusMessage.FOUND: item.Foreground = ColorFound; break;
-            case StatusMessage.SUCCESS: item.Foreground = ColorSuccess; break;
-            case StatusMessage.WARNING: item.Background = ColorWarning; break;
-            case StatusMessage.ERROR: item.Background = ColorError; ViewModel.ErrorCount++; break;
-            default: break;
-        }
-    }
-    internal void GetDataGrid(StatusMessage action, out ObservableRingBuffer<BasicStatusMessage> collection, out TableView? dataGrid)
-    {
-        switch (action)
-        {
-            case StatusMessage.PROCESSING:
-            case StatusMessage.SUCCESS:
-                collection = OStatus;
-                dataGrid = StatusList;
-                break;
-            case StatusMessage.SKIP:
-            case StatusMessage.FOUND:
-            case StatusMessage.INFO:
-            case StatusMessage.OTHER:
-                collection = OInfo;
-                dataGrid = InfoList;
-                break;
-            case StatusMessage.WARNING:
-            case StatusMessage.ERROR:
-                collection = OError;
-                dataGrid = ErrorList;
-                break;
-            default:
-                collection = OInfo;
-                dataGrid = InfoList;
-                break;
-        }
-    }
 
     private void CmdCancelClick(object sender, RoutedEventArgs arg)
     {

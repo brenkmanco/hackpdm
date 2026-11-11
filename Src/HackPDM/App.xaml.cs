@@ -61,7 +61,6 @@ public partial class HackApp : Application
         services.AddSingleton<IHackDefaults, HackDefaults>();
         services.AddSingleton<IOdooDefaults, OdooDefaults>();
 
-        services.AddSingleton<GridHelp>();
 
         services.AddSingleton<VMEnv>();
         services.AddSingleton(provider => provider.GetRequiredService<VMEnv>().HFM);

@@ -38,11 +38,9 @@ public sealed partial class HomeView : Page
     private static NavigationView? _Navigator { get; set; }
     private static Dictionary<NavigatePageMenu, NavigationViewItem?> _NavItems { get; set; } = [];
     private static NavigationViewItem? _SelectNav { get; set; }
-    private static MainWindow? Window { get; set; }
     public HomeView()
     {
         InitializeComponent();
-        Window = HackApp.Window as MainWindow;
         _Navigator = HomeNavigator;
         _SelectNav = ProfileNav;
         _NavItems = new Dictionary<NavigatePageMenu, NavigationViewItem?>(

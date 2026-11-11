@@ -34,8 +34,6 @@ public class OdooEntryColumns
 		FieldName = "Status",
 		SortDirection = SortDirection.Ascending
 	};
-	public bool InactivesEnabled { get; set; } = false;
-	public bool IgnoreFilters { get; set; } = false;
 	[JsonConverter( typeof( LazyConverterFactory ) )]
 	public Lazy<Dictionary<string, OdooEntryColumnID?>> Columns { get; set; } = new( () => new()
 	{

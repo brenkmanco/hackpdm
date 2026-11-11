@@ -4,9 +4,6 @@ using System.Numerics;
 namespace HackPDM.Domain.Representation
 {
     
-    class TypeRepresentative
-    {
-    }
 	
 	public interface IVectorize2<T>
     {
@@ -23,58 +20,6 @@ namespace HackPDM.Domain.Representation
 	{
         public abstract T w { get; set; }
     }
-	public struct Vector2<T>(T x, T y) : IVectorize2<T>
-	{
-		public T x { get; set; } = x;
-		public T y { get; set; } = y;
-		public readonly int Length { get => 2; }
-
-		public T this[int index]
-		{
-			readonly get => index switch
-			{
-				0 => x,
-				1 => y,
-				_ => throw new IndexOutOfRangeException(),
-			};
-			set => _ = index switch
-			{
-				0 => x = value,
-				1 => y = value,
-				_ => throw new IndexOutOfRangeException(),
-			};
-		}
-		public static implicit operator Vector2<T>( (T, T) v ) => new( v.Item1, v.Item2);
-		public override readonly string? ToString() => $"({x}, {y})";
-	}
-	public struct Vector3<T>(T x, T y, T z) : IVectorize3<T>
-	{
-		public T x { get; set; } = x;
-		public T y { get; set; } = y;
-		public T z { get; set; } = z;
-		public readonly int Length { get => 3; }
-
-		public T this[int index]
-		{
-			readonly get => index switch
-			{
-				0 => x,
-				1 => y,
-				2 => z,
-				_ => throw new IndexOutOfRangeException(),
-			};
-			set => _ = index switch
-			{
-				0 => x = value,
-				1 => y = value,
-				2 => z = value,
-				_ => throw new IndexOutOfRangeException(),
-			};
-		}
-
-		public static implicit operator Vector3<T>( (T, T, T) v ) => new( v.Item1, v.Item2, v.Item3 );
-		public override readonly string? ToString() => $"({x}, {y}, {z})";
-	}
 	public struct Vector4<T>(T x, T y, T z, T w) : IVectorize4<T>
     {
 		public T x { get; set; } = x;

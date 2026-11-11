@@ -69,12 +69,6 @@ public enum Operators
 }
 
 
-public enum MethodType : byte
-{
-	PropertyOnly,
-	FieldOnly,
-	PropertyAndField,
-}
 
 public enum RelationType
 {

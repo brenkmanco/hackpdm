@@ -69,58 +69,6 @@ public class AsyncHelper
         }
         return this;
     }
-    private async IAsyncEnumerable<(AsyncHelper, T)> InitializeAsync<T>(Func<T> func, bool wantTrue = true)
-    {
-        bool indefinite = _timeoutMs <= 0;
-        var timeout = DateTime.UtcNow;
-
-        if (!indefinite)
-        {
-            timeout = timeout + TimeSpan.FromMilliseconds(_timeoutMs);
-        }
-        while (!_signal)
-        {
-            yield return (null, await IterationInternal(timeout, func, indefinite, wantTrue));
-        }
-        yield return ((this, default));
-    }
-    private async Task<T> IterationInternal<T>(DateTime timeout, Func<T> func, bool indefinite = false, bool wantTrue = true)
-    {
-        TimeSpan leftOver = timeout - DateTime.UtcNow;
-        int min = indefinite ? _pollDelayMsInt : Convert.ToInt32(MathUtility.MinDownTo(0, leftOver.TotalMilliseconds, _pollDelayMs));
-        bool willEval = indefinite || min == _pollDelayMsInt;
-
-        try 
-        { 
-            await Task.Delay(min, _token); 
-        }
-        catch (TaskCanceledException e)
-        {
-            _wasCancelled = true;
-            Debug.WriteLine(e, "CANCEL");
-            return default;
-        }
-
-        if (!willEval)
-        {
-            _timedOut = true;
-            return default;
-        }
-        if (!wantTrue ^ _predicate())
-        {
-            _signal = true;
-        }
-        if (func is not null)
-        {
-            return func();
-        }
-        return default;
-        //else
-        //{
-        //    //_totalPollMs += min;
-        //    if (action is not null) action();
-        //}
-    }
     /// <summary>Wait until the predicate condition evaluates to true before continuing.</summary>
     /// <param name="eval">function to evaluate returning true or false</param>
     /// <param name="msTimeout">time before exiting function. (t <= 0) means that it continues indefinitely</param>

@@ -78,29 +78,6 @@ public static class ExtensionForm
 	}
 	extension (TableView grid)
 	{
-		public void SetAlternatingRowColors()
-		{
-			grid.Background = _brush;
-			grid.AlternateRowBackground = UIStorage.BrushWhite.Value;
-		}
-		public void ItemAdd<T>(T item)
-		{
-			GridMap.Map[grid].Add(item);
-			//if (grid.ItemsSource is ObservableCollection<T> list)
-			//{
-			//	list.Add(item);
-			//	// grid.ItemsSource = list;
-			//}
-		}
-		public void ItemRemove<T>(T item)
-		{
-			GridMap.Map[grid].Remove(item);
-			//if (grid.ItemsSource is ObservableCollection<T> list)
-			//{
-			//	list.Remove(item);
-			//	// grid.ItemsSource = list;
-			//}
-		}
 		//public Collection<object>? Items
 		//{
 		//	get => grid.ItemsSource as Collection<object>;
@@ -109,47 +86,9 @@ public static class ExtensionForm
 	}
 	extension(IEnumerable<HpEntry> entries)
 	{
-		public bool MessageToRecommit()
-		{
-			if (entries.Any())
-			{
-				string lst = string.Join("\n", entries.Where(entry => entry.IsLatest).Take(10).Select(entry => $"{entry.name}"));
-				string message = $"{lst}{(entries.Count() > 10 ? $"...\nincluding {entries.Count() - 10} other files\n" : "\n")}";
-				if (DialogResult.Yes == MessageBox.ShowAsync($"{message}would you like to recommit the latest versions?", "recommit latest?", MessageBoxButtons.YesNoCancel).Result)
-				{
-					return true;
-				}
-			}
-			return false;
-		}
 	}
 	extension (ListViewItem item)
 	{
-		public DataGridData LinkedItem
-		{
-			get
-			{
-				if (_data.TryGetValue(item, out var holder)) return holder.ItemData;
-				holder = new()
-				{
-					ItemData = new(),
-				};
-				_data.Add(item, holder);
-
-				return holder.ItemData;
-			}
-
-			set
-			{
-				if (!_data.TryGetValue(item, out var holder))
-				{
-					holder = new();
-					_data.Add(item, holder);
-				}
-				holder.ItemData = value;
-				item.Content = holder.ItemData;
-			}
-		}
 	}
 	extension (TreeViewNode node)
 	{
@@ -187,11 +126,6 @@ public static class ExtensionForm
 				node.Content = value;
 			}
 		}
-		public T? Content<T>() where T : class
-		{   
-			ArgumentNullException.ThrowIfNull(node);
-			return node.Content as T;
-		}
 	}
 	extension (TreeViewNode? cNode)
 	{
@@ -225,26 +159,10 @@ public static class ExtensionForm
 	}
 	extension (ItemsControl control)
 	{
-		public T? ItemsSource<T>() where T : class
-		{
-			ArgumentNullException.ThrowIfNull(control);
-			return control.ItemsSource as T;
-		}
 
-		public void Sort<T>(Comparison<T> comparison) 
-		{
-			var casted = control.ItemsSource as List<T>;
-			casted?.Sort(comparison.Invoke);
-			if (casted is not null) control.ItemsSource = casted;
-		}
 	}
 	extension (TreeData node)
 	{
-		public string? GetTreeNodePath()
-		{
-			ArgumentNullException.ThrowIfNull(node);
-			return node.FullPath;
-		}
 
 		public void EnsureVisible(TreeView tree)
 		{
@@ -265,10 +183,6 @@ public static class ExtensionForm
 	}
 	extension<T> (T page) where T : Page
 	{
-		public TWin? GetWindow<TWin>() where TWin : Window
-		{
-			return InstanceManager.GetAWindow<T, TWin>(page);
-		}
 		public Window? Window
 		{
 			get => InstanceManager.GetAWindow<T, Window>(page);
@@ -276,22 +190,6 @@ public static class ExtensionForm
 	}
 
 
-	public static IEnumerable<Control> GetAllControls(this Control control)
-	{
-		ArgumentNullException.ThrowIfNull(control);
-		var controls = new List<Control> { control };
-		if (control.XamlRoot?.Content is Panel panel)
-		{
-			foreach (var child in panel.Children)
-			{
-				if (child is Control childControl)
-				{
-					controls.AddRange(childControl.GetAllControls());
-				}
-			}
-		}
-		return controls;
-	}
 	private static TreeData? RecurseNode(this TreeData? node, ReadOnlySpan<string> paths)
 	{
 		foreach (TreeData tNode in node?.Children ?? [])
@@ -321,17 +219,6 @@ public static class ExtensionForm
 		return default;        
 	}
 	
-	public static T? FindParent<T>(this DependencyObject? child) where T : DependencyObject
-	{
-		DependencyObject? parent = child != null ? VisualTreeHelper.GetParent(child) : null;
-		while (parent != null)
-		{
-			if (parent is T typedParent)
-				return typedParent;
-			parent = VisualTreeHelper.GetParent(parent);
-		}
-		return default;
-	}
 
 	private class HolderValues
 	{

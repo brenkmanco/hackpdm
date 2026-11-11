@@ -22,8 +22,6 @@ public static class InstanceManager
 
     #region Window & Configuration Helpers
 
-    public static void SetWinConfig(string configName)
-        => WindowHelper.SetWindowConfig(HackApp.Window, GetConfig(configName));
 
     public static WindowConfig? GetConfig(string configName)
         => WindowConfig.PresetWindowConfig.GetValueOrDefault(configName);
@@ -65,28 +63,9 @@ public static class InstanceManager
     public static T Get<T>() where T : class, new()
         => GetOrCreate<T>(() => new T());
 
-    public static bool TryGet<T>(out T? instance) where T : class
-    {
-        if (_stateStore.TryGetValue(typeof(T), out var obj) && obj is T typed)
-        {
-            instance = typed;
-            return true;
-        }
-        instance = null;
-        return false;
-    }
 
-    public static void Register<T>(T instance) where T : class
-    {
-        ArgumentNullException.ThrowIfNull(instance);
-        _stateStore[typeof(T)] = instance;
-    }
 
-    public static bool Remove<T>() where T : class
-        => _stateStore.TryRemove(typeof(T), out _);
 
-    public static void ClearViewModels()
-        => _stateStore.Clear();
 
     // Convenience accessors for application ViewModel environment
     public static VMEnv Env => Get<VMEnv>();
@@ -108,8 +87,6 @@ public static class InstanceManager
 
     #region Legacy Page Helpers (Obsolete - to prevent breaks during migration)
 
-    [Obsolete("Avoid caching or retrieving Page instances. Use Frame.Navigate(typeof(T)) or instantiate on demand.")]
-    public static T GetAPage<T>() where T : Page, new() => new();
 
     #endregion
 }

@@ -5,50 +5,61 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 Every phase ends with the same gate:
 
 1. `dotnet build Src/HackPDM/HackPDM.csproj -f net10.0-desktop -p:Platform=x64 -c Debug` (0 errors, no new warnings)
-2. `dotnet test Src/HackPDM.Tests/HackPDM.Tests.csproj` (baseline: 99 passed / 22 skipped)
-3. Smoke test against the CI Odoo container (once Docker access works)
+2. `dotnet test Src/HackPDM.Tests/HackPDM.Tests.csproj` (baseline: 142 passed / 22 skipped without a server)
+3. `Odoo/ci/run_local_smoke.sh`: Odoo in Docker, integration tests (the 22 skipped run), then the client smoke test
 4. One commit per numbered step, so any step can be reverted alone
 
 Line counts are estimates from the survey, not measurements.
 
 ---
 
-## Phase 0: Safety net (small)
+## Phase 0: Safety net
 
 Goal: make later phases safe to do mechanically.
 
-- [ ] Get the Docker smoke test running locally (blocked on docker group access)
-- [ ] Characterization tests for code later phases rewrite:
-  - path conversion (absolute ↔ PWA-relative, the "root" prefix rule)
-  - `HashConverter.AssignToClass` / `RecordsPopulation` on a sample Odoo row
-  - domain building for entry search (current ArrayList output, as a golden value)
-  - `HackFile` construction from a local path
+- [~] Local smoke test: `Odoo/ci/run_local_smoke.sh` (mirrors the CI workflow; `--tests-only`, `--smoke-only`, `KEEP=1`). Written, not yet run: needs your user in the `docker` group
+- [x] Characterization tests in `Src/HackPDM.Tests/Characterization/` (43 tests):
+  - `PathConversionTests`: ConvertToWindowsPath, NodePathToWindowsPath, WindowsToOdooPath, GetRelativePath, InPWAFolder, HackDefaults.DefaultPath
+  - `OdooRowParsingTests`: JSON → Hashtable/ArrayList (`ToNativeObject`), row → `HpEntry` (`HashConverter`)
+  - `EntrySearchDomainTests`: golden search domains (EntrySearchService.cs is compiled into the test project)
+  - `HackFileConstructionTests`: the constructors and `GetFromPath`
+  - Tests that touch `HackDefaults.Instance` run in a non-parallel `SharedStateCollection`
 
-## Phase 1: Delete dead code (≈ 3,500–4,000 lines, no behaviour change)
+Found while writing them (pinned as current behaviour):
+- `new HackFile(path)` throws `FileNotFoundException` for a missing file (reads `FileInfo.Length`) → Phase 2
+- `HackFile.RelativePath` means two things: `root/<dir>` from the path factories, `<dir>/<file>` from the lazy getter → Phase 5
+
+## Phase 1: Delete dead code — DONE (≈ 5,000 lines removed, no behaviour change)
 
 Each item was found to have zero callers; re-grep immediately before deleting.
 
 **Infrastructure**
-- [ ] Server-side XML-RPC stack in `RPC/` (XmlRpcServer, Responder, SimpleHttpRequest, SystemObject, BoxcarRequest, Logger, Context)
-- [ ] Client XML path: `OdooClient.ExecuteAsync`, `OdooClient<T>.ExecuteAsync`, `SendXMLAsync`, then the remaining `RPC/*` (≈1,250 lines total in RPC/)
-- [ ] `Odoo/DataEnv.cs` (whole file)
-- [ ] `IHpModelConvert`, `IOdooTransport`, `Test<T>`, `HpCategory.Test`, duplicate `ExplorerItem` in HpDirectory.cs
-- [ ] `Help.cs`: BatchList, BatchArray, GetResults, OdooIdBecomesKey, ConvertSWFile, ValidateDependency, GetStatusMessage, ConvertValue(Method)
-- [ ] `ExtensionOdoo.cs`: OdooFieldExtension, Folder/FilePathsToHackWithDependencies, Try* variants, HasLocalVersion, TakeOutLatest, private TryNull
-- [ ] Model members: HpVersion BatchDownloadFiles/DownloadFilesData/DownloadContentsAll/GetFromPaths/CreateVersion, HpVersionProperty.Create/IsNone, HpVersionRelationship.Create, HpEntry.GetEntryList/GetDependencyPaths, HpNode.UpdateNodeLatestVersions, IrAttachment.GetFileContentsB64, HpBaseModelTransport.GetAllFields/RefreshAsync/GetRelatedRecordsBySearchAsync, OdooDefaults.CreateNewVersion
-- [ ] Sync `OdooClient` wrappers except the two used (PdmDeleteOperations:172, HpVersion:164 → switch those to async and delete all sync wrappers)
-- [ ] `SwDocMgr.ReplaceDependencies`; `SwHelper` (never assigns `_swApp`) plus its platform test
+- [x] Server-side XML-RPC stack in `RPC/` (XmlRpcServer, Responder, SimpleHttpRequest, SystemObject, BoxcarRequest, Logger, Context)
+- [x] Client XML path: `OdooClient.ExecuteAsync`, `OdooClient<T>.ExecuteAsync`, `SendXMLAsync`, then the remaining `RPC/*` (≈1,250 lines total in RPC/)
+- [x] `Odoo/DataEnv.cs` (whole file)
+- [x] `IHpModelConvert`, `IOdooTransport`, `Test<T>`, `HpCategory.Test`, duplicate `ExplorerItem` in HpDirectory.cs
+- [x] `Help.cs`: BatchList, BatchArray, GetResults, OdooIdBecomesKey, ConvertSWFile, ValidateDependency, GetStatusMessage, ConvertValue(Method)
+- [x] `ExtensionOdoo.cs`: OdooFieldExtension, Folder/FilePathsToHackWithDependencies, Try* variants, HasLocalVersion, TakeOutLatest, private TryNull
+- [x] Model members: HpVersion BatchDownloadFiles/DownloadFilesData/DownloadContentsAll/GetFromPaths/CreateVersion, HpVersionProperty.Create/IsNone, HpVersionRelationship.Create, HpEntry.GetEntryList/GetDependencyPaths, HpNode.UpdateNodeLatestVersions, IrAttachment.GetFileContentsB64, HpBaseModelTransport.GetAllFields/RefreshAsync/GetRelatedRecordsBySearchAsync, OdooDefaults.CreateNewVersion
+- [x] Sync `OdooClient` wrappers except the two used (PdmDeleteOperations:172, HpVersion:164 → switch those to async and delete all sync wrappers)
+- [x] `SwDocMgr.ReplaceDependencies`; `SwHelper` (never assigns `_swApp`) plus its platform test
 
 **Core / Domain / Shared**
-- [ ] Row `Clone()` boilerplate (14 classes, ≈190 lines), `IRowData`, `ICloneable<T>`
-- [ ] Unused ExtensionMethods / ExtensionsAsync / FileOperations / HackDefaults members, MathUtility, empty enums and types, Shared `Help.cs`
-- [ ] `AsyncHelper.RenewTokenSourceAsync`
+- [x] Row `Clone()` boilerplate (14 classes, ≈190 lines), `IRowData`, `ICloneable<T>`
+- [x] Unused ExtensionMethods / ExtensionsAsync / FileOperations / HackDefaults members, MathUtility, empty enums and types, Shared `Help.cs`
+- [x] `AsyncHelper.RenewTokenSourceAsync`
 
 **App**
-- [ ] GridHelp and grid types (after the two `EmptyListItem` callers move to bound collections in Phase 7), `GridMap`, `HackLists`/`HackItemsSource`
-- [ ] `MessageBoxWindow`, `Configuration/GlobalSettings.cs`, `FileCheck`, `UIConstants`
-- [ ] Unused members of StatusDialogView, ExtensionForm, SafeHelper, DispatcherExtensions, WindowHelper, InstanceManager, IImageProvider
-- [ ] ProfileManagerView's private `AbleToLogin` duplicate
+- [x] GridHelp and grid types (after the two `EmptyListItem` callers move to bound collections in Phase 7), `GridMap`, `HackLists`/`HackItemsSource`
+- [x] `MessageBoxWindow`, `Configuration/GlobalSettings.cs`, `FileCheck`, `UIConstants`
+- [x] Unused members of StatusDialogView, ExtensionForm, SafeHelper, DispatcherExtensions, WindowHelper, InstanceManager, IImageProvider
+- [x] ProfileManagerView's private `AbleToLogin` duplicate
+
+**Deliberately left for later phases**
+- [ ] `HackFileManagerView._treeItems`: looks unused, but assigning it as `ItemsSource` puts the TreeView in items-source mode, so removing it needs a runtime check (Phase 7)
+- [ ] `IHackFileModel` / `IHackBaseFileModel`, `IHackDefaultBase` split, `HpBaseModel.HpModelDictionary` / `UsualIncludedFields`: design leftovers, handled with the HackFile split (Phase 5) and registry cleanup (Phase 4)
+- [ ] `FormHelper.EZGradient` and the gradient fields in `ExtensionForm` may now be unused (Phase 6 facade cleanup)
+- Note: `HpVersion.DownloadContents` still blocks on `ReadAsync(...).GetAwaiter().GetResult()` (same as the old sync wrapper did); making it async is Phase 5 (`VersionFileService`)
 
 ## Phase 2: Fix confirmed bugs (small, high value)
 
@@ -62,6 +73,9 @@ Confirmed by reading the code:
 - [ ] `HpVersionRelationship:119`: `stagedRecords = [...]` overwritten each loop iteration, so only the last version's relationships are staged
 - [ ] `HpBaseModelTransport.GetRecordsByIdsAsync`: ignores `fields`, requests only `dir_id`
 - [ ] StatusDialog: `UpdateStatusDialogLoop` is never started; `Closing` handler attached while `ParentWindow` is null
+
+Found by the Phase 0 tests:
+- [ ] `new HackFile(path)` throws for a file that is not on disk (`HackFileConstructionTests.FromMissingPath_Throws`)
 
 Reported by the survey; verify before fixing:
 - [ ] `HackResultTree:141`: `Children.Add` bypasses `Add()`, so `Parent` is never set; `Count`/`IsReadOnly` are constant
@@ -140,7 +154,7 @@ The biggest and riskiest phase, so it is split. In 4a/4b old and new APIs coexis
 - [ ] `IFilePickerService` replaces the duplicated pickers
 - [ ] `HackFileManagerView`: columns and context menus in XAML instead of code-behind
 - [ ] Merge `InstanceManager` and `ViewModelEnvironment` into `AppComposition`; `GlobalSerializedData` and `ExtensionForm` responsibilities split
-- [ ] Delete GridHelp (Phase 1 leftover)
+- [x] Delete GridHelp (done in Phase 1)
 
 ## Phase 8: Generated code
 
@@ -153,8 +167,8 @@ The biggest and riskiest phase, so it is split. In 4a/4b old and new APIs coexis
 
 | Phase | Risk | Est. net lines | Depends on |
 |---|---|---|---|
-| 0 Safety net | low | +300 (tests) | – |
-| 1 Dead code | low | −3,500 to −4,000 | 0 |
+| 0 Safety net (smoke run pending) | low | +450 (tests) | – |
+| 1 Dead code ✅ | low | ≈ −5,000 (done) | 0 |
 | 2 Bug fixes | medium (behaviour changes, intended) | ±0 | 1 |
 | 3 Shared primitives | low | −400 | 1 |
 | 4 Typed Odoo seam | high | −1,000 | 3 |

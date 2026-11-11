@@ -100,12 +100,3 @@ public class Except<T1, T2, T3, T4> : Except<T1, T2, T3>
 		return this;
 	}
 }
-public class Helper
-{
-	public static Except<T2, T1> R2x1<T1, T2>( ref T1 dat1, ref T2 dat2 ) => new(ref dat2, ref dat1);
-}
-public class ExceptAdapt<T1, T2>
-{
-	Except<T1, T2> _except { get; init; }
-	public ExceptAdapt( ref Except<T1, T2> except ) => _except=except;
-}

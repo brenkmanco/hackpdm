@@ -13,7 +13,6 @@ namespace HackPDM.Mvvm.Models.Settings;
 public class StatusLogSession
 {
 	public static Dictionary<Guid, WeakReference<StatusLogSession>> ActiveSessions { get; } = [];
-	public static KeyValuePair<Guid, WeakReference<StatusLogSession>> Current { get => ActiveSessions.FirstOrDefault(); }
 	public Guid SessionId { get; } = Guid.NewGuid();
 
 	public StatusLogSession()

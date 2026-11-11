@@ -17,7 +17,3 @@ public interface IMany2One : IHpOdooRecord
 public interface IMultiRecord { public IHpOdooRecord?[]? Ids { get; set; } }
 public interface IMany2Many : IMultiRecord { }
 public interface IOne2Many : IMultiRecord { }
-public interface IHpWindowRootFunctions
-{
-    [OdooProp(OdooFieldType.Char, "windows_complete_name")] public string? windows_complete_name { get; set; }
-}

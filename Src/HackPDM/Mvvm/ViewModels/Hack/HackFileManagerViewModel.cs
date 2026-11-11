@@ -93,11 +93,7 @@ public partial class HackFileManagerViewModel : ObservableObject
 	public bool IsListLoaded { get; set; }
 	public bool IsFiltered { get; set; } = true;
 	public bool HackLoaded { get; set; }
-	public bool IsClosing { get; set; }
-	public int EntryPollingMs { get; set; } = 5000;
 
-	/// <summary>True when deleted entries should be listed.</summary>
-	public bool IsActive => ShowInactive;
 
 	/// <summary>True while the directory tree is being fetched; drives the loading ring.</summary>
 	[ObservableProperty]

@@ -49,8 +49,6 @@ public sealed partial class HackFileManagerView : Page
 {
 	public HackFileManagerViewModel ViewModel => InstanceManager.HFM;
 
-	/// <summary>Dispatcher used by SafeHelper to marshal work back onto this page's UI thread.</summary>
-	public static DispatcherQueue HackDispatcherQueue;
 
 	/// <summary>Tree node currently selected (the smoke tests read it).</summary>
 	public TreeViewNode? LastSelectedNode { get; set; }
@@ -96,7 +94,6 @@ public sealed partial class HackFileManagerView : Page
 	{
 		ViewModel.HackLoaded = true;
 		ViewModel.Initialize();
-		HackDispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
 		OdooDirectoryTree.ItemsSource = _treeItems;
 		OnGroupingChanged();
@@ -133,7 +130,6 @@ public sealed partial class HackFileManagerView : Page
 		};
 		Unloaded += ( _, _ ) =>
 		{
-			ViewModel.IsClosing = true;
 			_treeSelectionCancellation.Cancel();
 			ViewModel.RefreshRequested -= OnRefreshRequested;
 			ViewModel.GroupingChanged -= OnGroupingChanged;

@@ -28,13 +28,6 @@ public enum EntryReturnType
     Staged,
 }
 
-public enum HackVersionType
-{
-    Latest,
-    Older,
-    Unique,
-    New,
-}
 
 public enum EntryReprType
 {
@@ -51,12 +44,6 @@ public enum ChecksumType
     Sha512,
 }
 
-public enum ExtType
-{
-	Svg,
-	Png,
-	Other,
-}
 
 [Flags]
 public enum HackTestDepth : ushort

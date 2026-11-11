@@ -14,7 +14,6 @@ public class ViewModelEnvironment
 	public HackFileManagerViewModel HFM { get; set; } = AppComposition.CreateHackFileManager();
 	public ProfileManagerViewModel PM { get; set; } = new();
 	public SearchOdooViewModel SearchOdoo { get; set; } = AppComposition.CreateSearchOdoo();
-	public Dictionary<Guid, WeakReference<Tuple<StatusDialogViewModel, StatusLogSession>>> Dialogs { get; } = [];
 	public (StatusDialogViewModel StatusDialog, StatusLogSession Session) Logger { get; set; } = StatusDialogViewModel.CreateSessionPair();
 
 	public OdooSettingsViewModel OdooSettings { get; set; } = new();

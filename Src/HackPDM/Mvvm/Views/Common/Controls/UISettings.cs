@@ -31,13 +31,6 @@ namespace HackPDM.Mvvm.Views.Common.Controls
 			}
 		}
 	}
-	public interface IImageProvider
-	{
-		ImageSource? GetImage(string key);
-		Task<ImageSource?> GetImageAsync(string key);
-		void SetImage(string key, byte[] imgBytes);
-		IEnumerable<string> GetAvailableKeys();
-	}
 	// public interface IItemChangeListener<T>
 	// {
 	// 	void OnItemAdded(object sender,			ItemChangedEventArgs<T> e);

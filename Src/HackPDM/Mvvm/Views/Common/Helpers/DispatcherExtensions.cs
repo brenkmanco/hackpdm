@@ -62,18 +62,5 @@ public static class DispatcherExtensions
         }
     }
 
-    public static void ExecuteUI(this DispatcherQueue dispatcher, Action function)
-    {
-        if (dispatcher.HasThreadAccess)
-        {
-            function();
-        }
-        else
-        {
-            dispatcher.TryEnqueue(() => function());
-        }
-    }
 
-    public static Task ExecuteUI(this DispatcherQueue dispatcher, Func<Task> function)
-        => dispatcher.ExecuteUIAsync(function);
 }
