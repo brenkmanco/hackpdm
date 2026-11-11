@@ -26,6 +26,9 @@
   <!-- UI-free app models compiled in directly (the app itself targets Uno and can't be referenced) -->
   <ItemGroup>
     <Compile Include="..\HackPDM\Mvvm\Models\Odoo\EntrySearchService.cs" Link="Linked\EntrySearchService.cs" />
+    <Compile Include="..\HackPDM\Mvvm\Models\Hack\PdmWorkflowService.cs" Link="Linked\PdmWorkflowService.cs" />
+    <Compile Include="..\HackPDM\Mvvm\Models\Hack\EntryRow.cs" Link="Linked\EntryRow.cs" />
+    <Compile Include="..\HackPDM\Mvvm\Models\Common\IOperationReporter.cs" Link="Linked\IOperationReporter.cs" />
   </ItemGroup>
 
   <ItemGroup>

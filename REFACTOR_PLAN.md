@@ -106,14 +106,17 @@ Noticed while fixing (not done):
 
 Goal: each repeated rule lives in exactly one place. Pure moves, so low risk.
 
-- [ ] `PwaPaths` (Core): `ToRelative`, `ToAbsolute`, `ToTreeSegments`, root prefix constant. Replaces ≈8 copies and the magic `5` in 3 places
-- [ ] Split `FileOperations` into `Checksums`, `LocalFileWriter`, `ShellLauncher` (one shell-open switch)
-- [ ] `SwDependencies.PwaDependencyPaths(absPath)`: replaces 5 copies (ExtensionOdoo, HpEntry, HpVersionRelationship ×2, HackResultTree)
-- [ ] One SolidWorks doc-type map (4 copies) and one property-type switch (2 copies in SWDocMgr)
-- [ ] One size formatter, one id-list helper (`ToArrayListIDs` vs `GetIDs`), one model-name map (3 copies), one `OdooFieldType` enum, one operator mapping, one `IsExternalInit`
-- [ ] `Help.BatchList/BatchArray` → `Enumerable.Chunk`
-- [ ] `OdooDefaults` lookup maps: four hand-written loops → `ToDictionary`
-- [ ] App: `IUiDispatcher` replaces the 5 marshalling mechanisms (`UiDispatcher.Post`, SafeHelper, `HackDispatcherQueue` static, DispatcherExtensions, direct `DispatcherQueue` use)
+- [x] `PwaPaths` (Core): `Segments`, `ToRelative`, `ToAbsolute`, `FolderOf`, `LocalSegments`, `IsInside`, `ToServerName`, `ToServerDirectory`, plus the `Root` / separator constants. Replaced `ConvertToWindowsPath`, `NodePathToWindowsPath`, `WindowsToOdooPath`, `GetRelativePath`, `InPWAFolder`, `HackDefaults.DefaultPath`, `HpVersion.FolderOf`, `HpVersionRelationship.VaultWindowsName`, `EntryFileService.RootPrefixLength` and the magic `5` (`ODOO_PATH_PREFIX_LENGTH`)
+  - Behaviour change: `IsInside` is boundary-aware (`/vault2/x` is no longer "inside" `/vault`), and a path outside the working folder now has no server name (null) instead of a mangled one
+- [x] Split `FileOperations` into `Checksums`, `LocalFileWriter`, `ShellLauncher` (one shell-open switch). `FileOperations` keeps only the Base64 helpers (the schema generator emits calls to them) and `FilesInDirectory`
+- [x] `SwDependencies.Of(file, resolver)`: a SolidWorks file's references with where each resolves locally. The 5 copies had already shrunk to 2 (HackResultTree, HpVersionRelationship) with the reference resolver; both use it now
+- [x] One SolidWorks doc-type map (`SwDocumentTypes`: `Of`, `IsSolidWorks`, `IsSolidWorksExtension`) replaces `SwDocMgr.GetTypeFromString`, `SwFileReader.IsSolidWorksFile`, `Help.GetSwDmDocumentTypeFromExtension` and `OdooDefaultsConstants.DependentExt`/`DependentExtRegex`; one property-type switch (`SwDocMgr.ConvertProperty`). Deleted the unused `HpVersion.FileTypeExt`, `SolidWorksPreviewHelper` and `SldWorksUI`
+- [x] One size formatter (`ByteSize.Format`, also used by `FileSizeConverter`; fixes the stray spaces before "MB"), one id-list helper (`GetIDs`; `ToArrayListIDs` removed), one model-name map (the `[OdooModel]` attribute: the generated `HpModelDictionaryGen` for transports, the attribute read by reflection for `HpBaseModel`; the two hand-written dictionaries and the unused `SetHpModel` removed), one `OdooFieldType` enum and one `IsExternalInit` (Shared's files, linked into the schema generator and Abstractions; `IsExternalInit` is now internal), one operator table (`OpExtension`, both directions)
+- [x] `Help.BatchList/BatchArray` → `Enumerable.Chunk` (already gone before Phase 3)
+- [x] `OdooDefaults` lookup maps: the hand-written loops → one `MapBy` helper. A duplicate key now keeps the first record; `Dictionary.Add` used to throw, which left the whole map empty
+- [x] App: `IUiDispatcher` (`UiDispatcher.Current`, `DispatcherQueueUiDispatcher`) replaces `UiDispatcher.Post`'s delegate, SafeHelper, the `HackApp.DispatcherQueue` static, DispatcherExtensions and direct `DispatcherQueue.TryEnqueue` use. `Post` always queues (as before); `RunAsync` runs inline on the UI thread and propagates exceptions
+
+Gate after Phase 3: offline 170 passed / 37 skipped; live 211/211 plus SMOKE TEST PASSED. The live count went from 216 to 211 because the path tests for the deleted converters went with them.
 
 ## Phase 4: Typed Odoo seam (generics instead of object/ArrayList/Hashtable)
 

@@ -14,6 +14,8 @@
     
     <ItemGroup>
 	    <ProjectReference Include="..\HackPDM.Shared\HackPDM.Shared.csproj" />
+	    <!-- netstandard2.0 init/record shim (internal, so each netstandard project links its own) -->
+	    <Compile Include="..\HackPDM.Shared\General\IsExternalInit.cs" Link="Shared\IsExternalInit.cs" />
 	</ItemGroup>
 	
 </Project>

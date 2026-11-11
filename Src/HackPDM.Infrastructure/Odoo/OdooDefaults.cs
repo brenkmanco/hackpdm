@@ -305,14 +305,14 @@ public class OdooDefaults : IOdooDefaults
 		await TryHelper.TryAsync( async () => HpDirectoryRoot = await HpDirectory.GetRecordByIdAsync( 1 ) );
 
 		IdToUser = await TryHelper.TryAsync( async () => HpUsers = await HpUser.GetAllRecordsAsync() )
-			? IdMapUser( HpUsers )
+			? MapBy<IHpUserModel, int>( HpUsers, user => user.id ?? 0 )
 			: [];
 
 		if( await TryHelper.TryAsync( async () => HpProperties = await HpProperty.GetAllRecordsAsync() )
 			&& HpProperties is IEnumerable<IHpPropertyModel> properties && properties.Any() )
 		{
-			ExtToProp = new( properties.Select( prop => new KeyValuePair<string, IHpPropertyModel>( prop?.name ?? "", prop ) ) );
-			IdToProp = IdMapProperty( HpProperties );
+			ExtToProp = MapBy( properties, prop => prop?.name ?? "" );
+			IdToProp = MapBy<IHpPropertyModel, int>( properties, prop => prop.id ?? 0 );
 		}
 		else
 		{
@@ -321,7 +321,7 @@ public class OdooDefaults : IOdooDefaults
 		}
 
 		ExtToType = await TryHelper.TryAsync( async () => HpTypes = await HpType.GetAllRecordsAsync() )
-			? ExtensionMapType( HpTypes )
+			? MapBy<IHpTypeModel, string>( HpTypes, type => Extension( type.file_ext ) )
 			: [];
 
 		await TryHelper.TryAsync( async () => HpCategories = await HpCategory.GetAllRecordsAsync() );
@@ -329,9 +329,7 @@ public class OdooDefaults : IOdooDefaults
 		if( await TryHelper.TryAsync( async () => HpEntryNameFilters = await HpEntryNameFilter.GetAllRecordsAsync() ) )
 		{
 			EntryFilterPatterns = [ .. HpEntryNameFilters?.SkipNullSelect( eFilter => eFilter.name_regex! ) ?? [] ];
-			ExtToFilter = HpEntryNameFilters is IEnumerable<IHpEntryNameFilterModel> filters && filters.Any()
-				? ExtensionMapFilter( HpEntryNameFilters )
-				: [];
+			ExtToFilter = MapBy<IHpEntryNameFilterModel, string>( HpEntryNameFilters, filter => $"{filter.name_proto}" );
 		}
 
 		if( await TryHelper.TryAsync( async () => HpSettings = await HpSetting.GetAllRecordsAsync() ) )
@@ -350,10 +348,10 @@ public class OdooDefaults : IOdooDefaults
 		// ExtToCat (needs the categories and types above)
 		TryHelper.Try( () =>
 		{
-			ExtToCat = HpCategories is HpCategory[] arr && arr.Length != 0
-				&& HpTypes is HpType[] arrTypes && arrTypes.Length != 0
-				? ExtensionMapCategory( arr, arrTypes )
-				: [];
+			// each type's extension → its category
+			var categoryById = MapBy<IHpCategoryModel, int>( HpCategories, category => category.id ?? 0 );
+			ExtToCat = MapBy( HpTypes?.Where( type => type.cat_id?.id is int id && categoryById.ContainsKey( id ) ), type => Extension( type.file_ext ) )
+				.ToDictionary( pair => pair.Key, pair => categoryById[ pair.Value.cat_id!.id!.Value ] );
 		} );
 	}
 
@@ -365,96 +363,18 @@ public class OdooDefaults : IOdooDefaults
 			? node
 			: await HpNode.GetRecordByIdAsync(await createdNode.CreateAsync());
 	}
-	private static Dictionary<string, IHpEntryNameFilterModel> ExtensionMapFilter( IHpEntryNameFilterModel []? hpEntryNameFilters )
-    {
-        if (hpEntryNameFilters is null) return [];
+	/// <summary>A lookup map; the first record wins when two share a key (Dictionary.Add used to throw, emptying the whole map).</summary>
+	private static Dictionary<TKey, TValue> MapBy<TValue, TKey>( IEnumerable<TValue>? records, Func<TValue, TKey?> key ) where TKey : notnull
+	{
+		Dictionary<TKey, TValue> map = [];
+		foreach( TValue record in records ?? [] )
+			if( key( record ) is { } k )
+				map.TryAdd( k, record );
+		return map;
+	}
 
-        Dictionary<string, IHpEntryNameFilterModel> dict = [];
-        foreach ( IHpEntryNameFilterModel filter in hpEntryNameFilters )
-        {
-            dict.Add( $"{filter.name_proto}", filter );
-        }
-        return dict;
-    }
-    private static Dictionary<int, IHpUserModel> IdMapUser( in IHpUserModel[]? hpUsers )
-    {
-        if (hpUsers is null) return [];
-        Dictionary<int, IHpUserModel> dict = [];
+	private static string? Extension( string? fileExt ) => fileExt is null ? null : $".{fileExt.ToLower()}";
 
-        foreach ( IHpUserModel user in hpUsers )
-        {
-            dict.Add( user.id ?? 0, user );
-        }
-        return dict;
-    }
-
-
-
-
-
-
-
-
-
-
-    // TODO: fix type.file_ext being null.
-    // field is not actually null but the field
-    // AssignClasses funciton is not reading properly
-
-    public static Dictionary<string, IHpTypeModel> ExtensionMapType( in IHpTypeModel []? types )
-    {
-        if (types is null) return [];
-        Dictionary<string, IHpTypeModel> dict = [];
-        foreach ( HpType type in types )
-        {
-            dict.Add( $".{type.file_ext?.ToLower()}", type );
-        }
-        return dict;
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    public static Dictionary<string, IHpCategoryModel> ExtensionMapCategory( in HpCategory []? categories, in HpType []? types )
-    {
-        if (categories is null || types is null) return [];
-
-        Dictionary<string, IHpCategoryModel> dict = [];
-        foreach ( HpType type in types )
-        {
-            foreach ( HpCategory category in categories )
-            {
-                if (category.id != type.cat_id?.id || type.file_ext is null) continue;
-                dict.Add( $".{type.file_ext.ToLower()}", category );
-                break;
-            }
-        }
-        return dict;
-    }
-    public static Dictionary<int, IHpPropertyModel> IdMapProperty(in IHpPropertyModel[]? props )
-    {
-		if (props is null) return [];
-		Dictionary<int, IHpPropertyModel> dict = [];
-
-        foreach ( HpProperty prop in props )
-        {
-            dict.Add( prop.id ?? 0, prop );
-        }
-        return dict;
-    }
-    
     #endregion
 }
 

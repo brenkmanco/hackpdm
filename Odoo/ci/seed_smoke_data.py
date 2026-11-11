@@ -43,6 +43,14 @@ ensure("hp.directory", [("name", "=", "Library"), ("parent_id", "=", root)],
        {"name": "Library", "parent_id": root})
 
 txt = ensure("hp.type", [("file_ext", "=", "txt")], {"file_ext": "txt", "description": "text file"})
+for ext, description in (("sldprt", "SolidWorks part"), ("sldasm", "SolidWorks assembly"), ("slddrw", "SolidWorks drawing")):
+    ensure("hp.type", [("file_ext", "=", ext)], {"file_ext": ext, "description": description})
+# custom properties the client stores (others are dropped while restrict_properties is on)
+for prop in ("PartNum", "Description"):
+    ensure("hp.property", [("name", "=", prop)], {"name": prop, "prop_type": "text", "active": True})
+# SolidWorks lock files ("~$part.SLDPRT") are never committed
+ensure("hp.entry.name.filter", [("name_regex", "=", r"^~\$")],
+       {"name_proto": "~$*", "name_regex": r"^~\$", "description": "SolidWorks lock file"})
 
 for name in ("bracket.txt", "plate.txt", "readme.txt"):
     entry = ensure("hp.entry", [("name", "=", name), ("dir_id", "=", parts)],

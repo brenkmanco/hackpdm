@@ -175,7 +175,9 @@ class hp_common_model(models.AbstractModel):
         results:list[dict[str, Any]] = []
 
         for rec in records:
-            data:dict[str, Any] = {}
+            # always identify the record, like read() does; callers that asked only for other
+            # fields could not tell which record they got (an existing entry looked new)
+            data:dict[str, Any] = {"id": rec.id}
             for field in fields or []:
                 parts:list[str] = field.split(".")
                 data[field] = self._resolve_field(rec, parts, [], 0)

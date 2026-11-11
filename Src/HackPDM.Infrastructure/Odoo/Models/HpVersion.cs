@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
+using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Shared.GlobalData;
@@ -58,12 +59,13 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
 	[OdooProp(OdooFieldType.Binary, "preview_image")] public byte[]? preview_image { get; set; }
 	[OdooProp(OdooFieldType.Binary, "file_contents")] public byte[]? file_contents { get; set; }
 	public string? FileContentsBase64 { get; private set; }
-    public string? WinPathway { get => field ??= windows_complete_name?[OdooDefaultsConstants.ODOO_PATH_PREFIX_LENGTH..]; set; }
+    /// <summary>
+    /// The version's folder relative to the working folder, with this OS's separators (set from
+    /// dir_id when it was read). Falls back to windows_complete_name without "root\" and without
+    /// the file name; it used to keep both the file name and the backslashes.
+    /// </summary>
+    public string? WinPathway { get => field ??= windows_complete_name is null ? null : PwaPaths.FolderOf(windows_complete_name); set; }
     
-    public SwDmDocumentType FileTypeExt
-	{
-		get => file_ext is null or "" ? SwDmDocumentType.swDmDocumentUnknown : Help.GetSwDmDocumentTypeFromExtension(file_ext);
-	}
         
     static HpVersion()
     {
@@ -76,13 +78,11 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
         {
             if (this.HashedValues.ContainsKey("dir_id"))
             {
-                WinPathway = FileOperations.ConvertToWindowsPath(
-                    (HashedValues["dir_id"] as ArrayList)?[1] as string, false);
+                WinPathway = (HashedValues["dir_id"] as ArrayList)?[1] is string directory ? PwaPaths.ToRelative(directory) : null;
             }
 			if (WinPathway is null && this.HashedValues.ContainsKey("directory_complete_name"))
 			{
-				WinPathway = FileOperations.ConvertToWindowsPath(
-					(HashedValues["directory_complete_name"] as string ?? ""), false);
+				WinPathway = PwaPaths.ToRelative(HashedValues["directory_complete_name"] as string);
 			}
 		}
         finally 
@@ -93,12 +93,13 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
 
     public async Task<bool> GetPreviewImage()
 	{
-		if (preview_image is { Length: > 0 } && id != 0) 
+		if (preview_image is not { Length: > 0 } && id is not null and not 0) 
 		{
 			// reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
 			// which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
-			ArrayList list = await OClient.ReadAsync(HpModel, [this.id], ["preview_image"]);
-			preview_image = FileOperations.ConvertFromBase64((list[0] as Hashtable)?["preview_image"] as string);									
+			ArrayList? list = await OClient.ReadAsync(HpModel!, [this.id], ["preview_image"]);
+			if (list is [Hashtable row, ..])
+				preview_image = FileOperations.ConvertFromBase64(row["preview_image"] as string);									
 		}
 		return preview_image is { Length: > 0 };
 	}
@@ -126,15 +127,28 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
             }
             return true;
         }
-    public bool DownloadFile() => DownloadFile(Path.Combine(HackDefaults.Instance.PwaPathAbsolute, this.WinPathway));
+    /// <summary>The local folder this version belongs in, under the working folder.</summary>
+    public string LocalDirectory()
+    {
+        // windows_complete_name is "root\dir\file": the file name is part of it. WinPathway (taken
+        // from it) was used as the folder, so a file landed in a folder named after itself
+        if (windows_complete_name is { Length: > 0 } full
+            && Path.GetDirectoryName(PwaPaths.ToAbsolute( full )) is { Length: > 0 } dir)
+            return dir;
+        return Path.Combine(HackDefaults.Instance.PwaPathAbsolute, WinPathway ?? "");
+    }
+    public bool DownloadFile() => DownloadFile(LocalDirectory());
+    /// <summary>Writes this version's contents into <paramref name="toPath"/>; false when nothing could be downloaded.</summary>
     public bool DownloadFile(string toPath)
     {
         if (!Directory.Exists(toPath) && !Directory.CreateDirectory(toPath).Exists) return false;
         HackFile data = DownloadFileData();
     
         data.DirectoryName = toPath;
-        if (data.FileContents != null && data.FileContents.Length > 0)
+        if (data.FileContents is { Length: > 0 })
             data.CreateFile();
+        else if (file_size is not (null or 0))
+            return false;
     
         this.WinPathway = toPath;
         return true;
@@ -263,7 +277,24 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 				Debug.WriteLine(ex);
 			}
 		}
+		newVersion.preview_image ??= PreviewOf(hackFile);
 		return newVersion;
+	}
+
+	/// <summary>The saved preview of a SolidWorks file, sent with its new version so every client can show it.</summary>
+	private static byte[]? PreviewOf(HackFile? hackFile)
+	{
+		if (hackFile?.FullPath is not { } path || !SwDocumentTypes.IsSolidWorks(path))
+			return null;
+		try
+		{
+			return SolidWorksUtil.DocMgr?.GetPreviewPng(path);
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"no preview for {path}: {ex.Message}");
+			return null;
+		}
 	}
 	public static async Task<HpRecordStaged?> StageVersion(HackFile hackFile, IHpRecordStagedModel staged, HashedValueStoring hashStoreType = HashedValueStoring.None)
 	{

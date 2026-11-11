@@ -31,14 +31,25 @@ internal sealed class PwaScope : IDisposable
 	public string Absolute { get; }
 	public string Relative { get; }
 
+	private readonly bool _ownsFolder;
+
 	public PwaScope( bool create = false )
+		: this( Path.Combine( Path.GetTempPath(), $"hackpdm-char-{Guid.NewGuid():N}", "PWA" ), owns: true )
+	{
+		if( create ) Directory.CreateDirectory( Absolute );
+	}
+
+	/// <summary>Uses an existing folder as the working folder; it is left in place afterwards.</summary>
+	public PwaScope( string existingFolder ) : this( existingFolder, owns: false ) { }
+
+	private PwaScope( string absolute, bool owns )
 	{
 		_previousSettings = HackDefaults.Instance.SettingsProvider;
 		_previousRelative = HackDefaults.Instance.PwaPathRelative;
+		_ownsFolder = owns;
 
-		Relative = "PWA";
-		Absolute = Path.Combine( Path.GetTempPath(), $"hackpdm-char-{Guid.NewGuid():N}", Relative );
-		if( create ) Directory.CreateDirectory( Absolute );
+		Absolute = absolute;
+		Relative = Path.GetFileName( absolute );
 
 		HackDefaults.Instance.SettingsProvider = new InMemorySettingsProvider();
 		HackDefaults.Instance.PwaPathAbsolute = Absolute;
@@ -49,6 +60,7 @@ internal sealed class PwaScope : IDisposable
 	{
 		HackDefaults.Instance.SettingsProvider = _previousSettings;
 		HackDefaults.Instance.PwaPathRelative = _previousRelative;
-		try { Directory.Delete( Path.GetDirectoryName( Absolute )!, true ); } catch { }
+		if( _ownsFolder )
+			try { Directory.Delete( Path.GetDirectoryName( Absolute )!, true ); } catch { }
 	}
 }

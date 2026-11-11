@@ -1,21 +1,14 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net.Mime;
-using System.Security.Cryptography;
 using System.Threading.Tasks;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
-using HackPDM.Domain.OdooModels.Models;
-using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Core;
 
-
-
+/// <summary>Base64 conversion and listing the local files of a folder.</summary>
 public static class FileOperations
 {
     public static string? ConvertBytesToBase64(byte[]? fileBytes)
@@ -25,180 +18,7 @@ public static class FileOperations
             ? Convert.FromBase64String( base64String )
             : null;
 	
-	public static bool InPWAFolder(string? fullFileName) => fullFileName?.StartsWith(HackDefaults.Instance.PwaPathAbsolute) ?? false;
 
-    public static long? WriteAllBytes(HackFile file)
-    {
-        if (file.FileContents == null)
-        {
-            Console.WriteLine($"{file.Name} file contents empty");
-            return null;
-        }
-        try
-        {
-            string combinedPath = file.DirectoryName;//Path.Combine(HackDefaults.Instance.InstancePWAPathAbsolute, file.FilePath);
-            if (!Directory.Exists(combinedPath))
-            {
-                Directory.CreateDirectory(combinedPath);
-            }
-            combinedPath = Path.Combine(combinedPath, file.Name);
-
-            File.WriteAllBytes(combinedPath, file.FileContents);
-
-            Console.WriteLine($"{file.Name} created in {combinedPath}");
-            file.ApplyModifiedDateToLocal();
-            return file.FileSize ?? 0;
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e.Message);
-            return null;
-        }
-    }
-    public async static Task<bool> WriteAllBytesAsync(HackFile file)
-    {
-        if (file.FileContents == null)
-        {
-            Console.WriteLine($"{file.Name} file contents empty");
-            return false;
-        }
-        try
-        {
-            if (LocalTargetPath(file) is not { } targetPath) return false;
-
-            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-            await WriteBytes(targetPath, file.FileContents);
-
-            // the date and read-only flag are applied through the file's own path
-            file.FullPath = targetPath;
-            file.Info = null;
-            file.ApplyModifiedDateToLocal();
-            file.ApplyNonOwnerReadOnly();
-            return true;
-
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e.Message);
-            return false;
-        }
-    }
-    /// <summary>
-    /// Where a downloaded file is written: under the working folder at its server path. The server
-    /// path uses Windows separators and usually ends with the file name; both forms are accepted.
-    /// </summary>
-    internal static string? LocalTargetPath(HackFile file)
-    {
-        if (string.IsNullOrEmpty(file.DirectoryName)) return null;
-
-        string relative = file.DirectoryName.Replace('\\', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar);
-        if (file.Name is { Length: > 0 } name
-            && !string.Equals(Path.GetFileName(relative), name, StringComparison.OrdinalIgnoreCase))
-        {
-            relative = Path.Combine(relative, name);
-        }
-        return Path.Combine(HackDefaults.Instance?.PwaPathAbsolute ?? "", relative);
-    }
-    public static bool SameChecksum(IHpVersionModel versionModel, ChecksumType cType=ChecksumType.Sha1)
-        => SameChecksum(
-            Path.Combine(
-                HackDefaults.Instance.PwaPathAbsolute, 
-                versionModel.windows_complete_name[5..]), 
-            versionModel.checksum,
-            GetHashAlgorithm(cType));
-    public static bool SameChecksum( FileInfo file, string compareChecksum, ChecksumType cType = ChecksumType.Sha1 )
-    {
-        return file.Exists && SameChecksum( file.FullName, compareChecksum, GetHashAlgorithm( cType ) );
-    }
-	public static bool SameChecksum( string directoryPath, string compareChecksum, HashAlgorithm alg )
-    {
-        string? fileChecksum = FileChecksum(directoryPath, alg);
-		return fileChecksum != null && fileChecksum != "" && fileChecksum == compareChecksum;
-	}
-	public static HashAlgorithm GetHashAlgorithm(ChecksumType cType) => cType switch
-    {
-        ChecksumType.Md5        => MD5.Create(),
-        ChecksumType.Sha256     => SHA256.Create(),
-        ChecksumType.Sha512     => SHA512.Create(),
-        // SHA1 or default
-        _                       => SHA1.Create(),
-    };
-    public static string? FileChecksum(string? filePath, HashAlgorithm alg)
-    {
-		if (string.IsNullOrEmpty(filePath)) return null;
-        string fileChecksum = "";
-        try
-        {
-            // opens the file and computes the checksum
-            // and converts it to lowercase string
-            // checks it against the version checksum
-            FileInfo file = new(filePath);
-            if (!file.Exists) return null;
-
-            using (FileStream stream = file.OpenRead())
-            {
-                if (stream.Length != 0) 
-                    fileChecksum = string.Join("", alg.ComputeHash(stream)
-                        .Select(b => b.ToString("X2"))).ToLower();
-            }
-            return fileChecksum;
-        }
-        catch (Exception e) when (e is DirectoryNotFoundException || e is FileNotFoundException)
-        {
-            Debug.WriteLine($"file or directory not found: {e.Message}");
-        }
-        catch (Exception e)
-        {
-			Debug.WriteLine(e.Message);
-        }
-        return null;
-    }
-    public static async Task<string> FileChecksumAsync(string directoryPath, HashAlgorithm alg)
-        => await Task.Run(() => FileChecksum(directoryPath, alg));
-    private async static Task<bool> WriteBytes(string path, byte[] bytes)
-    {
-        try
-        {
-            if (path == null) throw new ArgumentNullException("path");
-            if (path.Length == 0) throw new ArgumentException("Invalid Argument: Empty path");
-            if (bytes == null) throw new ArgumentNullException("bytes");
-
-            using FileStream fileStream = new(
-                path: path,
-                mode: FileMode.Create,
-                access: FileAccess.Write,
-                share: FileShare.Read,
-                bufferSize: 4096,
-                useAsync: true);
-            await fileStream.WriteAsync(bytes, 0, bytes.Length);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-    public static byte[] ReadFileInChunks(string filePath)
-    {
-		using FileStream fs = new(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-		using BufferedStream bs = new(fs);
-		using MemoryStream ms = new();
-		byte[] buffer = new byte[4096]; // Adjust buffer size as needed
-		int bytesRead;
-		while ((bytesRead = bs.Read(buffer, 0, buffer.Length)) > 0)
-		{
-			ms.Write(buffer, 0, bytesRead);
-		}
-		return ms.ToArray();
-	}
-    public static HackFile[] FilesInDirectory(string path, SearchOption searchOption = SearchOption.TopDirectoryOnly)
-    {
-        IEnumerable<string> filePaths = Directory.EnumerateFiles(path, "*", searchOption);
-        DirectoryInfo directory = new DirectoryInfo(path);
-        IEnumerable<FileInfo> fileInfo = directory.EnumerateFiles("*", searchOption);
-
-        return fileInfo.ToHackArray();
-    }
     public static HackFile[]? FilesInDirectory(
         string path, 
         Dictionary<string, Task<HackFile>>? hackFileMap,
@@ -218,7 +38,7 @@ public static class FileOperations
 
 		HackFile[]? hackFiles = [.. filePaths.SkipSelect(filePath => 
         {
-            if (hackFileMap?.TryGetValue(WindowsToOdooPath(filePath, true), out var hackTask) is true)
+            if (hackFileMap?.TryGetValue(PwaPaths.ToServerDirectory(filePath) ?? "", out var hackTask) is true)
             {
                 if (hackTask.Result != default)
                 {
@@ -233,120 +53,5 @@ public static class FileOperations
 		localAndRemoteCount = filePaths.Length - hackFiles.Length;
 
 		return hackFiles;
-    }
-    
-    public static string? GetRelativePath( string fullPath )
-    {
-        // Get the directory of the full path
-        string? directoryPath = Path.GetDirectoryName(fullPath);
-		return directoryPath?.StartsWith(HackDefaults.Instance.PwaPathAbsolute) is true
-			? directoryPath[(HackDefaults.Instance.PwaPathAbsolute.Length - HackDefaults.Instance.PwaPathRelative.Length)..]
-			: null;
-    }
-
-    public static bool OpenFile(string fullpath)
-    {
-        try
-        {
-            FileInfo fileInfo = new(fullpath);
-            if (!fileInfo.Exists) throw new Exception();
-
-            if (OperatingSystem.IsWindows())
-            {
-                Process.Start(new ProcessStartInfo(fileInfo.FullName) { UseShellExecute = true });
-            }
-            else if (OperatingSystem.IsLinux())
-            {
-                Process.Start("xdg-open", fileInfo.FullName);
-            }
-            else if (OperatingSystem.IsMacOS())
-            {
-                Process.Start("open", fileInfo.FullName);
-            }
-            else
-            {
-                Process.Start(new ProcessStartInfo(fileInfo.FullName) { UseShellExecute = true });
-            }
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-    public static bool OpenFolder(string folderPath)
-    {
-        try
-        {
-            DirectoryInfo folderInfo = new DirectoryInfo(folderPath);
-            if (!folderInfo.Exists) throw new Exception();
-
-            if (OperatingSystem.IsWindows())
-            {
-                Process.Start("explorer.exe", folderPath);
-            }
-            else if (OperatingSystem.IsLinux())
-            {
-                Process.Start("xdg-open", folderPath);
-            }
-            else if (OperatingSystem.IsMacOS())
-            {
-                Process.Start("open", folderPath);
-            }
-            else
-            {
-                Process.Start(new ProcessStartInfo(folderPath) { UseShellExecute = true });
-            }
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-        
-    
-
-    public static string? ConvertToWindowsPath(string? pathway, bool withAbsolutePath)
-    {
-        if (pathway is null) return null;
-        string[] pathwaySegmented = pathway.Split([" / "], StringSplitOptions.RemoveEmptyEntries);
-        if (pathwaySegmented[0] == "root" || pathwaySegmented[0] == HackDefaults.Instance.PwaPathRelative)
-        {
-            pathwaySegmented = pathwaySegmented[1..];
-        }
-        string relativePath = string.Join(Path.DirectorySeparatorChar.ToString(), pathwaySegmented);
-
-        return withAbsolutePath ? Path.Combine(HackDefaults.Instance.PwaPathAbsolute, relativePath) : relativePath;
-    }
-    public static string? NodePathToWindowsPath(string? pathway, bool withAbsolutePath = true)
-    {
-        if (pathway is null) return null;
-        string[] pathwaySegmented = pathway.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
-        if (pathwaySegmented[0] == "root" || pathwaySegmented[0] == HackDefaults.Instance.PwaPathRelative)
-        {
-            pathwaySegmented = pathwaySegmented[1..];
-        }
-        string relativePath = string.Join(Path.DirectorySeparatorChar.ToString(), pathwaySegmented);
-
-        return withAbsolutePath ? Path.Combine(HackDefaults.Instance.PwaPathAbsolute, relativePath) : relativePath;
-    }
-    public static string WindowsToOdooPath(string pathway, bool fromFullPath = false)
-    {
-        if (fromFullPath)
-        {
-            pathway = pathway[(HackDefaults.Instance.PwaPathAbsolute.Length - HackDefaults.Instance.PwaPathRelative.Length)..];
-        }
-        string[] pathwaySegmented = pathway.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
-        if (pathwaySegmented[0] == HackDefaults.Instance.PwaPathRelative)
-        {
-            pathwaySegmented[0] = "root";
-        }
-        if (pathwaySegmented[0] != "root")
-        {
-            pathwaySegmented = [.. pathwaySegmented.Prepend("root")];
-        }
-        string relativePath = string.Join(@" / ", pathwaySegmented);
-        return relativePath;
     }
 }

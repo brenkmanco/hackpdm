@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 
+using HackPDM.Mvvm.ViewModels.Common;
 using HackPDM.Abstractions;
 using HackPDM.Core;
 using HackPDM.Core.General;
@@ -570,7 +571,7 @@ public sealed partial class MessageBox : Page
 		{
 			// awaited, so a failure building the window reaches the native fallback below instead of
 			// leaving the caller waiting forever
-			await SafeHelper.SafeInvokerAsync( () =>
+			await UiDispatcher.Current.RunAsync( () =>
 			{
 				MessageBox mbox = HackApp.Services?.GetRequiredService<MessageBox>();
 

@@ -1,6 +1,7 @@
 import io
 import os
 from odoo import models, fields, api, Command
+from odoo.exceptions import UserError
 from webdav3.client import Client
 import hashlib as hash
 import base64
@@ -378,15 +379,17 @@ class hp_version(models.Model):
 
     @api.model
     def checkout_entry(self, version_id, node):
+        """Checks out the entry of version_id to the calling user on node (an hp.node id or name).
+        Returns True; raises UserError when the entry is checked out to someone else or deleted."""
         if not isinstance(version_id, int):
-            return
-        node_rec = None
+            raise UserError(f"checkout_entry expects a version id, got {version_id!r}")
+        node_rec = self.env["hp.node"]
         if isinstance(node, int):
-            node_rec = self.env["hp.node"].browse(node)
+            node_rec = self.env["hp.node"].browse(node).exists()
         elif isinstance(node, str):
             node_rec = self.env["hp.node"].search([("name", "=", node)], limit=1)
-        
-        # node found    
+        if not node_rec:
+            raise UserError(f"checkout_entry: node {node!r} not found")
         node_rec.ensure_one()
         v_model = self.env["hp.version"]
         v_rec = v_model.browse(version_id)
@@ -403,13 +406,17 @@ class hp_version(models.Model):
             entry.checkout_node = node_rec.id
             entry.is_checked_out = True
             v_rec.node_id = node_rec.id
+        elif entry.deleted:
+            raise UserError(f"'{entry.name}' is deleted and cannot be checked out")
         else:
-            raise Exception(f"already checked out to user {entry.checkout_user.id}")
-        
+            raise UserError(f"'{entry.name}' is already checked out to {entry.checkout_user.name}")
+        return True
+
     @api.model
     def checkout_entries(self, version_ids, node):
         for version_id in version_ids:
             self.checkout_entry(version_id, node)
+        return True
 
     @api.model
     @api.depends('entry_id', 'file_ext', 'name')

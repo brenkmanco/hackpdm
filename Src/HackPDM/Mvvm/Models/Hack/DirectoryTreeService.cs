@@ -1,3 +1,4 @@
+using HackPDM.Core;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -21,7 +22,7 @@ public interface IDirectoryTreeService
 
 public sealed class DirectoryTreeService : IDirectoryTreeService
 {
-	private const string RootName = "root";
+	private const string RootName = PwaPaths.Root;
 
 	public async Task<DirectoryNode?> LoadAsync()
 	{
@@ -55,7 +56,7 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 
 		DirectoryNode node = new( name, table[ "id" ] as int? ?? 0 )
 		{
-			ExistsLocally = Directory.Exists( HackDefaults.DefaultPath( treePath, true ) ),
+			ExistsLocally = Directory.Exists( PwaPaths.ToAbsolute( treePath ) ),
 		};
 
 		if( table[ "directories" ] is Hashtable { Count: > 0 } children )
@@ -72,6 +73,6 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 	/// <summary>Every folder under the PWA as a tree path ("root\a\b").</summary>
 	private static IEnumerable<string> LocalTreePaths( string pwa )
 		=> Directory.Exists( pwa )
-			? Directory.EnumerateDirectories( pwa, "*", SearchOption.AllDirectories ).Select( dir => RootName + dir[ pwa.TrimEnd( '\\', '/' ).Length.. ] )
+			? Directory.EnumerateDirectories( pwa, "*", SearchOption.AllDirectories ).Select( dir => PwaPaths.ToServerName( dir ) ).OfType<string>()
 			: [];
 }

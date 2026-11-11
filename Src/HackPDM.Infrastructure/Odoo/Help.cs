@@ -51,14 +51,6 @@ public static class Help
             yield return sb.ToString();
         }
     }
-    public static SwDmDocumentType GetSwDmDocumentTypeFromExtension(string file_ext)
-        => file_ext.ToLower() switch
-        {
-            "sldprt" => SwDmDocumentType.swDmDocumentPart,
-            "sldasm" => SwDmDocumentType.swDmDocumentAssembly,
-            "slddrw" => SwDmDocumentType.swDmDocumentDrawing,
-            _ => SwDmDocumentType.swDmDocumentUnknown,
-        };
 }
 public static class HashConverter
 {

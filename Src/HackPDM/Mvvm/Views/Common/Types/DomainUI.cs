@@ -62,7 +62,7 @@ public partial class TreeData(string? name) : HackPDM.Domain.Representation.Tree
 		{
 			if (Node is null) return null;
 			if (DirectoryId is null or 0) return true;
-			if (FileOperations.NodePathToWindowsPath(FullPath, true) is not string path) return false;
+			if (PwaPaths.ToAbsolute( FullPath ) is not string path) return false;
 
 			DirectoryInfo folder = new(path);
 			return folder.Exists;

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HackPDM.Mvvm.ViewModels.Common;
 using HackPDM.Abstractions;
 using HackPDM.Abstractions.Structures;
 using HackPDM.Core;
@@ -114,19 +115,19 @@ public sealed partial class StatusDialogView : Page
 
 	internal async Task SetTotalDownloadedInternal()
 	{
-        await this.DispatcherQueue.ExecuteUIAsync(() =>
+        await UiDispatcher.Current.RunAsync(() =>
         {
             TotalDownload.Text = $"Session Downloaded: {OperatorConverter.LongBytesToString(StatusDialog_VM.SessionDownloaded)}";
         });
     }
 	internal async Task SetDownloadedInternal()
 	{
-		await this.DispatcherQueue.ExecuteUIAsync( ()
+		await UiDispatcher.Current.RunAsync( ()
 			=> Downloaded.Text = $"Downloaded: {OperatorConverter.LongBytesToString( ViewModel.Downloaded )}" );
 	}
     internal async Task SetProgressBarInternal()
     {
-        await this.DispatcherQueue.ExecuteUIAsync(()=>
+        await UiDispatcher.Current.RunAsync(()=>
         {
             fileCheckStatus.Maximum = ViewModel.MaxCount;
             fileCheckStatus.Value = ViewModel.TotalProcessed;

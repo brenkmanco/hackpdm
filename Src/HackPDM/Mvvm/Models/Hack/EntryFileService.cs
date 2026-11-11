@@ -63,15 +63,7 @@ public interface IEntryFileService
 
 public sealed class EntryFileService : IEntryFileService
 {
-	private const int RootPrefixLength = 5; // "root\" at the start of every tree path
-
-	public string ResolveLocalDirectory( string? nodePath )
-	{
-		string root = HackDefaults.Instance.PwaPathAbsolute;
-		return nodePath is null || nodePath.Length < RootPrefixLength
-			? root
-			: Path.Combine( root, nodePath[ RootPrefixLength.. ] );
-	}
+	public string ResolveLocalDirectory( string? nodePath ) => PwaPaths.ToAbsolute( nodePath ) ?? PwaPaths.Vault;
 
 	public async Task<IReadOnlyList<string>> OpenEntriesAsync( IEnumerable<EntryRow> entries, EntryOpenMode mode )
 	{
@@ -90,7 +82,7 @@ public sealed class EntryFileService : IEntryFileService
 			{
 				case EntryOpenTarget.Local when entry.FullName is not null:
 					// remote entries carry an Odoo path that has to be mapped into the local PWA
-					OpenFile( hasRemoteId ? FileOperations.ConvertToWindowsPath( entry.FullName, true ) ?? entry.FullName : entry.FullName );
+					OpenFile( hasRemoteId ? PwaPaths.ToAbsolute( entry.FullName ) ?? entry.FullName : entry.FullName );
 					break;
 				case EntryOpenTarget.Remote:
 					await OpenLatestRemoteAsync( entry.Id ?? 0 );
@@ -125,14 +117,14 @@ public sealed class EntryFileService : IEntryFileService
 			try
 			{
 				string? path = entry.Id is not ( null or 0 )
-					? FileOperations.ConvertToWindowsPath( entry.FullName, true )
+					? PwaPaths.ToAbsolute( entry.FullName )
 					: entry.FullName;
 				if( path is null )
 					continue;
 
 				FileInfo file = new( path );
 				if( file.Exists && file.DirectoryName is { } dir && opened.Add( dir ) )
-					FileOperations.OpenFolder( dir );
+					ShellLauncher.OpenFolder( dir );
 			}
 			catch( Exception )
 			{
@@ -142,10 +134,10 @@ public sealed class EntryFileService : IEntryFileService
 	}
 
 	public bool OpenFolder( string path )
-		=> Directory.Exists( path ) && FileOperations.OpenFolder( path );
+		=> Directory.Exists( path ) && ShellLauncher.OpenFolder( path );
 
 	public bool OpenFile( string path )
-		=> FileOperations.OpenFile( path );
+		=> ShellLauncher.OpenFile( path );
 
 	public List<FileInfo> FindLocalFiles( string directory, IEnumerable<EntryRow> entries )
 		=> [ .. entries
@@ -183,7 +175,7 @@ public sealed class EntryFileService : IEntryFileService
 	public bool HasConflictingLocalCopy( HpVersion version )
 	{
 		FileInfo file = new( Path.Combine( version.WinPathway ?? "", version.name ?? "" ) );
-		return file.Exists && !FileOperations.SameChecksum( file, version.checksum ?? "" );
+		return file.Exists && !Checksums.Matches( file.FullName, version.checksum );
 	}
 
 	public string DownloadVersion( HpVersion version, bool toTemp )

@@ -113,18 +113,34 @@ public class HackResultTree
 
 
 
+		// one resolver (and vault index) per tree, owned by its root
+		private SwReferenceResolver? _resolver;
+		private SwReferenceResolver Resolver => Parent?.Resolver ?? ( _resolver ??= new( HackDefaults.Instance.PwaPathAbsolute ) );
+
+		/// <summary>Where a reference that can't be found is reported: its stored path on Windows, else next to the referencing file.</summary>
+		private static string UnresolvedPath( string stored, string? referencing )
+			=> OperatingSystem.IsWindows() || Path.GetDirectoryName( referencing ) is not { Length: > 0 } dir
+				? stored
+				: Path.Combine( dir, SwReferenceResolver.FileName( stored ) );
+
+		private bool IsAncestorOrSelf( string path )
+		{
+			var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+			for( var node = this; node is not null; node = node.Parent )
+				if( node.Value?.Hack?.FullPath is { } p && string.Equals( Path.GetFullPath( p ), Path.GetFullPath( path ), comparison ) )
+					return true;
+			return false;
+		}
+
 		public async Task ProcessDependencies(bool stopAtBroken = true)
 		{
 			if( IsProcessed || IsBroken || (stopAtBroken && IsBrokenBranchPropagated) )
 				return;
 
-			// find all dependencies
-			List<string[]>? dependencies = null;
-
 			if( IsLeaf )
 			{
 				// if parent file is not a dependent type, return clean
-				if( !( this.Value?.Hack?.TypeExt is { } ext && OdooDefaultsConstants.DependentExt.Contains( $"{ext}" ) ) )
+				if( !( this.Value?.Hack?.TypeExt is { } ext && SwDocumentTypes.IsSolidWorksExtension( ext ) ) )
 				{
 					IsProcessed = true;
 					return;
@@ -132,23 +148,34 @@ public class HackResultTree
 
 				try
 				{
-					dependencies = SolidWorksUtil.DocMgr?.GetDependencies( this.Value?.Hack.FullPath! );
+					string referencing = this.Value!.Hack.FullPath!;
+					var references = SwDependencies.Of( referencing, Resolver );
 					// if no dependencies, return clean
-					if( dependencies is not { Count: > 0 } )
+					if( references.Count == 0 )
 					{
 						IsProcessed = true;
 						return;
 					}
 
-					foreach( var path in dependencies.Select( deps => deps[ 1 ] ) )
+					foreach( var (stored, local) in references )
 					{
-						ResultHackFile resHack = new(HackFile.GetFromPath(path, FileOperations.GetRelativePath(path)), HackTestDepth.FileExistsTest);
+						// stored references are Windows paths from the machine that saved the file
+						string path = local ?? UnresolvedPath( stored, referencing );
+						// circular references (e.g. in-context parts) would otherwise recurse forever
+						if( IsAncestorOrSelf( path ) )
+							continue;
+						ResultHackFile resHack = new(HackFile.GetFromPath(path), HackTestDepth.FileExistsTest);
 						// Add (not Children.Add) so the child knows its parent and tree
 						Add(new ResultNode(resHack));
 					}
 				}
-				catch
+				catch( Exception e )
 				{
+					// an unreadable file used to count as having no references, so an assembly
+					// could be committed without its parts; it now breaks the tree like a missing file
+					System.Diagnostics.Debug.WriteLine( $"references of {this.Value?.Hack?.FullPath} can't be read: {e}" );
+					this.Value?.MarkUnreadable();
+					IsProcessed = true;
 					return;
 				}
 			}

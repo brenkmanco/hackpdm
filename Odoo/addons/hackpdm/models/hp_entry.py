@@ -1,5 +1,6 @@
 import logging
 from odoo import models, fields, api
+from odoo.exceptions import UserError
 
 class hp_entry_name_filter(models.Model):
     #base fields
@@ -156,6 +157,30 @@ class hp_entry(models.Model):
             else:
                 record.version_property_ids = False
 
+
+    def _search_latest_version(self, operator, value):
+        """Search on the computed latest_version_id (the highest version id of each entry).
+
+        Odoo also calls this when a version's checkout fields change, to find the entries whose
+        computed checkout info depends on it; without it every commit failed on the server."""
+        self.env["hp.version"].flush_model(["entry_id"])
+        self.env.cr.execute(
+            "SELECT entry_id, MAX(id) FROM hp_version WHERE entry_id IS NOT NULL GROUP BY entry_id"
+        )
+        latest_by_entry = dict(self.env.cr.fetchall())
+
+        if value is False or value is None:
+            if operator in ("=", "!="):
+                # "= False": entries without any version
+                return [("id", "not in" if operator == "=" else "in", list(latest_by_entry))]
+            raise UserError(f"Unsupported search on latest version: {operator} {value!r}")
+
+        if isinstance(value, str) or (isinstance(value, (list, tuple)) and value and isinstance(value[0], str)):
+            version_domain = [("name", operator, value)]
+        else:
+            version_domain = [("id", operator, value)]
+        matching = set(self.env["hp.version"].search(version_domain).ids)
+        return [("id", "in", [entry for entry, latest in latest_by_entry.items() if latest in matching])]
 
     #@api.depends('version_ids')
     def _compute_latest_version(self):

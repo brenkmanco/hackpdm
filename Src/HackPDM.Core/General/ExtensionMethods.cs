@@ -286,15 +286,6 @@ public static class ExtensionConvertMethods
 {
 	public static HackFile[] ToHackArray(this IEnumerable<FileInfo> fileInfos)
 		=> [.. fileInfos.Select(file => new HackFile(file))];
-	public static ArrayList ToArrayListIDs<T>(this IEnumerable<T> source) where T : HpBaseModel, new()
-	{
-		ArrayList ids = [];
-		foreach (T model in source)
-		{
-			ids.Add(model.id);
-		}
-		return ids;
-	}
 	
 	extension(ArrayList list)
 	{

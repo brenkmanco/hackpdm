@@ -269,10 +269,16 @@ public partial class HackFileManagerViewModel : ObservableObject
 		{
 			await LoadDetailTabAsync( entry, token );
 
-			EntryPreview? preview = entry.LatestId is int versionId
-				? new EntryPreview( await _details.GetPreviewImageAsync( versionId ), null )
+			byte[]? image = entry.LatestId is int versionId ? await _details.GetPreviewImageAsync( versionId ) : null;
+			// a local-only file, or a version committed without a preview: use the local file's own preview
+			string? localPath = entry.LocalFile is { Exists: true } local ? local.FullName : null;
+			if( image is not { Length: > 0 } && localPath is not null )
+				image = await _details.GetLocalPreviewImageAsync( localPath );
+
+			EntryPreview? preview = image is { Length: > 0 }
+				? new EntryPreview( image, null )
 				: entry.Status is FileStatus.Lo
-					? new EntryPreview( null, entry.LocalFile?.FullName )
+					? new EntryPreview( null, localPath )
 					: null;
 
 			if( !token.IsCancellationRequested && preview is not null )

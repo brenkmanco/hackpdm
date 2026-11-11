@@ -179,7 +179,7 @@ public static class PdmDownloadOperations
                 onProgress?.Invoke(0, 1); // increments: the UI adds these to its counters
                 continue;
             }
-            if (FileOperations.SameChecksum(version, ChecksumType.Sha1))
+            if (Checksums.MatchesLocalCopy(version))
             {
                 log?.Invoke(StatusMessage.FOUND, $"Skipping version download: {version.name}");
                 summary.AddSkipped();
@@ -239,7 +239,7 @@ public static class PdmDownloadOperations
                         continue;
                     }
 
-                    if (got.file_contents is { Length: > 0 } && !await FileOperations.WriteAllBytesAsync(HpVersion.ToHackFile(got)))
+                    if (got.file_contents is { Length: > 0 } && !await LocalFileWriter.WriteAsync(HpVersion.ToHackFile(got)))
                     {
                         // a local write problem will not be fixed by downloading again
                         pending.Remove(id);

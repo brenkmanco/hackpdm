@@ -34,6 +34,7 @@ public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
 	[OdooProp(OdooFieldType.Char, "windows_complete_name")] public partial string? windows_complete_name { get; set; }
 	[OdooProp(OdooFieldType.DateTime, "checkout_date")] public DateTime? checkout_date {get;set;}
 	[OdooProp(OdooFieldType.Boolean, "deleted")] public bool? deleted {get;set;}
+	[OdooProp(OdooFieldType.Boolean, "is_checked_out")] public bool? is_checked_out {get;set;}
 	[OdooProp(OdooFieldType.Many2One, "latest_version_id")] public Many2One? latest_version_id {get;set;}
 	IMany2One? IHpEntryModel.latest_version_id { get =>(IMany2One?)latest_version_id; set => latest_version_id = (Many2One?)value; }
 	[OdooProp(OdooFieldType.Many2One, "dir_id")] public Many2One? dir_id {get;set;}
@@ -82,7 +83,8 @@ public partial class HpEntry
 	}
 	public partial string? windows_complete_name 
 	{ 
-		get => field ??= LocalFile?.RelativePath;
+		// the server's form, "root\dir\file"; HackFile.RelativePath is only the directory
+		get => field ??= LocalFile is { } local ? Operations.PdmCommitOperations.ServerWindowsName( local ) : null;
 		set;
 	}
 	public partial string? name 
@@ -95,13 +97,13 @@ public partial class HpEntry
 
 		if( HashedValues.TryGetValue( "windows_complete_name", out string? path ) )
 		{
-			path = FileOperations.NodePathToWindowsPath( path, true );
+			path = PwaPaths.ToAbsolute( path );
 			return new HackFile( path );
 		}
 		if( HashedValues.TryGetValue( nameof( dir_id ), out ArrayList? arr2 ) )
 		{
 			string? path2 = arr2?[1] as string;
-			path2 = FileOperations.ConvertToWindowsPath( path2, true );
+			path2 = PwaPaths.ToAbsolute( path2 );
 			return new HackFile( path2 );
 		}
 		return null;
@@ -110,14 +112,23 @@ public partial class HpEntry
 	public bool CanCheckOut() => (checkout_user?.id is null or 0) && deleted is false;
 	public bool CanUnCheckOut() => (checkout_user is not null) && checkout_user == OdooDefaults.Instance.OdooId;
 
-	public async Task CheckOut()
+	/// <summary>Checks the entry out to this user and node; false when the server refused or failed.</summary>
+	public async Task<bool> CheckOut()
 	{
-		if (!CanCheckOut()) return;
-		checkout_user = OdooDefaults.Instance.OdooId;
-		checkout_date = DateTime.Now;
-		checkout_node = OdooDefaults.Instance.MyNode.id;
+		if (!CanCheckOut()) return false;
+		if (latest_version_id?.id is not int versionId || versionId == 0 || OdooDefaults.Instance.MyNode?.id is not int nodeId)
+			return false;
 
-		bool success = await OdooClient<HpVersion>.CommandAsync<bool>( "checkout_entry", [ new ArrayList() { latest_version_id?.id ?? 0 } ] );
+		// hp.version.checkout_entry(version_id, node): the arguments used to be sent as one list,
+		// which the server ignored, so nothing was ever checked out
+		bool success = await OdooClient<HpVersion>.CommandAsync<bool>( "checkout_entry", [ versionId, nodeId ] );
+		if (success)
+		{
+			checkout_user = OdooDefaults.Instance.OdooId;
+			checkout_date = DateTime.Now;
+			checkout_node = nodeId;
+			is_checked_out = true;
+		}
 		//await WriteChangedValuesAsync("checkout_user", "checkout_date", "checkout_node");
 		//HpVersion version = new()
 		//{
@@ -125,34 +136,36 @@ public partial class HpEntry
 		//	id = latest_version_id
 		//};
 		//await version.WriteChangedValuesAsync("node_id");
-		if (success && HashedValues.TryGetValue("windows_complete_name", out object objpath) && objpath is string winpath)
-		{
-			string absPath = Path.Combine(HackDefaults.Instance.PwaPathAbsolute, winpath[5..]);
-			FileInfo file = new(absPath);
-			if (file.Exists)
-			{
-				file.Attributes &= ~FileAttributes.ReadOnly;
-			}
-		}
-
+		if (success)
+			SetLocalReadOnly(false);
+		return success;
 	}
-	public async Task UnCheckOut()
+	public async Task<bool> UnCheckOut()
 	{
-		if (!CanUnCheckOut()) return;
+		if (!CanUnCheckOut()) return false;
 		checkout_user = null;
 		checkout_date = null;
 		checkout_node = null;
+		is_checked_out = false;
 
-		await WriteChangedValuesAsync("checkout_user", "checkout_date", "checkout_node");
-		if (HashedValues.TryGetValue("windows_complete_name", out object objpath) && objpath is string winpath)
-		{
-			string absPath = Path.Combine(HackDefaults.Instance.PwaPathAbsolute, winpath[5..]);
-			FileInfo file = new(absPath);
-			if (file.Exists)
-			{
-				file.Attributes |= FileAttributes.ReadOnly;
-			}
-		}
+		bool success = await WriteChangedValuesAsync("checkout_user", "checkout_date", "checkout_node", "is_checked_out");
+		if (success)
+			SetLocalReadOnly(true);
+		return success;
+	}
+	/// <summary>Local copies are writable only while checked out.</summary>
+	private void SetLocalReadOnly(bool readOnly)
+	{
+		string? winpath = HashedValues.TryGetValue("windows_complete_name", out object? objpath) && objpath is string stored
+			? stored
+			: windows_complete_name;
+		if (string.IsNullOrEmpty(winpath))
+			return;
+		// stored as "root\dir\file" whatever the client OS
+		FileInfo file = new(PwaPaths.ToAbsolute( winpath )!);
+		if (!file.Exists)
+			return;
+		file.Attributes = readOnly ? file.Attributes | FileAttributes.ReadOnly : file.Attributes & ~FileAttributes.ReadOnly;
 	}
 	public static async Task<HpEntry?> ConvertToEntry(HackFile? hack, int dirId, HpPDMCommit? commit = null)
 	{

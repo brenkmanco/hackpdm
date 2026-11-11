@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 
+using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels;
@@ -48,33 +49,26 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
 		//ArrayList ids = versions.Select(v => v.ID).ToArrayList();
 		//ArrayList versionFields = OClient.Read(HpVersion.GetHpModel(), ids, ["id", "file_ext"]);
 		ArrayList stagedRecords = [];
+		SwReferenceResolver? resolver = null;
         try
         {
 
 		    foreach (HpRecordStaged vStaged in versionStaged)
 		    {
-			    if (vStaged is null || !OdooDefaultsConstants.DependentExt.Contains($".{vStaged.payload?["file_ext"]?.ToString().ToUpper()}")) continue;
+			    if (vStaged is null || !SwDocumentTypes.IsSolidWorksExtension(vStaged.payload?["file_ext"]?.ToString())) continue;
 
                 // TODO:
                 // windows_complete_name is null
                 // find version property where this is set
 				string? pathway = ( vStaged.payload?["WinPathway"]?.ToString() ?? vStaged.HashedValues?["windows_complete_name"] as string ) ?? throw new ArgumentException();
-                pathway = pathway.StartsWith( "root\\", StringComparison.InvariantCultureIgnoreCase ) ? pathway[ 5.. ] : pathway;
-				string ? filePathway = Path.Combine(HackDefaults.Instance?.PwaPathAbsolute ?? string.Empty, pathway ?? string.Empty);
-				List<string> paths = [];
-			    List<string[]> dependencies = SolidWorksUtil.DocMgr?.GetDependencies(filePathway); // NoInterrupt: true
-			    if (dependencies is not null && dependencies.Count > 0)
+				// "root\dir\file" whatever the OS
+				string? filePathway = PwaPaths.ToAbsolute( pathway );
+				resolver ??= new SwReferenceResolver(HackDefaults.Instance?.PwaPathAbsolute);
+				// the server links a dependency by its file name, so keep every reference: one saved
+				// from another folder or machine (not under the vault) used to be dropped here
+				List<string> paths = [.. SwDependencies.Of(filePathway!, resolver).Select(r => r.Local ?? r.Stored)];
+			    if (paths.Count > 0)
 			    {
-				    foreach (string[] deps in dependencies)
-				    {
-					    string path = deps[1];
-					    string absolute = "";
-					    var splitPath = path.Split([$"\\{HackDefaults.Instance.PwaPathRelative}\\"], StringSplitOptions.RemoveEmptyEntries);
-					    if (splitPath.Length == 2)
-						    absolute = Path.Combine([HackDefaults.Instance.PwaPathAbsolute, splitPath[1]]);
-					    else continue;
-					    paths.Add(absolute);
-				    }
 
 				    //HpVersion[] getVersions = HpVersion.GetFromPaths(includedFields: ["name", "entry_id"], fullPaths: [.. paths]);
                     // every version's dependencies are staged, not just the last version's
@@ -86,6 +80,8 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
                         payload = new Hashtable
                         {
                             { "path", p },
+                            // lets the server link this exact file, not just any file of that name
+                            { "windows_complete_name", PwaPaths.ToServerName(p) },
                             {
                                 "version",
                                 new Hashtable

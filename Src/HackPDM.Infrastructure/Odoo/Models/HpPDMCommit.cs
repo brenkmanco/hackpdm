@@ -34,8 +34,25 @@ public partial class HpPDMCommit : HpBaseModelTransport<HpPDMCommit>, IHpPDMComm
 }
 public partial class HpPDMCommit
 { 
-	public async Task<bool> ServerCommit()
-		=> await OdooClient<HpPDMCommit>.CommandAsync<bool>("start_commit", [this.id]);
+	/// <summary>
+	/// Creates the staged records on the server. start_commit returns the commit rows; a failed
+	/// commit has committed = false and the server's reason in message_exception.
+	/// </summary>
+	public async Task<(bool Committed, string? Error)> ServerCommit()
+	{
+		object? response = await OdooClient<HpPDMCommit>.ExecuteJsonAsync("start_commit", [this.id]);
+		if (response is null)
+			return (false, OdooClient.LatestException is { Length: > 0 } e ? e : "no response from the server");
+		if (response is ArrayList { Count: > 0 } rows && rows[0] is Hashtable row)
+		{
+			bool committed = row["committed"] is true;
+			this.committed = committed;
+			errored = row["errored"] is true;
+			message_exception = row["message_exception"] as string;
+			return committed ? (true, null) : (false, message_exception ?? "the server did not complete the commit");
+		}
+		return (false, "the server did not complete the commit");
+	}
 	public async Task<bool> ServerClear()
 		=> await OdooClient<HpPDMCommit>.CommandAsync<bool>("clear_commit", [this.id]);
 }

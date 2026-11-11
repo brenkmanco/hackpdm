@@ -19,18 +19,30 @@ public class HackDefaults : IHackDefaults
 		get => SettingsProvider?.Get<string>("PWAPathAbsolute") ?? "";
 		set => SettingsProvider?.Set("PWAPathAbsolute", value);
 	}
+	/// <summary>
+	/// The working folder's name. It was worked out once and kept, so after the working folder
+	/// changed it still named the old one (and relative paths came out wrong, or threw); it now
+	/// follows <see cref="PwaPathAbsolute"/>, unless set explicitly for the current folder.
+	/// </summary>
 	public string PwaPathRelative
 	{
 		get
 		{
-			field ??= Path.GetFileName(PwaPathAbsolute);
+			string absolute = PwaPathAbsolute;
+			if (field is null || _relativeFor != absolute)
+			{
+				field = Path.GetFileName(Path.TrimEndingDirectorySeparator(absolute));
+				_relativeFor = absolute;
+			}
 			return field;
 		}
 		set
 		{
 			field = value;
+			_relativeFor = PwaPathAbsolute;
 		}
 	}
+	private string? _relativeFor;
 	public string MeasureFileSize
 	{
 		get => SettingsProvider?.Get<string>("MeasureFileSize") ?? "";
@@ -68,18 +80,5 @@ public class HackDefaults : IHackDefaults
 			return;
 		}
 		Instance.SettingsProvider = settingsProvider;
-	}
-	public static string DefaultPath(string? pathway, bool withAbsolute = false)
-	{
-		if (pathway is null || pathway == "") return withAbsolute ? Instance.PwaPathAbsolute : "root";
-		// tree paths use '\\'; accept '/' too and join with the platform separator so this works off Windows
-		string[] paths = pathway.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
-		paths = [.. paths.Skip(1)];
-
-		string relativePath = string.Join(Path.DirectorySeparatorChar, paths);
-
-		if (withAbsolute) return Path.Combine(Instance.PwaPathAbsolute, relativePath);
-
-		return relativePath;
 	}
 }

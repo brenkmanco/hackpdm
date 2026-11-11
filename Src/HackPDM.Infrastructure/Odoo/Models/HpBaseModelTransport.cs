@@ -16,53 +16,6 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 {
 	// (MVVM) VIEWMODEL
 }
-public abstract partial class HpBaseModelTransport
-{
-	protected static new readonly Dictionary<Type, string> HpModelDictionary = new()
-	{
-		{typeof(IHpNodeModel),                OdooDefaultsConstants.HP_NODE},
-		{typeof(IHpEntryModel),               OdooDefaultsConstants.HP_ENTRY},
-		{typeof(IHpEntryNameFilterModel),     OdooDefaultsConstants.HP_ENTRY_NAME_FILTER},
-		{typeof(IHpDirectoryModel),           OdooDefaultsConstants.HP_DIRECTORY},
-		{typeof(IHpCategoryModel),            OdooDefaultsConstants.HP_CATEGORY},
-		{typeof(IHpCategoryPropertyModel),    OdooDefaultsConstants.HP_CATEGORY_PROPERTY},
-		{typeof(IHpVersionModel),             OdooDefaultsConstants.HP_VERSION},
-		{typeof(IHpVersionPropertyModel),     OdooDefaultsConstants.HP_VERSION_PROPERTY},
-
-		{typeof(IHpPDMCommitModel),     OdooDefaultsConstants.HP_PDM_COMMIT},
-		{typeof(IHpRecordStagedModel),     OdooDefaultsConstants.HP_RECORD_STAGED},
-
-		{typeof(IHpVersionRelationshipModel), OdooDefaultsConstants.HP_VERSION_RELATIONSHIP},
-		{typeof(IHpReleaseModel),             OdooDefaultsConstants.HP_RELEASE},
-		{typeof(IHpReleaseVersionRelModel),   OdooDefaultsConstants.HP_RELEASE_VERSION_REL},
-		{typeof(IHpTypeModel),                OdooDefaultsConstants.HP_TYPE},
-		{typeof(IHpPropertyModel),            OdooDefaultsConstants.HP_PROPERTY},
-		{typeof(IHpSettingModel),             OdooDefaultsConstants.HP_SETTINGS},
-		{typeof(IIrAttachment),				  OdooDefaultsConstants.IR_ATTACHMENT},
-		{typeof(IHpUserModel),                OdooDefaultsConstants.RES_USERS},
-
-		{typeof(HpNode),                OdooDefaultsConstants.HP_NODE},
-		{typeof(HpEntry),               OdooDefaultsConstants.HP_ENTRY},
-		{typeof(HpEntryNameFilter),     OdooDefaultsConstants.HP_ENTRY_NAME_FILTER},
-		{typeof(HpDirectory),           OdooDefaultsConstants.HP_DIRECTORY},
-		{typeof(HpCategory),            OdooDefaultsConstants.HP_CATEGORY},
-		{typeof(HpCategoryProperty),    OdooDefaultsConstants.HP_CATEGORY_PROPERTY},
-		{typeof(HpVersion),             OdooDefaultsConstants.HP_VERSION},
-		{typeof(HpVersionProperty),     OdooDefaultsConstants.HP_VERSION_PROPERTY},
-		{typeof(HpVersionRelationship), OdooDefaultsConstants.HP_VERSION_RELATIONSHIP},
-
-		{typeof(HpPDMCommit),			OdooDefaultsConstants.HP_PDM_COMMIT},
-		{typeof(HpRecordStaged),		OdooDefaultsConstants.HP_RECORD_STAGED},
-
-		{typeof(HpRelease),             OdooDefaultsConstants.HP_RELEASE},
-		{typeof(HpReleaseVersionRel),   OdooDefaultsConstants.HP_RELEASE_VERSION_REL},
-		{typeof(HpType),                OdooDefaultsConstants.HP_TYPE},
-		{typeof(HpProperty),            OdooDefaultsConstants.HP_PROPERTY},
-		{typeof(HpSetting),             OdooDefaultsConstants.HP_SETTINGS},
-		{typeof(IrAttachment),          OdooDefaultsConstants.IR_ATTACHMENT},
-		{typeof(HpUser),                OdooDefaultsConstants.RES_USERS},
-	};
-}
 public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport where T : HpBaseModelTransport, new()
 {
 	public Hashtable					ComputeHashtable(bool includeEmpty, string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
@@ -158,9 +111,7 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 	public static Task<ArrayList>		MultiCreateAsync(ArrayList records, bool withEmpty = false)
 	{
 		ArrayList hts = records.Select((HpBaseModelTransport<T> v) => v.ComputeHashtable(withEmpty)).ToArrayList();
-		var type = typeof(T);
-		string hpmodel = HpModelDictionary.TryGetValue(type, out hpmodel) ? hpmodel : null;
-		var tempId = OClient.CreateAsync(hpmodel, hts);
+		var tempId = OClient.CreateAsync(GetHpModel(), hts);
 		return tempId;
 	}
 	public static Task<ArrayList>		MultiStageAsync(HpBaseModelTransport<T>[] records, bool withEmpty = false )
@@ -257,18 +208,7 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 }
 public abstract partial class HpBaseModelTransport<T> 
 {
-	public override string? HpModel 
-	{ 
-		get => field ??= GetHpModel();
-		set => field = SetHpModel(value);
-	}
-	// getter setter
-	public static string? SetHpModel(string? value)
-	{
-		if (value is null) return null;
-		HpModelDictionaryGen[typeof(T).Name] = value;
-		return value;
-	}
+	public override string? HpModel => GetHpModel();
 	
 	public abstract Dictionary<string, object?> ToOdoo();
 	public static string[] GetFields( 
@@ -277,11 +217,8 @@ public abstract partial class HpBaseModelTransport<T>
 		string[]? insert = null 
 		) 
 		=> OdooFieldSelectionCache<T>.GetFields( excluded, included, insert ); 
-	public static string? GetHpModel()
-	{ 
-		
-		return HpModelDictionaryGen.GetValueOrDefault(typeof(T).Name);
-	}
+	/// <summary>The Odoo model name (generated from the class's [OdooModel] attribute).</summary>
+	public static string? GetHpModel() => HpModelDictionaryGen.GetValueOrDefault(typeof(T).Name);
 	
 	public static void				FinalizePopulation(ref T record, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
 	{

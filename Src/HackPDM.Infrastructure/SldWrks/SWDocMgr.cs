@@ -8,7 +8,8 @@ using SolidWorks.Interop.swdocumentmgr;
 
 namespace HackPDM.Infrastructure.SldWrks;
 
-public class SwDocMgr
+/// <summary>Windows only: reads SolidWorks files through the licensed SolidWorks Document Manager (COM).</summary>
+public class SwDocMgr : ISwDocumentReader
 {
     private static SwDMApplication _swDocMgr = default;
     public static SwDMApplication GetApplication() => _swDocMgr;
@@ -43,7 +44,7 @@ public class SwDocMgr
         List<string[]> listDepends = [];
 
         // get doc type
-        SwDmDocumentType swDocType = GetTypeFromString(fileName);
+        SwDmDocumentType swDocType = SwDocumentTypes.Of(fileName);
         if (swDocType == SwDmDocumentType.swDmDocumentUnknown)
         {
             return null;
@@ -89,7 +90,7 @@ public class SwDocMgr
 
     }
 
-    public List<Tuple<string, string, string, object>> GetProperties(string fileName)
+    public List<Tuple<string, string, string, object>>? GetProperties(string fileName)
     {
         SwDMDocument swDoc = default(SwDMDocument);
         SwDMConfigurationMgr swCfgMgr = default(SwDMConfigurationMgr);
@@ -101,7 +102,7 @@ public class SwDocMgr
         List<Tuple<string, string, string, object>> lstProps = [];
 
         // get doc type
-        SwDmDocumentType swDocType = GetTypeFromString(fileName);
+        SwDmDocumentType swDocType = SwDocumentTypes.Of(fileName);
         if (swDocType == SwDmDocumentType.swDmDocumentUnknown)
         {
             return null;
@@ -125,33 +126,8 @@ public class SwDocMgr
                 SwDmCustomInfoType nPropType = 0;
                 object oPropValue = swDoc.GetCustomProperty(strPropName, out nPropType);
 
-                // property type
-                string strPropType = "";
-                switch (nPropType)
-                {
-                    case SwDmCustomInfoType.swDmCustomInfoDate:
-                        strPropType = "date";
-                        oPropValue = Convert.ToDateTime(oPropValue);
-                        break;
-                    case SwDmCustomInfoType.swDmCustomInfoNumber:
-                        strPropType = "number";
-                        oPropValue = Convert.ToDecimal(oPropValue);
-                        break;
-                    case SwDmCustomInfoType.swDmCustomInfoText:
-                        strPropType = "text";
-                        oPropValue = Convert.ToString(oPropValue);
-                        break;
-                    case SwDmCustomInfoType.swDmCustomInfoYesOrNo:
-                        strPropType = "yesno";
-                        oPropValue = oPropValue.Equals("Yes");
-                        break;
-                    case SwDmCustomInfoType.swDmCustomInfoUnknown:
-                        strPropType = "";
-                        break;
-                }
-
-                // add to list
-                lstProps.Add(Tuple.Create<string, string, string, object>("", strPropName, strPropType, oPropValue));
+                var (strPropType, oValue) = ConvertProperty(nPropType, oPropValue);
+                lstProps.Add(Tuple.Create<string, string, string, object>("", strPropName, strPropType, oValue));
             }
         }
 
@@ -180,33 +156,8 @@ public class SwDocMgr
                 SwDmCustomInfoType nPropType = 0;
                 object oPropValue = swCfg.GetCustomProperty(strPropName, out nPropType);
 
-                // property type
-                string strPropType = "";
-                switch (nPropType)
-                {
-                    case SwDmCustomInfoType.swDmCustomInfoDate:
-                        strPropType = "date";
-                        oPropValue = Convert.ToDateTime(oPropValue);
-                        break;
-                    case SwDmCustomInfoType.swDmCustomInfoNumber:
-                        strPropType = "number";
-                        oPropValue = Convert.ToDecimal(oPropValue);
-                        break;
-                    case SwDmCustomInfoType.swDmCustomInfoText:
-                        strPropType = "text";
-                        oPropValue = Convert.ToString(oPropValue);
-                        break;
-                    case SwDmCustomInfoType.swDmCustomInfoYesOrNo:
-                        strPropType = "yesno";
-                        oPropValue = oPropValue.Equals("Yes");
-                        break;
-                    case SwDmCustomInfoType.swDmCustomInfoUnknown:
-                        strPropType = "";
-                        break;
-                }
-
-                // add to list
-                lstProps.Add(Tuple.Create<string, string, string, object>(strConfigName, strPropName, strPropType, oPropValue));
+                var (strPropType, oValue) = ConvertProperty(nPropType, oPropValue);
+                lstProps.Add(Tuple.Create<string, string, string, object>(strConfigName, strPropName, strPropType, oValue));
 
             }
 
@@ -217,34 +168,19 @@ public class SwDocMgr
 
     }
 
-    public static SwDmDocumentType GetTypeFromString(string modelPathName)
+    /// <summary>A Document Manager property's HackPDM type name and its value converted to match.</summary>
+    private static (string Type, object Value) ConvertProperty(SwDmCustomInfoType type, object value) => type switch
     {
+        SwDmCustomInfoType.swDmCustomInfoDate => ("date", Convert.ToDateTime(value)),
+        SwDmCustomInfoType.swDmCustomInfoNumber => ("number", Convert.ToDecimal(value)),
+        SwDmCustomInfoType.swDmCustomInfoText => ("text", Convert.ToString(value) ?? ""),
+        SwDmCustomInfoType.swDmCustomInfoYesOrNo => ("yesno", value.Equals("Yes")),
+        _ => ("", value),
+    };
 
-        // ModelPathName = fully qualified name of file
-        SwDmDocumentType nDocType = 0;
+    /// <summary>Read straight from the file: needs no Document Manager call.</summary>
+    public byte[]? GetPreviewPng(string fileName) => new SwFileReader().GetPreviewPng(fileName);
 
-        // Determine type of SOLIDWORKS file based on file extension
-        if (modelPathName.ToLower().EndsWith("sldprt"))
-        {
-            nDocType = SwDmDocumentType.swDmDocumentPart;
-        }
-        else if (modelPathName.ToLower().EndsWith("sldasm"))
-        {
-            nDocType = SwDmDocumentType.swDmDocumentAssembly;
-        }
-        else if (modelPathName.ToLower().EndsWith("slddrw"))
-        {
-            nDocType = SwDmDocumentType.swDmDocumentDrawing;
-        }
-        else
-        {
-            // Not a SOLIDWORKS file
-            nDocType = SwDmDocumentType.swDmDocumentUnknown;
-        }
-
-        return nDocType;
-
-    }
 
 
 

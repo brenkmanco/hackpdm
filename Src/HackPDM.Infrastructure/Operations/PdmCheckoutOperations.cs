@@ -26,7 +26,8 @@ public static class PdmCheckoutOperations
         foreach (var entry in filteredEntries)
         {
             log?.Invoke(StatusMessage.PROCESSING, $"Checking out {entry.name} ({entry.id})");
-            await CheckOutEntryAsync(entry);
+            if (!await CheckOutEntryAsync(entry))
+                log?.Invoke(StatusMessage.ERROR, $"Could not check out {entry.name}: {OdooClient.LatestException}");
             processed++;
             progress?.Invoke(processed, total);
         }
@@ -46,23 +47,18 @@ public static class PdmCheckoutOperations
         foreach (var entry in filteredEntries)
         {
             log?.Invoke(StatusMessage.PROCESSING, $"Unchecking out {entry.name} ({entry.id})");
-            await UnCheckOutEntryAsync(entry);
+            if (!await UnCheckOutEntryAsync(entry))
+                log?.Invoke(StatusMessage.ERROR, $"Could not undo the check out of {entry.name}: {OdooClient.LatestException}");
             processed++;
             progress?.Invoke(processed, total);
         }
     }
 
-    public static async Task CheckOutEntryAsync(HpEntry? entry)
-    {
-        if (entry is null) return;
-        await entry.CheckOut();
-    }
+    public static async Task<bool> CheckOutEntryAsync(HpEntry? entry)
+        => entry is not null && await entry.CheckOut();
 
-    public static async Task UnCheckOutEntryAsync(HpEntry? entry)
-    {
-        if (entry is null) return;
-        await entry.UnCheckOut();
-    }
+    public static async Task<bool> UnCheckOutEntryAsync(HpEntry? entry)
+        => entry is not null && await entry.UnCheckOut();
 
     public static List<HpEntry> FilterCheckoutEntries(IEnumerable<HpEntry> entries)
     {

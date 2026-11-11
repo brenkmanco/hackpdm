@@ -6,6 +6,12 @@ import re
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+def _like_literal(value):
+    """value for an =ilike domain that matches only itself (case-insensitively, as Windows and
+    SolidWorks treat file names): backslash, % and _ are LIKE wildcards/escapes."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class hp_pdm_commit(models.Model):
     _name = 'hp.pdm.commit'
     _inherit = 'hp.common.model'
@@ -119,7 +125,7 @@ class hp_pdm_commit(models.Model):
             "message_exception",
             "commit_summary",
             "node_by",
-            "staged_ids.target_model",
+            "staged_ids",
         ])
 
     def run_commit_job(self):
@@ -278,7 +284,15 @@ class hp_pdm_commit(models.Model):
         if parent_version_id and dep_path:
             parent_version = self.env["hp.version"].browse(parent_version_id)
             dep_filename = dep_path.replace("\\", "/").split("/")[-1]
-            child_entry = self.env["hp.entry"].search([("name", "=", dep_filename), ("deleted", "=", False)], limit=1)
+            child_entry = self.env["hp.entry"]
+            # the exact file when the client could place it in the vault; the name alone matched
+            # any file of that name, in any folder
+            dep_windows_name = payload.get("windows_complete_name")
+            if dep_windows_name:
+                child_entry = self.env["hp.entry"].search(
+                    [("windows_complete_name", "=ilike", _like_literal(dep_windows_name)), ("deleted", "=", False)], limit=1)
+            if not child_entry:
+                child_entry = self.env["hp.entry"].search([("name", "=ilike", _like_literal(dep_filename)), ("deleted", "=", False)], limit=1)
             if child_entry and child_entry.latest_version_id:
                 parent_version.write({"child_ids": [(4, child_entry.latest_version_id.id)]})
         row.write({"payload": {"complete": True}})

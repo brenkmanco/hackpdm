@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
@@ -24,23 +25,20 @@ public static class PdmCommitOperations
     public static async Task<HpDirectory?> CreateDirectoriesAsync(HackFile? hack)
     {
         if (hack is null) return null;
-        return (await HpDirectory.CreateNew(DirectorySegments(hack)))?.LastOrDefault()
+        return (await HpDirectory.CreateNew(new ArrayList(DirectorySegments(hack))))?.LastOrDefault()
             ?? throw new InvalidOperationException($"{HpDirectory.GetHpModel()} didn't create any records");
     }
 
     /// <summary>
-    /// The server directories a file belongs in, from the working folder down ("Projects", "Parts").
-    /// Taken from the absolute path because <see cref="HackFile.RelativePath"/> has two meanings and
-    /// separators differ by platform.
+    /// The server directories a file belongs in, from the working folder down ("Projects", "Parts");
+    /// none (the root) for a file outside it.
     /// </summary>
-    internal static ArrayList DirectorySegments(HackFile hack)
-    {
-        string? directory = hack.FullPath is { Length: > 0 } full ? Path.GetDirectoryName(full) : hack.DirectoryName;
-        if (string.IsNullOrEmpty(directory)) return [];
-        string relative = Path.GetRelativePath(HackDefaults.Instance.PwaPathAbsolute, directory);
-        if (relative == "." || relative.StartsWith("..") || Path.IsPathRooted(relative)) return [];
-        return new ArrayList(relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, '\\'], StringSplitOptions.RemoveEmptyEntries));
-    }
+    internal static string[] DirectorySegments(HackFile hack)
+        => PwaPaths.LocalSegments(hack.FullPath is { Length: > 0 } full ? Path.GetDirectoryName(full) : hack.DirectoryName) ?? [];
+
+    /// <summary>The entry's windows_complete_name on the server: "root\dir\sub\name".</summary>
+    internal static string ServerWindowsName(HackFile hack)
+        => PwaPaths.ToServerName([.. DirectorySegments(hack), hack.Name ?? ""]);
 
     public static async Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting)> FilesNotInOdooSegmentedAsync(
         IEnumerable<HackFile> hackFiles,
@@ -56,21 +54,30 @@ public static class PdmCommitOperations
             if (OdooDefaults.Instance.RestrictTypes is true && !OdooDefaults.Instance.ExtToType.ContainsKey(filepath ?? "-=-=-"))
                 continue;
 
-            string filePath = FileOperations.WindowsToOdooPath(hackArr[i].RelativePath);
+            string filePath = PwaPaths.ToServerDirectory(hackArr[i].DirectoryName) ?? hackArr[i].DirectoryName ?? "";
             ArrayList arrList =
             [
                 new ArrayList() { "name", "=", hackArr[i].Name },
-                new ArrayList() { "windows_complete_name", "=", (@"root\" + hackArr[i].RelativePath) },
+                new ArrayList() { "windows_complete_name", "=", ServerWindowsName(hackArr[i]) },
+                new ArrayList() { "deleted", "=", false },
             ];
-            HpEntry? entry = (await HpEntry.GetRecordsBySmartSearchAsync(
+            // a plain search_read: smart_read returned many2one fields as {id, name, model} maps,
+            // so checkout_user never matched and a checked-out file could not be committed
+            HpEntry? entry = (await HpEntry.GetRecordsBySearchAsync(
                 searchFilter: arrList,
-                includedFields: [nameof(HpEntry.id), nameof(HpEntry.name), nameof(HpEntry.dir_id), nameof(HpEntry.checkout_user)],
-                insertFields: ["version_ids.checksum"]))?.FirstOrDefault();
+                includedFields: [nameof(HpEntry.id), nameof(HpEntry.name), nameof(HpEntry.dir_id), nameof(HpEntry.checkout_user), nameof(HpEntry.latest_version_id)]))?.FirstOrDefault();
 
             if (entry is not null and { id: not null and not 0 })
             {
                 if (entry.checkout_user?.id == OdooDefaults.Instance.OdooId)
                 {
+                    // committing an unchanged file would only add an identical version
+                    if (await LatestChecksumAsync(entry) is { Length: > 0 } latest
+                        && string.Equals(latest, hackArr[i].GetChecksum(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        log?.Invoke(StatusMessage.SKIP, $"unchanged since the latest version, not committed: {filePath}");
+                        continue;
+                    }
                     log?.Invoke(StatusMessage.FOUND, $"entry found remotely for: {filePath}");
                     hacksFound.Add(hackArr[i]);
                     continue;
@@ -132,6 +139,12 @@ public static class PdmCommitOperations
             if (versionStaged is not { id: not 0 })
                 throw new ArgumentException("Version staging failed, Version is null or has an id of 0");
 
+            if (!CanReadReferences(hack, log))
+            {
+                onRecordStaged?.Invoke();
+                return true;
+            }
+
             log?.Invoke(StatusMessage.PROCESSING, "staging local version relationships...");
             if (!await HpVersionRelationship.StageRelationshipRecords(versionStaged))
                 throw new ArgumentException($"Failed to stage version relationships for {versionStaged.payload?["name"]}");
@@ -152,17 +165,56 @@ public static class PdmCommitOperations
         return true;
     }
 
+    /// <summary>
+    /// Whether a SolidWorks file's references and properties can be read. One that can't (damaged,
+    /// or a format the reader doesn't know) is still committed, without them, rather than failing
+    /// the whole commit.
+    /// </summary>
+    private static bool CanReadReferences(HackFile hack, Action<StatusMessage, string>? log)
+    {
+        if (!SwDocumentTypes.IsSolidWorksExtension(hack.TypeExt) || hack.FullPath is null)
+            return true;
+        try
+        {
+            SldWrks.SolidWorksUtil.DocMgr?.GetDependencies(hack.FullPath);
+            return true;
+        }
+        catch (Exception e)
+        {
+            log?.Invoke(StatusMessage.WARNING, $"{hack.Name}: references and properties can't be read ({e.Message}); committing the file without them");
+            return false;
+        }
+    }
+
+    private static async Task<string?> LatestChecksumAsync(HpEntry entry)
+    {
+        if (entry.latest_version_id?.id is not int versionId || versionId == 0)
+            return null;
+        return (await HpVersion.GetRecordsByIdsAsync([versionId], includedFields: [nameof(HpVersion.checksum)]))?.FirstOrDefault()?.checksum;
+    }
+
+    /// <summary>
+    /// The server's entry name filters (hp.entry.name.filter) as one regex, matched against file
+    /// names as hp_pdm_commit.py does; null when there are none (an empty pattern would match every file).
+    /// </summary>
+    private static Regex? EntryFilter()
+    {
+        string[] patterns = [.. (OdooDefaults.Instance?.EntryFilterPatterns ?? []).Where(p => !string.IsNullOrEmpty(p))];
+        return patterns.Length == 0 ? null : new Regex(string.Join("|", patterns), RegexOptions.IgnoreCase);
+    }
+
+    /// <summary>Whether the server would refuse a file of this name (a SolidWorks "~$" lock file, say).</summary>
+    public static bool IsFilteredName(string? name) => EntryFilter() is { } regex && regex.IsMatch(name ?? "");
+
     public static async Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting)> FilterCommitHackFilesAsync(
         IEnumerable<HackFile> hackFiles,
         Action<StatusMessage, string>? log = null)
     {
-        string combinedPattern = string.Join("|", OdooDefaults.Instance?.EntryFilterPatterns ?? []);
-        var regex = new Regex(combinedPattern, RegexOptions.IgnoreCase);
-
+        Regex? regex = EntryFilter();
         List<HackFile> hacks = [];
         foreach (HackFile hack in hackFiles)
         {
-            if (!regex.IsMatch($".{hack.TypeExt?.ToLower()}"))
+            if (regex is null || !regex.IsMatch(hack.Name ?? ""))
             {
                 hacks.Add(hack);
             }

@@ -24,46 +24,23 @@ public abstract partial class HpBaseModel
 	public static string[] UsualExcludedFields { get; set; } = [];
 	public static string[] UsualIncludedFields { get; set; } = [];
 
-	protected static readonly Dictionary<Type, string> HpModelDictionary = new()
-    {
-        {typeof(IHpNodeModel),                OdooDefaultsConstants.HP_NODE},
-        {typeof(IHpEntryModel),               OdooDefaultsConstants.HP_ENTRY},
-        {typeof(IHpEntryNameFilterModel),     OdooDefaultsConstants.HP_ENTRY_NAME_FILTER},
-        {typeof(IHpDirectoryModel),           OdooDefaultsConstants.HP_DIRECTORY},
-        {typeof(IHpCategoryModel),            OdooDefaultsConstants.HP_CATEGORY},
-        {typeof(IHpCategoryPropertyModel),    OdooDefaultsConstants.HP_CATEGORY_PROPERTY},
-        {typeof(IHpVersionModel),             OdooDefaultsConstants.HP_VERSION},
-        {typeof(IHpVersionPropertyModel),     OdooDefaultsConstants.HP_VERSION_PROPERTY},
-		{typeof(IHpPDMCommitModel),				OdooDefaultsConstants.HP_PDM_COMMIT},
-		{typeof(IHpRecordStagedModel),			OdooDefaultsConstants.HP_RECORD_STAGED},
-		{typeof(IHpVersionRelationshipModel), OdooDefaultsConstants.HP_VERSION_RELATIONSHIP},
-        {typeof(IHpReleaseModel),             OdooDefaultsConstants.HP_RELEASE},
-        {typeof(IHpReleaseVersionRelModel),   OdooDefaultsConstants.HP_RELEASE_VERSION_REL},
-        {typeof(IHpTypeModel),                OdooDefaultsConstants.HP_TYPE},
-        {typeof(IHpPropertyModel),            OdooDefaultsConstants.HP_PROPERTY},
-        {typeof(IHpSettingModel),             OdooDefaultsConstants.HP_SETTINGS},
-        {typeof(IIrAttachment),					OdooDefaultsConstants.IR_ATTACHMENT},
-        {typeof(IHpUserModel),                OdooDefaultsConstants.RES_USERS},
-    };
 
     public virtual void CompleteConstruction() { }
     // ID of the record in the database
-    public virtual string? HpModel
-    {
-        get
-        {
-            var type = GetType();
-            return HpModelDictionary.GetValueOrDefault(type);
-        }
-        set
-        {
-            var type = GetType();
-            HpModelDictionary[type] = value;
-        }
-    }
+    /// <summary>The Odoo model name, from the [OdooModel] attribute on this class or one of its interfaces.</summary>
+    public virtual string? HpModel => ModelNameOf(GetType());
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, string?> ModelNames = new();
+
+    /// <summary>The Odoo model name declared by [OdooModel] on a model class or interface (or one it implements).</summary>
+    public static string? ModelNameOf(Type type)
+        => ModelNames.GetOrAdd(type, static t =>
+            t.GetCustomAttribute<OdooModelAttribute>()?.DBName
+            ?? t.GetInterfaces().Select(i => i.GetCustomAttribute<OdooModelAttribute>()?.DBName).FirstOrDefault(n => n is not null));
     
     public bool IsRecord { get; set; }
-    public Hashtable HashedValues { get; set; } = [];
+    /// <summary>Fields read from the server that have no property (and values set for staging).</summary>
+    public Dictionary<string, object?> HashedValues { get; set; } = [];
     public string[]? ExcludedFields { get; set; }
     public string[]? InsertFields { get; set; }
     

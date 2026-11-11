@@ -1,3 +1,4 @@
+using HackPDM.Mvvm.Views.Common.Helpers;
 using HackPDM.Mvvm.Models.Hack;
 using HackPDM.Mvvm.Models.Odoo;
 using HackPDM.Mvvm.ViewModels.Common;
@@ -28,9 +29,9 @@ public static class AppComposition
 
 	public static IPdmWorkflowService Workflow => field ??= new PdmWorkflowService( Reporter );
 
-	/// <summary>Hooks view models up to the UI thread. Call once the window's dispatcher exists.</summary>
-	public static void Initialize()
-		=> UiDispatcher.Post = action => _ = SafeHelper.SafeInvokerAsync( action );
+	/// <summary>Hooks the app up to the UI thread. Call once the window's dispatcher exists.</summary>
+	public static void Initialize( Microsoft.UI.Dispatching.DispatcherQueue queue )
+		=> UiDispatcher.Current = new DispatcherQueueUiDispatcher( queue );
 
 	public static HackFileManagerViewModel CreateHackFileManager() => new(
 		Workflow,

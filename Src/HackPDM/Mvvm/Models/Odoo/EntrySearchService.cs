@@ -79,9 +79,8 @@ public sealed class EntrySearchService : IEntrySearchService
 		if( row.Id is not null )
 			return row.Directory.Split( " / " ).Skip( 1 ).ToArray();
 
-		// local results: a Windows folder inside the PWA
-		string relative = Path.GetRelativePath( HackDefaults.Instance.PwaPathAbsolute, row.Directory );
-		return relative == "." ? [] : relative.Split( [ '\\', '/' ], StringSplitOptions.RemoveEmptyEntries );
+		// local results: a folder inside the PWA
+		return PwaPaths.LocalSegments( row.Directory ) ?? [];
 	}
 
 	// internal: covered by HackPDM.Tests (Characterization/EntrySearchDomainTests), which compiles this file in
@@ -159,14 +158,13 @@ public sealed class EntrySearchService : IEntrySearchService
 			paths.Add( path );
 		}
 
-		int prefixLength = defaults.PwaPathAbsolute.Length - defaults.PwaPathRelative.Length;
 		List<SearchRow> rows = [];
 		foreach( FileInfo file in pwa.EnumerateFiles( $"*{fileName}*", SearchOption.AllDirectories ) )
 		{
 			if( rows.Count >= limit )
 				break;
 
-			string odooPath = FileOperations.WindowsToOdooPath( file.DirectoryName![ prefixLength.. ] );
+			string odooPath = PwaPaths.ToServerDirectory( file.DirectoryName ) ?? "";
 			bool isRemote = remotePathsByName.TryGetValue( file.Name.ToLower(), out var paths ) && paths.Contains( odooPath );
 			if( isRemote == matchRemote )
 				rows.Add( new SearchRow { Id = null, Name = file.Name, Directory = file.DirectoryName } );

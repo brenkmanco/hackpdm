@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
+using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
@@ -252,8 +253,15 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 			}
 		}
 
-		await commit.ServerCommit();
+		var (committed, error) = await commit.ServerCommit();
 		reporter.Complete();
+		if( !committed )
+		{
+			// nothing was created on the server; never report a failed commit as done
+			Log( StatusMessage.ERROR, $"Commit failed on the server: {error}" );
+			await reporter.NotifyAsync( $"Commit failed: {error}", "Commit Files" );
+			return;
+		}
 		await reporter.NotifyAsync( "Completed!" );
 	}
 
@@ -266,7 +274,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 			if( string.IsNullOrEmpty( item.FullName ) || string.IsNullOrEmpty( item.Type ) )
 				continue;
 
-			if( OdooDefaultsConstants.DependentExt.Contains( $".{item.Type.ToUpper()}" ) )
+			if( SwDocumentTypes.IsSolidWorksExtension( item.Type ) )
 			{
 				var (success, files, results) = await ExtensionOdoo.GetHackFileWithDependencies( item, true );
 				if( success )
@@ -292,7 +300,13 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 
 	public List<HackFile>? CollectFolderCommitFiles( string folderPath )
 	{
-		ExtensionOdoo.GetHackFolderWithDependencies( folderPath, true, out List<HackFile>? files );
+		if( !ExtensionOdoo.GetHackFolderWithDependencies( folderPath, out List<HackFile> files, out var broken ) )
+		{
+			// same rule as committing selected files: a SolidWorks file with missing references is not committed
+			foreach( var result in broken )
+				Log( StatusMessage.ERROR, $"({result.Value?.Result}) file: {result.Value?.Hack?.FullPath}" );
+			Log( StatusMessage.WARNING, "SolidWorks files with missing references were left out of the commit" );
+		}
 		return files;
 	}
 

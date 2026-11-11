@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels;
@@ -118,10 +119,10 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 		{
 			try
 			{
-				if (!OdooDefaultsConstants.DependentExt.Contains($".{stage.payload?["file_ext"]?.ToString()?.ToUpper()}")) continue;
+				if (!SwDocumentTypes.IsSolidWorksExtension(stage.payload?["file_ext"]?.ToString())) continue;
 				string? pathway = stage.payload?["WinPathway"]?.ToString() ?? stage.HashedValues?["windows_complete_name"] as string;
-				pathway = pathway?.StartsWith( "root\\", StringComparison.InvariantCultureIgnoreCase ) is true ? pathway[ 5.. ] : pathway;
-				string? filePath = Path.Combine(HackDefaults.Instance?.PwaPathAbsolute ?? "", pathway ?? "");
+				// "root\dir\file" whatever the OS
+				string? filePath = PwaPaths.ToAbsolute( pathway );
 				List<string> paths = [];
 
 				List<Tuple<string, string, string, object>> props = SolidWorksUtil.DocMgr.GetProperties(filePath);

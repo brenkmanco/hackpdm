@@ -34,7 +34,7 @@ public class EntryRow : HackPDM.Domain.Representation.EntryRow
 
 			string? path = ReprType switch
 			{
-				EntryReprType.Both or EntryReprType.Remote => FileOperations.ConvertToWindowsPath(FullName, true),
+				EntryReprType.Both or EntryReprType.Remote => PwaPaths.ToAbsolute( FullName ),
 				EntryReprType.Local => FullName,
 				_ => null,
 			};

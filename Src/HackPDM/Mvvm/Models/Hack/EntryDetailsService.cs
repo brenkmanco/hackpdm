@@ -8,6 +8,7 @@ using HackPDM.Core.General;
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.Models;
+using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Shared.GlobalData;
 
 using EntryRow = HackPDM.Domain.Representation.EntryRow;
@@ -27,6 +28,9 @@ public interface IEntryDetailsService
 	Task<List<PropertiesRow>> GetPropertiesAsync( EntryRow entry );
 	Task<List<VersionRow>> GetVersionInfoAsync( EntryRow entry );
 	Task<byte[]?> GetPreviewImageAsync( int? versionId );
+
+	/// <summary>The saved preview of a local SolidWorks file (read from the file itself), or null.</summary>
+	Task<byte[]?> GetLocalPreviewImageAsync( string? filePath );
 }
 
 public sealed class EntryDetailsService : IEntryDetailsService
@@ -100,7 +104,7 @@ public sealed class EntryDetailsService : IEntryDetailsService
 		if( versions.Length == 0 )
 			return [];
 
-		List<HpVersionProperty[]>? all = await HpVersion.GetAllVersionPropertiesAsync( versions.ToArrayListIDs() );
+		List<HpVersionProperty[]>? all = await HpVersion.GetAllVersionPropertiesAsync( versions.GetIDs() );
 		var rows = ( all ?? [] )
 			.Where( props => props is { Length: > 0 } )
 			.SelectMany( props => props )
@@ -170,5 +174,12 @@ public sealed class EntryDetailsService : IEntryDetailsService
 		if( version.preview_image is null && !await version.GetPreviewImage() )
 			return null;
 		return version.preview_image;
+	}
+
+	public Task<byte[]?> GetLocalPreviewImageAsync( string? filePath )
+	{
+		if( filePath is null || !SwDocumentTypes.IsSolidWorks( filePath ) || SolidWorksUtil.DocMgr is not { } reader )
+			return Task.FromResult<byte[]?>( null );
+		return Task.Run( () => reader.GetPreviewPng( filePath ) );
 	}
 }

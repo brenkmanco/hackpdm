@@ -37,7 +37,6 @@ public partial class HackApp : Application
 	public static IServiceProvider? Services { get; private set; }
     public static Window? Window;
     public static Frame? RootFrame;
-    public static DispatcherQueue DispatcherQueue;
     public static CoreSettings CoreSettings;
 
 	// To fix CS0121, fully qualify the InitializeComponent() call to specify the correct method.
@@ -100,8 +99,7 @@ public partial class HackApp : Application
 		Window.Closed += Window_Closed;
         Window.Activate();
 
-        DispatcherQueue = Window.DispatcherQueue;
-        AppComposition.Initialize();
+        AppComposition.Initialize(Window.DispatcherQueue);
 		ConfigureServices();
 		AppComposition.Theme.Attach(Window);
 

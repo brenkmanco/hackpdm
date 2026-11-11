@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
+using HackPDM.Mvvm.ViewModels.Common;
 using HackPDM.Core;
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
@@ -544,7 +545,7 @@ public sealed partial class HackFileManagerView : Page
 		_pipWindow = null;
 
 		// put the preview back once the window is gone (on the UI thread, avoiding duplicates)
-		DispatcherQueue.TryEnqueue( () =>
+		UiDispatcher.Post( () =>
 		{
 			if( ImageSlot.Children.Contains( OdooEntryImage ) )
 				return;

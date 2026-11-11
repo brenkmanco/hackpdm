@@ -15,6 +15,14 @@ public record ResultHackFile(bool IsBroken, bool IsTested, HackTestDepth TestDep
 		DoTest(test);
 	}
 
+	/// <summary>The file's references could not be read, so its dependency tree is unknown.</summary>
+	public void MarkUnreadable()
+	{
+		Result = HackResult.CorruptDepFile;
+		IsBroken = true;
+		IsTested = true;
+	}
+
 	public void DoTest() => DoTest(TestDepth);
 	public void DoTest(HackTestDepth test)
 	{
@@ -42,7 +50,7 @@ public record ResultHackFile(bool IsBroken, bool IsTested, HackTestDepth TestDep
 			resultPWA |= HackResult.MissingFile;
 			return resultPWA;
 		}
-		if (!FileOperations.InPWAFolder(Hack.FullPath))
+		if (!PwaPaths.IsInside(Hack.FullPath))
 		{
 			resultPWA &= ~HackResult.Clean;
 			resultPWA |= HackResult.OutOfPWA;

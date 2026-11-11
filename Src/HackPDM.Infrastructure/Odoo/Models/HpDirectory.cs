@@ -1,4 +1,5 @@
 ﻿using System;
+using HackPDM.Core;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -42,7 +43,7 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 	{
 		// a copy: the caller's list is not ours to change
 		paths = new ArrayList( paths );
-		paths.Insert( 0, "root" );
+		paths.Insert( 0, PwaPaths.Root );
 
 		Hashtable last = await LastAvailableDirectory( paths );
 		// this means that all directories in paths were found 

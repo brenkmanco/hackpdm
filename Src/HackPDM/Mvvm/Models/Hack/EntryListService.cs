@@ -79,7 +79,7 @@ public sealed class EntryListService : IEntryListService
 			{
 				if( ( pair.Value as Hashtable )?[ "fullname" ] is not string remotePath )
 					continue;
-				map.Add( remotePath, HashAsync( FileOperations.ConvertToWindowsPath( remotePath, true ), throttle ) );
+				map.Add( remotePath, HashAsync( PwaPaths.ToAbsolute( remotePath ), throttle ) );
 			}
 			await Task.WhenAll( map.Values );
 			return map;
@@ -102,7 +102,7 @@ public sealed class EntryListService : IEntryListService
 	/// <summary>Files in the folder that have no remote entry (not hashed: local-only rows never need the checksum).</summary>
 	private static Task<(HackFile[] files, int localAndRemoteCount)> FindLocalOnlyFilesAsync( string? treePath, Dictionary<string, Task<HackFile>>? remoteMap )
 	{
-		string path = HackDefaults.DefaultPath( treePath, true );
+		string path = PwaPaths.ToAbsolute( treePath ) ?? PwaPaths.Vault;
 		return Task.Run( () =>
 		{
 			if( treePath is null || !Directory.Exists( path ) )

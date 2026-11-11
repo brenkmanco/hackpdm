@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
+using HackPDM.Mvvm.ViewModels.Common;
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Shared.GlobalData;
@@ -88,7 +89,7 @@ internal static class SmokeTestRunner
 		} );
 
 		StartUiStallProbe();
-		HackApp.DispatcherQueue.TryEnqueue( async () =>
+		UiDispatcher.Post( async () =>
 		{
 			int code;
 			try
@@ -294,7 +295,7 @@ internal static class SmokeTestRunner
 			{
 				var sw = Stopwatch.StartNew();
 				var ran = new TaskCompletionSource( TaskCreationOptions.RunContinuationsAsynchronously );
-				if( !HackApp.DispatcherQueue.TryEnqueue( () => ran.TrySetResult() ) )
+				if( !UiDispatcher.Post( () => ran.TrySetResult() ) )
 					return;
 				await ran.Task;
 				long waited = sw.ElapsedMilliseconds;

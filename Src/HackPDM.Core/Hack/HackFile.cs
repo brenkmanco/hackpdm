@@ -155,7 +155,7 @@ public class HackFile : HackBaseFile, IHackFileModel
         ModifiedDate = file.LastWriteTime.ToUniversalTime();
         FileSize = file.Length;
         if (computeChecksum)
-            Checksum = FileOperations.FileChecksum( file.FullName, SHA1.Create() );
+            Checksum = Checksums.OfFile( file.FullName );
     }
 	public HackFile(EntryRow entry)
 	{
@@ -167,7 +167,7 @@ public class HackFile : HackBaseFile, IHackFileModel
 	{
 		this.FullPath = entry.ReprType is EntryReprType.Local
 			? entry.FullName
-			: FileOperations.ConvertToWindowsPath(entry.FullName, true);
+			: PwaPaths.ToAbsolute( entry.FullName );
 		
 		if (initFileInfo)
 		{
@@ -235,7 +235,7 @@ public class HackFile : HackBaseFile, IHackFileModel
 		Checksum = null;
 	}
     public void InitializeHackFromPath(string? path) => AssignToSelf(GetFromPath(path));
-    public string? GetChecksum() => Checksum ??= FileOperations.FileChecksum( FullPath, SHA1.Create() ) ;
+    public string? GetChecksum() => Checksum ??= Checksums.OfFile( FullPath ) ;
 	private void AssignToSelf(HackFile? hack)
     {
         this.Info = hack?.Info;
@@ -267,7 +267,7 @@ public class HackFile : HackBaseFile, IHackFileModel
         {
             hack = GetHackFromPathUninitialized(entry.FullName, null);
         }
-        hack?.RelativePath = Path.Combine("root", hack?.DirectoryName?[Math.Min(HackDefaults.Instance.PwaPathAbsolute.Length+1, hack.DirectoryName.Length)..] ?? "");
+        hack?.RelativePath = Path.Combine([PwaPaths.Root, .. PwaPaths.LocalSegments(hack?.DirectoryName) ?? []]);
         return hack;
     }
 	public static HackFile? GetFromPath(string? path, string? directory = null, bool initWithFileInfo=true, bool computeChecksum=true)
@@ -285,7 +285,7 @@ public class HackFile : HackBaseFile, IHackFileModel
 			hack = GetHackFromPathUninitialized(path, directory);
 		}
 
-        hack?.RelativePath = Path.Combine("root", hack?.DirectoryName?[Math.Min(HackDefaults.Instance.PwaPathAbsolute.Length+1, hack.DirectoryName.Length)..] ?? "");
+        hack?.RelativePath = Path.Combine([PwaPaths.Root, .. PwaPaths.LocalSegments(hack?.DirectoryName) ?? []]);
         return hack;
     }
     private static HackFile? GetHackFromPathUninitialized(string? path, string? directory=null)
@@ -324,7 +324,7 @@ public class HackFile : HackBaseFile, IHackFileModel
         foreach (HackFile file in hackFiles)
         {
             if (file.FileContents is { Length: > 0 })
-                tasks.Add(FileOperations.WriteAllBytesAsync(file));
+                tasks.Add(LocalFileWriter.WriteAsync(file));
             
             if (file.FileSize is long size)
             {
@@ -337,7 +337,7 @@ public class HackFile : HackBaseFile, IHackFileModel
         foreach (bool val in waitTask.Result) success += val ? 1 : 0;
         return (success, sizeAgg);
     }
-    public long? CreateFile() => FileOperations.WriteAllBytes(this);
+    public long? CreateFile() => LocalFileWriter.Write(this);
 
     // a HackFile stands for a file on disk: two are equal when they point at the same path
     private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()

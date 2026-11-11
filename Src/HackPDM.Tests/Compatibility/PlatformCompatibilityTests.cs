@@ -2,7 +2,8 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using Xunit;
-using HackPDM.Core;
+using HackPDM.Core;
+
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.SldWrks;
@@ -145,20 +146,20 @@ public class PlatformCompatibilityTests
 
         // 1. Windows path format with backslashes
         string windowsPath = @"root\Mechanical\Gears\Pinion.sldprt";
-        string? normalizedFromWindows = FileOperations.NodePathToWindowsPath(windowsPath, withAbsolutePath: false);
+        string? normalizedFromWindows = PwaPaths.ToRelative(windowsPath);
 
         string expected = $"Mechanical{sep}Gears{sep}Pinion.sldprt";
         Assert.Equal(expected, normalizedFromWindows);
 
         // 2. Linux path format with forward slashes
         string linuxPath = "root/Mechanical/Gears/Pinion.sldprt";
-        string? normalizedFromLinux = FileOperations.NodePathToWindowsPath(linuxPath, withAbsolutePath: false);
+        string? normalizedFromLinux = PwaPaths.ToRelative(linuxPath);
 
         Assert.Equal(expected, normalizedFromLinux);
 
         // 3. Mixed path format with both backslashes and forward slashes
         string mixedPath = "root\\Mechanical/Gears\\Pinion.sldprt";
-        string? normalizedFromMixed = FileOperations.NodePathToWindowsPath(mixedPath, withAbsolutePath: false);
+        string? normalizedFromMixed = PwaPaths.ToRelative(mixedPath);
 
         Assert.Equal(expected, normalizedFromMixed);
     }
@@ -166,9 +167,8 @@ public class PlatformCompatibilityTests
     [Fact]
     public void PathNormalization_NullInput_ReturnsNullGracefully()
     {
-        Assert.Null(FileOperations.NodePathToWindowsPath(null));
-        Assert.Null(FileOperations.ConvertToWindowsPath(null, withAbsolutePath: false));
-        Assert.Null(FileOperations.ConvertToWindowsPath(null, withAbsolutePath: true));
+        Assert.Null(PwaPaths.ToAbsolute(null));
+        Assert.Equal("", PwaPaths.ToRelative(null));
     }
 
     [Fact]
@@ -176,9 +176,9 @@ public class PlatformCompatibilityTests
     {
         if (!OperatingSystem.IsWindows())
         {
-            // On Linux or macOS, SolidWorks COM cannot run.
-            // Verify safe degradation to null rather than TypeLoadException or COMException.
-            Assert.Null(SolidWorksUtil.DocMgr);
+            // On Linux or macOS, SolidWorks COM cannot run: the managed file reader is used instead
+            // (no TypeLoadException or COMException).
+            Assert.IsType<SwFileReader>(SolidWorksUtil.DocMgr);
         }
         else
         {

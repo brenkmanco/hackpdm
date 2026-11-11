@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 
+using HackPDM.Core;
 using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Infrastructure.Odoo;
@@ -53,22 +54,7 @@ internal class HackUpdater
 		try
 		{
 			MessageBox.ShowAsync($"Opening {PUBLISH_URL}");
-			if (OperatingSystem.IsWindows())
-			{
-				Process.Start(new ProcessStartInfo(PUBLISH_URL) { UseShellExecute = true });
-			}
-			else if (OperatingSystem.IsLinux())
-			{
-				Process.Start("xdg-open", PUBLISH_URL);
-			}
-			else if (OperatingSystem.IsMacOS())
-			{
-				Process.Start("open", PUBLISH_URL);
-			}
-			else
-			{
-				Process.Start(new ProcessStartInfo(PUBLISH_URL) { UseShellExecute = true });
-			}
+			ShellLauncher.OpenUrl(PUBLISH_URL);
 			HackApp.Current.Exit();
 		}
 		catch

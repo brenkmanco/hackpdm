@@ -19,6 +19,7 @@ using HackPDM.Core.Hack;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo.Models;
+using HackPDM.Infrastructure.Operations;
 using HackPDM.Infrastructure.RPC;
 using HackPDM.Infrastructure.SldWrks;
 
@@ -93,9 +94,10 @@ public static class ExtensionOdoo
 	private static System.Threading.CancellationTokenSource RequestTimeout( int timeoutMs )
 		=> new( timeoutMs > 0 ? TimeSpan.FromMilliseconds( timeoutMs ) : DefaultRequestTimeout );
 
-	public async static Task<JsonRpcResponse?> SendJsonAsync( this JsonRpcRequest request, string url, int timeout = 0, IWebProxy? proxy = null )
+	public async static Task<JsonRpcResponse?> SendJsonAsync( this JsonRpcRequest request, string url, int timeout = 0, IWebProxy? proxy = null, System.Threading.CancellationToken token = default )
 	{
 		using var cts = RequestTimeout( timeout );
+		using var link = token.Register( cts.Cancel );
 		var httpClient = HttpClientFor( proxy, pooled: !ServerClosesConnections( url ) );
 
 		// PostAsJsonAsync handles body serialization, sets Content-Type to application/json, 
@@ -144,7 +146,11 @@ public static class ExtensionOdoo
 	}
 	public static async Task<(bool, HpVersion?)> GetVersionFromLocal( this HackFile hackFile )
 	{
-		string filePath = FileOperations.WindowsToOdooPath(hackFile.RelativePath ?? "");
+		// the file's folder as an hp.directory complete_name ("root / a / b"): from its RelativePath
+		// ("root\a\b"), else from where it is on disk
+		string filePath = hackFile.RelativePath is { Length: > 0 } relative
+			? string.Join(PwaPaths.DirectorySeparator, [PwaPaths.Root, .. PwaPaths.Segments(relative)])
+			: PwaPaths.ToServerDirectory(hackFile.DirectoryName ?? Path.GetDirectoryName(hackFile.FullPath)) ?? PwaPaths.Root;
 		// the domain itself (a list of conditions); it was wrapped in one extra list, which Odoo
 		// rejected with "unhashable type: 'list'"
 		ArrayList arrList =
@@ -158,26 +164,37 @@ public static class ExtensionOdoo
 
 		return (versionModel != null, versionModel);
 	}
-	public static bool GetHackFolderWithDependencies( string folderPath, bool listOutputDialog, out List<HackFile>? hackFiles )
+	/// <summary>
+	/// The files directly in <paramref name="folderPath"/> plus everything its SolidWorks files
+	/// reference, each once. Names the server's entry filters reject (SolidWorks "~$" lock files)
+	/// are left out. A SolidWorks file whose references can't all be found is left out with its
+	/// tree and reported in <paramref name="broken"/>; returns false when there were any.
+	/// </summary>
+	public static bool GetHackFolderWithDependencies( string folderPath, out List<HackFile> hackFiles, out List<HackResultTree.ResultNode> broken )
 	{
-		bool hasErrors = false;
-		Regex rxSearch = new Regex(OdooDefaultsConstants.DependentExtRegex, RegexOptions.IgnoreCase);
-		var filesInDir = Directory.EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly);
-		var matchedFiles = filesInDir.SegmentWhere(file => rxSearch.IsMatch(file ?? ""));
-		(List<HackFile>, List<HackFile>) hackSegment = (
-				[.. matchedFiles.Item1.Select(f => new HackFile(new FileInfo(f)))],
-				[.. matchedFiles.Item2.Select(f => new HackFile(new FileInfo(f)))]
-			);
-
-		IEnumerable<HackFile> allHackDependencyFiles = hackSegment.Item1.SelectMany<HackFile, HackFile>( m =>
+		HashSet<HackFile> files = [];
+		broken = [];
+		foreach( string path in Directory.EnumerateFiles( folderPath, "*", SearchOption.TopDirectoryOnly ) )
+		{
+			if( PdmCommitOperations.IsFilteredName( Path.GetFileName( path ) ) )
+				continue;
+			HackFile? hack = HackFile.GetFromPath( path );
+			if( hack is not { Exists: true } )
+				continue;
+			if( !SwDocumentTypes.IsSolidWorks( path ) )
 			{
-				var (success, hf, results) = GetHackFileWithDependencies(m).Result;
-				hasErrors |= !success;
-				return !success ? hf : Enumerable.Empty<HackFile>();
-			});
-		List<HackFile> allcombinedFiles = [.. allHackDependencyFiles, .. hackSegment.Item2.SkipWhile(hf => hf.Exists is null or false)];
-		hackFiles = allcombinedFiles;
-		return true;
+				files.Add( hack );
+				continue;
+			}
+			// the tree used to be kept only when it was broken, so no SolidWorks file was ever committed
+			var (success, tree, results) = GetHackFileWithDependencies( hack ).GetAwaiter().GetResult();
+			if( success )
+				files.AddAll( tree );
+			else
+				broken.AddRange( results );
+		}
+		hackFiles = [ .. files ];
+		return broken.Count == 0;
 	}
 	public static async Task<(bool success, List<HackFile>? hackFiles, List<HackResultTree.ResultNode> results)> GetHackFileWithDependencies( EntryRow? entry, bool listOutputDialog )
 		=> await GetHackFileWithDependencies( new HackFile( entry ) );
