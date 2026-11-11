@@ -244,7 +244,7 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 		T[]? records = await GetRecordsByIdsAsync([recordId], excludedFields: excludedFields, includedFields: includedFields, insertFields: insertFields);
 		return records != null && records!.Length > 0 ? records![0] : default;
 	}
-	public static async Task<T[]?>		GetRecordsByIdsAsync(ArrayList? recordIds, ArrayList? searchFilters = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
+	public static async Task<T[]?>		GetRecordsByIdsAsync(ArrayList? recordIds, ArrayList? searchFilters = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null, int timeoutMs = 90000)
 	{
 		string modelName = GetHpModel();
 
@@ -253,12 +253,12 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 
 		if (searchFilters == null)
 		{
-			result = await OClient.ReadAsync(modelName, recordIds, fields, 90000);
+			result = await OClient.ReadAsync(modelName, recordIds, fields, timeoutMs);
 		}
 		else
 		{
 			if (recordIds is not null and { Count: > 0 }) searchFilters.Add(new ArrayList { "id", "in", recordIds });
-			result = await OClient.BrowseAsync(modelName, [searchFilters, new ArrayList { "dir_id" }], 90000);
+			result = await OClient.BrowseAsync(modelName, [searchFilters, new ArrayList { "dir_id" }], timeoutMs);
 			// result = await OClient.SmartSearchAsync(modelName, searchFilters, [], fields, 90000);
 		}
 

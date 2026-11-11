@@ -67,6 +67,32 @@ namespace HackPDM.Core.Helper.Xaml
 		//	});
 		//	return await tcs.Task;
 		//}
+		/// <summary>
+		/// Runs an async delegate on the UI thread and completes when it has finished,
+		/// propagating its exception. Without this overload async lambdas bind to
+		/// <see cref="SafeInvokerAsync(Action)"/> as async void: the returned task completes at the
+		/// lambda's first await and any later exception is lost.
+		/// </summary>
+		internal static Task SafeInvokerAsync(Func<Task> func)
+		{
+			var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+			if (!HackApp.DispatcherQueue.TryEnqueue(async () =>
+			{
+				try
+				{
+					await func();
+					tcs.SetResult(true);
+				}
+				catch (Exception ex)
+				{
+					tcs.SetException(ex);
+				}
+			}))
+			{
+				tcs.SetException(new InvalidOperationException("UI dispatcher queue rejected the work item"));
+			}
+			return tcs.Task;
+		}
 		internal static Task SafeInvokerAsync(Action action)
 		{
 			var tcs = new TaskCompletionSource<bool>();

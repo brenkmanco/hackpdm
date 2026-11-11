@@ -160,7 +160,13 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
             // which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
             if (file_size != 0)
             {
-                return ((OClient.Read(HpModel, [this.id], [fileContents])?[0] as Hashtable)?[fileContents]) as byte[];
+                // JSON-RPC returns binary fields as base64 strings; the old `as byte[]` cast was always null
+                return ((OClient.Read(HpModel, [this.id], [fileContents])?[0] as Hashtable)?[fileContents]) switch
+                {
+                    byte[] bytes => bytes,
+                    string base64 when base64.Length > 0 => Convert.FromBase64String(base64),
+                    _ => null,
+                };
             }
         }
         return null;
@@ -213,35 +219,32 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         //if (versions.Count() != fileContentsBase64.Length) return null;
         if (versions is null) return null;
                 
-        int vLen = versions.Count;
-        var hackFiles = new HackFile[vLen];
-    
-        for (int i = 0; i < vLen; i++)
-        {
-            HackFile hack = new(versions[i].name, null);
-            var checkUser = versions[i].checkout_user;
-                    
-            hack.Owner = (checkUser?.id is not null)
-                ? OdooDefaults.Instance?.OdooId == checkUser?.id
-				: null;
+        return [.. versions.Select(ToHackFile)];
+    }
+    /// <summary>The file to write for a version whose file_contents have been read.</summary>
+    public static HackFile ToHackFile(HpVersion version)
+    {
+        HackFile hack = new(version.name, null);
+        var checkUser = version.checkout_user;
 
-            if (versions[i] != null && versions[i].file_contents is { Length: > 0 })
-            {
-                hack.FileContents = versions[i].file_contents;
-                hack.Name = versions[i].name;
-                hack.DirectoryName = versions[i].WinPathway;
-                hack.SetModifiedDate(versions[i]?.file_modify_stamp ?? default);
-                hack.FileSize = versions[i].file_size;
-                // winpathway is probably the shortened version
-            }
-            else
-            {
-                hack.FileContents = null;
-            }
-    
-            hackFiles[i] = hack;
+        hack.Owner = (checkUser?.id is not null)
+            ? OdooDefaults.Instance?.OdooId == checkUser?.id
+            : null;
+
+        if (version.file_contents is { Length: > 0 })
+        {
+            hack.FileContents = version.file_contents;
+            hack.Name = version.name;
+            hack.DirectoryName = version.WinPathway;
+            hack.SetModifiedDate(version.file_modify_stamp ?? default);
+            hack.FileSize = version.file_size;
+            // winpathway is probably the shortened version
         }
-        return hackFiles;
+        else
+        {
+            hack.FileContents = null;
+        }
+        return hack;
     }
    
     public static async Task<List<HpVersionProperty[]>> GetAllVersionPropertiesAsync(ArrayList ids)

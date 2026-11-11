@@ -100,6 +100,10 @@ public partial class HackApp : Application
 
         DispatcherQueue = Window.DispatcherQueue;
 		ConfigureServices();
+
+        // HACKPDM_SMOKE_TEST=1: drive login -> navigation -> server round trips, then exit (CI)
+        if (HackPDM.UI.Testing.SmokeTestRunner.IsEnabled)
+            HackPDM.UI.Testing.SmokeTestRunner.Start();
     }
 
 	private void Window_Closed( object sender, WindowEventArgs args )

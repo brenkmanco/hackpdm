@@ -14,6 +14,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
 
+using WinUI.TableView;
+
 using static HackPDM.Core.General.UnsafeExtensions;
 
 using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
@@ -23,10 +25,61 @@ namespace HackPDM.UI.Types;
 public partial class DynamicGroupCollection<T> : ObservableCollection<GroupInfoList<T>>
 {
 	public CollectionViewSource ViewSource { get; private set; }
-	public ObservableCollection<T> Master { get; } = [];
+	public RangeObservableCollection<T> Master { get; } = new();
 	private Func<T, object>? _selector;
 	public bool IsGrouped => this.Count != 0 && _selector != null;
 	public bool NoGrouping { get; set; } = true;
+	public Func<T, object>? Selector => _selector;
+
+	/// <summary>
+	/// Binds this collection to a <see cref="TableView"/>.
+	/// TableView must always receive the flat <see cref="Master"/> list: handing it the grouped
+	/// <see cref="CollectionViewSource"/> view (or this collection of groups) breaks its internal
+	/// CollectionView and crashes the page. Grouping is applied through TableView's own GroupDescriptions.
+	/// </summary>
+	public void BindTo( TableView grid )
+	{
+		if( !ReferenceEquals( grid.ItemsSource, Master ) )
+			grid.ItemsSource = Master;
+#if WINDOWS
+		var selector = NoGrouping ? null : _selector;
+		var current = grid.GroupDescriptions.Count == 1 ? grid.GroupDescriptions[0] as SelectorGroupDescription : null;
+		if( selector is null )
+		{
+			if( grid.GroupDescriptions.Count > 0 )
+				grid.GroupDescriptions.Clear();
+			return;
+		}
+		if( current is not null && ReferenceEquals( current.Selector, selector ) )
+			return;
+
+		grid.GroupDescriptions.Clear();
+		grid.GroupDescriptions.Add( new SelectorGroupDescription( selector, item => item is T t ? selector( t ) : null ) );
+#endif
+	}
+}
+#if WINDOWS
+internal sealed class SelectorGroupDescription( object selector, Func<object?, object?> valueDelegate )
+	: GroupDescription( null, SortDirection.Ascending, GroupKeyComparer.Instance, valueDelegate )
+{
+	public object Selector { get; } = selector;
+}
+#endif
+/// <summary>
+/// Orders group keys of arbitrary (possibly non-comparable or mixed) types without throwing.
+/// </summary>
+internal sealed class GroupKeyComparer : IComparer
+{
+	public static readonly GroupKeyComparer Instance = new();
+	public int Compare( object? x, object? y )
+	{
+		if( ReferenceEquals( x, y ) ) return 0;
+		if( x is null ) return -1;
+		if( y is null ) return 1;
+		if( x.GetType() == y.GetType() && x is IComparable cx )
+			return cx.CompareTo( y );
+		return string.CompareOrdinal( x.ToString(), y.ToString() );
+	}
 }
 public partial class DynamicGroupCollection<T> : ObservableCollection<GroupInfoList<T>>, IItemsName
 {
@@ -135,10 +188,35 @@ public partial class DynamicGroupCollection<T> : ObservableCollection<GroupInfoL
 			}
 		}
 	}
+	/// <summary>
+	/// Replaces every row with one Reset notification (one TableView refresh) instead of
+	/// one CollectionChanged + layout pass per added row, then re-applies the grouping.
+	/// </summary>
+	public void ReplaceAll( IEnumerable<T> items )
+	{
+		Master.ReplaceAll( items );
+		if( !NoGrouping && _selector != null )
+			Regroup( _selector );
+	}
 	public void ClearAll()
 	{
 		Master.Clear();
 		base.ClearItems();
+	}
+}
+/// <summary>ObservableCollection that can swap its contents with a single Reset notification.</summary>
+public class RangeObservableCollection<T> : ObservableCollection<T>
+{
+	public void ReplaceAll( IEnumerable<T> items )
+	{
+		CheckReentrancy();
+		Items.Clear();
+		foreach( var item in items )
+			Items.Add( item );
+		OnPropertyChanged( new System.ComponentModel.PropertyChangedEventArgs( nameof( Count ) ) );
+		OnPropertyChanged( new System.ComponentModel.PropertyChangedEventArgs( "Item[]" ) );
+		OnCollectionChanged( new System.Collections.Specialized.NotifyCollectionChangedEventArgs(
+			System.Collections.Specialized.NotifyCollectionChangedAction.Reset ) );
 	}
 }
 public interface IItemsName

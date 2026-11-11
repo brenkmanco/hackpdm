@@ -110,8 +110,9 @@ public sealed partial class HackFileManager : Page
 			RowDetailsVisibilityMode = info.GroupCollapsed ? TableViewRowDetailsVisibilityMode.VisibleWhenSelected : TableViewRowDetailsVisibilityMode.Collapsed,
 			RowHeight = info.RowHeight,
 			SelectionMode = ListViewSelectionMode.Extended,
-			ItemsSource = GroupedEntries
 		};
+		// Always bind the flat list; see DynamicGroupCollection.BindTo
+		GroupedEntries?.BindTo( OdooEntryList );
 
 		// Attach Events
 		//OdooEntryList.LoadingRowGroup += OdooEntryDataGrid_LoadingRowGroup;
@@ -445,7 +446,7 @@ public sealed partial class HackFileManager : Page
 		//	ItemsPath = "Items" />
 
 		GroupedEntries?.Regroup( entryrow => entryrow.Status );
-		OdooEntryList.ItemsSource = GroupedEntries?.ViewSource.View;
+		GroupedEntries?.BindTo( OdooEntryList );
 
 		OdooHistory.ItemsSource = OHistories;
 		OdooParents.ItemsSource = OParents;
@@ -559,8 +560,8 @@ public sealed partial class HackFileManager : Page
 				: v?.ToString() ?? string.Empty;
 		} );
 
-		// Refresh ItemsSource to reflect grouping change
-		OdooEntryList.ItemsSource = GroupedEntries.NoGrouping ? GroupedEntries.Master : GroupedEntries.ViewSource.View;
+		// Refresh grouping on the TableView
+		GroupedEntries.BindTo( OdooEntryList );
 	}
 	// LoadingRowGroup removed for TableView
 	// LoadingRow removed for TableView
@@ -590,6 +591,7 @@ public sealed partial class HackFileManager : Page
 	}
 	public TreeView GetOdooDirectoryTree()
 		=> OdooDirectoryTree;
+	internal TabViewItem HistoryTabItem => HistoryTab;
 	public TableView GetOdooEntryList()
 			=> OdooEntryList;
 	public Image GetOdooEntryImage() => OdooEntryImage;
@@ -835,6 +837,10 @@ public sealed partial class HackFileManager : Page
 			{
 				Debug.WriteLine( $"Operation cancelled: {e.Message}" );
 			}
+			catch( Exception e )
+			{
+				Debug.WriteLine( $"loading {LowerTabIndex?.Name} for {entry.Name} failed: {e}" );
+			}
 		} );
 
 		if( entry.LatestId is int id )
@@ -1031,13 +1037,17 @@ public sealed partial class HackFileManager : Page
 	{
 		var grid = sender as TableView;
 		var column = e.Column;
+		// sorting is done on the source collection below; stop TableView from applying its own sort too
+		e.Handled = true;
 		if (grid?.Columns != null) foreach( var col in grid.Columns )
 		{
 			if( e.Column == col )
 				continue;
 			col.SortDirection = null;
 		}
-		var modelField = column.SortMemberPath ?? column.Header?.ToString();
+		var modelField = column.SortMemberPath
+			?? ( column as TableViewBoundColumn )?.Binding?.Path?.Path
+			?? column.Header?.ToString();
 		bool isDesc = false;
 		(column.SortDirection, isDesc) = column.SortDirection is not null
 			and SortDirection.Ascending
@@ -1046,9 +1056,8 @@ public sealed partial class HackFileManager : Page
 
 		SortLogic<string>( modelField as string ?? "", isDesc );
 		GroupedEntries?.Regroup();
-		grid?.ItemsSource = GroupedEntries?.NoGrouping is true
-							? GroupedEntries?.Master
-							: GroupedEntries?.ViewSource.View;
+		if( grid is not null )
+			GroupedEntries?.BindTo( grid );
 		// e.Column.SortDirection = e.Column.SortDirection == DataGridSortDirection.Ascending 
 		// 	? DataGridSortDirection.Descending
 		// 	: DataGridSortDirection.Ascending;
@@ -2002,8 +2011,9 @@ public sealed partial class HackFileManager : Page
 	private void TreeViewItem_Unloaded( object sender, RoutedEventArgs e )
 	{
 		var tvi = sender as TreeViewItem;
-		var data = tvi?.DataContext;
-		ItemToContainerMap.Remove( data );
+		// DataContext is null for recycled containers; Dictionary.Remove(null) throws on the UI thread
+		if( tvi?.DataContext is { } data )
+			ItemToContainerMap.Remove( data );
 	}
 	
 	

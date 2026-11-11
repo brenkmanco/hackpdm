@@ -36,19 +36,21 @@ internal static class Latest
 
 		var versions = await PdmDownloadOperations.GetLatestVersionsAsync(entryIDs, ["preview_image", "entry_id", "node_id", "file_modify_stamp", "attachment_id", "file_contents"]);
 
-		IEnumerable<IEnumerable<HpVersion>>? versionBatches = Help.BatchArray(versions, Latest.DownloadBatchSize);
+		// batches are limited by total file size as well as count (see PdmDownloadOperations.MaxBatchBytes)
+		List<List<HpVersion>>? versionBatches = versions is null ? null : PdmDownloadOperations.BatchBySize(versions, Latest.DownloadBatchSize);
 		InstanceManager.Dialog.MaxCount = versions?.Length ?? 0;
 		InstanceManager.Dialog.SkipCounter = 0;
 		InstanceManager.Dialog.ProcessCounter = 0;
 		InstanceManager.Dialog.Downloaded = 0;
 
-		if( versionBatches is null || versions is null ) {
+		if( versionBatches is not { Count: > 0 } || versions is null ) {
 			await MessageBox.ShowAsync( "Cancelled Download... No Versions to Process" );
 			return;
 		}
+		PdmDownloadOperations.DownloadSummary? summary = null;
 		try {
 			CancellationToken token = arguements.Item2 ?? CancellationToken.None;
-			await PdmDownloadOperations.ProcessDownloadsAsync(
+			summary = await PdmDownloadOperations.ProcessDownloadsAsync(
 				versionBatches,
 				token,
 				OdooDefaults.Instance.ConcurrencySize,
@@ -64,7 +66,20 @@ internal static class Latest
 		}
 
 		InstanceManager.Dialog?.SetProgressBar( versions.Length, versions.Length );
-		await MessageBox.ShowAsync( "Completed!" );
+		if( summary is null )
+			return;
+		if( summary.Failed.IsEmpty )
+		{
+			await MessageBox.ShowAsync( $"Completed! {summary.Downloaded} downloaded, {summary.Skipped} already up to date." );
+			return;
+		}
+		// never report success when files are missing (they used to be skipped silently)
+		var failed = summary.Failed.ToArray();
+		await MessageBox.ShowAsync(
+			$"Completed with {failed.Length} file(s) NOT downloaded ({summary.Downloaded} downloaded, {summary.Skipped} up to date):\n"
+			+ string.Join( "\n", failed.Take( 15 ) )
+			+ ( failed.Length > 15 ? $"\n...and {failed.Length - 15} more (see the status log)" : "" ),
+			"Get Latest" );
 	}
 
 	public static async Task ProcessDownloadsAsync( IEnumerable<IEnumerable<HpVersion>> versionBatches, CancellationToken? cToken, int maxConcurrency = 2 )
