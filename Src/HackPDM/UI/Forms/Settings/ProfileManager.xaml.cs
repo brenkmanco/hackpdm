@@ -8,7 +8,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-using CommunityToolkit.WinUI.UI.Controls;
 
 using HackPDM.Configuration;
 using HackPDM.Core;
@@ -34,7 +33,9 @@ using Windows.Storage.Pickers;
 
 using Windows.UI.Composition;
 
+#if WINDOWS
 using WinRT.Interop;
+#endif
 
 using static HackPDM.UI.Forms.Settings.ProfileManager;
 
@@ -163,7 +164,7 @@ public sealed partial class ProfileManager : Page
 	{
 		OdooLoginProgressRing.IsActive = true;
 		OdooLoginProgressRing.UpdateLayout();
-		IsLoggedIn = await AbleToLogin();
+		IsLoggedIn = await ViewModel.AbleToLoginAsync();
 		OdooLoginProgressRing.IsActive = false;
 		if( !IsLoggedIn )
 			return;
@@ -174,22 +175,13 @@ public sealed partial class ProfileManager : Page
 		Home.NavigateToPage(NavigatePageMenu.HackFileManager);
 	}
 
-	public class SavedData
-	{
-		[JsonPropertyName( "OdooAddress" )] public string OdooAddress { get; set; }
-		[JsonPropertyName( "OdooPort" )] public string OdooPort { get; set; }
-		[JsonPropertyName( "OdooDb" )] public string OdooDb { get; set; }
-		[JsonPropertyName( "PWAPathAbsolute" )] public string PWAPathAbsolute { get; set; }
-		[JsonPropertyName( "OdooCredentialTarget" )] public string OdooCredentialTarget { get; set; }
-		[JsonPropertyName( "Username" )] public string Username { get; set; }
-		[JsonPropertyName( "Password" )] public string Password { get; set; }
-	}
+	public class SavedData : SavedProfileData { }
 
 	private async void LoadJsonSettingsBtn_Click( object sender, RoutedEventArgs e )
 	{
-		// invalid cast?
-		var hwnd = HackApp.Window?.IntPtrHandle ?? 0;
-		var windowId = HackApp.Window?.AppWindow.Id ?? Win32Interop.GetWindowIdFromWindow(hwnd);
+
+
+
 		var picker = new FileOpenPicker();
 #if WINDOWS
 		if (HackApp.Window != null)
@@ -273,8 +265,8 @@ public sealed partial class ProfileManager : Page
 	}
 	private static async Task SaveSettings( SavedData data )
 	{
-		var hwnd = HackApp.Window?.IntPtrHandle ?? 0;
-		var windowId = HackApp.Window?.AppWindow.Id ?? Win32Interop.GetWindowIdFromWindow(hwnd);
+
+
 		var picker = new FileSavePicker();
 #if WINDOWS
 		if (HackApp.Window != null)

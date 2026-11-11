@@ -15,7 +15,6 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using CommunityToolkit.WinUI;
-using CommunityToolkit.WinUI.UI.Controls;
 
 using HackPDM.Abstractions;
 using HackPDM.Core;
@@ -26,6 +25,8 @@ using HackPDM.Domain.Helper;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo;
+
+using HackPDM.Infrastructure.Operations;
 using HackPDM.Infrastructure.Odoo.FormTransport;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
@@ -51,13 +52,16 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
 
+#if WINDOWS
 using SolidWorks.Interop.sldworks;
+#endif
 
 using Windows.Storage;
 using Windows.Storage.FileProperties;
 using Windows.UI.WindowManagement;
 
-using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
+using TableView = WinUI.TableView.TableView;
+using WinUI.TableView;
 using Directory = System.IO.Directory;
 using EntryRow = HackPDM.UI.Types.EntryRow;
 using Image = Microsoft.UI.Xaml.Controls.Image;
@@ -74,7 +78,7 @@ namespace HackPDM.UI.Forms.Hack;
 // Form Control Constructions
 public sealed partial class HackFileManager : Page
 {
-	private DataGrid OdooEntryList;
+	private TableView OdooEntryList;
 	private MenuFlyoutSubItem ListOpen;
 	private MenuFlyoutItem ListPreview;
 	private MenuFlyoutItem ListLocal;
@@ -95,41 +99,39 @@ public sealed partial class HackFileManager : Page
 	{
 		var info = UIStorage.ColumnsInfo;
 		// 1. Instantiate DataGrid
-		OdooEntryList = new DataGrid
+		OdooEntryList = new TableView
 		{
 			Name = "OdooEntryList",
 			VerticalContentAlignment = VerticalAlignment.Stretch,
 			AutoGenerateColumns = false,
-			CanUserSortColumns = true,
+			CanSortColumns = true,
 			FontSize = info.FontSize,
 			IsReadOnly = true,
-			RowDetailsVisibilityMode = info.GroupCollapsed ? DataGridRowDetailsVisibilityMode.VisibleWhenSelected : DataGridRowDetailsVisibilityMode.Collapsed,
+			RowDetailsVisibilityMode = info.GroupCollapsed ? TableViewRowDetailsVisibilityMode.VisibleWhenSelected : TableViewRowDetailsVisibilityMode.Collapsed,
 			RowHeight = info.RowHeight,
-			SelectionMode = DataGridSelectionMode.Extended,
-			VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
-			ItemsSource = GroupedEntries
+			SelectionMode = ListViewSelectionMode.Extended,
 		};
+		// Always bind the flat list; see DynamicGroupCollection.BindTo
+		GroupedEntries?.BindTo( OdooEntryList );
 
 		// Attach Events
 		//OdooEntryList.LoadingRowGroup += OdooEntryDataGrid_LoadingRowGroup;
 		//OdooEntryList.Sorting += OdooEntryDataGrid_Sorting;
 
 		// 2. Fetch the Style from XAML and apply it
-		var headerStyle = (Style)this.Resources["GroupHeaderStyle"];
-		OdooEntryList.RowGroupHeaderStyles.Add( headerStyle );
-		OdooEntryList.RowGroupHeaderPropertyNameAlternative = "Items";
+		// Grouping is handled natively by TableView
 
 		// fetch saved configurations
 		var columns = UIStorage.Columns.Value;
 		// 3. Build Columns Using XAML Templates
 
 		// Column 1: Icon (Fetch template from Resources)
-		var iconColumn = new DataGridTemplateColumn
+		var iconColumn = new TableViewTemplateColumn
 		{
-			Width = new DataGridLength(32, DataGridLengthUnitType.Pixel),
+			Width = new GridLength(32),
 			CellTemplate = (DataTemplate)this.Resources["IconCellTemplate"],
-			CanUserReorder = true,
-			CanUserResize = true,
+			CanReorder = true,
+			CanResize = true,
 		};
 		OdooEntryList.Columns.Add( iconColumn );
 
@@ -140,14 +142,13 @@ public sealed partial class HackFileManager : Page
 		// Column 4: Size (Fetch template from Resources)
 		var sCol = columns[ nameof( EntryRow.Size ) ];
 
-		var sizeColumn = new DataGridTemplateColumn
+		var sizeColumn = new TableViewTemplateColumn
 		{
 			Header = sCol?.Column.Value.Header ?? "Size",
 			CellTemplate = ( DataTemplate )this.Resources[ "SizeCellTemplate" ],
 			Width = sCol?.Column.Value.AutoSize is true
-				? DataGridLength.Auto
-				: new DataGridLength( sCol?.Column.Value.Width ?? 100, DataGridLengthUnitType.Pixel ),
-			DisplayIndex = sCol?.Column.Value.DisplayIndex ?? -1,
+				? GridLength.Auto
+				: new GridLength( sCol?.Column.Value.Width ?? 100 ),
 		};
 		OdooEntryList.Columns.Add( sizeColumn );
 
@@ -226,34 +227,30 @@ public sealed partial class HackFileManager : Page
 		OdooEntryList.ContextFlyout = flyout;
 	}
 	// Helper method
-	private static DataGridTextColumn CreateTextColumn( string header, string bindingPath, double? width = null )
+	private static TableViewTextColumn CreateTextColumn( string header, string bindingPath, double? width = null )
 	{
-		var col = new DataGridTextColumn
+		var col = new TableViewTextColumn
 		{
 			Header = header,
 			Binding = new Binding { Path = new PropertyPath(bindingPath) },
 		};
 		if( width.HasValue )
-			col.Width = new DataGridLength( width.Value, DataGridLengthUnitType.Pixel );
+			col.Width = new GridLength( width.Value );
 		return col;
 	}
-	private static DataGridTextColumn? CreateTextColumn( OdooEntryColumnID? column )
+	private static TableViewTextColumn? CreateTextColumn( OdooEntryColumnID? column )
 	{
 		if( column is null )
 			return null;
 
 		var columnConfig = column.Column.Value;
-		var col = new DataGridTextColumn
+		var col = new TableViewTextColumn
 		{
 			Header = columnConfig.Header,
-			DisplayIndex = columnConfig.DisplayIndex,
 			Binding = new Binding { Path = new PropertyPath( column.BindingPath ) },
-			FontSize = UIStorage.ColumnsInfo.FontSize,
 			Width = columnConfig.AutoSize
-				? new DataGridLength( 1, DataGridLengthUnitType.Auto )
-				: new DataGridLength( columnConfig.Width is 0D
-					? 100
-					: columnConfig.Width, DataGridLengthUnitType.Pixel )
+				? GridLength.Auto
+				: new GridLength( columnConfig.Width is 0D ? 100 : columnConfig.Width )
 		};
 
 		return col;
@@ -449,7 +446,7 @@ public sealed partial class HackFileManager : Page
 		//	ItemsPath = "Items" />
 
 		GroupedEntries?.Regroup( entryrow => entryrow.Status );
-		OdooEntryList.ItemsSource = GroupedEntries?.ViewSource.View;
+		GroupedEntries?.BindTo( OdooEntryList );
 
 		OdooHistory.ItemsSource = OHistories;
 		OdooParents.ItemsSource = OParents;
@@ -480,8 +477,8 @@ public sealed partial class HackFileManager : Page
 
 		OdooEntryList.SelectionChanged += OdooEntryList_SelectionChanged;
 		OdooEntryList.Sorting += List_ColumnClick;
-		OdooEntryList.LoadingRow += OdooEntryList_LoadingRow;
-		OdooEntryList.LoadingRowGroup += OdooEntryList_LoadingRowGroup;
+		// // OdooEntryList.LoadingRow += OdooEntryList_LoadingRow;
+		// // OdooEntryList.LoadingRowGroup += OdooEntryList_LoadingRowGroup;
 
 		// tree events
 		TreeAnalyze.Click += ( sender, args ) => { };
@@ -563,78 +560,11 @@ public sealed partial class HackFileManager : Page
 				: v?.ToString() ?? string.Empty;
 		} );
 
-		// Refresh ItemsSource to reflect grouping change
-		OdooEntryList.ItemsSource = GroupedEntries.NoGrouping ? GroupedEntries.Master : GroupedEntries.ViewSource.View;
+		// Refresh grouping on the TableView
+		GroupedEntries.BindTo( OdooEntryList );
 	}
-	private void OdooEntryList_LoadingRowGroup( object? sender, DataGridRowGroupHeaderEventArgs e )
-	{
-		// Access the underlying grouping data
-		ICollectionViewGroup groupData = e.RowGroupHeader.CollectionViewGroup;
-
-		// Cast the group back to your specific group class
-
-		if( groupData.Group is GroupInfoList<EntryRow> myGroup )
-		{
-			// Override the text displayed in the label
-			e.RowGroupHeader.PropertyValue = $"{myGroup.Key}";
-			e.RowGroupHeader.FontSize = UIStorage.ColumnsInfo.FontSize;
-		}
-	}
-	private void OdooEntryList_LoadingRow( object? sender, DataGridRowEventArgs e )
-	{
-		var row = e.Row;
-		row.FontSize = UIStorage.ColumnsInfo.FontSize;
-		row.Height = UIStorage.ColumnsInfo.RowHeight;
-		var item = row.DataContext as EntryRow;
-		switch( item?.Status )
-		{
-			case FileStatus.Lo:
-			{
-				row.Background = UIStorage.OrangeBrush.Value;
-				break;
-			}
-			case FileStatus.Ro:
-			{
-				row.Background = UIStorage.BlueBrush.Value;
-				break;
-			}
-			case FileStatus.Ok:
-			goto default;
-			case FileStatus.Nv:
-			goto default;
-			case FileStatus.Lm:
-			goto default;
-			case FileStatus.Dt:
-			{
-				row.Background = UIStorage.RedBrush.Value;
-				break;
-			}
-			case FileStatus.Ds:
-			{
-				row.Background = UIStorage.RedBrush.Value;
-				break;
-			}
-			case FileStatus.If:
-			goto default;
-			case FileStatus.Ft:
-			goto default;
-			case FileStatus.Cm:
-			{
-				row.Background = UIStorage.GreenBrush.Value;
-				break;
-			}
-			case FileStatus.Co:
-			{
-				row.Background = UIStorage.GreenBrush.Value;
-				break;
-			}
-			default:
-			{
-				row.Background = null;
-				break;
-			}
-		}
-	}
+	// LoadingRowGroup removed for TableView
+	// LoadingRow removed for TableView
 	private void List_Click_SaveIcon( object sender, RoutedEventArgs e )
 	{
 		throw new NotImplementedException();
@@ -661,7 +591,8 @@ public sealed partial class HackFileManager : Page
 	}
 	public TreeView GetOdooDirectoryTree()
 		=> OdooDirectoryTree;
-	public DataGrid GetOdooEntryList()
+	internal TabViewItem HistoryTabItem => HistoryTab;
+	public TableView GetOdooEntryList()
 			=> OdooEntryList;
 	public Image GetOdooEntryImage() => OdooEntryImage;
 	public TextBlock GetEntriesLabel() => EntryListStatus;
@@ -776,7 +707,6 @@ public sealed partial class HackFileManager : Page
 	private async Task Async_PermDelete( HpEntry[] entries )
 	{
 		ArrayList ids = entries.Select(e => e.id).ToArrayList();
-		bool vDeleted = false;
 
 		// using DeleteEntry also deletes entries, versions, version props, version relationships, and ir attachment records
 		DialogResult result = await MessageBox.ShowAsync($"Are you sure you want to permanently delete {ids.Count} entries from the database?\n" +
@@ -785,7 +715,7 @@ public sealed partial class HackFileManager : Page
 		if( result is not DialogResult.Yes and not DialogResult.OK )
 			return;
 
-		vDeleted = await PermanentDeleteEntry( ids );
+		bool vDeleted = await PdmDeleteOperations.PermanentDeleteEntry( ids, (status, msg) => InstanceManager.Session.Log(status, msg) );
 
 		if( vDeleted )
 		{
@@ -793,7 +723,7 @@ public sealed partial class HackFileManager : Page
 		}
 		else
 		{
-			MessageBox.ShowAsync( "Was unable to delete entries", "Error", buttons: MessageBoxButtons.OKCancel, icon: MessageBoxIcon.Error );
+			await MessageBox.ShowAsync( "Was unable to delete entries", "Error", buttons: MessageBoxButtons.OKCancel, icon: MessageBoxIcon.Error );
 			return;
 		}
 
@@ -803,16 +733,7 @@ public sealed partial class HackFileManager : Page
 	}
 	private async Task Async_LogicalDelete( HpEntry[] entries )
 	{
-		object lockObject = new();
-		foreach( var entry in entries )
-		{
-			lock( lockObject )
-			{
-				InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Setting InActive {entry.name}: {entry.id}" );
-			}
-			await entry.LogicalDelete();
-
-		}
+		await PdmDeleteOperations.LogicalDeleteEntries( entries, (status, msg) => InstanceManager.Session.Log(status, msg) );
 
 		await MessageBox.ShowAsync( $"Completed!" );
 		await _treeHelper.RestartTree( OdooDirectoryTree );
@@ -820,15 +741,7 @@ public sealed partial class HackFileManager : Page
 	}
 	private async Task Async_LogicalUnDelete( HpEntry[] entries )
 	{
-		object lockObject = new();
-		foreach( var entry in entries )
-		{
-			lock( lockObject )
-			{
-				InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Setting Active {entry.name}: {entry.id}" );
-			}
-			await entry.LogicalUnDelete();
-		}
+		await PdmDeleteOperations.LogicalUnDeleteEntries( entries, (status, msg) => InstanceManager.Session.Log(status, msg) );
 
 		InstanceManager.Dialog?.SetProgressBar( 5, 5 );
 		await MessageBox.ShowAsync( $"Completed!" );
@@ -924,6 +837,10 @@ public sealed partial class HackFileManager : Page
 			{
 				Debug.WriteLine( $"Operation cancelled: {e.Message}" );
 			}
+			catch( Exception e )
+			{
+				Debug.WriteLine( $"loading {LowerTabIndex?.Name} for {entry.Name} failed: {e}" );
+			}
 		} );
 
 		if( entry.LatestId is int id )
@@ -952,9 +869,9 @@ public sealed partial class HackFileManager : Page
 			// 2. Extract the system thumbnail icon (32x32 requested here)
 			// Returns a crisp asset using a modern system scaling strategy
 			using var thumbnail = await file.GetThumbnailAsync(
-				ThumbnailMode.SingleItem,
+				Windows.Storage.FileProperties.ThumbnailMode.SingleItem,
 				dynamicSize,
-				ThumbnailOptions.ResizeThumbnail ); // Ensures Windows targets exact scale bounding
+				Windows.Storage.FileProperties.ThumbnailOptions.ResizeThumbnail ); // Ensures Windows targets exact scale bounding
 			if( thumbnail != null )
 			{
 				// 3. Convert it directly into a WinUI 3 compatible BitmapImage
@@ -1116,28 +1033,31 @@ public sealed partial class HackFileManager : Page
 		}
 	}
 	// click events
-	private void List_ColumnClick( object? sender, DataGridColumnEventArgs e )
+	private void List_ColumnClick( object? sender, TableViewSortingEventArgs e )
 	{
-		var grid = sender as DataGrid;
+		var grid = sender as TableView;
 		var column = e.Column;
-		foreach( var col in grid?.Columns ?? [] )
+		// sorting is done on the source collection below; stop TableView from applying its own sort too
+		e.Handled = true;
+		if (grid?.Columns != null) foreach( var col in grid.Columns )
 		{
 			if( e.Column == col )
 				continue;
 			col.SortDirection = null;
 		}
-		var modelField = column.ClipboardContentBinding?.Path.Path ?? column.Header;
+		var modelField = column.SortMemberPath
+			?? ( column as TableViewBoundColumn )?.Binding?.Path?.Path
+			?? column.Header?.ToString();
 		bool isDesc = false;
 		(column.SortDirection, isDesc) = column.SortDirection is not null
-			and DataGridSortDirection.Ascending
-				? (DataGridSortDirection.Descending, true)
-				: (DataGridSortDirection.Ascending, false);
+			and SortDirection.Ascending
+				? (SortDirection.Descending, true)
+				: (SortDirection.Ascending, false);
 
 		SortLogic<string>( modelField as string ?? "", isDesc );
 		GroupedEntries?.Regroup();
-		grid?.ItemsSource = GroupedEntries?.NoGrouping is true
-							? GroupedEntries?.Master
-							: GroupedEntries?.ViewSource.View;
+		if( grid is not null )
+			GroupedEntries?.BindTo( grid );
 		// e.Column.SortDirection = e.Column.SortDirection == DataGridSortDirection.Ascending 
 		// 	? DataGridSortDirection.Descending
 		// 	: DataGridSortDirection.Ascending;
@@ -1231,7 +1151,7 @@ public sealed partial class HackFileManager : Page
 		if( ViewModel.statusToken.IsCancellationRequested )
 			return;
 
-		HackFile.GetHackFolderWithDependencies( pathway, true, out List<HackFile> hf );
+		ExtensionOdoo.GetHackFolderWithDependencies( pathway, true, out List<HackFile>? hf );
 		await CommitInternal( hf );
 	}
 	private async void Tree_Click_Checkout( object sender, RoutedEventArgs e )
@@ -1343,7 +1263,7 @@ public sealed partial class HackFileManager : Page
 
 			if( OdooDefaultsConstants.DependentExt.Contains( $".{item.Type.ToUpper()}" ) )
 			{
-				var (success, hf, results) = await HackFile.GetHackFileWithDependencies( item, true );
+				var (success, hf, results) = await ExtensionOdoo.GetHackFileWithDependencies( item, true );
 				if( success )
 				{
 					hackFiles.AddAll( hf ?? [] );
@@ -1833,7 +1753,7 @@ public sealed partial class HackFileManager : Page
 
 			OdooEntryList.SelectedItem = entryItem;
 			OdooEntryList.Focus( FocusState.Programmatic );
-			OdooEntryList.ScrollIntoView( entryItem, null );
+			OdooEntryList.ScrollIntoView( entryItem );
 		}
 		catch
 		{
@@ -1862,7 +1782,11 @@ public sealed partial class HackFileManager : Page
 
 			string tempPath = Path.Combine(StorageBox.TemporaryPath, path);
 			version.DownloadFile( tempPath );
+#if WINDOWS
 			if( version.FileTypeExt != SolidWorks.Interop.swdocumentmgr.SwDmDocumentType.swDmDocumentUnknown )
+#else
+			if( false )
+#endif
 			{
 #if Debug
 				HackDefaults.DocMgr.GetDependencies(path);
@@ -1967,185 +1891,8 @@ public sealed partial class HackFileManager : Page
 		}
 	}
 
-	private static async Task<bool> PermanentDeleteVersionProperty( ArrayList ids )
-	{
-		if( ids is null || ids.Count < 1 )
-			return false;
+	// Permanent delete routines delegated to PdmDeleteOperations
 
-		HpVersionProperty[] vProps = null;
-		bool deletedVersionProps = false;
-
-		vProps = await HpVersionProperty.GetRecordsBySearchAsync( [ new ArrayList() { "version_id", "in", ids } ] );
-		if( vProps is not null
-			&& vProps.Count() > 0 )
-		{
-			ArrayList newIds = vProps.GetIDs();
-			InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting version properties..." );
-			deletedVersionProps = await OClient.DeleteAsync( HpVersionProperty.GetHpModel(), [ newIds ], 100000 );
-			if( deletedVersionProps )
-			{
-				InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted version properties: {string.Join( ", ", newIds.ToArray() )}" );
-			}
-			else
-			{
-				InstanceManager.Session.Log( StatusMessage.ERROR, $"Unable to delete version properties" );
-			}
-		}
-		else
-		{
-			deletedVersionProps = true;
-			InstanceManager.Session.Log( StatusMessage.SKIP, $"No version properties to delete" );
-		}
-#if DEBUG
-		Debug.WriteLine( $"version properties deleted = {deletedVersionProps}" );
-#endif
-		return deletedVersionProps;
-	}
-	private static async Task<bool> PermanentDeletedVersionRelationships( ArrayList ids )
-	{
-		if( ids is null || ids.Count < 1 )
-			return false;
-
-		HpVersionRelationship[] vRelationsParent = null;
-		HpVersionRelationship[] vRelationsChild = null;
-
-		bool deletedVersionRelParent = false;
-		bool deletedVersionRelChild = false;
-
-		vRelationsParent = await HpVersionRelationship.GetRecordsBySearchAsync( [ new ArrayList() { "parent_id", "in", ids } ] );
-		vRelationsChild = await HpVersionRelationship.GetRecordsBySearchAsync( [ new ArrayList() { "child_id", "in", ids } ] );
-
-		if( vRelationsParent is not null
-			&& vRelationsParent.Length > 0 )
-		{
-			ArrayList newIds = vRelationsParent.GetIDs();
-			InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting parent version relationships..." );
-			deletedVersionRelParent = await OdooClient<HpVersionRelationship>.DeleteAsync( [ newIds ], 100000 );
-			if( deletedVersionRelParent )
-			{
-				InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted parent version relationships: {string.Join( ", ", newIds.ToArray() )}" );
-			}
-			else
-			{
-				InstanceManager.Session.Log( StatusMessage.ERROR, $"Unable to delete parent version relationships" );
-			}
-		}
-		else
-		{
-			deletedVersionRelParent = true;
-			InstanceManager.Session.Log( StatusMessage.SKIP, $"No version relationship parents to delete" );
-		}
-
-		if( vRelationsChild is not null
-			&& vRelationsChild.Any() )
-		{
-			ArrayList newIds = vRelationsChild.GetIDs();
-			InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting child version relationships..." );
-			deletedVersionRelChild = await OClient.DeleteAsync( HpVersionRelationship.GetHpModel(), [ newIds ], 100000 );
-			if( deletedVersionRelChild )
-			{
-				InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted child version relationships: {string.Join( ", ", newIds.ToArray() )}" );
-			}
-			else
-			{
-				InstanceManager.Session.Log( StatusMessage.ERROR, $"Unable to delete child version relationships" );
-			}
-		}
-		else
-		{
-			deletedVersionRelChild = true;
-			InstanceManager.Session.Log( StatusMessage.SKIP, $"No version relationship children to delete" );
-		}
-
-#if DEBUG
-		Debug.WriteLine( $"version parents deleted = {deletedVersionRelParent}" );
-		Debug.WriteLine( $"version child deleted = {deletedVersionRelChild}" );
-#endif
-
-		return deletedVersionRelChild && deletedVersionRelParent;
-	}
-	private async Task<bool> PermanentDeleteEntry( ArrayList ids )
-	{
-		if( ids is null || ids.Count < 1 )
-			return false;
-
-		bool deletedVersions = await PermanentDeleteVersions(ids);
-		InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting entries..." );
-		bool deletedEntries = deletedVersions && OClient.Delete(HpEntry.GetHpModel(), [ids]);
-		if( deletedEntries )
-		{
-			InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted entries" );
-		}
-		else
-		{
-			InstanceManager.Session.Log( StatusMessage.ERROR, $"Unable to delete entries" );
-		}
-#if DEBUG
-		Debug.WriteLine( $"Entries deleted = {deletedEntries}" );
-#endif
-		return deletedVersions && deletedEntries;
-	}
-	private async Task<bool> PermanentDeleteVersions( ArrayList ids )
-	{
-		if( ids is null || ids.Count < 1 )
-			return false;
-
-		HpVersion[]? versions = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(ids, "version_ids", includedFields: ["ID"]);
-		IrAttachment[] irAttachments = null;
-
-		ArrayList vIds = versions?.Select(v => v.id).ToArrayList() ?? [];
-
-		bool deletedIrAttachments = false;
-		bool deletedVersions = false;
-		bool deletedVersionsProps = false;
-		bool deletedVersionsRel = false;
-
-		if( vIds.Count > 0 )
-		{
-			deletedVersionsProps = await PermanentDeleteVersionProperty( vIds );
-			deletedVersionsRel = await PermanentDeletedVersionRelationships( vIds );
-			irAttachments = await IrAttachment.GetRecordsBySearchAsync(
-			[
-				new ArrayList() { "res_id", "in", vIds },
-				new ArrayList() { "res_model", "=", HpVersion.GetHpModel()},
-				new ArrayList() { "res_field", "=", "file_contents"},
-			] );
-		}
-		InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting IR Attachments..." );
-		deletedIrAttachments = deletedVersionsProps
-							   && deletedVersionsRel
-							   && ( irAttachments is null
-								   || !irAttachments.Any()
-								   || await OClient.DeleteAsync( IrAttachment.GetHpModel(), [ irAttachments.GetIDs() ], 100000 ) );
-
-		if( deletedIrAttachments )
-		{
-			InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted IR Attachments" );
-		}
-		else
-		{
-			InstanceManager.Session.Log( StatusMessage.INFO, $"unable to delete IR Attachments" );
-		}
-		InstanceManager.Session.Log( StatusMessage.PROCESSING, $"Deleting versions..." );
-		deletedVersions = deletedIrAttachments
-						  && ( vIds.Count <= 0
-							   || await OClient.DeleteAsync( HpVersion.GetHpModel(), [ vIds ], 100000 ) );
-
-		if( deletedVersions )
-		{
-			InstanceManager.Session.Log( StatusMessage.SUCCESS, $"Deleted versions" );
-		}
-		else
-		{
-			InstanceManager.Session.Log( StatusMessage.ERROR, $"Unable to delete versions" );
-		}
-
-#if DEBUG
-		Debug.WriteLine( $"ir attachments deleted = {deletedIrAttachments}" );
-		Debug.WriteLine( $"versions deleted = {deletedVersions}" );
-#endif
-		return deletedIrAttachments && deletedVersions;
-	}
 	//
 	internal async Task GetLatestInternal( ArrayList entryIDs )
 	{
@@ -2162,13 +1909,17 @@ public sealed partial class HackFileManager : Page
 
 		(ArrayList, CancellationToken?) arguments = (newIds, ViewModel.statusToken?.Token);
 
-		ViewModel.statusToken.Token.Register( CancelledOperation );
+		if( ViewModel.statusToken is not null )
+		{
+			ViewModel.statusToken.Token.Register( CancelledOperation );
+		}
 		await AsyncHelper.AsyncRunner(() => Latest.Async_GetLatest( arguments ), "Get Latest", ViewModel.statusToken );
 	}
 	internal static void CancelledOperation()
 	{
-		InstanceManager.Dialog?.IsInProcess = false;
-		MessageBox.ShowAsync( "Cancelled Operation" );
+		if( InstanceManager.Dialog is not null )
+			InstanceManager.Dialog.IsInProcess = false;
+		_ = MessageBox.ShowAsync( "Cancelled Operation" );
 	}
 	internal async Task CommitInternal( IEnumerable<HackFile> hackFiles )
 		=> await AsyncHelper.AsyncRunner( () => Commit.Async_Commit( [ .. hackFiles ] ), "Commit Files" );
@@ -2260,17 +2011,12 @@ public sealed partial class HackFileManager : Page
 	private void TreeViewItem_Unloaded( object sender, RoutedEventArgs e )
 	{
 		var tvi = sender as TreeViewItem;
-		var data = tvi?.DataContext;
-		ItemToContainerMap.Remove( data );
+		// DataContext is null for recycled containers; Dictionary.Remove(null) throws on the UI thread
+		if( tvi?.DataContext is { } data )
+			ItemToContainerMap.Remove( data );
 	}
-	private void OdooEntryDataGrid_LoadingRowGroup( object sender, CommunityToolkit.WinUI.UI.Controls.DataGridRowGroupHeaderEventArgs e )
-	{
-
-	}
-	private void OdooEntryDataGrid_Sorting( object sender, CommunityToolkit.WinUI.UI.Controls.DataGridColumnEventArgs e )
-	{
-
-	}
+	
+	
 
 
 }

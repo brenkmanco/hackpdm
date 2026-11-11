@@ -9,7 +9,6 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
 using System.Threading.Tasks;
 
-using CommunityToolkit.WinUI.UI.Controls;
 
 using HackPDM.Abstractions;
 using HackPDM.Core;
@@ -19,6 +18,7 @@ using HackPDM.Domain.Representation;
 using HackPDM.Shared.GlobalData;
 using HackPDM.UI.Controls;
 using HackPDM.UI.Forms.Hack;
+using HackPDM.UI.Helpers;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
@@ -34,7 +34,7 @@ using Windows.Foundation;
 using Windows.Foundation.Collections;
 using Windows.UI;
 
-using AliasColumns = System.Collections.Generic.IEnumerable<CommunityToolkit.WinUI.UI.Controls.DataGridColumn>;
+using AliasColumns = System.Collections.Generic.IEnumerable<WinUI.TableView.TableViewColumn>;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -63,7 +63,7 @@ public sealed partial class MessageBox : Page
 	public ScrollView? ScrollContainer = null;
 	public TextBlock? TextBlockImpl = null;
 	public ListBox? ListBoxImpl = null;
-	public DataGrid? DataGridImpl = null;
+	public WinUI.TableView.TableView? DataGridImpl = null;
 	public MessageBox()
 	{
 		InitializeComponent();
@@ -254,20 +254,20 @@ public sealed partial class MessageBox : Page
 
 		(var template, IEnumerable<object?> data) =
 			 ( (AliasColumns template, IEnumerable<object?> data) )
-			 ( _parameters?.SegmentSelectDiffWhere<object, DataGridColumn?, object?>(
-				( p, index ) => p is DataGridColumn g ? (true, g, null) : (false, null, p), true ) )!;
+			 ( _parameters?.SegmentSelectDiffWhere<object, WinUI.TableView.TableViewColumn?, object?>(
+				( p, index ) => p is WinUI.TableView.TableViewColumn g ? (true, g, null) : (false, null, p), true ) )!;
 
 		DataGridImpl = new()
 		{
 			AutoGenerateColumns = false,
 			IsReadOnly = false,
-			CanUserReorderColumns = false,
-			CanUserSortColumns = false,
-			RowDetailsVisibilityMode = DataGridRowDetailsVisibilityMode.Collapsed,
+			CanReorderColumns = false,
+			CanSortColumns = false,
+			RowDetailsVisibilityMode = WinUI.TableView.TableViewRowDetailsVisibilityMode.Collapsed,
 			Margin = new Thickness( 0.5, 0.5, 0.5, 0.5 ),
 			ItemsSource = data,
 		};
-		DataGridImpl.Columns.AddRange( template );
+		if (template != null) { foreach (var col in template) DataGridImpl.Columns.Add(col); }
 
 		ScrollContainer.Content = DataGridImpl;
 		gridRoot.Children.Add( ScrollContainer );
@@ -605,7 +605,12 @@ public sealed partial class MessageBox : Page
 				| (uint)GetDefaultButton(buttons) 
 				| (uint)MessageBoxModal.AppModal 
 				| (uint)MessageBoxTypeFallback.TopMost,
-				MsgBox));
+#if WINDOWS
+				MsgBox
+#else
+				null
+#endif
+				));
 		}	
 		return tcs.Task;
 	}
@@ -614,26 +619,37 @@ public sealed partial class MessageBox : Page
 		string message, 
 		string title, 
 		uint type,
-		Func<nint, string, string, uint, int> mboxNativeMethod)
+		Func<nint, string, string, uint, int>? mboxNativeMethod)
 	{
 		try
 		{
-			return ( DialogResult )mboxNativeMethod( hwnd, message, title, type);
+#if WINDOWS
+			if (mboxNativeMethod != null)
+			{
+				return ( DialogResult )mboxNativeMethod( hwnd, message, title, type);
+			}
+			throw new Exception( "Invalid data or functions" );
+#else
+			Debug.WriteLine( $"[Native MessageBox Fallback] {title}: {message}" );
+			return DialogResult.OK;
+#endif
 		}
 		catch 
 		{
-			Debug.WriteLine( $"{mboxNativeMethod.Method.Name} failed." );
+			Debug.WriteLine( $"{mboxNativeMethod?.Method.Name ?? "Native method"} failed." );
 		}
 		
 		throw new Exception( "Invalid data or functions" );
 	}
 
+#if WINDOWS
 	[LibraryImport( "User32.dll", EntryPoint = "MessageBoxW", StringMarshalling = StringMarshalling.Utf16 )]
 	private static partial int MsgBox(
 	IntPtr hWnd,
 	string lpText,
 	string lpCaption,
 	uint uType );
+#endif
 
 }		
 public record MessageBoxDetails(

@@ -1,9 +1,10 @@
+from __future__ import annotations
 
 import logging
 import re
 
 from odoo import api, fields, models
-from odoo_app.exceptions import UserError
+from odoo.exceptions import UserError
 
 class hp_pdm_commit(models.Model):
     _name = 'hp.pdm.commit'

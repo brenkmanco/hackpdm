@@ -1,8 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-	<LangVersion>preview</LangVersion>
+    <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -23,10 +23,12 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-	<ItemGroup>
-		<ProjectReference Include="..\HackPDM.Core\HackPDM.Core.csproj" />
-		<ProjectReference Include="..\HackPDM.Domain\HackPDM.Domain.csproj" />
-		<ProjectReference Include="..\HackPDM.Infrastructure\HackPDM.Infrastructure.csproj" />
-	</ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\HackPDM.Shared\HackPDM.Shared.csproj" />
+    <ProjectReference Include="..\HackPDM.Abstractions\HackPDM.Abstractions.csproj" />
+    <ProjectReference Include="..\HackPDM.Core\HackPDM.Core.csproj" />
+    <ProjectReference Include="..\HackPDM.Domain\HackPDM.Domain.csproj" />
+    <ProjectReference Include="..\HackPDM.Infrastructure\HackPDM.Infrastructure.csproj" />
+  </ItemGroup>
 
 </Project>

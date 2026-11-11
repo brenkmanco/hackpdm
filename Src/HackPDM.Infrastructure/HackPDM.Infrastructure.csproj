@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -6,6 +6,12 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+			<_Parameter1>HackPDM.Tests</_Parameter1>
+		</AssemblyAttribute>
+	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\HackPDM.Core\HackPDM.Core.csproj" />

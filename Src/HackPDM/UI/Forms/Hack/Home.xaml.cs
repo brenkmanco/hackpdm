@@ -60,6 +60,8 @@ public sealed partial class Home : Page
         
         _Navigator.SelectedItem = _NavItems[NavigatePageMenu.ProfileManager];
     }
+    /// <summary>The frame that hosts the page selected in the navigation menu.</summary>
+    internal Frame ContentFrame => NavFrame;
     public static void NavigateToPage(NavigatePageMenu pageMenu)
     {
 		switch (pageMenu)

@@ -20,8 +20,8 @@ namespace HackPDM.Abstractions
 	{
 		public Dictionary<TKey, TValue> Forward { get; }
 		public Dictionary<TValue, TKey> Backward { get; }
-		public int Count { get; }
-		public bool IsReadOnly { get; }
+		public int Count => Forward.Count;
+		public bool IsReadOnly => false;
 
 		public ICollection<TKey> Keys => ((IDictionary<TKey, TValue>)Forward).Keys;
 		public ICollection<TValue> Values => ((IDictionary<TKey, TValue>)Forward).Values;

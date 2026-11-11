@@ -64,8 +64,8 @@ public static class OdooClient
     private static string _latestException = "";
     public static string? LatestException
     {
-        get;
-        set;
+        get => _latestException;
+        set => _latestException = value ?? "";
     }
     public static async Task<int> CorrectUserId()
     {
@@ -141,7 +141,7 @@ public static class OdooClient
 			}
 			else if( response?.Error is not null )
 			{
-				_latestException = response?.Error?.Message ?? "unknown exception";
+				_latestException = response?.Error?.Describe() ?? "unknown exception";
 				return 0;
 			}
             switch( response?.Result?.ValueKind )
@@ -225,7 +225,7 @@ public static class OdooClient
             else if ( response?.Error is not null)
             {
                 // possible for faultCode to have a null value
-                throw new Exception( response.Error.Message );
+                throw new Exception( response.Error.Describe() );
                 //latestException = objectResponse.Value.ToString();
                 //return null;
             }
@@ -375,7 +375,7 @@ public static class OdooClient
 			else if( response?.Error is not null )
 			{
 				// possible for faultCode to have a null value
-				throw new Exception( response.Error.Message );
+				throw new Exception( response.Error.Describe() );
 				//latestException = objectResponse.Value.ToString();
 				//return null;
 			}

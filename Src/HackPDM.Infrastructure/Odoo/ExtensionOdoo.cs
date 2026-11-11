@@ -40,42 +40,55 @@ public static class ExtensionOdoo
 		=> models.Select( model => model.id ).ToArrayList();
 
 
-	public async static Task<JsonRpcResponse?> SendJsonAsync( this JsonRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null )
+	// One pooled client for every RPC call: keeps connections alive between calls instead of
+	// opening (and leaving in TIME_WAIT) a new TCP connection per request, and accepts
+	// compressed responses. Per-call timeouts use a CancellationToken because
+	// HttpClient.Timeout cannot change once a shared client has been used.
+	private static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds( 100 );
+	private static readonly HttpClient SharedHttpClient = CreateHttpClient( null );
+	private static readonly ConcurrentDictionary<IWebProxy, HttpClient> ProxyHttpClients = new();
+
+	private static HttpClient CreateHttpClient( IWebProxy? proxy )
 	{
-		var handler = new HttpClientHandler();
-		if( proxy is not null ) {
+		var handler = new SocketsHttpHandler
+		{
+			AutomaticDecompression = DecompressionMethods.All,
+			// recycle pooled connections so DNS / server address changes are picked up
+			PooledConnectionLifetime = TimeSpan.FromMinutes( 5 ),
+			ConnectTimeout = TimeSpan.FromSeconds( 15 ),
+		};
+		if( proxy is not null )
+		{
 			handler.Proxy = proxy;
 			handler.UseProxy = true;
 		}
+		return new HttpClient( handler ) { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
+	}
 
-		using var httpClient = new HttpClient(handler);
+	private static HttpClient HttpClientFor( IWebProxy? proxy )
+		=> proxy is null ? SharedHttpClient : ProxyHttpClients.GetOrAdd( proxy, CreateHttpClient );
 
-		if( timeout > 0 ) {
-			httpClient.Timeout = TimeSpan.FromMilliseconds( timeout );
-		}
+	private static System.Threading.CancellationTokenSource RequestTimeout( int timeoutMs )
+		=> new( timeoutMs > 0 ? TimeSpan.FromMilliseconds( timeoutMs ) : DefaultRequestTimeout );
+
+	public async static Task<JsonRpcResponse?> SendJsonAsync( this JsonRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null )
+	{
+		using var cts = RequestTimeout( timeout );
+		var httpClient = HttpClientFor( proxy );
 
 		// PostAsJsonAsync handles body serialization, sets Content-Type to application/json, 
 		// and defaults to UTF-8 encoding automatically under the hood.
-		using var response = await httpClient.PostAsJsonAsync(url, request);
+		using var response = await httpClient.PostAsJsonAsync(url, request, cts.Token);
 		response.EnsureSuccessStatusCode();
 
 		// ReadFromJsonAsync automatically streams and deserializes the JSON response body
-		JsonRpcResponse? result = await response.Content.ReadFromJsonAsync<JsonRpcResponse>();
+		JsonRpcResponse? result = await response.Content.ReadFromJsonAsync<JsonRpcResponse>(cts.Token);
 		return result;
 	}
 	public async static Task<XmlRpcResponse> SendXMLAsync( this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null )
 	{
-		//HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
-		var handler = new HttpClientHandler();
-		if( proxy is not null ) {
-			handler.Proxy = proxy;
-			handler.UseProxy = true;
-		}
-		using var httpClient = new HttpClient(handler);
-
-		if( timeout > 0 ) {
-			httpClient.Timeout = TimeSpan.FromMilliseconds( timeout );
-		}
+		using var cts = RequestTimeout( timeout );
+		var httpClient = HttpClientFor( proxy );
 
 		// Serialize into a MemoryStream with UTF-8
 		using var ms = new MemoryStream();
@@ -93,10 +106,10 @@ public static class ExtensionOdoo
 				CharSet = "utf-8"
 			};
 
-		using var response = await httpClient.SendAsync(httpRequest);
+		using var response = await httpClient.SendAsync(httpRequest, cts.Token);
 		response.EnsureSuccessStatusCode();
 
-		using var responseStream = await response.Content.ReadAsStreamAsync();
+		using var responseStream = await response.Content.ReadAsStreamAsync(cts.Token);
 		using var reader = new StreamReader(responseStream);
 
 		XmlRpcResponse result = Deserializer.DeserializeResponse(reader);
@@ -116,10 +129,8 @@ public static class ExtensionOdoo
 		return isSuccess;
 	}
 
-	extension( HackFile hackFile )
-	{
 
-		public static async Task<(bool success, List<HackFile> hackFiles, List<HackResultTree.ResultNode> hackResults)> GetHackFileWithDependencies( HackFile file )
+	public static async Task<(bool success, List<HackFile> hackFiles, List<HackResultTree.ResultNode> hackResults)> GetHackFileWithDependencies( this HackFile file )
 	{
 		HackResultTree hackTree = new(file);
 		List<HackFile> hackFiles = [];
@@ -139,18 +150,19 @@ public static class ExtensionOdoo
 		// hackFiles = [.. hackResults.SkipSelect<HackResultTree.ResultNode, HackFile>(r => (r.Value?.Hack is null, r.Value?.Hack!))];
 		return (true, hackFiles, hackResults);
 	}
-	public async Task<(bool, HpVersion?)> GetVersionFromLocal()
+	public static async Task<(bool, HpVersion?)> GetVersionFromLocal( this HackFile hackFile )
 	{
-		string filePath = FileOperations.WindowsToOdooPath(hackFile.RelativePath);
+		string filePath = FileOperations.WindowsToOdooPath(hackFile.RelativePath ?? "");
+		// the domain itself (a list of conditions); it was wrapped in one extra list, which Odoo
+		// rejected with "unhashable type: 'list'"
 		ArrayList arrList =
-			[
-				new ArrayList()
-				{
+				[
 					new ArrayList() { "name", "=", hackFile.Name },
 					new ArrayList() { "directory_complete_name", "=", filePath },
-				}
-			];
-		HpVersion? versionModel = (await HpVersion.GetRecordsBySearchAsync(arrList, ["file_contents", "preview_image"]))?[0];
+				];
+		// metadata only: the second positional parameter is includedFields, which made this
+		// download just the file contents and preview image (and no metadata)
+		HpVersion? versionModel = (await HpVersion.GetRecordsBySearchAsync(arrList, excludedFields: ["file_contents", "preview_image"]))?[0];
 
 		return (versionModel != null, versionModel);
 	}
@@ -186,7 +198,7 @@ public static class ExtensionOdoo
 		}
 		return hackFiles;
 	}
-	public async Task<(bool, HpVersion?)> HasLocalVersion()
+	public static async Task<(bool, HpVersion?)> HasLocalVersion( this HackFile hackFile )
 	{
 		HpVersion? versionModel = null;
 		if( hackFile?.HasRemoteVersion == null || !( bool )hackFile.HasRemoteVersion ||
@@ -295,19 +307,18 @@ public static class ExtensionOdoo
 		parentFile = new( fInfo );
 		return TryFilePathToHackWithDependencies( out depAllInPWAorBrokenList, parentFile );
 	}
-    }
-    extension( IEnumerable<HpEntry> entries )
-	{
 
-		public IEnumerable<HpEntry> TakeOutLatest( out IEnumerable<HpEntry> latestEntries )
+
+	public static IEnumerable<HpEntry> TakeOutLatest( this IEnumerable<HpEntry> entries, out IEnumerable<HpEntry> latestEntries )
 	{
 		latestEntries = entries.TakeWhile( entry => entry.IsLatest );
 		entries = entries.Except( latestEntries );
 
 		return entries;
 	}
+
 }
-}
+
 public static class OdooFieldExtension
 {
 	public static readonly Dictionary<OdooFieldType, Type[]> Schema = new()

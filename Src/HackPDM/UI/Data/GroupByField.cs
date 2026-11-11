@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-using CommunityToolkit.WinUI.UI.Controls;
+using WinUI.TableView;
 
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo;
@@ -29,5 +29,5 @@ namespace HackPDM.UI.Data;
 public class GroupByField
 {
 	public string FieldName						{ get; set; } = string.Empty;
-	public DataGridSortDirection SortDirection	{ get; set; } = DataGridSortDirection.Ascending;
+	public SortDirection SortDirection	{ get; set; } = SortDirection.Ascending;
 }

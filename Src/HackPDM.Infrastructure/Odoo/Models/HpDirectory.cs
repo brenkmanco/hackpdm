@@ -90,7 +90,8 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 		=> await OClient.CommandAsync<Hashtable>(
 			GetHpModel(),
 			"get_entries",
-			[ new ArrayList { new ArrayList { directoryId, showInActive } } ]
+			// hp.directory.get_entries(value) expects value = [directory_id, show_inactive]
+			[ new ArrayList { directoryId, showInActive } ]
 		);
 
 	public async Task<ArrayList?> GetDirectoryEntryIDsAsync( bool withSubEntries = false, bool withDeleted = true )

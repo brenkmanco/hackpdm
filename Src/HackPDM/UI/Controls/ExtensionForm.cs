@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -23,7 +23,7 @@ using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 
 using Control = Microsoft.UI.Xaml.Controls.Control;
-using DataGrid = CommunityToolkit.WinUI.UI.Controls.DataGrid;
+using TableView = WinUI.TableView.TableView;
 using ListViewItem = Microsoft.UI.Xaml.Controls.ListViewItem;
 using Panel = Microsoft.UI.Xaml.Controls.Panel;
 using TreeData = HackPDM.UI.Types.TreeData;
@@ -69,14 +69,18 @@ public static class ExtensionForm
 		{
 			try { window.AppWindow.SetPresenter(kind); return true; } catch { return false; }
 		}
+#if WINDOWS
 		public IntPtr IntPtrHandle { get { return WinRT.Interop.WindowNative.GetWindowHandle( window ); } }
+#else
+		public IntPtr IntPtrHandle => IntPtr.Zero;
+#endif
 	}
-	extension (DataGrid grid)
+	extension (TableView grid)
 	{
 		public void SetAlternatingRowColors()
 		{
-			grid.RowBackground = _brush;
-			grid.AlternatingRowBackground = UIStorage.BrushWhite.Value;
+			grid.Background = _brush;
+			grid.AlternateRowBackground = UIStorage.BrushWhite.Value;
 		}
 		public void ItemAdd<T>(T item)
 		{
@@ -296,7 +300,7 @@ public static class ExtensionForm
 				return paths.Length == 1 ? node : node.RecurseNode(paths[1..]);
 			}
 		}
-		return null;
+		return default;
 	}
 	public static TreeData? FindTreeNode(this TreeView view, string path)
 	{
@@ -313,9 +317,21 @@ public static class ExtensionForm
 				return pathSpan.Length == 1 ? treeData : treeData.RecurseNode(pathSpan[1..]);
 			}
 		}
-		return null;        
+		return default;        
 	}
 	
+	public static T? FindParent<T>(this DependencyObject? child) where T : DependencyObject
+	{
+		DependencyObject? parent = child != null ? VisualTreeHelper.GetParent(child) : null;
+		while (parent != null)
+		{
+			if (parent is T typedParent)
+				return typedParent;
+			parent = VisualTreeHelper.GetParent(parent);
+		}
+		return default;
+	}
+
 	private class HolderValues
 	{
 		public bool IsSingleton { get; set; }=false;

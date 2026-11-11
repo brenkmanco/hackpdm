@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
@@ -53,7 +53,22 @@ internal class HackUpdater
 		try
 		{
 			MessageBox.ShowAsync($"Opening {PUBLISH_URL}");
-			Process proc = Process.Start( PUBLISH_URL );
+			if (OperatingSystem.IsWindows())
+			{
+				Process.Start(new ProcessStartInfo(PUBLISH_URL) { UseShellExecute = true });
+			}
+			else if (OperatingSystem.IsLinux())
+			{
+				Process.Start("xdg-open", PUBLISH_URL);
+			}
+			else if (OperatingSystem.IsMacOS())
+			{
+				Process.Start("open", PUBLISH_URL);
+			}
+			else
+			{
+				Process.Start(new ProcessStartInfo(PUBLISH_URL) { UseShellExecute = true });
+			}
 			HackApp.Current.Exit();
 		}
 		catch
