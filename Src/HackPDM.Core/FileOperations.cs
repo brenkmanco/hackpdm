@@ -64,16 +64,14 @@ public static class FileOperations
         }
         try
         {
-            if (file.DirectoryName is null) return false;
+            if (LocalTargetPath(file) is not { } targetPath) return false;
 
-            string combinedPath = Path.Combine(HackDefaults.Instance?.PwaPathAbsolute ?? "", file.DirectoryName);
-			DirectoryInfo dirInfo = new(Path.GetDirectoryName(combinedPath) ?? "");
-            if (!dirInfo.Exists)
-            {
-                dirInfo.Create();
-            }
+            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+            await WriteBytes(targetPath, file.FileContents);
 
-            await WriteBytes(combinedPath, file.FileContents);
+            // the date and read-only flag are applied through the file's own path
+            file.FullPath = targetPath;
+            file.Info = null;
             file.ApplyModifiedDateToLocal();
             file.ApplyNonOwnerReadOnly();
             return true;
@@ -84,6 +82,22 @@ public static class FileOperations
             Console.WriteLine(e.Message);
             return false;
         }
+    }
+    /// <summary>
+    /// Where a downloaded file is written: under the working folder at its server path. The server
+    /// path uses Windows separators and usually ends with the file name; both forms are accepted.
+    /// </summary>
+    internal static string? LocalTargetPath(HackFile file)
+    {
+        if (string.IsNullOrEmpty(file.DirectoryName)) return null;
+
+        string relative = file.DirectoryName.Replace('\\', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar);
+        if (file.Name is { Length: > 0 } name
+            && !string.Equals(Path.GetFileName(relative), name, StringComparison.OrdinalIgnoreCase))
+        {
+            relative = Path.Combine(relative, name);
+        }
+        return Path.Combine(HackDefaults.Instance?.PwaPathAbsolute ?? "", relative);
     }
     public static bool SameChecksum(IHpVersionModel versionModel, ChecksumType cType=ChecksumType.Sha1)
         => SameChecksum(

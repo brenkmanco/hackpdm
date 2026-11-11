@@ -149,7 +149,8 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 							case "text": vProp.text_value        = (string?)prop.Item4; break;
 							case "date": vProp.date_value        = (DateTime?)prop.Item4; break;
 							case "yesno": vProp.yesno_value      = (bool?)prop.Item4; break;
-							case "number": vProp.number_value    = (float?)prop.Item4; break;
+							// SWDocMgr boxes numbers as decimal; unboxing that as float? throws
+							case "number": vProp.number_value    = prop.Item4 is null ? null : Convert.ToSingle(prop.Item4, System.Globalization.CultureInfo.InvariantCulture); break;
 						}
 						isSuccessful = true;
 						Debug.WriteLine($"prop: {prop.Item2} | {isSuccessful}");

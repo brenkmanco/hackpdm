@@ -21,6 +21,23 @@ public sealed class DialogService : IDialogService
 	public async Task<bool> ConfirmAsync( string message, string caption, MessageBoxIcon icon = MessageBoxIcon.Question )
 		=> await MessageBox.ShowAsync( message, caption, MessageBoxButtons.YesNoCancel, icon ) is DialogResult.Yes or DialogResult.OK;
 
+	// the one status window: showing it again brings it to the front instead of opening another
+	private Microsoft.UI.Xaml.Window? _statusWindow;
+
 	public void ShowStatusWindow()
-		=> WindowHelper.CreateWindowAndPage<StatusDialogView>( out _, out _ );
+	{
+		if( _statusWindow is { } open )
+		{
+			open.Activate();
+			return;
+		}
+		WindowHelper.CreateWindowAndPage<StatusDialogView>( out var page, out var window );
+		page.ParentWindow = window;
+		_statusWindow = window;
+		window.Closed += ( _, _ ) =>
+		{
+			page.ParentWindow = null;
+			_statusWindow = null;
+		};
+	}
 }

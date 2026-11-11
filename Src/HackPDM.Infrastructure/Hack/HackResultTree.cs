@@ -10,8 +10,8 @@ public class HackResultTree
 {
 	public class ResultNode : IList<ResultNode>
 	{
-		public int Count { get; }
-		public bool IsReadOnly { get; }
+		public int Count => Children.Count;
+		public bool IsReadOnly => false;
 		public HackResultTree? Tree { get; set; }
 		public ResultNode? Root 
 		{
@@ -80,7 +80,9 @@ public class HackResultTree
 			this.Parent = parent;
 			this.Root = parent is not null ? ( parent?.Root ?? this ) : this;
 			this.Tree ??= parent is not null ? ( parent?.Tree ) : Tree;
-			this.Children = [ .. children ];
+			this.Children = [];
+			foreach( var child in children )
+				Add( child );
 
 			if( process )
 				ProcessDependencies();
@@ -100,7 +102,11 @@ public class HackResultTree
 		public bool Remove( ResultNode item ) => Children.Remove( item );
 
 		public int IndexOf( ResultNode item ) => Children.IndexOf( item );
-		public void Insert( int index, ResultNode item ) => Children.Insert( index, item );
+		public void Insert( int index, ResultNode item )
+		{
+			item.Parent = this;
+			Children.Insert( index, item );
+		}
 		public void RemoveAt( int index ) => Children.RemoveAt( index );
 
 
@@ -137,8 +143,8 @@ public class HackResultTree
 					foreach( var path in dependencies.Select( deps => deps[ 1 ] ) )
 					{
 						ResultHackFile resHack = new(HackFile.GetFromPath(path, FileOperations.GetRelativePath(path)), HackTestDepth.FileExistsTest);
-						ResultNode node = new ResultNode(resHack);
-						Children.Add(node);
+						// Add (not Children.Add) so the child knows its parent and tree
+						Add(new ResultNode(resHack));
 					}
 				}
 				catch

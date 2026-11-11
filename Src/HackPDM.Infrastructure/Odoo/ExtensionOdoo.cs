@@ -44,17 +44,25 @@ public static class ExtensionOdoo
 	// opening (and leaving in TIME_WAIT) a new TCP connection per request, and accepts
 	// compressed responses. Per-call timeouts use a CancellationToken because
 	// HttpClient.Timeout cannot change once a shared client has been used.
+	//
+	// Odoo's built-in server (Werkzeug, no reverse proxy) answers HTTP/1.0 and closes the socket
+	// after every response, but SocketsHttpHandler still returns that connection to the pool. When
+	// the next call picks it up before the server's FIN arrives, the call fails with
+	// "An error occurred while sending the request -> The response ended prematurely". So once a
+	// server has answered HTTP/1.0 without keep-alive, its calls go through a client that never
+	// pools connections.
 	private static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds( 100 );
-	private static readonly HttpClient SharedHttpClient = CreateHttpClient( null );
-	private static readonly ConcurrentDictionary<IWebProxy, HttpClient> ProxyHttpClients = new();
+	private static readonly ConcurrentDictionary<(IWebProxy? Proxy, bool Pooled), HttpClient> HttpClients = new();
+	private static readonly ConcurrentDictionary<string, bool> ClosesConnections = new( StringComparer.OrdinalIgnoreCase );
 
-	private static HttpClient CreateHttpClient( IWebProxy? proxy )
+	private static HttpClient CreateHttpClient( IWebProxy? proxy, bool pooled )
 	{
 		var handler = new SocketsHttpHandler
 		{
 			AutomaticDecompression = DecompressionMethods.All,
-			// recycle pooled connections so DNS / server address changes are picked up
-			PooledConnectionLifetime = TimeSpan.FromMinutes( 5 ),
+			// pooled: recycle connections so DNS / server address changes are picked up;
+			// not pooled: zero lifetime closes each connection after its response
+			PooledConnectionLifetime = pooled ? TimeSpan.FromMinutes( 5 ) : TimeSpan.Zero,
 			ConnectTimeout = TimeSpan.FromSeconds( 15 ),
 		};
 		if( proxy is not null )
@@ -65,20 +73,35 @@ public static class ExtensionOdoo
 		return new HttpClient( handler ) { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
 	}
 
-	private static HttpClient HttpClientFor( IWebProxy? proxy )
-		=> proxy is null ? SharedHttpClient : ProxyHttpClients.GetOrAdd( proxy, CreateHttpClient );
+	private static HttpClient HttpClientFor( IWebProxy? proxy, bool pooled )
+		=> HttpClients.GetOrAdd( ( proxy, pooled ), key => CreateHttpClient( key.Proxy, key.Pooled ) );
+
+	/// <summary>Whether the server behind <paramref name="url"/> has answered HTTP/1.0 without keep-alive.</summary>
+	internal static bool ServerClosesConnections( string url )
+		=> ClosesConnections.ContainsKey( new Uri( url ).GetLeftPart( UriPartial.Authority ) );
+
+	/// <summary>An HTTP/1.0 response closes the connection unless it says "Connection: keep-alive".</summary>
+	private static void NoteConnectionReuse( string url, HttpResponseMessage response )
+	{
+		bool keepAlive = response.Version >= HttpVersion.Version11
+			? response.Headers.ConnectionClose != true
+			: response.Headers.Connection.Contains( "keep-alive", StringComparer.OrdinalIgnoreCase );
+		if( !keepAlive )
+			ClosesConnections.TryAdd( new Uri( url ).GetLeftPart( UriPartial.Authority ), true );
+	}
 
 	private static System.Threading.CancellationTokenSource RequestTimeout( int timeoutMs )
 		=> new( timeoutMs > 0 ? TimeSpan.FromMilliseconds( timeoutMs ) : DefaultRequestTimeout );
 
-	public async static Task<JsonRpcResponse?> SendJsonAsync( this JsonRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null )
+	public async static Task<JsonRpcResponse?> SendJsonAsync( this JsonRpcRequest request, string url, int timeout = 0, IWebProxy? proxy = null )
 	{
 		using var cts = RequestTimeout( timeout );
-		var httpClient = HttpClientFor( proxy );
+		var httpClient = HttpClientFor( proxy, pooled: !ServerClosesConnections( url ) );
 
 		// PostAsJsonAsync handles body serialization, sets Content-Type to application/json, 
 		// and defaults to UTF-8 encoding automatically under the hood.
 		using var response = await httpClient.PostAsJsonAsync(url, request, cts.Token);
+		NoteConnectionReuse( url, response );
 		response.EnsureSuccessStatusCode();
 
 		// ReadFromJsonAsync automatically streams and deserializes the JSON response body
@@ -523,6 +546,9 @@ public static class OdooFieldHelpers
 
 	public static Hashtable ConvertJsonTable( object value )
 	{
+		// the JSON-RPC reader already turns objects into Hashtables; only a string still needs parsing
+		if( value is Hashtable table )
+			return table;
 		Hashtable result = [];
 		var valueDict = ConvertSerializedDict(value);
 		foreach( var item in valueDict ) {
@@ -532,6 +558,13 @@ public static class OdooFieldHelpers
 	}
 	public static Dictionary<string, object> ConvertSerializedDict( object value )
 	{
+		if( value is IDictionary parsed )
+		{
+			Dictionary<string, object> copy = [];
+			foreach( DictionaryEntry entry in parsed )
+				copy[ entry.Key.ToString() ?? "" ] = entry.Value!;
+			return copy;
+		}
 		return JsonConvert.DeserializeObject<Dictionary<string, object>>( ConvertSerializedString( value ) ) ?? [];
 	}
 }

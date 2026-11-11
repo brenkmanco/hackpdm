@@ -5,7 +5,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 Every phase ends with the same gate:
 
 1. `dotnet build Src/HackPDM/HackPDM.csproj -f net10.0-desktop -p:Platform=x64 -c Debug` (0 errors, no new warnings)
-2. `dotnet test Src/HackPDM.Tests/HackPDM.Tests.csproj` (baseline: 142 passed / 22 skipped without a server)
+2. `dotnet test Src/HackPDM.Tests/HackPDM.Tests.csproj` (baseline: 146 passed / 23 skipped without a server; 173/173 against Odoo)
 3. `Odoo/ci/run_local_smoke.sh`: Odoo in Docker, integration tests (the 22 skipped run), then the client smoke test
 4. One commit per numbered step, so any step can be reverted alone
 
@@ -29,7 +29,7 @@ Found by the first smoke run (fixed):
 - Opening a directory never listed its entries: `EnsureVisible` re-raised the tree's `SelectionChanged` for the same node, and each re-raise cancelled the load in flight (a regression from the MVVM refactor; the old handler ignored selections while loading). The view now ignores a selection of the node already loading. Entry-load errors now also go to stderr, not only `Debug`
 
 Found while writing them (pinned as current behaviour):
-- `new HackFile(path)` throws `FileNotFoundException` for a missing file (reads `FileInfo.Length`) → Phase 2
+- `new HackFile(path)` throws `FileNotFoundException` for a missing file (reads `FileInfo.Length`) → fixed in Phase 2
 - `HackFile.RelativePath` means two things: `root/<dir>` from the path factories, `<dir>/<file>` from the lazy getter → Phase 5
 
 ## Phase 1: Delete dead code — DONE (≈ 5,000 lines removed, no behaviour change)
@@ -64,30 +64,43 @@ Each item was found to have zero callers; re-grep immediately before deleting.
 - [ ] `FormHelper.EZGradient` and the gradient fields in `ExtensionForm` may now be unused (Phase 6 facade cleanup)
 - Note: `HpVersion.DownloadContents` still blocks on `ReadAsync(...).GetAwaiter().GetResult()` (same as the old sync wrapper did); making it async is Phase 5 (`VersionFileService`)
 
-## Phase 2: Fix confirmed bugs (small, high value)
+## Phase 2: Fix confirmed bugs — DONE
 
-Done before restructuring so later phases don't silently carry or change these.
+Each fix is pinned by a test where one could reach it. Gate: 0 build errors, warnings 444 → 430 (none new), 173/173 tests against Odoo, client smoke passing.
 
 Confirmed by reading the code:
-- [ ] `FileOperations.WriteAllBytesAsync`: path is `Combine(root, DirectoryName)` with no file name, and the directory created is its parent
-- [ ] `HpDirectory.CreateNew`: writes `directories[nextIndex]` every iteration; should be `[i - nextIndex]` (out of range when more than one level is created)
-- [ ] `OdooDefaults.InitializeAsync`: `.ContinueWith(async …)` yields un-awaited `Task<Task>`, so lookup maps fill after init returns; `.First(...)` throws on a missing row
-- [ ] `PdmCommitOperations:112,134`: `commit.ServerClear()` not awaited
-- [ ] `HpVersionRelationship:119`: `stagedRecords = [...]` overwritten each loop iteration, so only the last version's relationships are staged
-- [ ] `HpBaseModelTransport.GetRecordsByIdsAsync`: ignores `fields`, requests only `dir_id`
-- [ ] StatusDialog: `UpdateStatusDialogLoop` is never started; `Closing` handler attached while `ParentWindow` is null
+- [x] `FileOperations.WriteAllBytesAsync`: the plan's diagnosis was off. The server path (`WinPathway`) already ends with the file name, but uses `\` separators, so on Linux every download landed in the working folder as one file named `Projects\Parts\x.txt`. The file's path was also never set, so the modified date and read-only flag were never applied. Now `LocalTargetPath` normalizes separators (and appends the name only if missing), and the file's path is set before the date and flag. `GetLatestDownloadTests` now checks each file's location, not just its contents
+- [x] `HpDirectory.CreateNew`: `directories[nextIndex]` was out of range on the first directory created, so committing into any new folder threw. Also stopped mutating the caller's list
+  - found by the new `DirectoryCreationTests`: every new directory was rejected by the server because `default_cat = 1` points at a category that may not exist. Set only when category 1 exists
+  - `PdmCommitOperations.CreateDirectoriesAsync` split `RelativePath` on `\` only (and `RelativePath` has two meanings), so on Linux every commit went to root. Now `DirectorySegments` takes the folders from the absolute path (`CommitDirectorySegmentsTests`)
+- [x] `OdooDefaults.InitializeAsync`: sequential awaits instead of un-awaited `ContinueWith(async …)`, so the lookup maps exist when init returns; a missing settings row keeps its default instead of throwing
+- [x] `PdmCommitOperations`: `commit.ServerClear()` awaited (both rollbacks)
+- [x] `HpVersionRelationship.StageRelationshipRecords`: accumulates every version's relationships (was overwritten per version); a null staged version is skipped instead of dereferenced
+- [x] `HpBaseModelTransport.GetRecordsByIdsAsync`: the search path requests the asked-for fields (was only `dir_id`, which broke "restore deleted" rows) and no longer mutates the caller's filter list
+- [x] StatusDialog: the update loop starts on Loaded and stops on Unloaded (runs until unload, so a cancelled run still shows its final counts); `ParentWindow` attaches the close-confirmation handler when set; `DialogService` sets it
 
 Found by the Phase 0 tests:
-- [ ] `new HackFile(path)` throws for a file that is not on disk (`HackFileConstructionTests.FromMissingPath_Throws`)
+- [x] `new HackFile(path)` for a file not on disk: no size, date or checksum instead of throwing (`FromMissingPath_BuildsWithoutSizeOrChecksum`); `ModifiedDate` no longer reports FileInfo's 1601 placeholder
 
-Reported by the survey; verify before fixing:
-- [ ] `HackResultTree:141`: `Children.Add` bypasses `Add()`, so `Parent` is never set; `Count`/`IsReadOnly` are constant
-- [ ] `OdooClient<T>.CommandAsync`: falls back to `default(T)` of the model type, not `TReturn`
-- [ ] `HpBaseModelTransport:176-188`: mutates the Hashtable while enumerating it
-- [ ] `HpModel.cs:130`: `implicit operator MultiRecord(int[] multi) => multi;` looks self-recursive (stack overflow)
-- [ ] `SWDocMgr`: numeric properties boxed as `decimal`, possibly unboxed as `float?` elsewhere
-- [ ] `ConvertJsonTable` drops data when the value is already a Hashtable
-- [ ] App: ShowStatusWindow opens a new window per call; MessageBox fallback not awaited; SafeInvoker drops off-UI-thread work; settings pages' `Window?.Close()` always null; asset dictionary double extension and `Add` throwing in async void; `HackFile.Equals`/`GetHashCode` inconsistent; bare `catch` in PdmWorkflowService
+Reported by the survey (all verified first):
+- [x] `HackResultTree`: dependencies added through `Add()` so `Parent`/`Tree` are set; constructor children and `Insert` too; `Count`/`IsReadOnly` computed
+- [x] `OdooClient<T>.CommandAsync`: an empty response gives `new TReturn()`, not a cast of the model type
+- [x] `RecordsPopulation` remap: mutated the Hashtable while enumerating and stored entries under the old key; no caller passed it, so the parameter is removed
+- [x] `MultiRecord(int[])`: was self-recursive (stack overflow); builds the record directly
+- [x] SolidWorks number properties: boxed as `decimal`, unboxed as `float?` (InvalidCastException); converted with `Convert.ToSingle`
+- [x] `ConvertJsonTable` / `ConvertSerializedDict`: accept an already-parsed Hashtable/dictionary instead of returning empty
+- [x] App:
+  - `ShowStatusWindow` reuses the open window
+  - MessageBox awaits the UI work, so a failure reaches the native fallback instead of hanging the caller
+  - `SafeInvoker` uses the UI dispatcher off the UI thread (work was dropped) and `SafeInvokerAsync(Action)` fails instead of hanging when the queue rejects work
+  - asset map: no double extension, keyed like the built-ins, no throw in async void
+  - `HackFile.Equals`/`GetHashCode`: identity is the normalized full path (case-insensitive on Windows), consistent with the hash (`Equality_IsThePath_AndMatchesTheHash`)
+  - PdmWorkflowService: download failures are reported as failures, not "Cancelled"
+- [ ] Settings pages' `Window?.Close()` is always null: confirmed but harmless (the pages are only shown inline in Configuration, so Submit just saves). Giving Submit visible feedback → Phase 7
+
+Noticed while fixing (not done):
+- [x] Intermittent "An error occurred while sending the request" in the live tests (`AddonSeedDataTests` failing with search_count 0 / xml id not found): fixed. Odoo's Werkzeug server answers HTTP/1.0 and closes after each response, but SocketsHttpHandler pooled the connection anyway (even with `Connection: close` or an HTTP/1.0 request); a call that reused it before the FIN arrived got "The response ended prematurely" (about 1% of calls; Odoo never saw them). `SendJsonAsync` now routes a server that answered HTTP/1.0 without keep-alive through a non-pooling client, and `LatestException` keeps the inner exception messages (`RpcConnectionReuseTests` reproduces it offline)
+- `HackResultTree.ResultNode` starts `ProcessDependencies()` un-awaited from its constructor (CS4014) → Phase 5
 
 ## Phase 3: Shared primitives (one home per concept)
 

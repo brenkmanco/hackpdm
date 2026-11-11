@@ -37,7 +37,21 @@ public sealed partial class StatusDialogView : Page
 {
     public StatusDialog_VM ViewModel => InstanceManager.Dialog;
 
-    public Window? ParentWindow { get; set; }
+    /// <summary>The window showing this page; closing it while work runs asks for confirmation.</summary>
+    public Window? ParentWindow
+    {
+        get;
+        set
+        {
+            if (ReferenceEquals(field, value)) return;
+            field?.AppWindow.Closing -= AppWindow_Closing;
+            field = value;
+            field?.AppWindow.Closing += AppWindow_Closing;
+        }
+    }
+
+    // renders the counters while the page is on screen
+    private CancellationTokenSource? _updateLoop;
 
     public ObservableRingBuffer<BasicStatusMessage> OStatus => ViewModel.OStatus;
     public ObservableRingBuffer<BasicStatusMessage> OInfo => ViewModel.OInfo;
@@ -61,8 +75,7 @@ public sealed partial class StatusDialogView : Page
     {
         //HackFileManager.QueueAsyncStatus = new();
         InitializeComponent();
-        this.Loaded += new((s, e)=> HasLoaded = true);
-		ParentWindow?.AppWindow.Closing += AppWindow_Closing;
+        this.Loaded += StatusDialog_Loaded;
 		this.Unloaded += StatusDialog_Unloaded;
     }
 
@@ -79,7 +92,8 @@ public sealed partial class StatusDialogView : Page
         {
             await Task.Run(async () =>
             {
-                while (!Canceled)
+                // runs until the page unloads: a cancelled operation still shows its final counts
+                while (!token.IsCancellationRequested)
                 {
                     token.ThrowIfCancellationRequested();
 					// only render: the counters are written by IOperationReporter
@@ -151,12 +165,16 @@ public sealed partial class StatusDialogView : Page
 			    HackPDM.Shell.AppComposition.Reporter.Cancel();
         }
 	}
-	private async void StatusDialog_Unloaded( object sender, RoutedEventArgs e )
+	private void StatusDialog_Loaded( object sender, RoutedEventArgs e )
 	{
-		//if (HackFileManager.statusToken is { } cts)
-		//{
-		//    await cts.CancelAsync();
-		//}
-		//IsInProcess = false;
+		HasLoaded = true;
+		_updateLoop?.Cancel();
+		_updateLoop = new();
+		_ = UpdateStatusDialogLoop( _updateLoop.Token );
+	}
+	private void StatusDialog_Unloaded( object sender, RoutedEventArgs e )
+	{
+		_updateLoop?.Cancel();
+		_updateLoop = null;
 	}
 }

@@ -40,6 +40,8 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 	}
 	public async static Task<HpDirectory[]?> CreateNew( ArrayList paths )
 	{
+		// a copy: the caller's list is not ours to change
+		paths = new ArrayList( paths );
 		paths.Insert( 0, "root" );
 
 		Hashtable last = await LastAvailableDirectory( paths );
@@ -55,6 +57,10 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 		if( nextIndex >= paths.Count )
 			return [ await GetRecordByIdAsync( lastDirId ) ?? null ];
 
+		// category 1 is the usual default, but it may not exist (a fresh database has no categories),
+		// and referencing a missing record makes the server reject the directory
+		Many2One? defaultCategory = OdooDefaults.Instance.HpCategories?.Any( c => c.id == 1 ) is true ? 1 : null;
+
 		HpDirectory[] directories = new HpDirectory[paths.Count - nextIndex];
 		int lastParentId = lastDirId;
 		for( int i = nextIndex; i < paths.Count; i++ )
@@ -65,16 +71,16 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 				parent_id = lastParentId,
 				sandboxed = false,
 				deleted = false,
-				default_cat = 1,
+				default_cat = defaultCategory,
 			};
 			await newDirectory.CreateAsync( false );
 
 			if( newDirectory.id == 0 )
 			{
-				throw new Exception( "HpDirectory not created" );
+				throw new InvalidOperationException( $"directory '{paths[ i ]}' not created: {OClient.LatestException}" );
 			}
 
-			directories[ nextIndex ] = newDirectory;
+			directories[ i - nextIndex ] = newDirectory;
 			// for next iteration
 			lastParentId = newDirectory.id ?? 0;
 		}

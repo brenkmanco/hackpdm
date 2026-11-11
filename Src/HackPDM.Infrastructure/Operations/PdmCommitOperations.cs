@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -23,10 +24,22 @@ public static class PdmCommitOperations
     public static async Task<HpDirectory?> CreateDirectoriesAsync(HackFile? hack)
     {
         if (hack is null) return null;
-        ArrayList? paths = hack.RelativePath?.Split<ArrayList>("\\", StringSplitOptions.RemoveEmptyEntries);
-        paths?.RemoveAt(paths.Count - 1);
-        return (await HpDirectory.CreateNew(paths))?.LastOrDefault()
+        return (await HpDirectory.CreateNew(DirectorySegments(hack)))?.LastOrDefault()
             ?? throw new InvalidOperationException($"{HpDirectory.GetHpModel()} didn't create any records");
+    }
+
+    /// <summary>
+    /// The server directories a file belongs in, from the working folder down ("Projects", "Parts").
+    /// Taken from the absolute path because <see cref="HackFile.RelativePath"/> has two meanings and
+    /// separators differ by platform.
+    /// </summary>
+    internal static ArrayList DirectorySegments(HackFile hack)
+    {
+        string? directory = hack.FullPath is { Length: > 0 } full ? Path.GetDirectoryName(full) : hack.DirectoryName;
+        if (string.IsNullOrEmpty(directory)) return [];
+        string relative = Path.GetRelativePath(HackDefaults.Instance.PwaPathAbsolute, directory);
+        if (relative == "." || relative.StartsWith("..") || Path.IsPathRooted(relative)) return [];
+        return new ArrayList(relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, '\\'], StringSplitOptions.RemoveEmptyEntries));
     }
 
     public static async Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting)> FilesNotInOdooSegmentedAsync(
@@ -109,7 +122,7 @@ public static class PdmCommitOperations
         }
         if (entry.returnType is EntryReturnType.Failed)
         {
-            commit.ServerClear();
+            await commit.ServerClear();
             log?.Invoke(StatusMessage.ERROR, $"Error creating entry {entry.name}. Rolling back records...");
             return false;
         }
@@ -131,7 +144,7 @@ public static class PdmCommitOperations
         }
         catch (Exception e)
         {
-            commit.ServerClear();
+            await commit.ServerClear();
             Debug.WriteLine(e.Message);
             log?.Invoke(StatusMessage.ERROR, e.Message);
             return false;

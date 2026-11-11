@@ -169,24 +169,10 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 		var tempId = OClient.CreateAsync(OdooDefaultsConstants.HP_RECORD_STAGED, hts);
 		return tempId;
 	}
-	internal static T[]?				RecordsPopulation(IEnumerable<Hashtable>? hts, string[]? excludedFields = null, Dictionary<string, string>? remapNames = null)
+	internal static T[]?				RecordsPopulation(IEnumerable<Hashtable>? hts, string[]? excludedFields = null)
 	{
 		if (hts is null) return null;
 
-		if (remapNames is not null)
-		{
-			foreach (Hashtable ht in hts)
-			{
-				foreach (DictionaryEntry pair in ht)
-				{
-					if (remapNames.TryGetValue(pair.Key.ToString(), out string newName))
-					{
-						DictionaryEntry de = new(newName, pair.Value);
-						ht[pair.Key.ToString()] = de;
-					}
-				}
-			}
-		}
 		T[]? records = HashConverter.ConvertToClasses<T>(hts);
 		FinalizePopulations(records, excludedFields);
 		return records;
@@ -257,8 +243,10 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 		}
 		else
 		{
-			if (recordIds is not null and { Count: > 0 }) searchFilters.Add(new ArrayList { "id", "in", recordIds });
-			result = await OClient.BrowseAsync(modelName, [searchFilters, new ArrayList { "dir_id" }], timeoutMs);
+			// a copy: the caller's filter list is not ours to change
+			ArrayList domain = new(searchFilters);
+			if (recordIds is not null and { Count: > 0 }) domain.Add(new ArrayList { "id", "in", recordIds });
+			result = await OClient.BrowseAsync(modelName, [domain, fields], timeoutMs);
 			// result = await OClient.SmartSearchAsync(modelName, searchFilters, [], fields, 90000);
 		}
 

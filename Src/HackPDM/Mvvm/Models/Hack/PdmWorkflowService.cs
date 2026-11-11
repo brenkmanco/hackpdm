@@ -131,9 +131,15 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 				log: Log,
 				onProgress: ( processed, skipped ) => reporter.Advance( processed, skipped ) );
 		}
-		catch
+		catch( OperationCanceledException )
 		{
 			await reporter.NotifyAsync( "Cancelled Download" );
+		}
+		catch( Exception e )
+		{
+			// a failure is not a cancellation: say what went wrong
+			Log( StatusMessage.ERROR, $"download failed: {e}" );
+			await reporter.NotifyAsync( $"Download failed: {e.Message}", "Get Latest" );
 		}
 
 		reporter.Complete();

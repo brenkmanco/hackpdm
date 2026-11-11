@@ -292,72 +292,69 @@ public class OdooDefaults : IOdooDefaults
 		{
 			throw new Exception( "OdooId is 0 after login attempt" );
 		}
-		// HpNodes && MyNode
-		await TryHelper.TryAsync( async () => HpNodes                 = await HpNode.GetAllRecordsAsync() )
-            .ContinueWith( async ( success ) => MyNode      = await success ? HpNodes?.FirstOrDefault( node => node.name.Equals( Environment.MachineName.ToLower() ) )
-				?? TryAssignNewHpNode().Result
-				?? throw new ArgumentNullException( nameof( HpNode ), @"Unable to register new node" ) : null);
-		// HpDirectoryRoot
-		await TryHelper.TryAsync( async () => HpDirectoryRoot         = await HpDirectory.GetRecordByIdAsync( 1 ) );
-		// HpUsers && IdToUser
-		await TryHelper.TryAsync( async () => HpUsers                 = await HpUser.GetAllRecordsAsync() )
-            .ContinueWith( async ( success ) => IdToUser    = await success ? IdMapUser( HpUsers ) : [] );
-        // HpProperties && ExtToProp && IdToProp
-        await TryHelper.TryAsync( async () => HpProperties = await HpProperty.GetAllRecordsAsync() )
-             .ContinueWith( async ( success ) =>
-             {
-                 ExtToProp = await success 
-					 ?     HpProperties is IEnumerable<IHpPropertyModel> arr && arr.Any()
-						 ?     new( arr.Select( prop => new KeyValuePair<string, IHpPropertyModel>( prop?.name ?? "", prop ) ) )
-						 :     []  
-					 :     [];
-				 IdToProp = HpProperties is IEnumerable<IHpPropertyModel> arr2 && arr2.Any()
-			        ? IdMapProperty( HpProperties )
-			        : [];
-			 } );
-		// HpTypes && ExtToType
-		await TryHelper.TryAsync( async () => HpTypes                 = await HpType.GetAllRecordsAsync() )
-            .ContinueWith( async ( success ) => ExtToType   = await success ? ExtensionMapType( HpTypes ) : [] );
-        // HpCategories
-		await TryHelper.TryAsync( async () => HpCategories            = await HpCategory.GetAllRecordsAsync() );
-		// HpEntryNameFilters && EntryFilterPatterns && ExtToFilter
-		await TryHelper.TryAsync( async () => HpEntryNameFilters      = await HpEntryNameFilter.GetAllRecordsAsync() )
-			.ContinueWith( async ( success ) =>
-            {
-                if( !await success )
-                    return;
+		// Each lookup is fetched, then its maps are built, before the next starts: initialization is
+		// complete when this returns. A failed lookup leaves its maps empty instead of failing login.
+		string machine = Environment.MachineName.ToLower();
+		await TryHelper.TryAsync( async () =>
+		{
+			HpNodes = await HpNode.GetAllRecordsAsync();
+			MyNode = HpNodes?.FirstOrDefault( node => node.name?.Equals( machine ) is true )
+				?? await TryAssignNewHpNode()
+				?? throw new ArgumentNullException( nameof( HpNode ), @"Unable to register new node" );
+		} );
+		await TryHelper.TryAsync( async () => HpDirectoryRoot = await HpDirectory.GetRecordByIdAsync( 1 ) );
 
-				EntryFilterPatterns = await success ? [ .. HpEntryNameFilters?.SkipNullSelect( eFilter => eFilter.name_regex! ) ?? []] : [];
-				ExtToFilter         = HpEntryNameFilters is IEnumerable<IHpEntryNameFilterModel> arr && arr.Any()
-			        ? ExtensionMapFilter( HpEntryNameFilters )
-			        : [];
-			} );
-		// HpSettings && RestrictTypes && RestrictProperties && SwApi &&
-        // MaxBatchSize && MaxConcurrency && ConcurrencySize && DownloadBatchSize
-		await TryHelper.TryAsync( async () => HpSettings              = await HpSetting.GetAllRecordsAsync() )
-			.ContinueWith( async ( success ) =>
-            {
-                if( !await success )
-                    return;
-                
-				RestrictTypes       = ( HpSettings?.First( sett => sett.name == OdooDefaultsConstants.RESTRICT_TYPES_NAME ).bool_value ?? true );
-				RestrictProperties  = ( HpSettings?.First( sett => sett.name == OdooDefaultsConstants.RESTRICT_PROP_NAME ).bool_value ?? true );
-				SwApi               = ( HpSettings?.First( sett => sett.name == OdooDefaultsConstants.SW_KEY_NAME ).char_value ?? "" );
-				MaxBatchSize        = ( HpSettings?.First( sett => sett.name == "max_batch_size" ).int_value ?? 0 );
-				MaxConcurrency      = ( HpSettings?.First( sett => sett.name == "max_concurrency" ).int_value ?? 0 );
-				ConcurrencySize     = ( Math.Min( MaxConcurrency ?? 2, ConcurrencySize ) );
-				DownloadBatchSize   = ( Math.Min( MaxBatchSize ?? 5, DownloadBatchSize ) );
-                
-			} );
-		TryHelper.
-				// ExtToCat
-				Try( () =>
-        {
-            ExtToCat = HpCategories is HpCategory[] arr && arr.Length != 0
-                && HpTypes is HpType[] arrTypes && arrTypes.Length != 0
-                ? ExtensionMapCategory( arr, arrTypes )
-                : [];
-        } );
+		IdToUser = await TryHelper.TryAsync( async () => HpUsers = await HpUser.GetAllRecordsAsync() )
+			? IdMapUser( HpUsers )
+			: [];
+
+		if( await TryHelper.TryAsync( async () => HpProperties = await HpProperty.GetAllRecordsAsync() )
+			&& HpProperties is IEnumerable<IHpPropertyModel> properties && properties.Any() )
+		{
+			ExtToProp = new( properties.Select( prop => new KeyValuePair<string, IHpPropertyModel>( prop?.name ?? "", prop ) ) );
+			IdToProp = IdMapProperty( HpProperties );
+		}
+		else
+		{
+			ExtToProp = [];
+			IdToProp = [];
+		}
+
+		ExtToType = await TryHelper.TryAsync( async () => HpTypes = await HpType.GetAllRecordsAsync() )
+			? ExtensionMapType( HpTypes )
+			: [];
+
+		await TryHelper.TryAsync( async () => HpCategories = await HpCategory.GetAllRecordsAsync() );
+
+		if( await TryHelper.TryAsync( async () => HpEntryNameFilters = await HpEntryNameFilter.GetAllRecordsAsync() ) )
+		{
+			EntryFilterPatterns = [ .. HpEntryNameFilters?.SkipNullSelect( eFilter => eFilter.name_regex! ) ?? [] ];
+			ExtToFilter = HpEntryNameFilters is IEnumerable<IHpEntryNameFilterModel> filters && filters.Any()
+				? ExtensionMapFilter( HpEntryNameFilters )
+				: [];
+		}
+
+		if( await TryHelper.TryAsync( async () => HpSettings = await HpSetting.GetAllRecordsAsync() ) )
+		{
+			// a setting missing on the server keeps its default instead of failing the rest
+			IHpSettingModel? Setting( string name ) => HpSettings?.FirstOrDefault( sett => sett.name == name );
+			RestrictTypes       = Setting( OdooDefaultsConstants.RESTRICT_TYPES_NAME )?.bool_value ?? true;
+			RestrictProperties  = Setting( OdooDefaultsConstants.RESTRICT_PROP_NAME )?.bool_value ?? true;
+			SwApi               = Setting( OdooDefaultsConstants.SW_KEY_NAME )?.char_value ?? "";
+			MaxBatchSize        = Setting( "max_batch_size" )?.int_value ?? 0;
+			MaxConcurrency      = Setting( "max_concurrency" )?.int_value ?? 0;
+			ConcurrencySize     = Math.Min( MaxConcurrency ?? 2, ConcurrencySize );
+			DownloadBatchSize   = Math.Min( MaxBatchSize ?? 5, DownloadBatchSize );
+		}
+
+		// ExtToCat (needs the categories and types above)
+		TryHelper.Try( () =>
+		{
+			ExtToCat = HpCategories is HpCategory[] arr && arr.Length != 0
+				&& HpTypes is HpType[] arrTypes && arrTypes.Length != 0
+				? ExtensionMapCategory( arr, arrTypes )
+				: [];
+		} );
 	}
 
 	public async Task<HpNode?> TryAssignNewHpNode()

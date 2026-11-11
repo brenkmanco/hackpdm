@@ -53,7 +53,7 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
 
 		    foreach (HpRecordStaged vStaged in versionStaged)
 		    {
-			    if (vStaged is not null && !OdooDefaultsConstants.DependentExt.Contains($".{vStaged.payload?["file_ext"]?.ToString().ToUpper()}")) continue;
+			    if (vStaged is null || !OdooDefaultsConstants.DependentExt.Contains($".{vStaged.payload?["file_ext"]?.ToString().ToUpper()}")) continue;
 
                 // TODO:
                 // windows_complete_name is null
@@ -77,7 +77,8 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
 				    }
 
 				    //HpVersion[] getVersions = HpVersion.GetFromPaths(includedFields: ["name", "entry_id"], fullPaths: [.. paths]);
-                    stagedRecords = [.. paths.Select(p => new HpRecordStaged()
+                    // every version's dependencies are staged, not just the last version's
+                    stagedRecords.AddRange(paths.Select(p => new HpRecordStaged()
                     {
                         commit_id = vStaged.commit_id,
                         committing_id = (Many2One?)vStaged.commit_id,
@@ -95,7 +96,7 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
                                 }
                             }
                         },
-                    })];
+                    }).ToArray());
 			    }
 		    }
 

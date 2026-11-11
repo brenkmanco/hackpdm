@@ -603,13 +603,23 @@ public static class Assets
 		const string relativeDir = $"{SB.ASSETSFOLDER}/{SB.IMAGEFOLDER}";
 		const string msDir = $"{SB.LOCALPREFIX}/{relativeDir}";
 		
-		var assetFolder = await Storage.CreateFolderAsync(SB.ASSETSFOLDER, CreationCollisionOption.OpenIfExists);
-		var imageFolder = await assetFolder.CreateFolderAsync(SB.IMAGEFOLDER, CreationCollisionOption.OpenIfExists);
-
-		StorageFile[] files = [.. await imageFolder.GetFilesAsync()];
-		foreach (var file in files)
+		// async void (it runs from the static constructor): any exception here would crash the app
+		try
 		{
-			AssetMap.Add(file.Name, $"{msDir}/{file.Name}.{file.FileType.ToLower()}");
+			var assetFolder = await Storage.CreateFolderAsync(SB.ASSETSFOLDER, CreationCollisionOption.OpenIfExists);
+			var imageFolder = await assetFolder.CreateFolderAsync(SB.IMAGEFOLDER, CreationCollisionOption.OpenIfExists);
+
+			StorageFile[] files = [.. await imageFolder.GetFilesAsync()];
+			foreach (var file in files)
+			{
+				// keyed like the built-in entries (no extension); a local image replaces a built-in one.
+				// file.Name already has the extension, so it isn't appended again
+				AssetMap[System.IO.Path.GetFileNameWithoutExtension(file.Name)] = $"{msDir}/{file.Name}";
+			}
+		}
+		catch (Exception e)
+		{
+			System.Diagnostics.Debug.WriteLine($"local image assets not loaded: {e.Message}");
 		}
 	}
 

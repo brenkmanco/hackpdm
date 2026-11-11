@@ -10,7 +10,7 @@ namespace HackPDM.Mvvm.Views.Common.Controls
 	internal static class SafeHelper
 	{
 		internal static void SafeInvoker(Action action)
-			=> SafeInvokerInternal(action, DispatcherQueue.GetForCurrentThread());
+			=> SafeInvokerInternal(action, UiQueue);
 		internal static Task<T> SafeInvoker<T>(Func<T> func)
 		{
 			var tcs = new TaskCompletionSource<T>();
@@ -25,14 +25,18 @@ namespace HackPDM.Mvvm.Views.Common.Controls
 				{
 					tcs.SetException(ex);
 				}
-			}, DispatcherQueue.GetForCurrentThread());
+			}, UiQueue);
 			return tcs.Task;
 		}
-		private static void SafeInvokerInternal(Action action, DispatcherQueue dispatcher)
+		// the current thread's queue is null off the UI thread, which silently dropped the work
+		private static DispatcherQueue? UiQueue => DispatcherQueue.GetForCurrentThread() ?? HackApp.DispatcherQueue;
+
+		private static void SafeInvokerInternal(Action action, DispatcherQueue? dispatcher)
 		{
-			_ = dispatcher is not null and { HasThreadAccess: true}
-				? TryDoAction(action)
-				: dispatcher?.TryEnqueue(()=>TryDoAction(action));
+			if (dispatcher is { HasThreadAccess: true })
+				TryDoAction(action);
+			else if (dispatcher?.TryEnqueue(() => TryDoAction(action)) is not true)
+				Debug.WriteLine("SafeInvoker: no UI dispatcher accepted the work item; it was not run");
 		}
 		private static bool TryDoAction(Action action)
 		{
@@ -89,28 +93,15 @@ namespace HackPDM.Mvvm.Views.Common.Controls
 			}
 			return tcs.Task;
 		}
-		internal static Task SafeInvokerAsync(Action action)
-		{
-			var tcs = new TaskCompletionSource<bool>();
-			HackApp.DispatcherQueue.TryEnqueue(() =>
-			{
-				try
-				{
-					action();
-					tcs.SetResult(true);
-				}
-				catch (Exception ex)
-				{
-					tcs.SetException(ex);
-				}
-			});
-			return tcs.Task;
-		}
+		internal static Task SafeInvokerAsync(Action action) => SafeInvokerAsync(action, CancellationToken.None);
 		internal static Task SafeInvokerAsync(Action action, CancellationToken token)
 		{
-			var tcs = new TaskCompletionSource<bool>();
-			HackApp.DispatcherQueue.TryEnqueue(() =>
+			if (token.IsCancellationRequested)
+				return Task.FromCanceled(token);
+			var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+			if (!HackApp.DispatcherQueue.TryEnqueue(() =>
 			{
+				if (token.IsCancellationRequested) { tcs.SetCanceled(token); return; }
 				try
 				{
 					action();
@@ -120,7 +111,11 @@ namespace HackPDM.Mvvm.Views.Common.Controls
 				{
 					tcs.SetException(ex);
 				}
-			});
+			}))
+			{
+				// a rejected work item used to leave the task pending forever
+				tcs.SetException(new InvalidOperationException("UI dispatcher queue rejected the work item"));
+			}
 			return tcs.Task;
 		}
 	}

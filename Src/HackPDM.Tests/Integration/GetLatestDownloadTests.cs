@@ -124,6 +124,14 @@ public class GetLatestDownloadTests : IDisposable
 		Assert.Equal( Seeded.Length, summary.Downloaded );
 		var written = WrittenContents();
 		Assert.All( Seeded, name => Assert.Contains( $"hackpdm smoke test file {name}\n", written ) );
+		// each file lands at its own path under the working folder: root / Projects / Parts / <name>
+		Assert.All( Seeded, name =>
+		{
+			string expected = Path.Combine( _pwa, "Projects", "Parts", name );
+			Assert.True( File.Exists( expected ),
+				$"{expected} missing; written: {string.Join( ", ", Directory.EnumerateFileSystemEntries( _pwa, "*", SearchOption.AllDirectories ) )}" );
+			Assert.Equal( $"hackpdm smoke test file {name}\n", File.ReadAllText( expected ) );
+		} );
 	}
 
 	[OdooFact]

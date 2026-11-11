@@ -18,8 +18,6 @@ using HackPDM.Domain.OdooModels;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.Models;
 using HackPDM.Shared.GlobalData;
-using SolidWorks.Interop.sldworks;
-using SolidWorks.Interop.swconst;
 using SolidWorks.Interop.swdocumentmgr;
 using EntryRow = HackPDM.Domain.Representation.EntryRow;
 using TreeData = HackPDM.Domain.Representation.TreeData;

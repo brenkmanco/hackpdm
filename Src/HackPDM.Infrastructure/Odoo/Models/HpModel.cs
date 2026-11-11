@@ -127,7 +127,8 @@ public class MultiRecord : IList<HpModel?>, IMultiRecord
 	public static implicit operator MultiRecord?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!]};
 
 	public static implicit operator int[](MultiRecord multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.id ?? 0) ?? []];
-	public static implicit operator MultiRecord(int[] multi) => multi;
+	// built directly: `=> multi` would call this same conversion again, forever
+	public static implicit operator MultiRecord(int[] multi) => new() { Ids = [.. ( multi ?? [] ).Select(id => new HpModel() { id = id })] };
 
 	public static implicit operator ArrayList(MultiRecord? multi) => [.. multi?.Ids ?? []];
 	public static implicit operator MultiRecord?(ArrayList? ids) => ids is null ? null : new() { Ids = [.. ids.Cast<int?>()?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };

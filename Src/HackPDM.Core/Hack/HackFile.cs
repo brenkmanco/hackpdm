@@ -35,8 +35,9 @@ public class HackFile : HackBaseFile, IHackFileModel
             }
             if (field == default)
             {
+	            // FileInfo reports 1601-01-01 for a missing file, so only a file on disk has a date
 	            field = value == default
-		            ? Info?.LastWriteTime.ToUniversalTime() ?? default
+		            ? Info is { Exists: true } info ? info.LastWriteTime.ToUniversalTime() : default
 					: value;
             }
             else
@@ -61,11 +62,13 @@ public class HackFile : HackBaseFile, IHackFileModel
     public string? Checksum { get; set; }
     public long? FileSize 
     {
-        get => field ??= (Info?.Length 
-			?? (FullPath is null 
-				? null 
-				: (Info = new FileInfo(FullPath ?? "")).Length));
-        set => field = value ?? Info?.Length;
+        // null while the file isn't on disk (FileInfo.Length throws for a missing file)
+        get => field ??= (Info is { Exists: true } info
+			? info.Length
+			: FullPath is null || (Info = new FileInfo(FullPath)) is not { Exists: true } found
+				? null
+				: found.Length);
+        set => field = value ?? (Info is { Exists: true } info ? info.Length : null);
     }
         
     // odoo settings
@@ -144,13 +147,15 @@ public class HackFile : HackBaseFile, IHackFileModel
 		}
         Info = file;
         Name = file.Name;
-        DirectoryName = file?.DirectoryName;
-        FullPath = file?.FullName;
-        TypeExt = file?.Extension;
-        ModifiedDate = file?.LastWriteTime.ToUniversalTime() ?? default;
-        FileSize = file?.Length;
+        DirectoryName = file.DirectoryName;
+        FullPath = file.FullName;
+        TypeExt = file.Extension;
+        // a file that isn't on disk yet (about to be downloaded, say) has no date, size or checksum
+        if (!file.Exists) return;
+        ModifiedDate = file.LastWriteTime.ToUniversalTime();
+        FileSize = file.Length;
         if (computeChecksum)
-            Checksum = FileOperations.FileChecksum( file?.FullName, SHA1.Create() );
+            Checksum = FileOperations.FileChecksum( file.FullName, SHA1.Create() );
     }
 	public HackFile(EntryRow entry)
 	{
@@ -334,87 +339,36 @@ public class HackFile : HackBaseFile, IHackFileModel
     }
     public long? CreateFile() => FileOperations.WriteAllBytes(this);
 
-    public override bool Equals( object obj )
+    // a HackFile stands for a file on disk: two are equal when they point at the same path
+    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase
+        : StringComparer.Ordinal;
+
+    private string? IdentityPath
     {
-        string filePath = "";
-        HackFile hack = obj as HackFile;
-        IHpVersionModel versionModel = hack == null ? obj as IHpVersionModel : null;
-
-        if ( hack is not null || versionModel is not null )
+        get
         {
-            if ( this.FullPath is not null and not "" )
-            {
-                filePath = this.FullPath;
-            }
-            if ( filePath is ""
-                 && this.DirectoryName is not null and not ""
-                 && this.Name is not null and not "" )
-            {
-                filePath = Path.Combine( this.DirectoryName, this.Name );
-            }
+            string? path = FullPath is { Length: > 0 } full
+                ? full
+                : DirectoryName is { Length: > 0 } dir && Name is { Length: > 0 } name ? Path.Combine(dir, name) : null;
+            if (path is null) return null;
+            try { return Path.GetFullPath(path); }
+            catch { return path; }
         }
-
-        if ( hack is not null )
-        {
-            if (this.HpVersionId is not null and not 0 )
-            {
-                if (this.HpVersionId == hack.HpVersionId ) return true;
-                    
-            }
-            if (this.Checksum is not null and not "" )
-            {
-                if ( this.Checksum == hack.Checksum ) return true;
-					
-            }
-            if (hack.Checksum is not null and not "")
-            {
-
-                if ( filePath is not "" )
-                {
-                    string checksum = FileOperations.FileChecksum( this.FullPath, SHA1.Create() );
-                    if ( checksum == hack.Checksum ) return true;
-                }
-            }
-        }
-			
-        if ( versionModel is not null )
-        {
-            if ( this.Checksum is not null and not "" )
-            {
-                if ( this.Checksum == versionModel.checksum )
-                    return true;
-            }
-            if ( versionModel.checksum is not null and not "" )
-            {
-                if ( this.FullPath is not null and not "" )
-                {
-                    filePath = this.FullPath;
-                }
-                if ( filePath is ""
-                     && this.DirectoryName is not null and not ""
-                     && this.Name is not null and not "" )
-                {
-                    filePath = Path.Combine( this.DirectoryName, this.Name );
-                }
-                if ( filePath is not "" )
-                {
-                    string checksum = FileOperations.FileChecksum( this.FullPath, SHA1.Create() );
-                    if ( checksum == versionModel.checksum )
-                        return true;
-                }
-            }
-        }
-
-        return false;
     }
-    public override int GetHashCode()
+
+    /// <summary>
+    /// Same file path (version ids and checksums aren't identity: identical copies at two paths are
+    /// two files). Consistent with <see cref="GetHashCode"/>, so hash sets of files de-duplicate.
+    /// </summary>
+    public override bool Equals( object? obj )
     {
-		HashCode hash = new();
-        hash.Add( this.Name );
-        hash.Add( this.FullPath );
-        hash.Add( this.Checksum );
-        return hash.ToHashCode();
+        if ( ReferenceEquals( this, obj ) ) return true;
+        if ( obj is not HackFile other ) return false;
+        string? mine = IdentityPath, theirs = other.IdentityPath;
+        return mine is not null && theirs is not null && PathComparer.Equals( mine, theirs );
     }
+    public override int GetHashCode() => IdentityPath is { } path ? PathComparer.GetHashCode( path ) : 0;
     public async static Task<HackFile?> GetHackFileAsync(string? fullFilePath)
     {
 	    if (string.IsNullOrEmpty(fullFilePath)) return null;

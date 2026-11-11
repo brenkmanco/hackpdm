@@ -184,15 +184,6 @@
   </ItemGroup>
 
   <ItemGroup Condition="$(TargetFramework.Contains('windows'))">
-    <Reference Include="SolidWorks.Interop.sldworks">
-      <HintPath>..\HackPDM.Infrastructure\lib\SolidWorks.Interop.sldworks.dll</HintPath>
-    </Reference>
-    <Reference Include="SolidWorks.Interop.swcommands">
-      <HintPath>..\HackPDM.Infrastructure\lib\SolidWorks.Interop.swcommands.dll</HintPath>
-    </Reference>
-    <Reference Include="SolidWorks.Interop.swconst">
-      <HintPath>..\HackPDM.Infrastructure\lib\SolidWorks.Interop.swconst.dll</HintPath>
-    </Reference>
     <Reference Include="SolidWorks.Interop.swdocumentmgr">
       <HintPath>..\HackPDM.Infrastructure\lib\SolidWorks.Interop.swdocumentmgr.dll</HintPath>
     </Reference>

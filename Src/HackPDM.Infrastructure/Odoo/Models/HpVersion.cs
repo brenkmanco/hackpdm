@@ -14,7 +14,6 @@ using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Shared.OdooAttributes;
 
-using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swdocumentmgr;
 
 using DateTime = System.DateTime;

@@ -68,6 +68,16 @@ public static class OdooClient
         get => _latestException;
         set => _latestException = value ?? "";
     }
+    /// <summary>The exception's message followed by its inner exceptions' ("send failed: connection reset ..."),
+    /// since transport errors put the actual cause in the inner exception.</summary>
+    internal static string Describe( Exception exc )
+    {
+        var parts = new List<string>();
+        for( Exception? e = exc; e is not null; e = e.InnerException )
+            if( parts.Count == 0 || parts[ ^1 ] != e.Message )
+                parts.Add( e.Message );
+        return string.Join( " -> ", parts );
+    }
     public static async Task<int> CorrectUserId()
     {
         try
@@ -165,7 +175,7 @@ public static class OdooClient
 		}
 		catch( Exception exc )
 		{
-			_latestException = exc.Message;
+			_latestException = Describe( exc );
 			return 0;
 		}
 
@@ -215,7 +225,7 @@ public static class OdooClient
 		}
 		catch( Exception exc )
 		{
-			_latestException = exc.Message;
+			_latestException = Describe( exc );
 			return null;
 		}
 
@@ -280,12 +290,8 @@ public static class OdooClient<T> where T : HpBaseModelTransport<T>, new()
 	public static async Task<TReturn> CommandAsync<TReturn>(string method, ArrayList execParams, int? timeout = null) where TReturn : new()
     {
         object? response = await ExecuteJsonAsync(method, execParams, timeout);
-
-        if (typeof(TReturn).IsValueType)
-        {
-            return (TReturn)(response ?? default(T));
-        }
-        return (TReturn)(response ?? new T());
+        // no response: an empty TReturn (false, 0, an empty list), never the model type T
+        return response is TReturn value ? value : new TReturn();
     }
 
     public static async Task<ArrayList> ReadAsync(ArrayList ids, ArrayList fields, int? timeout = null)

@@ -14,7 +14,6 @@ using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Shared.OdooAttributes;
 
-using SolidWorks.Interop.sldworks;
 
 
 

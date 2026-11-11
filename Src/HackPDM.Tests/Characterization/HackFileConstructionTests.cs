@@ -44,12 +44,38 @@ public class HackFileConstructionTests
 	}
 
 	[Fact]
-	public void FromMissingPath_Throws()
+	public void FromMissingPath_BuildsWithoutSizeOrChecksum()
 	{
-		// KNOWN BUG (refactor Phase 2): the FileInfo constructor reads Length, which throws for a
-		// missing file, so a HackFile can't be built for a file that isn't on disk yet.
+		// a file that isn't on disk yet (about to be downloaded) can still be described
 		using var pwa = new PwaScope( create: true );
-		Assert.Throws<FileNotFoundException>( () => new HackFile( Path.Combine( pwa.Absolute, "missing.txt" ) ) );
+		string path = Path.Combine( pwa.Absolute, "missing.txt" );
+
+		var hack = new HackFile( path );
+
+		Assert.Equal( "missing.txt", hack.Name );
+		Assert.Equal( path, hack.FullPath );
+		Assert.Null( hack.FileSize );
+		Assert.Null( hack.Checksum );
+		Assert.Equal( default, hack.ModifiedDate );
+		Assert.False( hack.Exists );
+	}
+
+	[Fact]
+	public void Equality_IsThePath_AndMatchesTheHash()
+	{
+		using var pwa = new PwaScope( create: true );
+		string path = CreateFile( pwa );
+		var hashed = new HackFile( path );                                       // has a checksum
+		var unhashed = HackFile.GetFromPath( path, computeChecksum: false )!;    // doesn't
+
+		Assert.Equal( hashed, unhashed );
+		Assert.Equal( hashed.GetHashCode(), unhashed.GetHashCode() );
+		Assert.Single( new HashSet<HackFile> { hashed, unhashed } );
+
+		// identical contents at another path is another file
+		string copy = Path.Combine( Path.GetDirectoryName( path )!, "copy" + Path.GetExtension( path ) );
+		File.Copy( path, copy );
+		Assert.NotEqual( hashed, new HackFile( copy ) );
 	}
 
 	[Fact]

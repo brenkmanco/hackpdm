@@ -24,15 +24,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Reference Include="SolidWorks.Interop.sldworks">
-	    <HintPath>lib\SolidWorks.Interop.sldworks.dll</HintPath>
-	  </Reference>
-	  <Reference Include="SolidWorks.Interop.swcommands">
-	    <HintPath>lib\SolidWorks.Interop.swcommands.dll</HintPath>
-	  </Reference>
-	  <Reference Include="SolidWorks.Interop.swconst">
-	    <HintPath>lib\SolidWorks.Interop.swconst.dll</HintPath>
-	  </Reference>
 	  <Reference Include="SolidWorks.Interop.swdocumentmgr">
 	    <HintPath>lib\SolidWorks.Interop.swdocumentmgr.dll</HintPath>
 	  </Reference>

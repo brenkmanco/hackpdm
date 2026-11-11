@@ -563,16 +563,14 @@ public sealed partial class MessageBox : Page
 
 	private static DialogResult ShowInternal( string message, string? caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
 		ShowInternalAsync( message: message, caption: caption, buttons: buttons, icon: icon, type: type, parameters: parameters ).Result;
-	private static Task<DialogResult> ShowInternalAsync( string message, string? caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxType type = MessageBoxType.Default, params object[]? parameters )
+	private static async Task<DialogResult> ShowInternalAsync( string message, string? caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxType type = MessageBoxType.Default, params object[]? parameters )
 	{
-		var tcs = new TaskCompletionSource<DialogResult>();
+		var tcs = new TaskCompletionSource<DialogResult>( TaskCreationOptions.RunContinuationsAsynchronously );
 		try
 		{
-			// test
-#if DEBUG
-			// throw new Exception("test exception");
-#endif
-			SafeHelper.SafeInvokerAsync( () =>
+			// awaited, so a failure building the window reaches the native fallback below instead of
+			// leaving the caller waiting forever
+			await SafeHelper.SafeInvokerAsync( () =>
 			{
 				MessageBox mbox = HackApp.Services?.GetRequiredService<MessageBox>();
 
@@ -593,7 +591,7 @@ public sealed partial class MessageBox : Page
 			} );
 		}
 		catch( Exception ) {
-			tcs.SetResult(TryShowNative(
+			tcs.TrySetResult(TryShowNative(
 				HackApp.Window?.IntPtrHandle ?? 0,
 				message,
 				caption ?? "Information",
@@ -610,7 +608,7 @@ public sealed partial class MessageBox : Page
 #endif
 				));
 		}	
-		return tcs.Task;
+		return await tcs.Task;
 	}
 	private static DialogResult TryShowNative(
 		IntPtr hwnd, 
