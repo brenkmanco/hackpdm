@@ -6,7 +6,7 @@ using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Domain.Representation;
 
-public partial class EntryRow : DataGridData, IRowData<EntryRow>
+public partial class EntryRow : DataGridData
 {
 	// (MVVM) VIEW
 	public int? Id { get; set; }
@@ -26,26 +26,6 @@ public partial class EntryRow : DataGridData, IRowData<EntryRow>
 	public virtual bool? IsOnlyLocal { get; } = null;
 	public virtual bool? IsOnlyRemote { get; } = null;
 	public EntryReprType? ReprType { get; set; }
-	public EntryRow Clone()
-	{
-		var cItem = new EntryRow
-		{
-			Name			= this.Name		is null ? null : new(Name),
-			Text			= this.Text		is null ? null : new(Text),
-			Type			= this.Type		is null ? null : new(Type),
-			FullName		= this.FullName	is null ? null : new(FullName),
-			Id				= this.Id,
-			Size			= this.Size,
-			Status			= this.Status,
-			Checkout		= this.Checkout,
-			Category		= this.Category,
-			LocalDate		= this.LocalDate,
-			RemoteDate		= this.RemoteDate,
-			LatestId		= this.LatestId,
-			LatestReleaseId = this.LatestReleaseId,
-		};
-		return cItem;
-	}
 }
 
 

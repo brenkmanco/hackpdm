@@ -3,27 +3,25 @@ using System.IO;
 using HackPDM.Abstractions;
 using HackPDM.Core.Configuration;
 using HackPDM.Shared.GlobalData;
-using HackPDM.UI.Compatibility;
-using HackPDM.UI.Controls;
+using HackPDM.Shell;
+using HackPDM.Mvvm.Views.Common.Controls;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Extensions.DependencyInjection;
 
 
-using ProfileManager = HackPDM.UI.Forms.Settings.ProfileManager;
-using HackPDM.UI.Forms.Odoo;
-using HackPDM.UI.Forms.Hack;
+using ProfileManager = HackPDM.Mvvm.Views.Settings.ProfileManagerView;
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.Hack;
-using HackPDM.UI.Forms.FormTransport;
-using HackPDM.UI.Forms.Helper;
+using HackPDM.Mvvm.Models.Settings;
+using HackPDM.Mvvm.Views.Dialogs;
 using Microsoft.UI.Dispatching;
-using HackPDM.UI.Data;
-using HackPDM.UI.Models;
+using HackPDM.Mvvm.Views.Common.Settings;
 using System.Diagnostics;
+using HackPDM.Mvvm.Views.Hack;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -35,7 +33,7 @@ namespace HackPDM;
 /// </summary>
 public partial class HackApp : Application
 {
-    public static Home? HomePage;
+    public static HomeView? HomePage;
 	public static IServiceProvider? Services { get; private set; }
     public static Window? Window;
     public static Frame? RootFrame;
@@ -55,7 +53,7 @@ public partial class HackApp : Application
     {
 	    var services = new ServiceCollection();
 
-        services.AddSingleton<Home>();
+        services.AddSingleton<HomeView>();
 
         services.AddSingleton<ModernSettingsProvider>();
         services.AddSingleton<ISettingsProvider>(provider 
@@ -70,7 +68,7 @@ public partial class HackApp : Application
 
 	    services.AddTransient<ProfileManager>();
         services.AddTransient<MessageBox>();
-        services.AddTransient<HackFileManager>();
+        services.AddTransient<HackFileManagerView>();
 
 		Services =  services.BuildServiceProvider();
 
@@ -79,7 +77,7 @@ public partial class HackApp : Application
 
         CoreSettings = Services.GetRequiredService<ISettingsProvider>() as CoreSettings;
         Debug.WriteLine( $"Global data loaded from file: {UIStorage.GlobalData.IsLoadedFromFile}" );
-        HomePage = Services.GetRequiredService<Home>();
+        HomePage = Services.GetRequiredService<HomeView>();
 
 		var rootFrame = new Frame();
 		Window?.Content = rootFrame;
@@ -98,11 +96,12 @@ public partial class HackApp : Application
         Window.Activate();
 
         DispatcherQueue = Window.DispatcherQueue;
+        AppComposition.Initialize();
 		ConfigureServices();
 
         // HACKPDM_SMOKE_TEST=1: drive login -> navigation -> server round trips, then exit (CI)
-        if (HackPDM.UI.Testing.SmokeTestRunner.IsEnabled)
-            HackPDM.UI.Testing.SmokeTestRunner.Start();
+        if (HackPDM.Shell.Testing.SmokeTestRunner.IsEnabled)
+            HackPDM.Shell.Testing.SmokeTestRunner.Start();
     }
 
 	private void Window_Closed( object sender, WindowEventArgs args )

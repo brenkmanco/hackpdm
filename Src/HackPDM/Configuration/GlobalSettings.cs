@@ -4,14 +4,14 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 
-using HackPDM.UI.Controls;
-using HackPDM.UI.Forms.Helper;
+using HackPDM.Mvvm.Views.Common.Controls;
+using HackPDM.Mvvm.Views.Dialogs;
 
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Windows.Storage.Pickers;
 
-using static HackPDM.UI.Forms.Settings.ProfileManager;
+using static HackPDM.Mvvm.Views.Settings.ProfileManagerView;
 
 namespace HackPDM.Configuration;
 

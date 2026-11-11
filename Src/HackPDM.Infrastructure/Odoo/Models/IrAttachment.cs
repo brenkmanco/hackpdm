@@ -61,5 +61,4 @@ public partial class IrAttachment : HpBaseModelTransport<IrAttachment>
         return null;
     }
         
-    public string GetFileContentsB64() => _fileContentsBase64;
 }

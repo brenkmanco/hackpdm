@@ -8,8 +8,8 @@ using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Shared.GlobalData;
-using HackPDM.UI.Controls;
-using HackPDM.UI.Forms.Helper;
+using HackPDM.Mvvm.Views.Common.Controls;
+using HackPDM.Mvvm.Views.Dialogs;
 
 namespace HackPDM.Configuration;
 

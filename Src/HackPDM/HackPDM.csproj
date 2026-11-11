@@ -29,11 +29,11 @@
 
   <ItemGroup>
     <Using Include="Microsoft.UI.Xaml.Controls" />
-    <None Remove="UI\Forms\Hack\home.xaml" />
-    <None Remove="UI\Forms\Helper\DynamicJsonForm.xaml" />
-    <None Remove="UI\Forms\Helper\MessageBoxWindow.xaml" />
-    <None Remove="UI\Forms\Helper\PipWindow.xaml" />
-    <None Remove="UI\Forms\Settings\NotLoggedIn.xaml" />
+    <None Remove="Mvvm\Views\Hack\HomeView.xaml" />
+    <None Remove="Mvvm\Views\Tools\JsonEditorView.xaml" />
+    <None Remove="Mvvm\Views\Dialogs\MessageBoxWindow.xaml" />
+    <None Remove="Mvvm\Views\Dialogs\PipWindow.xaml" />
+    <None Remove="Mvvm\Views\Settings\NotLoggedInView.xaml" />
   </ItemGroup>
 
   <ItemGroup>

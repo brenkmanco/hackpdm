@@ -68,17 +68,6 @@ public enum Operators
 	ILikeEqual,
 }
 
-public enum ValueConversion
-{
-	Null,
-	Assignable,
-	Enum,
-	DateTime,
-	Nullable,
-	OtherConvert,
-	DoNothing,
-	Skip,
-}
 
 public enum MethodType : byte
 {

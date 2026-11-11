@@ -107,43 +107,6 @@ public partial class HpEntry
 		}
 		return null;
 	}
-	public HashSet<string>? GetDependencyPaths()
-	{
-		HackFile? hack = null;
-		string? thisPath = null;
-		HashSet<string>? dependentPaths = [];
-		if (HashedValues.TryGetValue("windows_complete_name", out string? path))
-		{
-			thisPath = FileOperations.NodePathToWindowsPath(path, true);
-			hack = new HackFile(thisPath);
-		}
-		else if (HashedValues.TryGetValue(nameof(dir_id), out ArrayList? arr2))
-		{
-			string? path2 = arr2?[1] as string;
-			thisPath = FileOperations.ConvertToWindowsPath(path2, true);
-			hack = new HackFile(thisPath);
-		}
-		else return null;
-
-		if (OdooDefaultsConstants.DependentExt.Contains(hack.Info.Extension))
-		{
-			var dependencies = SolidWorksUtil.DocMgr?.GetDependencies(thisPath);
-			if (dependencies is not null && dependencies.Count > 0)
-			{
-				foreach (string[] deps in dependencies)
-				{
-					string dpath = deps[1];
-					int index = dpath.IndexOf($"\\{HackDefaults.Instance.PwaPathRelative}\\");
-					if (index == -1) return null;
-					var splitPath = dpath[index..];
-
-					dependentPaths.Add(Path.Combine([HackDefaults.Instance.PwaPathAbsolute, splitPath]));
-				}
-			}
-		}
-
-		return dependentPaths is not null and { Count: > 0 } ? dependentPaths : null;
-	}
 
 	public bool CanCheckOut() => (checkout_user?.id is null or 0) && deleted is false;
 	public bool CanUnCheckOut() => (checkout_user is not null) && checkout_user == OdooDefaults.Instance.OdooId;
@@ -247,11 +210,6 @@ public partial class HpEntry
 	//public static async Task<(EntryReturnType, HpEntry?, HpRecordStaged?)> GetFallbackCreateEntryAsync( HackFile hackFile, int dirId, HpPDMCommit? commit = null)
 	//{
 	//}
-	internal static async Task<ArrayList> GetEntryList(int[] entryIds, bool update = false)
-	{
-		ArrayList arr = await OClient.CommandAsync<ArrayList>(HpVersion.GetHpModel(), "get_recursive_dependency_entries", [entryIds.ToArrayList()], 1000000);
-		return arr;
-	}
 	public async Task LogicalDelete()
 	{
 		deleted = true;

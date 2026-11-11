@@ -5,7 +5,7 @@ using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Domain.Representation;
 
-public class PropertiesRow : DataGridData, IRowData<PropertiesRow>
+public class PropertiesRow : DataGridData
 {
 	// (MVVM) VIEW
 	public int          Version     { get; set; }
@@ -14,21 +14,6 @@ public class PropertiesRow : DataGridData, IRowData<PropertiesRow>
 	public PropertyType? Type        { get; set; }
 	public object?      ValueData       { get; set; }
 	public PropertiesRow() {}
-	public PropertiesRow Clone()
-	{
-		var cItem = new PropertiesRow
-		{
-			Name = this.Name is null ?  null : new(this.Name),
-			Text = this.Text is null ?  null : new(this.Text),
-			Version = this.Version,
-			Property = this.Property,
-			Configuration = this.Configuration is null ?  null : new(this.Configuration),
-			Type = this.Type,
-			ValueData = Activator.CreateInstance(this.ValueData!.GetType()),
-		};
-		
-		return cItem;
-	}
 }
 
 

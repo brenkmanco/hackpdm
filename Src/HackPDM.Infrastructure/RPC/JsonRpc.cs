@@ -7,9 +7,6 @@ using System.Text.Json.Serialization;
 
 namespace HackPDM.Infrastructure.RPC;
 
-public class JsonRpc
-{
-}
 public class JsonRpcRequest
 {
 	[JsonPropertyName( "jsonrpc" )]

@@ -179,7 +179,6 @@ public class PlatformCompatibilityTests
             // On Linux or macOS, SolidWorks COM cannot run.
             // Verify safe degradation to null rather than TypeLoadException or COMException.
             Assert.Null(SolidWorksUtil.DocMgr);
-            Assert.Null(SolidWorksUtil.SwHelper);
         }
         else
         {

@@ -27,39 +27,7 @@ public static class ExtensionMethods
         }
         return list;
     }
-	public static T GetAssign<T>(this T obj, Func<T> func) where T : class
-    {
-        obj ??= func();
-        return obj;
-    }
 	
-    private static IEnumerable<(bool, TOut?)> SegmentSelectInternal<TIn, TOut>(IEnumerable<TIn?> array, Func<TIn?, (bool, TOut?)> predicateSelect, bool skipNullItem = true)
-    {
-        foreach (TIn? item in array)
-        {
-            if (skipNullItem && item is null) continue;
-
-            var value = predicateSelect(item);
-			
-            yield return (value.Item1, value.Item2);
-		}
-    }
-	private static IEnumerable<(bool, TOut?)> SegmentSelectInternal<TIn, TOut>(IEnumerable<TIn?> array, Func<TIn?, int, (bool, TOut?)> predicateSelect, bool skipNullItem = true)
-	{
-        int index = -1;
-		foreach (TIn? item in array)
-		{
-            checked
-            {
-                index++;
-            }
-			if (skipNullItem && item is null) continue;
-
-			var value = predicateSelect(item, index);
-
-			yield return (value.Item1, value.Item2);
-		}
-	}
 	private static IEnumerable<(bool, TOut?, TOut2?)> SegmentSelectDiffInternal<TIn, TOut, TOut2>(IEnumerable<TIn?> array, Func<TIn?, int, (bool, TOut?, TOut2?)> predicateSelect, bool skipNullItem = true)
 	{
 		int index = -1;
@@ -134,14 +102,6 @@ public static class ExtensionMethods
 			    yield return selector(obj);
 		    }
 	    }
-	    public IEnumerable<TOut> SelectNotDefault<TIn, TOut>(Func<TIn, TOut?> selector) where TOut : IEquatable<TOut>
-	    {
-		    foreach (TIn obj in source.OfType<TIn>())
-		    {
-			    var item = selector(obj);
-			    if (item is { } clean && !clean.Equals(default)) yield return clean;
-		    }
-	    }
     }
     extension(Hashtable ht)
     {
@@ -203,19 +163,6 @@ public static class ExtensionMethods
 			return true;
 		}
 
-		public FileInfo? CopyFile(string toPath)
-		{
-			try
-			{
-				if (!Directory.Exists(toPath) && !Directory.CreateDirectory(toPath).Exists) return null;
-
-				string toFilePath = Path.Combine(toPath, file.Name);
-
-				return  file.Exists  ?  file.CopyTo(toFilePath, true)  :     null;
-			}
-			catch { }
-			return null;
-		}
 	}
 
 	extension<T>(ObservableCollection<T> oc)
@@ -223,8 +170,6 @@ public static class ExtensionMethods
         public void Sort(Comparison<T> comparer, bool reverse = false) => oc.SortInternal(comparer, reverse);
 		public void Sort<TKey>(Func<T, TKey> keySelector, bool reverse = false) => oc.SortInternal(keySelector, reverse);
 		
-		public void ReverseSort(Comparison<T> comparer) => oc.SortInternal(comparer, true);
-		public void ReverseSort<TKey>( Func<T, TKey> keySelector ) => oc.SortInternal( keySelector, true );
 
 		private void SortInternal(Comparison<T> comparer, bool reverse = false)
 		{
@@ -358,10 +303,6 @@ public static class ExtensionConvertMethods
 	}
 	extension(IEnumerable items)
     {
-	    public ConcurrentBag<T> ToConcurrentBag<T>()
-	    {
-		    return items.Cast<object>().ToConcurrentBag<T>();
-	    }
     }
     extension<T>(IEnumerable<T> list)
     {
@@ -383,85 +324,14 @@ public static class ExtensionConvertMethods
 
 public static class UnsafeExtensions
 {
-	public delegate ref TOut RefSelector<TIn, TOut>(ref TIn input);
-	extension<T>(Span<T> span)
-	{
-		public void TakeWhile( Predicate<T> predicate )
-		{
-			for( int i = 0; i < span.Length; i++ )
-			{
-				ref var item = ref span[i];
-				if( predicate( item ) )
-				{
-					// list[i] = item;
-				}
-			}
-		}
-		public Span<T> Skip(Func<T, bool> predicate)
-		{
-			T[] temp = new T[span.Length]; int count = 0; for (int i = 0; i < span.Length; i++)
-			{
-				T val = span[i]; // safe indexing
-				if (!predicate(val)) 
-				{ 
-					temp[count++] = val; 
-				} 
-			} 
-			return temp.AsSpan(0, count); 
-		}
-		public ref TOut[] RefSelect<TOut>(
-			RefSelector<T, TOut> selector,
-			ref TOut[] unpopOuts)
-		{
-			for (int i = 0; i < span.Length; i++)
-			{
-				ref T val = ref span[i];
-				ref TOut unpopItem = ref selector(ref val);
-				unpopOuts[i] = unpopItem;
-			}
-			return ref unpopOuts;
-		}
-		public Span<T> SkipUnsafe(Func<T, bool> predicate) 
-		{
-			T[] temp = new T[span.Length];
-			int count = 0;
-
-			ref T start = ref MemoryMarshal.GetReference(span);
-
-			for (int i = 0; i < span.Length; i++)
-			{
-				T val = Unsafe.Add(ref start, i);
-				if (!predicate(val))
-				{
-					temp[count++] = val;
-				}
-			}
-
-			return temp.AsSpan(0, count);
-		}
-	}
 	extension<TIn, TOut>(Span<(TIn, TOut)> span)
 	{
-		public TIn[] SelectFirst()
-		{
-			TIn[] temp = new TIn[span.Length];
-			for (int i = 0; i < span.Length; i++)
-			{
-				ref TIn item = ref span[i].Item1;
-				temp[i] = item;
-			}
-			return temp;
-		}
 		public TOut[] SelectSecond()
 		{
 			TOut[] temp = new TOut[span.Length];
 			for (int i = 0; i < span.Length; i++)
-			{
-				ref TOut item = ref span[i].Item2;
-				temp[i] = item;
-			}
+				temp[i] = span[i].Item2;
 			return temp;
 		}
-		public Span<TOut> SelectSecondSpan() => span.SelectSecond();
 	}
 }

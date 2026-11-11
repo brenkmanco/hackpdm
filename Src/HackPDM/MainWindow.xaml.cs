@@ -2,7 +2,7 @@ using Microsoft.UI.Xaml;
 
 using HackPDM.Shared.GlobalData;
 
-using WindowHelper = HackPDM.UI.Controls.WindowHelper;
+using WindowHelper = HackPDM.Mvvm.Views.Common.Controls.WindowHelper;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.

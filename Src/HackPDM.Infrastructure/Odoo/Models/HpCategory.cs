@@ -12,9 +12,4 @@ public partial class HpCategory : HpBaseModelTransport<HpCategory>, IHpCategoryM
 	[OdooProp(OdooFieldType.Boolean, "track_version")] public bool? track_version { get; set; }
 	[OdooProp(OdooFieldType.Boolean, "track_depends")] public bool? track_depends { get; set; }
 
-	public void Test()
-	{
-		var convert = new HpCategory();
-		HpCategory.GetFields();
-	}
 }

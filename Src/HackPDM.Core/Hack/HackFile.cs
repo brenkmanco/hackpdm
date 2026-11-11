@@ -248,17 +248,6 @@ public class HackFile : HackBaseFile, IHackFileModel
     }
     public static async Task<HackFile> GetFromFileInfo( FileInfo file )
 		=> new(file);
-	public static async void ApplyFileInfoToHackFileAsync( FileInfo file, HackFile hack)
-	{
-		hack.Info = file;
-		hack.Name = file.Name;
-		hack.DirectoryName = file.DirectoryName;
-		hack.FullPath = file.FullName;
-		hack.TypeExt = file.Extension;
-		hack.ModifiedDate = file.LastWriteTime.ToUniversalTime();
-		hack.FileSize = file.Length;
-		hack.Checksum = await FileOperations.FileChecksumAsync( file.FullName, SHA1.Create() );
-	}
 
     internal static HackFile? GetFromPath(EntryRow? entry, bool initWithFileInfo=true)
     {
@@ -318,63 +307,7 @@ public class HackFile : HackBaseFile, IHackFileModel
 	// ///////////////////////////////////////////////////////
 
     
-    public static HackFile GetFromVersion(IHpVersionModel versionModel)
-    {
-        if (versionModel.windows_complete_name == null) return null;
-        HackFile hack = GetFromPath(
-            Path.Combine(
-                HackDefaults.Instance.PwaPathAbsolute, 
-                versionModel.windows_complete_name[
-                    HpBaseModel.ROOT_OFFSET
-                    ..
-                ]
-            ), 
-            Path.Combine(
-                HackDefaults.Instance.PwaPathRelative, 
-                versionModel.windows_complete_name[
-                    HpBaseModel.ROOT_OFFSET
-                    ..
-                    (versionModel.windows_complete_name.Length - versionModel.name.Length)
-                ]
-            )
-        );
-        if (hack != null && hack.Checksum == versionModel.checksum)
-        {
-            hack.HasRemoteVersion = true;
-            hack.HpVersionId = versionModel.id;
-        }
-        return hack;
-    }
-    public static bool GetLocalVersion(in IHpVersionModel versionModel, out HackFile hackFile)
-    {
-        hackFile = GetFromVersion(versionModel);
-        if ( hackFile == null ) return false;
-
-        return IsLocalVersion(versionModel, hackFile);
-    }
     
-    public static bool IsLocalVersion(in IHpVersionModel versionModel, in HackFile hackFile)
-    {
-        //if (HasLocalVersion(hackFile) && hackFile?.HpVersionID == version.ID) return true;
-        if (hackFile.Checksum == versionModel.checksum) return true;
-        return false;
-    }
-    public static bool GetLocalVersion(in IHpVersionModel[] versions, out HackFile hackFile)
-    {
-        hackFile = null;
-        foreach(IHpVersionModel version in versions)
-        {
-            if (hackFile != null)
-            {
-                if (IsLocalVersion(version, hackFile)) return true;
-            }
-            else
-            {
-                if (GetLocalVersion(version, out hackFile)) return true;
-            }
-        }
-        return false;
-    }
     
 
     public static async Task<(int, long)?> CreateFiles(params HackFile[] hackFiles)

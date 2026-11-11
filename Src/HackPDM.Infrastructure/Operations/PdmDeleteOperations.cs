@@ -169,7 +169,7 @@ public static class PdmDeleteOperations
 
         bool deletedVersions = await PermanentDeleteVersions(ids, log);
         log?.Invoke(StatusMessage.PROCESSING, "Deleting entries...");
-        bool deletedEntries = deletedVersions && OClient.Delete(HpEntry.GetHpModel(), [ids]);
+        bool deletedEntries = deletedVersions && await OClient.DeleteAsync(HpEntry.GetHpModel(), [ids]);
         if (deletedEntries)
         {
             log?.Invoke(StatusMessage.SUCCESS, "Deleted entries");

@@ -1,0 +1,32 @@
+using System;
+using System.Collections.ObjectModel;
+
+
+using HackPDM.Core;
+
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+
+// To learn more about WinUI, the WinUI project structure,
+// and more about our project templates, see: http://aka.ms/winui-project-info.
+
+namespace HackPDM.Mvvm.Views.Settings;
+
+/// <summary>
+/// An empty page that can be used on its own or navigated to within a Frame.
+/// </summary>
+public sealed partial class ApplicationSettingsView : Page
+{
+    public ApplicationSettingsView()
+    {
+        InitializeComponent();
+
+#if DEBUG
+        
+#endif
+    }
+
+#if DEBUG
+	
+#endif
+}

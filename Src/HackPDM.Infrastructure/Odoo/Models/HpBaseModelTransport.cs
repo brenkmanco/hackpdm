@@ -316,46 +316,11 @@ public abstract partial class HpBaseModelTransport<T>
 			FinalizePopulation(ref records[i], excludedFields);
 		}
 	}
-	public static ArrayList			GetAllFields() => GetOdooFields();
 	public static ArrayList			GetOdooFields(string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
 		=> [.. GetFields(excludedFieldNames, includedFieldNames, insertFieldNames)];
 	public override string			ToString() => id.ToString();
 
 	// async methods
-	public static async Task<TOther[]?> GetRelatedRecordsBySearchAsync<TOther>(ArrayList searchFilter, string relatedFieldName, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null) 
-		where TOther : HpBaseModelTransport<TOther>, new()
-	{
-		string modelName = GetHpModel();
-
-		List<TOther> records = [];
-		ArrayList fields = HpBaseModelTransport<TOther>.GetOdooFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
-
-		var result = await OClient.RelatedSearchAsync(modelName, [searchFilter, relatedFieldName, fields], 60000);
-
-		if (result.Count == 0) return null;
-
-		foreach (Hashtable ht in result)
-		{
-			TOther record = HashConverter.ConvertToClass<TOther>(ht);
-
-			// set record settings
-			record.id = (int)ht["id"];
-			//record.HashedValues = ht;
-			if (record.HpModel == OdooDefaultsConstants.HP_VERSION && ht.TryGetValue("dir_id", out int value))
-			{
-				record.HashedValues = new Hashtable
-				{
-					{ "dir_id", value }
-				};
-			}
-			record.IsRecord = true;
-			record.ExcludedFields = excludedFields;
-			record.CompleteConstruction();
-
-			records.Add(record);
-		}
-		return [.. records];
-	}
 	public static async Task<TOther[]?> GetRelatedRecordByIdsAsync<TOther>(ArrayList recordIds, string relatedFieldName, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null) 
 		where TOther : HpBaseModelTransport<TOther>, new()
 	{
@@ -388,24 +353,5 @@ public abstract partial class HpBaseModelTransport<T>
 			records.Add(record);
 		}
 		return [.. records];
-	}
-	public async Task					RefreshAsync()
-	{
-		if ((await OClient.ReadAsync(HpModel, [id], GetOdooFields()))?[0] is Hashtable ht)
-		{
-			HashConverter.AssignToClass(ht, this);
-
-			// set record settings
-			// HashedValues = ht;
-			if (HpModel == OdooDefaultsConstants.HP_VERSION && ht.TryGetValue("dir_id", out int value))
-			{
-				HashedValues = new Hashtable
-				{
-					{ "dir_id", value }
-				};
-			}
-			IsRecord = true;
-			CompleteConstruction();
-		}
 	}
 }

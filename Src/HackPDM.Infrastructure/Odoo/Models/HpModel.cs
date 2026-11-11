@@ -154,7 +154,3 @@ public class One2Many : MultiRecord
 	public static implicit operator ArrayList(One2Many? multi) => [.. multi?.Ids ?? []];
 	public static implicit operator One2Many?(ArrayList? ids) => ids is null ? null : new() { Ids = [.. ids.Cast<int?>()?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
 }
-public static class Test<T> where T : HpBaseModelTransport<T>, new()
-{
-
-}

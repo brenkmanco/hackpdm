@@ -17,14 +17,5 @@ namespace HackPDM.Infrastructure.SldWrks
 			}
 			set;
 		}
-		public static SwHelper? SwHelper
-		{
-			get
-			{
-				if (!OperatingSystem.IsWindows()) return null;
-				return field ??= new();
-			}
-			set;
-		}
 	}
 }

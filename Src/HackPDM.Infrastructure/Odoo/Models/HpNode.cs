@@ -17,8 +17,4 @@ public partial class HpNode : HpBaseModelTransport<HpNode>, IHpNodeModel
 {
 	[OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
 
-	internal static void UpdateNodeLatestVersions(int[] versionIds)
-    {
-        OClient.Command<ArrayList>(GetHpModel(), "update_node_latest_versions", [versionIds.ToArrayList()], 1000000);
-    }
 }

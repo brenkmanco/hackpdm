@@ -101,10 +101,3 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 			? await OClient.CommandAsync<ArrayList>( GetHpModel()!, "get_all_entry_ids", [ directoryId, withDeleted, withSubEntries ], 10000 )
 			: null;
 }
-public class ExplorerItem
-{
-    public string Name { get; set; }
-    public string IconPath { get; set; } 
-    public bool IsFolder { get; set; }
-    public ObservableCollection<ExplorerItem> Children { get; set; }
-}

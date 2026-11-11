@@ -18,9 +18,10 @@ using HackPDM.Infrastructure.Odoo.Models;
 
 
 
-using HackPDM.Infrastructure.XmlRpc;
+
 using HackPDM.Shared.GlobalData;
 using HackPDM.Infrastructure.RPC;
+
 using RestSharp.Serializers;
 using System.Text.Json;
 
@@ -171,175 +172,6 @@ public static class OdooClient
 		OdooDefaults.Instance.OdooId = ui;
 		return OdooDefaults.Instance.OdooId;
 	}
-    // switch( response?.Result?.ValueKind )
-   //         {
-   //             case JsonValueKind.Number:
-   //                 break;
-   //             case JsonValueKind.Array:
-   //                 break;
-   //             case JsonValueKind.String:
-   //                 break;
-   //             case JsonValueKind.True:
-   //                 break;
-			//	case JsonValueKind.False:
-			//		break;
-   //             case JsonValueKind.Null:
-			//	case JsonValueKind.Undefined:
-   //             default:
-			//		break;
-			//}
-    //  [("res_model", "=", "hp.version"), ("res_id", "=", 1)]
-    
-    public static object? Execute(string model, string method, ArrayList parameters, int? timeout = null)
-    {
-        _latestException = "";
-        int userTimeout = timeout == null ? _objectTimeout : (int)timeout;
-
-		JsonRpcRequest request = new()
-		{
-			Params = new()
-			{
-				Service = "object",
-				Method = "execute",
-				Args =
-				[
-					OdooDefaults.Instance.OdooDb,
-					OdooDefaults.Instance.OdooId,
-					OdooDefaults.Instance.OdooPass,
-                    model,
-                    method,
-                    .. parameters
-				],
-			}
-		};
-		
-        object? resVal;
-        try
-        {
-            //XmlRpcResponse? objectResponse = request.Send(OdooDefaults.Instance.OdooUrl + XmlrpcEndpoint + ObjectEndpoint, userTimeout);
-			var response = request.SendJsonAsync(OdooDefaults.Instance.OdooUrl + JsonRPCEndpoint, timeout: userTimeout).Result;
-			if ( response is null)
-            {
-                throw new Exception("web exception");
-            }
-            else if ( response?.Error is not null)
-            {
-                // possible for faultCode to have a null value
-                throw new Exception( response.Error.Describe() );
-                //latestException = objectResponse.Value.ToString();
-                //return null;
-            }
-            resVal = response?.Result?.ToNativeObject();
-        }
-        catch (Exception exc)
-        {
-            _latestException = exc.Message;
-            return null;
-        }
-
-        return resVal;
-    }
-
-    // generic execute command that'll return the response or the default/empty type
-    public static TReturn? Command<TReturn>(string model, string method, ArrayList execParams, int? timeout = null) where TReturn : new()
-    {
-        object? response = Execute(model, method, execParams, timeout);
-
-        return response is TReturn resp 
-            ? resp 
-            : typeof(TReturn).IsValueType 
-                ? default
-                : new TReturn();
-    }
-
-
-    // CRUD operations
-    public static int Create(string model, Hashtable values, int? timeout = null) 
-        => Command<int>(model, "create", [values], timeout); //
-    public static ArrayList? Read(string model, ArrayList ids, ArrayList fields, int? timeout = null) 
-        => Command<ArrayList>(model, "read", [ids, fields], timeout); //
-    public static ArrayList? FastRead(string model, ArrayList ids, ArrayList fields, int? timeout = null) 
-        => Command<ArrayList>(model, "fast_read", [ids, fields], timeout);
-	public static ArrayList? SmartSearch(string model, ArrayList? domain, ArrayList? ids, ArrayList? fields, int? timeout = null)
-	    => Command<ArrayList>(model, "smart_read", [domain, ids, fields ?? []], timeout); // read-only
-	public static bool Update(string model, int id, Hashtable values, int? timeout = null) 
-        => Command<bool>(model, "write", [id, values], timeout); //
-    public static bool Delete(string model, ArrayList execParams, int? timeout = null) 
-        => Command<bool>(model, "unlink", execParams, timeout); //
-        
-    // search functions
-    public static ArrayList? Search(string model, ArrayList domain, int? timeout = null) 
-        => Command<ArrayList>(model, "search", domain, timeout); // read-only
-    public static int SearchCount(string model, ArrayList execParams, int? timeout = null) 
-        => Command<int>(model, "search_count", execParams, timeout); // read-only
-    public static ArrayList? Browse(string model, ArrayList execParams, int? timeout = null) 
-        => Command<ArrayList>(model, "search_read", execParams, timeout); // read-only
-    // takes ids, field_name, fields
-    public static ArrayList? RelatedBrowse(string model, ArrayList execParams, int? timeout = null)
-        => Command<ArrayList>(model, "related_browse", execParams, timeout); // read-only
-
-    // takes domain search, related field name, and return fields
-    public static ArrayList? RelatedSearch(string model, ArrayList execParams, int? timeout = null)
-        => Command<ArrayList>(model, "related_search_browse", execParams, timeout); // read-only
-
-    // field functions
-    public static Hashtable? GetFields(string model, ArrayList execParams, int? timeout = null) 
-        => Command<Hashtable>(model, "fields_get", execParams, timeout); //
-    // "fields_view_get" is depreciated
-    public static Hashtable? GetFieldViews(string model, ArrayList execParams, int? timeout = null) 
-        => Command<Hashtable>(model, "get_view", execParams, timeout); // ?
-        
-    // common functions
-    public static ArrayList? NameSearch(string model, ArrayList execParams, int? timeout = null) 
-        => Command<ArrayList>(model, "display_name", execParams, timeout); // read-only
-    public static Hashtable? GetDefault(string model, ArrayList execParams, int? timeout = null) 
-        => Command<Hashtable>(model, "default_get", execParams, timeout); //
-    public static ArrayList? Duplicate(string model, ArrayList execParams, int? timeout = null) 
-        => Command<ArrayList>(model, "copy_data", execParams, timeout); //
-
-
-    // asynchronous commands
-    public static async Task<object> ExecuteAsync(string model, string method, ArrayList parameters, int? timeout = null)
-    {
-        _latestException = "";
-        int userTimeout = timeout == null ? _objectTimeout : (int)timeout;
-
-		XmlRpcRequest objectClient = new()
-        {
-            MethodName = "execute",
-            Params = {
-				OdooDefaults.Instance.OdooDb,
-				OdooDefaults.Instance.OdooId,
-				OdooDefaults.Instance.OdooPass,
-				model,
-				method,
-			},
-		};
-        objectClient.Params.AddRange(parameters);
-
-        object resVal;
-        try
-        {
-            XmlRpcResponse objectResponseAsync = await objectClient.SendXMLAsync(OdooDefaults.Instance.OdooUrl + XmlrpcEndpoint + ObjectEndpoint, userTimeout);
-
-            if (objectResponseAsync.IsFault)
-            {
-                // possible for faultCode to have a null value
-                string faultCode = (string)((Hashtable)objectResponseAsync.Value)["faultCode"];
-                throw new Exception(faultCode);
-                //latestException = objectResponse.Value.ToString();
-            }
-            resVal = objectResponseAsync.Value;
-        }
-        catch (Exception exc)
-        {
-            _latestException = exc.Message;
-            return null;
-        }
-
-        return resVal;
-    }
-	
 	public static async Task<object?> ExecuteJsonAsync( string model, string method, ArrayList parameters, int? timeout = null )
 	{
 		_latestException = "";
@@ -410,8 +242,6 @@ public static class OdooClient
         => await CommandAsync<int>(model, "create", [values], timeout); //
     public static async Task<ArrayList> CreateAsync(string model, ArrayList arrayValues, int? timeout = null)
         => await CommandAsync<ArrayList>(model, "create", [arrayValues], timeout); //
-	public static async Task<ArrayList> CreateReadAsync(string model, ArrayList arrayValues, ArrayList fields, int? timeout = null)
-		=> await CommandAsync<ArrayList>(model, "create_read", [arrayValues, fields], timeout); //
 	public static async Task<ArrayList> ReadAsync(string model, ArrayList ids, ArrayList fields, int? timeout = null)
         => await CommandAsync<ArrayList>(model, "read", [ids, fields], timeout); //
     public static async Task<bool> UpdateAsync(string model, int id, Hashtable values, int? timeout = null) 
@@ -434,89 +264,22 @@ public static class OdooClient
 	public static async Task<ArrayList> RelatedSearchAsync(string model, ArrayList execParams, int? timeout = null)
 		=> await CommandAsync<ArrayList>(model, "related_search_browse", execParams, timeout); // read-only
 																					// field functions
-	public static async Task<Hashtable> GetFieldsAsync(string model, ArrayList execParams, int? timeout = null)
-        => await CommandAsync<Hashtable>(model, "fields_get", execParams, timeout); //
     // "fields_view_get" is depreciated
-    public static async Task<Hashtable> GetFieldViewsAsync(string model, ArrayList execParams, int? timeout = null)
-        => await CommandAsync<Hashtable>(model, "get_view", execParams, timeout); // ?
 
 
     // common functions
-    public static async Task<ArrayList> NameSearchAsync(string model, ArrayList execParams, int? timeout = null)
-        => await CommandAsync<ArrayList>(model, "display_name", execParams, timeout); // read-only
-    public static async Task<Hashtable> GetDefaultAsync(string model, ArrayList execParams, int? timeout = null)
-        => await CommandAsync<Hashtable>(model, "default_get", execParams, timeout); //
-    public static async Task<ArrayList> DuplicateAsync(string model, ArrayList execParams, int? timeout = null)
-        => await CommandAsync<ArrayList>(model, "copy_data", execParams, timeout); //
 
 }
 public static class OdooClient<T> where T : HpBaseModelTransport<T>, new()
 {
-    private static string _model = HpBaseModelTransport<T>.GetHpModel();
-    public static object Execute(string method, ArrayList parameters, int? timeout = null) 
-        => OdooClient.Execute(_model, method, parameters, timeout);
+    private static readonly string _model = HpBaseModelTransport<T>.GetHpModel();
 
-    // generic execute command that'll return the response or the default/empty type
-    //public static TReturn Command<TReturn>(string method, ArrayList execParams, int? timeout = null) where TReturn : new()
-    //    => Command<TReturn>(method, execParams, timeout, false);
-    private static TReturn Command<TReturn>(string method, ArrayList execParams, int? timeout = null, bool isPrivate = true) where TReturn : new()
-    {
-        object response = Execute(method, execParams, timeout);
-
-        if (typeof(TReturn).IsValueType)
-        {
-            return (TReturn)(response ?? default(TReturn));
-        }
-        return (TReturn)(response ?? new TReturn());
-    }
-
-    // CRUD operations
-    public static int Create(Hashtable values, int? timeout = null)
-        => Command<int>("create", [values], timeout); //
-    public static ArrayList Read(ArrayList ids, ArrayList fields, int? timeout = null)
-        => Command<ArrayList>("read", [ids, fields], timeout); //
-    public static ArrayList FastRead(ArrayList ids, ArrayList fields, int? timeout = null)
-        => Command<ArrayList>("fast_read", [ids, fields], timeout);
-    public static bool Update(int id, Hashtable values, int? timeout = null)
-        => Command<bool>("write", [id, values], timeout); //
-    public static bool Delete(ArrayList execParams, int? timeout = null)
-        => Command<bool>("unlink", execParams, timeout); //
-
-    // search functions
-    public static ArrayList Search(ArrayList domain, int? timeout = null)
-        => Command<ArrayList>("search", domain, timeout); // read-only
-    public static int SearchCount(ArrayList execParams, int? timeout = null)
-        => Command<int>("search_count", execParams, timeout); // read-only
-    public static ArrayList Browse(ArrayList execParams, int? timeout = null)
-        => Command<ArrayList>("search_read", execParams, timeout); // read-only
-    public static ArrayList RelatedBrowse(ArrayList execParams, int? timeout = null)
-        => Command<ArrayList>("related_browse", execParams, timeout); // read-only
-    // field functions
-    public static Hashtable GetFields(ArrayList execParams, int? timeout = null)
-        => Command<Hashtable>("fields_get", execParams, timeout); //
-    // "fields_view_get" is depreciated
-    public static Hashtable GetFieldViews(ArrayList execParams, int? timeout = null)
-        => Command<Hashtable>("get_view", execParams, timeout); // ?
-
-    // common functions
-    public static ArrayList NameSearch(ArrayList execParams, int? timeout = null)
-        => Command<ArrayList>("display_name", execParams, timeout); // read-only
-    public static Hashtable GetDefault(ArrayList execParams, int? timeout = null)
-        => Command<Hashtable>("default_get", execParams, timeout); //
-    public static ArrayList Duplicate(ArrayList execParams, int? timeout = null)
-        => Command<ArrayList>("copy_data", execParams, timeout); //
-
-
-    // asynchronous commands
-
-    public static async Task<object> ExecuteAsync( string method, ArrayList parameters, int? timeout = null )
-        => OdooClient.ExecuteAsync( _model, method, parameters, timeout );
-	public static async Task<object> ExecuteJsonAsync( string method, ArrayList parameters, int? timeout = null )
+	public static Task<object?> ExecuteJsonAsync( string method, ArrayList parameters, int? timeout = null )
 		=> OdooClient.ExecuteJsonAsync( _model, method, parameters, timeout );
 
 	public static async Task<TReturn> CommandAsync<TReturn>(string method, ArrayList execParams, int? timeout = null) where TReturn : new()
     {
-        object response = await ExecuteJsonAsync(method, execParams, timeout);
+        object? response = await ExecuteJsonAsync(method, execParams, timeout);
 
         if (typeof(TReturn).IsValueType)
         {
@@ -525,44 +288,8 @@ public static class OdooClient<T> where T : HpBaseModelTransport<T>, new()
         return (TReturn)(response ?? new T());
     }
 
-
-
-    // crud operations
-    public static async Task<int> CreateAsync(Hashtable values, int? timeout = null)
-        => await CommandAsync<int>("create", [values], timeout); //
     public static async Task<ArrayList> ReadAsync(ArrayList ids, ArrayList fields, int? timeout = null)
-        => await CommandAsync<ArrayList>("read", [ids, fields], timeout); //
-    public static async Task<bool> UpdateAsync(int id, Hashtable values, int? timeout = null)
-        => await CommandAsync<bool>("write", [id, values], timeout); //
+        => await CommandAsync<ArrayList>("read", [ids, fields], timeout);
     public static async Task<bool> DeleteAsync(ArrayList execParams, int? timeout = null)
-        => await CommandAsync<bool>("unlink", execParams, timeout); //
-
-
-    // search functions
-    public static async Task<ArrayList> SearchAsync(ArrayList domain, int? timeout = null)
-        => await CommandAsync<ArrayList>("search", domain, timeout); // read-only
-    public static async Task<int> SearchCountAsync(string model, ArrayList execParams, int? timeout = null)
-        => await CommandAsync<int>("search_count", execParams, timeout); // read-only
-    public static async Task<ArrayList> BrowseAsync(ArrayList execParams, int? timeout = null)
-        => await CommandAsync<ArrayList>("search_read", execParams, timeout); // read-only
-    public static async Task<ArrayList> RelatedBrowseAsync(ArrayList execParams, int? timeout = null)
-        => await CommandAsync<ArrayList>("related_browse", execParams, timeout); // read-only
-
-    // field functions
-    public static async Task<Hashtable> GetFieldsAsync(ArrayList execParams, int? timeout = null)
-        => await CommandAsync<Hashtable>("fields_get", execParams, timeout); //
-    // "fields_view_get" is depreciated
-    public static async Task<Hashtable> GetFieldViewsAsync(ArrayList execParams, int? timeout = null)
-        => await CommandAsync<Hashtable>("get_view", execParams, timeout); // ?
-
-
-    // common functions
-    public static async Task<ArrayList> NameSearchAsync(ArrayList execParams, int? timeout = null)
-        => await CommandAsync<ArrayList>("display_name", execParams, timeout); // read-only
-    public static async Task<Hashtable> GetDefaultAsync(ArrayList execParams, int? timeout = null)
-        => await CommandAsync<Hashtable>("default_get", execParams, timeout); //
-    public static async Task<ArrayList> DuplicateAsync(ArrayList execParams, int? timeout = null)
-        => await CommandAsync<ArrayList>("copy_data", execParams, timeout); //
-    
-
+        => await CommandAsync<bool>("unlink", execParams, timeout);
 }

@@ -18,8 +18,6 @@ namespace HackPDM.Core;
 
 public static class FileOperations
 {
-    public static string ConvertToBase64(string filePath)
-        => Convert.ToBase64String(ReadFileInChunks(filePath));
     public static string? ConvertBytesToBase64(byte[]? fileBytes)
         => fileBytes is null ? null : Convert.ToBase64String(fileBytes);
 	public static byte[]? ConvertFromBase64(string? base64String )
@@ -231,47 +229,7 @@ public static class FileOperations
 			? directoryPath[(HackDefaults.Instance.PwaPathAbsolute.Length - HackDefaults.Instance.PwaPathRelative.Length)..]
 			: null;
     }
-    public static string FileSizeReformat(int? bytesize)
-        => FileSizeReformat((long?)bytesize);
-    public static string FileSizeReformat(long? bytesize, bool standard = false)
-        => bytesize switch
-        {
-            < 1024 => standard ? $"{bytesize} B" : $"{bytesize}     B",
-            < 1048576 => standard ? $"{bytesize / 1024f:.##} KB" : $"{bytesize / 1024f:.##}   KB",
-            < 1073741824 => standard ? $"{bytesize / 1048576f:.##} MB" : $"{bytesize / 1048576f:.##}   MB",
-            < 1099511627776 => standard ? $"{bytesize / 1073741824f:.##} GB" : $"{bytesize / 1073741824f:.##}   GB",
-            <= 1125899906842624 => standard ? $"{bytesize / 1099511627776f:.##} TB" : $"{bytesize / 1099511627776f:.##}   TB",
-            _ => standard ? $"{bytesize} B": $"{bytesize}     B",
-        };
 
-    public static bool IsFileLocked(FileInfo file)
-    {
-        FileStream? stream = null;
-
-        if (file.Exists)
-        {
-            try
-            {
-                stream = file.Open(FileMode.Open, FileAccess.Read, FileShare.None);
-            }
-            catch (IOException)
-            {
-                //the file is unavailable because it is:
-                //still being written to
-                //or being processed by another thread
-                //or does not exist (has already been processed)
-                return true;
-            }
-            finally
-            {
-                stream?.Close();
-            }
-        }
-
-        //file is not locked
-        return false;
-
-    }
     public static bool OpenFile(string fullpath)
     {
         try
@@ -334,9 +292,6 @@ public static class FileOperations
     }
         
     
-    public static string? ConvertToLocalPath(string? pathway, bool withAbsolutePath) => ConvertToWindowsPath(pathway, withAbsolutePath);
-    public static string? NodePathToLocalPath(string? pathway, bool withAbsolutePath = true) => NodePathToWindowsPath(pathway, withAbsolutePath);
-    public static string LocalToOdooPath(string pathway, bool fromFullPath = false) => WindowsToOdooPath(pathway, fromFullPath);
 
     public static string? ConvertToWindowsPath(string? pathway, bool withAbsolutePath)
     {

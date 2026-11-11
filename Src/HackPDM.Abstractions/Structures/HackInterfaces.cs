@@ -10,28 +10,6 @@ using System.IO;
 
 namespace HackPDM.Abstractions;
 
-public interface IConvert<T>
-{
-	T ConvertFromHt(Hashtable ht);
-}
-public interface ICloneable<T>
-{
-	T Clone();
-}
-public interface IRowData<T> : ICloneable<T>
-{
-}
-public interface ITreeItem
-{
-	public object? Tag { get; set; }
-	public IEnumerable<ITreeItem>? Children { get; set; }
-}
-public interface IListItem<T>
-{
-	public T? Value { get; }
-	public bool IsSelected { get; set; }
-	//public ListViewItem Item { get; set; }
-}
 
 public interface ISettingsProvider
 {

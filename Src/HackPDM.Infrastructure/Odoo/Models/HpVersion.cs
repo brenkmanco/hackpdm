@@ -127,16 +127,6 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
             }
             return true;
         }
-    public async static Task<(int, long)?> BatchDownloadFiles(List<HpVersion> processVersions)
-    {
-        HackFile[] datas = await DownloadFilesData(processVersions);
-                
-        if (datas == null || datas.Length < 1) return null;
-                
-        var finish = Task.WhenAll(HackFile.CreateFiles(datas));
-        await finish;
-        return finish.Result[0];
-    }
     public bool DownloadFile() => DownloadFile(Path.Combine(HackDefaults.Instance.PwaPathAbsolute, this.WinPathway));
     public bool DownloadFile(string toPath)
     {
@@ -161,7 +151,7 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
             if (file_size != 0)
             {
                 // JSON-RPC returns binary fields as base64 strings; the old `as byte[]` cast was always null
-                return ((OClient.Read(HpModel, [this.id], [fileContents])?[0] as Hashtable)?[fileContents]) switch
+                return ((OClient.ReadAsync(HpModel, [this.id], [fileContents]).GetAwaiter().GetResult()?[0] as Hashtable)?[fileContents]) switch
                 {
                     byte[] bytes => bytes,
                     string base64 when base64.Length > 0 => Convert.FromBase64String(base64),
@@ -170,36 +160,6 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
             }
         }
         return null;
-    }
-    public static async Task<List<HpVersion>> DownloadContentsAll(List<HpVersion> versions)
-    {
-        string[] fileContents = [
-            nameof(file_contents), 
-            nameof(dir_id), 
-            nameof(name), 
-            nameof(file_modify_stamp), 
-            nameof(file_size), 
-            nameof(checkout_user), 
-            nameof(windows_complete_name)];
-
-        List<HpVersion> processVersions = [.. versions.TakeAndRemove(version 
-            => version.file_contents is not { Length: 0 })];
-                
-        ArrayList ids = new(processVersions.Select(v => v.id).ToArray());
-        //string[] fileContentsBase64 = 
-        //ArrayList results = OClient.Read(GetHpModel(), ids, [fileContents], 60000);
-        HpVersion[]? readyVersions = await GetRecordsByIdsAsync(ids, includedFields: fileContents);
-        if (readyVersions is not null && readyVersions.Length > 0)
-            versions.AddRange(readyVersions);
-    
-        //IEnumerable<string> fileContentsBase64 = results.Select<object, string>(obj => {
-        //    Hashtable ht = ((Hashtable)obj);
-        //    object val = ht[fileContents];
-        //    return (val is string str) ? str : null;
-        //});
-        ////Utils.MapValues(typeof(HpVersion).GetProperty("fileContentsBase64"), versions, fileContentsBase64);
-        //return fileContentsBase64;
-        return versions;
     }
     public HackFile DownloadFileData()
     {
@@ -211,15 +171,6 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
         file.FileContents = file_contents;
     
         return file;
-    }
-    public static async Task<HackFile[]> DownloadFilesData(List<HpVersion> versions)
-    {
-        versions = await DownloadContentsAll(versions);
-        //string[] fileContentsBase64 = DownloadContentsAll(versions).ToArray();
-        //if (versions.Count() != fileContentsBase64.Length) return null;
-        if (versions is null) return null;
-                
-        return [.. versions.Select(ToHackFile)];
     }
     /// <summary>The file to write for a version whose file_contents have been read.</summary>
     public static HackFile ToHackFile(HpVersion version)
@@ -315,13 +266,6 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 		}
 		return newVersion;
 	}
-    public static async Task<HpVersion?> CreateVersion(HackFile hackFile, IHpEntryModel entry, int commit_id, HashedValueStoring hashStoreType = HashedValueStoring.None )
-    {
-        HpVersion? newVersion = PrepareCreation(hackFile, entry, commit_id, hashStoreType);
-        await newVersion?.CreateAsync( false, ["file_ext"] );
-    
-        return newVersion.id is not null and not 0 ? newVersion : null;
-	}
 	public static async Task<HpRecordStaged?> StageVersion(HackFile hackFile, IHpRecordStagedModel staged, HashedValueStoring hashStoreType = HashedValueStoring.None)
 	{
 		HpVersion? newVersion = PrepareCreation(hackFile, staged, hashStoreType);
@@ -338,17 +282,6 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
 		return versionStage?.id is not null and not 0 ? versionStage : null;
 	}
 	
-    public static async Task<HpVersion[]> GetFromPaths(string[] excludedFields = null, string[] includedFields = null, params string[] fullPaths)
-    {
-        var paths = Help.FastSlice(fullPaths, HackDefaults.Instance.PwaPathAbsolute.Length + 1, "root\\").ToArrayList();
-    
-        ArrayList searchParams =
-		[
-			new ArrayList { "windows_complete_name", "in", paths }
-        ];
-    
-        return await HpEntry.GetRelatedRecordsBySearchAsync<HpVersion>(searchParams, nameof(HpEntry.latest_version_id), includedFields: includedFields, excludedFields: excludedFields);
-    }
 
 	public override string ToString()
     {
