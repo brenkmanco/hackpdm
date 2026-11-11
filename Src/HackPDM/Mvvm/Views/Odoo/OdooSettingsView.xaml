@@ -31,6 +31,7 @@
             Text="Odoo Address" />
         <TextBox
             x:Name="txtOdooAddress"
+            Text="{x:Bind ViewModel.OdooAddress, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="0"
             Grid.Column="1"
             Margin="0,5,0,5" />
@@ -44,6 +45,7 @@
             Text="Odoo Port" />
         <TextBox
             x:Name="txtOdooPort"
+            Text="{x:Bind ViewModel.OdooPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="1"
             Grid.Column="1"
             Margin="0,5,0,5" />
@@ -57,6 +59,7 @@
             Text="Odoo DB" />
         <TextBox
             x:Name="txtOdooDb"
+            Text="{x:Bind ViewModel.OdooDb, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="2"
             Grid.Column="1"
             Margin="0,5,0,5" />
@@ -70,6 +73,7 @@
             Text="Odoo User" />
         <TextBox
             x:Name="txtOdooUser"
+            Text="{x:Bind ViewModel.OdooUser, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="3"
             Grid.Column="1"
             Margin="0,5,0,5" />
@@ -83,6 +87,7 @@
             Text="Odoo Pass" />
         <PasswordBox
             x:Name="txtOdooPass"
+            Password="{x:Bind ViewModel.OdooPass, Mode=TwoWay}"
             Grid.Row="4"
             Grid.Column="1"
             Margin="0,5,0,5" />
@@ -96,6 +101,7 @@
             Text="SW Key" />
         <TextBox
             x:Name="txtSwKey"
+            Text="{x:Bind ViewModel.OdooSwKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="5"
             Grid.Column="1"
             Margin="0,5,0,5" />
@@ -109,6 +115,7 @@
             Text="Area Factor" />
         <TextBox
             x:Name="txtAreaFactor"
+            Text="{x:Bind ViewModel.OdooAreaFactor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="6"
             Grid.Column="1"
             Margin="0,5,0,5" />
@@ -122,7 +129,7 @@
             Margin="0,10,0,0"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Bottom"
-            Click="SubmitOdooSettings"
+            Command="{x:Bind ViewModel.SubmitCommand}"
             Content="Submit" />
     </Grid>
 </Page>

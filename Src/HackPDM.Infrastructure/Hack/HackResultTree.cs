@@ -73,8 +73,9 @@ public class HackResultTree
 		public ResultNode( ResultHackFile? rNodeValue, ResultNode? parent = null) 
 			: this( rNodeValue, parent, [] ) {}
 		public ResultNode( ResultHackFile? rNodeValue, ResultNode? parent = null, params ResultNode[] children ) 
-			: this( rNodeValue, parent, false, children) {}
-		public ResultNode( ResultHackFile? rNodeValue, ResultNode? parent = null, bool process = false, params IEnumerable<ResultNode> children )
+			: this( rNodeValue, parent, (IEnumerable<ResultNode>)children ) {}
+		/// <remarks>Dependencies are resolved by awaiting <see cref="ProcessDependencies"/>, never from here.</remarks>
+		public ResultNode( ResultHackFile? rNodeValue, ResultNode? parent, IEnumerable<ResultNode> children )
 		{
 			this.Value = rNodeValue;
 			this.Parent = parent;
@@ -83,9 +84,6 @@ public class HackResultTree
 			this.Children = [];
 			foreach( var child in children )
 				Add( child );
-
-			if( process )
-				ProcessDependencies();
 		}
 
 

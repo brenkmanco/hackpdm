@@ -12,7 +12,7 @@ namespace HackPDM.Mvvm.Views.Settings;
 /// <summary>Theme editor plus a preview of every control type the app uses.</summary>
 public sealed partial class ThemeEditorView : Page
 {
-	public ThemeEditorViewModel ViewModel { get; } = new( AppComposition.Theme );
+	public ThemeEditorViewModel ViewModel { get; } = AppComposition.CreateThemeEditor();
 
 	// true while the view model is driving the picker, so its ColorChanged isn't sent back as an edit
 	private bool _syncingPicker;

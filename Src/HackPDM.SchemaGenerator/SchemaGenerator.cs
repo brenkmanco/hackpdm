@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading;
 
 using HackPDM.SchemaGenerator.GeneratedTypes;
 
@@ -11,150 +12,127 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace HackPDM.SchemaGenerator;
 
+/// <summary>
+/// For each [OdooModel] class: its inbound field map, outbound <c>ToOdoo</c> and field list; and for
+/// all of them the model-name dictionary and the type-keyed registry. Each model is read into an
+/// <see cref="OdooModelGen"/> of plain values, so an edit only regenerates the models it changed
+/// (the registry still regenerates whenever the set of models changes).
+/// </summary>
 [Generator]
 public sealed class OdooSchemaGenerator : IIncrementalGenerator
 {
+	private const string OdooModelAttribute = "HackPDM.Shared.OdooAttributes.OdooModelAttribute";
+	private const string OdooPropAttribute = "HackPDM.Shared.OdooAttributes.OdooPropAttribute";
+
+	private static readonly DiagnosticDescriptor InvalidOdooProp = new(
+		id: "HPDM001",
+		title: "Malformed [OdooProp]",
+		messageFormat: "{0}: [OdooProp] needs a field type and a field name; the property is not mapped",
+		category: "HackPDM.SchemaGenerator",
+		DiagnosticSeverity.Warning,
+		isEnabledByDefault: true );
+
+	private static readonly DiagnosticDescriptor InvalidOdooModel = new(
+		id: "HPDM002",
+		title: "Malformed [OdooModel]",
+		messageFormat: "{0}: [OdooModel] needs a name and a database model name; no code generated for it",
+		category: "HackPDM.SchemaGenerator",
+		DiagnosticSeverity.Warning,
+		isEnabledByDefault: true );
+
 	public void Initialize( IncrementalGeneratorInitializationContext context )
 	{
-		var classDeclarations = context.SyntaxProvider
-			.CreateSyntaxProvider(
-				predicate: static (node, _) =>
-					node is ClassDeclarationSyntax cds && cds.AttributeLists.Count > 0,
-				transform: static (ctx, _) =>
-					(ClassDeclarationSyntax)ctx.Node
-			)
-			.Where(static cls => cls is not null);
+		IncrementalValuesProvider<OdooModelGen?> models = context.SyntaxProvider.ForAttributeWithMetadataName(
+			OdooModelAttribute,
+			predicate: static ( node, _ ) => node is ClassDeclarationSyntax,
+			transform: static ( ctx, token ) => ReadModel( ctx, token ) );
 
-		var compilationAndClasses =
-			context.CompilationProvider.Combine(classDeclarations.Collect());
+		context.RegisterSourceOutput( models, static ( spc, model ) =>
+		{
+			if( model is null )
+				return;
+			foreach( string property in model.InvalidProperties )
+				spc.ReportDiagnostic( Diagnostic.Create( InvalidOdooProp, Location.None, $"{model.Name}.{property}" ) );
+			if( model.DbName.Length == 0 )
+			{
+				spc.ReportDiagnostic( Diagnostic.Create( InvalidOdooModel, Location.None, model.FullName ) );
+				return;
+			}
+			EmitModelBundle( spc, model );
+		} );
 
-		context.RegisterSourceOutput( compilationAndClasses, Generate );
+		IncrementalValueProvider<ImmutableArray<OdooModelGen>> all = models
+			.Where( static m => m is { DbName.Length: > 0 } )
+			.Select( static ( m, _ ) => m! )
+			.Collect();
+
+		context.RegisterSourceOutput( all, static ( spc, list ) =>
+		{
+			// stable output whatever order the compiler visits the files in
+			var sorted = list.OrderBy( m => m.FullName, StringComparer.Ordinal ).ToList();
+			EmitHpBaseModelPartial( spc, sorted );	// model name → Odoo model (HpModelDictionaryGen)
+			EmitRegistry( spc, sorted );			// model type → its generated mapper and field selector
+		} );
 	}
 
-	private static void Generate(
-		SourceProductionContext context,
-		(Compilation compilation, ImmutableArray<ClassDeclarationSyntax> classes) input )
+	private static OdooModelGen? ReadModel( GeneratorAttributeSyntaxContext ctx, CancellationToken token )
 	{
-		var (compilation, classes) = input;
+		if( ctx.TargetSymbol is not INamedTypeSymbol classSymbol )
+			return null;
+		AttributeData attr = ctx.Attributes[ 0 ];
+		string dbName = attr.ConstructorArguments.Length > 1 && attr.ConstructorArguments[ 1 ].Value is string db ? db : "";
 
-		var modelEntries = new List<(string FullName, string Name, string Namespace)>();
-		var modelAttrs = new List<(string name, string DbName)>();
-
-		foreach( var classSyntax in classes )
+		var properties = ImmutableArray.CreateBuilder<OdooPropertyGen>();
+		var invalid = ImmutableArray.CreateBuilder<string>();
+		foreach( IPropertySymbol prop in classSymbol.GetMembers().OfType<IPropertySymbol>() )
 		{
-			var semanticModel = compilation.GetSemanticModel(classSyntax.SyntaxTree);
-			if( semanticModel.GetDeclaredSymbol( classSyntax ) is not INamedTypeSymbol classSymbol )
+			token.ThrowIfCancellationRequested();
+			AttributeData? propAttr = prop.GetAttributes()
+				.FirstOrDefault( a => a.AttributeClass?.ToDisplayString() == OdooPropAttribute );
+			if( propAttr is null )
 				continue;
-
-			var modelAttr = classSymbol.GetAttributes()
-				.FirstOrDefault(a =>
-					a.AttributeClass?.ToDisplayString() ==
-					"HackPDM.Shared.OdooAttributes.OdooModelAttribute");
-
-			if( modelAttr is null )
+			if( propAttr.ConstructorArguments.Length < 2
+				|| propAttr.ConstructorArguments[ 0 ].Value is not int typeVal
+				|| propAttr.ConstructorArguments[ 1 ].Value is not string fieldName )
+			{
+				invalid.Add( prop.Name );
 				continue;
-
-			var fullName = classSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-			var name = classSymbol.Name;
-			var ns = classSymbol.ContainingNamespace.ToDisplayString();
-
-			modelAttrs.Add( (name, ( string )modelAttr.ConstructorArguments[ 1 ].Value!) );
-			modelEntries.Add( (fullName, name, ns) );
-
-			var props = CollectProperties(classSymbol);
-
-			EmitModelBundle( context, classSymbol, props );
+			}
+			string clrType = prop.Type.ToDisplayString( SymbolDisplayFormat.FullyQualifiedFormat );
+			if( !prop.Type.IsValueType && prop.NullableAnnotation == NullableAnnotation.Annotated )
+				clrType += "?";
+			properties.Add( new OdooPropertyGen( (OdooFieldType)typeVal, fieldName, prop.Name, clrType ) );
 		}
 
-		EmitHpBaseModelPartial( context, modelAttrs );	// model name → Odoo model (HpModelDictionaryGen)
-		EmitRegistry( context, modelEntries );			// model type → its generated mapper and field selector
+		return new OdooModelGen(
+			classSymbol.Name,
+			classSymbol.ContainingNamespace.ToDisplayString(),
+			classSymbol.ToDisplayString( SymbolDisplayFormat.FullyQualifiedFormat ),
+			dbName,
+			new( properties.ToImmutable() ),
+			new( invalid.ToImmutable() ) );
 	}
 
-	private static List<OdooPropertyGen> CollectProperties( INamedTypeSymbol classSymbol )
+	private static void EmitModelBundle( SourceProductionContext context, OdooModelGen model )
 	{
-		var props = new List<OdooPropertyGen>();
-
-		foreach( var prop in classSymbol.GetMembers().OfType<IPropertySymbol>() )
-		{
-			var attr = prop.GetAttributes()
-				.FirstOrDefault(a =>
-					a.AttributeClass?.ToDisplayString() ==
-					"HackPDM.Shared.OdooAttributes.OdooPropAttribute");
-
-			if( attr is null )
-				continue;
-
-			if( attr.ConstructorArguments.Length < 2 )
-				continue;
-
-			if( attr.ConstructorArguments[ 0 ].Value is not int typeVal )
-				continue;
-
-			if( attr.ConstructorArguments[ 1 ].Value is not string fieldName )
-				continue;
-
-			props.Add( new OdooPropertyGen(
-				( OdooFieldType )Enum.ToObject( typeof( OdooFieldType ), typeVal ),
-				fieldName,
-				prop ) );
-		}
-
-		return props;
-	}
-
-	private static void EmitModelBundle(
-		SourceProductionContext context,
-		INamedTypeSymbol classSymbol,
-		List<OdooPropertyGen> props )
-	{
-		var className = classSymbol.Name;
-		var ns = classSymbol.ContainingNamespace.ToDisplayString();
+		string className = model.Name;
+		string ns = model.Namespace;
 
 		// inbound assignments
-		var assignmentLines = string.Join(",\n            ",
-			props.Select(p =>
-			{
-				var type = p.property.Type;
-				var clrType = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-				bool isNullableReferenceType =
-					!type.IsValueType && p.property.NullableAnnotation == NullableAnnotation.Annotated;
-
-				string castType = clrType;
-				if (isNullableReferenceType)
-					castType = $"{clrType}?";
-
-				var fieldTypeName = $"(global::HackPDM.Shared.GlobalData.OdooFieldType.{p.odooType})";
-
-				var convertCall =
-					$"({castType})global::HackPDM.Infrastructure.Odoo.OdooValueConverter.Convert({fieldTypeName}, value)";
-
-				return
-					$"[\"{p.odooFieldName}\"] = (model, value) => model.{p.property.Name} = {convertCall}";
-			}));
+		var assignmentLines = string.Join( ",\n            ",
+			model.Properties.Select( p =>
+				$"[\"{p.OdooFieldName}\"] = (model, value) => model.{p.PropertyName} = ({p.ClrType})global::HackPDM.Infrastructure.Odoo.OdooValueConverter.Convert((global::HackPDM.Shared.GlobalData.OdooFieldType.{p.OdooType}), value)" ) );
 
 		// outbound entries
-		var outboundLines = string.Join(",\n            ",
-			props.Select(p =>
-			{
-				var expr = GenerateOutboundExpression(p, "model");
-				return $"[\"{p.odooFieldName}\"] = {expr}";
-			}));
+		var outboundLines = string.Join( ",\n            ",
+			model.Properties.Select( p => $"[\"{p.OdooFieldName}\"] = {GenerateOutboundExpression( p, "model" )}" ) );
 
-		// field names (property names)
-		var fieldNames = string.Join(",\n        ",
-			props.Select(p => $"\"{p.odooFieldName}\""));
+		// field names
+		var fieldNames = string.Join( ",\n        ",
+			model.Properties.Select( p => $"\"{p.OdooFieldName}\"" ) );
 
 		var source = $$"""
 // <auto-generated />
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using HackPDM.Core.General;
-using HackPDM.Core;
-using HackPDM.Shared.GlobalData;
-using System.Linq;
-
 namespace {{ns}};
 
 public static partial class OdooAssignments_{{className}}
@@ -205,13 +183,13 @@ public partial class {{className}}
 		[ OdooFieldType.Float ] = access => $"{access} is null ? null : global::System.Convert.ToDouble({access})",
 		[ OdooFieldType.Boolean ] = access => $"{access} is true ? 1 : {access} is false ? 0 : null",
 		[ OdooFieldType.Date ] = access => $"{access}?.ToString(\"yyyy-MM-dd\")",
-		[ OdooFieldType.DateTime ] = access => $"OdooDefaultsConstants.OdooDateFormat({access})",
+		[ OdooFieldType.DateTime ] = access => $"global::HackPDM.Shared.GlobalData.OdooDefaultsConstants.OdooDateFormat({access})",
 		[ OdooFieldType.Many2One ] = access => $"{access}?.id",
 		// replace the whole set: [(6, 0, ids)]
 		[ OdooFieldType.One2Many ] = X2ManyOutbound,
 		[ OdooFieldType.Many2Many ] = X2ManyOutbound,
-		[ OdooFieldType.Binary ] = access => $"FileOperations.ConvertBytesToBase64({access})",
-		[ OdooFieldType.Image ] = access => $"FileOperations.ConvertBytesToBase64({access})",
+		[ OdooFieldType.Binary ] = access => $"global::HackPDM.Core.FileOperations.ConvertBytesToBase64({access})",
+		[ OdooFieldType.Image ] = access => $"global::HackPDM.Core.FileOperations.ConvertBytesToBase64({access})",
 	};
 
 	private static string X2ManyOutbound( string access )
@@ -220,16 +198,14 @@ public partial class {{className}}
 	/// <summary>The property as is for text, JSON and anything without an emitter.</summary>
 	private static string GenerateOutboundExpression( OdooPropertyGen p, string modelVar )
 	{
-		string access = $"{modelVar}.{p.property.Name}";
-		return OutboundEmitters.TryGetValue( p.odooType, out var emit ) ? emit( access ) : access;
+		string access = $"{modelVar}.{p.PropertyName}";
+		return OutboundEmitters.TryGetValue( p.OdooType, out var emit ) ? emit( access ) : access;
 	}
 
-	private static void EmitHpBaseModelPartial(
-		SourceProductionContext context,
-		List<(string name, string DbName)> entries )
+	private static void EmitHpBaseModelPartial( SourceProductionContext context, List<OdooModelGen> models )
 	{
 		var dictEntries = string.Join(",\n        ",
-			entries.Select(e => $"{{ nameof({e.name}), \"{e.DbName}\" }}"));
+			models.Select(m => $"{{ nameof({m.FullName}), \"{m.DbName}\" }}"));
 
 		var source = $$"""
 // <auto-generated />
@@ -256,11 +232,9 @@ public partial class HpBaseModelTransport
 	/// so two models with the same class name in different namespaces would have collided), and the
 	/// generic caches that read it once per model type.
 	/// </summary>
-	private static void EmitRegistry(
-		SourceProductionContext context,
-		List<(string FullName, string Name, string Namespace)> models )
+	private static void EmitRegistry( SourceProductionContext context, List<OdooModelGen> models )
 	{
-		string Entries( Func<(string FullName, string Name, string Namespace), string> value )
+		string Entries( Func<OdooModelGen, string> value )
 			=> string.Join( ",\n            ", models.Select( m => $"[typeof({m.FullName})] = {value( m )}" ) );
 
 		var source = $$"""

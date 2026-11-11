@@ -33,7 +33,7 @@
             AutoGenerateColumns="False"
             CanSortColumns="True"
             IsReadOnly="True"
-            ItemsSource="{x:Bind OStatus, Mode=OneWay}"
+            ItemsSource="{x:Bind ViewModel.OStatus, Mode=OneWay}"
             RowDetailsVisibilityMode="Collapsed">
             
             <tv:TableView.Columns>
@@ -67,7 +67,7 @@
             AutoGenerateColumns="False"
             CanSortColumns="True"
             IsReadOnly="True"
-            ItemsSource="{x:Bind OInfo, Mode=OneWay}"
+            ItemsSource="{x:Bind ViewModel.OInfo, Mode=OneWay}"
             RowDetailsVisibilityMode="Collapsed">
             <tv:TableView.Columns>
                 <tv:TableViewTextColumn
@@ -92,7 +92,7 @@
             AutoGenerateColumns="False"
             CanSortColumns="True"
             IsReadOnly="True"
-            ItemsSource="{x:Bind OError, Mode=OneWay}"
+            ItemsSource="{x:Bind ViewModel.OError, Mode=OneWay}"
             RowDetailsVisibilityMode="Collapsed">
             <tv:TableView.Columns>
                 <tv:TableViewTextColumn
@@ -111,6 +111,8 @@
         <!--  Progress Bar  -->
         <ProgressBar
             x:Name="fileCheckStatus"
+            Maximum="{x:Bind ViewModel.MaxCount, Mode=OneWay}"
+            Value="{x:Bind ViewModel.TotalProcessed, Mode=OneWay}"
             Grid.Row="3"
             Grid.ColumnSpan="2"
             Height="15"
@@ -126,15 +128,7 @@
             <TextBlock
                 x:Name="ProgressText"
                 Margin="0,0,10,0"
-                Text="(0%)&#x0a;0 / 0" />
-            <TextBlock
-                x:Name="Downloaded"
-                Margin="0,0,10,0"
-                Text="Downloaded: " />
-            <TextBlock
-                x:Name="TotalDownload"
-                Margin="0,0,10,0"
-                Text="Session Downloaded: " />
+                Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}" />
         </StackPanel>
 
         <!--  Skipped Label  -->
@@ -144,7 +138,7 @@
             Grid.Column="0"
             HorizontalAlignment="Center"
             VerticalAlignment="Bottom"
-            Text="(0) Skipped" />
+            Text="{x:Bind ViewModel.SkippedText, Mode=OneWay}" />
 
         <!--  Control Buttons  -->
         <StackPanel
@@ -165,7 +159,7 @@
                 x:Name="cmdCancel"
                 Margin="0,0,10,0"
                 Content="Cancel" 
-                Click="CmdCancelClick"/>
+                Command="{x:Bind ViewModel.CancelCommand}"/>
             <Button x:Name="cmdClose" Content="Close" 
                 Click="CmdCloseClick"/>
         </StackPanel>

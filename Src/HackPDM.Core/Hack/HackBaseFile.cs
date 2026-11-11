@@ -7,7 +7,7 @@ using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Core.Hack;
 
-public abstract class HackBaseFile : IHackBaseFileModel
+public abstract class HackBaseFile
 {
     public string? Name 
     { 

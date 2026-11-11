@@ -35,12 +35,12 @@ public static class DependencyScanner
 	/// The files directly in <paramref name="folderPath"/> plus everything its SolidWorks files
 	/// reference, each once. Names the server's entry filters reject (SolidWorks "~$" lock files)
 	/// are left out. A SolidWorks file whose references can't all be found is left out with its
-	/// tree and reported in <paramref name="broken"/>; returns false when there were any.
+	/// tree and reported in <c>Broken</c>.
 	/// </summary>
-	public static bool GetHackFolderWithDependencies( string folderPath, out List<HackFile> hackFiles, out List<HackResultTree.ResultNode> broken )
+	public static async Task<(List<HackFile> Files, List<HackResultTree.ResultNode> Broken)> GetHackFolderWithDependenciesAsync( string folderPath )
 	{
 		HashSet<HackFile> files = [];
-		broken = [];
+		List<HackResultTree.ResultNode> broken = [];
 		foreach( string path in Directory.EnumerateFiles( folderPath, "*", SearchOption.TopDirectoryOnly ) )
 		{
 			if( PdmCommitOperations.IsFilteredName( Path.GetFileName( path ) ) )
@@ -54,13 +54,12 @@ public static class DependencyScanner
 				continue;
 			}
 			// the tree used to be kept only when it was broken, so no SolidWorks file was ever committed
-			var (success, tree, results) = GetHackFileWithDependencies( hack ).GetAwaiter().GetResult();
+			var (success, tree, results) = await GetHackFileWithDependencies( hack );
 			if( success )
 				files.AddAll( tree );
 			else
 				broken.AddRange( results );
 		}
-		hackFiles = [ .. files ];
-		return broken.Count == 0;
+		return ( [ .. files ], broken );
 	}
 }

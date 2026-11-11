@@ -12,7 +12,7 @@ using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Core.Hack;
 
-public class HackFile : HackBaseFile, IHackFileModel
+public class HackFile : HackBaseFile
 {
     // file settings
     public string? TypeExt 

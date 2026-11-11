@@ -48,7 +48,7 @@ namespace HackPDM.Mvvm.Views.Hack;
 /// </summary>
 public sealed partial class HackFileManagerView : Page
 {
-	public HackFileManagerViewModel ViewModel => InstanceManager.HFM;
+	public HackFileManagerViewModel ViewModel => AppComposition.FileManager;
 
 
 	/// <summary>Tree node currently selected (the smoke tests read it).</summary>
@@ -61,7 +61,6 @@ public sealed partial class HackFileManagerView : Page
 
 	public readonly Dictionary<object, TreeViewNode> ItemToContainerMap = new();
 
-	private TableView OdooEntryList = null!;
 	private readonly IPreviewImageLoader _previewLoader = new PreviewImageLoader();
 	private int _previewRequest;
 
@@ -77,7 +76,7 @@ public sealed partial class HackFileManagerView : Page
 	public HackFileManagerView()
 	{
 		InitializeComponent();
-		BuildEntryList();
+		ApplyColumnSettings();
 		ViewModel.HackLoaded = false;
 		Loaded += ( _, _ ) =>
 		{
@@ -121,6 +120,8 @@ public sealed partial class HackFileManagerView : Page
 		OdooChildren.DoubleTapped += OdooChildren_DoubleTapped;
 
 		// submenu headers can't hold a command, so double-tapping one runs its default action
+		EntryOpen.DoubleTapped += ( _, _ ) => ViewModel.OpenSelectedCommand.Execute( null );
+		EntryDelete.DoubleTapped += ( _, _ ) => ViewModel.LocalDeleteSelectedCommand.Execute( null );
 		TreeDownload.DoubleTapped += ( _, _ ) => ViewModel.GetLatestDirectoryCommand.Execute( null );
 		TreeUndelete.DoubleTapped += ( _, _ ) => ViewModel.RestoreDirectoryCommand.Execute( null );
 		HistoryDownload.DoubleTapped += ( _, _ ) => ViewModel.DownloadHistoryCommand.Execute( null );
@@ -152,113 +153,35 @@ public sealed partial class HackFileManagerView : Page
 	}
 
 	#endregion
-	#region Entry list construction
+	#region Entry list settings
 
-	/// <summary>Builds the entry TableView: its columns come from the user's saved column settings.</summary>
-	private void BuildEntryList()
+	/// <summary>
+	/// Applies the user's saved list settings: row size and font, and each column's header and width
+	/// (columns are matched to their saved settings by <c>SortMemberPath</c>, the <see cref="EntryRow"/> property).
+	/// Also fills the Group By menu.
+	/// </summary>
+	private void ApplyColumnSettings()
 	{
 		var info = UIStorage.ColumnsInfo;
-		OdooEntryList = new TableView
+		OdooEntryList.FontSize = info.FontSize;
+		OdooEntryList.RowHeight = info.RowHeight;
+		OdooEntryList.RowDetailsVisibilityMode = info.GroupCollapsed
+			? TableViewRowDetailsVisibilityMode.VisibleWhenSelected
+			: TableViewRowDetailsVisibilityMode.Collapsed;
+
+		var defaults = new OdooEntryColumns().Columns;
+		foreach( TableViewColumn column in OdooEntryList.Columns )
 		{
-			Name = "OdooEntryList",
-			VerticalContentAlignment = VerticalAlignment.Stretch,
-			AutoGenerateColumns = false,
-			CanSortColumns = true,
-			FontSize = info.FontSize,
-			IsReadOnly = true,
-			RowDetailsVisibilityMode = info.GroupCollapsed ? TableViewRowDetailsVisibilityMode.VisibleWhenSelected : TableViewRowDetailsVisibilityMode.Collapsed,
-			RowHeight = info.RowHeight,
-			SelectionMode = ListViewSelectionMode.Extended,
-		};
-		var columns = UIStorage.Columns.Value;
-		OdooEntryList.Columns.Add( new TableViewTemplateColumn
-		{
-			Width = new GridLength( 32 ),
-			CellTemplate = (DataTemplate)Resources[ "IconCellTemplate" ],
-			CanReorder = true,
-			CanResize = true,
-		} );
-		OdooEntryList.Columns.Add( TextColumn( columns[ nameof( EntryRow.Name ) ] ) ?? TextColumn( "Name", "Name", 350 ) );
-		OdooEntryList.Columns.Add( TextColumn( columns[ nameof( EntryRow.Type ) ] ) ?? TextColumn( "Type", "Type" ) );
+			if( column.SortMemberPath is not { } property )
+				continue;
+			// a settings file from before a column existed gets that column's default
+			OdooEntryColumn? saved = ( UIStorage.Columns.GetValueOrDefault( property ) ?? defaults.GetValueOrDefault( property ) )?.Column;
+			column.Header = saved?.Header ?? property;
+			column.Width = saved?.AutoSize is true ? GridLength.Auto : new GridLength( saved?.Width is > 0 ? saved.Width : 100 );
+		}
 
-		var size = columns[ nameof( EntryRow.Size ) ];
-		OdooEntryList.Columns.Add( new TableViewTemplateColumn
-		{
-			Header = size?.Column.Value.Header ?? "Size",
-			CellTemplate = (DataTemplate)Resources[ "SizeCellTemplate" ],
-			Width = size?.Column.Value.AutoSize is true ? GridLength.Auto : new GridLength( size?.Column.Value.Width ?? 100 ),
-		} );
-
-		OdooEntryList.Columns.Add( TextColumn( columns[ nameof( EntryRow.Status ) ] ) ?? TextColumn( "Status", "Status" ) );
-		OdooEntryList.Columns.Add( TextColumn( columns[ nameof( EntryRow.Checkout ) ] ) ?? TextColumn( "Checkout", "Checkout" ) );
-		OdooEntryList.Columns.Add( TextColumn( columns[ nameof( EntryRow.LocalDate ) ] ) ?? TextColumn( "Local Date", "LocalDate" ) );
-		OdooEntryList.Columns.Add( TextColumn( columns[ nameof( EntryRow.RemoteDate ) ] ) ?? TextColumn( "Remote Date", "RemoteDate" ) );
-		OdooEntryList.Columns.Add( TextColumn( columns[ nameof( EntryRow.FullName ) ] ) ?? TextColumn( "Full Name", "FullName" ) );
-
-		OdooEntryList.ContextFlyout = BuildEntryContextMenu();
-		RootEntryList.Content = OdooEntryList;
-	}
-
-	private MenuFlyout BuildEntryContextMenu()
-	{
-		var vm = ViewModel;
-		static MenuFlyoutItem Item( string text, System.Windows.Input.ICommand command, object? parameter = null )
-			=> new() { Text = text, Command = command, CommandParameter = parameter };
-
-		var open = new MenuFlyoutSubItem { Text = "Open" };
-		open.Items.Add( Item( "Preview Latest Remote", vm.OpenSelectedLatestRemoteCommand ) );
-		open.Items.Add( Item( "Latest Local", vm.OpenSelectedLatestLocalCommand ) );
-		open.Items.Add( Item( "File Directory", vm.OpenSelectedFoldersCommand ) );
-		open.DoubleTapped += ( _, _ ) => vm.OpenSelectedCommand.Execute( null );
-
-		var groupBy = new MenuFlyoutSubItem { Text = "Group By" };
-		foreach( var property in typeof( Domain.Representation.EntryRow ).GetProperties() )
-			groupBy.Items.Add( Item( property.Name, vm.GroupByCommand, property.Name ) );
-
-		var delete = new MenuFlyoutSubItem { Text = "Delete" };
-		delete.Items.Add( Item( "Local", vm.LocalDeleteSelectedCommand ) );
-		delete.Items.Add( Item( "Logical", vm.LogicalDeleteSelectedCommand ) );
-		delete.Items.Add( Item( "Permanent", vm.PermanentDeleteSelectedCommand ) );
-		delete.DoubleTapped += ( _, _ ) => vm.LocalDeleteSelectedCommand.Execute( null );
-
-		MenuFlyout flyout = new();
-		flyout.Items.Add( open );
-		flyout.Items.Add( Item( "Download", vm.GetLatestSelectedCommand ) );
-		flyout.Items.Add( new MenuFlyoutSeparator() );
-		flyout.Items.Add( Item( "Checkout", vm.CheckoutSelectedCommand ) );
-		flyout.Items.Add( Item( "Undo Checkout", vm.UndoCheckoutSelectedCommand ) );
-		flyout.Items.Add( new MenuFlyoutSeparator() );
-		flyout.Items.Add( groupBy );
-		flyout.Items.Add( new MenuFlyoutSeparator() );
-		flyout.Items.Add( Item( "Commit", vm.CommitSelectedCommand ) );
-		flyout.Items.Add( new MenuFlyoutSeparator() );
-		flyout.Items.Add( new MenuFlyoutItem { Text = "Restore" } );
-		flyout.Items.Add( Item( "Upload Icon", vm.UploadIconCommand ) );
-		flyout.Items.Add( new MenuFlyoutSeparator() );
-		flyout.Items.Add( delete );
-		return flyout;
-	}
-
-	private static TableViewTextColumn TextColumn( string header, string bindingPath, double? width = null )
-	{
-		var column = new TableViewTextColumn { Header = header, Binding = new Binding { Path = new PropertyPath( bindingPath ) } };
-		if( width.HasValue )
-			column.Width = new GridLength( width.Value );
-		return column;
-	}
-
-	private static TableViewTextColumn? TextColumn( OdooEntryColumnID? column )
-	{
-		if( column is null )
-			return null;
-
-		var config = column.Column.Value;
-		return new TableViewTextColumn
-		{
-			Header = config.Header,
-			Binding = new Binding { Path = new PropertyPath( column.BindingPath ) },
-			Width = config.AutoSize ? GridLength.Auto : new GridLength( config.Width is 0D ? 100 : config.Width ),
-		};
+		foreach( string field in EntryRowKeys.Names )
+			EntryGroupBy.Items.Add( new MenuFlyoutItem { Text = field, Command = ViewModel.GroupByCommand, CommandParameter = field } );
 	}
 
 	#endregion
@@ -452,7 +375,7 @@ public sealed partial class HackFileManagerView : Page
 
 	/// <summary>Selects the directory at <paramref name="pwaPath"/> in the tree, then the entry named <paramref name="fileName"/>.</summary>
 	private Task FindSearchSelectionAsync( string pwaPath, string fileName )
-		=> OnLocateRequestedAsync( pwaPath.Split( '\\' ), fileName );
+		=> OnLocateRequestedAsync( PwaPaths.Segments( pwaPath ), fileName );
 
 	/// <summary>Selects the directory at <paramref name="segmentsBelowRoot"/>, then the entry named <paramref name="fileName"/>.</summary>
 	private async Task OnLocateRequestedAsync( IReadOnlyList<string> segmentsBelowRoot, string? fileName )

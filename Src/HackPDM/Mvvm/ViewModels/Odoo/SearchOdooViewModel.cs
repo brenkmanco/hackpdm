@@ -21,15 +21,13 @@ namespace HackPDM.Mvvm.ViewModels.Odoo;
 /// State and commands for the search window. Searching is done by <see cref="IEntrySearchService"/>;
 /// showing a result in the file manager goes through the file manager's view model.
 /// </summary>
-public partial class SearchOdooViewModel : ObservableObject
+public partial class SearchOdooViewModel : OperationViewModel
 {
 	private const string DefaultMaxResults = "100";
 
 	private readonly IEntrySearchService _search;
 	private readonly IPdmWorkflowService _workflow;
 	private readonly IEntryFileService _files;
-	private readonly IDialogService _dialogs;
-	private readonly IOperationReporter _reporter;
 	private readonly Func<IReadOnlyList<string>, string?, Task> _locate;
 
 	public SearchOdooViewModel(
@@ -38,19 +36,17 @@ public partial class SearchOdooViewModel : ObservableObject
 		IEntryFileService files,
 		IDialogService dialogs,
 		IOperationReporter reporter,
-		Func<IReadOnlyList<string>, string?, Task> locate )
+		Func<IReadOnlyList<string>, string?, Task> locate ) : base( dialogs, reporter )
 	{
 		_search = search;
 		_workflow = workflow;
 		_files = files;
-		_dialogs = dialogs;
-		_reporter = reporter;
 		_locate = locate;
 	}
 
 	#region Collections
 
-	public ObservableCollection<SearchRow> SearchResultsList { get; } = [];
+	public RangeObservableCollection<SearchRow> SearchResultsList { get; } = [];
 	public ObservableCollection<SearchPropertiesRow> PropertiesActive { get; } = [];
 	public ObservableCollection<OperatorsRow> OperatorList { get; } = [];
 	public ObservableCollection<SearchPropertiesRow> PropertiesSearchable { get; } = [];
@@ -127,7 +123,7 @@ public partial class SearchOdooViewModel : ObservableObject
 	{
 		if( !int.TryParse( MaxResults, out int maxResults ) )
 		{
-			await _dialogs.ShowMessageAsync( "Invalid max results value. Please enter a valid number." );
+			await Dialogs.ShowMessageAsync( "Invalid max results value. Please enter a valid number." );
 			return;
 		}
 
@@ -141,12 +137,10 @@ public partial class SearchOdooViewModel : ObservableObject
 			LocalOnly ? [] : [ .. PropertiesActive ] );
 
 		List<SearchRow> rows = await _search.SearchAsync( query );
-		SearchResultsList.Clear();
-		foreach( SearchRow row in rows )
-			SearchResultsList.Add( row );
+		SearchResultsList.ReplaceAll( rows );
 
 		bool remoteSearch = !LocalOnly && !DeletedRemotely;
-		await _dialogs.ShowMessageAsync( remoteSearch && rows.Count == 0 ? "No results found." : "Finished!" );
+		await Dialogs.ShowMessageAsync( remoteSearch && rows.Count == 0 ? "No results found." : "Finished!" );
 	}
 
 	[RelayCommand]
@@ -169,7 +163,7 @@ public partial class SearchOdooViewModel : ObservableObject
 	{
 		if( SelectedProperty is not { } property || SelectedPropertyOperator is not { } op )
 		{
-			await _dialogs.ShowMessageAsync( "Add Property Name and Comparator" );
+			await Dialogs.ShowMessageAsync( "Add Property Name and Comparator" );
 			return;
 		}
 
@@ -196,8 +190,7 @@ public partial class SearchOdooViewModel : ObservableObject
 	#endregion
 	#region Commands: acting on results
 
-	private int[] SelectedRemoteIds()
-		=> [ .. SelectedResults.Select( r => r.Id ).OfType<int>() ];
+	private int[] SelectedRemoteIds() => RemoteIds( SelectedResults.Select( r => r.Id ) );
 
 	[RelayCommand]
 	private Task CheckoutAsync() => SetCheckoutAsync( checkout: true );
@@ -217,24 +210,13 @@ public partial class SearchOdooViewModel : ObservableObject
 	{
 		if( LocalOnly )
 		{
-			await _dialogs.ShowMessageAsync( checkout ? "Can't checkout local only entries" : "Can't uncheckout local only entries" );
+			await Dialogs.ShowMessageAsync( checkout ? "Can't checkout local only entries" : "Can't uncheckout local only entries" );
 			return false;
 		}
 
 		IReadOnlyList<int> ids = SelectedRemoteIds();
-		if( ids.Count == 0 )
-			return false;
-
-		_reporter.ShowWindow();
-		if( !checkout )
-		{
-			await _workflow.UnCheckoutAsync( ids );
-			return true;
-		}
-		// make sure the local copies are current before checking them out
-		await _workflow.GetLatestAsync( ids );
-		await _workflow.CheckoutAsync( ids );
-		return true;
+		await RunOnIdsAsync( ids, checkout ? _workflow.CheckoutLatestAsync : _workflow.UnCheckoutAsync );
+		return ids.Count > 0;
 	}
 
 	/// <summary>Local results open their folder; remote results download the latest version to temp and open it.</summary>

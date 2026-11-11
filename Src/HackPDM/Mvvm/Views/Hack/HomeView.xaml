@@ -47,7 +47,7 @@
             <NavigationViewItem
                 x:Name="JsonEditNav"
                 Content="Json Editor"
-                Tag="Json Editor">
+                Tag="JsonEditor">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Attach" />
                 </NavigationViewItem.Icon>
@@ -56,7 +56,7 @@
             <NavigationViewItem
                 x:Name="HackOdooNav"
                 Content="Configurations"
-                Tag="HackOdoo">
+                Tag="Configuration">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Edit" />
                 </NavigationViewItem.Icon>

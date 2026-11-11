@@ -369,7 +369,7 @@ public class PdmWorkflowTests : IAsyncLifetime
 		File.WriteAllText( Path.Combine( dir, "notes.txt" ), "notes\n" );
 		File.WriteAllText( Path.Combine( dir, "~$new.SLDASM" ), "SolidWorks lock file" );
 
-		List<HackFile>? files = _service.CollectFolderCommitFiles( dir );
+		List<HackFile>? files = await _service.CollectFolderCommitFilesAsync( dir );
 		Assert.NotNull( files );
 		Assert.Equal( [ "new.SLDASM", "new.SLDPRT", "notes.txt", "old.SLDASM", "tmp engine 2.SLDPRT" ],
 			files.Select( f => f.Name ).Where( n => !n!.StartsWith( "~$" ) ).Distinct().Order() );

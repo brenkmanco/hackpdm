@@ -57,9 +57,9 @@ public interface IEntryFileService
 	/// <summary>True when a different local copy of this version already exists at its working path.</summary>
 	bool HasConflictingLocalCopy( HpVersion version );
 	/// <summary>Downloads a version to its working folder, or to the temp folder; returns the folder used.</summary>
-	string DownloadVersion( HpVersion version, bool toTemp );
+	Task<string> DownloadVersionAsync( HpVersion version, bool toTemp );
 	VersionMovePlan PlanMove( HpVersion version, bool toTemp );
-	void ExecuteMove( HpVersion version, VersionMovePlan plan );
+	Task ExecuteMoveAsync( HpVersion version, VersionMovePlan plan );
 }
 
 public sealed class EntryFileService : IEntryFileService
@@ -106,7 +106,7 @@ public sealed class EntryFileService : IEntryFileService
 		if( version is null )
 			return;
 
-		version.DownloadFile( Path.GetTempPath() );
+		await version.DownloadFileAsync( Path.GetTempPath() );
 		OpenFile( Path.Combine( version.WinPathway ?? "", version.name ?? "" ) );
 	}
 
@@ -179,18 +179,18 @@ public sealed class EntryFileService : IEntryFileService
 		return file.Exists && !Checksums.Matches( file.FullName, version.checksum );
 	}
 
-	public string DownloadVersion( HpVersion version, bool toTemp )
+	public async Task<string> DownloadVersionAsync( HpVersion version, bool toTemp )
 	{
 		if( !toTemp )
 		{
-			version.DownloadFile( version.WinPathway ?? "" );
+			await version.DownloadFileAsync( version.WinPathway ?? "" );
 			return version.WinPathway ?? "";
 		}
 
 		// mirror the Odoo directory structure inside the temp folder
 		string relative = PwaPaths.ToRelative( OdooValues.Many2OneName( version.HashedValues.GetValueOrDefault( "dir_id" ) ) );
 		string tempPath = Path.Combine( StorageBox.TemporaryPath ?? Path.GetTempPath(), relative );
-		version.DownloadFile( tempPath );
+		await version.DownloadFileAsync( tempPath );
 		return tempPath;
 	}
 
@@ -201,11 +201,11 @@ public sealed class EntryFileService : IEntryFileService
 		return toTemp ? new( working, temp, true ) : new( temp, working, false );
 	}
 
-	public void ExecuteMove( HpVersion version, VersionMovePlan plan )
+	public async Task ExecuteMoveAsync( HpVersion version, VersionMovePlan plan )
 	{
 		if( plan.From.Exists )
 			plan.From.MoveFile( plan.To.DirectoryName ?? "" );
 		else
-			version.DownloadFile( plan.To.DirectoryName ?? "" );
+			await version.DownloadFileAsync( plan.To.DirectoryName ?? "" );
 	}
 }

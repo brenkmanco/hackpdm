@@ -14,7 +14,7 @@ internal static class EntryListGrouping
 	/// TableView must always receive the flat row list: handing it a grouped CollectionViewSource breaks
 	/// its internal CollectionView and crashes the page. Grouping goes through TableView's GroupDescriptions.
 	/// </summary>
-	public static void Apply( TableView grid, IList rows, Func<EntryRow, object>? groupKey )
+	public static void Apply( TableView grid, IList rows, Func<EntryRow, IComparable?>? groupKey )
 	{
 		if( !ReferenceEquals( grid.ItemsSource, rows ) )
 			grid.ItemsSource = rows;

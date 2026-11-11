@@ -24,6 +24,5 @@ namespace HackPDM.Mvvm.Views.Common.Settings;
 public class OdooEntryColumnID
 {
 	public string BindingPath		{ get; set; } = string.Empty;
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<OdooEntryColumn> Column	{ get; set; } = new( () => new OdooEntryColumn() );
+	public OdooEntryColumn Column	{ get; set; } = new();
 }

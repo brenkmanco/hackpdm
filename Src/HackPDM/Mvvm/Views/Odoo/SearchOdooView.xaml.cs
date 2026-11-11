@@ -13,7 +13,7 @@ namespace HackPDM.Mvvm.Views.Odoo;
 /// <summary>View for <see cref="SearchOdooViewModel"/>: binds the form and forwards selections.</summary>
 public sealed partial class SearchOdooView : Page
 {
-	public SearchOdooViewModel ViewModel => InstanceManager.SearchOdoo;
+	public SearchOdooViewModel ViewModel => AppComposition.SearchOdoo;
 
 	private Window? _parentWindow;
 

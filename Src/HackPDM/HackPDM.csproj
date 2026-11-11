@@ -204,6 +204,37 @@
     </ItemGroup>
   </Target>
 
+
+  <!--
+    The bundled image map (Mvvm/Views/Common/Imaging/Assets.cs) is generated from the Assets folder:
+    each image's key is its file name without the extension. Included: the images directly in Assets,
+    every Icons/*.svg, and StatusIcons (the .svg where one exists, otherwise the .png). Extra keys and
+    aliases are written by hand in Assets.cs.
+  -->
+  <Target Name="GenerateAssetMap" BeforeTargets="CoreCompile;XamlPreCompile">
+    <PropertyGroup>
+      <_AssetMapFile>$(IntermediateOutputPath)AssetMap.g.cs</_AssetMapFile>
+    </PropertyGroup>
+    <ItemGroup>
+      <_StatusSvg Include="Assets\StatusIcons\*.svg" />
+      <_AssetMapEntry Include="Assets\*.png;Assets\*.ico;Assets\*.gif" Folder="" />
+      <_AssetMapEntry Include="Assets\Icons\*.svg" Folder="Icons/" />
+      <_AssetMapEntry Include="@(_StatusSvg)" Folder="StatusIcons/" />
+      <_AssetMapEntry Include="Assets\StatusIcons\*.png" Exclude="@(_StatusSvg->'Assets\StatusIcons\%(Filename).png')" Folder="StatusIcons/" />
+      <_AssetMapLine Include="@(_AssetMapEntry->'		( &quot;%(Filename)&quot;, &quot;%(Folder)%(Filename)%(Extension)&quot; ),')" />
+    </ItemGroup>
+    <WriteLinesToFile
+      File="$(_AssetMapFile)"
+      Lines="// &lt;auto-generated /&gt; by the GenerateAssetMap target in HackPDM.csproj;namespace HackPDM.Mvvm.Views.Common.Imaging%3B;public static partial class Assets;{;	/// &lt;summary&gt;Each bundled image: its key and its path under Assets/.&lt;/summary&gt;;	private static readonly (string Key, string Path)[] BundledImages =;	[;@(_AssetMapLine);	]%3B;}"
+      Overwrite="true"
+      WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Remove="$(_AssetMapFile)" />
+      <Compile Include="$(_AssetMapFile)" />
+      <FileWrites Include="$(_AssetMapFile)" />
+    </ItemGroup>
+  </Target>
+
   <!--
     Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
     Explorer "Package and Publish" context menu entry to be enabled for this project even if

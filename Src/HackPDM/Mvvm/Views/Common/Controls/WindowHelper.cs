@@ -1,6 +1,6 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,7 +8,6 @@ using HackPDM.Mvvm.Views.Common.Controls;
 using HackPDM.Domain.Representation;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Mvvm.Views.Common.Settings;
-using HackPDM.Shell;
 using HackPDM.Mvvm.Models.Settings;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -61,63 +60,35 @@ public static partial class WindowHelper
         return window;
     }
 
-    public static Window CreateWindowPage<T>(bool activated = true, ArrayList? parameters = null) where T : Page, new()
+    // which window each page created here is shown in (weak: does not keep the page alive)
+    private static readonly ConditionalWeakTable<Page, Window> PageWindows = new();
+
+    /// <summary>The window <see cref="CreateWindowAndPage{T}"/> opened for <paramref name="page"/>; null for any other page.</summary>
+    public static Window? WindowOf(Page page)
+        => PageWindows.TryGetValue(page, out Window? window) ? window : null;
+
+    public static Window CreateWindowPage<T>(bool activated = true) where T : Page, new()
     {
-        CreateWindowAndPage<T>(out _, out var window, activated, parameters);
+        CreateWindowAndPage<T>(out _, out Window window, activated);
         return window;
     }
 
-
-
-    public static void CreateWindowAndPage<T>(out T page, out Window window, bool activated = true, ArrayList? parameters = null) 
-        where T : Page, new() 
-        => CreateWindowAndPageInternal(out page, out window, activated, parameters);
-
-    public static void CreateWindowAndPage<TPage, TWindow>(out TPage page, out TWindow window, bool activated = true, ArrayList? parameters = null) 
-        where TPage : Page, new()
-        where TWindow : Window, new()
-        => CreateWindowAndPageInternal(out page, out window, activated, parameters);
-
-    private static void CreateWindowFromPageInternal<TPage, TWindow>(TPage page, out TWindow window, bool activated = true, ArrayList? parameters = null)
-        where TPage : Page
-        where TWindow : Window, new()
+    /// <summary>A new window showing a new <typeparamref name="T"/>, sized by the preset named after the page type.</summary>
+    public static void CreateWindowAndPage<T>(out T page, out Window window, bool activated = true) where T : Page, new()
     {
-        window = new TWindow();
+        page = new T();
+        window = new Window();
         if (activated) window.Activate();
 
-        Frame rootFrame = new();
-        if (parameters is not null)
-        {
-            parameters.Add(window);
-            rootFrame.Navigate(typeof(TPage), parameters);
-            page = rootFrame.Content as TPage;
-        }
-        else 
-        {
-            rootFrame.Content = page;
-        }
-        
-        window.Content = rootFrame;
+        window.Content = new Frame { Content = page };
         HackPDM.Shell.AppComposition.Theme.Attach(window);
 
-        if (WindowConfig.PresetWindowConfig.TryGetValue(typeof(TPage).Name, out WindowConfig? value))
+        if (WindowConfig.PresetWindowConfig.TryGetValue(typeof(T).Name, out WindowConfig? value))
         {
             SetWindowConfig(window, value);
         }
-        if (page != null)
-        {
-            InstanceManager.RegisterWindow(page, window);
-        }
+        PageWindows.AddOrUpdate(page, window);
     }
-
-    private static void CreateWindowAndPageInternal<TPage, TWindow>(out TPage? page, out TWindow window, bool activated = true, ArrayList? parameters = null)
-        where TPage : Page, new()
-        where TWindow : Window, new()
-    {
-        page = parameters is null ? new() : null;
-        CreateWindowFromPageInternal(page, out window, activated, parameters);
-    }
-
 
     private static CancellationTokenSource _animationCts = new();
 
@@ -147,6 +118,12 @@ public class WindowConfig
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public static Dictionary<string, WindowConfig> PresetWindowConfig = UIStorage.GlobalData.Win.PresetWindowConfig;
+
+    private static readonly Dictionary<string, WindowConfig> Defaults = new WindowSettings().PresetWindowConfig;
+
+    /// <summary>The saved preset; the built-in one when the settings file predates it; a plain window otherwise.</summary>
+    public static WindowConfig Preset(string name)
+        => PresetWindowConfig.GetValueOrDefault(name) ?? Defaults.GetValueOrDefault(name) ?? new();
     public string Title { get; set; } = "Window";
     public HackPDM.Domain.Representation.Vector4<int> PositionAndSize { get; set; } = (0, 0, 500, 350);
     public AppWindowPresenterKind WindowKind { get; set; } = AppWindowPresenterKind.Overlapped;

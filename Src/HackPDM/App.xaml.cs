@@ -8,10 +8,8 @@ using HackPDM.Mvvm.Views.Common.Controls;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.Extensions.DependencyInjection;
 
 
-using ProfileManager = HackPDM.Mvvm.Views.Settings.ProfileManagerView;
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Domain.OdooModels;
@@ -34,7 +32,6 @@ namespace HackPDM;
 public partial class HackApp : Application
 {
     public static HomeView? HomePage;
-	public static IServiceProvider? Services { get; private set; }
     public static Window? Window;
     public static Frame? RootFrame;
     public static CoreSettings CoreSettings;
@@ -54,34 +51,13 @@ public partial class HackApp : Application
         Setup();
     }
 
+    /// <summary>Loads the settings, then shows the home page in the main window.</summary>
     private static void ConfigureServices()
     {
-	    var services = new ServiceCollection();
-
-        services.AddSingleton<HomeView>();
-
-        services.AddSingleton<ModernSettingsProvider>();
-        services.AddSingleton<ISettingsProvider>(provider 
-            => new CoreSettings(provider.GetRequiredService<ModernSettingsProvider>()));
-        services.AddSingleton<IHackDefaults, HackDefaults>();
-        services.AddSingleton<IOdooDefaults, OdooDefaults>();
-
-
-        services.AddSingleton<VMEnv>();
-        services.AddSingleton(provider => provider.GetRequiredService<VMEnv>().HFM);
-
-	    services.AddTransient<ProfileManager>();
-        services.AddTransient<MessageBox>();
-        services.AddTransient<HackFileManagerView>();
-
-		Services =  services.BuildServiceProvider();
-
-        Services.GetRequiredService<IHackDefaults>();
-        Services.GetRequiredService<IOdooDefaults>();
-
-        CoreSettings = Services.GetRequiredService<ISettingsProvider>() as CoreSettings;
+        CoreSettings = AppComposition.Settings;
+        AppComposition.InitializeDefaults();
         Debug.WriteLine( $"Global data loaded from file: {UIStorage.GlobalData.IsLoadedFromFile}" );
-        HomePage = Services.GetRequiredService<HomeView>();
+        HomePage = new HomeView();
 
 		var rootFrame = new Frame();
 		Window?.Content = rootFrame;
@@ -110,7 +86,7 @@ public partial class HackApp : Application
 
 	private void Window_Closed( object sender, WindowEventArgs args )
 	{
-        UIStorage.GlobalData.SaveToFile();
+        AppConfigStore.Save( UIStorage.GlobalData );
 	}
 
 	private static void Setup ()

@@ -21,28 +21,18 @@ using EntryRow = HackPDM.Mvvm.Models.Hack.EntryRow;
 
 namespace HackPDM.Mvvm.Views.Common.Settings;
 
+/// <summary>The status colours, saved with the app settings so a user can change them.</summary>
 public class ColorSettings
 {
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<Color> White				{ get; set; } = new Lazy<Color>(() => Color.FromArgb( 255, 255, 255, 255 ));
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<Color> Black				{ get; set; } = new Lazy<Color>(() => Color.FromArgb( 255, 0, 0, 0 ));
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<Color> LightGray			{ get; set; } = new Lazy<Color>(() => Color.FromArgb( 255, 211, 211, 211 ));
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<Color> Gray					{ get; set; } = new Lazy<Color>(() => Color.FromArgb( 255, 128, 128, 128 ));
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<Color> MustardYellow		{ get; set; } = new Lazy<Color>(() => Color.FromArgb( 255, 150, 150, 0 ));
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<Color> DarkGray				{ get; set; } = new Lazy<Color>(() => Color.FromArgb( 255, 64, 64, 64 ));
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<Color> DarkRed				{ get; set; } = new Lazy<Color>(() => Color.FromArgb( 255, 139, 0, 0 ));
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<Color> DarkBlue				{ get; set; } = new Lazy<Color>(() => Color.FromArgb( 255, 0, 0, 139 ));
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<Color> DarkOliveGreen		{ get; set; } = new Lazy<Color>(() => Color.FromArgb( 255, 85, 107, 47 ));
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<Color> OrangeEntry			{ get; set; } = new Lazy<Color>(() => UIStorage.ToColor( UIStorage.TransformUIntToRGB( ColorNames.OrangeBlast ) ));
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<Color> BlueEntry			{ get; set; } = new Lazy<Color>(() => UIStorage.ToColor( UIStorage.TransformUIntToRGB( ColorNames.BluishWater ) ));
+	public Color White			{ get; set; } = Color.FromArgb( 255, 255, 255, 255 );
+	public Color Black			{ get; set; } = Color.FromArgb( 255, 0, 0, 0 );
+	public Color LightGray		{ get; set; } = Color.FromArgb( 255, 211, 211, 211 );
+	public Color Gray			{ get; set; } = Color.FromArgb( 255, 128, 128, 128 );
+	public Color MustardYellow	{ get; set; } = Color.FromArgb( 255, 150, 150, 0 );
+	public Color DarkGray		{ get; set; } = Color.FromArgb( 255, 64, 64, 64 );
+	public Color DarkRed		{ get; set; } = Color.FromArgb( 255, 139, 0, 0 );
+	public Color DarkBlue		{ get; set; } = Color.FromArgb( 255, 0, 0, 139 );
+	public Color DarkOliveGreen	{ get; set; } = Color.FromArgb( 255, 85, 107, 47 );
+	public Color OrangeEntry	{ get; set; } = UIStorage.ToColor( UIStorage.TransformUIntToRGB( ColorNames.OrangeBlast ) );
+	public Color BlueEntry		{ get; set; } = UIStorage.ToColor( UIStorage.TransformUIntToRGB( ColorNames.BluishWater ) );
 }

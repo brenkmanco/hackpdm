@@ -27,6 +27,7 @@
             Text="PWA Folder" />
         <TextBox
             x:Name="txtPwaInput"
+            Text="{x:Bind ViewModel.PwaPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="0"
             Grid.Column="1"
             Margin="0,5,0,5" />
@@ -40,6 +41,7 @@
             Text="Temporary Folder Path" />
         <TextBox
             x:Name="HackTempFolderPath"
+            Text="{x:Bind ViewModel.TempFolderPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="1"
             Grid.Column="1"
             Margin="0,5,0,5" />
@@ -53,7 +55,7 @@
             Margin="0,10,0,0"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Bottom"
-            Click="btnSubmit_Click"
+            Command="{x:Bind ViewModel.SubmitCommand}"
             Content="Submit" />
     </Grid>
 </Page>

@@ -140,9 +140,9 @@ internal static class SmokeTestRunner
 			&& await Step( "login", async () =>
 			{
 				// same call the Profile Manager "Login" button makes
-				var pm = InstanceManager.PM;
-				ProfileManagerView.IsLoggedIn = await pm.AbleToLoginAsync();
-				if( !ProfileManagerView.IsLoggedIn )
+				var pm = AppComposition.ProfileManager;
+				pm.IsLoggedIn = await pm.AbleToLoginAsync();
+				if( !pm.IsLoggedIn )
 				{
 					string reasons = string.Join( "; ", pm.OStatus.Select( s => s.Message ) );
 					throw new InvalidOperationException(
@@ -154,7 +154,7 @@ internal static class SmokeTestRunner
 			&& await Step( "navigate to file manager", async () =>
 			{
 				// same call the Profile Manager makes after a successful login
-				HomeView.NavigateToPage( NavigatePageMenu.HackFileManager );
+				AppComposition.Navigation.NavigateTo( NavigatePageMenu.HackFileManager );
 				var frame = HackApp.HomePage?.ContentFrame
 					?? throw new InvalidOperationException( "home page has no content frame" );
 

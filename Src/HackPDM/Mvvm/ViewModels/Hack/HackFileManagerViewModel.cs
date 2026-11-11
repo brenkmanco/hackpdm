@@ -42,13 +42,11 @@ public enum FileManagerRefresh
 /// the view pushes selection in, invokes commands, and reacts to <see cref="RefreshRequested"/>
 /// and <see cref="GroupingChanged"/>.
 /// </summary>
-public partial class HackFileManagerViewModel : ObservableObject
+public partial class HackFileManagerViewModel : OperationViewModel
 {
 	private readonly IPdmWorkflowService _workflow;
 	private readonly IEntryFileService _files;
 	private readonly IEntryDetailsService _details;
-	private readonly IDialogService _dialogs;
-	private readonly IOperationReporter _reporter;
 	private readonly IDirectoryTreeService _directoryTree;
 	private readonly IEntryListService _entryList;
 
@@ -61,16 +59,25 @@ public partial class HackFileManagerViewModel : ObservableObject
 		IDialogService dialogs,
 		IOperationReporter reporter,
 		IDirectoryTreeService directoryTree,
-		IEntryListService entryList )
+		IEntryListService entryList ) : base( dialogs, reporter )
 	{
 		_workflow = workflow;
 		_files = files;
 		_details = details;
-		_dialogs = dialogs;
-		_reporter = reporter;
 		_directoryTree = directoryTree;
 		_entryList = entryList;
+		_detailTabs = new()
+		{
+			[ StorageBox.HISTORY_TAB ] = async entry => OHistories.ReplaceAll( await _details.GetHistoryAsync( entry ) ),
+			[ StorageBox.PARENT_TAB ] = async entry => OParents.ReplaceAll( await _details.GetParentsAsync( entry ) ),
+			[ StorageBox.CHILD_TAB ] = async entry => OChildren.ReplaceAll( await _details.GetChildrenAsync( entry ) ),
+			[ StorageBox.PROPERTIES_TAB ] = async entry => OProperties.ReplaceAll( await _details.GetPropertiesAsync( entry ) ),
+			[ StorageBox.INFO_TAB ] = async entry => OVersions.ReplaceAll( await _details.GetVersionInfoAsync( entry ) ),
+		};
 	}
+
+	/// <summary>How each detail tab is filled for an entry.</summary>
+	private readonly Dictionary<string, Func<EntryRow, Task>> _detailTabs;
 
 	#region Events for the view
 
@@ -128,17 +135,17 @@ public partial class HackFileManagerViewModel : ObservableObject
 	/// <summary>Rows of the selected directory.</summary>
 	public RangeObservableCollection<EntryRow> Entries { get; } = new();
 
-	private static readonly Func<EntryRow, object> GroupByStatus = row => row.Status;
-	private Func<EntryRow, object> _groupKey = GroupByStatus;
+	private static readonly Func<EntryRow, IComparable?> GroupByStatus = row => row.Status;
+	private Func<EntryRow, IComparable?> _groupKey = GroupByStatus;
 
 	/// <summary>Key the entry list is grouped by, or null when grouping is off.</summary>
-	public Func<EntryRow, object>? ActiveGroupKey => IsGroupingEnabled ? _groupKey : null;
+	public Func<EntryRow, IComparable?>? ActiveGroupKey => IsGroupingEnabled ? _groupKey : null;
 
-	public ObservableCollection<HistoryRow> OHistories { get; } = [];
-	public ObservableCollection<ParentRow> OParents { get; } = [];
-	public ObservableCollection<ChildrenRow> OChildren { get; } = [];
-	public ObservableCollection<PropertiesRow> OProperties { get; } = [];
-	public ObservableCollection<VersionRow> OVersions { get; } = [];
+	public RangeObservableCollection<HistoryRow> OHistories { get; } = [];
+	public RangeObservableCollection<ParentRow> OParents { get; } = [];
+	public RangeObservableCollection<ChildrenRow> OChildren { get; } = [];
+	public RangeObservableCollection<PropertiesRow> OProperties { get; } = [];
+	public RangeObservableCollection<VersionRow> OVersions { get; } = [];
 
 	#endregion
 	#region Selection (pushed in by the view)
@@ -169,8 +176,7 @@ public partial class HackFileManagerViewModel : ObservableObject
 	private string SelectedLocalDirectory => _files.ResolveLocalDirectory( LastSelectedNodePath );
 	private int SelectedDirectoryId => SelectedDirectory?.DirectoryId ?? 0;
 
-	private static int[] RemoteIds( IEnumerable<EntryRow> rows )
-		=> [ .. rows.Select( r => r.Id ).OfType<int>().Where( id => id != 0 ) ];
+	private static int[] RemoteIds( IEnumerable<EntryRow> rows ) => RemoteIds( rows.Select( r => r.Id ) );
 
 	#endregion
 	/// <summary>Loads the Odoo metadata the page needs before the tree is built.</summary>
@@ -293,32 +299,9 @@ public partial class HackFileManagerViewModel : ObservableObject
 
 	private async Task LoadDetailTabAsync( EntryRow entry, CancellationToken token )
 	{
-		switch( SelectedDetailTab )
-		{
-			case StorageBox.HISTORY_TAB:
-				Fill( OHistories, await _details.GetHistoryAsync( entry ), token );
-				break;
-			case StorageBox.PARENT_TAB:
-				Fill( OParents, await _details.GetParentsAsync( entry ), token );
-				break;
-			case StorageBox.CHILD_TAB:
-				Fill( OChildren, await _details.GetChildrenAsync( entry ), token );
-				break;
-			case StorageBox.PROPERTIES_TAB:
-				Fill( OProperties, await _details.GetPropertiesAsync( entry ), token );
-				break;
-			case StorageBox.INFO_TAB:
-				Fill( OVersions, await _details.GetVersionInfoAsync( entry ), token );
-				break;
-		}
-	}
-
-	private static void Fill<T>( ObservableCollection<T> target, IEnumerable<T> rows, CancellationToken token )
-	{
+		if( SelectedDetailTab is { } tab && _detailTabs.TryGetValue( tab, out var fill ) )
+			await fill( entry );
 		token.ThrowIfCancellationRequested();
-		target.Clear();
-		foreach( T row in rows )
-			target.Add( row );
 	}
 
 	/// <summary>Shows the preview image of a specific version (history/parent/child row selection).</summary>
@@ -333,27 +316,19 @@ public partial class HackFileManagerViewModel : ObservableObject
 	#endregion
 	#region Entry list: grouping and sorting
 
-	/// <summary>Regroups the entry list by the named <see cref="EntryRow"/> property.</summary>
+	/// <summary>Regroups the entry list by one of <see cref="EntryRowKeys.Names"/>.</summary>
 	[RelayCommand]
 	private void GroupBy( string? propertyName )
 	{
-		if( string.IsNullOrEmpty( propertyName ) )
+		if( !EntryRowKeys.TryGetGroupKey( propertyName, out var key ) )
 			return;
-		var property = typeof( EntryRow ).GetProperty( propertyName );
-		if( property is null )
-			return;
-
-		_groupKey = entry => property.GetValue( entry ) switch
-		{
-			DateTime date => date.ToShortDateString(),
-			var value => value?.ToString() ?? string.Empty,
-		};
+		_groupKey = key;
 		GroupingChanged?.Invoke();
 	}
 
 	public void SortEntries( string? fieldName, bool descending )
 	{
-		if( !EntryRowSorters.TryGet( fieldName, out var key ) )
+		if( !EntryRowKeys.TryGetSortKey( fieldName, out var key ) )
 			return;
 
 		Entries.Sort( key, descending );
@@ -366,54 +341,60 @@ public partial class HackFileManagerViewModel : ObservableObject
 	private async Task<IReadOnlyList<int>> SelectedDirectoryEntryIdsAsync( bool withSubdirectories, bool withDeleted = false )
 		=> await _workflow.GetDirectoryEntryIdsAsync( SelectedDirectoryId, withSubdirectories, withDeleted );
 
-	private async Task GetLatestForDirectoryAsync( bool withSubdirectories )
+	/// <summary>Runs <paramref name="operation"/> on the selected directory's entries; tells the user when no remote directory is selected.</summary>
+	private async Task RunOnDirectoryAsync( string what, bool withSubdirectories, bool withDeleted, Func<IReadOnlyList<int>, Task> operation, string? completedMessage = null )
 	{
-		if( SelectedDirectory is null )
+		if( SelectedDirectory is not { } directory )
 		{
-			await _dialogs.ShowMessageAsync( "current directory doesn't exist remotely" );
+			await Dialogs.ShowMessageAsync( "current directory doesn't exist remotely" );
 			return;
 		}
-
-		_reporter.ShowWindow();
-		_reporter.Log( StatusMessage.PROCESSING,
-			$"Retrieving all entries and their associated dependencies within directory ({SelectedDirectory.Name}, id: {SelectedDirectoryId})" );
-
-		IReadOnlyList<int> ids = await SelectedDirectoryEntryIdsAsync( withSubdirectories, ShowInactive );
-		await _workflow.GetLatestAsync( ids );
+		await RunOperationAsync( async () =>
+		{
+			Reporter.Log( StatusMessage.PROCESSING, $"{what} all entries within directory ({directory.Name}, id: {SelectedDirectoryId})" );
+			await operation( await SelectedDirectoryEntryIdsAsync( withSubdirectories, withDeleted ) );
+		}, completedMessage );
 	}
 
 	[RelayCommand]
-	private Task GetLatestDirectoryAsync() => GetLatestForDirectoryAsync( withSubdirectories: true );
+	private Task GetLatestDirectoryAsync() => RunOnDirectoryAsync( "Getting the latest of", true, ShowInactive, _workflow.GetLatestAsync );
 
 	[RelayCommand]
-	private Task GetLatestDirectoryTopAsync() => GetLatestForDirectoryAsync( withSubdirectories: false );
+	private Task GetLatestDirectoryTopAsync() => RunOnDirectoryAsync( "Getting the latest of", false, ShowInactive, _workflow.GetLatestAsync );
 
 	[RelayCommand]
-	private async Task CheckoutDirectoryAsync()
+	private Task CheckoutDirectoryAsync() => RunOnDirectoryAsync( "Checking out", true, false, _workflow.CheckoutLatestAsync );
+
+	[RelayCommand]
+	private Task UndoCheckoutDirectoryAsync() => RunOnDirectoryAsync( "Undoing the check out of", true, false, _workflow.UnCheckoutAsync );
+
+	[RelayCommand]
+	private async Task LogicalDeleteDirectoryAsync()
 	{
-		await GetLatestForDirectoryAsync( withSubdirectories: true );
-		IReadOnlyList<int> ids = await SelectedDirectoryEntryIdsAsync( withSubdirectories: true );
-		await _workflow.CheckoutAsync( ids );
+		await RunOnDirectoryAsync( "Deleting", true, false, _workflow.LogicalDeleteAsync, "Completed!" );
+		Refresh( FileManagerRefresh.All );
 	}
 
 	[RelayCommand]
-	private async Task UndoCheckoutDirectoryAsync()
+	private async Task RestoreDirectoryAsync()
 	{
-		_reporter.ShowWindow();
-		IReadOnlyList<int> ids = await SelectedDirectoryEntryIdsAsync( withSubdirectories: true );
-		await _workflow.UnCheckoutAsync( ids );
+		await RunOperationAsync( () => _workflow.RestoreDeletedInDirectoryAsync( SelectedDirectoryId ), "Completed!" );
+		Refresh( FileManagerRefresh.All );
 	}
+
+	[RelayCommand]
+	private Task RestoreDirectoryRecursiveAsync() => Dialogs.ShowMessageAsync( "Not Implemented Yet" );
 
 	[RelayCommand]
 	private async Task CommitDirectoryAsync()
 	{
 		if( SelectedDirectory?.IsRemoteOnly is true )
 			return;
-
-		_reporter.ShowWindow();
-		List<HackFile>? files = _workflow.CollectFolderCommitFiles( SelectedLocalDirectory );
-		if( files is { Count: > 0 } )
-			await _workflow.CommitAsync( files );
+		await RunOperationAsync( async () =>
+		{
+			if( await _workflow.CollectFolderCommitFilesAsync( SelectedLocalDirectory ) is { Count: > 0 } files )
+				await _workflow.CommitAsync( files );
+		} );
 	}
 
 	[RelayCommand]
@@ -426,67 +407,38 @@ public partial class HackFileManagerViewModel : ObservableObject
 		if( _files.CountFiles( directory ) is not int count )
 			return;
 
-		if( await _dialogs.ConfirmAsync( $"Are you sure you want to delete this directory and ({count}) files inside?", "Delete Directory", MessageBoxIcon.Warning ) )
+		if( await Dialogs.ConfirmAsync( $"Are you sure you want to delete this directory and ({count}) files inside?", "Delete Directory", MessageBoxIcon.Warning ) )
 			_files.DeleteDirectory( directory );
 	}
-
-	[RelayCommand]
-	private async Task LogicalDeleteDirectoryAsync()
-	{
-		_reporter.ShowWindow();
-		IReadOnlyList<int> ids = await SelectedDirectoryEntryIdsAsync( withSubdirectories: true );
-		await _workflow.LogicalDeleteAsync( ids );
-		await CompletedAsync( FileManagerRefresh.All );
-	}
-
-	[RelayCommand]
-	private async Task RestoreDirectoryAsync()
-	{
-		_reporter.ShowWindow();
-		await _workflow.RestoreDeletedInDirectoryAsync( SelectedDirectoryId );
-		await CompletedAsync( FileManagerRefresh.All );
-	}
-
-	[RelayCommand]
-	private Task RestoreDirectoryRecursiveAsync() => _dialogs.ShowMessageAsync( "Not Implemented Yet" );
 
 	#endregion
 	#region Entry list commands
 
 	[RelayCommand]
-	private async Task GetLatestSelectedAsync()
+	private Task GetLatestSelectedAsync() => RunOnIdsAsync( RemoteIds( SelectedEntries ), _workflow.GetLatestAsync );
+
+	[RelayCommand]
+	private Task CheckoutSelectedAsync()
+		=> RunOnIdsAsync( RemoteIds( SelectedEntries.Where( e => e.Checkout is null ) ), _workflow.CheckoutLatestAsync );
+
+	[RelayCommand]
+	private Task UndoCheckoutSelectedAsync()
+		=> RunOnIdsAsync( RemoteIds( SelectedEntries.Where( e => e.Checkout is not null ) ), _workflow.UnCheckoutAsync );
+
+	[RelayCommand]
+	private async Task LogicalDeleteSelectedAsync()
 	{
-		_reporter.ShowWindow();
-		await _workflow.GetLatestAsync( RemoteIds( SelectedEntries ) );
+		await RunOnIdsAsync( RemoteIds( SelectedEntries ), _workflow.LogicalDeleteAsync, "Completed!" );
+		Refresh( FileManagerRefresh.All );
 	}
 
 	[RelayCommand]
-	private async Task CheckoutSelectedAsync()
+	private Task CommitSelectedAsync() => RunOperationAsync( async () =>
 	{
-		IReadOnlyList<EntryRow> selected = SelectedEntries;
-		await GetLatestSelectedAsync();
-		await _workflow.CheckoutAsync( RemoteIds( selected.Where( e => e.Checkout is null ) ) );
-	}
-
-	[RelayCommand]
-	private async Task UndoCheckoutSelectedAsync()
-	{
-		IReadOnlyList<int> ids = RemoteIds( SelectedEntries.Where( e => e.Checkout is not null ) );
-		if( ids.Count == 0 )
-			return;
-
-		_reporter.ShowWindow();
-		await _workflow.UnCheckoutAsync( ids );
-	}
-
-	[RelayCommand]
-	private async Task CommitSelectedAsync()
-	{
-		_reporter.ShowWindow();
 		HashSet<HackFile> files = await _workflow.CollectCommitFilesAsync( SelectedEntries );
 		if( files.Count > 0 )
 			await _workflow.CommitAsync( files );
-	}
+	} );
 
 	[RelayCommand]
 	private Task OpenSelectedAsync() => OpenSelectedAsync( EntryOpenMode.Open );
@@ -501,7 +453,7 @@ public partial class HackFileManagerViewModel : ObservableObject
 	{
 		IReadOnlyList<string> errors = await _files.OpenEntriesAsync( SelectedEntries, mode );
 		if( errors.Count > 0 )
-			await _dialogs.ShowMessageAsync( string.Join( Environment.NewLine, errors ) );
+			await Dialogs.ShowMessageAsync( string.Join( Environment.NewLine, errors ) );
 	}
 
 	[RelayCommand]
@@ -518,17 +470,9 @@ public partial class HackFileManagerViewModel : ObservableObject
 			? $"Are you sure you want to delete ({files.Count}) files?"
 			: $"Are you sure you want to delete these files?\nfiles:\n{string.Join( Environment.NewLine, files.Select( f => f.FullName ) )}";
 
-		if( await _dialogs.ConfirmAsync( message, "Delete Files", MessageBoxIcon.Warning ) )
+		if( await Dialogs.ConfirmAsync( message, "Delete Files", MessageBoxIcon.Warning ) )
 			_files.DeleteFiles( files );
 		Refresh( FileManagerRefresh.Entries );
-	}
-
-	[RelayCommand]
-	private async Task LogicalDeleteSelectedAsync()
-	{
-		_reporter.ShowWindow();
-		await _workflow.LogicalDeleteAsync( RemoteIds( SelectedEntries ) );
-		await CompletedAsync( FileManagerRefresh.All );
 	}
 
 	[RelayCommand]
@@ -538,26 +482,28 @@ public partial class HackFileManagerViewModel : ObservableObject
 		IReadOnlyList<int> ids = RemoteIds( SelectedEntries );
 		if( ids.Count == 0 )
 		{
-			await _dialogs.ShowMessageAsync( "No entries to delete" );
+			await Dialogs.ShowMessageAsync( "No entries to delete" );
 			return;
 		}
 
-		bool confirmed = await _dialogs.ConfirmAsync(
+		bool confirmed = await Dialogs.ConfirmAsync(
 			$"Are you sure you want to permanently delete {ids.Count} entries from the database?\n" +
 			"This will also permanently delete all associative versions, version properties, and version relationships",
 			"Delete Entries and Other Records?", MessageBoxIcon.Warning );
 		if( !confirmed )
 			return;
 
-		_reporter.ShowWindow();
-		if( !await _workflow.PermanentDeleteAsync( ids ) )
+		bool deleted = false;
+		await RunOperationAsync( async () => deleted = await _workflow.PermanentDeleteAsync( ids ) );
+		if( !deleted )
 		{
-			await _dialogs.ShowMessageAsync( "Was unable to delete entries", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error );
+			await Dialogs.ShowMessageAsync( "Was unable to delete entries", "Error", MessageBoxButtons.OKCancel, MessageBoxIcon.Error );
 			return;
 		}
-		await CompletedAsync( FileManagerRefresh.All );
+		await Dialogs.ShowMessageAsync( "Completed!" );
+		Refresh( FileManagerRefresh.All );
 #else
-		await _dialogs.ShowMessageAsync( "Permanent delete is only available in debug builds" );
+		await Dialogs.ShowMessageAsync( "Permanent delete is only available in debug builds" );
 #endif
 	}
 
@@ -566,73 +512,55 @@ public partial class HackFileManagerViewModel : ObservableObject
 	{
 		if( SelectedEntries is not [ { FullName: not null } entry ] || !FileStatusPolicy.CanUploadIcon( entry.Status ) )
 			return;
-		await _dialogs.ShowMessageAsync( "Uploading icons is not implemented yet" );
+		await Dialogs.ShowMessageAsync( "Uploading icons is not implemented yet" );
 	}
 
 	#endregion
 	#region History commands
 
-	private Task<HpVersion?> SelectedHistoryVersionAsync()
-		=> _files.GetVersionAsync( SelectedHistory?.Version ?? 0 );
+	/// <summary>Runs <paramref name="act"/> on the version selected in the History tab, when there is one.</summary>
+	private async Task WithHistoryVersionAsync( Func<HpVersion, Task> act )
+	{
+		if( await _files.GetVersionAsync( SelectedHistory?.Version ?? 0 ) is { } version )
+			await act( version );
+	}
 
 	/// <summary>Downloads the selected history version, asking where to put it if a different local copy exists.</summary>
 	[RelayCommand]
-	private async Task DownloadHistoryAsync()
+	private Task DownloadHistoryAsync() => WithHistoryVersionAsync( async version =>
 	{
-		if( await SelectedHistoryVersionAsync() is not { } version )
-			return;
-
 		if( !_files.HasConflictingLocalCopy( version ) )
 		{
-			_files.DownloadVersion( version, toTemp: false );
+			await _files.DownloadVersionAsync( version, toTemp: false );
 			return;
 		}
 
-		DialogResult answer = await _dialogs.ShowMessageAsync(
+		DialogResult answer = await Dialogs.ShowMessageAsync(
 			"File exists as a different version.\n" +
 			"Retry:\tDownload in the Temporary Folder\n" +
 			"Ignore:\tOverwrite the current version\n" +
 			"Abort:\tCancel download",
 			"File Version Conflict", MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Warning );
 
-		switch( answer )
-		{
-			case DialogResult.Retry:
-				_files.DownloadVersion( version, toTemp: true );
-				break;
-			case DialogResult.Ignore:
-				_files.DownloadVersion( version, toTemp: false );
-				break;
-		}
-	}
+		if( answer is DialogResult.Retry or DialogResult.Ignore )
+			await _files.DownloadVersionAsync( version, toTemp: answer is DialogResult.Retry );
+	} );
 
-	[RelayCommand] private Task DownloadHistoryToTempAsync() => DownloadHistoryToFolderAsync( toTemp: true );
-	[RelayCommand] private Task DownloadHistoryOverwriteAsync() => DownloadHistoryToFolderAsync( toTemp: false );
-	[RelayCommand] private Task OpenHistoryFromTempAsync() => OpenHistoryAsync( toTemp: true );
-	[RelayCommand] private Task OpenHistoryOverwriteAsync() => OpenHistoryAsync( toTemp: false );
-	[RelayCommand] private Task MoveHistoryToTempAsync() => MoveHistoryAsync( toTemp: true );
-	[RelayCommand] private Task MoveHistoryToWorkingAsync() => MoveHistoryAsync( toTemp: false );
+	[RelayCommand] private Task DownloadHistoryToTempAsync() => WithHistoryVersionAsync( version => _files.DownloadVersionAsync( version, toTemp: true ) );
+	[RelayCommand] private Task DownloadHistoryOverwriteAsync() => WithHistoryVersionAsync( version => _files.DownloadVersionAsync( version, toTemp: false ) );
+	[RelayCommand] private Task OpenHistoryFromTempAsync() => WithHistoryVersionAsync( version => OpenHistoryAsync( version, toTemp: true ) );
+	[RelayCommand] private Task OpenHistoryOverwriteAsync() => WithHistoryVersionAsync( version => OpenHistoryAsync( version, toTemp: false ) );
+	[RelayCommand] private Task MoveHistoryToTempAsync() => WithHistoryVersionAsync( version => MoveHistoryAsync( version, toTemp: true ) );
+	[RelayCommand] private Task MoveHistoryToWorkingAsync() => WithHistoryVersionAsync( version => MoveHistoryAsync( version, toTemp: false ) );
 
-	private async Task DownloadHistoryToFolderAsync( bool toTemp )
+	private async Task OpenHistoryAsync( HpVersion version, bool toTemp )
 	{
-		if( await SelectedHistoryVersionAsync() is { } version )
-			_files.DownloadVersion( version, toTemp );
-	}
-
-	private async Task OpenHistoryAsync( bool toTemp )
-	{
-		if( await SelectedHistoryVersionAsync() is not { } version )
-			return;
-
-		string folder = _files.DownloadVersion( version, toTemp );
+		string folder = await _files.DownloadVersionAsync( version, toTemp );
 		_files.OpenFile( Path.Combine( folder, version.name ?? "" ) );
 	}
 
-	private async Task MoveHistoryAsync( bool toTemp )
+	private async Task MoveHistoryAsync( HpVersion version, bool toTemp )
 	{
-		if( await SelectedHistoryVersionAsync() is not { } version )
-			return;
-
 		VersionMovePlan plan = _files.PlanMove( version, toTemp );
 		string target = toTemp ? "temporary" : "current";
 		string prefix = plan.From.Exists ? "" : $"file doesn't exist in {plan.From.DirectoryName}.\n";
@@ -642,8 +570,8 @@ public partial class HackFileManagerViewModel : ObservableObject
 			: $"{prefix}Would you like to {verb} this version to {target}?";
 		string caption = ( plan.From.Exists ? "Move" : "Download" ) + ( plan.To.Exists ? " & Overwrite" : "" );
 
-		if( await _dialogs.ConfirmAsync( message, caption, plan.To.Exists ? MessageBoxIcon.Warning : MessageBoxIcon.Question ) )
-			_files.ExecuteMove( version, plan );
+		if( await Dialogs.ConfirmAsync( message, caption, plan.To.Exists ? MessageBoxIcon.Warning : MessageBoxIcon.Question ) )
+			await _files.ExecuteMoveAsync( version, plan );
 		Refresh( FileManagerRefresh.Entries );
 	}
 
@@ -672,22 +600,13 @@ public partial class HackFileManagerViewModel : ObservableObject
 			.AppendLine( $"\tDir ID = {v.dir_id}" )
 			.Append( $"\tWin DL Path = {v.WinPathway}" );
 
-		string ids = string.Join( ", ", plan.VersionIds.Cast<object>() );
-		if( await _dialogs.ShowMessageAsync( $"{intro}\n this will download version ids: {ids}\n{details}", "Version Download", MessageBoxButtons.YesNoCancel ) != DialogResult.Yes )
+		string ids = string.Join( ", ", plan.VersionIds );
+		if( await Dialogs.ShowMessageAsync( $"{intro}\n this will download version ids: {ids}\n{details}", "Version Download", MessageBoxButtons.YesNoCancel ) != DialogResult.Yes )
 			return;
 
 		IReadOnlyList<int> failed = await _workflow.DownloadVersionsAsync( plan.VersionIds );
 		if( failed.Count > 0 )
-			await _dialogs.ShowMessageAsync( $"failed to download version ids: {string.Join( ", ", failed )}" );
-	}
-
-	#endregion
-	#region Helpers
-
-	private async Task CompletedAsync( FileManagerRefresh refresh )
-	{
-		await _dialogs.ShowMessageAsync( "Completed!" );
-		Refresh( refresh );
+			await Dialogs.ShowMessageAsync( $"failed to download version ids: {string.Join( ", ", failed )}" );
 	}
 
 	#endregion

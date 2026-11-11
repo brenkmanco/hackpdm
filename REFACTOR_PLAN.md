@@ -5,7 +5,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 Every phase ends with the same gate:
 
 1. `dotnet build Src/HackPDM/HackPDM.csproj -f net10.0-desktop -p:Platform=x64 -c Debug` (0 errors, no new warnings)
-2. `dotnet test Src/HackPDM.Tests/HackPDM.Tests.csproj` (baseline: 146 passed / 23 skipped without a server; 173/173 against Odoo)
+2. `dotnet test Src/HackPDM.Tests/HackPDM.Tests.csproj` (current: 182 passed / 37 skipped without a server; 223/223 against Odoo. The Phase 0 baseline was 146 / 23 and 173/173)
 3. `Odoo/ci/run_local_smoke.sh`: Odoo in Docker, integration tests (the 22 skipped run), then the client smoke test
 4. One commit per numbered step, so any step can be reverted alone
 
@@ -30,7 +30,7 @@ Found by the first smoke run (fixed):
 
 Found while writing them (pinned as current behaviour):
 - `new HackFile(path)` throws `FileNotFoundException` for a missing file (reads `FileInfo.Length`) → fixed in Phase 2
-- `HackFile.RelativePath` means two things: `root/<dir>` from the path factories, `<dir>/<file>` from the lazy getter → Phase 5
+- `HackFile.RelativePath` means two things: `root/<dir>` from the path factories, `<dir>/<file>` from the lazy getter → still open (see Audit)
 
 ## Phase 1: Delete dead code — DONE (≈ 5,000 lines removed, no behaviour change)
 
@@ -49,7 +49,7 @@ Each item was found to have zero callers; re-grep immediately before deleting.
 
 **Core / Domain / Shared**
 - [x] Row `Clone()` boilerplate (14 classes, ≈190 lines), `IRowData`, `ICloneable<T>`
-- [x] Unused ExtensionMethods / ExtensionsAsync / FileOperations / HackDefaults members, MathUtility, empty enums and types, Shared `Help.cs`
+- [x] Unused ExtensionMethods / ExtensionsAsync / FileOperations / HackDefaults members, unused `MathUtility` members (the class stays: `AsyncHelper` uses it), empty enums and types, Shared `Help.cs`
 - [x] `AsyncHelper.RenewTokenSourceAsync`
 
 **App**
@@ -60,9 +60,9 @@ Each item was found to have zero callers; re-grep immediately before deleting.
 
 **Deliberately left for later phases**
 - [ ] `HackFileManagerView._treeItems`: looks unused, but assigning it as `ItemsSource` puts the TreeView in items-source mode, so removing it needs a runtime check (Phase 7)
-- [ ] `IHackFileModel` / `IHackBaseFileModel`, `IHackDefaultBase` split, `HpBaseModel.HpModelDictionary` / `UsualIncludedFields`: design leftovers, handled with the HackFile split (Phase 5) and registry cleanup (Phase 4)
-- [ ] `FormHelper.EZGradient` and the gradient fields in `ExtensionForm` may now be unused (Phase 6 facade cleanup)
-- Note: `HpVersion.DownloadContents` still blocks on `ReadAsync(...).GetAwaiter().GetResult()` (same as the old sync wrapper did); making it async is Phase 5 (`VersionFileService`)
+- [x] `IHackFileModel` / `IHackBaseFileModel` and `HpBaseModel.UsualIncludedFields` deleted (implemented, never used); `HpModelDictionary` replaced by the generated `HpModelDictionaryGen` (Phase 4). Still open: the `IHackDefaultBase` / `IHackDefaults` split (see Audit)
+- [x] `FormHelper`, `ExtensionForm` (Phases 6–7) and the unused `ColorDrawingHelper` (the last `EZGradient`) deleted
+- [x] `HpVersion.DownloadContents` blocked on `ReadAsync(...).GetAwaiter().GetResult()`: now `VersionFileService.DownloadContentsAsync` / `DownloadFileAsync` / `DownloadAllAsync`, awaited all the way up (done in the Audit)
 
 ## Phase 2: Fix confirmed bugs — DONE
 
@@ -96,11 +96,11 @@ Reported by the survey (all verified first):
   - asset map: no double extension, keyed like the built-ins, no throw in async void
   - `HackFile.Equals`/`GetHashCode`: identity is the normalized full path (case-insensitive on Windows), consistent with the hash (`Equality_IsThePath_AndMatchesTheHash`)
   - PdmWorkflowService: download failures are reported as failures, not "Cancelled"
-- [ ] Settings pages' `Window?.Close()` is always null: confirmed but harmless (the pages are only shown inline in Configuration, so Submit just saves). Giving Submit visible feedback → Phase 7
+- [x] Settings pages' `Window?.Close()` is null when the page is shown inline in Configuration: Submit now shows a "saved" message (Audit)
 
 Noticed while fixing (not done):
 - [x] Intermittent "An error occurred while sending the request" in the live tests (`AddonSeedDataTests` failing with search_count 0 / xml id not found): fixed. Odoo's Werkzeug server answers HTTP/1.0 and closes after each response, but SocketsHttpHandler pooled the connection anyway (even with `Connection: close` or an HTTP/1.0 request); a call that reused it before the FIN arrived got "The response ended prematurely" (about 1% of calls; Odoo never saw them). `SendJsonAsync` now routes a server that answered HTTP/1.0 without keep-alive through a non-pooling client, and `LatestException` keeps the inner exception messages (`RpcConnectionReuseTests` reproduces it offline)
-- `HackResultTree.ResultNode` starts `ProcessDependencies()` un-awaited from its constructor (CS4014) → Phase 5
+- [x] `HackResultTree.ResultNode` started `ProcessDependencies()` un-awaited from its constructor (CS4014): no caller asked for it, so the constructor flag is gone and dependencies are only resolved by awaiting `ProcessDependencies` (Audit)
 
 ## Phase 3: Shared primitives (one home per concept)
 
@@ -120,7 +120,7 @@ Gate after Phase 3: offline 170 passed / 37 skipped; live 211/211 plus SMOKE TES
 
 ## Phase 4: Typed Odoo seam (generics instead of object/ArrayList/Hashtable) ✅
 
-Done. Gate: live 223/223 + SMOKE TEST PASSED; offline 182 passed / 37 skipped. All new seam types live in `HackPDM.Infrastructure/Odoo/Rpc/`.
+Done. Gate: live 223/223 + SMOKE TEST PASSED; offline 182 passed / 37 skipped. All new seam types live in `HackPDM.Infrastructure/Odoo/Rpc/` (namespace `HackPDM.Infrastructure.Odoo.Rpc`, except `OdooValueConverter`, which keeps `HackPDM.Infrastructure.Odoo` because the generated code names it).
 
 **4a. Introduce the types**
 - [x] `DomainTerm(Field, Op, Value)` and an immutable `OdooDomain : IReadOnlyList<object>` with `Where`/`And`/`IdIn`/`All` builders and `&`/`|`/`!` operators (named `OdooDomain` because `Domain` clashes with the `HackPDM.Domain` namespace)
@@ -150,7 +150,7 @@ Done. Gate: live 223/223 + SMOKE TEST PASSED; offline 182 passed / 37 skipped. A
 - Permanent delete searched `hp.version.relationship`, which no longer exists in the addon; the old client swallowed the error as "nothing found". It now clears `hp.version.parent_ids`/`child_ids` with `(5, 0, 0)`
 - Errors are no longer lost to concurrent calls overwriting the shared `LatestException`
 
-**Left as is:** `ArrayList` window parameters in `MessageBox`, `WindowHelper` and `HomeView` (UI, not the Odoo seam).
+No `ArrayList` or `Hashtable` is left in the code (the UI window parameters went in Phase 7).
 
 ## Phase 5: Split the god classes (SRP) ✅
 
@@ -172,32 +172,99 @@ Done. Gate: live 223/223 + SMOKE TEST PASSED; offline 182 passed / 37 skipped.
 - A commit whose entry fails to stage no longer throws from the version step; it takes the rollback path
 - Deleted entries are left out of the "N check outs" count instead of failing one by one; a logical (un)delete that the server refuses is logged
 
-## Phase 6: ViewModel and command reuse
+## Phase 6: ViewModel and command reuse ✅
 
-- [ ] `RunOperationAsync(string title, Func<IOperationReporter, CancellationToken, Task<bool>>)` in a VM base: replaces the ShowWindow → op → Completed pattern (≈8 copies in HackFileManagerViewModel)
-- [ ] Generic history command (6 copies), shared Checkout/UnCheckout body, detail-tab dictionary instead of a switch
-- [ ] `RemoteIds` / `SelectedRemoteIds` and their guards unified
-- [ ] `ReplaceAll` on collections instead of repeated clear/fill
-- [ ] MessageBox table-driven (662 → ≈150 lines), all calls through `IDialogService`
-- [ ] Remove the pass-through facades (FormHelper, SldWorksUI), `LazyConverter`, OdooEntryColumns literals/brushes into resources
-- [ ] Group key typed (`Func<EntryRow, IComparable?>` or a `GroupKey` enum) instead of `Func<EntryRow, object>` plus reflection
+Done. Gate: live 223/223 + SMOKE TEST PASSED; offline 182 passed / 37 skipped.
 
-## Phase 7: Remaining pages to MVVM and a single composition root
+- [x] `OperationViewModel` base (`Dialogs`, `Reporter`): `RunOperationAsync(operation, completedMessage)` opens the status window, runs, then reports; `RunOnIdsAsync` adds the "nothing selected → do nothing" guard. Used by `HackFileManagerViewModel` and `SearchOdooViewModel`; directory commands share one `RunOnDirectoryAsync`
+- [x] History commands share `WithHistoryVersionAsync`; check out / undo share one body in `PdmWorkflowService.ChangeCheckoutAsync`, and the new `CheckoutLatestAsync` (get latest, then check out) replaces three copies across the two view models; detail tabs are a dictionary instead of a switch
+- [x] `RemoteIds` lives in the base and both view models use it
+- [x] `ReplaceAll` (an `ObservableCollection` extension; `RangeObservableCollection` does it with one Reset) replaces the clear/fill loops; the detail and search-result collections are range collections
+- [x] `MessageBox` is table-driven: one button layout per `MessageBoxButtons`, one `ShowAsync` (661 → 151 lines). The unused list/grid/content/tooltip layouts and their `MessageBoxType`/`MessageBoxWidth` enums are gone; `ShowAsync` is internal and every caller (view models, a few views and the updater) goes through `IDialogService`
+- [x] Removed `FormHelper` and `LazyConverter`/`LazyConverterFactory`: the saved settings (`ColorSettings`, `OdooEntryColumns`, `OdooEntryColumnID`) hold plain values (same JSON, so saved configs still load); the column defaults are one table; the status brushes are plain properties over the saved colours
+- [x] Group key typed: `EntryRowKeys` (was `EntryRowSorters`) has sort and group keys as `Func<EntryRow, IComparable?>`; the "Group By" menu lists its names instead of reflecting over `EntryRow`
 
-- [ ] Settings views bind to their existing (currently unused) view models
-- [ ] ProfileManager: `ProfileManagerViewModel` + `ProfileStore`
-- [ ] StatusDialog: view model owns the log; no polling in the view
-- [ ] Home: `INavigationService`
-- [ ] JSON editor: I/O moves to a service
-- [ ] `IFilePickerService` replaces the duplicated pickers
-- [ ] `HackFileManagerView`: columns and context menus in XAML instead of code-behind
-- [ ] Merge `InstanceManager` and `ViewModelEnvironment` into `AppComposition`; `GlobalSerializedData` and `ExtensionForm` responsibilities split
+**Behaviour changes**
+- A command on a selection with no server entries no longer opens an empty status window; logical delete with nothing selected skips the "Completed!" box
+- Checking out a directory gets the latest of its live entries only (it used to follow "show inactive")
+- Grouping by a date groups by day as a date (sorted chronologically) rather than by its short-date text; "Group By" offers only the sortable fields
+
+## Phase 7: Remaining pages to MVVM and a single composition root ✅
+
+Done. Gate: live 223/223 + SMOKE TEST PASSED; offline 182 passed / 37 skipped.
+
+- [x] Settings views bind to their view models. `HackSettingsViewModel` and `OdooSettingsViewModel` load the current values, validate, save, and raise `Saved`; the views are `x:Bind` plus one line that closes the window on `Saved`
+- [x] ProfileManager: `ProfileManagerViewModel` has the login and profile commands, and `IsLoggingIn` drives the progress ring. `ProfileStore` holds the template, a snapshot of the live settings (with or without the password), `Apply` and the JSON read and write. The view is just a constructor
+- [x] StatusDialog: the view model owns the session, the three logs and the progress counters. `StatusWindowReporter` calls `ResetProgress`/`Advance`/`SetProcessed`/`CompleteProgress`, which coalesce into one property-change post per batch to the UI thread. The 100 ms polling loop is gone, and the progress bar and labels are `x:Bind`
+- [x] Home: `INavigationService` (`NavigationService` in the shell, which HomeView attaches to). Each menu item's `Tag` is its `NavigatePageMenu` name; `HomeView.Pages` maps each page to its type and window preset (Configuration and the not-logged-in page are routed in `HomeView.Show`). The static navigator fields and `HomeView.NavigateToPage` are gone; `ProfileManagerViewModel` and the smoke test navigate through the service (the smoke test then reads the frame from `HackApp.HomePage`)
+- [x] JSON editor: `AppConfigJsonService` loads the settings file (or the sample), formats it and saves it
+- [x] `IFilePickerService` (`FilePickerService`) replaces the two picker setups in ProfileManagerView
+- [x] `HackFileManagerView`: the entry list, its columns and its context menu are XAML. The code only applies the saved headers, widths and row size, matching each column by `SortMemberPath`, and fills "Group By" from `EntryRowKeys.Names`
+- [x] `InstanceManager`, `ViewModelEnvironment` and the `VMEnv` aliases are merged into `AppComposition`, which now holds `Navigation`, `FilePickers`, `StatusLog`, `ProfileManager`, `FileManager` and `SearchOdoo`. The page → window lookup (which window a page was opened in) moved into `WindowHelper` (`WindowOf`). `WindowConfig.Preset` falls back to the built-in preset.
+  - Removed the unused `HomeViewModel`, `NotLoggedInViewModel` and `ApplicationSettingsViewModel`, along with the `CreateWindowAndPage` overloads that took `ArrayList` parameters (no caller used them).
+- [x] `GlobalSerializedData` is now a plain data class; `AppConfigStore` reads and writes it (fixed path, serializer options, `Load`/`Parse`/`Save`), and `ThemeService.ReadSavedMode` uses its path.
+  - `ExtensionForm` is split into `WindowExtensions` (presenter, handle, `page.Window`) and `TreeViewExtensions` (node data, path, breadcrumbs, `EnsureVisible`, `FindTreeNode`). Its unused gradient brushes and empty extension blocks are gone.
 - [x] Delete GridHelp (done in Phase 1)
 
-## Phase 8: Generated code
+**Behaviour changes**
+- Odoo settings: an invalid area factor now saves nothing. Before, it saved every field above it and still closed the window.
+- Hack settings: a blank folder path is now rejected.
+- Status window:
+  - "Cancel" now cancels the running operation. Before, it set a flag nothing read.
+  - Closing the window during an operation now actually waits for the confirmation. Before, the handler set `Cancel` after an `await`, so the window always closed.
+  - The "Downloaded" and "Session Downloaded" labels are gone. Nothing ever wrote those counters, so they always showed 0.
+- The entry list no longer throws when a saved settings file is missing a column; that column gets its default. Sorting the Size column now uses `Size` (it fell back to the header text before).
+- AppConfig.json always lives in the documents folder (it already did in practice). The unread `AppConfigFilePath` core setting is no longer written.
+- Loading a profile file that isn't valid JSON now shows "unable to deserialize" instead of throwing.
 
-- [ ] Generate the 615-line asset map (`Imaging/Settings.cs`) from the Assets folder at build time
-- [ ] SchemaGenerator follow-ups not covered in Phase 5
+**Left as is**
+- `HackFileManagerView._treeItems` (see Phase 1): still assigned, because it puts the TreeView in items-source mode
+- `ColorDrawingHelper.EZGradient` is unused (Phase 1 note); not part of this phase
+
+## Phase 8: Generated code ✅
+
+Done. Gate: live 223/223 + SMOKE TEST PASSED; offline 182 passed / 37 skipped.
+
+- [x] Asset map. The 615-line hand-written `Imaging/Settings.cs` is now `Imaging/Assets.cs` (about 60 lines). The `GenerateAssetMap` target in HackPDM.csproj writes `obj/.../AssetMap.g.cs` on every build, and only touches it when the Assets folder changed.
+  - Included: images directly in Assets, every `Icons/*.svg`, and `StatusIcons` (the .svg where one exists, otherwise the .png). Each key is the file name without its extension.
+  - The 8 keys that don't follow that rule stay hand-written in `Assets.cs`: jpg/jpeg/bmp/png share `gen.svg`, and four extension icons have no `Icons/` equivalent.
+  - Checked: the result equals the old map, plus the 8 entries below.
+- [x] SchemaGenerator follow-ups:
+  - The pipeline is incremental. `ForAttributeWithMetadataName` finds the `[OdooModel]` classes and reads each into an `OdooModelGen` of plain values (`EquatableArray` for its properties), so an edit regenerates only the models it changed. Before, the whole compilation went through `Collect`, and every attributed class was re-read on every keystroke.
+  - A malformed `[OdooProp]` or `[OdooModel]` now reports a warning (HPDM001/HPDM002) instead of being skipped silently. Analyzer release tracking (`AnalyzerReleases.*.md`) is added.
+  - Generated code no longer depends on `using` directives: the helper calls and `nameof` are fully qualified, and the registry is sorted by type name, so its output doesn't depend on file order. Checked by diffing the generated files: those are the only changes.
+  - Removed the empty `ColorCsvRow.cs`.
+
+**Behaviour changes**
+- 8 icons in `Icons/` that the old map never listed are now available: `default_file`, `default_folder`, `default_folder_opened`, `default_root_folder`, `default_root_folder_opened`, `psql`, `slddnv` and `sldtnfvt`. For .psql, .slddnv and .sldtnfvt files this means their own icon instead of the fallback.
+
+## Audit after Phase 8 ✅
+
+Every phase was checked against the code. Gate after the fixes: live 223/223 + SMOKE TEST PASSED; offline 182 passed / 37 skipped.
+
+**Fixed**
+- [x] Downloads are async end to end: `DownloadContentsAsync` / `DownloadFileAsync` / `DownloadAllAsync`, `IEntryFileService.DownloadVersionAsync` / `ExecuteMoveAsync`, `PdmWorkflowService.DownloadVersionsAsync`. Before, each version blocked a thread on its RPC
+- [x] Folder commits: `DependencyScanner.GetHackFolderWithDependenciesAsync` awaits each file's references (it blocked on each one), and `CollectFolderCommitFilesAsync` replaces `CollectFolderCommitFiles`
+- [x] Locating a "Where Used" / "Children" row split its folder on `\` only. `WinPathway` uses this OS's separators, so on Linux the double-tap never found the folder; it now uses `PwaPaths.Segments`
+- [x] One composition root: the Microsoft DI container in `App.xaml.cs` is gone. `AppComposition.Settings` / `InitializeDefaults` set up the settings store and defaults, and `CreateHackSettings` / `CreateOdooSettings` / `CreateThemeEditor` build the page view models. `HackApp.Services` is removed; `MessageBox` and `HomeView` are plain `new`
+- [x] Settings Submit gives feedback ("… settings saved"), which was the Phase 2 item deferred to Phase 7: inline in Configuration there is no window to close
+- [x] JSON editor has a view model (`JsonEditorViewModel`: the tree, load, parse, save, remove). The view keeps the preview dialog, syntax colouring and indent
+- [x] Status window: the close confirmation and cancel moved to `StatusDialogViewModel.ConfirmCloseAsync`
+- [x] `RangeObservableCollection` moved from `EntryRow.cs` to `Models/Common`; the inline MB formatting in `PdmDownloadOperations` uses `ByteSize.Format`
+- [x] Dead code: `IHackFileModel`, `IHackBaseFileModel`, `UsualIncludedFields`, `ColorDrawingHelper`, the commented-out `ComputeHashtable` and a commented-out `Hashtable` parameter
+
+**Behaviour changes**
+- Submitting the Odoo or Hack settings shows a "saved" message
+- Opening, downloading or moving a history version no longer freezes the window while it downloads
+
+**Still open** (larger design work, not done here)
+- [ ] `HackFile.RelativePath` still means two things: `root/<dir>` from `GetFromPath`, `<dir>/<file>` from the lazy getter
+- [ ] `IHackDefaultBase` / `IHackDefaults` split
+- [ ] View models read the ambient `OdooDefaults.Instance` / `HackDefaults.Instance` instead of an injected service. `AppConfigStore` and `GlobalSerializedData` live under `Views/Common/Settings`, so `AppConfigJsonService` (a model) depends on the view layer
+- [ ] `HackFileManagerViewModel` (≈ 610 lines) and `HackFileManagerView.xaml.cs` (≈ 490 lines) are still the largest classes. The view's locate logic polls with `AsyncHelper.WaitUntil`, and the tree load waits a fixed 500 ms
+- [ ] `HackFileManagerView._treeItems` (Phase 1): still needs a runtime check before removal
+- [ ] `OdooFileTypeManagerView` and `NotLoggedInView` are empty template pages ("Manage Types" opens an empty window)
+- Note: the Phase 0 test list and some Phase 2 bullets name methods later phases removed or renamed (`ToNativeObject`, `HashConverter`, `StageRelationshipRecords`, `OdooClient<T>`, `SafeInvoker`, …); they record what was fixed at the time
 
 ---
 
@@ -213,6 +280,6 @@ Done. Gate: live 223/223 + SMOKE TEST PASSED; offline 182 passed / 37 skipped.
 | 5 God-class splits | medium | −500 | 4 |
 | 6 VM reuse | medium | −800 | 3 (parts need 4) |
 | 7 Pages to MVVM | medium | ±0 (moves) | 6 |
-| 8 Generated code | low | −600 | – |
+| 8 Generated code ✅ | low | −600 | – |
 
 Phases 6 and 8 can run in parallel with 4/5 because they touch different projects.

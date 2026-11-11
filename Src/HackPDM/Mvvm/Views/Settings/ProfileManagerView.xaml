@@ -25,6 +25,7 @@
         <!--  Hack Settings Button  -->
         <Button
             x:Name="HackSettingsBtn"
+            Command="{x:Bind ViewModel.OpenSettingsCommand}"
             Grid.Row="1"
             Grid.Column="0"
             Height="35"
@@ -38,6 +39,7 @@
         <!--  Odoo Settings Button  -->
         <Button
             x:Name="odooSettingsBtn"
+            Command="{x:Bind ViewModel.OpenSettingsCommand}"
             Grid.Row="1"
             Grid.Column="1"
             Height="35"
@@ -50,6 +52,7 @@
         <!--  Odoo Login Button  -->
         <Button
             x:Name="OdooLoginBtn"
+            Command="{x:Bind ViewModel.LoginCommand}"
             Grid.Row="1"
             Grid.Column="2"
             Height="35"
@@ -72,7 +75,7 @@
                 x:Name="OdooLoginProgressRing"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"
-                IsActive="False" />
+                IsActive="{x:Bind ViewModel.IsLoggingIn, Mode=OneWay}" />
             <CommandBar
                 x:Name="MoreTools"
                 HorizontalAlignment="Stretch"
@@ -87,22 +90,22 @@
                         <MenuFlyout>
                             <MenuFlyoutItem
                                 x:Name="LoadJsonSettingsBtn"
-                                Click="LoadJsonSettingsBtn_Click"
+                                Command="{x:Bind ViewModel.LoadProfileCommand}"
                                 Text="Load Json Settings" />
 
                             <MenuFlyoutSubItem Text="Save Configuration To Json">
                                 <MenuFlyoutItem
                                     x:Name="SaveSettingsJson"
-                                    Click="SaveSettingsJson_Click"
+                                    Command="{x:Bind ViewModel.SaveProfileCommand}"
                                     Text="With Password" />
                                 <MenuFlyoutItem
                                     x:Name="SaveSettingsJsonWithoutPass"
-                                    Click="SaveSettingsJsonWithoutPassword_Click"
+                                    Command="{x:Bind ViewModel.SaveProfileWithoutPasswordCommand}"
                                     Text="Without Password" />
                             </MenuFlyoutSubItem>
                             <MenuFlyoutItem
                                 x:Name="CreateTemplateSettingsJson"
-                                Click="CreateTemplateSettingsJson_Click"
+                                Command="{x:Bind ViewModel.CreateTemplateCommand}"
                                 Text="Create Template Json" />
                         </MenuFlyout>
                     </AppBarButton.Flyout>

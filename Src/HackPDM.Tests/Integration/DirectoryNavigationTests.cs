@@ -122,7 +122,7 @@ public class DirectoryNavigationTests
 		int latest = await LatestVersionIdAsync( "bracket.txt" );
 		var version = ( await HpVersion.GetRecordByIdAsync( latest, excludedFields: [ "file_contents", "preview_image" ] ) )!;
 
-		byte[]? contents = version.DownloadContents();
+		byte[]? contents = await version.DownloadContentsAsync();
 
 		// JSON-RPC returns base64 text; the old `as byte[]` cast always produced null
 		Assert.NotNull( contents );

@@ -34,10 +34,10 @@ internal class HackUpdater
 		if (_odooClientVersion is not null && _odooClientVersion.char_value.Equals(_hackClientVersion))
 			return true;
 
-		if (showOutdatedUpdater && await MessageBox.ShowAsync( $"Latest version: {_hackClientVersion} doesn't match odoo version: {_odooClientVersion}\n" +
+		if (showOutdatedUpdater && await HackPDM.Shell.AppComposition.Dialogs.ShowMessageAsync( $"Latest version: {_hackClientVersion} doesn't match odoo version: {_odooClientVersion}\n" +
 		        $"Would you like to download the latest version?",
 			    "Versions",
-			    MessageBoxButtons.YesNoCancel ) == DialogResult.Yes )
+			    MessageBoxButtons.YesNoCancel, MessageBoxIcon.Information ) == DialogResult.Yes )
 		{
 			UpdaterProcess( );
 		}
@@ -53,7 +53,7 @@ internal class HackUpdater
 	{
 		try
 		{
-			MessageBox.ShowAsync($"Opening {PUBLISH_URL}");
+			_ = HackPDM.Shell.AppComposition.Dialogs.ShowMessageAsync($"Opening {PUBLISH_URL}");
 			ShellLauncher.OpenUrl(PUBLISH_URL);
 			HackApp.Current.Exit();
 		}

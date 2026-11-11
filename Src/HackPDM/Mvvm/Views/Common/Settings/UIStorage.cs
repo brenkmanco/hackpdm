@@ -13,13 +13,13 @@ public static class UIStorage
 {
 	#region Color Settings
 
-	public static readonly Lazy<SolidColorBrush> BrushWhite = new(() => new(ColorData.White.Value));
-	public static readonly Lazy<SolidColorBrush> BrushBlack = new(() => new(ColorData.Black.Value));
-	public static readonly Lazy<SolidColorBrush> BrushMustardYellow = new(() => new(ColorData.MustardYellow.Value));
-	public static readonly Lazy<SolidColorBrush> BrushDarkGray = new(() => new(ColorData.DarkGray.Value));
-	public static readonly Lazy<SolidColorBrush> BrushDarkOliveGreen = new(() => new(ColorData.DarkOliveGreen.Value));
-	public static readonly Lazy<SolidColorBrush> BrushDarkBlue = new(() => new(ColorData.DarkBlue.Value));
-	public static readonly Lazy<SolidColorBrush> BrushDarkRed = new(() => new(ColorData.DarkRed.Value));
+	public static SolidColorBrush BrushWhite => new( ColorData.White );
+	public static SolidColorBrush BrushBlack => new( ColorData.Black );
+	public static SolidColorBrush BrushMustardYellow => new( ColorData.MustardYellow );
+	public static SolidColorBrush BrushDarkGray => new( ColorData.DarkGray );
+	public static SolidColorBrush BrushDarkOliveGreen => new( ColorData.DarkOliveGreen );
+	public static SolidColorBrush BrushDarkBlue => new( ColorData.DarkBlue );
+	public static SolidColorBrush BrushDarkRed => new( ColorData.DarkRed );
 
 
 
@@ -31,12 +31,12 @@ public static class UIStorage
 	private static GlobalSerializedData? _globalData;
 	public static GlobalSerializedData GlobalData
 	{
-		get => _globalData ??= GlobalSerializedData.LoadFromFile(GlobalSerializedData.FilePath ?? "");
+		get => _globalData ??= AppConfigStore.Load();
 		set => _globalData = value;
 	}
 	public static ColorSettings ColorData => GlobalData.EColors;
 	public static OdooEntryColumns ColumnsInfo => GlobalData.ColumnsSettings;
-	public static Lazy<Dictionary<string, OdooEntryColumnID?>> Columns => GlobalData.ColumnsSettings.Columns;
+	public static Dictionary<string, OdooEntryColumnID?> Columns => GlobalData.ColumnsSettings.Columns;
 	#endregion
 
 	public static Color ToColor((byte, byte, byte, byte) argb) => Color.FromArgb(argb.Item1, argb.Item2, argb.Item3, argb.Item4);

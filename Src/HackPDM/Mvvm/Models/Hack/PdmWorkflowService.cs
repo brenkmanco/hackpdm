@@ -38,13 +38,15 @@ public interface IPdmWorkflowService
 	/// <summary>Downloads the latest version of each entry and everything it depends on.</summary>
 	Task GetLatestAsync( IReadOnlyList<int> entryIds );
 	Task CheckoutAsync( IReadOnlyList<int> entryIds );
+	/// <summary>Gets the latest of each entry (so the local copies are current), then checks them out.</summary>
+	Task CheckoutLatestAsync( IReadOnlyList<int> entryIds );
 	Task UnCheckoutAsync( IReadOnlyList<int> entryIds );
 	Task CommitAsync( IEnumerable<HackFile> hackFiles );
 
 	/// <summary>Turns selected entry rows into local files to commit, pulling in SolidWorks dependencies.</summary>
 	Task<HashSet<HackFile>> CollectCommitFilesAsync( IEnumerable<EntryRow> entries );
 	/// <summary>Collects every local file (and its dependencies) under a folder; null on failure.</summary>
-	List<HackFile>? CollectFolderCommitFiles( string folderPath );
+	Task<List<HackFile>> CollectFolderCommitFilesAsync( string folderPath );
 
 	Task LogicalDeleteAsync( IReadOnlyList<int> entryIds );
 	Task RestoreDeletedInDirectoryAsync( int directoryId );
@@ -172,44 +174,39 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 	#endregion
 	#region Checkout
 
-	public async Task CheckoutAsync( IReadOnlyList<int> entryIds )
+	public Task CheckoutAsync( IReadOnlyList<int> entryIds ) => ChangeCheckoutAsync( entryIds, checkout: true );
+
+	public Task UnCheckoutAsync( IReadOnlyList<int> entryIds ) => ChangeCheckoutAsync( entryIds, checkout: false );
+
+	public async Task CheckoutLatestAsync( IReadOnlyList<int> entryIds )
 	{
-		if( entryIds is null or { Count: < 1 } )
-			return;
-
-		IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids, excludedFields: HeavyEntryFields );
-		if( entries is null or { Length: < 1 } )
-			return;
-
-		await AsyncHelper.AsyncRunner( async () =>
-		{
-			reporter.SetTotal( entries.Length );
-			await PdmCheckoutOperations.CheckOutEntriesAsync( entries, Log, OnCheckoutProgress );
-			reporter.Complete();
-			await reporter.NotifyAsync( "Completed!" );
-		}, "Checkout Files" );
+		await GetLatestAsync( entryIds );
+		await CheckoutAsync( entryIds );
 	}
 
-	public async Task UnCheckoutAsync( IReadOnlyList<int> entryIds )
+	private async Task ChangeCheckoutAsync( IReadOnlyList<int> entryIds, bool checkout )
 	{
 		if( entryIds is null or { Count: < 1 } )
 			return;
 
 		int me = OdooDefaults.Instance.OdooId;
 		IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids, OdooDomain.Where( "checkout_user", Operators.Equal, me ), excludedFields: HeavyEntryFields );
+		// only entries checked out to this user are released
+		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids,
+			checkout ? null : OdooDomain.Where( "checkout_user", Operators.Equal, me ), excludedFields: HeavyEntryFields );
 		if( entries is null or { Length: < 1 } )
 			return;
 
 		await AsyncHelper.AsyncRunner( async () =>
 		{
 			reporter.SetTotal( entries.Length );
-			// only entries checked out to this user are released
-			await PdmCheckoutOperations.UnCheckOutEntriesAsync( entries, me, Log, OnCheckoutProgress );
+			if( checkout )
+				await PdmCheckoutOperations.CheckOutEntriesAsync( entries, Log, OnCheckoutProgress );
+			else
+				await PdmCheckoutOperations.UnCheckOutEntriesAsync( entries, me, Log, OnCheckoutProgress );
 			reporter.Complete();
 			await reporter.NotifyAsync( "Completed!" );
-		}, "UnCheckout Files" );
+		}, checkout ? "Checkout Files" : "UnCheckout Files" );
 	}
 
 	private void OnCheckoutProgress( int processed, int total )
@@ -303,9 +300,10 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		return hackFiles;
 	}
 
-	public List<HackFile>? CollectFolderCommitFiles( string folderPath )
+	public async Task<List<HackFile>> CollectFolderCommitFilesAsync( string folderPath )
 	{
-		if( !DependencyScanner.GetHackFolderWithDependencies( folderPath, out List<HackFile> files, out var broken ) )
+		var (files, broken) = await DependencyScanner.GetHackFolderWithDependenciesAsync( folderPath );
+		if( broken.Count > 0 )
 		{
 			// same rule as committing selected files: a SolidWorks file with missing references is not committed
 			foreach( var result in broken )
@@ -375,10 +373,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 	public async Task<IReadOnlyList<int>> DownloadVersionsAsync( IReadOnlyList<int> versionIds )
 	{
 		HpVersion[] versions = await HpVersion.GetRecordsByIdsAsync( versionIds ) ?? [];
-		if( versions.DownloadAll( out List<HpVersion> failed ) )
-			return [];
-
-		return failed.Ids();
+		return ( await versions.DownloadAllAsync() ).Ids();
 	}
 
 	#endregion

@@ -34,40 +34,19 @@ public class OdooEntryColumns
 		FieldName = "Status",
 		SortDirection = SortDirection.Ascending
 	};
-	[JsonConverter( typeof( LazyConverterFactory ) )]
-	public Lazy<Dictionary<string, OdooEntryColumnID?>> Columns { get; set; } = new( () => new()
+	/// <summary>The entry list's columns by <see cref="EntryRow"/> property; saved, so the user's widths and order survive.</summary>
+	public Dictionary<string, OdooEntryColumnID?> Columns { get; set; } = new()
 	{
-		{ nameof(EntryRow.Name),		new OdooEntryColumnID()
-			{ BindingPath = nameof(EntryRow.Name), Column = new Lazy<OdooEntryColumn>( ()
-				=> new OdooEntryColumn() { DisplayIndex = 0, Header = "Name", Width = 350, AutoSize = false } ) }},
+		[ nameof( EntryRow.Name ) ] = Column( nameof( EntryRow.Name ), 0, "Name", 350 ),
+		[ nameof( EntryRow.Type ) ] = Column( nameof( EntryRow.Type ), 1, "Type" ),
+		[ nameof( EntryRow.Size ) ] = Column( nameof( EntryRow.Size ), 2, "Size" ),
+		[ nameof( EntryRow.Status ) ] = Column( nameof( EntryRow.Status ), 3, "Status" ),
+		[ nameof( EntryRow.Checkout ) ] = Column( nameof( EntryRow.Checkout ), 4, "Checkout" ),
+		[ nameof( EntryRow.LocalDate ) ] = Column( nameof( EntryRow.LocalDate ), 5, "Local Date" ),
+		[ nameof( EntryRow.RemoteDate ) ] = Column( nameof( EntryRow.RemoteDate ), 6, "Remote Date" ),
+		[ nameof( EntryRow.FullName ) ] = Column( nameof( EntryRow.FullName ), 7, "Full Name", 200, autoSize: true ),
+	};
 
-		{ nameof(EntryRow.Type),		new OdooEntryColumnID()
-			{ BindingPath = nameof(EntryRow.Type), Column = new Lazy<OdooEntryColumn>( ()
-				=> new OdooEntryColumn() { DisplayIndex = 1, Header = "Type", Width = 100, AutoSize = false } ) }},
-
-		{ nameof(EntryRow.Size),		new OdooEntryColumnID()
-			{ BindingPath = nameof(EntryRow.Size), Column = new Lazy<OdooEntryColumn>( ()
-				=> new OdooEntryColumn() { DisplayIndex = 2, Header = "Size", Width = 100, AutoSize = false } ) }},
-
-		{ nameof(EntryRow.Status),		new OdooEntryColumnID()
-			{ BindingPath = nameof(EntryRow.Status)	, Column = new Lazy<OdooEntryColumn>( ()
-				=> new OdooEntryColumn() { DisplayIndex = 3, Header = "Status", Width = 100, AutoSize = false } ) }},
-
-		{ nameof(EntryRow.Checkout),	new OdooEntryColumnID()
-			{ BindingPath = nameof(EntryRow.Checkout), Column = new Lazy<OdooEntryColumn>( ()
-				=> new OdooEntryColumn() { DisplayIndex = 4, Header = "Checkout", Width = 100, AutoSize = false } ) }},
-
-		{ nameof(EntryRow.LocalDate),	new OdooEntryColumnID()
-			{ BindingPath = nameof(EntryRow.LocalDate), Column = new Lazy<OdooEntryColumn>( ()
-				=> new OdooEntryColumn() { DisplayIndex = 5, Header = "Local Date", Width = 100, AutoSize = false } ) }},
-
-		{ nameof(EntryRow.RemoteDate),	new OdooEntryColumnID()
-			{ BindingPath = nameof(EntryRow.RemoteDate), Column = new Lazy<OdooEntryColumn>( ()
-				=> new OdooEntryColumn() { DisplayIndex = 6, Header = "Remote Date", Width = 100, AutoSize = false } ) }},
-
-		{ nameof(EntryRow.FullName),	new OdooEntryColumnID()
-			{ BindingPath = nameof(EntryRow.FullName), Column = new Lazy<OdooEntryColumn>( ()
-				=> new OdooEntryColumn() { DisplayIndex = 7, Header = "Full Name", Width = 200, AutoSize = true } ) }},
-
-	} );
+	private static OdooEntryColumnID Column( string path, int index, string header, double width = 100, bool autoSize = false )
+		=> new() { BindingPath = path, Column = new() { DisplayIndex = index, Header = header, Width = width, AutoSize = autoSize } };
 }

@@ -22,7 +22,6 @@ public static class FileOperations
     public static HackFile[]? FilesInDirectory(
         string path, 
         Dictionary<string, Task<HackFile>>? hackFileMap,
-		//out Dictionary<string, Hashtable> dividedEntries, 
 		out int localAndRemoteCount,
 
 		SearchOption searchOption = SearchOption.TopDirectoryOnly,

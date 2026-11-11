@@ -54,7 +54,7 @@
                 VerticalAlignment="Center"
                 Orientation="Horizontal"
                 Spacing="8">
-                <Button Click="OnLoadJsonClick" Style="{StaticResource AccentButtonStyle}">
+                <Button Command="{x:Bind ViewModel.LoadCommand}" Style="{StaticResource AccentButtonStyle}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <FontIcon FontSize="16" Glyph="&#xE8E5;" />
                         <TextBlock Text="Load Sample" />
@@ -83,7 +83,7 @@
 
             <TreeView
                 x:Name="JsonTreeView"
-                ItemsSource="{x:Bind RootNodes, Mode=OneWay}"
+                ItemsSource="{x:Bind ViewModel.RootNodes, Mode=OneWay}"
                 SelectionMode="None">
                 <TreeView.Resources>
                     <Thickness x:Key="TreeViewItemPresenterPadding">0,0,0,0</Thickness>

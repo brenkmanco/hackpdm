@@ -225,7 +225,7 @@ public static class PdmDownloadOperations
                         || (got.file_contents is not { Length: > 0 } && (got.file_size ?? 0) > 0))
                     {
                         lastError[id] = !read.Ok
-                            ? $"{rpcError} ({bytes / (1024 * 1024.0):F1} MB request, {timeout / 1000}s timeout)"
+                            ? $"{rpcError} ({ByteSize.Format( bytes )} request, {timeout / 1000}s timeout)"
                             : "contents missing from the server response";
                         continue;
                     }

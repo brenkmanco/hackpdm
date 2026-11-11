@@ -46,12 +46,12 @@ public static class VersionFileService
 	}
 
 	/// <summary>The stored contents of a version (null for an empty or unsaved one).</summary>
-	public static byte[]? DownloadContents( this HpVersion version )
+	public static async Task<byte[]?> DownloadContentsAsync( this HpVersion version )
 	{
 		if( version.file_size == 0 || version.id is not int id || id == 0 )
 			return null;
 		// JSON-RPC returns binary fields as base64 strings
-		var rows = OdooRpc.ReadAsync( HpVersion.GetHpModel()!, [ id ], [ FileContents ] ).GetAwaiter().GetResult();
+		var rows = await OdooRpc.ReadAsync( HpVersion.GetHpModel()!, [ id ], [ FileContents ] );
 		return rows.Value is [ var row, .. ] ? FileOperations.ConvertFromBase64( row.Text( FileContents ) ) : null;
 	}
 
@@ -66,14 +66,14 @@ public static class VersionFileService
 		return Path.Combine( HackDefaults.Instance.PwaPathAbsolute, version.WinPathway ?? "" );
 	}
 
-	public static bool DownloadFile( this HpVersion version ) => version.DownloadFile( version.LocalDirectory() );
+	public static Task<bool> DownloadFileAsync( this HpVersion version ) => version.DownloadFileAsync( version.LocalDirectory() );
 
 	/// <summary>Writes this version's contents into <paramref name="toPath"/>; false when nothing could be downloaded.</summary>
-	public static bool DownloadFile( this HpVersion version, string toPath )
+	public static async Task<bool> DownloadFileAsync( this HpVersion version, string toPath )
 	{
 		if( !Directory.Exists( toPath ) && !Directory.CreateDirectory( toPath ).Exists )
 			return false;
-		version.file_contents ??= version.DownloadContents();
+		version.file_contents ??= await version.DownloadContentsAsync();
 		if( version.file_contents is { Length: > 0 } contents )
 			LocalFileWriter.Write( new HackFile( version.name!, null ) { FileContents = contents, DirectoryName = toPath } );
 		else if( version.file_size is not (null or 0) )
@@ -82,11 +82,14 @@ public static class VersionFileService
 		return true;
 	}
 
-	/// <summary>Downloads each version into its folder; the ones that failed come back in <paramref name="failedDownloads"/>.</summary>
-	public static bool DownloadAll( this IEnumerable<HpVersion> versions, out List<HpVersion> failedDownloads )
+	/// <summary>Downloads each version into its folder; returns the ones that failed.</summary>
+	public static async Task<List<HpVersion>> DownloadAllAsync( this IEnumerable<HpVersion> versions )
 	{
-		failedDownloads = [ .. versions.Where( version => !version.DownloadFile() ) ];
-		return failedDownloads.Count == 0;
+		List<HpVersion> failed = [];
+		foreach( HpVersion version in versions )
+			if( !await version.DownloadFileAsync() )
+				failed.Add( version );
+		return failed;
 	}
 
 	/// <summary>Moves the local copy into <paramref name="toPath"/>; false when there is none or it can't be moved.</summary>

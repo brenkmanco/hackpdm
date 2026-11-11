@@ -2,23 +2,6 @@ using System;
 
 namespace HackPDM.Shared.GlobalData;
 
-public enum MessageBoxType
-{
-	Default,
-	ListDetail,
-	GridDetail,
-	ContentDetail,
-	ToolTip,
-	Notification,
-}
-
-public enum MessageBoxWidth
-{
-	Default,
-	DynamicWidthText,
-	DynamicWidthTextWithThreshold,
-}
-
 public enum DialogResult
 {
 	None		= 0,

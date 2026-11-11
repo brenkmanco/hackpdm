@@ -56,7 +56,7 @@ public sealed class ThemeService : IThemeService
 
 	public bool NeedsRestart => _settings.Mode != _startupMode;
 
-	public string SavePath => GlobalSerializedData.FilePath ?? "";
+	public string SavePath => AppConfigStore.FilePath;
 
 	public event Action? ThemeChanged;
 
@@ -70,8 +70,8 @@ public sealed class ThemeService : IThemeService
 	{
 		try
 		{
-			// not through GlobalSerializedData: its static setup needs services that don't exist yet
-			string path = Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.Personal ), "AppConfig.json" );
+			// only the mode: the full settings need converters for types that can't load this early
+			string path = AppConfigStore.FilePath;
 			if( !File.Exists( path ) )
 				return new ThemeSettings().Mode;
 			using JsonDocument doc = JsonDocument.Parse( File.ReadAllText( path ) );
@@ -177,7 +177,7 @@ public sealed class ThemeService : IThemeService
 		// restore everything, then re-apply the theme as saved on disk
 		foreach( string key in _originals.Keys.ToList() )
 			Restore( key );
-		_settings = GlobalSerializedData.LoadFromFile( SavePath ).Theme;
+		_settings = AppConfigStore.Load().Theme;
 		UIStorage.GlobalData.Theme = _settings;
 		ApplyOverrides();
 		foreach( var root in LiveRoots() )
@@ -188,7 +188,7 @@ public sealed class ThemeService : IThemeService
 	public void Save()
 	{
 		UIStorage.GlobalData.Theme = _settings;
-		UIStorage.GlobalData.SaveToFile();
+		AppConfigStore.Save( UIStorage.GlobalData );
 	}
 
 	private void ApplyOverrides()

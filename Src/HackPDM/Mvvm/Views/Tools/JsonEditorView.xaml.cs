@@ -1,95 +1,33 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-using HackPDM.Infrastructure.Odoo;
 using HackPDM.Mvvm.ViewModels.Tools;
-using HackPDM.Mvvm.Views.Common.Settings;
 
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Data;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Navigation;
 
-using Windows.Data.Xml.Dom;
-using Windows.Foundation;
-using Windows.Foundation.Collections;
 using Windows.UI;
-
-using static System.Runtime.InteropServices.JavaScript.JSType;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
 
 namespace HackPDM.Mvvm.Views.Tools;
 
-/// <summary>
-/// An empty page that can be used on its own or navigated to within a Frame.
-/// </summary>
+/// <summary>Edits AppConfig.json as a tree or as text; the tree lives in <see cref="JsonEditorViewModel"/>.</summary>
 public sealed partial class JsonEditorView : Page
 {
-	public ObservableCollection<JsonNodeViewModel> RootNodes { get; } = [];
+	public JsonEditorViewModel ViewModel { get; } = new();
+
 	public JsonEditorView()
 	{
 		InitializeComponent();
 	}
-	private void OnLoadJsonClick(object sender, RoutedEventArgs e)
-	{
-		string sampleJson = """
-        {
-          "appName": "Automation Engine",
-          "maxRetries": 5,
-          "isProduction": true,
-          "dbConfig": {
-            "host": "localhost",
-            "port": 5432
-          },
-          "allowedPorts": [80, 443, 8080]
-        }
-        """;
-		JsonNode? jsonNode = null;
-		if (File.Exists(GlobalSerializedData.FilePath))
-		{
-			string json = File.ReadAllText(GlobalSerializedData.FilePath);
-			jsonNode = JsonNode.Parse(json);
-		}
-		jsonNode ??= JsonNode.Parse(sampleJson);
 
-		RootNodes.Clear();
-
-		if (jsonNode is JsonObject obj)
-		{
-			foreach (var kvp in obj)
-			{
-				RootNodes.Add(new JsonNodeViewModel(kvp.Key, kvp.Value));
-			}
-		}
-	}
-	private JsonObject? GetRootObject()
-	{
-		var rootObj = new JsonObject();
-		foreach( var node in RootNodes ) {
-			rootObj[ node.Key ] = node.ToJsonNode();
-		}
-		return rootObj;
-	}
 	private async void OnExportJsonClick( object sender, RoutedEventArgs e )
 	{
-		var rootObj = GetRootObject() ?? [];
-		string exportedJson = rootObj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+		string exportedJson = ViewModel.ToJson();
 
 		ContentDialog dialog = new() {
 			Title = "Exported JSON Output",
@@ -109,7 +47,7 @@ public sealed partial class JsonEditorView : Page
 		};
 		switch( await dialog.ShowAsync() ) {
 			case ContentDialogResult.Primary:
-			GlobalSerializedData.LoadFromJson( exportedJson ).SaveToFile();
+			ViewModel.Save( exportedJson );
 			break;
 			case ContentDialogResult.Secondary:
 			case ContentDialogResult.None:
@@ -128,22 +66,13 @@ public sealed partial class JsonEditorView : Page
 	private void OnDeleteNodeClick(object sender, RoutedEventArgs e)
 	{
 		if (sender is Button { DataContext: JsonNodeViewModel vm })
-		{
-			if (vm.Parent != null)
-			{
-				vm.DeleteSelf();
-			}
-			else
-			{
-				RootNodes.Remove(vm);
-			}
-		}
+			ViewModel.Remove(vm);
 	}
 
 	// Recalculates TreeViewItemIndent as items expand/collapse to keep deep trees on-screen
 	private void UpdateDynamicIndent()
 	{
-		int maxExpandedDepth = GetMaxExpandedDepth(RootNodes, 0);
+		int maxExpandedDepth = GetMaxExpandedDepth(ViewModel.RootNodes, 0);
 
 		// Scale indent step ratio dynamically: compresses step width as max opened depth increases
 		double calculatedIndent = Math.Max(18.0, Math.Min(48.0, 320.0 / (maxExpandedDepth + 1)));
@@ -199,35 +128,17 @@ public sealed partial class JsonEditorView : Page
 
 	private void SyncTreeToCodeView()
 	{
-		var rootObj = GetRootObject() ?? [];
-
-		string rawJson = rootObj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-		ApplyJsonSyntaxHighlighting(rawJson);
+		ApplyJsonSyntaxHighlighting(ViewModel.ToJson());
 	}
 
 	private bool SyncCodeViewToTree()
 	{
 		CodeEditor.Document.GetText(TextGetOptions.None, out string codeText);
-		try
-		{
-			var jsonNode = JsonNode.Parse(codeText);
-			RootNodes.Clear();
-
-			if (jsonNode is JsonObject obj)
-			{
-				foreach (var kvp in obj)
-				{
-					RootNodes.Add(new JsonNodeViewModel(kvp.Key, kvp.Value));
-				}
-			}
+		if (ViewModel.LoadText(codeText) is not { } error)
 			return true;
-		}
-		catch (JsonException ex)
-		{
-			JsonParseInfoBar.Message = $"JSON Syntax Error: {ex.Message}";
-			JsonParseInfoBar.IsOpen = true;
-			return false;
-		}
+		JsonParseInfoBar.Message = $"JSON Syntax Error: {error}";
+		JsonParseInfoBar.IsOpen = true;
+		return false;
 	}
 	private void ApplyJsonSyntaxHighlighting(string jsonText)
 	{

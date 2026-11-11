@@ -190,7 +190,59 @@
 					<TabViewItem
 						x:Name="RootEntryList"
 						Header="Entries"
-						IsClosable="False" />
+						IsClosable="False">
+						<!--  headers and widths come from the saved column settings (ApplyColumnSettings), matched by SortMemberPath  -->
+						<tv:TableView
+							x:Name="OdooEntryList"
+							VerticalContentAlignment="Stretch"
+							AutoGenerateColumns="False"
+							CanSortColumns="True"
+							IsReadOnly="True"
+							SelectionMode="Extended">
+							<tv:TableView.Columns>
+								<tv:TableViewTemplateColumn
+									Width="32"
+									CanReorder="True"
+									CanResize="True"
+									CellTemplate="{StaticResource IconCellTemplate}" />
+								<tv:TableViewTextColumn Binding="{Binding Name}" SortMemberPath="Name" />
+								<tv:TableViewTextColumn Binding="{Binding Type}" SortMemberPath="Type" />
+								<tv:TableViewTemplateColumn CellTemplate="{StaticResource SizeCellTemplate}" SortMemberPath="Size" />
+								<tv:TableViewTextColumn Binding="{Binding Status}" SortMemberPath="Status" />
+								<tv:TableViewTextColumn Binding="{Binding Checkout}" SortMemberPath="Checkout" />
+								<tv:TableViewTextColumn Binding="{Binding LocalDate}" SortMemberPath="LocalDate" />
+								<tv:TableViewTextColumn Binding="{Binding RemoteDate}" SortMemberPath="RemoteDate" />
+								<tv:TableViewTextColumn Binding="{Binding FullName}" SortMemberPath="FullName" />
+							</tv:TableView.Columns>
+							<tv:TableView.ContextFlyout>
+								<MenuFlyout>
+									<MenuFlyoutSubItem x:Name="EntryOpen" Text="Open">
+										<MenuFlyoutItem Text="Preview Latest Remote" Command="{x:Bind ViewModel.OpenSelectedLatestRemoteCommand}" />
+										<MenuFlyoutItem Text="Latest Local" Command="{x:Bind ViewModel.OpenSelectedLatestLocalCommand}" />
+										<MenuFlyoutItem Text="File Directory" Command="{x:Bind ViewModel.OpenSelectedFoldersCommand}" />
+									</MenuFlyoutSubItem>
+									<MenuFlyoutItem Text="Download" Command="{x:Bind ViewModel.GetLatestSelectedCommand}" />
+									<MenuFlyoutSeparator />
+									<MenuFlyoutItem Text="Checkout" Command="{x:Bind ViewModel.CheckoutSelectedCommand}" />
+									<MenuFlyoutItem Text="Undo Checkout" Command="{x:Bind ViewModel.UndoCheckoutSelectedCommand}" />
+									<MenuFlyoutSeparator />
+									<!--  one item per EntryRowKeys.Names, added by the view  -->
+									<MenuFlyoutSubItem x:Name="EntryGroupBy" Text="Group By" />
+									<MenuFlyoutSeparator />
+									<MenuFlyoutItem Text="Commit" Command="{x:Bind ViewModel.CommitSelectedCommand}" />
+									<MenuFlyoutSeparator />
+									<MenuFlyoutItem Text="Restore" />
+									<MenuFlyoutItem Text="Upload Icon" Command="{x:Bind ViewModel.UploadIconCommand}" />
+									<MenuFlyoutSeparator />
+									<MenuFlyoutSubItem x:Name="EntryDelete" Text="Delete">
+										<MenuFlyoutItem Text="Local" Command="{x:Bind ViewModel.LocalDeleteSelectedCommand}" />
+										<MenuFlyoutItem Text="Logical" Command="{x:Bind ViewModel.LogicalDeleteSelectedCommand}" />
+										<MenuFlyoutItem Text="Permanent" Command="{x:Bind ViewModel.PermanentDeleteSelectedCommand}" />
+									</MenuFlyoutSubItem>
+								</MenuFlyout>
+							</tv:TableView.ContextFlyout>
+						</tv:TableView>
+					</TabViewItem>
 					<TabViewItem Header="Changes" IsClosable="False">
 						<Grid>
 							<Grid.ColumnDefinitions>
