@@ -90,6 +90,8 @@ public sealed partial class HomeView : Page
         if (args.IsSettingsSelected)
         {
             NavFrame.Navigate( typeof( ApplicationSettingsView ) );
+			WindowHelper.SetWindowConfig( HackApp.Window, InstanceManager.GetConfig( "AppSettings" )
+				?? new WindowConfig { Title = "Settings", PositionAndSize = (0, 0, 1400, 950) } );
             return;
         }
         if (args.SelectedItem is not NavigationViewItem nvi) return;
@@ -155,6 +157,7 @@ public sealed partial class HomeView : Page
 
 	private void HomeNavigator_BackRequested(NavigationView sender, NavigationViewBackRequestedEventArgs args)
 	{
-        Debug.WriteLine("Back requested");
+        if (NavFrame.CanGoBack)
+            NavFrame.GoBack();
 	}
 }

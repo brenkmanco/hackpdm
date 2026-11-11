@@ -46,6 +46,12 @@ public partial class HackApp : Application
 	public HackApp()
     {
 		InitializeComponent();
+		// menus, flyouts and dialogs follow the application theme, which can only be set this early
+		switch (HackPDM.Mvvm.Views.Common.Theming.ThemeService.ReadSavedMode())
+		{
+			case AppThemeMode.Dark: RequestedTheme = ApplicationTheme.Dark; break;
+			case AppThemeMode.Light: RequestedTheme = ApplicationTheme.Light; break;
+		}
         Setup();
     }
 
@@ -97,6 +103,7 @@ public partial class HackApp : Application
         DispatcherQueue = Window.DispatcherQueue;
         AppComposition.Initialize();
 		ConfigureServices();
+		AppComposition.Theme.Attach(Window);
 
         // HACKPDM_SMOKE_TEST=1: drive login -> navigation -> server round trips, then exit (CI)
         if (HackPDM.Shell.Testing.SmokeTestRunner.IsEnabled)

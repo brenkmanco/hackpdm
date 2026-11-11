@@ -3,21 +3,18 @@
     x:Class="HackPDM.Mvvm.Views.Settings.ApplicationSettingsView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:controls="clr-namespace:Microsoft.UI.Xaml.Controls;assembly=Microsoft.WinUI"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:local="using:HackPDM.Mvvm.Views.Settings"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
-    <Frame>
-        <StackPanel x:Name="RootStack">
-            <ColorPicker
-                x:Name="ColorPick"
-                ColorSpectrumShape="Box"
-                IsAlphaEnabled="True"
-                IsAlphaSliderVisible="True"
-                IsColorChannelTextInputVisible="True"
-                IsColorPreviewVisible="True"
-                IsHexInputVisible="True" />
-        </StackPanel>
-    </Frame>
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <!--  One entry per settings page; add more SelectorBarItems here  -->
+        <SelectorBar x:Name="SettingsSections" Margin="12,4,12,0" SelectionChanged="SettingsSections_SelectionChanged">
+            <SelectorBarItem x:Name="ThemeSection" Icon="FontColor" IsSelected="True" Text="Theme" />
+        </SelectorBar>
+        <Frame x:Name="SectionFrame" Grid.Row="1" />
+    </Grid>
 </Page>

@@ -52,6 +52,7 @@ public static partial class WindowHelper
         {
             Frame rootFrame = new();
             window.Content = rootFrame;
+            HackPDM.Shell.AppComposition.Theme.Attach(window);
         }
         if (WindowConfig.PresetWindowConfig.TryGetValue(configName ?? "TemplateWindow", out WindowConfig? value))
         {
@@ -97,6 +98,7 @@ public static partial class WindowHelper
         }
         
         window.Content = rootFrame;
+        HackPDM.Shell.AppComposition.Theme.Attach(window);
 
         if (WindowConfig.PresetWindowConfig.TryGetValue(typeof(TPage).Name, out WindowConfig? value))
         {

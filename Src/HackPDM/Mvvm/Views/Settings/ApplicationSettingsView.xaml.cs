@@ -1,32 +1,38 @@
 using System;
-using System.Collections.ObjectModel;
-
-
-using HackPDM.Core;
 
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
 
 namespace HackPDM.Mvvm.Views.Settings;
 
-/// <summary>
-/// An empty page that can be used on its own or navigated to within a Frame.
-/// </summary>
+/// <summary>Application settings hub (the NavigationView's settings gear): one section per settings page.</summary>
 public sealed partial class ApplicationSettingsView : Page
 {
-    public ApplicationSettingsView()
-    {
-        InitializeComponent();
+	public ApplicationSettingsView()
+	{
+		InitializeComponent();
+		Loaded += ( _, _ ) => ShowSection( SettingsSections.SelectedItem );
+	}
 
-#if DEBUG
-        
-#endif
-    }
+	private void SettingsSections_SelectionChanged( SelectorBar sender, SelectorBarSelectionChangedEventArgs args )
+		=> ShowSection( sender.SelectedItem );
 
-#if DEBUG
-	
-#endif
+	private void ShowSection( SelectorBarItem? item )
+	{
+		Type? page = item?.Name switch
+		{
+			nameof( ThemeSection ) => typeof( ThemeEditorView ),
+			_ => null,
+		};
+		if( page is null || SectionFrame.CurrentSourcePageType == page )
+			return;
+		try
+		{
+			SectionFrame.Navigate( page );
+		}
+		catch( Exception e )
+		{
+			Console.Error.WriteLine( $"settings page {page.Name} failed to open: {e}" );
+			SectionFrame.Content = new TextBlock { Text = $"Could not open {item?.Text}: {e.Message}", Margin = new( 12 ) };
+		}
+	}
 }

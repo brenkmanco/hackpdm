@@ -53,6 +53,8 @@ public class GlobalSerializedData
 	public ColorSettings EColors	{ get; set; } = new();
 	[JsonPropertyName( "ColumnSettings" )]
 	public OdooEntryColumns ColumnsSettings { get; set; } = new();
+	[JsonPropertyName( "Theme" )]
+	public HackPDM.Mvvm.Models.Settings.ThemeSettings Theme { get; set; } = new();
 
 	public static string? GetFilePathDirectory()
 	{

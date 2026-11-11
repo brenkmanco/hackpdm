@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -217,7 +217,8 @@ public partial class HackFileManagerViewModel : ObservableObject
 		catch( OperationCanceledException ) { }
 		catch( Exception e )
 		{
-			System.Diagnostics.Debug.WriteLine( $"loading entries failed: {e}" );
+			// stderr too: Debug output is invisible outside a debugger (e.g. the smoke-test log)
+			Console.Error.WriteLine( $"loading entries failed: {e}" );
 		}
 		finally
 		{

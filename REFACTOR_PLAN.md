@@ -17,13 +17,16 @@ Line counts are estimates from the survey, not measurements.
 
 Goal: make later phases safe to do mechanically.
 
-- [~] Local smoke test: `Odoo/ci/run_local_smoke.sh` (mirrors the CI workflow; `--tests-only`, `--smoke-only`, `KEEP=1`). Written, not yet run: needs your user in the `docker` group
+- [x] Local smoke test: `Odoo/ci/run_local_smoke.sh` (mirrors the CI workflow; `--tests-only`, `--smoke-only`, `KEEP=1`). Passing: 168/168 tests against Odoo, client smoke 7/7 steps. Run it via `sg docker -c Odoo/ci/run_local_smoke.sh` until you log in again after joining the docker group
 - [x] Characterization tests in `Src/HackPDM.Tests/Characterization/` (43 tests):
   - `PathConversionTests`: ConvertToWindowsPath, NodePathToWindowsPath, WindowsToOdooPath, GetRelativePath, InPWAFolder, HackDefaults.DefaultPath
   - `OdooRowParsingTests`: JSON → Hashtable/ArrayList (`ToNativeObject`), row → `HpEntry` (`HashConverter`)
   - `EntrySearchDomainTests`: golden search domains (EntrySearchService.cs is compiled into the test project)
   - `HackFileConstructionTests`: the constructors and `GetFromPath`
   - Tests that touch `HackDefaults.Instance` run in a non-parallel `SharedStateCollection`
+
+Found by the first smoke run (fixed):
+- Opening a directory never listed its entries: `EnsureVisible` re-raised the tree's `SelectionChanged` for the same node, and each re-raise cancelled the load in flight (a regression from the MVVM refactor; the old handler ignored selections while loading). The view now ignores a selection of the node already loading. Entry-load errors now also go to stderr, not only `Debug`
 
 Found while writing them (pinned as current behaviour):
 - `new HackFile(path)` throws `FileNotFoundException` for a missing file (reads `FileInfo.Length`) → Phase 2
@@ -167,7 +170,7 @@ The biggest and riskiest phase, so it is split. In 4a/4b old and new APIs coexis
 
 | Phase | Risk | Est. net lines | Depends on |
 |---|---|---|---|
-| 0 Safety net (smoke run pending) | low | +450 (tests) | – |
+| 0 Safety net ✅ | low | +450 (tests) | – |
 | 1 Dead code ✅ | low | ≈ −5,000 (done) | 0 |
 | 2 Bug fixes | medium (behaviour changes, intended) | ±0 | 1 |
 | 3 Shared primitives | low | −400 | 1 |

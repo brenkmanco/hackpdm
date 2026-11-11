@@ -40,6 +40,7 @@ public class WindowSettings
 		{ "HackFileManager",		new () { Title = "Hack File Manager",	PositionAndSize = (0, 0, 1600, 900) }},
 		{ "NotLoggedIn",			new () { Title = "Not Logged In",		PositionAndSize = (0, 0, 1600, 900) }},
 		{ nameof(MessageBox),			new () { Title = "Info",				PositionAndSize = (0, 0, 450, 250), WindowKind = AppWindowPresenterKind.CompactOverlay }},
+		{ "AppSettings",				new () { Title = "Settings",				PositionAndSize = (0, 0, 1400, 950) }},
 		{ "TemplateWindow",				new () { Title = "Template Window",		PositionAndSize = (0, 0, 500, 300) }},
 	};
 }

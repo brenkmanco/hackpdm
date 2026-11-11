@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -55,6 +55,8 @@ public sealed partial class HackFileManagerView : Page
 
 	/// <summary>The in-flight directory selection (smoke tests wait on it).</summary>
 	public Task? TreeSelectionTask { get; private set; }
+	/// <summary>The tree node whose entries are loading or loaded (see OdooDirectoryTree_SelectionChanged).</summary>
+	private TreeViewNode? _loadingNode;
 
 	public readonly Dictionary<object, TreeViewNode> ItemToContainerMap = new();
 
@@ -339,6 +341,11 @@ public sealed partial class HackFileManagerView : Page
 	{
 		if( args.AddedItems.FirstOrDefault() is not TreeData data || data.Node is null )
 			return;
+		// EnsureVisible (below, and in the locate/refresh paths) sets SelectedNode, which raises
+		// SelectionChanged again for the same node; reloading then would cancel the load in flight
+		// and loop forever without ever listing the entries.
+		if( data.Node == _loadingNode )
+			return;
 
 		SelectDirectory( data.Node );
 		data.EnsureVisible( sender );
@@ -348,6 +355,7 @@ public sealed partial class HackFileManagerView : Page
 	/// <summary>Loads the selected directory's entries; a newer load cancels an older one.</summary>
 	private Task LoadSelectedEntriesAsync()
 	{
+		_loadingNode = LastSelectedNode;
 		_treeSelectionCancellation.Cancel();
 		_treeSelectionCancellation = new();
 		ViewModel.IsListLoaded = false;

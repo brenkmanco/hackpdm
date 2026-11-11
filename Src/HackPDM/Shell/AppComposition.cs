@@ -5,6 +5,8 @@ using HackPDM.Mvvm.ViewModels.Hack;
 using HackPDM.Mvvm.ViewModels.Odoo;
 using HackPDM.Mvvm.ViewModels.Settings;
 using HackPDM.Mvvm.Views.Common.Controls;
+using HackPDM.Mvvm.Views.Common.Settings;
+using HackPDM.Mvvm.Views.Common.Theming;
 using HackPDM.Mvvm.Views.Dialogs;
 
 namespace HackPDM.Shell;
@@ -20,6 +22,9 @@ public static class AppComposition
 
 	/// <summary>App-wide progress reporter, shared so the status window can cancel whatever is running.</summary>
 	public static StatusWindowReporter Reporter => field ??= new( Dialogs, () => InstanceManager.Dialog, () => InstanceManager.Session );
+
+	/// <summary>App theme, loaded from AppConfig.json. First use needs the app settings (after services are configured).</summary>
+	public static ThemeService Theme => field ??= new( UIStorage.GlobalData.Theme );
 
 	public static IPdmWorkflowService Workflow => field ??= new PdmWorkflowService( Reporter );
 
