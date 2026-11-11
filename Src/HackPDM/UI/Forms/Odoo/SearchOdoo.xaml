@@ -36,7 +36,12 @@
             <StackPanel Grid.Column="0" Spacing="8">
                 <TextBlock x:Name="label1" Text="Filename Value" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ComboBox x:Name="OdooSearchComparer" Width="80">
+                    <ComboBox
+                        x:Name="OdooSearchComparer"
+                        Width="80"
+                        IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
+                        ItemsSource="{x:Bind ViewModel.OperatorList}"
+                        SelectedItem="{x:Bind ViewModel.SelectedComparer, Mode=TwoWay}">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="rep:OperatorsRow">
                                 <TextBlock Text="{Binding OpRepr}" />
@@ -46,7 +51,8 @@
                     <TextBox
                         x:Name="FileNameTextbox"
                         MinWidth="250"
-                        HorizontalAlignment="Stretch" />
+                        HorizontalAlignment="Stretch"
+                        Text="{x:Bind ViewModel.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 </StackPanel>
 
                 <StackPanel
@@ -55,19 +61,19 @@
                     Spacing="24">
                     <CheckBox
                         x:Name="OdooCheckedMe"
-                        Checked="OdooCheckedMe_CheckedChanged"
                         Content="Checked Out to Me"
-                        Unchecked="OdooCheckedMe_CheckedChanged" />
+                        IsChecked="{x:Bind ViewModel.CheckedOutMe, Mode=TwoWay}"
+                        IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}" />
                     <CheckBox
                         x:Name="OdooLocalOnly"
-                        Checked="OdooLocalOnly_CheckedChanged"
                         Content="Only Existing Locally"
-                        Unchecked="OdooLocalOnly_CheckedChanged" />
+                        IsChecked="{x:Bind ViewModel.LocalOnly, Mode=TwoWay}"
+                        IsEnabled="{x:Bind ViewModel.IsLocalOnlyEnabled, Mode=OneWay}" />
                     <CheckBox
                         x:Name="OdooDeletedIsLocal"
-                        Checked="OdooDeletedIsLocal_CheckedChanged"
                         Content="Deleted Existing Locally"
-                        Unchecked="OdooDeletedIsLocal_CheckedChanged" />
+                        IsChecked="{x:Bind ViewModel.DeletedRemotely, Mode=TwoWay}"
+                        IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}" />
                 </StackPanel>
 
                 <StackPanel
@@ -81,7 +87,7 @@
                     <TextBox
                         x:Name="OdooMaxRes"
                         Width="60"
-                        Text="100" />
+                        Text="{x:Bind ViewModel.MaxResults, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 </StackPanel>
             </StackPanel>
 
@@ -96,7 +102,12 @@
 
                     <StackPanel Grid.Column="0" Spacing="4">
                         <TextBlock x:Name="label2" Text="Property" />
-                        <ComboBox x:Name="OdooSearchProperty" MinWidth="150">
+                        <ComboBox
+                            x:Name="OdooSearchProperty"
+                            MinWidth="150"
+                            IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
+                            ItemsSource="{x:Bind ViewModel.PropertiesSearchable}"
+                            SelectedItem="{x:Bind ViewModel.SelectedProperty, Mode=TwoWay}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="rep:SearchPropertiesRow">
                                     <TextBlock Text="{Binding Name}" />
@@ -107,7 +118,12 @@
 
                     <StackPanel Grid.Column="1" Spacing="4">
                         <TextBlock x:Name="OdooPropComparer" Text="is" />
-                        <ComboBox x:Name="OdooSearchPropEqual" Width="80">
+                        <ComboBox
+                            x:Name="OdooSearchPropEqual"
+                            Width="80"
+                            IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
+                            ItemsSource="{x:Bind ViewModel.OperatorList}"
+                            SelectedItem="{x:Bind ViewModel.SelectedPropertyOperator, Mode=TwoWay}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="rep:OperatorsRow">
                                     <TextBlock Text="{Binding OpRepr}" />
@@ -118,7 +134,11 @@
 
                     <StackPanel Grid.Column="2" Spacing="4">
                         <TextBlock x:Name="label3" Text="Value" />
-                        <TextBox x:Name="OdooSearchPropValue" MinWidth="150" />
+                        <TextBox
+                            x:Name="OdooSearchPropValue"
+                            MinWidth="150"
+                            IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
+                            Text="{x:Bind ViewModel.PropertyValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
 
                     <Button
@@ -126,7 +146,8 @@
                         Grid.Column="3"
                         MinWidth="120"
                         VerticalAlignment="Bottom"
-                        Click="OdooPropAdd_Click"
+                        Command="{x:Bind ViewModel.AddPropertyCommand}"
+                        IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
                         Content="Add" />
                 </Grid>
 
@@ -136,11 +157,13 @@
                     Spacing="8">
                     <Button
                         x:Name="OdooPropDelete"
-                        Click="OdooPropDelete_Click"
+                        Command="{x:Bind ViewModel.DeletePropertiesCommand}"
+                        IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
                         Content="Delete" />
                     <Button
                         x:Name="OdooPropertyReset"
-                        Click="OdooPropertyReset_Click"
+                        Command="{x:Bind ViewModel.ResetPropertiesCommand}"
+                        IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
                         Content="Reset List" />
                 </StackPanel>
             </StackPanel>
@@ -152,7 +175,8 @@
             Height="120"
             Margin="0,16,0,0"
             AutoGenerateColumns="False"
-            ItemsSource="{x:Bind PropertiesActive}">
+            IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
+            ItemsSource="{x:Bind ViewModel.PropertiesActive}">
             <tv:TableView.Columns>
                 <tv:TableViewComboBoxColumn
                     Width="2*"
@@ -198,17 +222,21 @@
                 <MenuFlyout>
                     <MenuFlyoutSubItem x:Name="CheckOutMenuItem" Text="Checkout">
                         <MenuFlyoutItem
+                            x:Name="checkoutToolStripMenuItem"
+                            Command="{x:Bind ViewModel.CheckoutCommand}"
+                            Text="Checkout" />
+                        <MenuFlyoutItem
                             x:Name="checkoutOpenToolStripMenuItem"
-                            Click="checkoutOpenToolStripMenuItem_Click"
+                            Command="{x:Bind ViewModel.CheckoutAndOpenCommand}"
                             Text="Checkout and Open" />
                     </MenuFlyoutSubItem>
                     <MenuFlyoutItem
                         x:Name="unCheckoutToolStripMenuItem"
-                        Click="unCheckoutToolStripMenuItem_Click"
+                        Command="{x:Bind ViewModel.UndoCheckoutCommand}"
                         Text="UnCheckout" />
                     <MenuFlyoutItem
                         x:Name="openToolStripMenuItem"
-                        Click="openToolStripMenuItem_Click"
+                        Command="{x:Bind ViewModel.OpenCommand}"
                         Text="Open" />
                 </MenuFlyout>
             </tv:TableView.ContextFlyout>
@@ -237,7 +265,7 @@
                 </Button>
                 <Button
                     x:Name="btnReset"
-                    Click="OdooReset_Click"
+                    Command="{x:Bind ViewModel.ResetCommand}"
                     Content="Reset" />
             </StackPanel>
 
@@ -245,7 +273,7 @@
                 x:Name="btnSearch"
                 Grid.Column="2"
                 MinWidth="200"
-                Click="OdooSearch_Click"
+                Command="{x:Bind ViewModel.SearchCommand}"
                 Content="Search"
                 Style="{ThemeResource AccentButtonStyle}" />
         </Grid>

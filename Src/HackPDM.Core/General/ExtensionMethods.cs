@@ -254,15 +254,14 @@ public static class ExtensionMethods
 			var ocSort = reverse ? oc.OrderByDescending(keySelector).ToList() :
 			oc.OrderBy( keySelector ).ToList();
 
-			ocSort.ForEach( item =>
+			for( int targetIndex = 0; targetIndex < ocSort.Count; targetIndex++ )
 			{
-				int currentIndex = oc.IndexOf(item);
-				int targetIndex = oc.IndexOf(item);
+				int currentIndex = oc.IndexOf(ocSort[targetIndex]);
 				if( currentIndex != targetIndex )
 				{
 					oc.Move( currentIndex, targetIndex );
 				}
-			} );
+			}
 		}
     }
 	extension<T>(IEnumerable<T?> array)

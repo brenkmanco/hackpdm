@@ -1,0 +1,3182 @@
+
+// --- File: Src/HackPDM.SchemaGenerator/SchemaGenerator.cs ---
+namespace HackPDM.SchemaGenerator;
+[Generator]
+public sealed class OdooSchemaGenerator : IIncrementalGenerator
+	public void Initialize( IncrementalGeneratorInitializationContext context )
+	private static void Generate(
+	private static List<OdooPropertyGen> CollectProperties( INamedTypeSymbol classSymbol )
+	private static void EmitModelBundle(
+namespace {{ns}};
+public static partial class OdooAssignments_{{className}}
+    public static readonly global::System.Collections.Generic.Dictionary<string, global::System.Action<{{ns}}.{{className}}, object?>> Map =
+    public static global::System.Collections.Generic.Dictionary<string, object?> ToOdoo({{ns}}.{{className}} model) =>
+public static partial class OdooFieldSelection_{{className}}
+    internal static readonly string[] ModelFields = new[]
+    public static string[] GetFields(
+public partial class {{className}}
+    public override global::System.Collections.Generic.Dictionary<string, object?> ToOdoo() =>
+	private static void EmitGenericFieldSelectionFacade(
+namespace HackPDM.Infrastructure.Odoo.Models;
+internal static class OdooFieldSelectionCache<TModel>
+    public static readonly System.Func<string[]?, string[]?, string[]?, string[]> GetFields =
+    private static System.Func<string[]?, string[]?, string[]?, string[]> Resolve()
+	private static string GenerateOutboundExpression( OdooPropertyGen p, string modelVar )
+	private static void EmitHpBaseModelPartial(
+namespace HackPDM.Infrastructure.Odoo.Models;
+public partial class HpBaseModelTransport
+    public static readonly global::System.Collections.Generic.Dictionary<string, string> HpModelDictionaryGen =
+	private static void EmitGenericFacade(
+namespace HackPDM.Infrastructure.Odoo.Models;
+public static class OdooAssignments<TModel>
+    public static global::System.Collections.Generic.Dictionary<string, global::System.Action<TModel, object?>> Map =>
+internal static class OdooAssignmentsCache<TModel>
+    public static readonly global::System.Collections.Generic.Dictionary<string, global::System.Action<TModel, object?>> Map =
+    private static global::System.Collections.Generic.Dictionary<string, global::System.Action<TModel, object?>> Resolve()
+
+// --- File: Src/HackPDM.SchemaGenerator/GeneratedTypes/IsExternalInit.cs ---
+internal static class IsExternalInit { }
+
+// --- File: Src/HackPDM.SchemaGenerator/GeneratedTypes/ColorCsvRow.cs ---
+namespace HackPDM.SchemaGenerator.GeneratedTypes;
+
+// --- File: Src/HackPDM.SchemaGenerator/GeneratedTypes/OdooFieldGen.cs ---
+namespace HackPDM.SchemaGenerator.GeneratedTypes;
+public sealed record OdooFieldGen(OdooFieldType odooType);
+public sealed record OdooPropertyGen(OdooFieldType odooType, string odooFieldName, IPropertySymbol property);
+public sealed record OdooModelGen(string OdooName, string OdooDBName);
+
+// --- File: Src/HackPDM.SchemaGenerator/GeneratedTypes/OdooFieldType.cs ---
+public enum OdooFieldType
+
+// --- File: Src/HackPDM.Shared/General/IsExternalInit.cs ---
+public static class IsExternalInit { }
+
+// --- File: Src/HackPDM.Shared/General/Help.cs ---
+namespace HackPDM.Shared.General;
+public static class Help
+	public static bool ParseGoodName( string s ) => s.Trim().Equals( "x", StringComparison.OrdinalIgnoreCase );
+	public static uint HexToUint( string hex )
+	public static string ToEnumName( string raw )
+	public static string ReplaceAnyChar( this string str, char[] chArr, Func<char, string> foundCharSelector )
+	public static string ReplaceAnyChar( this string str, string chArr, Func<char, string> foundCharSelector )
+	public static IEnumerable<string> ReplaceAll( this string str, string chArr, Func<char, string> foundCharSelector )
+	public static IEnumerable<string> ReplaceAll(this string str, char[] chArr, Func<char, string> foundCharSelector)
+	public static IEnumerable<ColorCsvRow> LoadCsv( string path )
+	public static IEnumerable<ColorCsvRow> ParseCsv( string text )
+	public static IEnumerable<ColorCsvRow> ParseCsv(IEnumerable<string> lines)
+public sealed record ColorCsvRow( string Name, string Hex, bool GoodName );
+public struct Except<T>(Expression<Func<T>> expr)
+
+// --- File: Src/HackPDM.Shared/OdooAttributes/OdooPropAttribute.cs ---
+namespace HackPDM.Shared.OdooAttributes;
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
+[SuppressMessage("Resharper", "InconsistentNaming")]
+public class OdooPropAttribute(OdooFieldType odooType, string odooFieldName) : Attribute
+    public OdooFieldType OdooType { get; } = odooType;
+    public string OdooFieldName { get; } = odooFieldName;
+
+// --- File: Src/HackPDM.Shared/OdooAttributes/OdooFieldAttribute.cs ---
+namespace HackPDM.Shared.OdooAttributes;
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
+public class OdooFieldAttribute(OdooFieldType odooType) : Attribute
+    public OdooFieldType OdooType { get; } = odooType;
+
+// --- File: Src/HackPDM.Shared/OdooAttributes/OdooModelAttribute.cs ---
+namespace HackPDM.Shared.OdooAttributes;
+[AttributeUsage(AttributeTargets.Interface | AttributeTargets.Struct | AttributeTargets.Class, AllowMultiple = true)]
+public class OdooModelAttribute(string odooName, string odooDBName) : Attribute
+    public string OdooName { get; } = odooName;
+    public string DBName { get; } = odooDBName;
+
+// --- File: Src/HackPDM.Shared/OdooAttributes/OdooFieldTypeAttribute.cs ---
+namespace HackPDM.Shared.OdooAttributes;
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
+[SuppressMessage("Resharper", "InconsistentNaming")]
+public class OdooFieldTypeAttribute(OdooFieldType odooType) : Attribute
+    public OdooFieldType OdooType { get; } = odooType;
+
+// --- File: Src/HackPDM.Shared/GlobalData/HackOdooEnums.cs ---
+namespace HackPDM.Shared.GlobalData;
+public enum FileStatus
+public enum EntryReturnType
+public enum DomainOperators
+public enum Operators
+public enum ValueConversion
+public enum StatusMessage
+public enum ChecksumType
+public enum MethodType : byte
+public enum RelationType
+public enum HashedValueStoring : byte
+public enum ColumnGroup
+public enum HackVersionType
+public enum TaskProgress
+public enum SortPredefined
+public enum ExtType
+public enum EntryReprType
+[Flags]
+public enum HackTestDepth : ushort
+[Flags]
+public enum HackResult : ushort
+public enum NavigatePageMenu
+
+// --- File: Src/HackPDM.Shared/GlobalData/StorageBox.cs ---
+namespace HackPDM.Shared.GlobalData;
+public static class StorageBox
+    public const string APP_NAME = "WyrmPDM";
+    public const string APP_VERSION = "1.0.0";
+    public const string APP_DEVELOPER = "Justin";
+    public static string? TemporaryPath
+    public const int PROFILE_MANAGER_WIDTH = 600;
+    public const int PROFILE_MANAGER_HEIGHT = 415;
+    public const int MESSAGE_BOX_WIDTH = 400;
+    public const int MESSAGE_BOX_HEIGHT = 200;
+    public const string MESSAGE_BOX_TITLE = "Info";
+    public const string MESSAGE_BOX_OK = "OK";
+    public const string MESSAGE_BOX_CANCEL = "Cancel";
+    public const string MESSAGE_BOX_YES = "Yes";
+    public const string MESSAGE_BOX_NO = "No";
+    public const string MESSAGE_BOX_CONTENT = "";
+    public const int STATUS_BOX_WIDTH = 1280;
+    public const int STATUS_BOX_HEIGHT = 720;
+    public const int HACK_FILE_MANAGER_WIDTH = 1280;
+    public const int HACK_FILE_MANAGER_HEIGHT = 720;
+    public const string HACK_FILE_MANAGER_TITLE = "Hack File Manager - HackPDM";
+    public const string EMPTY_PLACEHOLDER = "-";
+    public const string HISTORY_TAB = "HistoryTab";
+    public const string PARENT_TAB = "ParentTab";
+    public const string CHILD_TAB = "ChildTab";
+    public const string PROPERTIES_TAB = "PropertiesTab";
+    public const string INFO_TAB = "InfoTab";
+    public const string DEFAULT_ODOO_CREDENTIALS = "HackPDM-OdooUser";
+        public const string ASSETSPREFIX    = "ms-appx:///";
+        public const string LOCALPREFIX     = "ms-appdata:///local";
+        public const string ASSETSFOLDER    = "Assets";
+        public const string IMAGEFOLDER     = "Images";
+        public const string EXTENSIONFOLDER = "ExtensionIcons";
+        public const string ICONFOLDER		= "Icons";
+        public const string FOLDERICONS     = "FolderIcons";
+        public const string STATUSFOLDER    = "StatusIcons";
+    public const string ALPHABET_UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    public const string ALPHABET_LOWERCASE = "abcdefghijklmnopqrstuvwxyz";
+	public const string DIGITS = "0123456789";
+    public const string ALPHANUMERIC = ALPHABET_UPPERCASE + ALPHABET_LOWERCASE + DIGITS;
+
+// --- File: Src/HackPDM.Shared/GlobalData/GlobalEnums.cs ---
+namespace HackPDM.Shared.GlobalData
+	public enum FlowDirection
+	public enum OdooFieldType
+	public enum NullChangeType
+	public enum NullFixType
+	public enum ChangeType
+	public enum ReasonForCall
+	public enum PropertyType
+	public enum MessageBoxType
+	public enum MessageBoxWidth
+	public enum DialogResult
+	public enum MessageBoxButtons : uint
+	public enum MessageBoxIcon : uint
+	public enum MessageBoxRepresentation : uint
+	public enum MessageBoxModal : uint
+	public enum MessageBoxAFeature : uint
+	public enum MessageBoxWFeature : uint
+	public enum MessageBoxTypeFallback : uint
+
+// --- File: Src/HackPDM.Shared/GlobalData/OdooDefaultsConstants.cs ---
+namespace HackPDM.Shared.GlobalData;
+public static class OdooDefaultsConstants
+	public const string HP_NODE = "hp.node";
+	public const string HP_ENTRY = "hp.entry";
+	public const string HP_ENTRY_NAME_FILTER = "hp.entry.name.filter";
+	public const string HP_DIRECTORY = "hp.directory";
+	public const string HP_CATEGORY = "hp.category";
+	public const string HP_CATEGORY_PROPERTY = "hp.category.property";
+	public const string HP_VERSION = "hp.version";
+	public const string HP_VERSION_PROPERTY = "hp.version.property";
+	public const string HP_VERSION_RELATIONSHIP = "hp.version.relationship";
+	public const string HP_RELEASE = "hp.release";
+	public const string HP_RELEASE_REVIEW = "hp.release.review";
+	public const string HP_RELEASE_VERSION_REL = "hp.release.version.rel";
+	public const string HP_SETTINGS = "hp.settings";
+	public const string HP_PROPERTY = "hp.property";
+	public const string HP_TYPE = "hp.type";
+	public const string HP_PDM_COMMIT = "hp.pdm.commit";
+	public const string HP_RECORD_STAGED = "hp.record.staged";
+	public const string RES_USERS = "res.users";
+	public const string IR_ATTACHMENT = "ir.attachment";
+	public const string IR_MODEL = "ir.model";
+	public const string HP_NODE_NAME = "hp_node";
+	public const string HP_ENTRY_NAME = "hp_entry";
+	public const string HP_ENTRY_NAME_FILTER_NAME = "hp_entry_name_filter";
+	public const string HP_DIRECTORY_NAME = "hp_directory";
+	public const string HP_CATEGORY_NAME = "hp_category";
+	public const string HP_CATEGORY_PROPERTY_NAME = "hp_category_property";
+	public const string HP_VERSION_NAME = "hp_version";
+	public const string HP_VERSION_PROPERTY_NAME = "hp_version_property";
+	public const string HP_VERSION_RELATIONSHIP_NAME = "hp_version_relationship";
+	public const string HP_RELEASE_NAME = "hp_release";
+	public const string HP_RELEASE_REVIEW_NAME = "hp_release_review";
+	public const string HP_RELEASE_VERSION_REL_NAME = "hp_release_version_rel";
+	public const string HP_SETTINGS_NAME = "hp_settings";
+	public const string HP_PROPERTY_NAME = "hp_property";
+	public const string HP_TYPE_NAME = "hp_type";
+	public const string HP_PDM_COMMIT_NAME = "hp_pdm_commit";
+	public const string HP_RECORD_STAGED_NAME = "hp_record_staged";
+	public const string RES_USERS_NAME = "res_users";
+	public const string IR_ATTACHMENT_NAME = "ir_attachment";
+	public const string IR_MODEL_NAME = "ir_model";
+	public const string ODOO_VERSION_KEY_NAME = "client_version";
+	public const string SW_KEY_NAME = "swdocmgr_key";
+	public const string RESTRICT_PROP_NAME = "restrict_properties";
+	public const string RESTRICT_TYPES_NAME = "restrict_types";
+	public const string HP_TEST = "hp.test";
+	public const string HP_TEST_NAME = "hp_test";
+	public const int ODOO_PATH_PREFIX_LENGTH = 5;
+	public static readonly string[] DependentExt = [".SLDPRT", ".SLDASM", ".SLDDRW"];
+	public static readonly string DependentExtRegex = "(?i)(" + string.Join("|", DependentExt.Select(s => $"(\\{s}$)")) + ")";
+	public static string? OdooDateFormat(DateTime? dt) => dt?.ToString("yyyy-MM-dd HH:mm:ss");
+
+// --- File: Src/HackPDM.Shared/GlobalData/OperatorConverter.cs ---
+namespace HackPDM.Shared.GlobalData;
+public partial class OperatorConverter
+	public static string LongBytesToString(long bytesize)
+    public static string OperatorToString(Operators op)
+	public static Operators StringToOperator(string op)
+	public object Convert(object value, Type targetType, object parameter, string language)
+	public object ConvertBack(object value, Type targetType, object parameter, string language)
+public static class OpExtension
+	public static string OperatorConversion(this Operators op)
+	public static string OperatorConversion(this DomainOperators op)
+
+// --- File: Src/HackPDM/MainWindow.xaml.cs ---
+namespace HackPDM;
+public sealed partial class MainWindow : Window
+    public MainWindow()
+
+// --- File: Src/HackPDM/App.xaml.cs ---
+namespace HackPDM;
+public partial class HackApp : Application
+    public static Home? HomePage;
+	public static IServiceProvider? Services { get; private set; }
+    public static Window? Window;
+    public static Frame? RootFrame;
+    public static DispatcherQueue DispatcherQueue;
+    public static CoreSettings CoreSettings;
+	public HackApp()
+    private void ConfigureServices()
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    private static void Setup ()
+
+// --- File: Src/HackPDM/GlobalSuppressions.cs ---
+[assembly: SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "<Pending>", Scope = "member", Target = "~M:HackPDM.Forms.Helper.MessageBoxInstance.CreateDialog~Microsoft.UI.Xaml.Controls.ContentDialog")]
+[assembly: SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "<Pending>", Scope = "member", Target = "~M:HackPDM.Forms.Settings.SearchOdoo.OdooReset_Click(System.Object,Microsoft.UI.Xaml.RoutedEventArgs)")]
+[assembly: SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "<Pending>", Scope = "member", Target = "~M:HackPDM.Forms.Hack.HackFileManager.FindSearchSelectionAsync(System.String,System.String,System.String)~System.Threading.Tasks.Task")]
+
+// --- File: Src/HackPDM/UI/Forms/InstanceManager.cs ---
+namespace HackPDM.UI.Forms;
+public static class InstanceManager
+    private static readonly Dictionary<Page, Window> _window = [];
+    private static readonly Dictionary<Type, List<Page>?> _pages = [];
+    public static TWin? GetAWindow<TPage, TWin>(TPage page) where TPage : Page where TWin : Window
+    public static void RegisterWindow<TPage, TWin>(TPage page, TWin win) where TPage : Page where TWin : Window
+    public static T GetPageSetConfig<T>(string configName, Window? window = null) where T : Page, new()
+    public static void SetWinConfig(string configName)
+	public static WindowConfig? GetConfig(string configName)
+	public static T GetAPage<T>() where T : Page, new()
+    public static List<T> GetPages<T>() where T : Page, new()
+    public static void Register<T>(T? page) where T : Page
+    public static bool TryGet<T>(out T? page) where T : Page
+    public static bool TryGet<TPage, TWin>(out TPage? page, out TWin? win) where TPage : Page where TWin : Window
+    public static bool TryGetPages<T>(out List<T>? pages) where T : Page
+
+// --- File: Src/HackPDM/UI/Forms/Helper/MessageBoxWindow.xaml.cs ---
+namespace HackPDM.UI.Forms.Helper
+	public sealed partial class MessageBoxWindow : Window
+		public MessageBoxWindow()
+
+// --- File: Src/HackPDM/UI/Forms/Helper/FormHelper.cs ---
+namespace HackPDM.UI.Forms.Helper;
+public static class FormHelper
+    public static string GetParentDirectory(string path)
+    public static string GetBaseName(string path)
+    public static void GetAllFilesInDir(string dirpath, ref List<string> filesfound)
+    public static (int, TreeViewNode?) LastValidTreeIndex(in string combinedPath, in string[] paths, in Dictionary<string, TreeViewNode> nodeMap)
+    private static (int, TreeViewNode?) RecurseNodePath(in TreeViewNode currentNode, string[] nodes, int index)
+    public static Dictionary<string, TreeViewNode>? ConvertTreeToDictionary(in TreeView tree)
+    private static void RecurseNodesConvert(in TreeViewNode node, in Dictionary<string, TreeViewNode>? nodeMap)
+        internal async Task ExecuteUI(Func<Task> function)
+        internal void ExecuteUI(Action function)
+        internal Task ExecuteUIAsync(Action function)
+		public void SetGrid( int row, int column, int rowspan = 1, int columnspan = 1 )
+    public static LinearGradientBrush EZGradient(FlowDirection direction, params Color[] colorGradient)
+    public static ref Color ChangeColor(this ref Color color, byte? A = null, byte? R = null, byte? G = null, byte? B = null)
+    public static Color ModifyColor(this Color color, byte? A = null, byte? R = null, byte? G = null, byte? B = null)
+	public static LinearGradientBrush EZGradient( double angle, params Color[] colorGradient )
+    public static RadialGradientBrush EZRadGradient(Vector4<double> circView, Vector2<double> gradCenter, double opacity = 1, params Color[] colorGradient)
+    public static GradientStopCollection EvenSpacedGradientCollection(params Color[] colorGradient)
+    public static IEnumerable<GradientStop> EvenSpacedGradient(params Color[] colorGradient)
+public partial class FileSizeConverter : IValueConverter
+    public object Convert(object value, Type targetType, object parameter, string language)
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+
+// --- File: Src/HackPDM/UI/Forms/Helper/MessageBox.xaml.cs ---
+namespace HackPDM.UI.Forms.Helper;
+public sealed partial class MessageBox : Page
+	private string? _message;
+	private string? _caption;
+	private MessageBoxButtons _button;
+	private MessageBoxIcon _icon;
+	private MessageBoxType _type;
+	private MessageBoxRepresentation focusButton;
+	private MessageBoxWidth _windowWidthWrap = MessageBoxWidth.DynamicWidthTextWithThreshold;
+	private object[]? _parameters;
+	public TaskCompletionSource<DialogResult> TCS { get; private set; }
+	public DialogResult? Result { get; private set; } = DialogResult.None;
+	private Window? _messageWindow;
+	public ScrollView? ScrollContainer = null;
+	public TextBlock? TextBlockImpl = null;
+	public ListBox? ListBoxImpl = null;
+	public DataGrid? DataGridImpl = null;
+	public MessageBox()
+	public MessageBox( ArrayList parameters ) => ParseParameters( parameters );
+	private void ParseParameters( ArrayList parameters )
+	public void Init( MessageBoxDetails? details )
+	private void ShowInternal()
+	private void TestConfig()
+	protected override void OnNavigatedTo( NavigationEventArgs e )
+	private void GeneralBoxConfig()
+	private void ApplyPageConfig()
+	private void DefaultImpl()
+	private void ListImpl()
+	private void GridImpl()
+	private void ContentImpl()
+	private void ToolTipImpl()
+	private void NotifyImpl()
+	private (Button? primary, Button? secondary, Button? close) DefaultButtons()
+	private void PrimaryPress( object sender, RoutedEventArgs e ) => SetToClose( MessageBoxRepresentation.Primary );
+	private void SecondaryPress( object sender, RoutedEventArgs e ) => SetToClose( MessageBoxRepresentation.Secondary );
+	private void ClosePress( object sender, RoutedEventArgs e ) => SetToClose( MessageBoxRepresentation.Tertiary );
+	private void SetToClose( MessageBoxRepresentation buttonPress )
+	private static MessageBoxRepresentation GetDefaultButton( MessageBoxButtons buttons )
+	private static DialogResult MapContentToDialogResult( MessageBoxRepresentation result, MessageBoxButtons buttons ) =>
+	public static async Task<DialogResult> ShowAsync( string message ) =>
+	public static async Task<DialogResult> ShowAsync( string message, string caption, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
+	public static async Task<DialogResult> ShowAsync( string message, MessageBoxButtons buttons, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
+	public static async Task<DialogResult> ShowAsync( string message, string caption, MessageBoxButtons buttons, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
+	public static async Task<DialogResult> ShowAsync( string message, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
+	public static async Task<DialogResult> ShowAsync( string message, string caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
+	private static DialogResult ShowInternal( string message, string? caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxType type = MessageBoxType.Default, params object[]? parameters ) =>
+	private static Task<DialogResult> ShowInternalAsync( string message, string? caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxType type = MessageBoxType.Default, params object[]? parameters )
+	private static DialogResult TryShowNative(
+	[LibraryImport( "User32.dll", EntryPoint = "MessageBoxW", StringMarshalling = StringMarshalling.Utf16 )]
+	private static partial int MsgBox(
+public record MessageBoxDetails(
+
+// --- File: Src/HackPDM/UI/Forms/Helper/SldWorksUI.cs ---
+namespace HackPDM.UI.Forms.Helper;
+public static class SldWorksUI
+    public static async Task<SoftwareBitmap> GetPreview(string fileName, bool deep = false)
+    public static byte[][] GetRgb(SoftwareBitmap bitmap)
+    [ComImport]
+    [Guid("5B0D3235-4DBA-4D44-865E-8F1D0E4FD04D")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public static async Task<SoftwareBitmap> ResizeImageAsync(
+
+// --- File: Src/HackPDM/UI/Forms/FormTransport/GridHelp.cs ---
+namespace HackPDM.UI.Forms.FormTransport
+	internal class GridHelp
+		private HackFileManager _HFM { get; set; }
+		public GridHelp()
+		public void InjectHFM(HackFileManager hack)
+		public static void InitGridView(DataGrid grid) => InitListViewInternal(grid);
+		private static void InitListViewInternal(DataGrid grid)
+		private static void InitListViewInternal(ListView list, ListDetail rows)
+		public static void ResetListViews(IEnumerable<DataGrid> grids)
+		internal async Task<HpVersion[]?> ProcessHistorySelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listVersions = true)
+		internal async Task<List<HpVersionProperty[]?>?> ProcessPropertiesSelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listProperties = true)
+		private async Task<List<HpVersionProperty[]?>> ProcessPropertiesSelectInternalAsync(DataGrid grid, HpVersion[]? versions, CancellationToken token, bool listProperties = true)
+		internal async Task<HpVersion[]?> ProcessParentSelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listParents = true)
+		internal async Task<HpVersion[]?> ProcessChildSelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listChildren = true)
+		internal async Task<HpVersion?> ProcessInfoSelectAsync(DataGrid grid, EntryRow? entry, CancellationToken token, bool listVersionInfo = true)
+					[entry?.Id ?? 0],
+		internal static async Task UpdateListAsync<T>(DataGrid list, T item)
+		internal HpVersion[]? GetVersionsForEntry(int entryId, string[]? excludedFields = null, string[]? insertedFields = null)
+		internal async Task<HpVersion[]?> GetVersionsForEntryAsync(int entryId, string[]? excludedFields = null, string[]? insertedFields = null)
+		internal async Task<HpRelease[]?> GetReleaseForEntryAsync(int entryId, string[]? excludedFields = null, string[]? insertedFields = null)
+		private void PopulateProperties(DataGrid grid, in List<HpVersionProperty[]> allProperties)
+		private void PopulateChildren(DataGrid grid, in HpVersion[] versions)
+		private void PopulateParent(DataGrid grid, in HpVersion[] versions)
+		private void PopulateHistory(DataGrid grid, in HpVersion[] versions)
+		private void PopulateVersionInfo(DataGrid grid, HpVersion versionModel)
+		internal async Task PreviewImage(HpVersion? version)
+		internal async Task PreviewImage(int? hpVersionId)
+		internal static T EmptyListItem<T>(DataGrid grid) where T : new()
+		internal static T EmptyListItemInternal<T>(DataGrid grid) where T : new()
+		internal static async Task<Dictionary<string, Task<HackFile>>> GetFileMap(Hashtable entries)
+		internal static void InitGridView(ItemsControl control) => InitListView(control, null);
+		internal static void InitListView(ItemsControl control, ListDetail? rows)
+
+// --- File: Src/HackPDM/UI/Forms/FormTransport/SafeHelper.cs ---
+namespace HackPDM.Core.Helper.Xaml
+	internal static class SafeHelper
+		internal static void SafeInvokeGen<T>(T data, Action<T> action)
+		internal static void SafeInvoker(Action action)
+		internal static Task<T> SafeInvoker<T>(Func<T> func)
+		private static void SafeInvokerInternal(Action action, DispatcherQueue dispatcher)
+		private static bool TryDoAction(Action action)
+		internal static Task SafeInvokerAsync(Action action)
+		internal static Task SafeInvokerAsync(Action action, CancellationToken token)
+
+// --- File: Src/HackPDM/UI/Forms/FormTransport/TreeHelp.cs ---
+namespace HackPDM.UI.Forms.FormTransport
+	public class TreeHelp
+		private HackFileManager _HFM { get; set; }
+		private TreeView _tree { get; set; }
+		private DataGrid _grid { get; set; }
+		private static AssetsImageProvider? AssetsProvider { get => field ??= ImageProvider as AssetsImageProvider; }
+		public TreeHelp() { }
+		public void InjectHFM(HackFileManager hackFM)
+		public async Task CreateTreeViewBackground(TreeView tree)
+		private async Task LoadOdooDirectoryTree(TreeView tree)
+		internal void ResetImagePreview(Image img, ProgressRing ring)
+		internal void LoadingVisualized(Image img, ProgressRing ring)
+		internal async Task<(Hashtable? entries, Dictionary<string, Task<HackFile>>? hackmap)> GetHackAndEntry(int? directoryId)
+		internal async Task TreeSelectItem(TreeView tree, TreeViewNode node, DataGrid grid, CancellationToken token = default)
+		internal async Task<bool> TreeItemsChangedPolling(int timeout = -1, CancellationToken token = default)
+		internal static async Task CreateTreeHash(TreeView tree, HpDirectory directoryModel)
+		internal static async Task CreateLocalTree(TreeView treeView)
+		internal async static Task AddLocalDirectoriesTest(TreeView tree, string[] paths, Dictionary<string, TreeViewNode> vNodes)
+		internal async static Task AddLocalDirectory(TreeViewNode? parent, string namePath, Dictionary<string, TreeViewNode> vNodes)
+		internal async static void AddLocalDirectories(TreeView tree, TreeViewNode node, string[] pathway, Dictionary<string, TreeViewNode> treeDict)
+		internal static async Task AddDirectoriesToTree(TreeView tree, Hashtable entries)
+		internal static async Task AddNodesMinimalMemoryAsync(TreeView tree, Hashtable rootNode)
+		public static void RefreshTree(TreeView tree)
+		public async Task RestartTree(TreeView tree)
+		public void RestartEntries(TreeView tree, DataGrid grid)
+		private static void FindUpdatedEntries(DataGrid grid, TreeViewNode node, Hashtable entries, Dictionary<string, Task<HackFile>> hackFileMap)
+		private static HackFile[]? GetHackNonEntries(TreeViewNode? node, Dictionary<string, Task<HackFile>>? hackFileMap, out int localAndRemoteCount)
+		internal async void AddRemoteEntries(DataGrid grid, Hashtable entries, Dictionary<string, Task<HackFile>> hackFileMap)
+		private static async Task AddRemoteEntry(DataGrid grid, DictionaryEntry pair, Dictionary<string, Task<HackFile>> hackFileMap)
+		internal static async Task<ImageSource?> GetRemoteImage(string? name)
+		internal async void AddLocalEntries(DataGrid grid, TreeViewNode? node, Dictionary<string, Task<HackFile>>? hackFileMap = null)
+		private async Task AddLocalEntry(DataGrid grid, TreeViewNode node, HackFile file)
+
+// --- File: Src/HackPDM/UI/Forms/FormTransport/FormProxy.cs ---
+public class FormProxy
+
+// --- File: Src/HackPDM/UI/Forms/Settings/StatusDialog.xaml.cs ---
+namespace HackPDM.UI.Forms.Settings;
+public sealed partial class StatusDialog : Page
+    public Window? ParentWindow { get; set; }
+    public ObservableCollection<BasicStatusMessage> OStatus { get; internal set; } = [];
+    public ObservableCollection<BasicStatusMessage> OInfo { get; internal set; } = [];
+    public ObservableCollection<BasicStatusMessage> OError { get; internal set; } = [];
+    public static Brush ColorProcessing { get; set; } = UIStorage.BrushDarkBlue;
+    public static Brush ColorSkip { get; set; } = UIStorage.BrushDarkGray;
+    public static Brush ColorFound { get; set; } = UIStorage.BrushDarkGray;
+    public static Brush ColorSuccess { get; set; } = UIStorage.BrushDarkOliveGreen;
+    public static Brush ColorWarning { get; set; } = UIStorage.BrushMustardYellow;
+    public static Brush ColorError { get; set; } = UIStorage.BrushDarkRed;
+    public static Brush ColorDefaultFore { get; set; } = UIStorage.BrushBlack;
+    public static Brush ColorDefaultBack { get; set; } = UIStorage.BrushWhite;
+	private int _errorCount = 0;
+    public static bool? SkipText
+    public static int? HistoryLength
+    public bool DoubleBuff { get; set; } = true;
+    public bool Canceled { get; private set; }
+    public bool HasLoaded { get; set; }
+	internal bool IsInProcess { get; set; }
+    public bool ShowStatusDialog(string titleText)
+    public async Task<bool> ShowWait(string titleText)
+    public StatusDialog()
+	private async void StatusDialog_Unloaded(object sender, RoutedEventArgs e)
+	private async void AppWindow_Closing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
+	private StatusDialog(string titleText) : this()
+    public void ClearStatus()
+    public async Task UpdateStatusDialogLoop(CancellationToken token)
+    public void EndStatusDialogLoop()
+	public async Task AddStatusLine(StatusMessage action, string description)
+    public async Task AddStatusLines(ConcurrentQueue<(StatusMessage action, string description)> values)
+    public async Task SetProgressBar(int value, int max)
+    private async Task SetProgressBarInternal(int[] @params)
+    private async Task AddStatusLinesInternal(ConcurrentQueue<(StatusMessage action, string description)> values)
+	private static void RemoveExcessLines(DataGrid grid)
+    private async Task AddStatusLine((StatusMessage action, string description) statusMessage)
+    private void ColorizeStatus((StatusMessage action, string description) values, ListViewItem item)
+    private DataGrid GetList(StatusMessage action) => action switch
+    private void GetDataGrid(StatusMessage action, out ObservableCollection<BasicStatusMessage> collection, out DataGrid? dataGrid)
+    private void CmdCancelClick(object sender, RoutedEventArgs arg)
+    private void CmdCloseClick(object sender, RoutedEventArgs arg)
+    private void StatusSettings_Click(object sender, RoutedEventArgs arg)
+	public async Task SetDownloaded(long downloadBytes)
+	public async Task SetTotalDownloaded(long sessionDownloadBytes)
+
+// --- File: Src/HackPDM/UI/Forms/Settings/ProfileManager.xaml.cs ---
+namespace HackPDM.UI.Forms.Settings;
+public sealed partial class ProfileManager : Page
+	public static bool IsLoggedIn { get; private set; }
+	public static ObservableCollection<BasicStatusMessage> OStatus { get; internal set; } = [];
+	private static readonly object LockObject = new();
+	public ProfileManager()
+	private void LoadSettings()
+	public void OdooSetting( object sender, RoutedEventArgs e )
+	public async void HackSetting( object sender, RoutedEventArgs e )
+	private async Task<bool> AbleToLogin()
+	private async void AttemptLogin( object sender, RoutedEventArgs e )
+	private void LoadFromJson( string json )
+	public static async void TestMessageBox()
+				private void DefaultImpl()
+	public class SavedData
+		[JsonPropertyName( "OdooAddress" )] public string OdooAddress { get; set; }
+		[JsonPropertyName( "OdooPort" )] public string OdooPort { get; set; }
+		[JsonPropertyName( "OdooDb" )] public string OdooDb { get; set; }
+		[JsonPropertyName( "PWAPathAbsolute" )] public string PWAPathAbsolute { get; set; }
+		[JsonPropertyName( "OdooCredentialTarget" )] public string OdooCredentialTarget { get; set; }
+		[JsonPropertyName( "Username" )] public string Username { get; set; }
+		[JsonPropertyName( "Password" )] public string Password { get; set; }
+	private async void LoadJsonSettingsBtn_Click( object sender, RoutedEventArgs e )
+	private async void SaveSettingsJson_Click( object sender, RoutedEventArgs e )
+	private async void SaveSettingsJsonWithoutPassword_Click( object sender, RoutedEventArgs e )
+	private async Task SaveSettings( SavedData data )
+	private readonly SavedData _templateData = new()
+	private async void CreateTemplateSettingsJson_Click( object sender, RoutedEventArgs e )
+
+// --- File: Src/HackPDM/UI/Forms/Settings/NotLoggedIn.xaml.cs ---
+namespace HackPDM.UI.Forms.Settings
+	public sealed partial class NotLoggedIn : Page
+		public NotLoggedIn()
+
+// --- File: Src/HackPDM/UI/Forms/Settings/ApplicationSettingsPage.xaml.cs ---
+namespace HackPDM.UI.Forms.Settings;
+public sealed partial class ApplicationSettingsPage : Page
+    public ApplicationSettingsPage()
+
+// --- File: Src/HackPDM/UI/Forms/Hack/HackSettings.xaml.cs ---
+namespace HackPDM.UI.Forms.Hack;
+public sealed partial class HackSettings : Page
+	private static CoreSettings? Sett;
+	public HackSettings()
+	private void GetInfoDefaults()
+	private async void btnSubmit_Click(object sender, RoutedEventArgs e)
+	private bool TryCreateDirectory(string path)
+
+// --- File: Src/HackPDM/UI/Forms/Hack/Home.xaml.cs ---
+namespace HackPDM.UI.Forms.Hack;
+public sealed partial class Home : Page
+    private static NavigationView? Navigator { get; set; }
+    private static NavigationViewItem? HackNav {  get; set; }
+    private static NavigationViewItem? ProfileNav { get; set; }
+    private static NavigationViewItem? ConfigNav { get; set; }
+    private static MainWindow? Window { get; set; }
+    public Home()
+    public static void NavigateToPage(NavigatePageMenu pageMenu)
+	private void HomeNavigator_SelectionChanged( NavigationView sender, NavigationViewSelectionChangedEventArgs args )
+					[
+	private void HomeNavigator_BackRequested(NavigationView sender, NavigationViewBackRequestedEventArgs args)
+
+// --- File: Src/HackPDM/UI/Forms/Hack/HackFileManager.xaml.cs ---
+namespace HackPDM.UI.Forms.Hack;
+public sealed partial class HackFileManager : Page
+	public ObservableCollection<TreeData>? LastSelectedNodePaths { get; set; } = [];
+	public ObservableCollection<EntryRow> OEntries { get; internal set; } = [];
+	public ObservableCollection<HistoryRow> OHistories { get; internal set; } = [];
+	public ObservableCollection<ParentRow> OParents { get; internal set; } = [];
+	public ObservableCollection<ChildrenRow> OChildren { get; internal set; } = [];
+	public ObservableCollection<PropertiesRow> OProperties { get; internal set; } = [];
+	public ObservableCollection<VersionRow> OVersions { get; internal set; } = [];
+	public ObservableCollection<TreeData> ONodes { get; internal set; } = [];
+	public static ConcurrentQueue<(StatusMessage action, string description)> QueueAsyncStatus = new();
+	public static NotifyIcon Notify { get; } = Notifier.Notify;
+	public static StatusDialog? Dialog { get; set; }
+	public static ListDetail ActiveList { get; set; }
+	public static readonly Dictionary<object, TreeViewNode> ItemToContainerMap = new();
+	private static Task? _entryListChange;
+	private static Task? _treeItemChange;
+	private static (object? sender, SelectionChangedEventArgs? e) _queuedEntryChange = (null, null);
+	private static (TreeView? sender, TreeViewSelectionChangedEventArgs? args) _queuedTreeChange = (null, null);
+	private static readonly BackgroundWorker _backgroundWorker = new()
+	private static CancellationTokenSource? _cSource = new();
+	private static CancellationTokenSource? _cTreeSource = new();
+	public static CancellationTokenSource? statusToken = new();
+	private static ImageSource? _previewImage = null;
+	public static int DownloadBatchSize
+	public static int SkipCounter { get; private set; }
+    internal static long Downloaded { get; set; }
+	internal static long SessionDownloaded { get; set; }
+    internal static int TotalProcessed { get; set; }
+	internal static int ProcessCounter { get; set; }
+    internal static int MaxCount { get; set; }
+    public bool IsActive { get; set; } = false;
+    public bool IsFiltered { get; set; } = true;
+	public bool HackLoaded { get; private set; }
+	private TreeHelp _treeHelper { get; set; }
+	private GridHelp _gridHelper { get; set; }
+	internal HackLists _hackLists { get; set; }
+	public TreeViewNode? LastSelectedNode { get; set; } = null;
+	public string? LastSelectedNodePath { get; set; } = null;
+	public int EntryPollingMs { get; set; } = 5000;
+	public bool IsTreeLoaded { get; set; } = false;
+	public bool IsListLoaded { get; set; } = false;
+	public HpDirectory root;
+	public static bool IsClosing = false;
+	public string SWKey;
+	internal delegate void BackgroundMethodDel(object sender, DoWorkEventArgs e);
+	internal delegate void BackgroundCompleteDel(object sender, RunWorkerCompletedEventArgs e);
+	public static DispatcherQueue HackDispatcherQueue;
+	internal TabViewItem? LowerTabIndex
+	public HackFileManager()
+	public static async Task LoadOdooDefaults()
+	public async void LoadHackMan()
+	private static async Task DebugTest2()
+	private static async Task DebugTest()
+	private void AssignCollections()
+	private void AssignGridAndCollectionsMap()
+	private void InitializeEvents()
+	private void OdooEntryList_LoadingRow( object? sender, DataGridRowEventArgs e )
+	private void List_Click_SaveIcon(object sender, RoutedEventArgs e)
+	private void OdooDirectoryTree_RightTapped(object sender, RightTappedRoutedEventArgs e)
+	private async Task HackFileManager_Load()
+	public TreeView GetOdooDirectoryTree()
+	public DataGrid GetOdooEntryList()
+	public Image GetOdooEntryImage() => OdooEntryImage;
+	public ProgressRing GetProgressRing() => LoadRing;
+	public TextBlock GetEntriesLabel() => EntryListStatus;
+	public TextBlock GetEntriesLocalLabel() => EntryListLocalOnly;
+	public TextBlock GetEntriesRemoteLabel() => EntryListRemoteOnly;
+	public (Image, ProgressRing) GetVisualizer() => (OdooEntryImage, LoadRing);
+	internal void RestartEntries() => _treeHelper.RestartEntries(OdooDirectoryTree, OdooEntryList);
+	internal async Task RestartTree() => await _treeHelper.RestartTree(OdooDirectoryTree);
+	public Stopwatch TimerStopwatch;
+public sealed partial class HackFileManager : Page
+	private void OdooDirectoryBreadcrumb_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
+	private async void Tree_Click_Undelete(object sender, RoutedEventArgs e)
+	private void ListDelete_DoubleClicked(object sender, DoubleTappedRoutedEventArgs e)
+	private async Task Async_GetLatest((ArrayList, CancellationToken) arguements)
+	private async Task Async_Commit(List<HackFile>? hacks)
+	private async Task Async_CheckOut(HpEntry[] entries)
+	private async Task Async_UnCheckOut(HpEntry[] entries)
+	private async Task Async_PermDelete(HpEntry[] entries)
+	private async Task Async_LogicalDelete(HpEntry[] entries)
+	private async Task Async_LogicalUnDelete(HpEntry[] entries)
+	private async Task Async_ListItemChange(EntryRow item, CancellationToken token)
+	internal async Task ProcessEntrySelectionAsync(EntryRow? entry, CancellationToken token, bool listLatestVersionInfo = false)
+public async static Task<(EntryReturnType, HpVersion?, HpRecordStaged?)> ConvertHackFile(HackFile hackFile, HpPDMCommit? commit)
+	private static IEnumerable<HpEntry> FilterCheckoutEntries(HpEntry[] entries)
+	private static IEnumerable<HpEntry> FilterUnCheckoutEntries(HpEntry[] entries)
+	private async Task CheckOutEntry(HpEntry? entry)
+	private async Task UnCheckOutEntry(HpEntry entryModel)
+	private static async Task<(HackFile[], HackFile[])> FilterCommitHackFiles(ConcurrentSet<HackFile> hackFiles)
+	public async static Task<(HackFile[], HackFile[])> FilesNotInOdooSegmented(IEnumerable<HackFile> hackFiles)
+			[
+	private HpVersion[] GetLatestVersions(ArrayList entryIDs, string[]? excludedFields = null)
+	private async Task ProcessVersionBatchAsync(IEnumerable<HpVersion> batchVersions)
+	public async Task ProcessDownloadsAsync(IEnumerable<IEnumerable<HpVersion>> versionBatches, CancellationToken cToken, int maxConcurrency = 2)
+	private async void GetLatestFromTreeNode(bool withSubdirectories = false)
+    private async void ODT_SetLastSelected(TreeData? tData)
+	private async void OdooDirectoryTree_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
+	private async void VersionTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+	private async void OdooEntryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+	private void OdooHistory_ItemSelectionChanged(object sender, SelectionChangedEventArgs e)
+	private void OdooParents_ItemSelectionChanged(object sender, SelectionChangedEventArgs e)
+	private void OdooChildren_ItemSelectionChanged(object sender, SelectionChangedEventArgs e)
+	private async void ShowInactive_Checked(object sender, RoutedEventArgs e)
+	private async void Anchor_Checked(object sender, RoutedEventArgs e)
+	private void ShowHidden_Checked(object sender, RoutedEventArgs e)
+	private void OdooCMSTree_Opening(object sender, CancelEventArgs e)
+	private void List_ColumnClick(object? sender, DataGridColumnEventArgs e)
+	private void Tree_Click_GetLatest(object sender, RoutedEventArgs e)
+	private void Tree_Click_GetLatestAll(object sender, RoutedEventArgs e)
+	private void Tree_Click_GetLatestTop(object sender, RoutedEventArgs e)
+	private async void Tree_Click_Commit(object sender, RoutedEventArgs e)
+	private async void Tree_Click_Checkout(object sender, RoutedEventArgs e)
+	private async void Tree_Click_UndoCheckout(object sender, RoutedEventArgs e)
+	private void Tree_Click_OpenDirectory(object sender, RoutedEventArgs e)
+	private async void Tree_Click_Restore(object sender, RoutedEventArgs e)
+	private async void Tree_Click_RestoreTop(object sender, RoutedEventArgs e)
+	private void Tree_Click_RestoreAll(object sender, RoutedEventArgs e)
+	private async void Tree_Click_LocalDelete(object sender, RoutedEventArgs e)
+	private async void Tree_Click_LogicalDelete(object sender, RoutedEventArgs e)
+	private void Tree_Click_PermanentDelete(object sender, RoutedEventArgs e)
+	internal async void List_Click_GetLatest(object sender, RoutedEventArgs e)
+	internal async Task ListClickGetLatest(object sender, RoutedEventArgs e)
+	private async void List_Click_Commit(object sender, RoutedEventArgs e)
+	private static HashSet<HackFile> ProcessHacks(List<EntryRow>? entries)
+	internal async void List_Click_Checkout(object sender, RoutedEventArgs e)
+	internal async void List_Click_UndoCheckout(object sender, RoutedEventArgs e)
+	private void List_Click_Open(object sender, RoutedEventArgs e)
+	private void List_Click_OpenLatestRemote(object sender, RoutedEventArgs e)
+	private void List_Click_OpenLatestLocal(object sender, RoutedEventArgs e)
+	private void List_Click_OpenDirectory(object sender, RoutedEventArgs e)
+	private void List_Click_Restore(object sender, RoutedEventArgs e)
+	private async void List_Click_LocalDelete(object sender, RoutedEventArgs e)
+	private async void List_Click_LogicalDelete(object sender, RoutedEventArgs e)
+	private async void List_Click_PermanentDelete(object sender, RoutedEventArgs e)
+	private async void AdditionalTools_Click_Refresh(object sender, RoutedEventArgs e)
+	private void AdditionalTools_Click_Search(object sender, RoutedEventArgs e)
+	private void AdditionalTools_Click_ManageTypes(object sender, RoutedEventArgs e)
+	private async void History_Click_Download(object sender, DoubleTappedRoutedEventArgs e)
+	private void History_Click_TemporaryDownload(object sender, RoutedEventArgs e)
+	private void History_Click_OverwriteDownload(object sender, RoutedEventArgs e)
+	private void History_Click_Open(object sender, DoubleTappedRoutedEventArgs e)
+	private void History_Click_OverwriteOpen(object sender, RoutedEventArgs e)
+	private void History_Click_TemporaryOpen(object sender, RoutedEventArgs e)
+	private void History_Click_OverwriteMove(object sender, RoutedEventArgs e)
+	private void History_Click_TemporaryMove(object sender, RoutedEventArgs e)
+	private async void History_DoubleClick(object sender, DoubleTappedRoutedEventArgs e)
+	private async void OdooParents_DoubleClick(object sender, DoubleTappedRoutedEventArgs e)
+	private async void OdooChildren_DoubleClick(object sender, DoubleTappedRoutedEventArgs e)
+	private void OpenLocalFile(string path)
+	private void OpenRemoteFile(int entryId)
+	private async void PreviewImageSelection<T>(T? item)
+	public async Task FindSearchSelectionAsync(string pwaPath, string fileName, string delimiter = "\\")
+	private async void DownloadOpen(bool toTemp = false)
+	private async Task<HpVersion?> DownloadHistory(bool toTemp = false)
+	private async void LocalMoveEntry(bool toTemp = false)
+	private async Task<HpVersion?> GetVersionFromHistory()
+	private void EndNodePaths(TreeViewNode node, in List<string> paths)
+	internal static async Task<ArrayList> GetAllEntriesAndDependenciesList(int[] entryIds, bool update = false)
+	private async Task<ArrayList> GetVersionList(params int[] versionIds)
+	private async Task<bool> PermanentDeleteVersionProperty(ArrayList ids)
+	private async Task<bool> PermanentDeletedVersionRelationships(ArrayList ids)
+	private async Task<bool> PermanentDeleteEntry(ArrayList ids)
+	private async Task<bool> PermanentDeleteVersions(ArrayList ids)
+			[
+	internal async Task GetLatestInternal(ArrayList entryIDs)
+    internal static void CancelledOperation()
+    internal async Task CommitInternal(IEnumerable<HackFile> hackFiles)
+	internal async Task CheckoutInternal(ArrayList entryIDs)
+	internal async Task UnCheckoutInternal(ArrayList entryIDs)
+	internal async Task LogicalDeleteInternal(ArrayList entryIDs)
+	internal async Task UnDeleteInternal(bool withSubdirectories = false)
+	private void TreeViewItem_Loaded(object sender, RoutedEventArgs e)
+	private void TreeViewItem_Unloaded(object sender, RoutedEventArgs e)
+	private void OdooEntryDataGrid_LoadingRowGroup(object sender, CommunityToolkit.WinUI.UI.Controls.DataGridRowGroupHeaderEventArgs e)
+	private void OdooEntryDataGrid_Sorting(object sender, CommunityToolkit.WinUI.UI.Controls.DataGridColumnEventArgs e)
+
+// --- File: Src/HackPDM/UI/Forms/Odoo/SearchOdoo.xaml.cs ---
+namespace HackPDM.UI.Forms.Odoo
+	public sealed partial class SearchOdoo : Page
+		private HackFileManager hackman;
+		private TreeView OdooDirectoryTree;
+		private DataGrid OdooEntryList;
+		private Window ParentWindow;
+		private ObservableCollection<SearchRow> SearchResultsList = new();
+		private ObservableCollection<SearchPropertiesRow> PropertiesActive = new();
+		private ObservableCollection<OperatorsRow> OperatorList = new();
+		private ObservableCollection<SearchPropertiesRow> PropertiesSearchable = new();
+		public SearchOdoo()
+		public SearchOdoo(HackFileManager hackman) : this()
+		public void SetHackInstance(HackFileManager hackman)
+		public void StoreWindowInstance(Window window)
+		private void SetPropertyDropdown()
+		private void SetPropertyEqualDropdown()
+		private async void OdooSearch_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+			[
+		private void DisplayLocal(ArrayList results, string filename, int limit = 100, bool isNotOnlyLocal = false)
+		private void DisplaySearch(ArrayList list, int limit)
+		private Dictionary<string, List<string>> GetNamePathwaysDict(ArrayList result)
+		private async Task<ArrayList[]> CompilePropertyParams()
+		private ConcurrentSet<int> FilterCandidates(ArrayList[] lists)
+		private void OdooCancel_Click(object sender, RoutedEventArgs e)
+		private void OdooReset_Click(object sender, RoutedEventArgs e)
+		private async void OdooSearchResults_DoubleTapped(object sender, DoubleTappedRoutedEventArgs doubleTappedRoutedEventArgs)
+		private async void FindSearchSelection(SearchRow? item)
+		private void OdooLocalOnly_CheckedChanged(object sender, RoutedEventArgs e) => ControlEnabler();
+		private void OdooCheckedMe_CheckedChanged(object sender, RoutedEventArgs e) => ControlEnabler();
+		private void OdooDeletedIsLocal_CheckedChanged(object sender, RoutedEventArgs e) => ControlEnabler();
+		private async void OdooPropAdd_Click(object sender, RoutedEventArgs e)
+		private void OdooPropertyReset_Click(object sender, RoutedEventArgs e)
+		private void OdooPropDelete_Click(object sender, RoutedEventArgs e)
+		private void ControlEnabler()
+		private async void CheckOutMenuItem_Click(object sender, RoutedEventArgs e)
+		private async void unCheckoutToolStripMenuItem_Click(object sender, RoutedEventArgs e)
+		private async Task CheckOutItems(IEnumerable<SearchRow>? items, bool willCheckout = true)
+		private async void openToolStripMenuItem_Click(object sender, RoutedEventArgs e)
+		private void checkoutOpenToolStripMenuItem_Click(object sender, RoutedEventArgs e)
+		private void OpenLocalFile(string path)
+		private async Task DownloadRemoteFile(int entryID)
+		private async Task PreviewRemoteFile(int entryID)
+
+// --- File: Src/HackPDM/UI/Forms/Odoo/OdooSettings.xaml.cs ---
+namespace HackPDM.UI.Forms.Odoo;
+public sealed partial class OdooSettings : Page
+    private static CoreSettings? Sett;
+    public OdooSettings()
+    private void SubmitOdooSettings(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    private void GetInfoDefault()
+    private async void SetInfoDefault()
+    private void textBox1_TextChanged(object sender, EventArgs e) => changeURL();
+    private void txtOdooUrl_TextChanged(object sender, EventArgs e) => changeURL();
+    private void changeURL()
+
+// --- File: Src/HackPDM/UI/Forms/Odoo/OdooFileTypeManager.xaml.cs ---
+namespace HackPDM.UI.Forms.Odoo;
+public sealed partial class OdooFileTypeManager : Page
+    public OdooFileTypeManager()
+
+// --- File: Src/HackPDM/UI/Compatibility/LegacySettingsProvider.cs ---
+namespace HackPDM.UI.Compatibility;
+public class LegacySettingsProvider : ISettingsProvider
+    public T? Get<T>(string key, T? defaultValue = default) => throw new System.NotImplementedException();
+    public void Set<T>(string key, T value) => throw new System.NotImplementedException();
+    public bool Contains(string key) => throw new System.NotImplementedException();
+    public void Remove(string key) => throw new System.NotImplementedException();
+
+// --- File: Src/HackPDM/UI/Compatibility/AssetsImageProvider.cs ---
+namespace HackPDM.UI.Compatibility;
+public class AssetsImageProvider : IImageProvider
+	internal static readonly Dictionary<string, string> AssetMap;
+	internal static readonly Dictionary<string, StorageFile> FileCache;
+	private static StorageFolder Storage => ApplicationData.Current.LocalFolder;
+	private static string ImagesFolderPath => $"{StorageBox.ASSETSFOLDER}/{StorageBox.IMAGEFOLDER}";
+    private static string ImagesFolderPathUri => $"{StorageBox.LOCALPREFIX}/{ImagesFolderPath}";
+	private static StorageFolder AssetsFolder => field ??= Storage.CreateFolderAsync(StorageBox.ASSETSFOLDER, CreationCollisionOption.OpenIfExists).Get();
+    private static StorageFolder ImagesFolder => field ??= AssetsFolder.CreateFolderAsync(StorageBox.IMAGEFOLDER, CreationCollisionOption.OpenIfExists).Get();
+	public AssetsImageProvider() : this([]) {}
+	public AssetsImageProvider(Dictionary<string, string>? assetMap)
+	public ImageSource? GetImage(string key)
+	public async Task<ImageSource?> GetImageAsync(string key)
+	public async void SetImage(string key, byte[] imageBytes)
+	public async void SetImage(string key, SoftwareBitmap softwareBitmap)
+	public IEnumerable<string> GetAvailableKeys() => AssetMap.Keys;
+
+// --- File: Src/HackPDM/UI/Compatibility/Settings.cs ---
+namespace HackPDM.UI.Compatibility;
+public static class Assets
+	public static readonly Dictionary<string, string> AssetMap;
+	private static StorageFolder Storage => ApplicationData.Current.LocalFolder;
+	private static async void LoadInLocalDictionary()
+
+// --- File: Src/HackPDM/UI/Compatibility/ModernSettingsProvider.cs ---
+namespace HackPDM.UI.Compatibility;
+[SupportedOSPlatform("windows10.0.17763.0")]
+public class ModernSettingsProvider : ISettingsProvider
+    private static ApplicationDataContainer Settings => ApplicationData.Current.LocalSettings;
+    public T? Get<T>(string key, T? defaultValue = default) =>
+    public void Set<T>(string key, T value)
+    public bool Contains(string key) => Settings.Values.ContainsKey(key);
+    public void Remove(string key) => Settings.Values.Remove(key);
+
+// --- File: Src/HackPDM/UI/Types/DomainUI.cs ---
+namespace HackPDM.UI.Types;
+public class EntryRow : HackPDM.Domain.Representation.EntryRow
+	public ImageSource? Icon { get; set; }
+	public ImageSource? StatusIcon { get; set; }
+	public override FileInfo? LocalFile
+	public override bool? IsLocal
+	public override bool? IsRemote
+	public override bool? IsOnlyLocal => IsRemote is false & IsLocal is true;
+	public override bool? IsOnlyRemote => IsRemote is true & IsLocal is false;
+public partial class TreeData(string? name) : HackPDM.Domain.Representation.TreeData, IEnumerable<TreeData>
+	public TreeView? ParentTree { get; internal set; }
+	public TreeViewNode? Node { get; internal set; }
+	public TreeViewItem? VisualContainer => ParentTree?.ContainerFromNode(Node) as TreeViewItem;
+	public TreeData? Parent => Node?.Depth <= 0 ? null : Node?.Parent?.LinkedData;
+	public ImageSource? Icon { get; set; }
+	public IEnumerable<TreeData>? Children => Node?.Children.Select(n => n.LinkedData);
+	public override string? Name
+	public override string? FullPath => Parent is null ? Depth < 0 ? null : Name : $"{Parent?.FullPath}\\{Name}";
+	public override object? Tag { get; set; }
+	public override int? DirectoryId { get; set; }
+	public override bool IsLinked => Node is not null;
+	public override bool HasChildren => Node?.HasChildren ?? false;
+	public override int Depth => Node?.Depth ?? -1;
+	public override bool IsExpanded
+	public bool? IsLocalOnly
+	public bool? IsLocal
+	public bool? IsRemoteOnly
+	public bool? IsRemote
+	public override void SortTree()
+		[
+	public IEnumerator<TreeData> GetEnumerator() => Children?.GetEnumerator() ?? Enumerable.Empty<TreeData>().GetEnumerator();
+
+// --- File: Src/HackPDM/UI/Types/HackStructs.cs ---
+namespace HackPDM.UI.Types;
+public class NotifyIcon
+    public string? BalloonTipText;
+    public string? BalloonTipTitle;
+    public string? Text;
+    public void ShowBalloonTip(int timeout) { }
+public class Notifier
+    private static CancellationTokenSource _fileSystemCancel = new();
+    public static ConcurrentQueue<FileCheck> QueueFileCheck = new();
+    public static DirectoryInfo? Directory;
+    public static FileSystemWatcher? FileWatcher { get; set; }
+    public static NotifyIcon Notify { get; set; } = new();
+    public static bool IsRunning { get; private set; } = false;
+    public static bool IsInvalidDirectory  { get; private set; } = true;
+    public static void CancelCheckLoop()
+    public async static void FileCheckLoop()
+public class ListDetail
+    public ColumnInfo[] SortColumnOrder
+    public ColumnInfo SortRowOrder
+    public ColumnGroup ColumnGroup { get; set; }
+    public ListDetail(ColumnInfo[] columnSort, int indexOfSort = 0)
+    public ListDetail(ColumnInfo[] columnSort, string activeColumn = "ID")
+    public void SetRank(int rankFrom = 0, int rankTo = 0) => (SortColumnOrder[rankTo], SortColumnOrder[rankFrom]) = (SortColumnOrder[rankFrom], SortColumnOrder[rankTo]);
+    public void SetActiveColumn(int index = 0)
+    public void SetActiveColumn(string name = "ID")
+    public void SetActiveColumn(ColumnInfo column)
+public class ColumnInfo<T> { }
+public class ColumnInfo
+    public const int DEFAULT_WIDTH = 75;
+    public readonly ColumnGroup Group;
+    public string Name;
+    public int Width;
+    public HorizontalAlignment Align;
+    public ComparerSort Sort;
+    public int Rank;
+    public ColumnInfo(string name, object value, ColumnGroup group = ColumnGroup.Row, int rank = -1, ComparerSort sort = null)
+public class ColumnHeader
+    public string Name = "";
+    public string Text = "";
+    public int Width;
+    public HorizontalAlignment TextAlign;
+    public ColumnHeader(string name, string text, int width = 75, HorizontalAlignment align = HorizontalAlignment.Left)
+    public ColumnHeader()
+public struct FileCheck
+    public readonly WatcherChangeTypes ChangeType { get; }
+    public readonly string Name { get; }
+    public readonly string CurrentPath { get; }
+    public readonly string OldPath { get; }
+    public HackFile Hack
+    public FileCheck(string name, string path, string oldPath = null, WatcherChangeTypes type = WatcherChangeTypes.All)
+    public FileCheck(EventArgs e)
+    public override bool Equals(object obj)
+    public override int GetHashCode()
+    public static bool operator ==(FileCheck left, FileCheck right)
+    public static bool operator !=(FileCheck left, FileCheck right)
+    public void Notify()
+    public static void Notify(string title, string text)
+    public static string FindCommonPath(IEnumerable<FileCheck> fileChecks)
+public class ComparerSort : IComparer
+    public delegate int CompareFunction(object x, object y);
+    public CompareFunction ComparerFunction;
+    private ListDetail _listDetail;
+    public ColumnGroup Group;
+    public bool IsAscending;
+    public bool InvalidsAtBack;
+    public SortPredefined SortType;
+    public int Compare(object x, object y)
+
+// --- File: Src/HackPDM/UI/Controls/WindowHelper.cs ---
+namespace HackPDM.UI.Controls;
+public static partial class WindowHelper
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool MoveWindow(IntPtr hWnd, int x, int y, int nWidth, int nHeight, [MarshalAs(UnmanagedType.Bool)] bool bRepaint);
+	public static void ResizeWindow(Window window, int width, int height)
+    public static Task AnimateWindowSize(AppWindow appWindow, Windows.Graphics.SizeInt32 targetSize, double durationMs = 250, CancellationToken token = default)
+    public static T CreateWindow<T>(string? configName = null, bool activated = true, bool withFrame = true) where T : Window, new()
+    public static Window CreateWindowPage<T>(bool activated = true, ArrayList? parameters = null) where T : Page, new()
+    public static Window CreateWindowFromPage<TPage>(TPage page, bool activated = true, ArrayList? parameters = null)
+    public static void CreateWindowFromPage<TPage, TWindow>(TPage page, out TWindow window, bool activated = true, ArrayList? parameter = null)
+	public static void CreateWindowAndPage<T>(out T page, out Window window, bool activated = true, ArrayList? parameters = null)
+    public static void CreateWindowAndPage<TPage, TWindow>(out TPage page, out TWindow window, bool activated = true, ArrayList? parameters = null)
+	private static void CreateWindowFromPageInternal<TPage, TWindow>(TPage page, out TWindow window, bool activated = true, ArrayList? parameters = null)
+	private static void CreateWindowAndPageInternal<TPage, TWindow>(out TPage? page, out TWindow window, bool activated = true, ArrayList? parameters = null)
+	public static Window CreateWindowPage<T>(WindowConfig winConfig) where T : Page, new()
+    private static CancellationTokenSource _animationCts = new();
+	public static void SetWindowConfig(Window window, WindowConfig windowConfig)
+public class WindowConfig(string title, Vector4<int> positionAndSize, AppWindowPresenterKind kind = AppWindowPresenterKind.Overlapped)
+    public static Dictionary<string, WindowConfig> PresetWindowConfig = new ()
+    public string Title { get; set; } = title;
+    public Vector4<int> PositionAndSize { get; set; } = positionAndSize;
+    public AppWindowPresenterKind WindowKind { get; set; } = kind;
+
+// --- File: Src/HackPDM/UI/Controls/ExtensionForm.cs ---
+namespace HackPDM.UI.Controls;
+public static class ExtensionForm
+	private static readonly ConditionalWeakTable<DependencyObject, HolderValues> _data = new();
+	private static readonly GradientStopCollection _gradientStops;
+	private static readonly GradientStop _gradientStop;
+	private static readonly GradientStop _gradientStop2;
+	private static readonly LinearGradientBrush _brush;
+		public bool SetWindowType(AppWindowPresenterKind kind)
+		public IntPtr IntPtrHandle { get { return WinRT.Interop.WindowNative.GetWindowHandle( window ); } }
+		public void SetAlternatingRowColors()
+		public void ItemAdd<T>(T item)
+		public void ItemRemove<T>(T item)
+		public bool MessageToRecommit()
+		public DataGridData LinkedItem
+		public TreeData LinkedData
+		public T? Content<T>() where T : class
+		public void UpdateBreadCrumbCollection(ObservableCollection<TreeData>? collection)
+		public IEnumerable<TreeViewNode> GetNodePath()
+		private IEnumerable<TreeViewNode> GetNodePathInternal()
+		public T? ItemsSource<T>() where T : class
+		public void Sort<T>(Comparison<T> comparison)
+		public string? GetTreeNodePath()
+		public void EnsureVisible(TreeView tree)
+		public TWin? GetWindow<TWin>() where TWin : Window
+		public Window? Window
+	public static IEnumerable<Control> GetAllControls(this Control control)
+	private static TreeData? RecurseNode(this TreeData? node, ReadOnlySpan<string> paths)
+	public static TreeData? FindTreeNode(this TreeView view, string path)
+	private class HolderValues
+		public bool IsSingleton { get; set; }=false;
+		public TreeData? TreeNodeData { get; set;  } = null;
+		public DataGridData? ItemData { get; set;  } = null;
+
+// --- File: Src/HackPDM/UI/Controls/ImageUtils.cs ---
+namespace HackPDM.UI.Controls;
+internal static class ImageUtils
+	private static readonly CanvasDevice _device = CanvasDevice.GetSharedDevice();
+	public static CanvasRenderTarget ResizeCanvasBitmap(
+	public async static Task<SoftwareBitmap?> OverlayBitmapImagesAsync(
+	public static async Task<bool> SaveSoftwareBitmapAsync(
+	private async static Task<CanvasBitmap?> LoadCanvasBitmapAsync(BitmapImage bitmapImage)
+	public static BitmapImage Load(string name) =>
+
+// --- File: Src/HackPDM/UI/Controls/UISettings.cs ---
+namespace HackPDM.UI.Controls
+	public class UISettings
+		private static IImageProvider GetProvider(Dictionary<string, string>? assetmap = null)
+		public static IImageProvider? ImageProvider
+		public static ImageSource? GetImage(string key)							=> ImageProvider?.GetImage(key);
+		public static Task<ImageSource?>? GetImageAsync(string key)				=> ImageProvider?.GetImageAsync(key);
+		public static BitmapImage? GetBitmapFromBytes(byte[] imgBytes)
+		public static IEnumerable<string>? GetAvailableKeys()					=> ImageProvider?.GetAvailableKeys();
+		public static void SetImage(string key, byte[] imgBytes)				=> ImageProvider?.SetImage(key, imgBytes);
+		public static void SetImage(string key, SoftwareBitmap img)
+		public async static Task<byte[]> GetImageBytes(BitmapImage img)
+	public interface IImageProvider
+
+// --- File: Src/HackPDM/UI/Models/Structures.cs ---
+namespace HackPDM.UI.Models;
+public record HackLists
+    public required DataGrid Entry { get; init; }
+    public required DataGrid History { get; init; }
+    public required DataGrid Parents { get; init; }
+    public required DataGrid Children { get; init; }
+    public required DataGrid Properties { get; init; }
+    public required DataGrid Versions { get; init; }
+    public ImmutableArray<DataGrid> AllLists
+    public ImmutableArray<DataGrid> SubLists
+public record HackItemsSource
+    public required ImmutableArray<ObservableCollection<Types.EntryRow>> Entry { get; init; } = [];
+    public required ImmutableArray<ObservableCollection<HistoryRow>> History { get; init; } = [];
+    public required ImmutableArray<ObservableCollection<ParentRow>> Parents { get; init; } = [];
+    public required ImmutableArray<ObservableCollection<ChildrenRow>> Children { get; init; } = [];
+    public required ImmutableArray<ObservableCollection<PropertiesRow>> Properties { get; init; } = [];
+    public required ImmutableArray<ObservableCollection<VersionRow>> Versions { get; init; } = [];
+public static class GridMap
+    public static BiMap<DataGrid, IList> Map { get; set; }
+
+// --- File: Src/HackPDM/UI/Data/UIStorage.cs ---
+namespace HackPDM.UI.Data;
+public static class UIStorage
+		public static readonly Color White              = Color.FromArgb(255, 255, 255, 255);
+		public static readonly Color Black              = Color.FromArgb(255, 0, 0, 0);
+		public static readonly Color LightGray			= Color.FromArgb(255, 211, 211, 211);
+		public static readonly Color Gray               = Color.FromArgb(255, 128, 128, 128);
+		public static readonly Color MustardYellow		= Color.FromArgb(255, 150, 150, 0);
+		public static readonly Color DarkGray			= Color.FromArgb(255, 64, 64, 64);
+		public static readonly Color DarkRed			= Color.FromArgb(255, 139, 0, 0);
+		public static readonly Color DarkBlue		    = Color.FromArgb(255, 0, 0, 139);
+		public static readonly Color DarkOliveGreen		= Color.FromArgb(255, 85, 107, 47);
+		public static readonly Color OrangeEntry		= ToColor(TransformUIntToRGB(ColorNames.OrangeBlast));
+		public static readonly Color BlueEntry			= ToColor(TransformUIntToRGB(ColorNames.BluishWater));
+		public static readonly SolidColorBrush BrushWhite				= new(White);
+		public static readonly SolidColorBrush BrushBlack				= new(Black);
+		public static readonly SolidColorBrush BrushLightGray			= new(LightGray);
+		public static readonly SolidColorBrush BrushGray				= new(Gray);
+		public static readonly SolidColorBrush BrushMustardYellow		= new(MustardYellow);
+		public static readonly SolidColorBrush BrushDarkGray			= new(DarkGray);
+		public static readonly SolidColorBrush BrushDarkOliveGreen		= new(DarkOliveGreen);
+		public static readonly SolidColorBrush BrushDarkBlue			= new(DarkBlue);
+		public static readonly SolidColorBrush BrushDarkRed				= new(DarkRed);
+		public static readonly LinearGradientBrush OrangeBrush = FormHelper.EZGradient(
+			[OrangeEntry.ModifyColor(40), OrangeEntry.ModifyColor(10), OrangeEntry.ModifyColor(0)]);
+		public static readonly LinearGradientBrush BlueBrush = FormHelper.EZGradient(
+			[BlueEntry.ModifyColor(40), BlueEntry.ModifyColor(10), BlueEntry.ModifyColor(0)]);
+		public static readonly LinearGradientBrush RedBrush = FormHelper.EZGradient(
+			[DarkRed.ModifyColor(55), DarkRed.ModifyColor(10), DarkRed.ModifyColor(0)]);
+		public static readonly LinearGradientBrush GreenBrush = FormHelper.EZGradient(
+			[DarkOliveGreen.ModifyColor(40), DarkOliveGreen.ModifyColor(10), DarkOliveGreen.ModifyColor(0)]);
+	private static Color ToColor((byte, byte, byte, byte) argb) => Color.FromArgb(argb.Item1, argb.Item2, argb.Item3, argb.Item4);
+	private static (byte, byte, byte, byte)  TransformUIntToRGB(ColorNames names)
+
+// --- File: Src/HackPDM/UI/Data/UIEnums.cs ---
+namespace HackPDM.UI.Data
+	public enum ToolTipIcon
+	public enum FormType
+	public enum HorizontalAlignment
+	[Serializable]
+	public enum ThemeType
+
+// --- File: Src/HackPDM/Configuration/HackUpdater.cs ---
+namespace HackPDM.Configuration;
+internal class HackUpdater
+	private static IHpSettingModel? _odooClientVersion;
+	private static Version? CurrentVersion()
+	private static async Task<bool> IsCorrectOdooVersion(Version? version, bool showOutdatedUpdater = false)
+	public static async Task<bool> EnsureUpdated(bool showOutdatedUpdater = false)
+	public static void UpdaterProcess( )
+
+// --- File: Src/HackPDM.Domain/Helper/IndexedQueue.cs ---
+namespace HackPDM.Domain.Helper;
+public class IndexedQueue<T> : IEnumerable<T>, IEnumerable, ICollection<T>, ICloneable
+    public int Start { get; set; }
+    public int Count { get; private set; }
+    public int Capacity { get; private set; }
+    public int InitialCapacity { get; set; }
+    public bool Growable
+    public int MaxCapacity
+    public object SyncRoot => _buffer.SyncRoot;
+    public bool IsSynchronized => _buffer.IsSynchronized;
+    public bool IsReadOnly => ((ICollection<T>)_buffer).IsReadOnly;
+    private T[] _buffer;
+    private int _mask;
+    private readonly static T[] EmptyArray = [];
+    private const int MINIMUM_POWER_GROW = 1;
+    private const int GROW_FACTOR = 200;
+    public IndexedQueue(int capacity) : this(capacity, false)
+    public IndexedQueue(int initialCapacity = 4, bool growable = true)
+    public T this[int index]
+	public void PushFront(T item)
+	public T PopFront()
+	public void Enqueue(T item)
+    public void TryShrink(int shrinkFactor = 1)
+    private void Grow()
+    private static int NextPowerOfTwo(int value)
+    public T Dequeue()
+    public IEnumerator<T> GetEnumerator()
+    public object Clone() => CloneThis();
+    public IndexedQueue<T> CloneThis()
+    public void Clear()
+    public bool Contains(T item)
+    public void CopyTo(T[] array, int arrayIndex)
+    public void Add(T item)
+    public bool Remove(T item)
+
+// --- File: Src/HackPDM.Domain/Helper/ConcurrentSet.cs ---
+namespace HackPDM.Domain.Helper;
+public class ConcurrentSet<T> : ISet<T>, IReadOnlyCollection<T>, IDisposable
+	private ConcurrentDictionary<T, bool?> _fakeBag;
+	private bool _disposedValue;
+	public int Count
+	public bool IsReadOnly
+	public ConcurrentSet()
+	public ConcurrentSet( ConcurrentBag<T> bag )
+	public ConcurrentSet( IEnumerable<T> items )
+	public T this[int index ]
+	public bool Add( T item ) => _fakeBag.TryAdd( item, null );
+	public void AddRange( IEnumerable<T> items )
+	public bool TryTake( out T item )
+	public void Clear() => _fakeBag.Clear();
+	public bool Contains( T item ) => _fakeBag.ContainsKey( item );
+	public void CopyTo( T [] array, int arrayIndex ) => _fakeBag.Keys.CopyTo( array, arrayIndex );
+	public void ExceptWith( IEnumerable<T> other )
+	public IEnumerator<T> GetEnumerator() => _fakeBag.Keys.GetEnumerator();
+	public void IntersectWith( IEnumerable<T> other )
+	public bool IsProperSubsetOf( IEnumerable<T> other ) => _fakeBag.All( item => other.Contains( item.Key ) );
+	public bool IsProperSupersetOf( IEnumerable<T> other ) => other.All( item => _fakeBag.ContainsKey( item ) );
+	public bool IsSubsetOf( IEnumerable<T> other ) => IsProperSubsetOf( other );
+	public bool IsSupersetOf( IEnumerable<T> other ) => IsProperSupersetOf( other );
+	public bool Overlaps( IEnumerable<T> other ) => other.Any( item => _fakeBag.ContainsKey( item ) );
+	public bool Remove( T item ) => _fakeBag.TryRemove( item, out _ );
+	public bool SetEquals( IEnumerable<T> other )
+	public void SymmetricExceptWith( IEnumerable<T> other )
+	public void UnionWith( IEnumerable<T> other ) => AddRange( other );
+	public static implicit operator ConcurrentSet<T>( T[] items ) => new( items );
+	public static implicit operator ConcurrentSet<T>( List<T> items ) => new( items );
+	public static implicit operator ConcurrentSet<T>( ConcurrentBag<T> bag ) => new ConcurrentSet<T>(bag);
+	public void Dispose()
+	protected virtual void Dispose( bool disposing )
+
+// --- File: Src/HackPDM.Domain/OdooModels/IOdooDefaults.cs ---
+namespace HackPDM.Domain.OdooModels;
+public interface IOdooDefaultBase
+public interface IOdooDefaults : IOdooDefaultBase
+    public static virtual IOdooDefaults? Instance { get; set; }
+
+// --- File: Src/HackPDM.Domain/OdooModels/ReflectionInfo.cs ---
+namespace HackPDM.Domain.OdooModels;
+public class ReflectionInfo
+    public class FieldInfoEntry
+        public FieldInfo? FieldInfo;
+        public string? Name;
+        public ValueConversion? Conversion;
+        public FieldInfoEntry(FieldInfo? fieldInfo, string? name, ValueConversion? conversion)
+        public FieldInfoEntry((FieldInfo? fieldInfo, string? name, ValueConversion? conversion) tup)
+        public FieldInfoEntry() => Init(null, null, null);
+        public FieldInfoEntry Assign(FieldInfo? fieldInfo, string? name, ValueConversion? conversion)
+        public void Init(FieldInfo? fieldInfo, string? name, ValueConversion? conversion)
+    public class PropInfoEntry
+        public PropertyInfo? PropInfo;
+        public string? Name;
+        public ValueConversion? Conversion;
+        public PropInfoEntry(PropertyInfo? propInfo, string? name, ValueConversion? conversion)
+        public PropInfoEntry((PropertyInfo? propInfo, string? name, ValueConversion? conversion) tup)
+        public PropInfoEntry() => Init(null, null, null);
+        public PropInfoEntry Assign(PropertyInfo? propInfo, string? name, ValueConversion? conversion)
+        public void Init(PropertyInfo? propertyInfo, string? name, ValueConversion? conversion)
+    public struct HackFileResults
+        public List<IHackFileModel> CleanFiles { get; private set; } = new();
+        public List<IHackFileModel> BrokenFiles { get; private set; } = new();
+        public HackFileResults(List<IHackFileModel> cleanFiles, List<IHackFileModel> brokenFiles)
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpVersionPropertyModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_VERSION_PROPERTY_NAME, OdooDefaultsConstants.HP_VERSION_PROPERTY)]
+public interface IHpVersionPropertyModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Char, "prop_name")] public string? prop_name {get;set;}
+	[OdooProp(OdooFieldType.Char, "sw_config_name")] public string? sw_config_name {get;set;}
+    [OdooProp(OdooFieldType.Char, "text_value")] public string? text_value {get;set;}
+    [OdooProp(OdooFieldType.Float, "number_value")] public float? number_value {get;set;}
+    [OdooProp(OdooFieldType.Boolean, "yesno_value")] public bool? yesno_value {get;set;}
+    [OdooProp(OdooFieldType.DateTime, "date_value")] public DateTime? date_value {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "version_id")] public IMany2One? version_id {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "prop_id")] public IMany2One? prop_id {get;set;}
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpCategoryPropertyModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_CATEGORY_PROPERTY_NAME, OdooDefaultsConstants.HP_CATEGORY_PROPERTY)]
+public interface IHpCategoryPropertyModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Many2One, "cat_id")] public IMany2One? cat_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "prop_id")] public IMany2One? prop_id { get; set; }
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpRecordStagedModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_RECORD_STAGED_NAME, OdooDefaultsConstants.HP_RECORD_STAGED)]
+public interface IHpRecordStagedModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Char, "target_model")] public string? target_model { get;set;}
+	[OdooProp(OdooFieldType.Many2One, "committing_id")] public IMany2One? committing_id { get; set; }
+	[OdooProp(OdooFieldType.Integer, "target_id")] public int? target_id { get; set; }
+	[OdooProp(OdooFieldType.Many2Many, "dependency_tree_ids")] public IMany2Many? dependency_tree_ids { get; set; }
+	[OdooProp(OdooFieldType.Json, "payload")] public Hashtable? payload { get; set; }
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IIrAttachment.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.IR_ATTACHMENT_NAME, OdooDefaultsConstants.IR_ATTACHMENT)]
+public interface IIrAttachment : IHpOdooRecord
+    [OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
+    [OdooProp(OdooFieldType.Char, "res_model")] public string? res_model {get;set;}
+    [OdooProp(OdooFieldType.Char, "checksum")] public string? checksum {get;set;}
+    [OdooProp(OdooFieldType.Char, "mimetype")] public string? mimetype {get;set;}
+	[OdooProp(OdooFieldType.Char, "type")] public string? type {get;set;}
+    [OdooProp(OdooFieldType.Integer, "file_size")] public int? file_size {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "res_id")] public IMany2One? res_id {get;set;}
+    public string _fileContentsBase64 {get;set;}
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpEntryNameFilterModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_ENTRY_NAME_FILTER_NAME, OdooDefaultsConstants.HP_ENTRY_NAME_FILTER)]
+public interface IHpEntryNameFilterModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Char, "name_proto")] public string? name_proto { get; set; }
+	[OdooProp(OdooFieldType.Char, "name_regex")] public string? name_regex { get; set; }
+	[OdooProp(OdooFieldType.Char, "description")] public string? description { get; set; }
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpReleaseModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_RELEASE_NAME, OdooDefaultsConstants.HP_RELEASE)]
+public interface IHpReleaseModel : IHpOdooRecord
+    [OdooProp(OdooFieldType.Many2One, "version_id")] public IMany2One? version_id { get; set; }
+    [OdooProp(OdooFieldType.Many2One, "release_user_id")] public IMany2One? release_user_id {get;set;}
+	[OdooProp(OdooFieldType.DateTime, "release_stamp")] public DateTime? release_stamp {get;set;}
+	[OdooProp(OdooFieldType.Char, "release_note")] public string? release_note {get;set;}
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpReleaseVersionRelModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_RELEASE_VERSION_REL_NAME, OdooDefaultsConstants.HP_RELEASE_VERSION_REL)]
+public interface IHpReleaseVersionRelModel : IHpOdooRecord
+    [OdooProp(OdooFieldType.Many2One, "release_id")] public IMany2One? release_id {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "release_version")] public IMany2One? release_version {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "release_user")] public IMany2One? release_user {get;set;}
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpReleaseReviewModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_RELEASE_REVIEW_NAME, OdooDefaultsConstants.HP_RELEASE_REVIEW)]
+public interface IHpReleaseReviewModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Many2One, "review_release_version_id")] public IMany2One? review_release_version_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "review_user_id")] public IMany2One? review_user_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "release_id")] public IMany2One? release_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "release_user_id")] public IMany2One? release_user_id {get;set;}
+	[OdooProp(OdooFieldType.DateTime, "review_stamp")] public DateTime? review_stamp {get;set;}
+	[OdooProp(OdooFieldType.DateTime, "review_deadline")] public DateTime? review_deadline {get;set;}
+	[OdooProp(OdooFieldType.DateTime, "release_reviewed")] public DateTime? release_reviewed {get;set;}
+	[OdooProp(OdooFieldType.DateTime, "release_date")] public DateTime? release_date {get;set;}
+	[OdooProp(OdooFieldType.Char, "review_note")] public string? review_note {get;set;}
+	[OdooProp(OdooFieldType.Char, "release_note")] public string? release_note {get;set;}
+	[OdooProp(OdooFieldType.Boolean, "reviewed")] public bool? reviewed {get;set;}
+	[OdooProp(OdooFieldType.Boolean, "accepted")] public bool? accepted {get;set;}
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpTypeModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_TYPE_NAME, OdooDefaultsConstants.HP_TYPE)]
+public interface IHpTypeModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Char, "description")] public string? description {get;set;}
+	[OdooProp(OdooFieldType.Char, "file_ext")] public string? file_ext {get;set;}
+	[OdooProp(OdooFieldType.Char, "type_regex")] public string? type_regex {get;set;}
+	[OdooProp(OdooFieldType.Binary, "icon")] public byte[]? icon {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "cat_id")] public IMany2One? cat_id {get;set;}
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/HpRecordModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpEntryModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_ENTRY_NAME, OdooDefaultsConstants.HP_ENTRY)]
+public interface IHpEntryModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
+	[OdooProp(OdooFieldType.Char, "windows_complete_name")] public string? windows_complete_name { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "checkout_date")] public DateTime? checkout_date {get;set;}
+	[OdooProp(OdooFieldType.Boolean, "deleted")] public bool? deleted {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "latest_version_id")] public IMany2One? latest_version_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "dir_id")] public IMany2One? dir_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "type_id")] public IMany2One? type_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "checkout_user")] public IMany2One? checkout_user {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "checkout_node")] public IMany2One? checkout_node {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "cat_id")] public IMany2One? cat_id {get;set;}
+    public bool IsLatest { get; }
+public struct EntryLocalPath(string path, IHpEntryModel? entry, bool isBroken = false)
+	public IHpEntryModel? Entry { get; set; } = entry;
+	public string Path { get; set; } = path;
+	public bool IsBroken { get; set; } = isBroken;
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpTestModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_TEST_NAME, OdooDefaultsConstants.HP_TEST)]
+public interface IHpTestModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Binary		, "binary"	 )] public byte[]? binary		{ get; set; }
+	[OdooProp(OdooFieldType.Boolean		, "boolean"	 )]	public bool? boolean		{ get; set; }
+	[OdooProp(OdooFieldType.Char		, "character")]	public string? character	{ get; set; }
+	[OdooProp(OdooFieldType.Date		, "dates"	 )]	public DateTime? dates		{ get; set; }
+	[OdooProp(OdooFieldType.DateTime	, "datetimes")]	public DateTime? datetimes	{ get; set; }
+	[OdooProp(OdooFieldType.Float		, "floats"	 )]	public float? floats		{ get; set; }
+	[OdooProp(OdooFieldType.Html		, "html"	 )]	public string? html			{ get; set; }
+	[OdooProp(OdooFieldType.Image		, "image"	 )]	public byte[]? image		{ get; set; }
+	[OdooProp(OdooFieldType.Integer		, "integer"	 )]	public int? integer			{ get; set; }
+	[OdooProp(OdooFieldType.Json		, "json"	 )]	public Hashtable? json		{ get; set; }
+	[OdooProp(OdooFieldType.Monetary	, "monetary" )]	public decimal? monetary	{ get; set; }
+	[OdooProp(OdooFieldType.Selection	, "selection")]	public string? selection	{ get; set; }
+	[OdooProp(OdooFieldType.Text		, "text"	 )]	public string? text			{ get; set; }
+	[OdooProp(OdooFieldType.Many2One	, "many2one" )]	public IMany2One? many2one	{ get; set; }
+	[OdooProp(OdooFieldType.One2Many	, "one2many" )]	public IOne2Many? one2many	{ get; set; }
+    [OdooProp(OdooFieldType.Many2Many	, "many2many")] public IMany2Many? many2many{ get; set; }
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/HpEntryMiniModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+public class HpEntryMiniModel
+	public string? Name;
+	public string? Type;
+	public long? Size;
+	public string? Checkout;
+	public string? Fullname;
+	public DateTime? LatestDate;
+	public bool? Deleted;
+	public string? LatestChecksum;
+	public string? Category;
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpOdooRecord.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+public interface IHpOdooRecord
+    [OdooProp(OdooFieldType.Integer, "id")] public int? id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "commit_id")] public IMany2One? commit_id { get; set; }
+public interface IMany2One : IHpOdooRecord
+    public string? name { get; set; }
+public interface IMultiRecord { public IHpOdooRecord?[]? Ids { get; set; } }
+public interface IMany2Many : IMultiRecord { }
+public interface IOne2Many : IMultiRecord { }
+public interface IHpWindowRootFunctions
+    [OdooProp(OdooFieldType.Char, "windows_complete_name")] public string? windows_complete_name { get; set; }
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpPropertyModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_PROPERTY_NAME, OdooDefaultsConstants.HP_PROPERTY)]
+public interface IHpPropertyModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
+    [OdooProp(OdooFieldType.Char, "prop_type")] public string? prop_type {get;set;}
+	[OdooProp(OdooFieldType.Boolean, "active")] public bool? active {get;set;}
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpDirectoryModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_DIRECTORY_NAME, OdooDefaultsConstants.HP_DIRECTORY)]
+public interface IHpDirectoryModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
+	[OdooProp(OdooFieldType.Char, "parent_path")] public string? parent_path {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "parent_id")] public IMany2One? parent_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "default_cat")] public IMany2One? default_cat {get;set;}
+	[OdooProp(OdooFieldType.Boolean, "deleted")] public bool? deleted {get;set;}
+	[OdooProp(OdooFieldType.Boolean, "sandboxed")] public bool? sandboxed {get;set;}
+public class ExplorerItem
+    public string Name { get; set; }
+    public string IconPath { get; set; }
+    public bool IsFolder { get; set; }
+    public ObservableCollection<ExplorerItem> Children { get; set; }
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpSettingModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_SETTINGS_NAME, OdooDefaultsConstants.HP_SETTINGS)]
+public interface IHpSettingModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
+	[OdooProp(OdooFieldType.Char, "description")] public string? description {get;set;}
+	[OdooProp(OdooFieldType.Char, "type")] public string? type {get;set;}
+	[OdooProp(OdooFieldType.Boolean, "bool_value")] public bool? bool_value {get;set;}
+	[OdooProp(OdooFieldType.Integer, "int_value")] public int? int_value {get;set;}
+	[OdooProp(OdooFieldType.Char, "char_value")] public string? char_value {get;set;}
+	[OdooProp(OdooFieldType.Float, "float_value")] public float? float_value {get;set;}
+	[OdooProp(OdooFieldType.DateTime, "date_value")] public DateTime? date_value {get;set;}
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpUserModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.RES_USERS_NAME, OdooDefaultsConstants.RES_USERS)]
+public interface IHpUserModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
+	[OdooProp(OdooFieldType.Char, "login")] public string? login {get;set;}
+	[OdooProp(OdooFieldType.Char, "email")] public string? email {get;set;}
+	[OdooProp(OdooFieldType.Char, "signature")] public string? signature {get;set;}
+	[OdooProp(OdooFieldType.DateTime, "login_date")] public DateTime? login_date {get;set;}
+	[OdooProp(OdooFieldType.Boolean, "active")] public bool? active {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "company_id")] public IMany2One? company_id {get;set;}
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpVersionRelationshipModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_VERSION_RELATIONSHIP_NAME, OdooDefaultsConstants.HP_VERSION_RELATIONSHIP)]
+public interface IHpVersionRelationshipModel : IHpOdooRecord
+    [OdooProp(OdooFieldType.Many2One, "parent_id")] public IMany2One? parent_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "child_id")] public IMany2One? child_id {get;set;}
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpNodeModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_NODE_NAME, OdooDefaultsConstants.HP_NODE)]
+public interface IHpNodeModel : IHpOdooRecord
+    [OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpCategoryModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_CATEGORY_NAME, OdooDefaultsConstants.HP_CATEGORY)]
+public interface IHpCategoryModel : IHpOdooRecord
+    [OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
+	[OdooProp(OdooFieldType.Char, "cat_description")] public string? cat_description { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "track_version")] public bool? track_version { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "track_depends")] public bool? track_depends { get; set; }
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/HpBaseModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+public abstract partial class HpBaseModel
+	public const int ROOT_OFFSET = 5;
+	[OdooProp(OdooFieldType.Integer, "id")] public int? id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "commit_id")] public virtual IMany2One? commit_id { get; set; }
+	public static string[] UsualExcludedFields { get; set; } = [];
+	public static string[] UsualIncludedFields { get; set; } = [];
+	protected static readonly Dictionary<Type, string> HpModelDictionary = new()
+    public virtual void CompleteConstruction() { }
+    public virtual string? HpModel
+    public bool IsRecord { get; set; }
+    public Hashtable HashedValues { get; set; } = [];
+    public string[]? ExcludedFields { get; set; }
+    public string[]? InsertFields { get; set; }
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpPDMCommitModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_PDM_COMMIT_NAME, OdooDefaultsConstants.HP_PDM_COMMIT)]
+public interface IHpPDMCommitModel : IHpOdooRecord
+	[OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
+	[OdooProp(OdooFieldType.Char, "job_uuid")] public string? job_uuid { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "committed_at")] public DateTime? committed_at { get;set;}
+	[OdooProp(OdooFieldType.DateTime, "commit_finished_at")] public DateTime? commit_finished_at { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "committing")] public bool? committing { get;set;}
+	[OdooProp(OdooFieldType.Boolean, "committed")] public bool? committed { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "errored")] public bool? errored { get; set; }
+	[OdooProp(OdooFieldType.Text, "message_exception")] public string? message_exception { get; set; }
+	[OdooProp(OdooFieldType.Text, "commit_summary")] public string? commit_summary { get; set; }
+	[OdooProp(OdooFieldType.Integer, "progress_total")] public int? progress_total { get; set; }
+	[OdooProp(OdooFieldType.Float, "duration_seconds")] public float? duration_seconds { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "node_by")] public IMany2One? node_by { get; set; }
+	[OdooProp(OdooFieldType.One2Many, "staged_ids")] public IOne2Many? staged_ids { get;set;}
+
+// --- File: Src/HackPDM.Domain/OdooModels/Models/IHpVersionModel.cs ---
+namespace HackPDM.Domain.OdooModels.Models;
+[OdooModel(OdooDefaultsConstants.HP_VERSION_NAME, OdooDefaultsConstants.HP_VERSION)]
+public interface IHpVersionModel : IHpOdooRecord
+    [OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
+    [OdooProp(OdooFieldType.Char, "file_ext")] public string? file_ext {get;set;}
+    [OdooProp(OdooFieldType.Char, "checksum")] public string? checksum {get;set;}
+    [OdooProp(OdooFieldType.Char, "windows_complete_name")] public string? windows_complete_name { get; set; }
+    [OdooProp(OdooFieldType.Many2One, "entry_id")] public IMany2One? entry_id {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "node_id")] public IMany2One? node_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "dir_id")] public IMany2One? dir_id {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "checkout_user")] public IMany2One? checkout_user {get;set;}
+    [OdooProp(OdooFieldType.Many2One, "attachment_id")] public IMany2One? attachment_id {get;set;}
+	[OdooProp(OdooFieldType.Many2Many, "parent_ids")] public IMany2Many? parent_ids { get; set; }
+	[OdooProp(OdooFieldType.Many2Many, "child_ids")] public IMany2Many? child_ids { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "file_modify_stamp")] public DateTime? file_modify_stamp {get;set;}
+    [OdooProp(OdooFieldType.Integer, "file_size")] public int? file_size {get;set;}
+    [OdooProp(OdooFieldType.Binary, "preview_image")] public byte[]? preview_image {get;set;}
+	[OdooProp(OdooFieldType.Binary, "file_contents")] public byte[]? file_contents {get;set;}
+
+// --- File: Src/HackPDM.Domain/Hack/IHackBaseFileModel.cs ---
+namespace HackPDM.Domain.Hack;
+public interface IHackBaseFileModel
+    public string? Name
+    public string? DirectoryName
+    public string? FullPath
+    public string? RelativePath
+    public byte[]? FileContents { get; set; }
+    public FileInfo? Info { get; set; }
+    public Hashtable ComputeHashtable(bool includeEmpty = true, in string[] excludedFieldNames = null);
+	protected static T? DefaultType<T>() where T : new() => default;
+
+// --- File: Src/HackPDM.Domain/Hack/IHackFileModel.cs ---
+namespace HackPDM.Domain.Hack;
+public interface IHackFileModel : IHackBaseFileModel
+    public string? TypeExt
+    public DateTime ModifiedDate
+    protected DateTime OverwriteDate
+    public long? FileSize
+    public string? Checksum { get; set; }
+	public int? HpEntryId { get; set; }
+	public bool? HasRemoteEntry { get; set; }
+    public int? HpVersionId { get; set; }
+    public bool? HasRemoteVersion { get; set; }
+    public bool? Owner { get; set; }
+    public bool? Exists
+
+// --- File: Src/HackPDM.Domain/Hack/IHackDefaults.cs ---
+namespace HackPDM.Domain.Hack
+	public interface IHackDefaults : IHackDefaultBase
+
+// --- File: Src/HackPDM.Domain/Representation/ChildrenRow.cs ---
+namespace HackPDM.Domain.Representation;
+public class ChildrenRow : DataGridData, IRowData<ChildrenRow>
+	public int Version { get; set; }
+	public string? BasePath { get; set; }
+	public ChildrenRow() { }
+	public ChildrenRow Clone()
+
+// --- File: Src/HackPDM.Domain/Representation/VersionRow.cs ---
+namespace HackPDM.Domain.Representation;
+public class VersionRow : DataGridData, IRowData<VersionRow>
+	public int Id { get; set; }
+	public long? FileSize { get; set; }
+	public int? DirectoryId { get; set; }
+	public int? NodeId { get; set; }
+	public int? EntryId { get; set; }
+	public int? AttachmentId { get; set; }
+	public DateTime? ModifyDate { get; set; }
+	public string? Checksum { get; set; }
+	public string? OdooCompletePath { get; set; }
+	public VersionRow Clone()
+
+// --- File: Src/HackPDM.Domain/Representation/TypeRepresentative.cs ---
+namespace HackPDM.Domain.Representation
+    class TypeRepresentative
+	public interface IVectorize2<T>
+        public abstract T x { get; set; }
+        public abstract T y { get; set; }
+        public T this[int index] { get; set; }
+        public int Length { get; }
+    public interface IVectorize3<T> : IVectorize2<T>
+        public abstract T z { get; set; }
+    public interface IVectorize4<T> : IVectorize3<T>
+        public abstract T w { get; set; }
+	public struct Vector2<T>(T x, T y) : IVectorize2<T>
+		public T x { get; set; } = x;
+		public T y { get; set; } = y;
+		public readonly int Length { get => 2; }
+		public T this[int index]
+		public override readonly string? ToString() => $"({x}, {y})";
+	public struct Vector3<T>(T x, T y, T z) : IVectorize3<T>
+		public T x { get; set; } = x;
+		public T y { get; set; } = y;
+		public T z { get; set; } = z;
+		public readonly int Length { get => 3; }
+		public T this[int index]
+		public override readonly string? ToString() => $"({x}, {y}, {z})";
+	public struct Vector4<T>(T x, T y, T z, T w) : IVectorize4<T>
+		public T x { get; set; } = x;
+		public T y { get; set; } = y;
+        public T z { get; set; } = z;
+        public T w { get; set; } = w;
+		public readonly int Length { get => 4; }
+		public T this[int index]
+		public static implicit operator RectInt32(Vector4<T> xyzw)		=> xyzw is Vector4<int> vec ? new RectInt32(vec.x, vec.y, vec.z, vec.w) : default;
+		public override readonly string? ToString() => $"({x}, {y}, {z}, {w})";
+
+// --- File: Src/HackPDM.Domain/Representation/HistoryRow.cs ---
+namespace HackPDM.Domain.Representation;
+public class HistoryRow : DataGridData, IRowData<HistoryRow>
+	public int          Version     { get; set; }
+	public IHpUserModel?      ModUser     { get; set; }
+	public DateTime?    ModDate     { get; set; }
+	public long?         Size        { get; set; }
+	public DateTime?    RelDate     { get; set; }
+	public HistoryRow() {}
+	public HistoryRow Clone()
+
+// --- File: Src/HackPDM.Domain/Representation/SearchRow.cs ---
+namespace HackPDM.Domain.Representation;
+public class SearchRow : DataGridData, IRowData<SearchRow>
+	public int? Id { get; set; }
+	public string? Directory { get; set; }
+	public SearchRow Clone()
+
+// --- File: Src/HackPDM.Domain/Representation/FileTypeEntryFilterRow.cs ---
+namespace HackPDM.Domain.Representation;
+public class FileTypeEntryFilterRow : DataGridData, IRowData<FileTypeEntryFilterRow>
+	public int Id { get; set; }
+	public string? Proto { get; set; }
+	public string? RegEx { get; set; }
+	public string? Description { get; set; }
+	public FileTypeEntryFilterRow Clone()
+
+// --- File: Src/HackPDM.Domain/Representation/Representative.cs ---
+namespace HackPDM.Domain.Representation;
+public class BasicStatusMessage : IRowData<BasicStatusMessage>
+	public StatusMessage Status { get; set; } = StatusMessage.OTHER;
+	public string? Message { get; set; }
+	public BasicStatusMessage Clone() => new()
+public partial class DataGridData
+	public virtual string? Name { get; set; } = "";
+	public virtual string? Text
+public class Wrap<T>(T value) where T : struct
+	public static implicit operator T(Wrap<T> wrap) => wrap.Value;
+	public static implicit operator Wrap<T>(T value) => new Wrap<T>(value);
+
+// --- File: Src/HackPDM.Domain/Representation/EntryRow.cs ---
+namespace HackPDM.Domain.Representation;
+public partial class EntryRow : DataGridData, IRowData<EntryRow>
+	public int? Id { get; set; }
+	public string? Type { get; set; }
+	public long? Size { get; set; }
+	public FileStatus Status { get; set; } = FileStatus.Lo;
+	public IHpUserModel? Checkout { get; set; }
+	public IHpCategoryModel? Category { get; set; }
+	public DateTime? LocalDate { get; set; }
+	public DateTime? RemoteDate { get; set; }
+	public string? FullName { get; set; }
+	public int? LatestId { get; set; }
+	public int? LatestReleaseId { get; set; }
+	public virtual FileInfo? LocalFile { get; set; } = null;
+	public virtual bool? IsLocal { get; } = null;
+	public virtual bool? IsRemote { get; } = null;
+	public virtual bool? IsOnlyLocal { get; } = null;
+	public virtual bool? IsOnlyRemote { get; } = null;
+	public EntryReprType? ReprType { get; set; }
+	public EntryRow Clone()
+
+// --- File: Src/HackPDM.Domain/Representation/FileTypeLocDatRow.cs ---
+namespace HackPDM.Domain.Representation;
+public class FileTypeLocDatRow : DataGridData, IRowData<FileTypeLocDatRow>
+	public string? Extension { get; set; }
+	public string? RegEx { get; set; }
+	public string? Category { get; set; }
+	public string? Description { get; set; }
+	public object? Icon { get; set; } // Type is Unknown, so use object
+	public object? RemoveIcon { get; set; } // Type is Unknown, so use object
+	public FileTypeLocDatRow Clone()
+
+// --- File: Src/HackPDM.Domain/Representation/FileTypeRow.cs ---
+namespace HackPDM.Domain.Representation;
+public class FileTypeRow : DataGridData, IRowData<FileTypeRow>
+	public string? Extension { get; set; }
+	public string? Category { get; set; }
+	public string? RegEx { get; set; }
+	public string? Description { get; set; }
+	public FileTypeRow Clone()
+
+// --- File: Src/HackPDM.Domain/Representation/ParentRow.cs ---
+namespace HackPDM.Domain.Representation;
+public class ParentRow : DataGridData, IRowData<ParentRow>
+	public int          Version     { get; set; }
+	public string?      BasePath    { get; set; }
+	public ParentRow() {}
+	public ParentRow Clone()
+
+// --- File: Src/HackPDM.Domain/Representation/OperatorsRow.cs ---
+namespace HackPDM.Domain.Representation;
+public partial class OperatorsRow : DataGridData, IRowData<OperatorsRow>
+	public partial Operators Operator { get; set; }
+	public partial string? OpRepr { get; set; }
+	public OperatorsRow Clone()
+public partial class OperatorsRow
+	public partial Operators Operator
+	public partial string? OpRepr
+
+// --- File: Src/HackPDM.Domain/Representation/PropertiesRow.cs ---
+namespace HackPDM.Domain.Representation;
+public class PropertiesRow : DataGridData, IRowData<PropertiesRow>
+	public int          Version     { get; set; }
+	public int?         Property    { get; set; }
+	public string?      Configuration{  get; set; }
+	public PropertyType? Type        { get; set; }
+	public object?      ValueData       { get; set; }
+	public PropertiesRow() {}
+	public PropertiesRow Clone()
+
+// --- File: Src/HackPDM.Domain/Representation/SearchPropertiesRow.cs ---
+namespace HackPDM.Domain.Representation;
+public class SearchPropertiesRow : DataGridData, IRowData<SearchPropertiesRow>
+	public int ID { get; set; }
+	public Operators Comparer { get; set; }
+	public string? Value { get; set; }
+	public bool IsTextOrDate { get; set; }
+	public SearchPropertiesRow Clone()
+
+// --- File: Src/HackPDM.Domain/Representation/FileTypeLocRow.cs ---
+namespace HackPDM.Domain.Representation;
+public class FileTypeLocRow : DataGridData, IRowData<FileTypeLocRow>
+	public string? Extension { get; set; }
+	public string? Status { get; set; }
+	public string? Example { get; set; }
+	public FileTypeLocRow Clone()
+
+// --- File: Src/HackPDM.Domain/Representation/TreeData.cs ---
+namespace HackPDM.Domain.Representation;
+public abstract partial class TreeData
+	public virtual string? Name { get; set; }
+	public virtual string? FullPath { get; }
+	public virtual object? Tag { get; set; }
+	public virtual int? DirectoryId { get; set; }
+	public abstract bool IsExpanded { get; set; }
+	public abstract int Depth { get; }
+	public abstract bool HasChildren { get; }
+	public abstract bool IsLinked { get; }
+	public abstract void SortTree();
+
+// --- File: Src/HackPDM.Domain/Data/DataModel.cs ---
+public class StatusData
+    public static StatusData StaticData = new();
+    public static long SessionDownloadBytes;
+    public int TotalProcess;
+    public int SkipCounter;
+    public int ProcessCounter;
+    public int MaxCount;
+    public long DownloadBytes;
+
+// --- File: Src/HackPDM.Core/FileOperations.cs ---
+namespace HackPDM.Core;
+public static class FileOperations
+    public static string ConvertToBase64(string filePath)
+    public static string? ConvertBytesToBase64(byte[]? fileBytes)
+	public static byte[]? ConvertFromBase64(string? base64String )
+	public static bool InPWAFolder(string? fullFileName) => fullFileName?.StartsWith(HackDefaults.Instance.PwaPathAbsolute) ?? false;
+    public static long? WriteAllBytes(HackFile file)
+    public async static Task<bool> WriteAllBytesAsync(HackFile file)
+    public static bool SameChecksum(IHpVersionModel versionModel, ChecksumType cType=ChecksumType.Sha1)
+    public static bool SameChecksum( FileInfo file, string compareChecksum, ChecksumType cType = ChecksumType.Sha1 )
+	public static DirectoryInfo CreateDirectory(string path)
+	public static bool SameChecksum( string directoryPath, string compareChecksum, HashAlgorithm alg )
+    public static HashAlgorithm GetHashAlgorithm(ChecksumType cType) => cType switch
+    public static string? FileChecksum(string? filePath, HashAlgorithm alg)
+    public static async Task<string> FileChecksumAsync(string directoryPath, HashAlgorithm alg)
+    private async static Task<bool> WriteBytes(string path, byte[] bytes)
+    public static byte[] ReadFileInChunks(string filePath)
+    public static HackFile[] FilesInDirectory(string path, SearchOption searchOption = SearchOption.TopDirectoryOnly)
+    public static HackFile[]? FilesInDirectory(
+    public static string? GetRelativePath( string fullPath )
+    public static string FileSizeReformat(int? bytesize)
+    public static string FileSizeReformat(long? bytesize, bool standard = false)
+    public static bool IsFileLocked(FileInfo file)
+    public static bool OpenFile(string fullpath)
+    public static bool OpenFolder(string folderPath)
+    public static string? ConvertToWindowsPath(string? pathway, bool withAbsolutePath)
+    public static string? NodePathToWindowsPath(string? pathway, bool withAbsolutePath = true)
+    public static string WindowsToOdooPath(string pathway, bool fromFullPath = false)
+
+// --- File: Src/HackPDM.Core/ReplaceExpressionVisitor.cs ---
+namespace HackPDM.Core;
+public sealed class ReplaceExpressionVisitor : ExpressionVisitor
+	private readonly IReadOnlyDictionary<Expression, Expression> _replacements;
+	public ReplaceExpressionVisitor(IReadOnlyDictionary<Expression, Expression> replacements)
+	[return: NotNullIfNotNull(nameof(node))]
+	public override Expression? Visit(Expression? node)
+public static class ExpressionExtensions
+	public static Expression Replace(this Expression expression, Expression from, Expression to)
+	public static Expression ReplaceMany(this Expression expression, params (Expression from, Expression to)[] pairs)
+public static class QueryableHijackExtensions
+	public static IQueryable<TOut> RewriteQuery<T, TOut>(
+
+// --- File: Src/HackPDM.Core/AsyncHelper.cs ---
+namespace HackPDM.Core;
+public class AsyncHelper
+    private readonly Func<bool> _predicate;
+    private readonly double _pollDelayMs;
+    private readonly double _timeoutMs;
+    private readonly int _pollDelayMsInt;
+    private readonly int _timeoutMsInt;
+    private int _totalPollMs = 0;
+    private bool _signal = false;
+    private bool _timedOut = false;
+    private bool _wasCancelled = false;
+    private CancellationToken _token;
+    private AsyncHelper(Func<bool> eval, int millisecondTimeout = -1, int pollingMilliseconds = 1000, CancellationToken token = default)
+    private async Task<AsyncHelper> InitializeAsync(bool wantTrue = true)
+    private async Task<AsyncHelper> InitializeAsync(Action action, bool wantTrue = true)
+    private async IAsyncEnumerable<(AsyncHelper, T)> InitializeAsync<T>(Func<T> func, bool wantTrue = true)
+    private async Task<T> IterationInternal<T>(DateTime timeout, Func<T> func, bool indefinite = false, bool wantTrue = true)
+    public static async Task<bool> WaitUntil(Func<bool> eval, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
+    public static async Task<bool> WaitWhile(Func<bool> eval, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
+    public static async Task<bool> WaitForMilliseconds(int milliseconds, CancellationToken token = default)
+    public static async Task<bool> DoWhileWaitUntil(Func<bool> eval, Action action, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
+    public static async Task<bool> DoWhileWaitWhile(Func<bool> eval, Action action, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
+    public static async Task<bool> AsyncRunner(Func<Task> function, string statusHeader = "Status", CancellationTokenSource tokenSource = default)
+    private static async Task<bool> DoWhileWaitInternal(Func<bool> eval, Action action, bool wantTrue = true, int pollingMsEval = 1000, int msTimeout = -1, CancellationToken token = default)
+    private static async Task<bool> WaitInternal(Func<bool> eval, bool wantTrue = true, int msTimeout = -1, int pollingMs = 1000, CancellationToken token = default)
+    private static async Task<bool> WaitTimeInternal(int milliseconds = 1000, CancellationToken token = default)
+
+// --- File: Src/HackPDM.Core/General/MathUtility.cs ---
+namespace HackPDM.Core.General;
+public class MathUtility
+    public static int Min(params int[] values)
+    public static int Max(params int[] values)
+    public static int MaxUpTo(int max, params int[] values)
+    public static int MinDownTo(int min, params int[] values)
+    public static T MinDownTo<T>(T min, params T[] values) where T : IComparable<T>, IEquatable<T>
+    public static T MaxUpTo<T>(T max, params T[] values) where T : IComparable<T>, IEquatable<T>
+	public static void If(bool condition, Action @true, Action @false)
+	public static T If<T>(bool condition, Func<T> @true, Func<T> @false)
+	public static Lazy<T> LazyIf<T>(bool condition, Func<T> @true, Func<T> @false)
+
+// --- File: Src/HackPDM.Core/General/ReflectionHelp.cs ---
+namespace HackPDM.Core.General;
+public class ReflectionHelp
+    public static T ConvertToClass<T>(in Hashtable ht, MethodType mType = MethodType.PropertyOnly)
+    public static T[]? ConvertToClasses<T>(in IEnumerable<Hashtable>? hts, MethodType mType = MethodType.PropertyOnly) where T : HpBaseModel, new()
+    public static T AssignToClass<T>(in Hashtable ht, T obj, MethodType mType = MethodType.PropertyOnly)
+    public static T[]? AssignToClasses<T>(ref IEnumerable<(Hashtable, T)>? hts, MethodType mType = MethodType.PropertyOnly)
+    public static void AssignToClass<T>( in Hashtable ht, ref T obj, MethodType mType = MethodType.PropertyOnly )
+    public static Hashtable ConvertToHashtable<T>(T obj, MethodType mType = MethodType.PropertyAndField, bool includeEmpty = true, in string[] excludedFieldNames = null)
+    private static void GetProperties<T>(T obj, ref Hashtable ht, bool includeEmpty = true, in string[] excludedFieldNames = null)
+    private static void GetFields<T>(T obj, ref Hashtable ht, bool includeEmpty = true, in string[] excludedFieldNames = null)
+    internal static object? ConvertValue(object value, Type targetType)
+    internal static ValueConversion ConvertValueMethod(object value, Type targetType)
+    internal static object? ConvertValue(object? value, Type targetType, ValueConversion conversion)
+
+// --- File: Src/HackPDM.Core/General/ExtensionMethods.cs ---
+namespace HackPDM.Core.General;
+public static class ExtensionMethods
+	public static int Compare(this int? a, int? b) => Nullable.Compare(a, b);
+	public static void RemoveFromIndex<T>(this IList<T> list, int index, bool isInclusive = false)
+    public static IList AddRange(this IList list, IEnumerable items)
+	public static T GetAssign<T>(this T obj, Func<T> func) where T : class
+    public static T? FirstOrDefault<T>(this ArrayList? list, Predicate<T>? predicate = null) where T : class
+    public static T[] Populate<T>(this T[] values, Func<T> func)
+    private static IEnumerable<(bool, TOut?)> SegmentSelectInternal<TIn, TOut>(IEnumerable<TIn?> array, Func<TIn?, (bool, TOut?)> predicateSelect, bool skipNullItem = true)
+	private static IEnumerable<(bool, TOut?)> SegmentSelectInternal<TIn, TOut>(IEnumerable<TIn?> array, Func<TIn?, int, (bool, TOut?)> predicateSelect, bool skipNullItem = true)
+	private static IEnumerable<(bool, TOut?, TOut2?)> SegmentSelectDiffInternal<TIn, TOut, TOut2>(IEnumerable<TIn?> array, Func<TIn?, int, (bool, TOut?, TOut2?)> predicateSelect, bool skipNullItem = true)
+	public static IEnumerable<object> Flatten(this IEnumerable source)
+	public static bool StartsWith(this Span<char> str, Span<string> list)
+	public static HashSet<T> AddAll<T>(this HashSet<T> hashset, IEnumerable<T> values)
+	public static void RenewTokenSource(this CancellationTokenSource? source)
+	public static List<TOut> TakeAndRemove<TOut>(this List<TOut> source, Func<TOut, bool> predicate)
+		public IEnumerable this[Range range]
+		public bool Any<T>(Func<T, bool> predicate)
+	    public IEnumerable<TOut> Select<TIn, TOut>(Func<TIn, TOut> selector)
+	    public IEnumerable<Tout> SkipSelect<TIn, Tout>(Predicate<TIn> predicate, Func<TIn, Tout> selector)
+	    public IEnumerable<TOut> SelectNotDefault<TIn, TOut>(Func<TIn, TOut?> selector) where TOut : IEquatable<TOut>
+	    public IEnumerable<T> SelectMany<TIn, T>(Func<TIn, IEnumerable<T>> selector)
+	    public IEnumerable<TOut> Select<TIn, TOut>(Func<TIn, TOut> selector)
+	    public IEnumerable<TOut> SelectKeysWhere<TIn, TOut>(Func<TIn, TOut> selector, Predicate<TOut> predicate)
+	    public IEnumerable<TOut> SelectKeysWhere<TIn, TOut>(Func<TIn, TOut> selector, Func<TIn, TOut, bool> predicate)
+	    public IEnumerable<TOut> SelectMany<TIn, TOut>(Func<TIn, IEnumerable<TOut>> selector)
+	    public bool TryGetValue(object key, out object? value)
+	    public bool TryGetValue<T>(object key, out T? value)
+	    public bool TryGetValue<TKey, TVal>(TKey key, out TVal? value) where TKey : notnull
+	    public Hashtable TakeWhere(Predicate<DictionaryEntry> predicate)
+		public void Deconstruct<TK, TV>(out TK? key, out TV? value)
+		public void Deconstruct(out object key, out object value)
+		public ObservableCollection<string> SplitByPathObserve()
+		public TArray Split<TArray>(string[]? delimiters = null, StringSplitOptions options = StringSplitOptions.RemoveEmptyEntries)
+		public IEnumerable<string> SplitBy(Func<string, char, bool> evaluater)
+		public TArray Split<TArray>(string delimiter = " ", StringSplitOptions options = StringSplitOptions.RemoveEmptyEntries)
+		public bool GetFileEndType(out string extension)
+		public bool IsEmptySpace()
+		public string[] SplitByPath()
+		public bool MoveFile(string toPath)
+		public FileInfo CopyFile(string toPath)
+        public void Sort(Comparison<T> comparer, bool reverse = false) => oc.SortInternal(comparer, reverse);
+		public void ReverseSort(Comparison<T> comparer) => oc.SortInternal(comparer, true);
+		private void SortInternal(Comparison<T> comparer, bool reverse = false)
+		public T Cloned() => obj.Clone() as T;
+	    public (IEnumerable<TOut?>, IEnumerable<TOut?>) SegmentSelectWhere<TOut>(Func<T?, (bool, TOut?)> predicateSelect, bool skipNullItem = true)
+		public (IEnumerable<TOut?>, IEnumerable<TOut2?>) SegmentSelectDiffWhere<TOut, TOut2>(Func<T?, int, (bool, TOut?, TOut2?)> predicateSelect, bool skipNullItem = true)
+	    public (IEnumerable<TOut?>, IEnumerable<TOut?>) SegmentSelectWhere<TOut>(Func<T?, int, (bool, TOut?)> predicateSelect, bool skipNullItem = true)
+	    public IEnumerable<TOut?> LambdaContextual<TContext, TOut>(TContext context, Func<TContext, T?, (bool, TOut?)> predicateSelect)
+	    public (List<T?>, List<T?>) SegmentWhere(Predicate<T?> predicate)
+		public IEnumerable<T> SkipNull()
+		public IEnumerable<TOut> SkipNullSelect<TOut>(Func<T, TOut> func)
+	    public IEnumerable<TOut> SkipSelect<TOut>(Func<T, bool> predicate, Func<T, TOut> selector)
+	    public IEnumerable<TOut?> SkipSelect<TOut>(Func<T, (bool, TOut)> predicateSelector)
+	    public bool ContainsAny(IEnumerable<T> values)
+	    public bool SelectContains<TOut>(TOut value, Func<T, TOut> selector)
+	    public bool SelectContainsAny<TOut>(IEnumerable<TOut> values, Func<T, TOut> selector)
+	    public IEnumerable<T> SkipList(IEnumerable<T> match)
+		public TOut FirstSelect<TOut>(Func<T, (bool, TOut)> predicateSelect)
+		public TOut? FirstOrDefaultSelect<TOut>( Func<T, (bool, TOut)> predicateSelect )
+		public IEnumerable<(T, T2)> PopulateZip<T2>(Func<T, T2> func)
+		public TOut? FirstOrDefaultSelect<TOut>( Func<object, (bool, TOut)> predicateSelect )
+public static class ExtensionConvertMethods
+	public static HackFile[] ToHackArray(this IEnumerable<FileInfo> fileInfos)
+	public static ArrayList ToArrayListIDs<T>(this IEnumerable<T> source) where T : HpBaseModel, new()
+		public T[] ToArray<T>() => [.. list.Cast<T>()];
+		public HashSet<T> ToHashSet<T>() => [.. list.Cast<T>()];
+	    public ConcurrentBag<T> ToConcurrentBag<T>()
+	    public ConcurrentSet<T> ToConcurrentSet<T>()
+	    public ArrayList ToArrayList()
+	    public ConcurrentSet<T> ToConcurrentSet()
+	    public ArrayList ToArrayList()
+	    public ConcurrentBag<T> ToConcurrentBag()
+public static class Conversions
+		public (T1, T1) Repeat2() => (v1, v1);
+		public (T1, T1, T1) Repeat3() => (v1, v1, v1);
+		public (T1, T1, T1, T1) Repeat4() => (v1, v1, v1, v1);
+		public (T1, T1, T1, T1, T1) Repeat5() => (v1, v1, v1, v1, v1);
+public class DynamicTuple<T>
+	private readonly T[] _items;
+	public DynamicTuple(params T[] items)
+	public ref T this[int index] => ref _items[index];
+	public int Length => _items.Length;
+	public void Deconstruct(out T first, out T second)
+	public void Deconstruct(out T first, out T second, out T third)
+	public void Deconstruct(out T a, out T b, out T c, out T d)
+	public void Deconstruct(out T a, out T b, out T c, out T d, out T e)
+	public void Deconstruct(out T a, out T b, out T c, out T d, out T e, out T f)
+	public void Deconstruct(out T a, out T b, out T c, out T d, out T e, out T f, out T g)
+public static class UnsafeExtensions
+	public delegate ref TOut RefSelector<TIn, TOut>(ref TIn input);
+		public void TakeWhile( Predicate<T> predicate )
+		public Span<T> Skip(Func<T, bool> predicate)
+		public ref TOut[] RefSelect<TOut>(
+		public Span<T> SkipUnsafe(Func<T, bool> predicate)
+		public TIn[] SelectFirst()
+		public TOut[] SelectSecond()
+		public Span<TOut> SelectSecondSpan() => span.SelectSecond();
+
+// --- File: Src/HackPDM.Core/General/ExtensionsAsync.cs ---
+namespace HackPDM.Core.General
+	public static class ExtensionsAsync
+		public static async Task<CancellationTokenSource> RenewTokenSourceAsync(this CancellationTokenSource? source)
+
+// --- File: Src/HackPDM.Core/Hack/HackFile.cs ---
+namespace HackPDM.Core.Hack;
+public class HackFile : HackBaseFile, IHackFileModel
+    public string? TypeExt
+    public DateTime ModifiedDate
+    public DateTime OverwriteDate { get; set; } = default;
+    public string? Checksum { get; set; }
+    public long? FileSize
+	public int? HpEntryId { get; set; }
+	public bool? HasRemoteEntry { get; set; }
+    public int? HpVersionId { get; set; }
+    public bool? HasRemoteVersion { get; set; }
+    public bool? Owner { get; set; }
+    public bool? Exists
+    public HackFile() {}
+    public HackFile(HackFile hack)
+    public HackFile(
+    public HackFile(FileInfo? file)
+	public HackFile(EntryRow entry)
+    public HackFile(string? fullPath) => InitializeHackFromPath( fullPath );
+	internal void InitializeFromEntryRow(EntryRow entry, bool initFileInfo=false)
+    internal void ApplyModifiedDateToLocal()
+    internal void ApplyNonOwnerReadOnly()
+    public void SetModifiedDate(DateTime date)
+	private void NullSelf()
+    public void InitializeHackFromPath(string? path) => AssignToSelf(GetFromPath(path));
+    private void AssignToSelf(HackFile? hack)
+    public static async Task<HackFile> GetFromFileInfo( FileInfo file )
+	public static async void ApplyFileInfoToHackFileAsync( FileInfo file, HackFile hack)
+    internal static HackFile? GetFromPath(EntryRow? entry, bool initWithFileInfo=true)
+	public static HackFile? GetFromPath(string? path, string? directory = null, bool initWithFileInfo=true)
+    private static HackFile? GetHackFromPathUninitialized(string? path, string? directory=null)
+    public static HackFile GetFromVersion(IHpVersionModel versionModel)
+    public static bool GetLocalVersion(in IHpVersionModel versionModel, out HackFile hackFile)
+    public static bool IsLocalVersion(in IHpVersionModel versionModel, in HackFile hackFile)
+    public static bool GetLocalVersion(in IHpVersionModel[] versions, out HackFile hackFile)
+    public static async Task<(int, long)?> CreateFiles(params HackFile[] hackFiles)
+    public long? CreateFile() => FileOperations.WriteAllBytes(this);
+    public override bool Equals( object obj )
+    public override int GetHashCode()
+    public async static Task<HackFile?> GetHackFileAsync(string? fullFilePath)
+    private static async Task<HackFile> FileInfoToHackFile(FileInfo fileInfo) => await HackFile.GetFromFileInfo(fileInfo);
+    public static implicit operator HackFile( FileInfo file)
+
+// --- File: Src/HackPDM.Core/Hack/HackBaseFile.cs ---
+namespace HackPDM.Core.Hack;
+public abstract class HackBaseFile : IHackBaseFileModel
+    public string? Name
+    public string? DirectoryName
+    public string? FullPath
+    public string? RelativePath
+    public byte[]? FileContents { get; set; }
+    public FileInfo? Info { get; set; }
+    public virtual Hashtable ComputeHashtable(bool includeEmpty = true, in string[]? excludedFieldNames = null)
+
+// --- File: Src/HackPDM.Core/Hack/HackDefaults.cs ---
+namespace HackPDM.Core.Hack;
+public class HackDefaults : IHackDefaults
+	public ISettingsProvider? SettingsProvider { get; set; }
+	public string PwaPathAbsolute
+	public string PwaPathRelative
+	public string MeasureFileSize
+	public double MeasureByteSize
+	public double FileSizeMult
+	public double? ByteSizeMultiplier
+	public string? CurrentPath { get; set; } = null;
+	public static IHackDefaults? Instance { get; set; } = new HackDefaults();
+	public HackDefaults() { }
+	public HackDefaults(ISettingsProvider settingsProvider)
+	public static bool GetFiles(string relativePath, out IEnumerable<string> files)
+	public static string DefaultPath(string? pathway, bool withAbsolute = false)
+	public static T[] ArrayListToModelsArray<T>(ArrayList al) where T : IConvert<T>, new()
+	private static void RecurseTravel(DirectoryDict directory, string directoryFullPath)
+
+// --- File: Src/HackPDM.Core/Odoo/OdooHelp.cs ---
+public class OdooHelp
+
+// --- File: Src/HackPDM.Core/Configuration/CoreSettings.cs ---
+namespace HackPDM.Core.Configuration;
+public class CoreSettings(ISettingsProvider provider) : ISettingsProvider
+    public ISettingsProvider Provider { get; } = provider;
+    public T? Get<T>(string key, T? defaultValue = default) => Provider.Get(key, defaultValue);
+    public void Set<T>(string key, T value) => Provider.Set(key, value);
+    public bool Contains(string key) => Provider.Contains(key);
+    public void Remove(string key) => Provider.Remove(key);
+
+// --- File: Src/HackPDM.Tests/UnitTest1.cs ---
+	public class UnitTest1
+
+// --- File: Src/HackPDM.Abstractions/Structures/CallbackDelegations.cs ---
+namespace HackPDM.Abstractions;
+public static class CallbackDelegations
+    public delegate Task<bool> AbleToLogin();
+
+// --- File: Src/HackPDM.Abstractions/Structures/XmlRpcExposedAttribute.cs ---
+namespace HackPDM.Abstractions;
+[AttributeUsage( AttributeTargets.Class | AttributeTargets.Method )]
+public class XmlRpcExposedAttribute : Attribute
+	public static bool ExposedObject( object obj )
+	public static bool ExposedMethod( object obj, string methodName )
+	public static bool IsExposed( MemberInfo mi )
+
+// --- File: Src/HackPDM.Abstractions/Structures/BiMap.cs ---
+namespace HackPDM.Abstractions
+	public class BiMap<TKey, TValue> :
+		public Dictionary<TKey, TValue> Forward { get; }
+		public Dictionary<TValue, TKey> Backward { get; }
+		public int Count { get; }
+		public bool IsReadOnly { get; }
+		public ICollection<TKey> Keys => ((IDictionary<TKey, TValue>)Forward).Keys;
+		public ICollection<TValue> Values => ((IDictionary<TKey, TValue>)Forward).Values;
+		public bool IsSynchronized => ((ICollection)Forward).IsSynchronized;
+		public object SyncRoot => ((ICollection)Forward).SyncRoot;
+		public bool IsFixedSize => ((IDictionary)Forward).IsFixedSize;
+		public TKey this[TValue key] { get => ((IDictionary<TValue, TKey>)Backward)[key]; set => ((IDictionary<TValue, TKey>)Backward)[key] = value; }
+		public object this[object key] { get => ((IDictionary)Forward)[key]; set => ((IDictionary)Forward)[key] = value; }
+		public TValue this[TKey key] { get => ((IDictionary<TKey, TValue>)Forward)[key]; set => ((IDictionary<TKey, TValue>)Forward)[key] = value; }
+		public BiMap()
+		public BiMap(int capacity)
+		public BiMap(IEqualityComparer<TKey> keyComparer, IEqualityComparer<TValue> valueComparer)
+		public BiMap(int capacity, IEqualityComparer<TKey> keyComparer, IEqualityComparer<TValue> valueComparer)
+		public BiMap(IDictionary<TKey, TValue> dictionary)
+		public void AddFront(KeyValuePair<TKey, TValue> item)
+		public void AddBack(KeyValuePair<TValue, TKey> item)
+		public void Clear()
+		public void Add(KeyValuePair<TKey, TValue> item)
+		public void Add(TKey key, TValue value)
+		public void Add(TValue key, TKey value)
+		public void Add(object key, object value)
+		public void Add(KeyValuePair<TValue, TKey> item)
+		public bool TryGetValue(TKey key, out TValue value)
+		public bool TryGetValue(TValue key, out TKey value)
+		public void CopyTo(Array array, int index)
+		public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
+		public void CopyTo(KeyValuePair<TValue, TKey>[] array, int arrayIndex)
+		public bool Contains(object key)
+		public bool Contains(KeyValuePair<TKey, TValue> item)
+		public bool Contains(KeyValuePair<TValue, TKey> item)
+		public bool ContainsValue(object value) => ((IDictionary)Backward).Contains(value);
+		public bool ContainsKey(TKey key)
+		public bool ContainsKey(TValue key)
+		public bool Remove(TKey key)
+		public bool Remove(KeyValuePair<TKey, TValue> item)
+		public void Remove(object key)
+		public bool Remove(KeyValuePair<TValue, TKey> item)
+		public bool Remove(TValue key)
+		public void OnDeserialization(object sender)
+		public void GetObjectData(SerializationInfo info, StreamingContext context)
+		public IEnumerator<KeyValuePair<TValue, TKey>> GetBackEnumerator()
+		public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() => Forward.GetEnumerator();
+
+// --- File: Src/HackPDM.Abstractions/Structures/ColorNames.cs ---
+namespace HackPDM.UI.Types;
+public enum ColorNames : uint
+
+// --- File: Src/HackPDM.Abstractions/Structures/XmlRpcErrorCodes.cs ---
+public class XmlRpcErrorCodes
+	public const int PARSE_ERROR_MALFORMED = -32700;
+	public const string PARSE_ERROR_MALFORMED_MSG = "Parse Error, not well formed";
+	public const int PARSE_ERROR_ENCODING = -32701;
+	public const string PARSE_ERROR_ENCODING_MSG = "Parse Error, unsupported encoding";
+	public const int SERVER_ERROR_METHOD = -32601;
+	public const string SERVER_ERROR_METHOD_MSG = "Server Error, requested method not found";
+	public const int SERVER_ERROR_PARAMS = -32602;
+	public const string SERVER_ERROR_PARAMS_MSG = "Server Error, invalid method parameters";
+	public const int APPLICATION_ERROR = -32500;
+	public const string APPLICATION_ERROR_MSG = "Application Error";
+	public const int TRANSPORT_ERROR = -32300;
+	public const string TRANSPORT_ERROR_MSG = "Transport Layer Error";
+
+// --- File: Src/HackPDM.Abstractions/Structures/HackInterfaces.cs ---
+namespace HackPDM.Abstractions;
+public interface IConvert<T>
+public interface ICloneable<T>
+public interface IRowData<T> : ICloneable<T>
+public interface ITreeItem
+	public object? Tag { get; set; }
+	public IEnumerable<ITreeItem>? Children { get; set; }
+public interface IListItem<T>
+	public T? Value { get; }
+	public bool IsSelected { get; set; }
+public interface ISettingsProvider
+public interface IHackDefaultBase
+	public ISettingsProvider? SettingsProvider { get; set; }
+	public string PwaPathAbsolute
+	public string PwaPathRelative
+	public string MeasureFileSize
+	public double MeasureByteSize
+	public double FileSizeMult
+	public double? ByteSizeMultiplier
+	public string? CurrentPath { get; set; }
+
+// --- File: Src/HackPDM.Abstractions/Structures/HackStructs.cs ---
+namespace HackPDM.Abstractions;
+public struct DirectoryDict
+    public DirectoryDict[] Directories;
+    public string Name;
+    public HpEntryReturn[] Entries;
+    public int Id;
+public struct HpEntryReturn : IConvert<HpEntryReturn>
+    public string Name;
+    public int Id;
+    public HpEntryReturn ConvertFromHt(Hashtable ht) => ht;
+    public static implicit operator HpEntryReturn(Hashtable ht)
+public struct ContentDialogInfo
+    public ContentDialogInfo() { }
+    public string Message { get; set; } = null;
+    public string? Caption { get; set; } = null;
+    public string? PrimaryText { get; set; } = null;
+    public string? SecondaryText { get; set; } = null;
+    public string? CloseText { get; set; } = null;
+    public MessageBoxRepresentation ButtonRepresentation { get; set; } =  MessageBoxRepresentation.Primary;
+
+// --- File: Src/HackPDM.Infrastructure/SldWrks/SolidWorksUtil.cs ---
+namespace HackPDM.Infrastructure.SldWrks
+	public class SolidWorksUtil
+		public static SwDocMgr? DocMgr
+		public static SwHelper SwHelper
+
+// --- File: Src/HackPDM.Infrastructure/SldWrks/SWHelper.cs ---
+namespace HackPDM.Infrastructure.SldWrks;
+public class SwHelper
+    private SolidWorks.Interop.sldworks.SldWorks _swApp;
+    private SolidWorks.Interop.sldworks.SldWorks _swRunApp;
+    public SwHelper()
+    public List<string[]> GetDependencies(string fileName, bool deep=false)
+    public List<Tuple<string, string, string, object>> GetProperties(string fileName)
+
+// --- File: Src/HackPDM.Infrastructure/SldWrks/SWDocMgr.cs ---
+namespace HackPDM.Infrastructure.SldWrks;
+public class SwDocMgr
+    private static SwDMApplication _swDocMgr = default;
+    public static SwDMApplication GetApplication() => _swDocMgr;
+	public SwDocMgr(string strLicenseKey)
+	public void ReplaceDependencies(string filepath, string newReference, SwDmDocumentType docType)
+    public List<string[]>? GetDependencies(string fileName, bool deep=false, bool noInterrupt=false)
+    public List<Tuple<string, string, string, object>> GetProperties(string fileName)
+    public static SwDmDocumentType GetTypeFromString(string modelPathName)
+
+// --- File: Src/HackPDM.Infrastructure/Hack/ResultHackFile.cs ---
+namespace HackPDM.Core.Hack;
+public record ResultHackFile(bool IsBroken, bool IsTested, HackTestDepth TestDepth, HackFile? Hack)
+	public bool IsBroken { get; private set; } = IsBroken;
+	public bool IsTested { get; private set; } = IsTested;
+	public HackTestDepth TestDepth { get; private set; } = TestDepth;
+	public HackResult Result { get; private set; } = HackResult.NotTested;
+	public ResultHackFile(HackFile? hack, HackTestDepth test = HackTestDepth.FileExistsTest) : this(default, default, default, hack)
+	public void DoTest() => DoTest(TestDepth);
+	public void DoTest(HackTestDepth test)
+	private HackResult TestPWA()
+	private HackResult TestFileExists()
+	private HackResult TestFileIsCorrupt() => TestFileExists();
+
+// --- File: Src/HackPDM.Infrastructure/Hack/HackResultTree.cs ---
+namespace HackPDM.Core.Hack;
+public class HackResultTree(ResultHackFile? value = null)
+	public class ResultNode( ResultHackFile? rNodeValue = null ) : IList<ResultNode>
+		public int Count { get; }
+		public bool IsReadOnly { get; }
+		public ResultNode? Parent { get; set; } = null;
+		public ResultHackFile? Value { get; set; } = rNodeValue;
+		public IList<ResultNode> Children { get; set; } = [];
+		public bool IsRoot => Parent is null;
+		public bool IsLeaf => Children.Count == 0;
+		public bool IsBranch => !IsLeaf;
+		public bool IsBroken => Value?.IsBroken ?? true;
+		public bool IsProcessed = false;
+		public bool IsBrokenPropagated => IsBroken || Children.Any( c => c.IsBrokenPropagated );
+		public bool IsBrokenBranchPropagated => (IsBroken || Parent?.IsBrokenBranchPropagated is true);
+		public bool IsBrokenTreePropagated => ( GetRoot().IsBrokenPropagated );
+		public IList<ResultNode>? BrokenNodes
+		public IEnumerable<ResultNode>? AllChildren
+		public ResultNode this[ int index ]
+		public IEnumerator<ResultNode> GetEnumerator() => Children.GetEnumerator();
+		public void Add( ResultNode item )
+		public void Clear() => Children.Clear();
+		public bool Contains( ResultNode item ) => Children.Contains( item );
+		public void CopyTo( ResultNode[] array, int arrayIndex ) => Children.CopyTo( array, arrayIndex );
+		public bool Remove( ResultNode item ) => Children.Remove( item );
+		public int IndexOf( ResultNode item ) => Children.IndexOf( item );
+		public void Insert( int index, ResultNode item ) => Children.Insert( index, item );
+		public void RemoveAt( int index ) => Children.RemoveAt( index );
+		public void ProcessDependencies(bool stopAtBroken = true)
+		private ResultNode GetRoot()
+		public IEnumerable<ResultNode> GetAllNodes(bool onlyBroken = false)
+	public ResultNode? Root { get; set; } = new(value);
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Help.cs ---
+namespace HackPDM.Infrastructure.Odoo;
+public static class Help
+	public static List<List<T>>? BatchList<T>(T[]? list, int batchSize)
+	public static T[][]? BatchArray<T>(T[]? array, int batchSize)
+	public static T[][]? BatchArray<T>(IEnumerable<T>? array, int batchSize)
+    public static List<List<T>>? BatchList<T>(IEnumerable<T>? list, int batchSize)
+    public static IEnumerable<string> FastSlice(IEnumerable<string> source, int startIndex, string prependText = null, string appendText = null)
+    public static ArrayList GetResults(in ArrayList source, string hashKeyName, bool singleValue=false)
+    public static Hashtable OdooIdBecomesKey(ArrayList arr)
+	public static bool ConvertSWFile<T>(HpVersion versionModel, out T file) where T : new()
+    public static ResultHackFile ValidateDependency(string path)
+    public static (StatusMessage status, string message) GetStatusMessage(HackResult result, ResultHackFile? parentFile, List<ResultHackFile> list)
+    public static SwDmDocumentType GetSwDmDocumentTypeFromExtension(string file_ext)
+public class Kwargs<T>(T obj)
+    public Kwargs(T obj, Dictionary<string, object> kwargs) : this(obj)
+    public T ApplyKwargsToObject()
+public static class HashConverter
+    public static T? ConvertToClass<T>(in Hashtable ht) where T : HpBaseModelTransport, new()
+	public static T[]? ConvertToClasses<T>(in IEnumerable<Hashtable>? hts) where T : HpBaseModelTransport, new()
+    public static ref T AssignToClass<T>(in Hashtable ht, ref T record) where T : HpBaseModelTransport
+			record.id = id ?? 0;
+    public static void AssignToClass<T>(in Hashtable ht, T record) where T : HpBaseModelTransport
+			record.id = id ?? 0;
+	public static ref Span<(Hashtable, T)> AssignToClasses<T>(ref Span<(Hashtable, T)> values) where T : HpBaseModelTransport
+				record.record.id = id ?? 0;
+	public static T ConvertToClassFallback<T>(in Hashtable ht, MethodType mType = MethodType.PropertyOnly)
+    public static T[]? ConvertToClassesFallback<T>(in IEnumerable<Hashtable>? hts, MethodType mType = MethodType.PropertyOnly) where T : HpBaseModelTransport, new()
+    public static T AssignToClassFallback<T>(in Hashtable ht, T obj, MethodType mType = MethodType.PropertyOnly)
+    public static T[]? AssignToClassesFallback<T>(ref IEnumerable<(Hashtable, T)>? hts, MethodType mType = MethodType.PropertyOnly)
+    public static void PopulateSelf<T>(this T hprecord, in Hashtable ht, MethodType mType = MethodType.PropertyOnly) where T : HpBaseModel
+    public static void AssignToClassFallback<T>( in Hashtable ht, ref T obj, MethodType mType = MethodType.PropertyOnly )
+    public static Hashtable ConvertToHashtable<T>(T obj, MethodType mType = MethodType.PropertyAndField, bool includeEmpty = true, in string[] excludedFieldNames = null)
+    private static void GetProperties<T>(T obj, ref Hashtable ht, bool includeEmpty = true, in string[] excludedFieldNames = null)
+    private static void GetFields<T>(T obj, ref Hashtable ht, bool includeEmpty = true, in string[] excludedFieldNames = null)
+    internal static object? ConvertValue(object value, Type targetType)
+    internal static ValueConversion ConvertValueMethod(object value, Type targetType)
+    internal static object? ConvertValue(object? value, Type targetType, ValueConversion conversion)
+    public static ArrayList FilesNotInOdoo(string[] filePaths)
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/ExtensionOdoo.cs ---
+namespace HackPDM.Infrastructure.Odoo;
+public static class ExtensionOdoo
+    private static readonly Encoding Encoding = new ASCIIEncoding();
+    private static readonly XmlRpcRequestSerializer Serializer = new();
+    private static readonly XmlRpcResponseDeserializer Deserializer = new();
+    public static ArrayList GetIDs(this IEnumerable<HpBaseModel> models)
+    public async static Task<XmlRpcResponse> SendAsync(this XmlRpcRequest request, string url, int timeout = 0, IWebProxy proxy = null)
+    public static bool DownloadAll(this HpVersion[] versions, out List<HpVersion> failedDownloads)
+	    public static bool GetHackFileWithDependencies(HackFile file, out List<HackFile> hackFiles, out List<HackResultTree.ResultNode>? hackResults)
+	    public async Task<(bool, HpVersion?)> GetVersionFromLocal()
+		    [
+	    public static List<HackFile> FilePathsToHackWithDependencies(params string[] filePaths)
+	    public async Task<(bool, HpVersion?)> HasLocalVersion()
+	    public static List<HackFile> FolderPathToHackWithDependencies(string pathway, SearchOption options = SearchOption.AllDirectories)
+	    public static bool GetHackFolderWithDependencies(string folderPath, bool listOutputDialog, out List<HackFile>? hackFiles)
+			    [.. matchedFiles.Item1.Select(f => new HackFile(new FileInfo(f)))],
+			    [.. matchedFiles.Item2.Select(f => new HackFile(new FileInfo(f)))]
+	    public static bool GetHackFileWithDependencies(EntryRow? entry, bool listOutputDialog, out List<HackFile>? hackFiles, out List<HackResultTree.ResultNode> results )
+	    public static bool GetHackFileWithDependencies(string? filePath, bool listOutputDialog, out List<HackFile>? hackFiles, out List<HackResultTree.ResultNode> results )
+	    public static HackResult TryFilePathToHackWithDependencies(out List<ResultHackFile> depAllInPWAorBrokenList, ResultHackFile parentFile)
+	    public static bool TryFilePathsToHackWithDependencies(out (List<ResultHackFile> depAllInPWAorBrokenList, ResultHackFile parentFile)[] hackFiles, params string[] filePaths)
+	    public static HackResult TryFilePathToHackWithDependencies(out List<ResultHackFile> depAllInPWAorBrokenList, out ResultHackFile parentFile, string filePath)
+	    public IEnumerable<HpEntry> TakeOutLatest(out IEnumerable<HpEntry> latestEntries)
+public static class OdooFieldExtension
+	public static readonly Dictionary<OdooFieldType, Type[]> Schema = new()
+	private static bool IsValidShape(this OdooFieldType type, object? value) =>
+public static class OdooFieldHelpers
+	public static bool TryCast<T>(object? value, out T? result)
+	public static bool TryCast<TIn, TOut>(
+	public static bool TryCastAny<T1, T2, TOut>(
+	public static bool TryCastAny<T1, T2, T3, TOut>(
+	public static bool TryCastAny<T1, T2, T3, T4, TOut>(
+	private static bool ReturnTrue<T>(in T _) => true;
+	private static bool ReturnFalse<T>(in T _) => false;
+	private static bool TryNull<TIn, TOut>(TIn input, Func<TIn, TOut> func, out TOut? result)
+	private static TOut? TryNull<TIn, TOut>(TIn input, Func<TIn, TOut> func)
+	public static object? Convert(OdooFieldType type, object? value)
+	private static object? Normalize(OdooFieldType type, object? value)
+	private static bool IsValidShape(OdooFieldType type, object? value) =>
+	private static int FromInt(int i) => i;
+	private static int FromLong(long l) => (int)l;
+	private static float FromFloat(float f) => f;
+	private static float FromDouble(double d) => (float)d;
+	private static float FromDecimal(decimal m) => (float)m;
+	private static decimal FromDecimalMonetary(decimal m) => m;
+	private static decimal FromDoubleMonetary(double d) => (decimal)d;
+	private static (int id, string name)? FromObjectArray(object value)
+	private static (int id, string name)? FromArrayList(object value)
+	public static string ConvertString(object value)
+	public static int ConvertInteger(object value)
+	public static float ConvertFloat(object value)
+	public static decimal ConvertMonetary(object value)
+	public static bool ConvertBoolean(object value)
+	public static DateTime ConvertDate(object value)
+	public static DateTime ConvertDateTime(object value)
+	public static byte[] ConvertBinary(object value)
+	public static Many2One ConvertMany2one(object value)
+	public static One2Many ConvertOne2many(object value)
+	public static Many2Many ConvertMany2many(object value)
+	public static string ConvertSelectionString(object value)
+	public static int ConvertSelectionInt(object value)
+	public static string ConvertReferenceString(object value)
+	public static (string model, int id) ConvertReferenceToTuple(object value)
+	public static string ConvertSerializedString(object value)
+	public static Hashtable ConvertJsonTable(object value)
+	public static Dictionary<string, object> ConvertSerializedDict(object value)
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/OdooDefaults.cs ---
+namespace HackPDM.Infrastructure.Odoo;
+public class OdooDefaults : IOdooDefaults
+    public static IOdooDefaults? Instance { get; set; } = new OdooDefaults();
+    public ISettingsProvider Settings { get; set; }
+    private OdooDefaults() {}
+    public OdooDefaults(ISettingsProvider settingsProvider)
+	public string? OdooUser
+    public string? OdooPass
+    public bool SaveCredentials() => TrySetWindowsOdooUserPass( OdooUser, OdooPass, OdooCredentialTarget );
+	public static bool TrySetWindowsOdooUserPass(string? username, string? password, string? credentialName = null)
+    public string? OdooAddress
+    public string? OdooPort
+    public string? OdooDb
+    public string? OdooUrl
+    public string? OdooSwKey
+    public decimal? OdooAreaFactor
+    public string? OdooCredentialTarget
+    public int OdooId
+    public string[] EntryFilterPatterns
+    private readonly object MLockObject = new();
+    public IHpNodeModel? MyNode
+    public IHpDirectoryModel? HpDirectoryRoot
+    public int DownloadBatchSize
+    public int ConcurrencySize
+        internal set
+    public int? MaxConcurrency
+    public int? MaxBatchSize
+    public IHpSettingModel []? HpSettings
+    public string? SwApi
+    public bool? RestrictProperties
+    public bool? RestrictTypes
+    public IHpEntryNameFilterModel[]? HpEntryNameFilters
+    public IHpCategoryModel[]? HpCategories
+    public IHpTypeModel[]? HpTypes
+    public IHpPropertyModel[]? HpProperties
+    public IHpNodeModel[]? HpNodes
+    public IHpUserModel[]? HpUsers
+    public Dictionary<string, IHpTypeModel> ExtToType
+    public Dictionary<string, IHpCategoryModel> ExtToCat
+    public Dictionary<string, IHpPropertyModel> ExtToProp
+    public Dictionary<string, IHpEntryNameFilterModel> ExtToFilter
+    public Dictionary<int, IHpPropertyModel> IdToProp
+    public Dictionary<int, IHpUserModel> IdToUser
+    public async Task<HpNode?> TryAssignNewHpNode()
+	private static Dictionary<string, IHpEntryNameFilterModel> ExtensionMapFilter( IHpEntryNameFilterModel []? hpEntryNameFilters )
+    private static Dictionary<int, IHpUserModel> IdMapUser( in IHpUserModel[]? hpUsers )
+    public static Dictionary<string, IHpTypeModel> ExtensionMapType( in IHpTypeModel []? types )
+    public static Dictionary<string, IHpCategoryModel> ExtensionMapCategory( in HpCategory []? categories, in HpType []? types )
+    public static Dictionary<int, IHpPropertyModel> IdMapProperty(in IHpPropertyModel[]? props )
+    public async static Task<(HpVersion?, HpRecordStaged?)> CreateNewVersion( HackFile hack, IHpEntryModel? entry, IHpRecordStagedModel? staged )
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/OdooRpcCs.cs ---
+namespace HackPDM.Infrastructure.Odoo;
+public static class OdooClient
+    public static readonly string XmlrpcEndpoint = "/xmlrpc";
+    public static readonly string AuthenticationEndpoint = "/common";
+    public static readonly string ObjectEndpoint = "/object";
+    private static int _commonTimeout = 3000;
+    public static int CommonTimeout
+    private static int _objectTimeout = 5000;
+    public static int ObjectTimeout
+    private static string _latestException = "";
+    public static string? LatestException
+    public static async Task<int> CorrectUserId()
+    public static async Task<bool> CorrectOdooAddress()
+	public static async Task<bool> CorrectOdooPort()
+    public static int? Login(int? timeout = null)
+    public static object? Execute(string model, string method, ArrayList parameters, int? timeout = null)
+    public static TReturn? Command<TReturn>(string model, string method, ArrayList execParams, int? timeout = null) where TReturn : new()
+    public static int Create(string model, Hashtable values, int? timeout = null)
+    public static ArrayList? Read(string model, ArrayList ids, ArrayList fields, int? timeout = null)
+    public static ArrayList? FastRead(string model, ArrayList ids, ArrayList fields, int? timeout = null)
+	public static ArrayList? SmartSearch(string model, ArrayList? domain, ArrayList? ids, ArrayList? fields, int? timeout = null)
+	public static bool Update(string model, int id, Hashtable values, int? timeout = null)
+    public static bool Delete(string model, ArrayList execParams, int? timeout = null)
+    public static ArrayList? Search(string model, ArrayList domain, int? timeout = null)
+    public static int SearchCount(string model, ArrayList execParams, int? timeout = null)
+    public static ArrayList? Browse(string model, ArrayList execParams, int? timeout = null)
+    public static ArrayList? RelatedBrowse(string model, ArrayList execParams, int? timeout = null)
+    public static ArrayList? RelatedSearch(string model, ArrayList execParams, int? timeout = null)
+    public static Hashtable? GetFields(string model, ArrayList execParams, int? timeout = null)
+    public static Hashtable? GetFieldViews(string model, ArrayList execParams, int? timeout = null)
+    public static ArrayList? NameSearch(string model, ArrayList execParams, int? timeout = null)
+    public static Hashtable? GetDefault(string model, ArrayList execParams, int? timeout = null)
+    public static ArrayList? Duplicate(string model, ArrayList execParams, int? timeout = null)
+    public static async Task<object> ExecuteAsync(string model, string method, ArrayList parameters, int? timeout = null)
+    public static async Task<T> CommandAsync<T>(string model, string method, ArrayList execParams, int? timeout = null) where T : new()
+    public static async Task<int> CreateCommitAsync(int? timeout = null)
+    public static async Task<int> CreateAsync(string model, Hashtable values, int? timeout = null)
+    public static async Task<ArrayList> CreateAsync(string model, ArrayList arrayValues, int? timeout = null)
+	public static async Task<ArrayList> CreateReadAsync(string model, ArrayList arrayValues, ArrayList fields, int? timeout = null)
+	public static async Task<ArrayList> ReadAsync(string model, ArrayList ids, ArrayList fields, int? timeout = null)
+    public static async Task<bool> UpdateAsync(string model, int id, Hashtable values, int? timeout = null)
+    public static async Task<bool> DeleteAsync(string model, ArrayList execParams, int? timeout = null)
+    public static async Task<ArrayList> SearchAsync(string model, ArrayList domain, int? timeout = null)
+    public static async Task<int> SearchCountAsync(string model, ArrayList execParams, int? timeout = null)
+    public static async Task<ArrayList> BrowseAsync(string model, ArrayList execParams, int? timeout = null)
+    public static async Task<ArrayList> SmartSearchAsync(string model, ArrayList? domain, ArrayList? ids, ArrayList? fields, int? timeout = null)
+	public static async Task<ArrayList> RelatedBrowseAsync(string model, ArrayList execParams, int? timeout = null)
+	public static async Task<ArrayList> RelatedSearchAsync(string model, ArrayList execParams, int? timeout = null)
+	public static async Task<Hashtable> GetFieldsAsync(string model, ArrayList execParams, int? timeout = null)
+    public static async Task<Hashtable> GetFieldViewsAsync(string model, ArrayList execParams, int? timeout = null)
+    public static async Task<ArrayList> NameSearchAsync(string model, ArrayList execParams, int? timeout = null)
+    public static async Task<Hashtable> GetDefaultAsync(string model, ArrayList execParams, int? timeout = null)
+    public static async Task<ArrayList> DuplicateAsync(string model, ArrayList execParams, int? timeout = null)
+public static class OdooClient<T> where T : HpBaseModelTransport<T>, new()
+    private static string _model = HpBaseModelTransport<T>.GetHpModel();
+    public static object Execute(string method, ArrayList parameters, int? timeout = null)
+    public static TReturn Command<TReturn>(string method, ArrayList execParams, int? timeout = null) where TReturn : new()
+    private static TReturn Command<TReturn>(string method, ArrayList execParams, int? timeout = null, bool isPrivate = true) where TReturn : new()
+    public static int Create(Hashtable values, int? timeout = null)
+    public static ArrayList Read(ArrayList ids, ArrayList fields, int? timeout = null)
+    public static ArrayList FastRead(ArrayList ids, ArrayList fields, int? timeout = null)
+    public static bool Update(int id, Hashtable values, int? timeout = null)
+    public static bool Delete(ArrayList execParams, int? timeout = null)
+    public static ArrayList Search(ArrayList domain, int? timeout = null)
+    public static int SearchCount(ArrayList execParams, int? timeout = null)
+    public static ArrayList Browse(ArrayList execParams, int? timeout = null)
+    public static ArrayList RelatedBrowse(ArrayList execParams, int? timeout = null)
+    public static Hashtable GetFields(ArrayList execParams, int? timeout = null)
+    public static Hashtable GetFieldViews(ArrayList execParams, int? timeout = null)
+    public static ArrayList NameSearch(ArrayList execParams, int? timeout = null)
+    public static Hashtable GetDefault(ArrayList execParams, int? timeout = null)
+    public static ArrayList Duplicate(ArrayList execParams, int? timeout = null)
+    public static async Task<object> ExecuteAsync(string method, ArrayList parameters, int? timeout = null)
+    public static async Task<TReturn> CommandAsync<TReturn>(string method, ArrayList execParams, int? timeout = null) where TReturn : new()
+    public static async Task<int> CreateAsync(Hashtable values, int? timeout = null)
+    public static async Task<ArrayList> ReadAsync(ArrayList ids, ArrayList fields, int? timeout = null)
+    public static async Task<bool> UpdateAsync(int id, Hashtable values, int? timeout = null)
+    public static async Task<bool> DeleteAsync(ArrayList execParams, int? timeout = null)
+    public static async Task<ArrayList> SearchAsync(ArrayList domain, int? timeout = null)
+    public static async Task<int> SearchCountAsync(string model, ArrayList execParams, int? timeout = null)
+    public static async Task<ArrayList> BrowseAsync(ArrayList execParams, int? timeout = null)
+    public static async Task<ArrayList> RelatedBrowseAsync(ArrayList execParams, int? timeout = null)
+    public static async Task<Hashtable> GetFieldsAsync(ArrayList execParams, int? timeout = null)
+    public static async Task<Hashtable> GetFieldViewsAsync(ArrayList execParams, int? timeout = null)
+    public static async Task<ArrayList> NameSearchAsync(ArrayList execParams, int? timeout = null)
+    public static async Task<Hashtable> GetDefaultAsync(ArrayList execParams, int? timeout = null)
+    public static async Task<ArrayList> DuplicateAsync(ArrayList execParams, int? timeout = null)
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/IHpModelConvert.cs ---
+namespace HackPDM.Infrastructure.Odoo.FormTransport;
+public interface IHpModelConvert<in TInterface, out TModel>
+    public TModel Convert(TInterface model);
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpNode.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_NODE_NAME, OdooDefaultsConstants.HP_NODE)]
+public partial class HpNode : HpBaseModelTransport<HpNode>, IHpNodeModel
+	[OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
+	internal static void UpdateNodeLatestVersions(int[] versionIds)
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpReleaseReview.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_RELEASE_REVIEW_NAME, OdooDefaultsConstants.HP_RELEASE_REVIEW)]
+public partial class HpReleaseReview : HpBaseModelTransport<HpReleaseReview>, IHpReleaseReviewModel
+	[OdooProp(OdooFieldType.Many2One, "review_release_version_id")] public Many2One? review_release_version_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "review_user_id")] public Many2One? review_user_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "release_id")] public Many2One? release_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "release_user_id")] public Many2One? release_user_id { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "review_stamp")] public DateTime? review_stamp { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "review_deadline")] public DateTime? review_deadline { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "release_reviewed")] public DateTime? release_reviewed { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "release_date")] public DateTime? release_date { get; set; }
+	[OdooProp(OdooFieldType.Char, "review_note")] public string? review_note { get; set; }
+	[OdooProp(OdooFieldType.Char, "release_note")] public string? release_note { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "reviewed")] public bool? reviewed { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "accepted")] public bool? accepted { get; set; }
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpProperty.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_PROPERTY_NAME, OdooDefaultsConstants.HP_PROPERTY)]
+public partial class HpProperty : HpBaseModelTransport<HpProperty>, IHpPropertyModel
+	[OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
+	[OdooProp(OdooFieldType.Char, "prop_type")] public string? prop_type { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "active")] public bool? active { get; set; }
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpEntry.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_ENTRY_NAME, OdooDefaultsConstants.HP_ENTRY)]
+public partial class HpEntry : HpBaseModelTransport<HpEntry>, IHpEntryModel
+	[OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
+	[OdooProp(OdooFieldType.Char, "windows_complete_name")] public string? windows_complete_name { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "checkout_date")] public DateTime? checkout_date {get;set;}
+	[OdooProp(OdooFieldType.Boolean, "deleted")] public bool? deleted {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "latest_version_id")] public Many2One? latest_version_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "dir_id")] public Many2One? dir_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "type_id")] public Many2One? type_id {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "checkout_user")] public Many2One? checkout_user {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "checkout_node")] public Many2One? checkout_node {get;set;}
+	[OdooProp(OdooFieldType.Many2One, "cat_id")] public Many2One? cat_id {get;set;}
+	public bool IsLatest { get; }
+	public HackFile? LocalFile
+	public HackFile? GetLocalFile()
+	public HashSet<string>? GetDependencyPaths()
+	public IEnumerable<EntryLocalPath> GetDependentPathways()
+	private static void DoNothing() { }
+    public static ArrayList GetLatestIDs(ArrayList ids)
+    public static int GetLatestID(int id)
+	public static async Task<int> GetLatestIDAsync(int id)
+	public int GetLatestID()
+	public bool CanCheckOut() => (checkout_user?.id is null or 0) && deleted is false;
+    public bool CanUnCheckOut() => (checkout_user is not null) && checkout_user == OdooDefaults.Instance.OdooId;
+    public async Task CheckOut()
+    public async Task UnCheckOut()
+    internal static async Task<HpEntry?> CreateNew( HackFile hackFile, int dirId )
+	public static async Task<(EntryReturnType, HpEntry?, HpRecordStaged?)> GetFallbackCreateEntryAsync( HackFile hackFile, int dirId, HpPDMCommit? commit = null)
+    internal static async Task<ArrayList> GetEntryList(int[] entryIds, bool update = false)
+    public async Task LogicalDelete()
+    public async Task LogicalUnDelete()
+    public override string ToString()
+    public int id { get; set; }
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpSetting.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_SETTINGS_NAME, OdooDefaultsConstants.HP_SETTINGS)]
+public partial class HpSetting : HpBaseModelTransport<HpSetting>, IHpSettingModel
+	[OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
+	[OdooProp(OdooFieldType.Char, "description")] public string? description { get; set; }
+	[OdooProp(OdooFieldType.Char, "type")] public string? type { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "bool_value")] public bool? bool_value { get; set; }
+	[OdooProp(OdooFieldType.Integer, "int_value")] public int? int_value { get; set; }
+	[OdooProp(OdooFieldType.Char, "char_value")] public string? char_value { get; set; }
+	[OdooProp(OdooFieldType.Float, "float_value")] public float? float_value { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "date_value")] public DateTime? date_value { get; set; }
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpVersionProperty.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_VERSION_PROPERTY_NAME, OdooDefaultsConstants.HP_VERSION_PROPERTY)]
+public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>, IHpVersionPropertyModel
+	[OdooProp(OdooFieldType.Char, "prop_name")] public string? prop_name { get; set; }
+	[OdooProp(OdooFieldType.Char, "sw_config_name")] public string? sw_config_name { get; set; }
+	[OdooProp(OdooFieldType.Char, "text_value")] public string? text_value { get; set; }
+	[OdooProp(OdooFieldType.Float, "number_value")] public float? number_value { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "yesno_value")] public bool? yesno_value { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "date_value")] public DateTime? date_value { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "version_id")] public Many2One? version_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "prop_id")] public Many2One? prop_id { get; set; }
+	public HpVersionProperty() { }
+    public HpVersionProperty(
+public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
+    public PropertyType GetValueType()
+    public bool IsText( out string text )
+    public bool IsNumber( out float number )
+    public bool IsYesNo(out bool yesNo)
+    public bool IsDate(out string date)
+    public bool IsNone()
+    public static async void Create(params HpVersion[] versions)
+	public static async void Create(params HpRecordStaged[] staged)
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpPDMCommit.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_PDM_COMMIT_NAME, OdooDefaultsConstants.HP_PDM_COMMIT)]
+public partial class HpPDMCommit : HpBaseModelTransport<HpPDMCommit>, IHpPDMCommitModel
+	[OdooProp(OdooFieldType.Char, "name")] public string? name {get;set;}
+	[OdooProp(OdooFieldType.Char, "job_uuid")] public string? job_uuid { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "committed_at")] public DateTime? committed_at { get;set;}
+	[OdooProp(OdooFieldType.DateTime, "commit_finished_at")] public DateTime? commit_finished_at { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "committing")] public bool? committing { get;set;}
+	[OdooProp(OdooFieldType.Boolean, "committed")] public bool? committed { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "errored")] public bool? errored { get; set; }
+	[OdooProp(OdooFieldType.Text, "message_exception")] public string? message_exception { get; set; }
+	[OdooProp(OdooFieldType.Text, "commit_summary")] public string? commit_summary { get; set; }
+	[OdooProp(OdooFieldType.Integer, "progress_total")] public int? progress_total { get; set; }
+	[OdooProp(OdooFieldType.Float, "duration_seconds")] public float? duration_seconds { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "node_by")] public Many2One? node_by { get; set; }
+	[OdooProp(OdooFieldType.One2Many, "staged_ids")] public One2Many? staged_ids { get;set;}
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpBaseModelTransport.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+public abstract partial class HpBaseModelTransport : HpBaseModel
+public abstract partial class HpBaseModelTransport
+	protected static new readonly Dictionary<Type, string> HpModelDictionary = new()
+public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport where T : HpBaseModelTransport, new()
+	public Hashtable ComputeHashtable(string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
+	public Hashtable ComputeHashtable(bool includeEmpty = true, in string[]? excludedFieldNames = null, bool isNew = false, in string[]? insertFieldNames = null)
+	public virtual Task<int> Create() => Create(false);
+	public async virtual Task<int> Create(bool withEmpty = false)
+	public async virtual Task<int> CreateCommitAsync()
+	public virtual Task<int> CreateAsync() => CreateAsync(false);
+	public async virtual Task<int> CreateAsync(bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null)
+	public static Task<int> CreateEmptyAsync() => OClient.CreateAsync(GetHpModel(), new Hashtable());
+	public static async Task<T[]?> CreateReadAsync() =>
+	public static Task<ArrayList> MultiCreateAsync(ArrayList records, bool withEmpty = false)
+	public async virtual Task<bool> WriteChangedValuesAsync(params string[] fieldNamesToWrite)
+	protected ArrayList ComputeArrayList(bool includeEmpty, in string[]? excludedFieldNames = null)
+	public async virtual Task<T?>				GetRecord()
+	public async virtual Task<T?>				GetRecord(int? recordId)
+	public virtual T				GetThisRecordsField<T2>(string fieldName) => GetThisRecordsField<T>(fieldName, null);
+	public virtual T2				GetThisRecordsField<T2>(string fieldName, in string[] excludedFieldNames = null)
+	public static T[]?				GetRecordsByIds(ArrayList? recordIds, ArrayList? searchFilters = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
+	public static T?				GetRecordById(int recordId, string[] excludedFields = null)
+	public static T[]				GetRecordsBySearch(ArrayList searchFilter = null, string[] excludedFields = null, string[] insertFields = null)
+	public static T[]?				GetAllRecords(string[] excludedFields = null, string[] insertFields = null)
+	internal static T?				RecordPopulation(Hashtable ht, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None, Dictionary<string, string>? remapNames = null)
+	internal static T[]?			RecordsPopulation(IEnumerable<Hashtable>? hts, string[]? excludedFields = null, Dictionary<string, string>? remapNames = null)
+	private static Hashtable		ScalpFields(Hashtable ht, HashedValueStoring hashStoreType)
+	public static T? Default() => typeof(T).IsValueType ? default : new T();
+	public static async Task<T[]?>		GetAllRecordsAsync(string[]? excludedFields = null, string[]? insertFields = null)
+	public static async Task<T[]?>		GetRecordsBySmartSearchAsync(ArrayList? searchFilter = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
+	public static async Task<T[]?>		GetRecordsBySearchAsync(ArrayList? searchFilter = null, string[]? includedFields = null, string[]? excludedFields = null, string[]? insertFields = null)
+	public static async Task<T?>		GetRecordByIdAsync(int recordId, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
+	public async static Task<T[]?>	GetRecordsByIdsAsync(ArrayList? recordIds, ArrayList? searchFilters = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
+public abstract partial class HpBaseModelTransport<T>
+	public static T Empty => field ??= new();
+	public override string? HpModel
+	public static string? SetHpModel(string? value)
+	public abstract Dictionary<string, object?> ToOdoo();
+	public static string[] GetFields(
+	public static string? GetHpModel()
+	public static TOther[]			GetRelatedRecordByIds<TOther>(ArrayList recordIds, string relatedFieldName, string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null)
+			record.id = (int)ht["id"];
+				record.HashedValues = new Hashtable
+			record.IsRecord = true;
+			record.ExcludedFields = excludedFields;
+			record.CompleteConstruction();
+	internal static int[]?			GetRelatedIdsById(ArrayList recordIds, string relatedFieldName)
+	internal static TOther[]		GetRelatedRecordsBySearch<TOther>(ArrayList searchFilter, string relatedFieldName, string[] excludedFields = null, string[] includedFields = null, string[] insertFields = null)
+			record.id = (int)ht["id"];
+				record.HashedValues = new Hashtable
+			record.IsRecord = true;
+			record.ExcludedFields = excludedFields;
+			record.CompleteConstruction();
+	public object?					GetFieldValue(int id, string fieldName)
+	public void						Refresh()
+	public static Tval?				GetFieldValue<Tval>(int id, string fieldName)
+	public static Tval?				GetFieldValue<Tval>(int id, string fieldName, Tval? defaultVal = null)
+	public static void				FinalizePopulation(ref T record, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
+		record.IsRecord = true;
+		record.ExcludedFields = excludedFields;
+		record.CompleteConstruction();
+	public static void				FinalizePopulations(T[]? records, string[]? excludedFields = null)
+	internal static void			SortById(T[] arr)
+	internal static void			SortReverseById(T[] arr)
+	private static int				CompareIds(T a, T b)
+	private static ArrayList		SearchParams(ArrayList values, string fieldName)
+	public static ArrayList			SearchParams(Hashtable ht)
+	public static ArrayList			GetAllFields() => GetOdooFields();
+	public static ArrayList			GetOdooFields(string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
+	public override string			ToString() => id.ToString();
+	public static async Task<Tval?>		GetFieldValueAsync<Tval>(int id, string fieldName)
+	public static async Task<Tval?>		GetFieldValueAsync<Tval>(int id, string fieldName, Tval? defaultVal = null)
+	public static async Task<TOther[]?> GetRelatedRecordsBySearchAsync<TOther>(ArrayList searchFilter, string relatedFieldName, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
+			record.id = (int)ht["id"];
+				record.HashedValues = new Hashtable
+			record.IsRecord = true;
+			record.ExcludedFields = excludedFields;
+			record.CompleteConstruction();
+	public static async Task<TOther[]?> GetRelatedRecordByIdsAsync<TOther>(ArrayList recordIds, string relatedFieldName, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
+			record.id = (int)ht["id"];
+				record.HashedValues = new Hashtable
+			record.IsRecord = true;
+			record.ExcludedFields = excludedFields;
+			record.CompleteConstruction();
+	public static async Task<int[]?>	GetRelatedIdsByIdAsync(ArrayList recordIds, string relatedFieldName)
+	public static async Task<object?>	GetFieldValueAsync(int id, string fieldName)
+	public async Task					RefreshAsync()
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpRelease.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_RELEASE_NAME, OdooDefaultsConstants.HP_RELEASE)]
+public partial class HpRelease : HpBaseModelTransport<HpRelease>, IHpReleaseModel
+	[OdooProp(OdooFieldType.Many2One, "version_id")] public Many2One? version_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "release_user_id")] public Many2One? release_user_id { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "release_stamp")] public DateTime? release_stamp { get; set; }
+	[OdooProp(OdooFieldType.Char, "release_note")] public string? release_note { get; set; }
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpModel.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+public class HpModel : IHpOdooRecord
+	public int? id { get; set; }
+	public Many2One? commit_id { get; set; }
+	public static implicit operator int?(HpModel? model) => model?.id;
+	public static implicit operator HpModel?(int? id) => id is null ? null : new() { id = id };
+public class Many2One : HpModel
+	public string? name { get; set; }
+	public void Deconstruct(out HpModel? id, out string? name)
+	public void Deconstruct(out string? name, out HpModel? id)
+	public void Deconstruct(out int? id, out string? name)
+	public void Deconstruct(out string? name, out int? id)
+	public static implicit operator int?(Many2One? model) => model?.id;
+	public static implicit operator Many2One?(int? id) => id is null ? null : new() { id = id };
+	public static implicit operator string?(Many2One? model) => model?.name;
+	public static implicit operator Many2One?(string? name) => name is null ? null : new() { name = name };
+	public static implicit operator (int? id, string? name)?(Many2One? model) => (model?.id, model?.name);
+	public static implicit operator Many2One?((int? id, string? name)? tuple) => tuple?.id is null && tuple?.name is null ? null : new() { id = tuple?.id, name = tuple?.name };
+	public static implicit operator (string? name, int? id)?(Many2One? model) => (model?.name, model?.id);
+	public static implicit operator Many2One?((string? name, int? id)? tuple) => tuple?.id is null && tuple?.name is null ? null : new() { id = tuple?.id, name = tuple?.name };
+public class MultiRecord : IList<HpModel?>, IMultiRecord
+	public HpModel? this[int index] { get => (Ids as IList<HpModel?>)?[index]; set => (Ids as IList<HpModel?>)?[index] = value; }
+	public HpModel?[]? Ids { get; set; }
+	public int Count => (Ids as ICollection<HpModel?>)?.Count ?? 0;
+	public bool IsReadOnly => Ids is ICollection<HpModel?> { IsReadOnly: true };
+	public void Add(HpModel? item)
+	public void Clear()
+	public bool Contains(HpModel? item)
+	public void CopyTo(HpModel?[] array, int arrayIndex)
+	public IEnumerator<HpModel?> GetEnumerator()
+	public int IndexOf(HpModel? item)
+	public void Insert(int index, HpModel? item)
+	public bool Remove(HpModel? item)
+	public void RemoveAt(int index)
+	public static implicit operator int?[]?(MultiRecord? multi) => [.. multi?.Ids ?? []];
+	public static implicit operator MultiRecord?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!]};
+	public static implicit operator int[](MultiRecord multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.id ?? 0) ?? []];
+	public static implicit operator MultiRecord(int[] multi) => multi;
+	public static implicit operator ArrayList(MultiRecord? multi) => [.. multi?.Ids ?? []];
+	public static implicit operator MultiRecord?(ArrayList? ids) => ids is null ? null : new() { Ids = [.. ids.Cast<int?>()?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
+public class Many2Many : MultiRecord
+	public static implicit operator int?[]?(Many2Many? multi) => [.. multi?.Ids ?? []];
+	public static implicit operator Many2Many?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
+	public static implicit operator int[](Many2Many multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.id ?? 0) ?? []];
+	public static implicit operator Many2Many(int[] multi) => multi;
+	public static implicit operator ArrayList(Many2Many? multi) => [.. multi?.Ids ?? []];
+	public static implicit operator Many2Many?(ArrayList? ids) => ids is null ? null : new() { Ids = [.. ids.Cast<int?>()?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
+public class One2Many : MultiRecord
+	public static implicit operator int?[]?(One2Many? multi) => [.. multi?.Ids ?? []];
+	public static implicit operator One2Many?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
+	public static implicit operator int[](One2Many multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.id ?? 0) ?? []];
+	public static implicit operator One2Many(int[] multi) => multi;
+	public static implicit operator ArrayList(One2Many? multi) => [.. multi?.Ids ?? []];
+	public static implicit operator One2Many?(ArrayList? ids) => ids is null ? null : new() { Ids = [.. ids.Cast<int?>()?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
+public static class Test<T> where T : HpBaseModelTransport<T>, new()
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpRecordStaged.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_RECORD_STAGED_NAME, OdooDefaultsConstants.HP_RECORD_STAGED)]
+public partial class HpRecordStaged : HpBaseModelTransport<HpRecordStaged>, IHpRecordStagedModel
+	[OdooProp(OdooFieldType.Char, "target_model")] public string? target_model { get;set;}
+	[OdooProp(OdooFieldType.Integer, "target_id")] public int? target_id { get; set; }
+	[OdooProp(OdooFieldType.Json, "payload")] public Hashtable? payload { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "committing_id")] public Many2One? committing_id { get; set; }
+	[OdooProp(OdooFieldType.Many2Many, "dependency_tree_ids")] public Many2Many? dependency_tree_ids { get; set; }
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpTest.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_TEST_NAME, OdooDefaultsConstants.HP_TEST)]
+public partial class HpTest : HpBaseModelTransport<HpTest>, IHpTestModel
+	[OdooProp(OdooFieldType.Binary		, "binary"	 )] public byte[]? binary		{ get; set; }
+	[OdooProp(OdooFieldType.Boolean		, "boolean"	 )]	public bool? boolean		{ get; set; }
+	[OdooProp(OdooFieldType.Char		, "character")]	public string? character	{ get; set; }
+	[OdooProp(OdooFieldType.Date		, "dates"	 )]	public DateTime? dates		{ get; set; }
+	[OdooProp(OdooFieldType.DateTime	, "datetimes")]	public DateTime? datetimes	{ get; set; }
+	[OdooProp(OdooFieldType.Float		, "floats"	 )]	public float? floats		{ get; set; }
+	[OdooProp(OdooFieldType.Html		, "html"	 )]	public string? html			{ get; set; }
+	[OdooProp(OdooFieldType.Image		, "image"	 )]	public byte[]? image		{ get; set; }
+	[OdooProp(OdooFieldType.Integer		, "integer"	 )]	public int? integer			{ get; set; }
+	[OdooProp(OdooFieldType.Json		, "json"	 )]	public Hashtable? json		{ get; set; }
+	[OdooProp(OdooFieldType.Monetary	, "monetary" )]	public decimal? monetary	{ get; set; }
+	[OdooProp(OdooFieldType.Selection	, "selection")]	public string? selection	{ get; set; }
+	[OdooProp(OdooFieldType.Text		, "text"	 )]	public string? text			{ get; set; }
+	[OdooProp(OdooFieldType.Many2One	, "manytoone" )] public Many2One? many2one	{ get; set; }
+	[OdooProp(OdooFieldType.One2Many	, "onetomany" )] public One2Many? one2many	{ get; set; }
+    [OdooProp(OdooFieldType.Many2Many	, "manytomany")] public Many2Many? many2many { get; set; }
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/IrAttachment.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.IR_ATTACHMENT_NAME, OdooDefaultsConstants.IR_ATTACHMENT)]
+public partial class IrAttachment : HpBaseModelTransport<IrAttachment>, IIrAttachment
+    [OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
+    [OdooProp(OdooFieldType.Char, "res_model")] public string? res_model { get; set; }
+	[OdooProp(OdooFieldType.Char, "checksum")] public string? checksum { get; set; }
+	[OdooProp(OdooFieldType.Char, "mimetype")] public string? mimetype { get; set; }
+	[OdooProp(OdooFieldType.Char, "type")] public string? type { get; set; }
+	[OdooProp(OdooFieldType.Integer, "file_size")] public int? file_size { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "res_id")] public Many2One? res_id { get; set; }
+	private string _fileContentsBase64;
+    public IrAttachment() { }
+    public IrAttachment(
+public partial class IrAttachment : HpBaseModelTransport<IrAttachment>
+    public string DownloadContents()
+    public string GetFileContentsB64() => _fileContentsBase64;
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpVersionRelationship.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_VERSION_RELATIONSHIP_NAME, OdooDefaultsConstants.HP_VERSION_RELATIONSHIP)]
+public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelationship>, IHpVersionRelationshipModel
+    [OdooProp(OdooFieldType.Many2One, "parent_id")] public Many2One? parent_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "child_id")] public Many2One? child_id { get; set; }
+	public HpVersionRelationship() { }
+    public HpVersionRelationship(
+public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelationship>
+    public async static void Create(params HpVersion[] versions)
+	public async static void Create(params HpRecordStaged[] versionStaged)
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpCategoryProperty.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_CATEGORY_PROPERTY_NAME, OdooDefaultsConstants.HP_CATEGORY_PROPERTY)]
+public partial class HpCategoryProperty : HpBaseModelTransport<HpCategoryProperty>, IHpCategoryPropertyModel
+	[OdooProp(OdooFieldType.Many2One, "cat_id")] public Many2One? cat_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "prop_id")] public Many2One? prop_id { get; set; }
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpEntryNameFilter.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_ENTRY_NAME_FILTER_NAME, OdooDefaultsConstants.HP_ENTRY_NAME_FILTER)]
+public partial class HpEntryNameFilter : HpBaseModelTransport<HpEntryNameFilter>, IHpEntryNameFilterModel
+	[OdooProp(OdooFieldType.Char, "name_proto")] public string? name_proto { get; set; }
+	[OdooProp(OdooFieldType.Char, "name_regex")] public string? name_regex { get; set; }
+	[OdooProp(OdooFieldType.Char, "description")] public string? description { get; set; }
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpVersion.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_VERSION_NAME, OdooDefaultsConstants.HP_VERSION)]
+public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionModel
+	[OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
+	[OdooProp(OdooFieldType.Char, "file_ext")] public string? file_ext { get; set; }
+	[OdooProp(OdooFieldType.Char, "checksum")] public string? checksum { get; set; }
+    [OdooProp(OdooFieldType.Char, "windows_complete_name")] public string? windows_complete_name { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "entry_id")] public Many2One? entry_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "node_id")] public Many2One? node_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "dir_id")] public Many2One? dir_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "checkout_user")] public Many2One? checkout_user { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "attachment_id")] public Many2One? attachment_id { get; set; }
+	[OdooProp(OdooFieldType.Many2Many, "parent_ids")] public Many2Many? parent_ids { get; set; }
+	[OdooProp(OdooFieldType.Many2Many, "child_ids")] public Many2Many? child_ids { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "file_modify_stamp")] public DateTime? file_modify_stamp { get; set; }
+	[OdooProp(OdooFieldType.Integer, "file_size")] public int? file_size { get; set; }
+	[OdooProp(OdooFieldType.Binary, "preview_image")] public byte[]? preview_image { get; set; }
+	[OdooProp(OdooFieldType.Binary, "file_contents")] public byte[]? file_contents { get; set; }
+	public string? FileContentsBase64 { get; private set; }
+    public string? WinPathway { get => field ??= windows_complete_name?[OdooDefaultsConstants.ODOO_PATH_PREFIX_LENGTH..]; set; }
+    public SwDmDocumentType FileTypeExt
+    public override void CompleteConstruction()
+    public async Task<bool> GetPreviewImage()
+public partial class HpVersion : HpBaseModelTransport<HpVersion>
+	public bool MoveFile(string toPath)
+    public async static Task<(int, long)?> BatchDownloadFiles(List<HpVersion> processVersions)
+    public bool DownloadFile() => DownloadFile(Path.Combine(HackDefaults.Instance.PwaPathAbsolute, this.WinPathway));
+    public bool DownloadFile(string toPath)
+    public byte[]? DownloadContents()
+    public static async Task<List<HpVersion>> DownloadContentsAll(List<HpVersion> versions)
+    public HackFile DownloadFileData()
+    public static async Task<HackFile[]> DownloadFilesData(List<HpVersion> versions)
+    public static string[] GetDirectoryPath(ArrayList ids)
+    internal static HpVersion MostRecent(HpVersion[] versions)
+    public static async Task<HpVersionProperty[]?> GetProperties(HpVersion version)
+    public static async Task<List<HpVersionProperty[]>> GetAllVersionPropertiesAsync(ArrayList ids)
+    public static List<HpVersionProperty[]> GetAllVersionProperties(ArrayList ids)
+    public static bool HasChecksum(string checksum, params HpVersion[] versions)
+    public static async Task<HpVersion []?> GetChildren ( int id )
+    internal static HpVersion? PrepareCreation(HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType = HashedValueStoring.None)
+	internal static HpVersion? PrepareCreation(HackFile hackFile, IHpRecordStagedModel staged, HashedValueStoring hashStoreType = HashedValueStoring.None)
+	public static async Task<HpVersion> CreateNew(HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType = HashedValueStoring.None )
+	public static async Task<HpRecordStaged?> CreateNew(HackFile hackFile, IHpRecordStagedModel staged, HashedValueStoring hashStoreType = HashedValueStoring.None)
+	internal static async Task<HpVersion[]?> CreateAllNew( params (HackFile hackFile, IHpEntryModel entry, HashedValueStoring hashStoreType)[] data)
+    public static HpVersion[] GetFromPaths(params string[] fullPaths)
+    public static HpVersion[] GetFromPaths(string[] excludedFields = null, string[] includedFields = null, params string[] fullPaths)
+	public bool ExistsLocally
+	public override string ToString()
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpCategory.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_CATEGORY_NAME, OdooDefaultsConstants.HP_CATEGORY)]
+public partial class HpCategory : HpBaseModelTransport<HpCategory>, IHpCategoryModel
+	[OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
+	[OdooProp(OdooFieldType.Char, "cat_description")] public string? cat_description { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "track_version")] public bool? track_version { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "track_depends")] public bool? track_depends { get; set; }
+	public void Test()
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/OdooFieldSelector.cs ---
+public static class OdooFieldSelector
+	public static string[] Select(
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpDirectory.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_DIRECTORY_NAME, OdooDefaultsConstants.HP_DIRECTORY)]
+public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirectoryModel
+	[OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
+	[OdooProp(OdooFieldType.Char, "parent_path")] public string? parent_path { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "parent_id")] public Many2One? parent_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "default_cat")] public Many2One? default_cat { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "deleted")] public bool? deleted { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "sandboxed")] public bool? sandboxed { get; set; }
+    public static Task<Hashtable> LastAvailableDirectory( ArrayList paths )
+    public async static Task<bool> CreateNew( HpDirectory[] directories )
+    public async static Task<HpDirectory[]?> CreateNew( ArrayList paths )
+    public int GetId()
+    public Hashtable GetSubdirectories(bool withEntries = true)
+    public static Dictionary<string, object>? GetSubdirectories(int id)
+    public Hashtable GetSubdirectories(string pathway)
+    public Hashtable GetEntries()
+    public static Hashtable GetEntries(int? directoryId, bool showInActive = false)
+    public ArrayList? GetDirectoryEntryIDs(bool withSubEntries = false, bool withDeleted = true)
+	public async Task<ArrayList?> GetDirectoryEntryIDsAsync(bool withSubEntries = false, bool withDeleted = true)
+	public static async Task<ArrayList?> GetDirectoryEntryIDsAsync( int directoryId, bool withSubEntries = false, bool withDeleted = false)
+    public static ArrayList? GetDirectoryEntryIDs( int directoryId, bool withSubEntries = false, bool withDeleted = false )
+public class ExplorerItem
+    public string Name { get; set; }
+    public string IconPath { get; set; }
+    public bool IsFolder { get; set; }
+    public ObservableCollection<ExplorerItem> Children { get; set; }
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpType.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_TYPE_NAME, OdooDefaultsConstants.HP_TYPE)]
+public partial class HpType : HpBaseModelTransport<HpType>, IHpTypeModel
+	[OdooProp(OdooFieldType.Char, "description")] public string? description { get; set; }
+	[OdooProp(OdooFieldType.Char, "file_ext")] public string? file_ext { get; set; }
+	[OdooProp(OdooFieldType.Char, "type_regex")] public string? type_regex { get; set; }
+	[OdooProp(OdooFieldType.Binary, "icon")] public byte[]? icon { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "cat_id")] public Many2One? cat_id { get; set; }
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/IOdooTransport.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models
+	internal interface IOdooTransport<T> where T : HpBaseModelTransport<T>, new()
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpUser.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.RES_USERS_NAME, OdooDefaultsConstants.RES_USERS)]
+public partial class HpUser : HpBaseModelTransport<HpUser>, IHpUserModel
+	[OdooProp(OdooFieldType.Char, "name")] public string? name { get; set; }
+	[OdooProp(OdooFieldType.Char, "login")] public string? login { get; set; }
+	[OdooProp(OdooFieldType.Char, "email")] public string? email { get; set; }
+	[OdooProp(OdooFieldType.Char, "signature")] public string? signature { get; set; }
+	[OdooProp(OdooFieldType.DateTime, "login_date")] public DateTime? login_date { get; set; }
+	[OdooProp(OdooFieldType.Boolean, "active")] public bool? active { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "company_id")] public Many2One? company_id { get; set; }
+	public override string ToString()
+
+// --- File: Src/HackPDM.Infrastructure/Odoo/Models/HpReleaseVersionRel.cs ---
+namespace HackPDM.Infrastructure.Odoo.Models;
+[OdooModel(OdooDefaultsConstants.HP_RELEASE_VERSION_REL_NAME, OdooDefaultsConstants.HP_RELEASE_VERSION_REL)]
+public partial class HpReleaseVersionRel : HpBaseModelTransport<HpReleaseVersionRel>, IHpReleaseVersionRelModel
+	[OdooProp(OdooFieldType.Many2One, "release_id")] public Many2One? release_id { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "release_version")] public Many2One? release_version { get; set; }
+	[OdooProp(OdooFieldType.Many2One, "release_user")] public Many2One? release_user { get; set; }
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcDeserializer.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class XmlRpcDeserializer : XmlRpcXmlTokens
+	private static readonly DateTimeFormatInfo DateFormat = new DateTimeFormatInfo();
+	private object _container;
+	private Stack _containerStack;
+	protected string Text;
+	protected object Value;
+	protected string Name;
+	public XmlRpcDeserializer()
+	public virtual object Deserialize( TextReader xmlData )
+	protected void DeserializeNode( XmlTextReader reader )
+	public object Deserialize( string xmlData )
+	private void PopContext()
+	private void PushContext()
+	protected void Reset()
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcXmlTokens.cs ---
+public class XmlRpcXmlTokens
+	public const string ISO_DATETIME = "yyyyMMdd\\THH\\:mm\\:ss";
+	public const string BASE64 = "base64";
+	public const string STRING = "string";
+	public const string INT = "i4";
+	public const string ALT_INT = "int";
+	public const string DATETIME = "dateTime.iso8601";
+	public const string BOOLEAN = "boolean";
+	public const string VALUE = "value";
+	public const string NAME = "name";
+	public const string ARRAY = "array";
+	public const string DATA = "data";
+	public const string MEMBER = "member";
+	public const string STRUCT = "struct";
+	public const string DOUBLE = "double";
+	public const string PARAM = "param";
+	public const string PARAMS = "params";
+	public const string METHOD_CALL = "methodCall";
+	public const string METHOD_NAME = "methodName";
+	public const string METHOD_RESPONSE = "methodResponse";
+	public const string FAULT = "fault";
+	public const string FAULT_CODE = "faultCode";
+	public const string FAULT_STRING = "faultString";
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcRequest.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class XmlRpcRequest
+	private readonly XmlRpcResponseDeserializer _deserializer = new XmlRpcResponseDeserializer();
+	private readonly Encoding _encoding = new ASCIIEncoding();
+	private readonly XmlRpcRequestSerializer _serializer = new XmlRpcRequestSerializer();
+	public virtual IList Params { get; }
+	public virtual string MethodName
+	public string MethodNameObject
+	public string MethodNameMethod
+	public XmlRpcRequest()
+	public XmlRpcRequest( string methodName, IList parameters )
+	public object Invoke( string url )
+	public XmlRpcResponse? Send( string url, int timeout = 0, IWebProxy proxy = null )
+	public override string ToString()
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/Context.cs ---
+internal struct Context
+	public string Name;
+	public object Container;
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcBoxcarRequest.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class XmlRpcBoxcarRequest : XmlRpcRequest
+	public IList Requests = new ArrayList();
+	public override string MethodName => "system.multiCall";
+	public override IList Params
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcSerializer.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class XmlRpcSerializer
+	public virtual void Serialize( XmlTextWriter output, object obj )
+	public string Serialize( object obj )
+	public void SerializeObject( XmlTextWriter output, object obj )
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcResponseDeserializer.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class XmlRpcResponseDeserializer : XmlRpcDeserializer
+	private static XmlRpcResponseDeserializer _singleton;
+	public override object Deserialize( TextReader xmlData )
+	public XmlRpcResponse DeserializeResponse( TextReader xmlData )
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcRequestSerializer.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class XmlRpcRequestSerializer : XmlRpcSerializer
+	private static XmlRpcRequestSerializer _singleton;
+	public static XmlRpcRequestSerializer Singleton
+	public override void Serialize( XmlTextWriter output, object obj )
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcRequestDeserializer.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class XmlRpcRequestDeserializer : XmlRpcDeserializer
+	private static XmlRpcRequestDeserializer _singleton;
+	public override object Deserialize( TextReader xmlData )
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcServer.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class XmlRpcServer : IEnumerable
+	private const int RESPONDER_COUNT = 10;
+	private readonly IDictionary _handlers;
+	private readonly int _port;
+	private readonly WaitCallback _wc;
+	private IPAddress _address;
+	private TcpListener _myListener;
+	private XmlRpcSystemObject _system;
+	public object this [ string name ] => _handlers [ name ];
+	public XmlRpcServer( IPAddress address, int port )
+	public XmlRpcServer( int port )
+	public IEnumerator GetEnumerator()
+	public void Start()
+	public void Stop()
+	public void StartListen()
+	public void Add( string name, object obj )
+	public string MethodName( string methodName )
+	public object Invoke( XmlRpcRequest req )
+	public object Invoke( string objectName, string methodName, IList parameters )
+	public void WaitCallback( object responder )
+	public static void HttpHeader( string sHttpVersion, string sMimeHeader, long iTotBytes, string sStatusCode, TextWriter output )
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcResponder.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class XmlRpcResponder
+	private TcpClient _client;
+	private readonly XmlRpcRequestDeserializer _deserializer = new XmlRpcRequestDeserializer();
+	private readonly XmlRpcResponseSerializer _serializer = new XmlRpcResponseSerializer();
+	private readonly XmlRpcServer _server;
+	public SimpleHttpRequest HttpReq
+	public XmlRpcResponder( XmlRpcServer server, TcpClient client )
+	public void Respond()
+	public void Respond( SimpleHttpRequest httpReq )
+	public void Close()
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcException.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+[Serializable]
+internal class XmlRpcException : Exception
+	public string FaultString => Message;
+	public int FaultCode
+	public XmlRpcException( int code, string message )
+	public override string ToString()
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcSystemObject.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+[Abstractions.XmlRpcExposed]
+public class XmlRpcSystemObject
+	private readonly XmlRpcServer _server;
+	public static IDictionary MethodHelper { get; } = new Hashtable();
+	public XmlRpcSystemObject( XmlRpcServer server )
+	public static object Invoke( object target, string methodName, IList parameters )
+	[XmlRpcExposed]
+	public IList ListMethods()
+	[XmlRpcExposed]
+	public IList MethodSignature( string name )
+	[XmlRpcExposed]
+	public string MethodHelp( string name )
+	[XmlRpcExposed]
+	public IList MultiCall( IList calls )
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcResponse.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class XmlRpcResponse
+	private object _value;
+	public bool IsFault;
+	public object Value
+	public int FaultCode
+	public string FaultString
+	public XmlRpcResponse()
+	public XmlRpcResponse( int code, string message )
+	public void SetFault( int code, string message )
+	public override string ToString()
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/SimpleHttpRequest.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class SimpleHttpRequest
+	private string _filePath;
+	private string _filePathDir;
+	private string _filePathFile;
+	private Hashtable _headers;
+	public StreamWriter Output
+	public StreamReader Input
+	public TcpClient Client
+	private string FilePath
+	public string HttpMethod
+	public string Protocol
+	public string FilePathFile
+	public string FilePathDir
+	public SimpleHttpRequest( TcpClient client )
+	private void GetRequestMethod()
+	private void GetRequestHeaders()
+	public override string ToString()
+	public void Close()
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/XmlRpcResponseSerializer.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class XmlRpcResponseSerializer : XmlRpcSerializer
+	public static XmlRpcResponseSerializer Singleton
+	public override void Serialize( XmlTextWriter output, object obj )
+
+// --- File: Src/HackPDM.Infrastructure/XmlRpc/Logger.cs ---
+namespace HackPDM.Infrastructure.XmlRpc;
+public class Logger
+	public delegate void LoggerDelegate( string message, LogLevel level );
+	public static LoggerDelegate Delegate;
+	public static void WriteEntry( string message, LogLevel level )

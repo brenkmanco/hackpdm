@@ -63,7 +63,6 @@ public partial class HackApp : Application
         services.AddSingleton<IHackDefaults, HackDefaults>();
         services.AddSingleton<IOdooDefaults, OdooDefaults>();
 
-        services.AddSingleton<TreeHelp>();
         services.AddSingleton<GridHelp>();
 
         services.AddSingleton<VMEnv>();

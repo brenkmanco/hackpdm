@@ -189,13 +189,13 @@ internal static class SmokeTestRunner
 				var vm = page!.ViewModel;
 				int min = int.TryParse( Env( "HACKPDM_SMOKE_MIN_ENTRIES", "1" ), out var m ) ? m : 1;
 
-				// selecting the node in the tree raises SelectionChanged -> TreeHelp.TreeSelectItem
+				// selecting the node in the tree raises SelectionChanged -> ViewModel.LoadEntriesAsync
 				directory!.EnsureVisible( page.GetOdooDirectoryTree() );
 
 				var master = vm.GroupedEntries?.Master
 					?? throw new InvalidOperationException( "view model has no entry collection" );
 				await WaitUntil( () => page.LastSelectedNode == directory.Node, "tree selection applied" );
-				await WaitUntil( () => master.Count >= min && vm._treeItemChange is { IsCompleted: true },
+				await WaitUntil( () => master.Count >= min && page.TreeSelectionTask is { IsCompleted: true },
 					$">= {min} entries listed", () => $"{master.Count} listed" );
 				await WaitStable( () => master.Count );
 				// RestartEntries / SearchOdoo / the entry locator wait on this flag

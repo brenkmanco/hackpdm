@@ -89,7 +89,7 @@
 						BorderBrush="DimGray"
 						BorderThickness="3"
 						CornerRadius="10"
-						ItemsSource="{x:Bind LastSelectedNodePaths}"
+						ItemsSource="{x:Bind ViewModel.LastSelectedNodePaths}"
 						Visibility="Visible">
 						<BreadcrumbBar.ItemTemplate>
 							<DataTemplate x:DataType="types:TreeData">
@@ -114,28 +114,38 @@
 							<TreeView.ContextFlyout>
 								<MenuFlyout>
 									<MenuFlyoutSubItem x:Name="TreeDownload" Text="Download">
-										<MenuFlyoutItem x:Name="TreeDownloadAll" Text="All" />
-										<MenuFlyoutItem x:Name="TreeDownloadTop" Text="Top Directory" />
+										<MenuFlyoutItem x:Name="TreeDownloadAll" Text="All"
+										Command="{x:Bind ViewModel.GetLatestDirectoryCommand}" />
+										<MenuFlyoutItem x:Name="TreeDownloadTop" Text="Top Directory"
+										Command="{x:Bind ViewModel.GetLatestDirectoryTopCommand}" />
 									</MenuFlyoutSubItem>
 									<MenuFlyoutSeparator />
-									<MenuFlyoutItem x:Name="TreeCheckout" Text="Checkout" />
-									<MenuFlyoutItem x:Name="TreeUndoCheckout" Text="Undo Checkout" />
+									<MenuFlyoutItem x:Name="TreeCheckout" Text="Checkout"
+										Command="{x:Bind ViewModel.CheckoutDirectoryCommand}" />
+									<MenuFlyoutItem x:Name="TreeUndoCheckout" Text="Undo Checkout"
+										Command="{x:Bind ViewModel.UndoCheckoutDirectoryCommand}" />
 									<MenuFlyoutSeparator />
-									<MenuFlyoutItem x:Name="TreeCommit" Text="Commit" />
+									<MenuFlyoutItem x:Name="TreeCommit" Text="Commit"
+										Command="{x:Bind ViewModel.CommitDirectoryCommand}" />
 									<MenuFlyoutSeparator />
 									<MenuFlyoutItem x:Name="TreeAnalyze" Text="Analyze" />
 									<MenuFlyoutSeparator />
 									<MenuFlyoutSubItem x:Name="TreeDelete" Text="Delete">
-										<MenuFlyoutItem x:Name="TreeLocalDelete" Text="Local" />
-										<MenuFlyoutItem x:Name="TreeLogicalDelete" Text="Logical" />
+										<MenuFlyoutItem x:Name="TreeLocalDelete" Text="Local"
+										Command="{x:Bind ViewModel.LocalDeleteDirectoryCommand}" />
+										<MenuFlyoutItem x:Name="TreeLogicalDelete" Text="Logical"
+										Command="{x:Bind ViewModel.LogicalDeleteDirectoryCommand}" />
 										<MenuFlyoutItem x:Name="TreePermanentDelete" Text="Permanent" />
 									</MenuFlyoutSubItem>
 									<MenuFlyoutSubItem x:Name="TreeUndelete" Text="Restore">
-										<MenuFlyoutItem x:Name="TreeRestoreAll" Text="All" />
-										<MenuFlyoutItem x:Name="TreeRestoreTop" Text="Top Directory" />
+										<MenuFlyoutItem x:Name="TreeRestoreAll" Text="All"
+										Command="{x:Bind ViewModel.RestoreDirectoryRecursiveCommand}" />
+										<MenuFlyoutItem x:Name="TreeRestoreTop" Text="Top Directory"
+										Command="{x:Bind ViewModel.RestoreDirectoryCommand}" />
 									</MenuFlyoutSubItem>
 									<MenuFlyoutSeparator />
-									<MenuFlyoutItem x:Name="TreeOpenDirectory" Text="Open Directory" />
+									<MenuFlyoutItem x:Name="TreeOpenDirectory" Text="Open Directory"
+										Command="{x:Bind ViewModel.OpenDirectoryCommand}" />
 								</MenuFlyout>
 							</TreeView.ContextFlyout>
 							<TreeView.ItemTemplate>
@@ -207,21 +217,21 @@
 						Padding="5,0,5,0"
 						VerticalAlignment="Center"
 						FontWeight="Bold"
-						Text="Entries: None" />
+						Text="{x:Bind ViewModel.EntriesLabel, Mode=OneWay}" />
 					<TextBlock
 						x:Name="EntryListLocalOnly"
 						Grid.Column="1"
 						Padding="5,0,5,0"
 						VerticalAlignment="Center"
 						FontWeight="Bold"
-						Text="LO: None" />
+						Text="{x:Bind ViewModel.EntriesLabelLocal, Mode=OneWay}" />
 					<TextBlock
 						x:Name="EntryListRemoteOnly"
 						Grid.Column="2"
 						Padding="5,0,5,0"
 						VerticalAlignment="Center"
 						FontWeight="Bold"
-						Text="RO: None" />
+						Text="{x:Bind ViewModel.EntriesLabelRemote, Mode=OneWay}" />
 				</Grid>
 
 				<TabView
@@ -236,7 +246,7 @@
 						<tv:TableView
 							x:Name="OdooHistory"
 							AutoGenerateColumns="False"
-							ItemsSource="{x:Bind OHistories}"
+							ItemsSource="{x:Bind ViewModel.OHistories}"
 							>
 							<tv:TableView.Columns>
 								<tv:TableViewTextColumn Binding="{Binding Version}" Header="Version" />
@@ -248,16 +258,22 @@
 							<tv:TableView.ContextFlyout>
 								<MenuFlyout x:Name="HistoryContextMenu">
 									<MenuFlyoutSubItem x:Name="HistoryDownload" Text="Download">
-										<MenuFlyoutItem x:Name="HistoryDownloadTemp" Text="Temporary" />
-										<MenuFlyoutItem x:Name="HistoryDownloadOverwrite" Text="Overwrite" />
+										<MenuFlyoutItem x:Name="HistoryDownloadTemp" Text="Temporary"
+										Command="{x:Bind ViewModel.DownloadHistoryToTempCommand}" />
+										<MenuFlyoutItem x:Name="HistoryDownloadOverwrite" Text="Overwrite"
+										Command="{x:Bind ViewModel.DownloadHistoryOverwriteCommand}" />
 									</MenuFlyoutSubItem>
 									<MenuFlyoutSubItem x:Name="HistoryOpen" Text="Open">
-										<MenuFlyoutItem x:Name="HistoryOpenTemp" Text="Temporary" />
-										<MenuFlyoutItem x:Name="HistoryOpenOverwrite" Text="Overwrite" />
+										<MenuFlyoutItem x:Name="HistoryOpenTemp" Text="Temporary"
+										Command="{x:Bind ViewModel.OpenHistoryFromTempCommand}" />
+										<MenuFlyoutItem x:Name="HistoryOpenOverwrite" Text="Overwrite"
+										Command="{x:Bind ViewModel.OpenHistoryOverwriteCommand}" />
 									</MenuFlyoutSubItem>
 									<MenuFlyoutSubItem x:Name="HistoryMove" Text="Move">
-										<MenuFlyoutItem x:Name="HistoryMoveTemp" Text="Temporary" />
-										<MenuFlyoutItem x:Name="HistoryMoveOverwrite" Text="Overwrite" />
+										<MenuFlyoutItem x:Name="HistoryMoveTemp" Text="Temporary"
+										Command="{x:Bind ViewModel.MoveHistoryToTempCommand}" />
+										<MenuFlyoutItem x:Name="HistoryMoveOverwrite" Text="Overwrite"
+										Command="{x:Bind ViewModel.MoveHistoryToWorkingCommand}" />
 									</MenuFlyoutSubItem>
 								</MenuFlyout>
 							</tv:TableView.ContextFlyout>
@@ -268,7 +284,7 @@
 							x:Name="OdooParents"
 							AutoGenerateColumns="False"
 							CanSortColumns="False"
-							ItemsSource="{x:Bind OParents}"
+							ItemsSource="{x:Bind ViewModel.OParents}"
 							RowDetailsVisibilityMode="Collapsed">
 							<tv:TableView.Columns>
 								<tv:TableViewTextColumn Binding="{Binding Version}" Header="Version" />
@@ -281,7 +297,7 @@
 						<tv:TableView
 							x:Name="OdooChildren"
 							AutoGenerateColumns="False"
-							ItemsSource="{x:Bind OChildren}"
+							ItemsSource="{x:Bind ViewModel.OChildren}"
 							RowDetailsVisibilityMode="Collapsed"
 							SelectionMode="Extended">
 							<tv:TableView.Columns>
@@ -295,7 +311,7 @@
 						<tv:TableView
 							x:Name="OdooProperties"
 							AutoGenerateColumns="False"
-							ItemsSource="{x:Bind OProperties}"
+							ItemsSource="{x:Bind ViewModel.OProperties}"
 							RowDetailsVisibilityMode="Collapsed">
 							<tv:TableView.Columns>
 								<tv:TableViewTextColumn Binding="{Binding Version}" Header="Version" />
@@ -311,7 +327,7 @@
 							x:Name="OdooVersionInfoList"
 							AutoGenerateColumns="False"
 							IsReadOnly="True"
-							ItemsSource="{x:Bind OVersions}"
+							ItemsSource="{x:Bind ViewModel.OVersions}"
 							RowDetailsVisibilityMode="Collapsed">
 							<tv:TableView.Columns>
 								<tv:TableViewTextColumn Binding="{Binding Id}" Header="Version Id" />
@@ -352,14 +368,16 @@
 						Height="256">
 						<ProgressRing
 							x:Name="LoadRing"
-							Width="Auto"
-							Height="Auto"
-							IsActive="True" />
+							Width="256"
+							Height="256"
+							IsActive="{x:Bind ViewModel.IsTreeLoading, Mode=OneWay}"
+							Visibility="{x:Bind ViewModel.IsTreeLoading, Mode=OneWay}" />
 						<Image
 							x:Name="OdooEntryImage"
-							Width="0"
-							Height="0"
-							Source="ms-appx:///Assets/placeholder.png"
+							Width="256"
+							Height="256"
+							Visibility="{x:Bind ViewModel.IsPreviewVisible, Mode=OneWay}"
+							Source="{x:Bind ViewModel.PreviewImage, Mode=OneWay}"
 							Stretch="UniformToFill" />
 						<Grid
 							Margin="10"
@@ -388,10 +406,9 @@
 						<AppBarToggleButton
 							x:Name="ToggleGroups"
 							VerticalAlignment="Center"
-							Checked="ToggleGroups_Checked"
 							Icon="Orientation"
-							Label="Grouped"
-							Unchecked="ToggleGroups_Checked" />
+							IsChecked="{x:Bind ViewModel.IsGroupingEnabled, Mode=TwoWay}"
+							Label="Grouped" />
 						<AppBarToggleButton
 							x:Name="Anchor"
 							VerticalAlignment="Center"
@@ -401,17 +418,14 @@
 						<AppBarToggleButton
 							x:Name="ShowInactive"
 							VerticalAlignment="Center"
-							Checked="ShowInactive_Checked"
 							Icon="Stop"
-							Label="Show Inactive"
-							Unchecked="ShowInactive_Checked" />
+							IsChecked="{x:Bind ViewModel.ShowInactive, Mode=TwoWay}"
+							Label="Show Inactive" />
 						<AppBarToggleButton
 							x:Name="ShowHidden"
 							VerticalAlignment="Center"
-							Checked="ShowHidden_Checked"
 							Icon="View"
-							Label="Ignore Filter"
-							Unchecked="ShowHidden_Checked" />
+							Label="Ignore Filter" />
 						<AppBarButton
 							x:Name="AdditionalTools"
 							VerticalAlignment="Center"
@@ -419,9 +433,9 @@
 							Label="Additional Tools">
 							<AppBarButton.Flyout>
 								<MenuFlyout>
-									<MenuFlyoutItem x:Name="OdooRefreshDropdown" Text="Refresh View" />
-									<MenuFlyoutItem x:Name="OdooSearchDropdown" Text="Search" />
-									<MenuFlyoutItem x:Name="OdooManageTypesDropdown" Text="Manage File Types" />
+									<MenuFlyoutItem x:Name="OdooRefreshDropdown" Click="Refresh_Click" Text="Refresh View" />
+									<MenuFlyoutItem x:Name="OdooSearchDropdown" Click="Search_Click" Text="Search" />
+									<MenuFlyoutItem x:Name="OdooManageTypesDropdown" Click="ManageTypes_Click" Text="Manage File Types" />
 								</MenuFlyout>
 							</AppBarButton.Flyout>
 						</AppBarButton>

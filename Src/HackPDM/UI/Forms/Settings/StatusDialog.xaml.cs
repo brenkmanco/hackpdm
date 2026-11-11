@@ -104,9 +104,10 @@ public sealed partial class StatusDialog : Page
                 while (!Canceled)
                 {
                     token.ThrowIfCancellationRequested();
-					await (ViewModel.SetDownloaded( ViewModel.Downloaded));
-					await ( StatusDialog_VM.SetTotalDownloaded( StatusDialog_VM.SessionDownloaded));
-					await (ViewModel.SetProgressBar( ViewModel.SkipCounter + ViewModel.ProcessCounter, ViewModel.MaxCount));
+					// only render: the counters are written by IOperationReporter
+					await SetDownloadedInternal();
+					await SetTotalDownloadedInternal();
+					await SetProgressBarInternal();
 					await Task.Delay(100, token);
 			    }
 		    }, token);
@@ -137,7 +138,8 @@ public sealed partial class StatusDialog : Page
         {
             fileCheckStatus.Maximum = ViewModel.MaxCount;
             fileCheckStatus.Value = ViewModel.TotalProcessed;
-            ProgressText.Text = $"({((ViewModel.TotalProcessed) / (float)ViewModel.MaxCount) * 100:f2}%)\n{ViewModel.TotalProcessed} / {ViewModel.MaxCount}";
+            float percent = ViewModel.MaxCount > 0 ? ViewModel.TotalProcessed / (float)ViewModel.MaxCount * 100 : 0;
+            ProgressText.Text = $"({percent:f2}%)\n{ViewModel.TotalProcessed} / {ViewModel.MaxCount}";
             SkippedLabel.Text = $"({ViewModel.SkipCounter}) Skipped";
         });
     }
@@ -231,14 +233,9 @@ public sealed partial class StatusDialog : Page
 			    "There are items still processing..\nWould you like to continue and close the window and operations?", 
 			    "Cancel Operation?",
 			    MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
-		    if (args.Cancel)
-		    {
-			    //if (HackFileManager.statusToken is { } cts)
-			    //{
-				//await cts.CancelAsync();
-			    //}
-			    IsInProcess = false;
-		    }
+		    // closing the window stops the running operation
+		    if (!args.Cancel)
+			    HackPDM.Services.StatusWindowReporter.Default.Cancel();
         }
 	}
 	private async void StatusDialog_Unloaded( object sender, RoutedEventArgs e )
