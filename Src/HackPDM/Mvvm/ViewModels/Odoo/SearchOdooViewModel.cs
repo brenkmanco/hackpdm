@@ -196,8 +196,8 @@ public partial class SearchOdooViewModel : ObservableObject
 	#endregion
 	#region Commands: acting on results
 
-	private ArrayList SelectedRemoteIds()
-		=> [ .. SelectedResults.Where( r => r.Id is not null ).Select( r => (object)r.Id!.Value ) ];
+	private int[] SelectedRemoteIds()
+		=> [ .. SelectedResults.Select( r => r.Id ).OfType<int>() ];
 
 	[RelayCommand]
 	private Task CheckoutAsync() => SetCheckoutAsync( checkout: true );
@@ -221,7 +221,7 @@ public partial class SearchOdooViewModel : ObservableObject
 			return false;
 		}
 
-		ArrayList ids = SelectedRemoteIds();
+		IReadOnlyList<int> ids = SelectedRemoteIds();
 		if( ids.Count == 0 )
 			return false;
 

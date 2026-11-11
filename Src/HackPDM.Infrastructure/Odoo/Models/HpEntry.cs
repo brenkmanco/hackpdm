@@ -22,7 +22,6 @@ using HackPDM.Shared.OdooAttributes;
 //using static System.Net.Mime.MediaTypeNames;
 
 
-using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 // Resharper disable InconsistentNaming
 
 namespace HackPDM.Infrastructure.Odoo.Models;
@@ -95,143 +94,16 @@ public partial class HpEntry
 	public HackFile? GetLocalFile()
 	{
 
-		if( HashedValues.TryGetValue( "windows_complete_name", out string? path ) )
-		{
-			path = PwaPaths.ToAbsolute( path );
-			return new HackFile( path );
-		}
-		if( HashedValues.TryGetValue( nameof( dir_id ), out ArrayList? arr2 ) )
-		{
-			string? path2 = arr2?[1] as string;
-			path2 = PwaPaths.ToAbsolute( path2 );
-			return new HackFile( path2 );
-		}
+		if( HashedValues.GetValueOrDefault( "windows_complete_name" ) is string path )
+			return new HackFile( PwaPaths.ToAbsolute( path ) );
+		if( OdooValues.Many2OneName( HashedValues.GetValueOrDefault( nameof( dir_id ) ) ) is string directory )
+			return new HackFile( PwaPaths.ToAbsolute( directory ) );
 		return null;
 	}
 
 	public bool CanCheckOut() => (checkout_user?.id is null or 0) && deleted is false;
-	public bool CanUnCheckOut() => (checkout_user is not null) && checkout_user == OdooDefaults.Instance.OdooId;
-
-	/// <summary>Checks the entry out to this user and node; false when the server refused or failed.</summary>
-	public async Task<bool> CheckOut()
-	{
-		if (!CanCheckOut()) return false;
-		if (latest_version_id?.id is not int versionId || versionId == 0 || OdooDefaults.Instance.MyNode?.id is not int nodeId)
-			return false;
-
-		// hp.version.checkout_entry(version_id, node): the arguments used to be sent as one list,
-		// which the server ignored, so nothing was ever checked out
-		bool success = await OdooClient<HpVersion>.CommandAsync<bool>( "checkout_entry", [ versionId, nodeId ] );
-		if (success)
-		{
-			checkout_user = OdooDefaults.Instance.OdooId;
-			checkout_date = DateTime.Now;
-			checkout_node = nodeId;
-			is_checked_out = true;
-		}
-		//await WriteChangedValuesAsync("checkout_user", "checkout_date", "checkout_node");
-		//HpVersion version = new()
-		//{
-		//	node_id = checkout_node,
-		//	id = latest_version_id
-		//};
-		//await version.WriteChangedValuesAsync("node_id");
-		if (success)
-			SetLocalReadOnly(false);
-		return success;
-	}
-	public async Task<bool> UnCheckOut()
-	{
-		if (!CanUnCheckOut()) return false;
-		checkout_user = null;
-		checkout_date = null;
-		checkout_node = null;
-		is_checked_out = false;
-
-		bool success = await WriteChangedValuesAsync("checkout_user", "checkout_date", "checkout_node", "is_checked_out");
-		if (success)
-			SetLocalReadOnly(true);
-		return success;
-	}
-	/// <summary>Local copies are writable only while checked out.</summary>
-	private void SetLocalReadOnly(bool readOnly)
-	{
-		string? winpath = HashedValues.TryGetValue("windows_complete_name", out object? objpath) && objpath is string stored
-			? stored
-			: windows_complete_name;
-		if (string.IsNullOrEmpty(winpath))
-			return;
-		// stored as "root\dir\file" whatever the client OS
-		FileInfo file = new(PwaPaths.ToAbsolute( winpath )!);
-		if (!file.Exists)
-			return;
-		file.Attributes = readOnly ? file.Attributes | FileAttributes.ReadOnly : file.Attributes & ~FileAttributes.ReadOnly;
-	}
-	public static async Task<HpEntry?> ConvertToEntry(HackFile? hack, int dirId, HpPDMCommit? commit = null)
-	{
-		// if the hack file is a restricted type return
-		if (OdooDefaults.Instance?.RestrictTypes is true
-			& OdooDefaults.Instance!.ExtToType.TryGetValue(hack.TypeExt.ToLower(), out IHpTypeModel? itype) is false)
-			return null;
-
-		HpEntry entry = new()
-		{
-			commit_id = new Many2One
-			{
-				id = commit?.id
-			},
-			name = hack?.Name,
-			deleted = false,
-			dir_id = dirId,
-			LocalFile = hack,
-		};
-
-		if (itype is not null)
-		{
-			entry.cat_id = itype.cat_id?.id ?? 0;
-			entry.type_id = itype.id;
-		}
-		entry.returnType = EntryReturnType.Staged;
-		return entry;
-	}
-	public async Task<HpEntry?> FindRemoteEntry()
-	{
-		HpEntry? entry = (await GetRecordsBySearchAsync(
-			[
-				new ArrayList { "name", "=", name },
-				new ArrayList { "dir_id", "=", dir_id?.id },
-				new ArrayList { "deleted", "=", false }
-			]))?.FirstOrDefault();
-		if (entry is not null and { id: not 0 })
-		{
-			entry.returnType = EntryReturnType.GotExisting;
-		}
-		return entry;
-	}
-	public async Task<HpRecordStaged?> StageEntry()
-	{
-		//HpEntry? entry = await FindRemoteEntry();
-		HpRecordStaged? stagedRecord = null;
-
-		stagedRecord = await this.StageRecAsync(false);
-		returnType = stagedRecord?.id is null or 0 ? EntryReturnType.Failed : EntryReturnType.Staged;
-
-		return stagedRecord;
-	}
-
-	//public static async Task<(EntryReturnType, HpEntry?, HpRecordStaged?)> GetFallbackCreateEntryAsync( HackFile hackFile, int dirId, HpPDMCommit? commit = null)
-	//{
-	//}
-	public async Task LogicalDelete()
-	{
-		deleted = true;
-		await WriteChangedValuesAsync("deleted");
-	}
-	public async Task LogicalUnDelete()
-	{
-		deleted = false;
-		await WriteChangedValuesAsync("deleted");
-	}
+	/// <summary>Checked out to <paramref name="userId"/> (this user by default).</summary>
+	public bool CanUnCheckOut( int? userId = null ) => checkout_user is not null && checkout_user == ( userId ?? OdooDefaults.Instance.OdooId );
 	public override string ToString()
 	{
 		return name;

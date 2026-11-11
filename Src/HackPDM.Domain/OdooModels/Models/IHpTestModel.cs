@@ -17,7 +17,7 @@ public interface IHpTestModel : IHpOdooRecord
 	[OdooProp(OdooFieldType.Html		, "html"	 )]	public string? html			{ get; set; }
 	[OdooProp(OdooFieldType.Image		, "image"	 )]	public byte[]? image		{ get; set; }
 	[OdooProp(OdooFieldType.Integer		, "integer"	 )]	public int? integer			{ get; set; }
-	[OdooProp(OdooFieldType.Json		, "json"	 )]	public Hashtable? json		{ get; set; }
+	[OdooProp(OdooFieldType.Json		, "json"	 )]	public Dictionary<string, object?>? json		{ get; set; }
 	[OdooProp(OdooFieldType.Monetary	, "monetary" )]	public decimal? monetary	{ get; set; }
 	[OdooProp(OdooFieldType.Selection	, "selection")]	public string? selection	{ get; set; }
 	[OdooProp(OdooFieldType.Text		, "text"	 )]	public string? text			{ get; set; }

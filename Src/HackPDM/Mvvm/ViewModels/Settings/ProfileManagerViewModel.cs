@@ -24,15 +24,15 @@ public partial class ProfileManagerViewModel : ObservableObject
 			List<string> errors = [];
 
 			await OdooDefaults.Instance!.InitializeAsync();
-			if (!await OdooClient.CorrectOdooAddress())
+			if (!await OdooConnection.CorrectOdooAddress())
 			{
 				errors.Add("invalid odoo address or unreachable host");
 			}
-			else if (!await OdooClient.CorrectOdooPort())
+			else if (!await OdooConnection.CorrectOdooPort())
 			{
 				errors.Add("invalid odoo port or server is down");
 			}
-			else if (await OdooClient.CorrectUserId() is int status)
+			else if (OdooConnection.CorrectUserId() is int status)
 			{
 				switch (status)
 				{

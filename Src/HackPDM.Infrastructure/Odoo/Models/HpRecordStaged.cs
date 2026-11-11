@@ -12,7 +12,7 @@ public partial class HpRecordStaged : HpBaseModelTransport<HpRecordStaged>, IHpR
 {
 	[OdooProp(OdooFieldType.Char, "target_model")] public string? target_model { get;set;}
 	[OdooProp(OdooFieldType.Integer, "target_id")] public int? target_id { get; set; }
-	[OdooProp(OdooFieldType.Json, "payload")] public Hashtable? payload { get; set; }
+	[OdooProp(OdooFieldType.Json, "payload")] public Dictionary<string, object?>? payload { get; set; }
 
 	[OdooProp(OdooFieldType.Many2One, "committing_id")] public Many2One? committing_id { get; set; }
 	

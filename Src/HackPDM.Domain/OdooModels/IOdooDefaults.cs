@@ -23,29 +23,31 @@ public interface IOdooDefaultBase
 	}
 
 	int OdooId { get; set; }
+	/// <summary>Why the last login failed; null after a successful one.</summary>
+	string? LoginError { get; }
 	string[] EntryFilterPatterns { get; }
 	IHpNodeModel? MyNode { get; }
-	IHpDirectoryModel? HpDirectoryRoot { get; set; }
-	int DownloadBatchSize { get; set; }
+	IHpDirectoryModel? HpDirectoryRoot { get; }
+	int DownloadBatchSize { get; }
 	int ConcurrencySize { get; }
 	int? MaxConcurrency { get; }
 	int? MaxBatchSize { get; }
-	IHpSettingModel[]? HpSettings { get; set; }
-	string? SwApi { get; set; }
-	bool? RestrictProperties { get; set; }
-	bool? RestrictTypes { get; set; }
-	IHpEntryNameFilterModel[]? HpEntryNameFilters { get; set; }
-	IHpCategoryModel[]? HpCategories { get; set; }
-	IHpTypeModel[]? HpTypes { get; set; }
-	IHpPropertyModel[]? HpProperties { get; set; }
-	IHpNodeModel[]? HpNodes { get; set; }
-	IHpUserModel[]? HpUsers { get; set; }
-	Dictionary<string, IHpTypeModel> ExtToType { get; set; }
-	Dictionary<string, IHpCategoryModel> ExtToCat { get; set; }
-	Dictionary<string, IHpPropertyModel> ExtToProp { get; set; }
-	Dictionary<string, IHpEntryNameFilterModel> ExtToFilter { get; set; }
-	Dictionary<int, IHpPropertyModel> IdToProp { get; set; }
-	Dictionary<int, IHpUserModel> IdToUser { get; set; }
+	IHpSettingModel[]? HpSettings { get; }
+	string? SwApi { get; }
+	bool? RestrictProperties { get; }
+	bool? RestrictTypes { get; }
+	IHpEntryNameFilterModel[]? HpEntryNameFilters { get; }
+	IHpCategoryModel[]? HpCategories { get; }
+	IHpTypeModel[]? HpTypes { get; }
+	IHpPropertyModel[]? HpProperties { get; }
+	IHpNodeModel[]? HpNodes { get; }
+	IHpUserModel[]? HpUsers { get; }
+	Dictionary<string, IHpTypeModel> ExtToType { get; }
+	Dictionary<string, IHpCategoryModel> ExtToCat { get; }
+	Dictionary<string, IHpPropertyModel> ExtToProp { get; }
+	Dictionary<string, IHpEntryNameFilterModel> ExtToFilter { get; }
+	Dictionary<int, IHpPropertyModel> IdToProp { get; }
+	Dictionary<int, IHpUserModel> IdToUser { get; }
 	Task InitializeAsync();
 }
 public interface IOdooDefaults : IOdooDefaultBase

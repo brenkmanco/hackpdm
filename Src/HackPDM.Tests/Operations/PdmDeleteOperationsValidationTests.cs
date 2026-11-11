@@ -68,8 +68,8 @@ public class PdmDeleteOperationsValidationTests
     {
         var logger = new MockStatusLogger();
 
-        bool resultNull = await PdmDeleteOperations.LogicalDeleteEntries(null, logger);
-        bool resultEmpty = await PdmDeleteOperations.LogicalDeleteEntries([], logger);
+        bool resultNull = await PdmDeleteOperations.SetDeletedAsync(null, true, logger);
+        bool resultEmpty = await PdmDeleteOperations.SetDeletedAsync([], true, logger);
 
         Assert.False(resultNull);
         Assert.False(resultEmpty);
@@ -81,8 +81,8 @@ public class PdmDeleteOperationsValidationTests
     {
         var logger = new MockStatusLogger();
 
-        bool resultNull = await PdmDeleteOperations.LogicalUnDeleteEntries(null, logger);
-        bool resultEmpty = await PdmDeleteOperations.LogicalUnDeleteEntries([], logger);
+        bool resultNull = await PdmDeleteOperations.SetDeletedAsync(null, false, logger);
+        bool resultEmpty = await PdmDeleteOperations.SetDeletedAsync([], false, logger);
 
         Assert.False(resultNull);
         Assert.False(resultEmpty);

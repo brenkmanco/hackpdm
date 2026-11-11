@@ -40,19 +40,19 @@ public partial class HpPDMCommit
 	/// </summary>
 	public async Task<(bool Committed, string? Error)> ServerCommit()
 	{
-		object? response = await OdooClient<HpPDMCommit>.ExecuteJsonAsync("start_commit", [this.id]);
-		if (response is null)
-			return (false, OdooClient.LatestException is { Length: > 0 } e ? e : "no response from the server");
-		if (response is ArrayList { Count: > 0 } rows && rows[0] is Hashtable row)
+		Result<IReadOnlyList<OdooRow>> response = await OdooRpc.ExecuteAsync<IReadOnlyList<OdooRow>>(GetHpModel()!, "start_commit", [this.id]);
+		if (!response.Ok)
+			return (false, response.Error);
+		if (response.Value is [var row, ..])
 		{
-			bool committed = row["committed"] is true;
+			bool committed = row.Bool("committed");
 			this.committed = committed;
-			errored = row["errored"] is true;
-			message_exception = row["message_exception"] as string;
+			errored = row.Bool("errored");
+			message_exception = row.Text("message_exception");
 			return committed ? (true, null) : (false, message_exception ?? "the server did not complete the commit");
 		}
 		return (false, "the server did not complete the commit");
 	}
 	public async Task<bool> ServerClear()
-		=> await OdooClient<HpPDMCommit>.CommandAsync<bool>("clear_commit", [this.id]);
+		=> (await OdooRpc.ExecuteAsync<bool>(GetHpModel()!, "clear_commit", [this.id])).ValueOr(false);
 }

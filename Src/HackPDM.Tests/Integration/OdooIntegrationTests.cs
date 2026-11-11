@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Concurrent;
 
 using HackPDM.Abstractions;
@@ -34,9 +33,9 @@ internal static class OdooTestServer
 
 	public static async Task<int> LoginAsync()
 	{
-		int uid = await OdooClient.LoginJson( 30_000 ) ?? 0;
-		Assert.True( uid > 0, $"Odoo login failed: {OdooClient.LatestException}" );
-		return uid;
+		Result<int> login = await OdooRpc.LoginAsync( 30_000 );
+		Assert.True( login.Ok, $"Odoo login failed: {login.Error}" );
+		return login.Value;
 	}
 }
 
@@ -77,7 +76,7 @@ public sealed class OdooCollection
 }
 
 /// <summary>
-/// Exercises the real JSON-RPC client (<see cref="OdooClient"/>) against an Odoo 16.0 server
+/// Exercises the real JSON-RPC client (<see cref="OdooRpc"/>) against an Odoo 16.0 server
 /// with the hackpdm addon installed.
 /// </summary>
 [Collection( OdooCollection.Name )]
@@ -104,8 +103,9 @@ public class OdooIntegrationTests
 		try
 		{
 			OdooDefaults.Instance.OdooPass = "definitely-not-the-password";
-			int uid = await OdooClient.LoginJson( 30_000 ) ?? 0;
-			Assert.Equal( 0, uid );
+			Result<int> login = await OdooRpc.LoginAsync( 30_000 );
+			Assert.False( login.Ok );
+			Assert.Equal( 0, login.Value );
 		}
 		finally
 		{
@@ -119,11 +119,11 @@ public class OdooIntegrationTests
 	{
 		await LoginAsync();
 
-		object? result = await OdooClient.ExecuteJsonAsync( "hp.settings", "no_such_method", [] );
+		Result<object?> result = await OdooRpc.ExecuteAsync<object?>( "hp.settings", "no_such_method", [] );
 
-		Assert.Null( result );
+		Assert.False( result.Ok );
 		// Odoo's JSON-RPC error has an integer code and the real text in data.message
-		Assert.Contains( "no_such_method", OdooClient.LatestException );
+		Assert.Contains( "no_such_method", result.Error );
 	}
 
 	[OdooFact]
@@ -131,13 +131,13 @@ public class OdooIntegrationTests
 	{
 		await LoginAsync();
 
-		ArrayList ids = await OdooClient.SearchAsync( Settings, [ new ArrayList { new ArrayList { "name", "=", "client_version" } } ] );
-		Assert.True( ids.Count == 1, $"expected one client_version setting, got {ids.Count}: {OdooClient.LatestException}" );
+		var ids = await OdooRpc.SearchAsync( Settings, OdooDomain.Where( "name", "client_version" ) );
+		Assert.True( ids.Value is { Count: 1 }, $"expected one client_version setting, got {ids}" );
 
-		ArrayList rows = await OdooClient.ReadAsync( Settings, ids, [ "name", "type", "char_value" ] );
-		var row = Assert.IsType<Hashtable>( Assert.Single( rows ) );
-		Assert.Equal( "char", row[ "type" ] );
-		Assert.False( string.IsNullOrEmpty( row[ "char_value" ] as string ) );
+		var rows = await OdooRpc.ReadAsync( Settings, ids.Value!, [ "name", "type", "char_value" ] );
+		OdooRow row = Assert.Single( rows.Value! );
+		Assert.Equal( "char", row.Text( "type" ) );
+		Assert.False( string.IsNullOrEmpty( row.Text( "char_value" ) ) );
 	}
 
 	[OdooFact]
@@ -146,27 +146,28 @@ public class OdooIntegrationTests
 		await LoginAsync();
 		string name = $"ci-category-{Guid.NewGuid():N}";
 
-		int id = await OdooClient.CreateAsync( Category, new Hashtable { { "name", name }, { "track_version", true } } );
-		Assert.True( id > 0, $"create failed: {OdooClient.LatestException}" );
+		var created = await OdooRpc.CreateAsync( Category, new Dictionary<string, object?> { [ "name" ] = name, [ "track_version" ] = true } );
+		Assert.True( created.Value > 0, $"create failed: {created.Error}" );
+		int id = created.Value;
 		try
 		{
-			ArrayList rows = await OdooClient.ReadAsync( Category, [ id ], [ "name", "track_version" ] );
-			var row = Assert.IsType<Hashtable>( Assert.Single( rows ) );
-			Assert.Equal( name, row[ "name" ] );
-			Assert.Equal( true, row[ "track_version" ] );
+			var rows = await OdooRpc.ReadAsync( Category, [ id ], [ "name", "track_version" ] );
+			OdooRow row = Assert.Single( rows.Value! );
+			Assert.Equal( name, row.Text( "name" ) );
+			Assert.True( row.Bool( "track_version" ) );
 
-			Assert.True( await OdooClient.UpdateAsync( Category, id, new Hashtable { { "track_version", false } } ),
-				$"write failed: {OdooClient.LatestException}" );
-			rows = await OdooClient.ReadAsync( Category, [ id ], [ "track_version" ] );
-			Assert.Equal( false, ( (Hashtable)rows[ 0 ]! )[ "track_version" ] );
+			var written = await OdooRpc.WriteAsync( Category, [ id ], new Dictionary<string, object?> { [ "track_version" ] = false } );
+			Assert.True( written.Value, $"write failed: {written.Error}" );
+			rows = await OdooRpc.ReadAsync( Category, [ id ], [ "track_version" ] );
+			Assert.False( rows.Value![ 0 ].Bool( "track_version" ) );
 		}
 		finally
 		{
-			Assert.True( await OdooClient.DeleteAsync( Category, [ new ArrayList { id } ] ),
-				$"unlink failed: {OdooClient.LatestException}" );
+			var deleted = await OdooRpc.UnlinkAsync( Category, [ id ] );
+			Assert.True( deleted.Value, $"unlink failed: {deleted.Error}" );
 		}
 
-		int remaining = await OdooClient.SearchCountAsync( Category, [ new ArrayList { new ArrayList { "id", "=", id } } ] );
-		Assert.Equal( 0, remaining );
+		var remaining = await OdooRpc.SearchCountAsync( Category, OdooDomain.Where( "id", id ) );
+		Assert.Equal( 0, remaining.Value );
 	}
 }

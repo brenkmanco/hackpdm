@@ -15,41 +15,41 @@ public sealed record DomainTerm( string Field, string Op, object? Value )
 /// <see cref="DomainTerm"/> or one of the operators "&amp;", "|", "!". Immutable; the builders
 /// return new domains. <c>a &amp; b</c> and <c>a | b</c> combine two domains.
 /// </summary>
-public sealed class Domain : IReadOnlyList<object>
+public sealed class OdooDomain : IReadOnlyList<object>
 {
 	public const string AndOp = "&", OrOp = "|", NotOp = "!";
 
 	private readonly object[] _items;
 
-	private Domain( object[] items ) => _items = items;
+	private OdooDomain( object[] items ) => _items = items;
 
 	/// <summary>Matches every record.</summary>
-	public static Domain All { get; } = new( [] );
+	public static OdooDomain All { get; } = new( [] );
 
-	public static Domain Where( string field, string op, object? value ) => All.And( field, op, value );
-	public static Domain Where( string field, Operators op, object? value ) => All.And( field, op, value );
+	public static OdooDomain Where( string field, string op, object? value ) => All.And( field, op, value );
+	public static OdooDomain Where( string field, Operators op, object? value ) => All.And( field, op, value );
 	/// <summary><c>(field, "=", value)</c>.</summary>
-	public static Domain Where( string field, object? value ) => All.And( field, "=", value );
+	public static OdooDomain Where( string field, object? value ) => All.And( field, "=", value );
 	/// <summary><c>("id", "in", ids)</c>.</summary>
-	public static Domain IdIn( IEnumerable<int> ids ) => Where( "id", "in", ids.ToArray() );
+	public static OdooDomain IdIn( IEnumerable<int> ids ) => Where( "id", "in", ids.ToArray() );
 
 	/// <summary>This domain and one more term.</summary>
-	public Domain And( string field, string op, object? value ) => new( [ .. _items, new DomainTerm( field, op, value ) ] );
-	public Domain And( string field, Operators op, object? value ) => And( field, op.OperatorConversion(), value );
+	public OdooDomain And( string field, string op, object? value ) => new( [ .. _items, new DomainTerm( field, op, value ) ] );
+	public OdooDomain And( string field, Operators op, object? value ) => And( field, op.OperatorConversion(), value );
 	/// <summary>This domain and <c>(field, "=", value)</c>.</summary>
-	public Domain And( string field, object? value ) => And( field, "=", value );
-	public Domain And( Domain other ) => this & other;
+	public OdooDomain And( string field, object? value ) => And( field, "=", value );
+	public OdooDomain And( OdooDomain other ) => this & other;
 
 	/// <summary>Both domains must match.</summary>
-	public static Domain operator &( Domain a, Domain b )
+	public static OdooDomain operator &( OdooDomain a, OdooDomain b )
 		=> a.IsEmpty ? b : b.IsEmpty ? a : new( [ AndOp, .. a.AsExpression(), .. b.AsExpression() ] );
 
 	/// <summary>Either domain matches (an empty side matches everything, so the result does too).</summary>
-	public static Domain operator |( Domain a, Domain b )
+	public static OdooDomain operator |( OdooDomain a, OdooDomain b )
 		=> a.IsEmpty || b.IsEmpty ? All : new( [ OrOp, .. a.AsExpression(), .. b.AsExpression() ] );
 
 	/// <summary>The domain does not match.</summary>
-	public static Domain operator !( Domain a ) => a.IsEmpty ? a : new( [ NotOp, .. a.AsExpression() ] );
+	public static OdooDomain operator !( OdooDomain a ) => a.IsEmpty ? a : new( [ NotOp, .. a.AsExpression() ] );
 
 	public bool IsEmpty => _items.Length == 0;
 

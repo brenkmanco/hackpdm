@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Xml.Linq;
 
 using HackPDM.Infrastructure.Odoo;
@@ -40,37 +39,32 @@ public class AddonSeedDataTests
 	/// <summary>Resolves an addon XML id to (model, res_id) through ir.model.data.</summary>
 	private static async Task<(string Model, int ResId)?> ResolveXmlIdAsync( string xmlId )
 	{
-		ArrayList rows = await OdooClient.BrowseAsync( "ir.model.data",
-		[
-			new ArrayList { new ArrayList { "module", "=", Module }, new ArrayList { "name", "=", xmlId } },
-			new ArrayList { "model", "res_id" },
-		] );
-		if( rows.Count != 1 || rows[ 0 ] is not Hashtable row )
+		var rows = await OdooRpc.SearchReadAsync( "ir.model.data",
+			OdooDomain.Where( "module", Module ).And( "name", xmlId ), [ "model", "res_id" ] );
+		if( rows.Value is not { Count: 1 } found )
 			return null;
-		return ( (string)row[ "model" ]!, Convert.ToInt32( row[ "res_id" ] ) );
+		return ( found[ 0 ].Text( "model" )!, found[ 0 ].Int( "res_id" ) ?? 0 );
 	}
 
 	private static async Task<int> IdOf( string xmlId )
 	{
 		var resolved = await ResolveXmlIdAsync( xmlId );
-		Assert.True( resolved is not null, $"xml id {Module}.{xmlId} not found: {OdooClient.LatestException}" );
+		Assert.True( resolved is not null, $"xml id {Module}.{xmlId} not found" );
 		return resolved!.Value.ResId;
 	}
 
-	private static async Task<Hashtable> ReadAsync( string model, string xmlId, params string[] fields )
+	private static async Task<OdooRow> ReadAsync( string model, string xmlId, params string[] fields )
 	{
 		int id = await IdOf( xmlId );
-		ArrayList rows = await OdooClient.ReadAsync( model, [ id ], new ArrayList( fields ) );
-		Assert.True( rows.Count == 1, $"read {model}({id}) returned {rows.Count} rows: {OdooClient.LatestException}" );
-		return Assert.IsType<Hashtable>( rows[ 0 ] );
+		var rows = await OdooRpc.ReadAsync( model, [ id ], fields );
+		Assert.True( rows.Value is { Count: 1 }, $"read {model}({id}) returned {rows.Value?.Count ?? 0} rows: {rows.Error}" );
+		return rows.Value![ 0 ];
 	}
 
 	/// <summary>Many2one values come back as [id, display_name]; false when empty.</summary>
-	private static int? Many2OneId( object? value )
-		=> value is ArrayList { Count: > 0 } pair ? Convert.ToInt32( pair[ 0 ] ) : null;
+	private static int? Many2OneId( object? value ) => OdooValues.Many2OneId( value );
 
-	private static int[] Ids( object? value )
-		=> value is ArrayList list ? list.Cast<object>().Select( Convert.ToInt32 ).Order().ToArray() : [];
+	private static int[] Ids( object? value ) => [ .. OdooValues.Ids( value ).Order() ];
 
 	private static void AssertDouble( double expected, object? actual )
 		=> Assert.Equal( expected, Convert.ToDouble( actual ), precision: 6 );
@@ -100,11 +94,11 @@ public class AddonSeedDataTests
 		await OdooTestServer.LoginAsync();
 
 		var resolved = await ResolveXmlIdAsync( xmlId );
-		Assert.True( resolved is not null, $"{Module}.{xmlId} missing from ir.model.data: {OdooClient.LatestException}" );
+		Assert.True( resolved is not null, $"{Module}.{xmlId} missing from ir.model.data" );
 		Assert.Equal( model, resolved!.Value.Model );
 
-		int count = await OdooClient.SearchCountAsync( model, [ new ArrayList { new ArrayList { "id", "=", resolved.Value.ResId } } ] );
-		Assert.Equal( 1, count );
+		var count = await OdooRpc.SearchCountAsync( model, OdooDomain.Where( "id", resolved.Value.ResId ) );
+		Assert.Equal( 1, count.Value );
 	}
 
 	// ---------------------------------------------------------------- hp.settings records
@@ -163,7 +157,7 @@ public class AddonSeedDataTests
 		Assert.Contains( "<strong>Test HTML</strong> content for hp.test.", row[ "html" ] as string );
 		Assert.Equal( 42, row[ "integer" ] );
 
-		var json = Assert.IsType<Hashtable>( row[ "json" ] );
+		var json = Assert.IsType<Dictionary<string, object?>>( row[ "json" ] );
 		Assert.Equal( "value", json[ "key" ] );
 		Assert.Equal( 123, json[ "number" ] );
 		Assert.Equal( true, json[ "flag" ] );
@@ -202,8 +196,8 @@ public class AddonSeedDataTests
 		var parent = await ReadAsync( "hp.test", "hp_test_data_two", "onetomany" );
 		int childId = Assert.Single( Ids( parent[ "onetomany" ] ) );
 
-		ArrayList rows = await OdooClient.ReadAsync( "hp.test", [ childId ], [ "character", "manytoone", "parent_path" ] );
-		var child = Assert.IsType<Hashtable>( Assert.Single( rows ) );
+		var rows = await OdooRpc.ReadAsync( "hp.test", [ childId ], [ "character", "manytoone", "parent_path" ] );
+		OdooRow child = Assert.Single( rows.Value! );
 
 		Assert.Equal( "Child 1", child[ "character" ] );
 		// The XML sets manytoone=ref('hp_test_data_one') on the child, but a (0, 0, {...}) command

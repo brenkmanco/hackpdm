@@ -22,7 +22,6 @@ using DateTime = System.DateTime;
 //using static System.Net.Mime.MediaTypeNames;
 
 
-using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 // Resharper disable InconsistentNaming
 
 namespace HackPDM.Infrastructure.Odoo.Models;
@@ -76,242 +75,30 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
     {
         try
         {
-            if (this.HashedValues.ContainsKey("dir_id"))
-            {
-                WinPathway = (HashedValues["dir_id"] as ArrayList)?[1] is string directory ? PwaPaths.ToRelative(directory) : null;
-            }
-			if (WinPathway is null && this.HashedValues.ContainsKey("directory_complete_name"))
-			{
-				WinPathway = PwaPaths.ToRelative(HashedValues["directory_complete_name"] as string);
-			}
+            // the folder from dir_id ([id, "root / a / b"]) or directory_complete_name, when they were read
+            if (OdooValues.Many2OneName(HashedValues.GetValueOrDefault("dir_id")) is string directory)
+                WinPathway = PwaPaths.ToRelative(directory);
+			else if (HashedValues.GetValueOrDefault("directory_complete_name") is string completeName)
+				WinPathway = PwaPaths.ToRelative(completeName);
 		}
         finally 
         {
             base.CompleteConstruction();
         }
     }
-
-    public async Task<bool> GetPreviewImage()
-	{
-		if (preview_image is not { Length: > 0 } && id is not null and not 0) 
-		{
-			// reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
-			// which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
-			ArrayList? list = await OClient.ReadAsync(HpModel!, [this.id], ["preview_image"]);
-			if (list is [Hashtable row, ..])
-				preview_image = FileOperations.ConvertFromBase64(row["preview_image"] as string);									
-		}
-		return preview_image is { Length: > 0 };
-	}
 }
 public partial class HpVersion : HpBaseModelTransport<HpVersion>
 {
-	public bool MoveFile(string toPath)
-        {
-            try
-            {
-                if (!Directory.Exists(toPath) && !Directory.CreateDirectory(toPath).Exists) return false;
-    
-                string fromFilePath = Path.Combine(this.WinPathway, this.name);
-                string toFilePath = Path.Combine(toPath, this.name);
-    
-                FileInfo file = new(fromFilePath);
-                if (file.Exists) file.MoveTo(toFilePath);
-                else return false;
-    
-                this.WinPathway = toPath;
-            }
-            catch
-            {
-                return false;
-            }
-            return true;
-        }
-    /// <summary>The local folder this version belongs in, under the working folder.</summary>
-    public string LocalDirectory()
-    {
-        // windows_complete_name is "root\dir\file": the file name is part of it. WinPathway (taken
-        // from it) was used as the folder, so a file landed in a folder named after itself
-        if (windows_complete_name is { Length: > 0 } full
-            && Path.GetDirectoryName(PwaPaths.ToAbsolute( full )) is { Length: > 0 } dir)
-            return dir;
-        return Path.Combine(HackDefaults.Instance.PwaPathAbsolute, WinPathway ?? "");
-    }
-    public bool DownloadFile() => DownloadFile(LocalDirectory());
-    /// <summary>Writes this version's contents into <paramref name="toPath"/>; false when nothing could be downloaded.</summary>
-    public bool DownloadFile(string toPath)
-    {
-        if (!Directory.Exists(toPath) && !Directory.CreateDirectory(toPath).Exists) return false;
-        HackFile data = DownloadFileData();
-    
-        data.DirectoryName = toPath;
-        if (data.FileContents is { Length: > 0 })
-            data.CreateFile();
-        else if (file_size is not (null or 0))
-            return false;
-    
-        this.WinPathway = toPath;
-        return true;
-    }
-    public byte[]? DownloadContents()
-    {
-        const string fileContents = "file_contents";
-    
-        if (this.IsRecord || this.id != 0)
-        {
-            // reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
-            // which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
-            if (file_size != 0)
-            {
-                // JSON-RPC returns binary fields as base64 strings; the old `as byte[]` cast was always null
-                return ((OClient.ReadAsync(HpModel, [this.id], [fileContents]).GetAwaiter().GetResult()?[0] as Hashtable)?[fileContents]) switch
-                {
-                    byte[] bytes => bytes,
-                    string base64 when base64.Length > 0 => Convert.FromBase64String(base64),
-                    _ => null,
-                };
-            }
-        }
-        return null;
-    }
-    public HackFile DownloadFileData()
-    {
-        if (file_contents == null) file_contents = DownloadContents();
-    
-        HackFile file = new(name, null);
-        if (file_contents == null) return file;
-    
-        file.FileContents = file_contents;
-    
-        return file;
-    }
-    /// <summary>The file to write for a version whose file_contents have been read.</summary>
-    public static HackFile ToHackFile(HpVersion version)
-    {
-        HackFile hack = new(version.name, null);
-        var checkUser = version.checkout_user;
-
-        hack.Owner = (checkUser?.id is not null)
-            ? OdooDefaults.Instance?.OdooId == checkUser?.id
-            : null;
-
-        if (version.file_contents is { Length: > 0 })
-        {
-            hack.FileContents = version.file_contents;
-            hack.Name = version.name;
-            hack.DirectoryName = version.WinPathway;
-            hack.SetModifiedDate(version.file_modify_stamp ?? default);
-            hack.FileSize = version.file_size;
-            // winpathway is probably the shortened version
-        }
-        else
-        {
-            hack.FileContents = null;
-        }
-        return hack;
-    }
-   
-    public static async Task<List<HpVersionProperty[]>> GetAllVersionPropertiesAsync(ArrayList ids)
+    /// <summary>Each version's properties (null for a version without any), in the server's order.</summary>
+    public static async Task<List<HpVersionProperty[]?>> GetAllVersionPropertiesAsync(IReadOnlyList<int> ids)
     {
     	const string versionPropField = "version_property_ids";
-    	ArrayList list = await OClient.ReadAsync(GetHpModel(), ids, [versionPropField]);
-    	List<HpVersionProperty[]> versionProperties = [];
-    	foreach (Hashtable ht in list)
-    	{
-    		ArrayList values = (ArrayList)ht[versionPropField];
-    		versionProperties.Add(await HpBaseModelTransport<HpVersionProperty>.GetRecordsByIdsAsync(values));
-    	}
+    	var rows = await OdooRpc.ReadAsync(GetHpModel()!, ids, [versionPropField]);
+    	List<HpVersionProperty[]?> versionProperties = [];
+    	foreach (OdooRow row in rows.ValueOr([]))
+    		versionProperties.Add(await HpVersionProperty.GetRecordsByIdsAsync(row.RefIds(versionPropField)));
     	return versionProperties;
     }
-
-    internal static HpVersion? PrepareCreation(HackFile hackFile, IHpEntryModel entry, int commit_id, HashedValueStoring hashStoreType = HashedValueStoring.None)
-    {
-        if (OdooDefaults.Instance.RestrictTypes is true & !OdooDefaults.Instance.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
-            return null;
-
-		HpVersion newVersion = new()
-		{
-			name = $"{hackFile.Name}",
-			dir_id = entry.dir_id as Many2One,
-			entry_id = entry.id,
-			file_ext = hackFile.TypeExt[1..].ToLower(),
-			WinPathway = entry.windows_complete_name,
-            node_id = OdooDefaults.Instance.MyNode?.id,
-			file_contents = hackFile.FileContents,
-			commit_id = (Many2One?)commit_id,
-            HashedValues = {{ "windows_complete_name", entry.windows_complete_name } },
-		};
-		return PrepareCreation(hackFile, newVersion);
-	}
-	internal static HpVersion? PrepareCreation(HackFile hackFile, IHpRecordStagedModel staged, HashedValueStoring hashStoreType = HashedValueStoring.None)
-	{
-		if (OdooDefaults.Instance.RestrictTypes is true & !OdooDefaults.Instance.ExtToType.ContainsKey(hackFile.TypeExt.ToLower()))
-			return null;
-
-        string? path = staged.payload?[ "windows_complete_name" ] as string;
-		HpVersion newVersion = new()
-		{
-			name = $"{hackFile.Name}",
-			dir_id = staged.payload?[nameof(dir_id)] as int?,
-			entry_id = staged.id,
-			file_ext = hackFile.TypeExt[1..].ToLower(),
-			WinPathway = path,
-            node_id = OdooDefaults.Instance.MyNode?.id,
-			file_contents = hackFile.FileContents,
-            commit_id = staged.commit_id,
-            HashedValues = {{ "windows_complete_name", path } },
-		};
-		
-		return PrepareCreation(hackFile, newVersion);
-	}
-	private static HpVersion? PrepareCreation(in HackFile hackFile, in HpVersion newVersion)
-    {
-		if (newVersion.file_contents is null)
-		{
-			try
-			{
-				newVersion.file_contents ??= File.ReadAllBytes(hackFile?.FullPath ?? "");
-			}
-			catch (Exception ex)
-			{
-				Debug.WriteLine(ex);
-			}
-		}
-		newVersion.preview_image ??= PreviewOf(hackFile);
-		return newVersion;
-	}
-
-	/// <summary>The saved preview of a SolidWorks file, sent with its new version so every client can show it.</summary>
-	private static byte[]? PreviewOf(HackFile? hackFile)
-	{
-		if (hackFile?.FullPath is not { } path || !SwDocumentTypes.IsSolidWorks(path))
-			return null;
-		try
-		{
-			return SolidWorksUtil.DocMgr?.GetPreviewPng(path);
-		}
-		catch (Exception ex)
-		{
-			Debug.WriteLine($"no preview for {path}: {ex.Message}");
-			return null;
-		}
-	}
-	public static async Task<HpRecordStaged?> StageVersion(HackFile hackFile, IHpRecordStagedModel staged, HashedValueStoring hashStoreType = HashedValueStoring.None)
-	{
-		HpVersion? newVersion = PrepareCreation(hackFile, staged, hashStoreType);
-        HpRecordStaged? versionStage = await newVersion?.StageRecAsync();
-
-		return versionStage?.id is not null and not 0 ? versionStage : null;
-	}
-	public static async Task<HpRecordStaged?> StageVersion(HackFile hackFile, IHpEntryModel entry, int commit, HashedValueStoring hashStoreType = HashedValueStoring.None)
-	{
-		HpVersion? newVersion = PrepareCreation(hackFile, entry, commit, hashStoreType);
-        newVersion?.HashedValues.Add( "__internal__existing", true );
-		HpRecordStaged? versionStage = await newVersion?.StageRecAsync();
-
-		return versionStage?.id is not null and not 0 ? versionStage : null;
-	}
-	
 
 	public override string ToString()
     {

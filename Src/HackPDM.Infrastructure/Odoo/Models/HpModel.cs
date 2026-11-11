@@ -1,3 +1,4 @@
+using System.Linq;
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -61,97 +62,70 @@ public class Many2One : HpModel, IMany2One
 	public static implicit operator (string? name, int? id)?(Many2One? model) => (model?.name, model?.id);
 	public static implicit operator Many2One?((string? name, int? id)? tuple) => tuple?.id is null && tuple?.name is null ? null : new() { id = tuple?.id, name = tuple?.name };
 }
-public class MultiRecord : IList<HpModel?>, IMultiRecord
+/// <summary>
+/// The records of a one2many / many2many field (each an <see cref="HpModel"/> with its id). The one
+/// base for <see cref="Many2Many"/> and <see cref="One2Many"/>, which used to repeat its conversions
+/// (and turned <c>int[]</c> into themselves by calling the same conversion forever).
+/// </summary>
+public abstract class MultiRecord : IList<HpModel?>, IMultiRecord
 {
-	public HpModel? this[int index] { get => (Ids as IList<HpModel?>)?[index]; set => (Ids as IList<HpModel?>)?[index] = value; }
+	// a list: the array this used to wrap ignored Add, so a many2many always read as empty
+	private readonly List<HpModel?> _items = [];
 
-	public HpModel?[]? Ids { get; set; }
+	protected MultiRecord() { }
+	protected MultiRecord( IEnumerable<int> ids ) => _items.AddRange( ids.Select( id => (HpModel?)new HpModel { id = id } ) );
 
-	public int Count => (Ids as ICollection<HpModel?>)?.Count ?? 0;
-
-	public bool IsReadOnly => Ids is ICollection<HpModel?> { IsReadOnly: true };
-
-	IHpOdooRecord?[]? IMultiRecord.Ids { get => Ids; set => Ids = value as HpModel?[]; }
-
-	public void Add(HpModel? item)
+	public HpModel?[]? Ids
 	{
-		(Ids as ICollection<HpModel?>)?.Add(item);
+		get => [ .. _items ];
+		set
+		{
+			_items.Clear();
+			if( value is not null )
+				_items.AddRange( value );
+		}
+	}
+	IHpOdooRecord?[]? IMultiRecord.Ids
+	{
+		get => Ids;
+		set => Ids = value?.Select( r => r as HpModel ?? ( r is null ? null : new HpModel { id = r.id } ) ).ToArray();
 	}
 
-	public void Clear()
-	{
-		(Ids as ICollection<HpModel?>)?.Clear();
-	}
+	/// <summary>The ids (records without one left out).</summary>
+	public int[] IdValues => [ .. _items.Select( m => m?.id ).OfType<int>() ];
 
-	public bool Contains(HpModel? item)
-	{
-		return (Ids as ICollection<HpModel?>)?.Contains(item) is true;
-	}
+	public static implicit operator int[]( MultiRecord? multi ) => multi?.IdValues ?? [];
 
-	public void CopyTo(HpModel?[] array, int arrayIndex)
-	{
-		(Ids as ICollection<HpModel?>)?.CopyTo(array, arrayIndex);
-	}
-
-	public IEnumerator<HpModel?> GetEnumerator()
-	{
-		return (Ids as ICollection<HpModel?>)?.GetEnumerator() ?? Enumerable.Empty<HpModel?>().GetEnumerator();
-	}
-
-	public int IndexOf(HpModel? item)
-	{
-		return (Ids as IList<HpModel?>)?.IndexOf(item) ?? -1;
-	}
-
-	public void Insert(int index, HpModel? item)
-	{
-		(Ids as IList<HpModel?>)?.Insert(index, item);
-	}
-
-	public bool Remove(HpModel? item)
-	{
-		return (Ids as ICollection<HpModel?>)?.Remove(item) is true;
-	}
-
-	public void RemoveAt(int index)
-	{
-		(Ids as IList<HpModel?>)?.RemoveAt(index);
-	}
-
-	IEnumerator IEnumerable.GetEnumerator()
-	{
-		return Ids?.GetEnumerator() ?? Enumerable.Empty<HpModel?>().GetEnumerator(); ;
-	}
-
-	public static implicit operator int?[]?(MultiRecord? multi) => [.. multi?.Ids ?? []];
-	public static implicit operator MultiRecord?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!]};
-
-	public static implicit operator int[](MultiRecord multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.id ?? 0) ?? []];
-	// built directly: `=> multi` would call this same conversion again, forever
-	public static implicit operator MultiRecord(int[] multi) => new() { Ids = [.. ( multi ?? [] ).Select(id => new HpModel() { id = id })] };
-
-	public static implicit operator ArrayList(MultiRecord? multi) => [.. multi?.Ids ?? []];
-	public static implicit operator MultiRecord?(ArrayList? ids) => ids is null ? null : new() { Ids = [.. ids.Cast<int?>()?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
+	public HpModel? this[ int index ] { get => _items[ index ]; set => _items[ index ] = value; }
+	public int Count => _items.Count;
+	public bool IsReadOnly => false;
+	public void Add( HpModel? item ) => _items.Add( item );
+	public void Clear() => _items.Clear();
+	public bool Contains( HpModel? item ) => _items.Contains( item );
+	public void CopyTo( HpModel?[] array, int arrayIndex ) => _items.CopyTo( array, arrayIndex );
+	public IEnumerator<HpModel?> GetEnumerator() => _items.GetEnumerator();
+	public int IndexOf( HpModel? item ) => _items.IndexOf( item );
+	public void Insert( int index, HpModel? item ) => _items.Insert( index, item );
+	public bool Remove( HpModel? item ) => _items.Remove( item );
+	public void RemoveAt( int index ) => _items.RemoveAt( index );
+	IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
-public class Many2Many : MultiRecord 
+public sealed class Many2Many : MultiRecord, IMany2Many
 {
-	public static implicit operator int?[]?(Many2Many? multi) => [.. multi?.Ids ?? []];
-	public static implicit operator Many2Many?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
-
-	public static implicit operator int[](Many2Many multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.id ?? 0) ?? []];
-	public static implicit operator Many2Many(int[] multi) => multi;
-
-	public static implicit operator ArrayList(Many2Many? multi) => [.. multi?.Ids ?? []];
-	public static implicit operator Many2Many?(ArrayList? ids) => ids is null ? null : new() { Ids = [.. ids.Cast<int?>()?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
+	public Many2Many() { }
+	public Many2Many( IEnumerable<int> ids ) : base( ids ) { }
+	public static implicit operator Many2Many( int[] ids ) => new( ids );
 }
-public class One2Many : MultiRecord 
+public sealed class One2Many : MultiRecord, IOne2Many
 {
-	public static implicit operator int?[]?(One2Many? multi) => [.. multi?.Ids ?? []];
-	public static implicit operator One2Many?(int?[]? ids) => ids is null ? null : new() { Ids = [.. ids?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
+	public One2Many() { }
+	public One2Many( IEnumerable<int> ids ) : base( ids ) { }
+	public static implicit operator One2Many( int[] ids ) => new( ids );
+}
 
-	public static implicit operator int[](One2Many multi) => [.. multi?.Ids?.SkipNullSelect(hp => hp.id ?? 0) ?? []];
-	public static implicit operator One2Many(int[] multi) => multi;
-
-	public static implicit operator ArrayList(One2Many? multi) => [.. multi?.Ids ?? []];
-	public static implicit operator One2Many?(ArrayList? ids) => ids is null ? null : new() { Ids = [.. ids.Cast<int?>()?.SkipSelect(id => (id is null, id is null ? null : new HpModel() { id = id }))!] };
+public static class RecordIds
+{
+	/// <summary>The records' ids (records without one left out).</summary>
+	public static int[] Ids( this IEnumerable<HackPDM.Domain.OdooModels.Models.HpBaseModel> models )
+		=> [ .. models.Select( model => model.id ).OfType<int>().Where( id => id != 0 ) ];
 }

@@ -53,9 +53,9 @@ public partial class IrAttachment : HpBaseModelTransport<IrAttachment>
         const string datas = "datas";
         if (this.IsRecord || this.id != 0)
         {
-            // reads the datas field in ir.attachment and returns an ArrayList with one record because of one ID
-            // which contains a hashtable with keys: datas and id. datas has a value of string which is the base 64 file contents
-            this._fileContentsBase64 = (string)((Hashtable)(await OdooClient<IrAttachment>.ReadAsync([this.id], [datas]))[0])[datas];
+            // datas: the contents, base64
+            var rows = await OdooRpc.ReadAsync(GetHpModel()!, [this.id ?? 0], [datas]);
+            this._fileContentsBase64 = rows.Value is [var row, ..] ? row.Text(datas) : null;
             return this._fileContentsBase64;
         }
         return null;

@@ -1,4 +1,3 @@
-using System.Collections;
 
 using HackPDM.Core;
 using HackPDM.Infrastructure.Odoo;
@@ -22,17 +21,18 @@ public class VersionPreviewTests
 	{
 		await OdooTestServer.LoginAsync();
 		byte[] png = new SwFileReader().GetPreviewPng( SwSamples.Old( "old.SLDPRT" ) )!;
-		ArrayList ids = await OdooClient.SearchAsync( "hp.version", [ new ArrayList() ] );
-		Assert.True( ids.Count > 0, $"no seeded versions: {OdooClient.LatestException}" );
-		int id = Convert.ToInt32( ids[ 0 ] );
+		var ids = await OdooRpc.SearchAsync( "hp.version", OdooDomain.All );
+		Assert.True( ids.Value is { Count: > 0 }, $"no seeded versions: {ids.Error}" );
+		int id = ids.Value![ 0 ];
 
 		var version = new HpVersion { preview_image = png };
-		Hashtable values = version.ComputeHashtable( false, includedFieldNames: [ "preview_image" ] );
-		Assert.True( await OdooClient.UpdateAsync( "hp.version", id, values ), OdooClient.LatestException );
+		var values = version.ComputeValues( false, includedFieldNames: [ "preview_image" ] );
+		var written = await OdooRpc.WriteAsync( "hp.version", [ id ], values );
+		Assert.True( written.Value, written.Error );
 
-		var read = await OdooClient.ReadAsync( "hp.version", [ id ], [ "preview_image" ] );
-		Assert.True( read is [ Hashtable row, .. ], OdooClient.LatestException );
-		Assert.Equal( png, FileOperations.ConvertFromBase64( ( (Hashtable)read[ 0 ]! )[ "preview_image" ] as string ) );
+		var read = await OdooRpc.ReadAsync( "hp.version", [ id ], [ "preview_image" ] );
+		Assert.True( read.Value is [ _, .. ], read.Error );
+		Assert.Equal( png, FileOperations.ConvertFromBase64( read.Value![ 0 ].Text( "preview_image" ) ) );
 
 		var loaded = ( await HpVersion.GetRecordsByIdsAsync( [ id ], includedFields: [ "preview_image" ] ) )?.FirstOrDefault();
 		Assert.Equal( png, loaded?.preview_image );

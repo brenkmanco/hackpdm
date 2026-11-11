@@ -162,7 +162,8 @@ public class HackFile : HackBaseFile, IHackFileModel
 		if (entry.LocalFile is not { }) { NullSelf(); return; }
 		InitializeFromEntryRow(entry, true);
 	}
-    public HackFile(string? fullPath) => InitializeHackFromPath( fullPath );
+    /// <summary>The file at <paramref name="fullPath"/>, hashed, with its RelativePath (see <see cref="GetFromPath"/>).</summary>
+    public HackFile(string? fullPath) => AssignToSelf( GetFromPath( fullPath ) );
 	internal void InitializeFromEntryRow(EntryRow entry, bool initFileInfo=false)
 	{
 		this.FullPath = entry.ReprType is EntryReprType.Local
@@ -234,7 +235,6 @@ public class HackFile : HackBaseFile, IHackFileModel
 		FileSize = null;
 		Checksum = null;
 	}
-    public void InitializeHackFromPath(string? path) => AssignToSelf(GetFromPath(path));
     public string? GetChecksum() => Checksum ??= Checksums.OfFile( FullPath ) ;
 	private void AssignToSelf(HackFile? hack)
     {
@@ -251,25 +251,11 @@ public class HackFile : HackBaseFile, IHackFileModel
         this.FileContents = hack?.FileContents;
         this.FileSize = hack?.FileSize;
     }
-    public static async Task<HackFile> GetFromFileInfo( FileInfo file )
-		=> new(file);
-
-    internal static HackFile? GetFromPath(EntryRow? entry, bool initWithFileInfo=true)
-    {
-        if (entry is null) return null;
-        HackFile? hack;
-        if (initWithFileInfo)
-        {
-            hack = new(entry);
-            if (hack.Info is null || !hack.Info.Exists) return hack;   
-        }
-        else
-        {
-            hack = GetHackFromPathUninitialized(entry.FullName, null);
-        }
-        hack?.RelativePath = Path.Combine([PwaPaths.Root, .. PwaPaths.LocalSegments(hack?.DirectoryName) ?? []]);
-        return hack;
-    }
+    /// <summary>
+    /// The one factory for a file on disk: name, folder, extension, date and size; the checksum
+    /// unless <paramref name="computeChecksum"/> is false; the folder relative to the working folder.
+    /// Without <paramref name="initWithFileInfo"/> nothing is read from disk but the date.
+    /// </summary>
 	public static HackFile? GetFromPath(string? path, string? directory = null, bool initWithFileInfo=true, bool computeChecksum=true)
     {
 		if (path is null) return null;
@@ -302,43 +288,6 @@ public class HackFile : HackBaseFile, IHackFileModel
 	}
     
     
-	// ////////////////////////////////////////
-	// ////////////////////////////////////////
-	
-	
-	
-
-	// ///////////////////////////////////////////////////////
-	// ///////////////////////////////////////////////////////
-
-    
-    
-    
-
-    public static async Task<(int, long)?> CreateFiles(params HackFile[] hackFiles)
-    {
-        List<Task<bool>> tasks = [];
-        int success = 0;
-        long sizeAgg = 0;
-
-        foreach (HackFile file in hackFiles)
-        {
-            if (file.FileContents is { Length: > 0 })
-                tasks.Add(LocalFileWriter.WriteAsync(file));
-            
-            if (file.FileSize is long size)
-            {
-	            sizeAgg += size;
-            }
-        }
-        Task<bool[]> waitTask = Task.WhenAll(tasks);
-        await waitTask;
-
-        foreach (bool val in waitTask.Result) success += val ? 1 : 0;
-        return (success, sizeAgg);
-    }
-    public long? CreateFile() => LocalFileWriter.Write(this);
-
     // a HackFile stands for a file on disk: two are equal when they point at the same path
     private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
@@ -369,28 +318,6 @@ public class HackFile : HackBaseFile, IHackFileModel
         return mine is not null && theirs is not null && PathComparer.Equals( mine, theirs );
     }
     public override int GetHashCode() => IdentityPath is { } path ? PathComparer.GetHashCode( path ) : 0;
-    public async static Task<HackFile?> GetHackFileAsync(string? fullFilePath)
-    {
-	    if (string.IsNullOrEmpty(fullFilePath)) return null;
-	    HackFile hackFile = default;
-
-	    try
-	    {
-		    // if the directory doesn't exist then return its default type
-		    FileInfo fileInfo = new(fullFilePath);
-		    if (!fileInfo.Exists) return hackFile;
-                
-		    hackFile = await FileInfoToHackFile(fileInfo);
-	    }
-	    catch (Exception ex) 
-	    {
-		    Console.WriteLine(ex);
-	    }
-	    return hackFile;
-    }
-    
-    private static async Task<HackFile> FileInfoToHackFile(FileInfo fileInfo) => await HackFile.GetFromFileInfo(fileInfo);
-
     public static implicit operator HackFile( FileInfo file)
 	{
 		return new HackFile( file );

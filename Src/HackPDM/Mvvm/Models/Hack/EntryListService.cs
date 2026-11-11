@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -44,20 +43,19 @@ public sealed class EntryListService : IEntryListService
 		List<EntryRow> rows = [];
 		Dictionary<string, Task<HackFile>>? localByRemotePath = null;
 
-		if( directoryId is not ( null or 0 ) )
+		if( directoryId is int id and not 0 )
 		{
-			Hashtable? entries = await HpDirectory.GetEntriesAsync( directoryId, includeDeleted );
+			Result<IReadOnlyList<RemoteEntryDto>> entries = await HpDirectory.GetEntriesAsync( id, includeDeleted );
 			token.ThrowIfCancellationRequested();
-			if( entries is not null )
+			if( !entries.Ok )
+				System.Diagnostics.Debug.WriteLine( $"entries of directory {id} could not be read: {entries.Error}" );
+			if( entries.Value is { } remote )
 			{
 				// local copies are hashed off the UI thread
-				localByRemotePath = await HashLocalCopiesAsync( entries );
+				localByRemotePath = await HashLocalCopiesAsync( remote );
 				token.ThrowIfCancellationRequested();
-				foreach( DictionaryEntry pair in entries )
-				{
-					if( await CreateRemoteRowAsync( pair, localByRemotePath ) is { } row )
-						rows.Add( row );
-				}
+				foreach( RemoteEntryDto entry in remote )
+					rows.Add( await CreateRemoteRowAsync( entry, localByRemotePath ) );
 			}
 		}
 
@@ -70,16 +68,16 @@ public sealed class EntryListService : IEntryListService
 	}
 
 	/// <summary>Maps each remote entry's Odoo path to its local file (read and SHA1-hashed for the status column).</summary>
-	private static Task<Dictionary<string, Task<HackFile>>> HashLocalCopiesAsync( Hashtable entries )
+	private static Task<Dictionary<string, Task<HackFile>>> HashLocalCopiesAsync( IReadOnlyList<RemoteEntryDto> entries )
 		=> Task.Run( async () =>
 		{
 			Dictionary<string, Task<HackFile>> map = new( entries.Count );
 			using SemaphoreSlim throttle = new( HashConcurrency );
-			foreach( DictionaryEntry pair in entries )
+			foreach( RemoteEntryDto entry in entries )
 			{
-				if( ( pair.Value as Hashtable )?[ "fullname" ] is not string remotePath )
+				if( entry.FullName is not { } remotePath )
 					continue;
-				map.Add( remotePath, HashAsync( PwaPaths.ToAbsolute( remotePath ), throttle ) );
+				map.TryAdd( remotePath, HashAsync( PwaPaths.ToAbsolute( remotePath ), throttle ) );
 			}
 			await Task.WhenAll( map.Values );
 			return map;
@@ -90,8 +88,8 @@ public sealed class EntryListService : IEntryListService
 		await throttle.WaitAsync();
 		try
 		{
-			// GetHackFileAsync hashes synchronously; Task.Run lets the files hash in parallel
-			return ( await Task.Run( () => HackFile.GetHackFileAsync( localPath ) ) )!;
+			// hashing is synchronous; Task.Run lets the files hash in parallel (null for a missing file)
+			return ( await Task.Run( () => HackFile.GetFromPath( localPath ) is { Exists: true } hack ? hack : null ) )!;
 		}
 		finally
 		{
@@ -112,46 +110,41 @@ public sealed class EntryListService : IEntryListService
 		} );
 	}
 
-	private static async Task<EntryRow?> CreateRemoteRowAsync( DictionaryEntry pair, Dictionary<string, Task<HackFile>> localByRemotePath )
+	private static async Task<EntryRow> CreateRemoteRowAsync( RemoteEntryDto entry, Dictionary<string, Task<HackFile>> localByRemotePath )
 	{
-		if( pair.Value is not Hashtable table )
-			return null;
-
-		string? fullName = table[ "fullname" ] as string;
-		HackFile? local = !string.IsNullOrWhiteSpace( fullName ) && localByRemotePath.TryGetValue( fullName, out var hashing )
+		HackFile? local = !string.IsNullOrWhiteSpace( entry.FullName ) && localByRemotePath.TryGetValue( entry.FullName, out var hashing )
 			? await hashing // already finished
 			: null;
 
-		var checkout = table[ "checkout" ] is int userId and not 0 ? OdooDefaults.Instance.IdToUser.GetValueOrDefault( userId ) : null;
-		DateTime remoteDate = DateTime.TryParse( table[ "latest_date" ] as string, out DateTime parsed ) ? parsed : default;
+		var checkout = entry.CheckoutUserId is int userId ? OdooDefaults.Instance.IdToUser.GetValueOrDefault( userId ) : null;
 
 		FileStatus status = EntryStatusResolver.ResolveRemote(
-			deleted: table[ "deleted" ] as bool?,
+			deleted: entry.Deleted,
 			checkoutUserId: checkout?.id,
 			myUserId: OdooDefaults.Instance.OdooId,
-			latestChecksum: table[ "latest_checksum" ],
+			// Odoo sends false when there is no checksum: no versions
+			latestChecksum: entry.LatestChecksum ?? (object)false,
 			localChecksum: local?.Checksum,
-			remoteDate: remoteDate,
+			remoteDate: entry.LatestDate ?? default,
 			localModified: local?.ModifiedDate );
 
-		string? type = table[ "type" ] as string;
 		return new EntryRow
 		{
-			Id = table[ "id" ] as int?,
-			Name = pair.Key.ToString(),
-			Type = type,
-			Size = Convert.ToInt64( table[ "size" ] ),
+			Id = entry.Id,
+			Name = entry.Name,
+			Type = entry.Type,
+			Size = entry.Size,
 			Checkout = checkout,
 			ReprType = local?.Exists is true ? EntryReprType.Both : EntryReprType.Remote,
-			LatestReleaseId = table[ "release" ] as int?,
-			LatestId = table[ "latest" ] as int?,
-			RemoteDate = remoteDate == default ? null : remoteDate,
+			LatestReleaseId = entry.LatestReleaseId,
+			LatestId = entry.LatestVersionId,
+			RemoteDate = entry.LatestDate,
 			LocalDate = local?.ModifiedDate.Year is null or 1 ? null : local?.ModifiedDate,
 			Status = status,
-			Category = table[ "category" ] is string category
+			Category = entry.Category is string category
 				? OdooDefaults.Instance.HpCategories?.FirstOrDefault( c => c.name?.Equals( category ) is true )
 				: null,
-			FullName = fullName,
+			FullName = entry.FullName,
 		};
 	}
 

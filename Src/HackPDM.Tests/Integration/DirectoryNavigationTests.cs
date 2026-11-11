@@ -1,5 +1,3 @@
-using System.Collections;
-
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.Models;
 
@@ -24,25 +22,34 @@ public class DirectoryNavigationTests
 	{
 		await OdooTestServer.LoginAsync();
 		var root = await HpDirectory.GetRecordByIdAsync( 1 );
-		Assert.True( root is not null,
-			$"hp.directory 1 not found (seed with Odoo/ci/seed_smoke_data.py): {OdooClient.LatestException}" );
+		Assert.True( root is not null, "hp.directory 1 not found (seed with Odoo/ci/seed_smoke_data.py)" );
 		return root!;
 	}
 
-	private static Hashtable Child( Hashtable directory, string name )
+	private static async Task<SubdirectoryDto> TreeAsync()
 	{
-		var children = Assert.IsType<Hashtable>( directory[ "directories" ] );
-		Assert.True( children.ContainsKey( name ),
-			$"'{directory[ "name" ]}' has no child '{name}'; children: {string.Join( ", ", children.Keys.Cast<object>() )}" );
-		return Assert.IsType<Hashtable>( children[ name ] );
+		Result<SubdirectoryDto> tree = await ( await RootAsync() ).GetSubdirectoriesAsync( false );
+		Assert.True( tree.Ok, $"get_children_directories_by_id failed: {tree.Error}" );
+		return tree.Value!;
+	}
+
+	private static SubdirectoryDto Child( SubdirectoryDto directory, string name )
+	{
+		SubdirectoryDto? child = directory.Directories.FirstOrDefault( d => d.Name == name );
+		Assert.True( child is not null,
+			$"'{directory.Name}' has no child '{name}'; children: {string.Join( ", ", directory.Directories.Select( d => d.Name ) )}" );
+		return child!;
+	}
+
+	private static async Task<IReadOnlyList<RemoteEntryDto>> EntriesAsync( int directoryId )
+	{
+		var entries = await HpDirectory.GetEntriesAsync( directoryId );
+		Assert.True( entries.Ok, $"get_entries({directoryId}) failed: {entries.Error}" );
+		return entries.Value!;
 	}
 
 	private static async Task<int> PartsDirectoryIdAsync()
-	{
-		var tree = await ( await RootAsync() ).GetSubdirectoriesAsync( false );
-		Assert.NotNull( tree );
-		return Convert.ToInt32( Child( Child( tree!, "Projects" ), "Parts" )[ "id" ] );
-	}
+		=> Child( Child( await TreeAsync(), "Projects" ), "Parts" ).Id;
 
 	[OdooFact]
 	public async Task RootDirectory_LoadsAsRecord()
@@ -55,14 +62,13 @@ public class DirectoryNavigationTests
 	[OdooFact]
 	public async Task DirectoryTree_ContainsSeededHierarchy()
 	{
-		var tree = await ( await RootAsync() ).GetSubdirectoriesAsync( false );
-		Assert.True( tree is { Count: > 0 }, $"get_children_directories_by_id returned nothing: {OdooClient.LatestException}" );
+		var tree = await TreeAsync();
 
-		Assert.Equal( "root", tree![ "name" ] );
-		Assert.Equal( 1, Convert.ToInt32( tree[ "id" ] ) );
+		Assert.Equal( "root", tree.Name );
+		Assert.Equal( 1, tree.Id );
 		Child( tree, "Library" );
 		var parts = Child( Child( tree, "Projects" ), "Parts" );
-		Assert.Empty( Assert.IsType<Hashtable>( parts[ "directories" ] ) );
+		Assert.Empty( parts.Directories );
 	}
 
 	[OdooFact]
@@ -70,37 +76,29 @@ public class DirectoryNavigationTests
 	{
 		int parts = await PartsDirectoryIdAsync();
 
-		Hashtable? entries = await HpDirectory.GetEntriesAsync( parts );
-		Assert.True( entries is { Count: > 0 }, $"get_entries({parts}) returned nothing: {OdooClient.LatestException}" );
+		var entries = await EntriesAsync( parts );
 
-		Assert.Equal( SeededEntries, entries!.Keys.Cast<string>().Order().ToArray() );
-		foreach( DictionaryEntry pair in entries )
+		Assert.Equal( SeededEntries, entries.Select( e => e.Name ).Order().ToArray() );
+		foreach( RemoteEntryDto entry in entries )
 		{
-			var entry = Assert.IsType<Hashtable>( pair.Value );
-			Assert.True( Convert.ToInt32( entry[ "id" ] ) > 0 );
-			Assert.True( Convert.ToInt32( entry[ "latest" ] ) > 0, $"{pair.Key} has no latest version" );
-			Assert.Equal( "txt", entry[ "type" ] );
-			Assert.EndsWith( $"Parts / {pair.Key}", entry[ "fullname" ] as string );
+			Assert.True( entry.Id > 0 );
+			Assert.True( entry.LatestVersionId > 0, $"{entry.Name} has no latest version" );
+			Assert.Equal( "txt", entry.Type );
+			Assert.EndsWith( $"Parts / {entry.Name}", entry.FullName );
 		}
 	}
 
 	[OdooFact]
 	public async Task DirectoryEntries_EmptyDirectory_ReturnsNoEntries()
 	{
-		var tree = await ( await RootAsync() ).GetSubdirectoriesAsync( false );
-		int library = Convert.ToInt32( Child( tree!, "Library" )[ "id" ] );
-
-		Hashtable? entries = await HpDirectory.GetEntriesAsync( library );
-		Assert.True( entries is not null && string.IsNullOrEmpty( OdooClient.LatestException ),
-			$"get_entries({library}) failed: {OdooClient.LatestException}" );
-		Assert.Empty( entries! );
+		int library = Child( await TreeAsync(), "Library" ).Id;
+		Assert.Empty( await EntriesAsync( library ) );
 	}
 
 	private static async Task<int> LatestVersionIdAsync( string entryName )
 	{
-		int parts = await PartsDirectoryIdAsync();
-		Hashtable entries = ( await HpDirectory.GetEntriesAsync( parts ) )!;
-		return Convert.ToInt32( ( (Hashtable)entries[ entryName ]! )[ "latest" ] );
+		var entries = await EntriesAsync( await PartsDirectoryIdAsync() );
+		return entries.Single( e => e.Name == entryName ).LatestVersionId ?? 0;
 	}
 
 	[OdooFact]
@@ -111,7 +109,7 @@ public class DirectoryNavigationTests
 
 		var (found, version) = await local.GetVersionFromLocal();
 
-		Assert.True( found, $"no version found: {OdooClient.LatestException}" );
+		Assert.True( found, "no version found" );
 		// it used to request *only* file_contents + preview_image, so the metadata was missing
 		Assert.Equal( latest, version!.id );
 		Assert.Equal( "bracket.txt", version.name );
@@ -134,12 +132,10 @@ public class DirectoryNavigationTests
 	[OdooFact]
 	public async Task EntryVersions_AreReadable()
 	{
-		int parts = await PartsDirectoryIdAsync();
-		Hashtable entries = ( await HpDirectory.GetEntriesAsync( parts ) )!;
-		int latest = Convert.ToInt32( ( (Hashtable)entries[ "bracket.txt" ]! )[ "latest" ] );
+		int latest = await LatestVersionIdAsync( "bracket.txt" );
 
 		var version = await HpVersion.GetRecordByIdAsync( latest );
-		Assert.True( version is not null, $"hp.version {latest} not readable: {OdooClient.LatestException}" );
+		Assert.True( version is not null, $"hp.version {latest} not readable" );
 		Assert.Equal( "bracket.txt", version!.name );
 		Assert.True( version.file_size > 0 );
 	}

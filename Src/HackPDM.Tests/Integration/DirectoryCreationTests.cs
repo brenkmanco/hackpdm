@@ -1,4 +1,3 @@
-using System.Collections;
 
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
@@ -23,11 +22,11 @@ public class DirectoryCreationTests
 	{
 		await OdooTestServer.LoginAsync();
 		string a = $"new-{Guid.NewGuid():N}", b = "deeper";
-		ArrayList paths = [ "Projects", "Parts", a, b ];
+		List<string> paths = [ "Projects", "Parts", a, b ];
 
 		HpDirectory[]? created = await HpDirectory.CreateNew( paths );
 
-		Assert.Equal( [ "Projects", "Parts", a, b ], paths.Cast<string>() ); // the caller's list is untouched
+		Assert.Equal( [ "Projects", "Parts", a, b ], paths ); // the caller's list is untouched
 		Assert.NotNull( created );
 		Assert.Equal( [ a, b ], created!.Select( d => d.name ) );
 		var first = await HpDirectory.GetRecordByIdAsync( created[ 0 ].id!.Value );

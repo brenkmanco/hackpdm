@@ -26,12 +26,12 @@ public static class Repository<T> where T : HpBaseModelTransport<T>, new()
 			: FetchAsync( OdooRpc.ReadAsync( Model, ids, fields.For<T>(), timeoutMs, token ), fields );
 
 	/// <summary>Records matching <paramref name="domain"/> (all records for null).</summary>
-	public static Task<Result<T[]>> SearchReadAsync( Domain? domain = null, FieldSelection fields = default, int? limit = null, int timeoutMs = OdooRpc.LongTimeout, CancellationToken token = default )
+	public static Task<Result<T[]>> SearchReadAsync( OdooDomain? domain = null, FieldSelection fields = default, int? limit = null, int timeoutMs = OdooRpc.LongTimeout, CancellationToken token = default )
 		=> FetchAsync( OdooRpc.SearchReadAsync( Model, domain, fields.For<T>(), limit, timeoutMs, token ), fields );
 
 	/// <summary>Records matching <paramref name="domain"/> through the addon's smart_read (ids always included).</summary>
-	public static Task<Result<T[]>> SmartReadAsync( Domain? domain = null, FieldSelection fields = default, int timeoutMs = OdooRpc.LongTimeout, CancellationToken token = default )
-		=> FetchAsync( OdooRpc.ExecuteAsync<IReadOnlyList<OdooRow>>( Model, "smart_read", [ domain ?? Domain.All, Array.Empty<int>(), fields.For<T>() ], timeoutMs, token ), fields );
+	public static Task<Result<T[]>> SmartReadAsync( OdooDomain? domain = null, FieldSelection fields = default, int timeoutMs = OdooRpc.LongTimeout, CancellationToken token = default )
+		=> FetchAsync( OdooRpc.ExecuteAsync<IReadOnlyList<OdooRow>>( Model, "smart_read", [ domain ?? OdooDomain.All, Array.Empty<int>(), fields.For<T>() ], timeoutMs, token ), fields );
 
 	/// <summary>The records of <typeparamref name="TOther"/> that <paramref name="relatedField"/> of these records points to (the addon's related_browse).</summary>
 	public static Task<Result<TOther[]>> RelatedAsync<TOther>( IReadOnlyList<int> ids, string relatedField, FieldSelection fields = default, int timeoutMs = 60000 )

@@ -279,24 +279,22 @@ public class VersionPreviewStagingTests
 	[Fact]
 	public void PreparedVersion_OfASolidWorksFile_IncludesItsPreview()
 	{
-		var defaults = HackPDM.Infrastructure.Odoo.OdooDefaults.Instance;
-		var (restrict, extToType) = ( defaults.RestrictTypes, defaults.ExtToType );
+		var defaults = (HackPDM.Infrastructure.Odoo.OdooDefaults)HackPDM.Infrastructure.Odoo.OdooDefaults.Instance;
+		var lookups = defaults.Lookups;
 		try
 		{
-			defaults.RestrictTypes = false;
-			defaults.ExtToType ??= [];
+			defaults.Lookups = lookups with { RestrictTypes = false };
 			var entry = new HackPDM.Infrastructure.Odoo.Models.HpEntry { id = 1, windows_complete_name = @"root\Projects" };
 
-			var part = HackPDM.Infrastructure.Odoo.Models.HpVersion.PrepareCreation( new HackPDM.Core.Hack.HackFile( SwSamples.Old( "old.SLDPRT" ) ), entry, 1 )!;
+			var part = HackPDM.Infrastructure.Operations.CommitStaging.PrepareVersion( new HackPDM.Core.Hack.HackFile( SwSamples.Old( "old.SLDPRT" ) ), entry, 1 )!;
 			Assert.Equal( new SwFileReader().GetPreviewPng( SwSamples.Old( "old.SLDPRT" ) ), part.preview_image );
 
-			var other = HackPDM.Infrastructure.Odoo.Models.HpVersion.PrepareCreation( new HackPDM.Core.Hack.HackFile( SwSamples.Old( "asm.signature" ) ), entry, 1 )!;
+			var other = HackPDM.Infrastructure.Operations.CommitStaging.PrepareVersion( new HackPDM.Core.Hack.HackFile( SwSamples.Old( "asm.signature" ) ), entry, 1 )!;
 			Assert.Null( other.preview_image );
 		}
 		finally
 		{
-			defaults.RestrictTypes = restrict;
-			defaults.ExtToType = extToType;
+			defaults.Lookups = lookups;
 		}
 	}
 }

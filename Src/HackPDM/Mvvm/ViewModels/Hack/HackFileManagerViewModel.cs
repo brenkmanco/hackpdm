@@ -169,8 +169,8 @@ public partial class HackFileManagerViewModel : ObservableObject
 	private string SelectedLocalDirectory => _files.ResolveLocalDirectory( LastSelectedNodePath );
 	private int SelectedDirectoryId => SelectedDirectory?.DirectoryId ?? 0;
 
-	private static ArrayList RemoteIds( IEnumerable<EntryRow> rows )
-		=> [ .. rows.Where( r => r.Id is not ( null or 0 ) ).Select( r => (object)r.Id!.Value ) ];
+	private static int[] RemoteIds( IEnumerable<EntryRow> rows )
+		=> [ .. rows.Select( r => r.Id ).OfType<int>().Where( id => id != 0 ) ];
 
 	#endregion
 	/// <summary>Loads the Odoo metadata the page needs before the tree is built.</summary>
@@ -363,7 +363,7 @@ public partial class HackFileManagerViewModel : ObservableObject
 	#endregion
 	#region Directory (tree) commands
 
-	private async Task<ArrayList?> SelectedDirectoryEntryIdsAsync( bool withSubdirectories, bool withDeleted = false )
+	private async Task<IReadOnlyList<int>> SelectedDirectoryEntryIdsAsync( bool withSubdirectories, bool withDeleted = false )
 		=> await _workflow.GetDirectoryEntryIdsAsync( SelectedDirectoryId, withSubdirectories, withDeleted );
 
 	private async Task GetLatestForDirectoryAsync( bool withSubdirectories )
@@ -378,8 +378,8 @@ public partial class HackFileManagerViewModel : ObservableObject
 		_reporter.Log( StatusMessage.PROCESSING,
 			$"Retrieving all entries and their associated dependencies within directory ({SelectedDirectory.Name}, id: {SelectedDirectoryId})" );
 
-		ArrayList? ids = await SelectedDirectoryEntryIdsAsync( withSubdirectories, ShowInactive );
-		await _workflow.GetLatestAsync( ids ?? [] );
+		IReadOnlyList<int> ids = await SelectedDirectoryEntryIdsAsync( withSubdirectories, ShowInactive );
+		await _workflow.GetLatestAsync( ids );
 	}
 
 	[RelayCommand]
@@ -392,16 +392,16 @@ public partial class HackFileManagerViewModel : ObservableObject
 	private async Task CheckoutDirectoryAsync()
 	{
 		await GetLatestForDirectoryAsync( withSubdirectories: true );
-		ArrayList? ids = await SelectedDirectoryEntryIdsAsync( withSubdirectories: true );
-		await _workflow.CheckoutAsync( ids ?? [] );
+		IReadOnlyList<int> ids = await SelectedDirectoryEntryIdsAsync( withSubdirectories: true );
+		await _workflow.CheckoutAsync( ids );
 	}
 
 	[RelayCommand]
 	private async Task UndoCheckoutDirectoryAsync()
 	{
 		_reporter.ShowWindow();
-		ArrayList? ids = await SelectedDirectoryEntryIdsAsync( withSubdirectories: true );
-		await _workflow.UnCheckoutAsync( ids ?? [] );
+		IReadOnlyList<int> ids = await SelectedDirectoryEntryIdsAsync( withSubdirectories: true );
+		await _workflow.UnCheckoutAsync( ids );
 	}
 
 	[RelayCommand]
@@ -434,8 +434,8 @@ public partial class HackFileManagerViewModel : ObservableObject
 	private async Task LogicalDeleteDirectoryAsync()
 	{
 		_reporter.ShowWindow();
-		ArrayList? ids = await SelectedDirectoryEntryIdsAsync( withSubdirectories: true );
-		await _workflow.LogicalDeleteAsync( ids ?? [] );
+		IReadOnlyList<int> ids = await SelectedDirectoryEntryIdsAsync( withSubdirectories: true );
+		await _workflow.LogicalDeleteAsync( ids );
 		await CompletedAsync( FileManagerRefresh.All );
 	}
 
@@ -471,7 +471,7 @@ public partial class HackFileManagerViewModel : ObservableObject
 	[RelayCommand]
 	private async Task UndoCheckoutSelectedAsync()
 	{
-		ArrayList ids = RemoteIds( SelectedEntries.Where( e => e.Checkout is not null ) );
+		IReadOnlyList<int> ids = RemoteIds( SelectedEntries.Where( e => e.Checkout is not null ) );
 		if( ids.Count == 0 )
 			return;
 
@@ -535,7 +535,7 @@ public partial class HackFileManagerViewModel : ObservableObject
 	private async Task PermanentDeleteSelectedAsync()
 	{
 #if DEBUG
-		ArrayList ids = RemoteIds( SelectedEntries );
+		IReadOnlyList<int> ids = RemoteIds( SelectedEntries );
 		if( ids.Count == 0 )
 		{
 			await _dialogs.ShowMessageAsync( "No entries to delete" );

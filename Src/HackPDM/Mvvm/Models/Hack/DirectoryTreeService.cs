@@ -28,9 +28,14 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 	{
 		try
 		{
-			if( OdooDefaults.Instance.HpDirectoryRoot is not HpDirectory remoteRoot
-				|| await remoteRoot.GetSubdirectoriesAsync( false ) is not Hashtable remote )
+			if( OdooDefaults.Instance.HpDirectoryRoot is not HpDirectory remoteRoot )
 				return null;
+			Result<SubdirectoryDto> tree = await remoteRoot.GetSubdirectoriesAsync( false );
+			if( tree.Value is not { } remote )
+			{
+				Debug.WriteLine( $"directory tree could not be read: {tree.Error}" );
+				return null;
+			}
 
 			string pwa = HackDefaults.Instance.PwaPathAbsolute;
 			return await Task.Run( () =>
@@ -48,25 +53,18 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 		}
 	}
 
-	/// <summary>Converts Odoo's nested { name, id, directories } tables into nodes.</summary>
-	private static DirectoryNode FromRemote( Hashtable table, string? parentPath )
+	/// <summary>Converts the server's directory tree into nodes.</summary>
+	private static DirectoryNode FromRemote( SubdirectoryDto directory, string? parentPath )
 	{
-		string name = table[ "name" ] as string ?? RootName;
+		string name = directory.Name is { Length: > 0 } n ? n : RootName;
 		string treePath = parentPath is null ? name : $"{parentPath}\\{name}";
 
-		DirectoryNode node = new( name, table[ "id" ] as int? ?? 0 )
+		DirectoryNode node = new( name, directory.Id )
 		{
 			ExistsLocally = Directory.Exists( PwaPaths.ToAbsolute( treePath ) ),
 		};
-
-		if( table[ "directories" ] is Hashtable { Count: > 0 } children )
-		{
-			foreach( DictionaryEntry pair in children )
-			{
-				if( pair.Value is Hashtable child )
-					node.Children.Add( FromRemote( child, treePath ) );
-			}
-		}
+		foreach( SubdirectoryDto child in directory.Directories )
+			node.Children.Add( FromRemote( child, treePath ) );
 		return node;
 	}
 

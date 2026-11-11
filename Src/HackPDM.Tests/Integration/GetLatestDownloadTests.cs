@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Text;
 
 using HackPDM.Core.Hack;
@@ -97,9 +96,9 @@ public class GetLatestDownloadTests : IDisposable
 	private async Task<HpVersion[]> SeededLatestVersionsAsync()
 	{
 		await OdooTestServer.LoginAsync();
-		ArrayList ids = await OdooClient.SearchAsync( "hp.entry", [ new ArrayList { new ArrayList { "name", "in", new ArrayList( Seeded ) } } ] );
-		Assert.True( ids.Count == Seeded.Length, $"seed data missing (Odoo/ci/seed_smoke_data.py): {OdooClient.LatestException}" );
-		var versions = await PdmDownloadOperations.GetLatestVersionsAsync( ids, LatestExcluded );
+		var ids = await OdooRpc.SearchAsync( "hp.entry", OdooDomain.Where( "name", "in", Seeded ) );
+		Assert.True( ids.Value?.Count == Seeded.Length, $"seed data missing (Odoo/ci/seed_smoke_data.py): {ids}" );
+		var versions = await PdmDownloadOperations.GetLatestVersionsAsync( ids.Value!, LatestExcluded );
 		Assert.Equal( Seeded.Length, versions?.Length );
 		return versions!;
 	}

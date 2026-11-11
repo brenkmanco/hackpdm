@@ -14,7 +14,6 @@ using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Shared.OdooAttributes;
 
-using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 
 // Resharper disable InconsistentNaming
 
@@ -34,77 +33,73 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
 }
 public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 {
-	public static Task<Hashtable> LastAvailableDirectory( ArrayList paths )
+	/// <summary>How far <paramref name="paths"/> (root first) already exists on the server.</summary>
+	public static async Task<Result<LastAvailableDirectory>> LastAvailableDirectory( IReadOnlyList<string> paths )
 	{
-		var last = OClient.CommandAsync<Hashtable>(GetHpModel(), "last_available_directory", [new ArrayList { paths }]);
-		return last;
+		Result<OdooRow> last = await OdooRpc.ExecuteAsync<OdooRow>( GetHpModel()!, "last_available_directory", [ paths ] );
+		return last.Map( row => new LastAvailableDirectory( row?.Int( "index" ) ?? 0, row?.Int( "dir_id" ) ?? 1 ) );
 	}
-	public async static Task<HpDirectory[]?> CreateNew( ArrayList paths )
+
+	/// <summary>
+	/// Creates the folders of <paramref name="paths"/> (below root) that don't exist yet; the created
+	/// directories, or the existing deepest one when they all exist.
+	/// </summary>
+	public async static Task<HpDirectory[]?> CreateNew( IEnumerable<string> paths )
 	{
-		// a copy: the caller's list is not ours to change
-		paths = new ArrayList( paths );
-		paths.Insert( 0, PwaPaths.Root );
+		List<string> path = [ PwaPaths.Root, .. paths ];
 
-		Hashtable last = await LastAvailableDirectory( paths );
-		// this means that all directories in paths were found 
-		int nextIndex = 1;
-
-		if( !last.TryGetValue( "index", out int index ) )
-		{ index = 0; }
-		if( !last.TryGetValue( "dir_id", out int lastDirId ) )
-		{ lastDirId = 1; }
-		nextIndex = index + 1;
-
-		if( nextIndex >= paths.Count )
-			return [ await GetRecordByIdAsync( lastDirId ) ?? null ];
+		LastAvailableDirectory last = ( await LastAvailableDirectory( path ) ).Unwrap();
+		int nextIndex = last.Index + 1;
+		if( nextIndex >= path.Count )
+			return [ await GetRecordByIdAsync( last.DirectoryId ) ?? null ];
 
 		// category 1 is the usual default, but it may not exist (a fresh database has no categories),
 		// and referencing a missing record makes the server reject the directory
 		Many2One? defaultCategory = OdooDefaults.Instance.HpCategories?.Any( c => c.id == 1 ) is true ? 1 : null;
 
-		HpDirectory[] directories = new HpDirectory[paths.Count - nextIndex];
-		int lastParentId = lastDirId;
-		for( int i = nextIndex; i < paths.Count; i++ )
+		HpDirectory[] directories = new HpDirectory[ path.Count - nextIndex ];
+		int lastParentId = last.DirectoryId;
+		for( int i = nextIndex; i < path.Count; i++ )
 		{
 			HpDirectory newDirectory = new()
 			{
-				name = (string)paths[i],
+				name = path[ i ],
 				parent_id = lastParentId,
 				sandboxed = false,
 				deleted = false,
 				default_cat = defaultCategory,
 			};
-			await newDirectory.CreateAsync( false );
-
-			if( newDirectory.id == 0 )
-			{
-				throw new InvalidOperationException( $"directory '{paths[ i ]}' not created: {OClient.LatestException}" );
-			}
+			if( await newDirectory.CreateAsync( false ) == 0 )
+				throw new InvalidOperationException( $"directory '{path[ i ]}' not created: {newDirectory.LastError}" );
 
 			directories[ i - nextIndex ] = newDirectory;
-			// for next iteration
 			lastParentId = newDirectory.id ?? 0;
 		}
 		return directories;
 	}
-	public async Task<Hashtable?> GetSubdirectoriesAsync( bool withEntries = true )
-	{
-		return this.IsRecord
-			? await OClient.CommandAsync<Hashtable>( HpModel, "get_children_directories_by_id", new ArrayList( new ArrayList { this.id, withEntries } ) )
-			: null;
-	}
-	public static async Task<Hashtable?> GetEntriesAsync( int? directoryId, bool showInActive = false )
-		=> await OClient.CommandAsync<Hashtable>(
-			GetHpModel(),
-			"get_entries",
-			// hp.directory.get_entries(value) expects value = [directory_id, show_inactive]
-			[ new ArrayList { directoryId, showInActive } ]
-		);
 
-	public async Task<ArrayList?> GetDirectoryEntryIDsAsync( bool withSubEntries = false, bool withDeleted = true )
-		=> await GetDirectoryEntryIDsAsync( this.id ?? 0, withSubEntries, withDeleted );
-	public static async Task<ArrayList?> GetDirectoryEntryIDsAsync( int directoryId, bool withSubEntries = false, bool withDeleted = false )
+	/// <summary>This directory with every directory (and, with <paramref name="withEntries"/>, entry) below it.</summary>
+	public async Task<Result<SubdirectoryDto>> GetSubdirectoriesAsync( bool withEntries = true )
+	{
+		if( !IsRecord || id is not int directoryId )
+			return Result<SubdirectoryDto>.Fail( "not a directory read from the server" );
+		Result<OdooRow> tree = await OdooRpc.ExecuteAsync<OdooRow>( HpModel!, "get_children_directories_by_id", [ directoryId, withEntries ], OdooRpc.LongTimeout );
+		return tree.Map( row => SubdirectoryDto.FromRow( row ?? [] ) );
+	}
+
+	/// <summary>The entries directly in a directory (deleted ones too with <paramref name="showInActive"/>).</summary>
+	public static async Task<Result<IReadOnlyList<RemoteEntryDto>>> GetEntriesAsync( int directoryId, bool showInActive = false )
+	{
+		// hp.directory.get_entries(value) expects value = [directory_id, show_inactive]
+		Result<OdooRow> entries = await OdooRpc.ExecuteAsync<OdooRow>( GetHpModel()!, "get_entries", [ new object?[] { directoryId, showInActive } ], OdooRpc.LongTimeout );
+		return entries.Map( map => RemoteEntryDto.ListFrom( map ) );
+	}
+
+	public Task<Result<IReadOnlyList<int>>> GetDirectoryEntryIDsAsync( bool withSubEntries = false, bool withDeleted = true )
+		=> GetDirectoryEntryIDsAsync( this.id ?? 0, withSubEntries, withDeleted );
+	/// <summary>The ids of the entries in a directory (and, with <paramref name="withSubEntries"/>, below it).</summary>
+	public static Task<Result<IReadOnlyList<int>>> GetDirectoryEntryIDsAsync( int directoryId, bool withSubEntries = false, bool withDeleted = false )
 		=> directoryId != 0
-			? await OClient.CommandAsync<ArrayList>( GetHpModel()!, "get_all_entry_ids", [ directoryId, withDeleted, withSubEntries ], 10000 )
-			: null;
+			? OdooRpc.ExecuteAsync<IReadOnlyList<int>>( GetHpModel()!, "get_all_entry_ids", [ directoryId, withDeleted, withSubEntries ], OdooRpc.LongTimeout )
+			: Task.FromResult( Result<IReadOnlyList<int>>.Fail( "no directory" ) );
 }

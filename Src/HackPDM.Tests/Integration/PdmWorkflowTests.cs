@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 
@@ -98,30 +97,30 @@ public class PdmWorkflowTests : IAsyncLifetime
 	}
 
 	/// <summary>The entry for <paramref name="relative"/> (under this test's folder) as a field map, or null.</summary>
-	private async Task<Hashtable?> EntryAsync( string relative, bool includeDeleted = false )
+	private async Task<OdooRow?> EntryAsync( string relative, bool includeDeleted = false )
 	{
 		string windowsName = @"root\" + _folder + @"\" + relative.Replace( '/', '\\' );
-		ArrayList domain = [ new ArrayList { "windows_complete_name", "=", windowsName } ];
+		OdooDomain domain = OdooDomain.Where( "windows_complete_name", windowsName );
 		if( !includeDeleted )
-			domain.Add( new ArrayList { "deleted", "=", false } );
-		ArrayList ids = await OdooClient.SearchAsync( "hp.entry", [ domain ] );
+			domain = domain.And( "deleted", false );
+		IReadOnlyList<int> ids = ( await OdooRpc.SearchAsync( "hp.entry", domain ) ).Unwrap();
 		if( ids.Count == 0 )
 			return null;
 		Assert.True( ids.Count == 1, $"{ids.Count} entries named {windowsName}" );
-		ArrayList rows = await OdooClient.ReadAsync( "hp.entry", ids,
+		var rows = await OdooRpc.ReadAsync( "hp.entry", ids,
 			[ "name", "deleted", "dir_id", "latest_version_id", "version_ids", "checkout_user", "checkout_node", "is_checked_out", "directory_complete_name" ] );
-		return (Hashtable)rows[ 0 ]!;
+		return rows.Unwrap()[ 0 ];
 	}
 
-	private async Task<Hashtable> RequireEntryAsync( string relative, bool includeDeleted = false )
+	private async Task<OdooRow> RequireEntryAsync( string relative, bool includeDeleted = false )
 		=> await EntryAsync( relative, includeDeleted ) ?? throw new Xunit.Sdk.XunitException( $"no entry for {relative}\n{_reporter.Dump()}" );
 
-	private static int Id( object? many2one ) => many2one is ArrayList { Count: > 0 } pair ? Convert.ToInt32( pair[ 0 ] ) : 0;
+	private static int Id( object? many2one ) => OdooValues.Many2OneId( many2one ) ?? 0;
 
-	private static async Task<Hashtable> VersionAsync( int id, params string[] fields )
+	private static async Task<OdooRow> VersionAsync( int id, params string[] fields )
 	{
-		ArrayList rows = await OdooClient.ReadAsync( "hp.version", [ id ], [ "name", "checksum", "file_size", "entry_id", .. fields ] );
-		return (Hashtable)rows[ 0 ]!;
+		var rows = await OdooRpc.ReadAsync( "hp.version", [ id ], [ "name", "checksum", "file_size", "entry_id", .. fields ] );
+		return rows.Unwrap()[ 0 ];
 	}
 
 	private void AssertNoErrors() => Assert.False( _reporter.Errors.Any(), _reporter.Dump() );
@@ -151,7 +150,7 @@ public class PdmWorkflowTests : IAsyncLifetime
 		var versionA = await VersionAsync( Id( entryA[ "latest_version_id" ] ) );
 		Assert.Equal( Sha1( a ), versionA[ "checksum" ] );
 		Assert.Equal( 6L, Convert.ToInt64( versionA[ "file_size" ] ) );
-		Assert.Single( (ArrayList)entryA[ "version_ids" ]! );
+		Assert.Single( entryA.RefIds( "version_ids" ) );
 		// nothing is left checked out by a first commit
 		Assert.Equal( false, entryA[ "is_checked_out" ] );
 	}
@@ -163,11 +162,11 @@ public class PdmWorkflowTests : IAsyncLifetime
 		string b = WriteFile( "Sub/Deeper/b.txt", "bravo bravo\n" );
 		await CommitAsync( a, b );
 		AssertNoErrors();
-		var ids = new ArrayList
-		{
+		List<int> ids =
+		[
 			Convert.ToInt32( ( await RequireEntryAsync( "Sub/a.txt" ) )[ "id" ] ),
 			Convert.ToInt32( ( await RequireEntryAsync( "Sub/Deeper/b.txt" ) )[ "id" ] ),
-		};
+		];
 
 		UseVault( _otherVault );
 		await _service.GetLatestAsync( ids );
@@ -216,7 +215,7 @@ public class PdmWorkflowTests : IAsyncLifetime
 		await CommitAsync( a );
 		Assert.True( _reporter.Errors.Any( e => e.Contains( "not checked out" ) ), _reporter.Dump() );
 		entry = await RequireEntryAsync( "a.txt" );
-		Assert.Single( (ArrayList)entry[ "version_ids" ]! );
+		Assert.Single( entry.RefIds( "version_ids" ) );
 
 		// checked out: a second version, now the latest
 		await _service.CheckoutAsync( [ entryId ] );
@@ -226,7 +225,7 @@ public class PdmWorkflowTests : IAsyncLifetime
 		AssertNoErrors();
 
 		entry = await RequireEntryAsync( "a.txt" );
-		Assert.Equal( 2, ( (ArrayList)entry[ "version_ids" ]! ).Count );
+		Assert.Equal( 2, entry.RefIds( "version_ids" ).Count );
 		int latest = Id( entry[ "latest_version_id" ] );
 		Assert.NotEqual( firstVersion, latest );
 		Assert.Equal( Sha1( a ), ( await VersionAsync( latest ) )[ "checksum" ] );
@@ -254,7 +253,7 @@ public class PdmWorkflowTests : IAsyncLifetime
 
 		await CommitAsync( a );
 
-		Assert.Single( (ArrayList)( await RequireEntryAsync( "a.txt" ) )[ "version_ids" ]! );
+		Assert.Single( ( await RequireEntryAsync( "a.txt" ) ).RefIds( "version_ids" ) );
 	}
 
 	[OdooFact]
@@ -282,12 +281,12 @@ public class PdmWorkflowTests : IAsyncLifetime
 		await CommitAsync( a );
 		var entry = await RequireEntryAsync( "a.txt" );
 		int entryId = Convert.ToInt32( entry[ "id" ] );
-		ArrayList versionIds = (ArrayList)entry[ "version_ids" ]!;
+		IReadOnlyList<int> versionIds = entry.RefIds( "version_ids" );
 
 		Assert.True( await _service.PermanentDeleteAsync( [ entryId ] ), _reporter.Dump() );
 
 		Assert.Null( await EntryAsync( "a.txt", includeDeleted: true ) );
-		Assert.Empty( await OdooClient.SearchAsync( "hp.version", [ new ArrayList { new ArrayList { "id", "in", versionIds } } ] ) );
+		Assert.Empty( ( await OdooRpc.SearchAsync( "hp.version", OdooDomain.IdIn( versionIds ) ) ).Unwrap() );
 		// the local file is the user's; deleting from the server leaves it alone
 		Assert.True( File.Exists( a ) );
 	}
@@ -311,7 +310,7 @@ public class PdmWorkflowTests : IAsyncLifetime
 	private static EntryRow LocalRow( string path )
 		=> new() { Id = 0, FullName = path, Type = Path.GetExtension( path ).TrimStart( '.' ).ToLowerInvariant(), ReprType = EntryReprType.Local };
 
-	private static HashSet<int> Ids( object? many ) => ( (ArrayList)many! ).Cast<object>().Select( Convert.ToInt32 ).ToHashSet();
+	private static HashSet<int> Ids( object? many ) => [ .. OdooValues.Ids( many ) ];
 
 	[OdooFact]
 	public async Task Commit_SolidWorksAssembly_PullsInItsReferences_AndLinksTheExactFiles()
@@ -331,13 +330,13 @@ public class PdmWorkflowTests : IAsyncLifetime
 		await _service.CommitAsync( files );
 		AssertNoErrors();
 
-		async Task<Hashtable> Latest( string name, params string[] fields )
+		async Task<OdooRow> Latest( string name, params string[] fields )
 			=> await VersionAsync( Id( ( await RequireEntryAsync( $"Sw/{name}" ) )[ "latest_version_id" ] ), [ "child_ids", "parent_ids", .. fields ] );
 		var asm = await Latest( "new.SLDASM", "preview_image" );
 		var oldAsm = await Latest( "old.SLDASM" );
 		var part = await Latest( "new.SLDPRT", "version_property_ids" );
 		var basePart = await Latest( "tmp engine 2.SLDPRT", "version_property_ids" );
-		int I( Hashtable v ) => Convert.ToInt32( v[ "id" ] );
+		int I( OdooRow v ) => Convert.ToInt32( v[ "id" ] );
 
 		Assert.Equal( new HashSet<int> { I( part ), I( oldAsm ) }, Ids( asm[ "child_ids" ] ) );
 		Assert.Equal( new HashSet<int> { I( part ) }, Ids( oldAsm[ "child_ids" ] ) );
@@ -347,8 +346,8 @@ public class PdmWorkflowTests : IAsyncLifetime
 
 		// the assembly's saved preview and the parts' custom properties come along
 		Assert.False( asm[ "preview_image" ] is null or false, "assembly preview missing" );
-		var props = await OdooClient.ReadAsync( "hp.version.property", (ArrayList)basePart[ "version_property_ids" ]!, [ "prop_name", "sw_config_name", "text_value" ] );
-		Assert.Contains( props.Cast<Hashtable>(), p => "PartNum".Equals( p[ "prop_name" ] ) && "X000545".Equals( p[ "text_value" ] ) );
+		var props = ( await OdooRpc.ReadAsync( "hp.version.property", basePart.RefIds( "version_property_ids" ), [ "prop_name", "sw_config_name", "text_value" ] ) ).Unwrap();
+		Assert.Contains( props, p => p.Text( "prop_name" ) == "PartNum" && p.Text( "text_value" ) == "X000545" );
 	}
 
 	[OdooFact]
@@ -433,12 +432,13 @@ public class PdmWorkflowTests : IAsyncLifetime
 
 		// another user holds the file
 		string login = $"other-{Guid.NewGuid():N}"[ ..16 ];
-		int other = await OdooClient.CreateAsync( "res.users", new Hashtable { { "name", login }, { "login", login } } );
-		Assert.True( other > 0, OdooClient.LatestException );
-		Assert.True( await OdooClient.UpdateAsync( "hp.entry", entryId, new Hashtable
+		int other = ( await OdooRpc.CreateAsync( "res.users", new Dictionary<string, object?> { [ "name" ] = login, [ "login" ] = login } ) ).Unwrap();
+		Assert.True( other > 0 );
+		var held = await OdooRpc.WriteAsync( "hp.entry", [ entryId ], new Dictionary<string, object?>
 		{
-			{ "checkout_user", other }, { "checkout_node", OdooDefaults.Instance.MyNode!.id }, { "is_checked_out", true },
-		} ), OdooClient.LatestException );
+			[ "checkout_user" ] = other, [ "checkout_node" ] = OdooDefaults.Instance.MyNode!.id, [ "is_checked_out" ] = true,
+		} );
+		Assert.True( held.Value, held.Error );
 
 		await _service.CheckoutAsync( [ entryId ] );
 		Assert.Equal( other, Id( ( await RequireEntryAsync( "a.txt" ) )[ "checkout_user" ] ) );
@@ -450,10 +450,11 @@ public class PdmWorkflowTests : IAsyncLifetime
 		File.WriteAllText( a, "my change\n" );
 		await CommitAsync( a );
 		Assert.Contains( _reporter.Errors, e => e.Contains( "not checked out to current user" ) );
-		Assert.Single( (ArrayList)( await RequireEntryAsync( "a.txt" ) )[ "version_ids" ]! );
+		Assert.Single( ( await RequireEntryAsync( "a.txt" ) ).RefIds( "version_ids" ) );
 
 		// the server refuses too, whatever the client does
-		await OdooClient.ExecuteJsonAsync( "hp.version", "checkout_entry", [ Id( entry[ "latest_version_id" ] ), OdooDefaults.Instance.MyNode!.id! ] );
-		Assert.Contains( "already checked out", OdooClient.LatestException );
+		var refused = await OdooRpc.ExecuteAsync<bool>( "hp.version", "checkout_entry", [ Id( entry[ "latest_version_id" ] ), OdooDefaults.Instance.MyNode!.id! ] );
+		Assert.False( refused.Ok );
+		Assert.Contains( "already checked out", refused.Error );
 	}
 }

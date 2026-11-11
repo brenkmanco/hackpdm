@@ -48,18 +48,6 @@ public class ExtensionMethodsTests
     }
 
     [Fact]
-    public void ToArrayList_ConvertsEnumerableToArrayList()
-    {
-        var list = new List<string> { "One", "Two", "Three" };
-        ArrayList arrayList = list.ToArrayList();
-
-        Assert.Equal(3, arrayList.Count);
-        Assert.Equal("One", arrayList[0]);
-        Assert.Equal("Two", arrayList[1]);
-        Assert.Equal("Three", arrayList[2]);
-    }
-
-    [Fact]
     public void ToConcurrentSet_ConvertsEnumerableToConcurrentSet()
     {
         var numbers = new[] { 10, 20, 30, 20, 10 };

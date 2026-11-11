@@ -20,25 +20,17 @@ namespace HackPDM.Infrastructure.Operations;
 /// </summary>
 public static class PdmDownloadOperations
 {
-    public static async Task<ArrayList> GetAllEntriesAndDependenciesListAsync(int[] entryIds)
-    {
-        return await OdooClient.CommandAsync<ArrayList>(
-            HpVersion.GetHpModel(),
-            "get_recursive_dependency_entries",
-            [entryIds.ToArrayList()],
-            1000000);
-    }
+    private const int DependencyTimeoutMs = 1000000;
 
-    public static async Task<ArrayList> GetVersionListAsync(params int[] versionIds)
-    {
-        return await OdooClient.CommandAsync<ArrayList>(
-            HpVersion.GetHpModel(),
-            "get_recursive_dependency_versions",
-            [versionIds.ToArrayList()],
-            1000000);
-    }
+    /// <summary>The entries and every entry they depend on (recursively), each once.</summary>
+    public static Task<Result<IReadOnlyList<int>>> GetAllEntriesAndDependenciesListAsync(IReadOnlyList<int> entryIds)
+        => OdooRpc.ExecuteAsync<IReadOnlyList<int>>(HpVersion.GetHpModel()!, "get_recursive_dependency_entries", [entryIds], DependencyTimeoutMs);
 
-    public static async Task<HpVersion[]?> GetLatestVersionsAsync(ArrayList entryIDs, string[]? excludedFields = null)
+    /// <summary>The versions and every version they depend on (recursively).</summary>
+    public static Task<Result<IReadOnlyList<int>>> GetVersionListAsync(params int[] versionIds)
+        => OdooRpc.ExecuteAsync<IReadOnlyList<int>>(HpVersion.GetHpModel()!, "get_recursive_dependency_versions", [versionIds], DependencyTimeoutMs);
+
+    public static async Task<HpVersion[]?> GetLatestVersionsAsync(IReadOnlyList<int> entryIDs, string[]? excludedFields = null)
     {
         excludedFields ??= ["preview_image", "file_contents"];
         return await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(entryIDs, nameof(HpEntry.latest_version_id), excludedFields);
@@ -221,25 +213,24 @@ public static class PdmDownloadOperations
                 long bytes = group.Sum(v => (long)(v.file_size ?? 0));
                 int timeout = ContentsTimeoutMs(bytes, attempt);
 
-                HpVersion[]? loaded = await HpVersion.GetRecordsByIdsAsync(
-                    new ArrayList(group.Select(v => v.id).ToArray()), includedFields: ContentFields, timeoutMs: timeout);
-                // LatestException is shared by concurrent calls, so this reason is best effort
-                string rpcError = OdooClient.LatestException is { Length: > 0 } e ? e : "no data returned";
+                Result<HpVersion[]> read = await Repository<HpVersion>.ReadAsync(
+                    group.Ids(), FieldSelection.Only(ContentFields), timeout);
+                string rpcError = read.Error ?? "no data returned";
 
-                Dictionary<int, HpVersion> byId = (loaded ?? []).Where(v => v?.id is > 0).ToDictionary(v => v.id!.Value);
+                Dictionary<int, HpVersion> byId = read.ValueOr([]).Where(v => v?.id is > 0).ToDictionary(v => v.id!.Value);
                 foreach (HpVersion requested in group)
                 {
                     int id = requested.id!.Value;
                     if (!byId.TryGetValue(id, out HpVersion? got)
                         || (got.file_contents is not { Length: > 0 } && (got.file_size ?? 0) > 0))
                     {
-                        lastError[id] = loaded is null
+                        lastError[id] = !read.Ok
                             ? $"{rpcError} ({bytes / (1024 * 1024.0):F1} MB request, {timeout / 1000}s timeout)"
                             : "contents missing from the server response";
                         continue;
                     }
 
-                    if (got.file_contents is { Length: > 0 } && !await LocalFileWriter.WriteAsync(HpVersion.ToHackFile(got)))
+                    if (got.file_contents is { Length: > 0 } && !await LocalFileWriter.WriteAsync(got.ToHackFile()))
                     {
                         // a local write problem will not be fixed by downloading again
                         pending.Remove(id);

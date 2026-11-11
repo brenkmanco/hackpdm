@@ -118,40 +118,59 @@ Goal: each repeated rule lives in exactly one place. Pure moves, so low risk.
 
 Gate after Phase 3: offline 170 passed / 37 skipped; live 211/211 plus SMOKE TEST PASSED. The live count went from 216 to 211 because the path tests for the deleted converters went with them.
 
-## Phase 4: Typed Odoo seam (generics instead of object/ArrayList/Hashtable)
+## Phase 4: Typed Odoo seam (generics instead of object/ArrayList/Hashtable) ✅
 
-The biggest and riskiest phase, so it is split. In 4a/4b old and new APIs coexist; 4c deletes the old ones.
+Done. Gate: live 223/223 + SMOKE TEST PASSED; offline 182 passed / 37 skipped. All new seam types live in `HackPDM.Infrastructure/Odoo/Rpc/`.
 
 **4a. Introduce the types**
-- [ ] `record DomainTerm(string Field, string Op, object? Value)` and `Domain : IReadOnlyList<DomainTerm>` (with `&`/`|` builders)
-- [ ] Ids as `IReadOnlyList<int>` everywhere
-- [ ] One transport: `Task<Result<T>> CallAsync<T>(string service, string method, IReadOnlyList<object?> args, CancellationToken ct)`; `Result<T>` replaces the static `LatestException`
-- [ ] Typed verbs on top: `SearchAsync`, `ReadAsync<T>`, `SearchReadAsync<T>`, `CreateAsync`, `WriteAsync`, `UnlinkAsync`
-- [ ] `Repository<T> where T : HpBaseModelTransport<T>, new()` with one `FetchAsync` (replaces ≈5 fetch → populate copies) and one `Assign<T>` (replaces the 3 `HashConverter` loops)
-- [ ] DTO records: `StagedVersionPayload`, `DirectoryEntriesDto`, `SubdirectoryDto`, `RemoteEntryDto`, `SwProperty`
-- [ ] Write payloads as `Dictionary<string, object?>` (the generated `ToOdoo()` already returns one)
+- [x] `DomainTerm(Field, Op, Value)` and an immutable `OdooDomain : IReadOnlyList<object>` with `Where`/`And`/`IdIn`/`All` builders and `&`/`|`/`!` operators (named `OdooDomain` because `Domain` clashes with the `HackPDM.Domain` namespace)
+- [x] Ids as `IReadOnlyList<int>` everywhere
+- [x] One transport: `OdooRpc.CallAsync(service, method, args, timeout, token)` → `Result<JsonElement>`; `Result<T>` (`Ok`/`Error`/`ValueOr`/`Unwrap`/`Map`) replaces the static `LatestException`. Where a model method used to report through it, the instance now has `LastError`; login has `OdooDefaults.LoginError`
+- [x] Typed verbs: `SearchAsync`, `SearchCountAsync`, `ReadAsync`, `SearchReadAsync`, `CreateAsync`, `CreateManyAsync`, `WriteAsync`, `UnlinkAsync`, `ExecuteAsync<T>`; rows are `OdooRow : Dictionary<string, object?>`, read with the `OdooValues` row helpers
+- [x] `Repository<T> where T : HpBaseModelTransport<T>, new()` with one `FetchAsync` and one `Assign` (unknown fields → `HashedValues`)
+- [x] DTO records: `RemoteEntryDto`, `SubdirectoryDto`, `LastAvailableDirectory` (in DirectoryDtos.cs). `StagedVersionPayload` and `SwProperty` were not needed: staged payloads stay `Dictionary<string, object?>`
+- [x] Write payloads as `Dictionary<string, object?>` (`ComputeValues` replaces `ComputeHashtable`)
 
 **4b. Migrate callers**
-- [ ] Operations, models, `EntrySearchService`, `EntryListService`, `DirectoryTreeService`, `PdmWorkflowService`
-- [ ] `IPdmWorkflowService` signatures take `IReadOnlyList<int>` instead of `ArrayList`
-- [ ] `dir_id as ArrayList[1]` → `Many2One` helper; app Hashtable rows → `RemoteEntryDto`
-- [ ] Drop the hand-written type → model registry in HpBaseModelTransport (use the generated `HpModelDictionaryGen`)
+- [x] Operations, models, `EntrySearchService`, `EntryListService`, `DirectoryTreeService`, `PdmWorkflowService`, view models, smoke runner, tests
+- [x] `IPdmWorkflowService` signatures take `IReadOnlyList<int>` instead of `ArrayList`
+- [x] Many2one access through `OdooValues.Many2OneId/Many2OneName` (`row.RefId/RefName`); app Hashtable rows → `RemoteEntryDto`
+- [x] Dropped the hand-written type → model registry (model names come from `[OdooModel]` / the generated dictionary). Connection probes moved to `OdooConnection`
 
 **4c. Delete the old surface**
-- [ ] The 4× wrapper matrix in `OdooRpcCs.cs` (≈250 lines), `ToNativeObject`/`ConvertFromHt`, ArrayList extensions, `HashedValues` Hashtable, `RecordsPopulation`
-- [ ] Collapse `MultiRecord`/`Many2Many`/`One2Many` operator triplication into one generic base
+- [x] Deleted `OdooRpcCs.cs` (the wrapper matrix), `ToNativeObject`, `HashConverter`, the ArrayList/Hashtable extensions, `RecordsPopulation`/`FinalizePopulation(s)`; `HashedValues` is a `Dictionary<string, object?>`
+- [x] `MultiRecord` is one abstract base; `Many2Many`/`One2Many` are sealed, implement their interfaces, and convert from `int[]`
 
-## Phase 5: Split the god classes (SRP)
+**Bugs found and fixed on the way**
+- `Many2Many`'s `int[]` conversion called itself (stack overflow), and a many2many always read as empty (Add on a null array was a no-op)
+- `Many2Many`/`One2Many` didn't implement `IMany2Many`/`IOne2Many`, so casting to them failed at run time
+- Entry search passed its result limit as the RPC timeout
+- `EntryFileService` built its temp path with `\` on Linux
+- `OdooValues.FromJson` typed every number as `double` (`? int : ? long : double` unifies to double)
+- Permanent delete searched `hp.version.relationship`, which no longer exists in the addon; the old client swallowed the error as "nothing found". It now clears `hp.version.parent_ids`/`child_ids` with `(5, 0, 0)`
+- Errors are no longer lost to concurrent calls overwriting the shared `LatestException`
 
-- [ ] `ExtensionOdoo.cs` (779 lines) → `OdooTransport`, `DependencyScanner`, `OdooValueConverter`
-- [ ] `OdooRpcCs.cs` → `OdooAuth`, `OdooConnectivity`, `OdooRpcClient`
-- [ ] `OdooDefaults` → `OdooConnectionSettings` + immutable `OdooLookupCache` built by one loader
-- [ ] Hp* models become data-only; behaviour moves to `VersionFileService` (move/download/write), `CheckoutService`, and Operations
-- [ ] `HackFile` split: metadata record + `Checksums` + `LocalFileWriter` + version matcher + `PwaPaths`; one factory replaces the 5 construction copies
-- [ ] `Help.cs` split by concern (or emptied by the moves above)
-- [ ] Operations: `DeleteWhereAsync<T>(Domain, label, log)` replaces 3 copies; one logical (un)delete; one checkout loop that uses `HpEntry.CanCheckOut`; `HpEntry.CheckOut`/`UnCheckOut` share the read-only toggle
-- [ ] `HpVersionProperty.FromSwProperty(...)` replaces the two near-identical builders; one `HpVersion.PrepareCreation`/`StageVersion`
-- [ ] SchemaGenerator: shared emitter, type → emitter map instead of `t.Name` switches
+**Left as is:** `ArrayList` window parameters in `MessageBox`, `WindowHelper` and `HomeView` (UI, not the Odoo seam).
+
+## Phase 5: Split the god classes (SRP) ✅
+
+Done. Gate: live 223/223 + SMOKE TEST PASSED; offline 182 passed / 37 skipped.
+
+- [x] `ExtensionOdoo.cs` deleted, split into `OdooTransport` (HTTP, pooling, timeouts), `DependencyScanner` (Infrastructure/Hack: a file's or folder's SolidWorks references) and `OdooValueConverter` (one switch replacing the `TryCast*`/`From*` helper matrix; the generator calls it)
+- [x] `OdooRpcCs.cs` was already gone in Phase 4 (`OdooRpc`, `OdooTransport`, `OdooConnection`)
+- [x] `OdooDefaults` → `OdooConnectionSettings` (address, db, credentials) + immutable `OdooLookupCache` record built by one `LoadAsync`; `OdooDefaults` keeps only the session (user id, `LoginError`) and delegates. The lookup members of `IOdooDefaults` are get-only now
+- [x] Model behaviour moved out: `VersionFileService` (find the version of a local file, preview, download, write, move, `ToHackFile`, `DownloadAll`), checkout into `PdmCheckoutOperations`, staging into `CommitStaging` (entry, version, relationships, properties). `HpEntry`/`HpVersion`/`HpVersionProperty`/`HpVersionRelationship` keep fields, derived defaults and queries
+- [x] `HackFile`: `Checksums`, `LocalFileWriter`, `PwaPaths` were already split out; the version matcher went to `VersionFileService`; `GetFromPath` is the one factory (removed `GetFromFileInfo`, `GetHackFileAsync`, `FileInfoToHackFile`, `InitializeHackFromPath`, the `EntryRow` overload, `CreateFile(s)`)
+- [x] `Help.cs` deleted (only an unused `FastSlice` was left)
+- [x] Operations: `UnlinkMatchingAsync` (Phase 4) is the one delete-where; one `SetDeletedAsync(entries, deleted)` replaces logical delete/undelete; one checkout loop whose filters use `HpEntry.CanCheckOut`/`CanUnCheckOut`; check out and undo share the read-only toggle
+- [x] `HpVersionProperty.FromSwProperty(...)` is the one property builder (the unused parameter constructor is gone); one `CommitStaging.NewVersion` behind both `PrepareVersion`/`StageVersionAsync` overloads
+- [x] SchemaGenerator: one `OdooGeneratedRegistry` keyed by `typeof(model)` replaces the two `typeof(TModel).Name` switches (same-named models in two namespaces would have collided); outbound values come from a field type → emitter map
+
+**Behaviour changes**
+- A `max_batch_size` / `max_concurrency` setting that is unset or 0 now means the defaults (5 files, 2 downloads); concurrency used to drop to 1
+- Float and monetary fields accept whole numbers (the JSON reader now gives them as `int`; they used to read as 0)
+- A commit whose entry fails to stage no longer throws from the version step; it takes the rollback path
+- Deleted entries are left out of the "N check outs" count instead of failing one by one; a logical (un)delete that the server refuses is logged
 
 ## Phase 6: ViewModel and command reuse
 

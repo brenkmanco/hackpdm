@@ -17,7 +17,8 @@ public static class OdooValues
 			JsonValueKind.Object => element.EnumerateObject().ToDictionary( p => p.Name, p => FromJson( p.Value ) ),
 			JsonValueKind.Array => element.EnumerateArray().Select( FromJson ).ToList(),
 			JsonValueKind.String => element.GetString(),
-			JsonValueKind.Number => element.TryGetInt32( out int i ) ? i : element.TryGetInt64( out long l ) ? l : element.GetDouble(),
+			// boxed: unboxed, `? i : ? l : d` would type every number as double
+			JsonValueKind.Number => element.TryGetInt32( out int i ) ? i : element.TryGetInt64( out long l ) ? (object)l : element.GetDouble(),
 			JsonValueKind.True => true,
 			JsonValueKind.False => false,
 			JsonValueKind.Null or JsonValueKind.Undefined => null,
@@ -28,7 +29,7 @@ public static class OdooValues
 	public static object? ToRpc( object? value )
 		=> value switch
 		{
-			Domain domain => domain.ToRpc(),
+			OdooDomain domain => domain.ToRpc(),
 			DomainTerm term => term.ToRpc(),
 			string or null => value,
 			IDictionary => value,

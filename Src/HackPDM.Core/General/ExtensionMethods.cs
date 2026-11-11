@@ -82,47 +82,6 @@ public static class ExtensionMethods
         return takenElements;
     }
     
-    extension(ArrayList source)
-    {
-		public bool Any<T>(Func<T, bool> predicate)
-	    {
-		    foreach (T obj in source.OfType<T>())
-		    {
-			    if (predicate(obj))
-			    {
-				    return true;
-			    }
-		    }
-		    return false;
-	    }
-	    public IEnumerable<TOut> Select<TIn, TOut>(Func<TIn, TOut> selector)
-	    {
-		    foreach (TIn obj in source.OfType<TIn>())
-		    {
-			    yield return selector(obj);
-		    }
-	    }
-    }
-    extension(Hashtable ht)
-    {
-	    public bool TryGetValue(object key, out object? value)
-	    {
-		    value = ht[key];
-		    if (value != null) return true;
-		    return false;
-	    }
-	    public bool TryGetValue<TKey, TVal>(TKey key, out TVal? value) where TKey : notnull
-	    {
-		    if (ht[key] is TVal t)
-		    {
-			    value = t;
-			    return true;
-		    }
-		    value = default;
-		    return false;
-	    }
-    }
-
 	/// <param name="str">The string.</param>
 	extension(string str)
 	{
@@ -287,11 +246,6 @@ public static class ExtensionConvertMethods
 	public static HackFile[] ToHackArray(this IEnumerable<FileInfo> fileInfos)
 		=> [.. fileInfos.Select(file => new HackFile(file))];
 	
-	extension(ArrayList list)
-	{
-		public T[] ToArray<T>() => [.. list.Cast<T>()];
-		public HashSet<T> ToHashSet<T>() => [.. list.Cast<T>()];
-	}
 	extension(IEnumerable items)
     {
     }
@@ -303,13 +257,6 @@ public static class ExtensionConvertMethods
 		    return set;
 	    }
 
-	    public ArrayList ToArrayList()
-	    {
-		    if (list == null)
-			    throw new ArgumentNullException(nameof(list));
-
-		    return [.. list];
-	    }
     }
 }
 

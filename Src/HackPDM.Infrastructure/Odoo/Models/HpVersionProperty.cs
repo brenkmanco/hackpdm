@@ -38,23 +38,6 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 	IMany2One? IHpVersionPropertyModel.prop_id { get => (IMany2One?)prop_id; set => prop_id = (Many2One?)value; }
 
 	public HpVersionProperty() { }
-    public HpVersionProperty(
-        string swConfigName = null,
-        string textValue = null,
-        float numberValue = default,
-        bool yesnoValue = default,
-        DateTime? dateValue = null,
-        int versionId = 0,
-        int propId = 0)
-    {
-        this.sw_config_name = swConfigName;
-        this.text_value = textValue;
-        this.number_value = numberValue;
-        this.yesno_value = yesnoValue;
-        this.date_value = dateValue;
-        this.version_id = versionId;
-        this.prop_id = propId;
-    }
 }
 public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 {
@@ -111,65 +94,33 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
         }
         return false;
     }
-	public static async Task<bool> StagePropertyRecords(params HpRecordStaged[] staged)
+	/// <summary>
+	/// A custom property read from a SolidWorks file (configuration, name, type, value) as a property
+	/// of version <paramref name="versionId"/>; null when the server doesn't know the property and
+	/// only allows known ones.
+	/// </summary>
+	public static HpVersionProperty? FromSwProperty( string config, string name, string type, object? value, int versionId, IMany2One? commitId )
 	{
-		HpVersionProperty[] stagedProps = [];
-        
-		foreach (HpRecordStaged stage in staged)
+		IHpPropertyModel? known = null;
+		bool isKnown = OdooDefaults.Instance.ExtToProp?.TryGetValue( name, out known ) ?? false;
+		if( !isKnown && OdooDefaults.Instance.RestrictProperties is not false )
+			return null;
+		HpVersionProperty property = new()
 		{
-			try
-			{
-				if (!SwDocumentTypes.IsSolidWorksExtension(stage.payload?["file_ext"]?.ToString())) continue;
-				string? pathway = stage.payload?["WinPathway"]?.ToString() ?? stage.HashedValues?["windows_complete_name"] as string;
-				// "root\dir\file" whatever the OS
-				string? filePath = PwaPaths.ToAbsolute( pathway );
-				List<string> paths = [];
-
-				List<Tuple<string, string, string, object>> props = SolidWorksUtil.DocMgr.GetProperties(filePath);
-
-#pragma warning disable CS8601 // Possible null reference assignment.
-				HpVersionProperty[] properties = [.. props.SkipSelect( prop =>
-				{
-					bool isSuccessful = false;
-					IHpPropertyModel? hpProperty = null;
-
-					bool isFound = OdooDefaults.Instance.ExtToProp?.TryGetValue(prop.Item2, out hpProperty) ?? false;
-
-					if (isFound || OdooDefaults.Instance.RestrictProperties is false)
-					{
-                        int id = stage.id is int stage_id ? stage_id : 0;
-						HpVersionProperty vProp = new()
-						{
-							sw_config_name = prop.Item1 == "" ? null : prop.Item1,
-							version_id = id != 0 ? id : throw new Exception("version id not defined"),
-                            commit_id = stage.commit_id,
-						};
-						if (hpProperty is not null) vProp.prop_id = hpProperty.id ?? 0;
-						switch (prop.Item3)
-						{
-							case "text": vProp.text_value        = (string?)prop.Item4; break;
-							case "date": vProp.date_value        = (DateTime?)prop.Item4; break;
-							case "yesno": vProp.yesno_value      = (bool?)prop.Item4; break;
-							// SWDocMgr boxes numbers as decimal; unboxing that as float? throws
-							case "number": vProp.number_value    = prop.Item4 is null ? null : Convert.ToSingle(prop.Item4, System.Globalization.CultureInfo.InvariantCulture); break;
-						}
-						isSuccessful = true;
-						Debug.WriteLine($"prop: {prop.Item2} | {isSuccessful}");
-						return (false, vProp);
-					}
-					Debug.WriteLine($"prop: {prop.Item2} | {isSuccessful}");
-					return (true, null);
-				}) ?? []];
-#pragma warning restore CS8601 // Possible null reference assignment.
-				stagedProps = [.. stagedProps, .. properties];
-			}
-			catch (Exception e)
-			{
-				Debug.WriteLine($"unable to create properties for {stage.id}\n{e}");
-				return false;
-			}
+			sw_config_name = config == "" ? null : config,
+			version_id = versionId,
+			commit_id = commitId,
+		};
+		if( known is not null )
+			property.prop_id = known.id ?? 0;
+		switch( type )
+		{
+			case "text": property.text_value = (string?)value; break;
+			case "date": property.date_value = (DateTime?)value; break;
+			case "yesno": property.yesno_value = (bool?)value; break;
+			// SWDocMgr boxes numbers as decimal; unboxing that as float? throws
+			case "number": property.number_value = value is null ? null : Convert.ToSingle( value, System.Globalization.CultureInfo.InvariantCulture ); break;
 		}
-		if (stagedProps.Length > 0) await MultiStageAsync( stagedProps );
-        return true;
+		return property;
 	}
 }

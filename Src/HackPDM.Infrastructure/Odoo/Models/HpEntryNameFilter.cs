@@ -6,7 +6,6 @@ using HackPDM.Infrastructure.Odoo;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Shared.OdooAttributes;
 
-using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 
 // Resharper disable InconsistentNaming
 

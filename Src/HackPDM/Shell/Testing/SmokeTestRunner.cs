@@ -146,7 +146,7 @@ internal static class SmokeTestRunner
 				{
 					string reasons = string.Join( "; ", pm.OStatus.Select( s => s.Message ) );
 					throw new InvalidOperationException(
-						$"login rejected: {( reasons.Length > 0 ? reasons : "no status" )}; rpc: {OdooClient.LatestException}" );
+						$"login rejected: {( reasons.Length > 0 ? reasons : "no status" )}; login: {OdooDefaults.Instance.LoginError}" );
 				}
 				var odoo = OdooDefaults.Instance;
 				return $"uid={odoo.OdooId} node={odoo.MyNode?.name} root={odoo.HpDirectoryRoot?.name}";
@@ -182,7 +182,7 @@ internal static class SmokeTestRunner
 				if( directory is null )
 					throw new InvalidOperationException(
 						$"directory '{wanted ?? "<any remote>"}' not in tree: [{string.Join( ", ", all.Select( d => $"{d.FullPath}#{d.DirectoryId}" ) )}]"
-						+ $"; root={OdooDefaults.Instance.HpDirectoryRoot?.name}#{OdooDefaults.Instance.HpDirectoryRoot?.id}; rpc: {OdooClient.LatestException}" );
+						+ $"; root={OdooDefaults.Instance.HpDirectoryRoot?.name}#{OdooDefaults.Instance.HpDirectoryRoot?.id}" );
 
 				return $"{all.Count} nodes; opening {directory.FullPath} (id {directory.DirectoryId})";
 			} )

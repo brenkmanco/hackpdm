@@ -8,7 +8,6 @@ using HackPDM.Domain.OdooModels.Models;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Shared.OdooAttributes;
 
-using OClient = HackPDM.Infrastructure.Odoo.OdooClient;
 
 namespace HackPDM.Infrastructure.Odoo.Models;
 
@@ -16,195 +15,108 @@ public abstract partial class HpBaseModelTransport : HpBaseModel
 {
 	// (MVVM) VIEWMODEL
 }
-public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport where T : HpBaseModelTransport, new()
+public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport where T : HpBaseModelTransport<T>, new()
 {
-	public Hashtable					ComputeHashtable(bool includeEmpty, string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
+	/// <summary>Why the last create / write / stage of this record failed; null after a success.</summary>
+	public string? LastError { get; protected internal set; }
+
+	/// <summary>The write payload: the selected fields' values (empty ones only with <paramref name="includeEmpty"/>), plus id and commit_id.</summary>
+	public Dictionary<string, object?> ComputeValues( bool includeEmpty, string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null )
 	{
-		// 1. Get the fields we want to send
-		var fields = GetFields(excludedFieldNames, includedFieldNames, insertFieldNames);
+		var fields = GetFields( excludedFieldNames, includedFieldNames, insertFieldNames );
+		var outbound = ToOdoo();
+		Dictionary<string, object?> values = [];
 
-		// 2. Convert model to outbound dictionary
-		var dict = ToOdoo();
-
-		// 3. Build the Hashtable
-		var table = new Hashtable();
-
-		foreach (var field in fields)
+		foreach( var field in fields )
 		{
-			if( dict.TryGetValue( field, out var value ) )
+			if( outbound.TryGetValue( field, out var value ) )
 			{
 				if( includeEmpty || value is not null )
-					table[ field ] = value;
+					values[ field ] = value;
 			}
 			else if( insertFieldNames is not null && insertFieldNames.Contains( field ) )
 			{
-				var val = HashedValues.TryGetValue(field, out var v) ? v : null;
-				if( includeEmpty || val is not null )
-					table[ field ] = val;
+				var inserted = HashedValues.GetValueOrDefault( field );
+				if( includeEmpty || inserted is not null )
+					values[ field ] = inserted;
 			}
 		}
 
-		if (id is not null and not 0)
-		{
-			table[nameof(id)] = id;
-		}
-		if (commit_id is not null and not {id: 0 })
-		{
-			table[nameof(commit_id)] = commit_id.id;
-		}
+		if( id is not null and not 0 )
+			values[ nameof( id ) ] = id;
+		if( commit_id is not null and not { id: 0 } )
+			values[ nameof( commit_id ) ] = commit_id.id;
+		return values;
+	}
 
-		return table;
-	}
-	public async virtual Task<int>		CreateCommitAsync()
+	/// <summary>Opens an hp.pdm.commit; this record's id becomes the commit's.</summary>
+	public async virtual Task<int> CreateCommitAsync()
 	{
-		return (id = await OClient.CreateCommitAsync()) ?? throw new InvalidOperationException();
+		Result<int> created = await OdooRpc.CreateCommitAsync();
+		LastError = created.Error;
+		return (id = created.Unwrap()) ?? 0;
 	}
-	public virtual Task<int>			CreateAsync() => CreateAsync( false );
+	public virtual Task<int> CreateAsync() => CreateAsync( false );
 	public virtual Task<HpRecordStaged?> StageRecAsync() => StageRecAsync( false );
-	public async virtual Task<int>		CreateAsync( bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
+	/// <summary>Creates this record on the server; its new id, or 0 (see <see cref="LastError"/>).</summary>
+	public async virtual Task<int> CreateAsync( bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
 	{
-		Hashtable ht = ComputeHashtable(withEmpty, excludedFields);
-		id = await OClient.CreateAsync( HpModel, ht, 10000 );
-
+		Result<int> created = await OdooRpc.CreateAsync( HpModel!, ComputeValues( withEmpty, excludedFields ), OdooRpc.LongTimeout );
+		LastError = created.Error;
+		id = created.ValueOr( 0 );
 		IsRecord = id != 0;
 		return id ?? 0;
 	}
 	public async virtual Task<HpRecordStaged?> StageRecAsync( bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
 	{
-		var rec = PreStageRec( withEmpty, excludedFields, insertFIelds ) ;
-		_ = await rec?.CreateAsync();
+		var rec = PreStageRec( withEmpty, excludedFields, insertFIelds );
+		if( rec is not null )
+		{
+			await rec.CreateAsync();
+			LastError = rec.LastError;
+		}
 		return rec;
 	}
-	public async virtual Task<bool>		WriteChangedValuesAsync(params string[] fieldNamesToWrite)
+	/// <summary>Writes the named properties' current values (as the server expects them).</summary>
+	public async virtual Task<bool> WriteChangedValuesAsync( params string[] fieldNamesToWrite )
 	{
-		Hashtable ht = [];
-		Type type = GetType();
+		var outbound = ToOdoo();
+		Dictionary<string, object?> values = [];
+		foreach( string fieldName in fieldNamesToWrite )
+			values[ fieldName ] = outbound.TryGetValue( fieldName, out var value )
+				? value
+				: GetType().GetProperty( fieldName, BindingFlags.Public | BindingFlags.Instance )?.GetValue( this );
 
-		foreach (string fieldName in fieldNamesToWrite)
-		{
-			PropertyInfo field = type.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance);
-			ht.Add(fieldName, field.GetValue(this));
-		}
-
-		return await OClient.UpdateAsync(HpModel, id ?? 0, ht);
+		Result<bool> written = await OdooRpc.WriteAsync( HpModel!, [ id ?? 0 ], values );
+		LastError = written.Error;
+		return written.ValueOr( false );
 	}
-	public virtual HpRecordStaged?		PreStageRec( bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
+	public virtual HpRecordStaged? PreStageRec( bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
 	{
-		Hashtable ht = ComputeHashtable(withEmpty, excludedFields);
-
 		if( commit_id is null or { id: 0 } ) return null;
 		if( HpModel == OdooDefaultsConstants.HP_RECORD_STAGED ) return this as HpRecordStaged;
 
-		if( HpModel == OdooDefaultsConstants.HP_VERSION && HashedValues.TryGetValue( "__internal__existing", out _ ) )
-			ht.Add( "__internal__existing", true );
+		Dictionary<string, object?> values = ComputeValues( withEmpty, excludedFields );
+		if( HpModel == OdooDefaultsConstants.HP_VERSION && HashedValues.ContainsKey( "__internal__existing" ) )
+			values[ "__internal__existing" ] = true;
 
 		HpRecordStaged record = new()
 		{
 			target_model = HpModel,
 			commit_id = commit_id,
 			committing_id = (Many2One?)commit_id,
-			payload = ht,
-			HashedValues = { { "windows_complete_name", this.HashedValues.TryGetValue("windows_complete_name", out var v) ? v : null } },
+			payload = values,
+			HashedValues = { [ "windows_complete_name" ] = HashedValues.GetValueOrDefault( "windows_complete_name" ) },
 		};
 		return record.PreStageRec( false );
 	}
-	public static Task<ArrayList>		MultiCreateAsync(ArrayList records, bool withEmpty = false)
-	{
-		ArrayList hts = records.Select((HpBaseModelTransport<T> v) => v.ComputeHashtable(withEmpty)).ToArrayList();
-		var tempId = OClient.CreateAsync(GetHpModel(), hts);
-		return tempId;
-	}
-	public static Task<ArrayList>		MultiStageAsync(HpBaseModelTransport<T>[] records, bool withEmpty = false )
-	{
-		ArrayList hts = records.Select(v => v.PreStageRec(withEmpty)?.ComputeHashtable(false)).ToArrayList();
-		var tempId = OClient.CreateAsync(OdooDefaultsConstants.HP_RECORD_STAGED, hts);
-		return tempId;
-	}
-	internal static T[]?				RecordsPopulation(IEnumerable<Hashtable>? hts, string[]? excludedFields = null)
-	{
-		if (hts is null) return null;
-
-		T[]? records = HashConverter.ConvertToClasses<T>(hts);
-		FinalizePopulations(records, excludedFields);
-		return records;
-	}
-	public static async Task<T[]?>		GetAllRecordsAsync(string[]? excludedFields = null, string[]? insertFields = null)
-	{
-		string modelName = GetHpModel();
-
-		ArrayList fields = GetOdooFields(excludedFieldNames: excludedFields, insertFieldNames: insertFields);
-
-		ArrayList result = await OClient.BrowseAsync(modelName, [new ArrayList(), fields], 10000);
-
-
-		if (result.Count == 0) return null;
-
-		var records = RecordsPopulation(hts: result?.Select<Hashtable, Hashtable>(static h => h), excludedFields);
-		return [.. records ?? []];
-	}
-	public static async Task<T[]?>		GetRecordsBySmartSearchAsync(ArrayList? searchFilter = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
-	{
-		string modelName = GetHpModel();
-		
-		ArrayList fields = GetOdooFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
-
-		searchFilter ??= [];
-
-		var result = await OClient.SmartSearchAsync(modelName, searchFilter, [], fields, 10000);
-		if (result.Count == 0) return null;
-		var records = RecordsPopulation(hts: result?.Select<Hashtable, Hashtable>(static h => h), excludedFields);
-		return [.. records ?? []];
-	}
-	public static async Task<T[]?>		GetRecordsBySearchAsync(ArrayList? searchFilter = null, string[]? includedFields = null, string[]? excludedFields = null, string[]? insertFields = null)
-	{
-		string modelName = GetHpModel();
-
-		ArrayList fields = GetOdooFields(excludedFieldNames: excludedFields, includedFieldNames: includedFields, insertFieldNames: insertFields);
-		ArrayList result;
-
-		if (searchFilter == null)
-		{
-			searchFilter = [];
-		}
-
-		result = await OClient.BrowseAsync(modelName, [searchFilter, fields], 10000);
-
-
-		if (result.Count == 0) return null;
-
-		var records = RecordsPopulation(hts: result?.Select<Hashtable, Hashtable>(static h => h), excludedFields);
-		return [.. records ?? []];
-	}
-	public static async Task<T?>		GetRecordByIdAsync(int recordId, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null)
-	{
-		if (recordId == 0) return default;
-		T[]? records = await GetRecordsByIdsAsync([recordId], excludedFields: excludedFields, includedFields: includedFields, insertFields: insertFields);
-		return records != null && records!.Length > 0 ? records![0] : default;
-	}
-	public static async Task<T[]?>		GetRecordsByIdsAsync(ArrayList? recordIds, ArrayList? searchFilters = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null, int timeoutMs = 90000)
-	{
-		string modelName = GetHpModel();
-
-		ArrayList fields = GetOdooFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
-		ArrayList result;
-
-		if (searchFilters == null)
-		{
-			result = await OClient.ReadAsync(modelName, recordIds, fields, timeoutMs);
-		}
-		else
-		{
-			// a copy: the caller's filter list is not ours to change
-			ArrayList domain = new(searchFilters);
-			if (recordIds is not null and { Count: > 0 }) domain.Add(new ArrayList { "id", "in", recordIds });
-			result = await OClient.BrowseAsync(modelName, [domain, fields], timeoutMs);
-			// result = await OClient.SmartSearchAsync(modelName, searchFilters, [], fields, 90000);
-		}
-
-		return result.Count == 0 
-			? null 
-			: RecordsPopulation(result.Select<Hashtable, Hashtable>(h => h), excludedFields);
-	}
+	/// <summary>Creates the records in one call; their ids.</summary>
+	public static async Task<IReadOnlyList<int>> MultiCreateAsync( IEnumerable<HpBaseModelTransport<T>> records, bool withEmpty = false )
+		=> ( await OdooRpc.CreateManyAsync( GetHpModel()!, records.Select( v => v.ComputeValues( withEmpty ) ) ) ).ValueOr( [] );
+	/// <summary>Stages the records (as hp.record.staged) in one call; the staged ids.</summary>
+	public static async Task<IReadOnlyList<int>> MultiStageAsync( IEnumerable<HpBaseModelTransport<T>> records, bool withEmpty = false )
+		=> ( await OdooRpc.CreateManyAsync( OdooDefaultsConstants.HP_RECORD_STAGED,
+			records.Select( v => v.PreStageRec( withEmpty )?.ComputeValues( false ) ).OfType<Dictionary<string, object?>>() ) ).ValueOr( [] );
 }
 public abstract partial class HpBaseModelTransport<T> 
 {
@@ -220,63 +132,32 @@ public abstract partial class HpBaseModelTransport<T>
 	/// <summary>The Odoo model name (generated from the class's [OdooModel] attribute).</summary>
 	public static string? GetHpModel() => HpModelDictionaryGen.GetValueOrDefault(typeof(T).Name);
 	
-	public static void				FinalizePopulation(ref T record, string[]? excludedFields = null, HashedValueStoring hashStoreType = HashedValueStoring.None)
-	{
-		// set record settings
-
-		// this is included in HashConverter.ConvertToClass
-		//record.id = (int)ht["id"];
-
-		record.IsRecord = true;
-		record.ExcludedFields = excludedFields;
-		
-		record.CompleteConstruction();
-	}
-	public static void				FinalizePopulations(T[]? records, string[]? excludedFields = null)
-	{
-		if (records is not {Length: > 0 } ) return;
-		
-		for (int i = 0; i < records.Length; i++)
-		{
-			FinalizePopulation(ref records[i], excludedFields);
-		}
-	}
-	public static ArrayList			GetOdooFields(string[]? excludedFieldNames = null, string[]? includedFieldNames = null, string[]? insertFieldNames = null)
-		=> [.. GetFields(excludedFieldNames, includedFieldNames, insertFieldNames)];
 	public override string			ToString() => id.ToString();
 
-	// async methods
-	public static async Task<TOther[]?> GetRelatedRecordByIdsAsync<TOther>(ArrayList recordIds, string relatedFieldName, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null) 
+	// reads (null when nothing matched or the call failed, as before; Repository<T> gives the error)
+	private static T[]? NullIfEmpty( Result<T[]> result ) => result.Value is { Length: > 0 } records ? records : null;
+
+	public static async Task<T[]?> GetAllRecordsAsync( string[]? excludedFields = null, string[]? insertFields = null )
+		=> NullIfEmpty( await Repository<T>.SearchReadAsync( null, new( excludedFields, null, insertFields ) ) );
+	public static async Task<T[]?> GetRecordsBySmartSearchAsync( OdooDomain? searchFilter = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null )
+		=> NullIfEmpty( await Repository<T>.SmartReadAsync( searchFilter, new( excludedFields, includedFields, insertFields ) ) );
+	public static async Task<T[]?> GetRecordsBySearchAsync( OdooDomain? searchFilter = null, string[]? includedFields = null, string[]? excludedFields = null, string[]? insertFields = null )
+		=> NullIfEmpty( await Repository<T>.SearchReadAsync( searchFilter, new( excludedFields, includedFields, insertFields ) ) );
+	public static async Task<T?> GetRecordByIdAsync( int recordId, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null )
+		=> recordId == 0 ? default : ( await GetRecordsByIdsAsync( [ recordId ], excludedFields: excludedFields, includedFields: includedFields, insertFields: insertFields ) )?.FirstOrDefault();
+	/// <summary>Records by id; with <paramref name="searchFilters"/>, only those of them (or, without ids, all records) that match.</summary>
+	public static async Task<T[]?> GetRecordsByIdsAsync( IReadOnlyList<int>? recordIds, OdooDomain? searchFilters = null, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null, int timeoutMs = 90000 )
+	{
+		FieldSelection fields = new( excludedFields, includedFields, insertFields );
+		return NullIfEmpty( searchFilters is null
+			? await Repository<T>.ReadAsync( recordIds ?? [], fields, timeoutMs )
+			: await Repository<T>.SearchReadAsync( recordIds is { Count: > 0 } ? searchFilters.And( "id", "in", recordIds ) : searchFilters, fields, timeoutMs: timeoutMs ) );
+	}
+	/// <summary>The <typeparamref name="TOther"/> records that <paramref name="relatedFieldName"/> of these records points to.</summary>
+	public static async Task<TOther[]?> GetRelatedRecordByIdsAsync<TOther>( IReadOnlyList<int> recordIds, string relatedFieldName, string[]? excludedFields = null, string[]? includedFields = null, string[]? insertFields = null )
 		where TOther : HpBaseModelTransport<TOther>, new()
 	{
-		string modelName = GetHpModel();
-
-		List<TOther> records = [];
-		ArrayList fields = HpBaseModelTransport<TOther>.GetOdooFields(includedFieldNames: includedFields, excludedFieldNames: excludedFields, insertFieldNames: insertFields);
-		ArrayList result = await OClient.RelatedBrowseAsync(modelName, [recordIds, relatedFieldName, fields], 60000);
-
-		if (result.Count == 0) return null;
-
-		foreach (Hashtable ht in result)
-		{
-			TOther record = HashConverter.ConvertToClass<TOther>(ht);
-
-			// set record settings
-			record.id = (int)ht["id"];
-			//record.HashedValues = ht;
-			if (record.HpModel == OdooDefaultsConstants.HP_VERSION && ht.TryGetValue("dir_id", out object value))
-			{
-				record.HashedValues = new Hashtable
-				{
-					{ "dir_id", value }
-				};
-			}
-			record.IsRecord = true;
-			record.ExcludedFields = excludedFields;
-			record.CompleteConstruction();
-
-			records.Add(record);
-		}
-		return [.. records];
+		Result<TOther[]> related = await Repository<T>.RelatedAsync<TOther>( recordIds, relatedFieldName, new( excludedFields, includedFields, insertFields ) );
+		return related.Value is { Length: > 0 } records ? records : null;
 	}
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -45,18 +44,20 @@ public interface IEntrySearchService
 
 public sealed class EntrySearchService : IEntrySearchService
 {
-	private const int BrowseLimit = 10000;
-	private static readonly ArrayList ResultFields = [ "id", "name", "directory_complete_name" ];
+	private static readonly string[] ResultFields = [ "id", "name", "directory_complete_name" ];
 
 	public async Task<List<SearchRow>> SearchAsync( EntrySearchQuery query )
 	{
-		ArrayList domain = await BuildDomainAsync( query );
-		ArrayList results = await OdooClient.BrowseAsync( HpEntry.GetHpModel()!, [ domain, ResultFields ], BrowseLimit ) ?? [];
+		OdooDomain domain = await BuildDomainAsync( query );
+		Result<IReadOnlyList<OdooRow>> found = await OdooRpc.SearchReadAsync( HpEntry.GetHpModel()!, domain, ResultFields, timeoutMs: OdooRpc.LongTimeout );
+		if( !found.Ok )
+			System.Diagnostics.Debug.WriteLine( $"entry search failed: {found.Error}" );
+		IReadOnlyList<OdooRow> results = found.ValueOr( [] );
 
 		List<SearchRow> rows = query.LocalOnly || query.DeletedRemotely
 			// local only: files with no matching entry; deleted: files whose entry is deleted
 			? await Task.Run( () => FindLocalFiles( results, query.FileName, query.MaxResults, matchRemote: !query.LocalOnly ) )
-			: [ .. results.OfType<Hashtable>().Take( query.MaxResults ).Select( ToRow ) ];
+			: [ .. results.Take( query.MaxResults ).Select( ToRow ) ];
 
 		rows.Sort( ( a, b ) => string.CompareOrdinal( a.Name, b.Name ) );
 		return rows;
@@ -84,42 +85,35 @@ public sealed class EntrySearchService : IEntrySearchService
 	}
 
 	// internal: covered by HackPDM.Tests (Characterization/EntrySearchDomainTests), which compiles this file in
-	internal static async Task<ArrayList> BuildDomainAsync( EntrySearchQuery query )
+	internal static async Task<OdooDomain> BuildDomainAsync( EntrySearchQuery query )
 	{
-		ArrayList domain = [];
+		OdooDomain domain = OdooDomain.All;
 		if( query.FileName.Length > 0 )
-			domain.Add( new ArrayList { "name", query.NameComparer, query.FileName } );
+			domain = domain.And( "name", query.NameComparer, query.FileName );
 
 		// remote filters don't apply to a local-only search
 		if( query.LocalOnly )
 			return domain;
 
 		if( query.CheckedOutToMe )
-			domain.Add( new ArrayList { "checkout_user", "=", OdooDefaults.Instance.OdooId } );
+			domain = domain.And( "checkout_user", OdooDefaults.Instance.OdooId );
 		if( query.DeletedRemotely )
-			domain.Add( new ArrayList { "deleted", "=", true } );
+			domain = domain.And( "deleted", true );
 		if( query.Properties.Count > 0 )
-			domain.Add( new ArrayList { "id", "in", new ArrayList( ( await EntriesMatchingAllPropertiesAsync( query.Properties ) ).ToArray() ) } );
+			domain = domain.And( "id", "in", ( await EntriesMatchingAllPropertiesAsync( query.Properties ) ).ToArray() );
 		return domain;
 	}
 
 	/// <summary>Ids of entries that have a version matching every property filter.</summary>
 	private static async Task<HashSet<int>> EntriesMatchingAllPropertiesAsync( IReadOnlyList<SearchPropertiesRow> properties )
 	{
-		ArrayList fields = [ "entry_id" ];
 		HashSet<int>? candidates = null;
 		foreach( SearchPropertiesRow property in properties )
 		{
-			ArrayList filter =
-			[
-				new ArrayList { "prop_id", "=", property.ID },
-				new ArrayList { "text_value", property.Comparer.OperatorConversion(), property.Value },
-			];
-			ArrayList matches = await OdooClient.BrowseAsync( HpVersionProperty.GetHpModel()!, [ filter, fields ], BrowseLimit ) ?? [];
+			OdooDomain filter = OdooDomain.Where( "prop_id", property.ID ).And( "text_value", property.Comparer, property.Value );
+			Result<IReadOnlyList<OdooRow>> matches = await OdooRpc.SearchReadAsync( HpVersionProperty.GetHpModel()!, filter, [ "entry_id" ], timeoutMs: OdooRpc.LongTimeout );
 
-			IEnumerable<int> entryIds = matches.OfType<Hashtable>()
-				.Select( m => ( m[ "entry_id" ] as ArrayList )?[ 0 ] as int? ?? 0 )
-				.Where( id => id != 0 );
+			IEnumerable<int> entryIds = matches.ValueOr( [] ).Select( m => m.RefId( "entry_id" ) ).OfType<int>().Where( id => id != 0 );
 
 			if( candidates is null )
 				candidates = [ .. entryIds ];
@@ -129,18 +123,18 @@ public sealed class EntrySearchService : IEntrySearchService
 		return candidates ?? [];
 	}
 
-	private static SearchRow ToRow( Hashtable entry ) => new()
+	private static SearchRow ToRow( OdooRow entry ) => new()
 	{
-		Id = entry[ "id" ] as int?,
-		Name = entry[ "name" ]?.ToString(),
-		Directory = entry[ "directory_complete_name" ]?.ToString(),
+		Id = entry.Int( "id" ),
+		Name = entry.Text( "name" ),
+		Directory = entry.Text( "directory_complete_name" ),
 	};
 
 	/// <summary>
 	/// Local files named like <paramref name="fileName"/>. With <paramref name="matchRemote"/> only files that
 	/// appear in <paramref name="remoteResults"/> are kept; without it only files that don't.
 	/// </summary>
-	private static List<SearchRow> FindLocalFiles( ArrayList remoteResults, string fileName, int limit, bool matchRemote )
+	private static List<SearchRow> FindLocalFiles( IReadOnlyList<OdooRow> remoteResults, string fileName, int limit, bool matchRemote )
 	{
 		var defaults = HackDefaults.Instance;
 		DirectoryInfo pwa = new( defaults.PwaPathAbsolute );
@@ -148,9 +142,9 @@ public sealed class EntrySearchService : IEntrySearchService
 			return [];
 
 		Dictionary<string, List<string>> remotePathsByName = [];
-		foreach( Hashtable entry in remoteResults.OfType<Hashtable>() )
+		foreach( OdooRow entry in remoteResults )
 		{
-			if( entry[ "name" ] is not string name || entry[ "directory_complete_name" ] is not string path )
+			if( entry.Text( "name" ) is not string name || entry.Text( "directory_complete_name" ) is not string path )
 				continue;
 			string key = name.ToLower();
 			if( !remotePathsByName.TryGetValue( key, out var paths ) )

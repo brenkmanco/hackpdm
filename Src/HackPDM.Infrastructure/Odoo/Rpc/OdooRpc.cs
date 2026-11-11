@@ -62,7 +62,7 @@ public static class OdooRpc
 		}
 		catch( Exception e )
 		{
-			return Result<JsonElement>.Fail( OdooClient.Describe( e ) );
+			return Result<JsonElement>.Fail( Describe( e ) );
 		}
 	}
 
@@ -74,7 +74,7 @@ public static class OdooRpc
 		return raw.Ok ? Convert<T>( raw.Value ) : Result<T>.Fail( raw.Error! );
 	}
 
-	/// <summary>Logs in; the user id (0 with an error for wrong credentials).</summary>
+	/// <summary>Logs in and sets OdooDefaults.OdooId; the user id, or why it failed.</summary>
 	public static async Task<Result<int>> LoginAsync( int? timeoutMs = null, CancellationToken token = default )
 	{
 		if( string.IsNullOrEmpty( Settings?.OdooDb ) || string.IsNullOrEmpty( Settings.OdooUser ) || string.IsNullOrEmpty( Settings.OdooPass ) )
@@ -88,23 +88,37 @@ public static class OdooRpc
 			JsonValueKind.String when int.TryParse( raw.Value.GetString(), out int parsed ) => parsed,
 			_ => 0,
 		};
-		return uid > 0 ? Result<int>.Success( uid ) : Result<int>.Fail( "login username or password failed" );
+		if( uid <= 0 )
+			return Result<int>.Fail( "login username or password failed" );
+		Settings.OdooId = uid;
+		return Result<int>.Success( uid );
+	}
+
+	/// <summary>The exception's message followed by its inner exceptions' ("send failed -> connection reset ..."),
+	/// since transport errors put the actual cause in the inner exception.</summary>
+	internal static string Describe( Exception exc )
+	{
+		var parts = new List<string>();
+		for( Exception? e = exc; e is not null; e = e.InnerException )
+			if( parts.Count == 0 || parts[ ^1 ] != e.Message )
+				parts.Add( e.Message );
+		return string.Join( " -> ", parts );
 	}
 
 	// ------------------------------------------------------------------ typed verbs
 
-	public static Task<Result<IReadOnlyList<int>>> SearchAsync( string model, Domain? domain = null, int? limit = null, int? timeoutMs = null, CancellationToken token = default )
-		=> ExecuteAsync<IReadOnlyList<int>>( model, "search", limit is null ? [ domain ?? Domain.All ] : [ domain ?? Domain.All, 0, limit ], timeoutMs, token );
+	public static Task<Result<IReadOnlyList<int>>> SearchAsync( string model, OdooDomain? domain = null, int? limit = null, int? timeoutMs = null, CancellationToken token = default )
+		=> ExecuteAsync<IReadOnlyList<int>>( model, "search", limit is null ? [ domain ?? OdooDomain.All ] : [ domain ?? OdooDomain.All, 0, limit ], timeoutMs, token );
 
-	public static Task<Result<int>> SearchCountAsync( string model, Domain? domain = null, int? timeoutMs = null, CancellationToken token = default )
-		=> ExecuteAsync<int>( model, "search_count", [ domain ?? Domain.All ], timeoutMs, token );
+	public static Task<Result<int>> SearchCountAsync( string model, OdooDomain? domain = null, int? timeoutMs = null, CancellationToken token = default )
+		=> ExecuteAsync<int>( model, "search_count", [ domain ?? OdooDomain.All ], timeoutMs, token );
 
 	public static Task<Result<IReadOnlyList<OdooRow>>> ReadAsync( string model, IReadOnlyList<int> ids, IReadOnlyList<string>? fields = null, int? timeoutMs = null, CancellationToken token = default )
 		=> ExecuteAsync<IReadOnlyList<OdooRow>>( model, "read", [ ids, fields ?? [] ], timeoutMs, token );
 
-	public static Task<Result<IReadOnlyList<OdooRow>>> SearchReadAsync( string model, Domain? domain = null, IReadOnlyList<string>? fields = null, int? limit = null, int? timeoutMs = null, CancellationToken token = default )
+	public static Task<Result<IReadOnlyList<OdooRow>>> SearchReadAsync( string model, OdooDomain? domain = null, IReadOnlyList<string>? fields = null, int? limit = null, int? timeoutMs = null, CancellationToken token = default )
 		=> ExecuteAsync<IReadOnlyList<OdooRow>>( model, "search_read",
-			limit is null ? [ domain ?? Domain.All, fields ?? [] ] : [ domain ?? Domain.All, fields ?? [], 0, limit ], timeoutMs, token );
+			limit is null ? [ domain ?? OdooDomain.All, fields ?? [] ] : [ domain ?? OdooDomain.All, fields ?? [], 0, limit ], timeoutMs, token );
 
 	public static Task<Result<int>> CreateAsync( string model, IReadOnlyDictionary<string, object?> values, int? timeoutMs = null, CancellationToken token = default )
 		=> ExecuteAsync<int>( model, "create", [ values ], timeoutMs, token );

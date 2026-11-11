@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
+using HackPDM.Infrastructure.Hack;
 using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Core;
 using HackPDM.Core.General;
@@ -20,7 +21,7 @@ using HackPDM.Mvvm.Models.Common;
 namespace HackPDM.Mvvm.Models.Hack;
 
 /// <summary>What will be downloaded when the user asks for a specific historical version.</summary>
-public sealed record VersionDownloadPlan( HpVersion Version, bool IsLatest, ArrayList VersionIds );
+public sealed record VersionDownloadPlan( HpVersion Version, bool IsLatest, IReadOnlyList<int> VersionIds );
 
 /// <summary>
 /// PDM workflows (get latest, checkout, commit, delete, restore). Progress, log lines and the
@@ -31,12 +32,13 @@ public interface IPdmWorkflowService
 	/// <summary>Loads the Odoo lookup tables (nodes, settings, types, users...) the file manager needs.</summary>
 	void PreloadMetadata();
 
-	Task<ArrayList?> GetDirectoryEntryIdsAsync( int directoryId, bool withSubdirectories, bool withDeleted = false );
+	/// <summary>The directory's entry ids; empty (and logged) when the server call failed.</summary>
+	Task<IReadOnlyList<int>> GetDirectoryEntryIdsAsync( int directoryId, bool withSubdirectories, bool withDeleted = false );
 
 	/// <summary>Downloads the latest version of each entry and everything it depends on.</summary>
-	Task GetLatestAsync( ArrayList entryIds );
-	Task CheckoutAsync( ArrayList entryIds );
-	Task UnCheckoutAsync( ArrayList entryIds );
+	Task GetLatestAsync( IReadOnlyList<int> entryIds );
+	Task CheckoutAsync( IReadOnlyList<int> entryIds );
+	Task UnCheckoutAsync( IReadOnlyList<int> entryIds );
 	Task CommitAsync( IEnumerable<HackFile> hackFiles );
 
 	/// <summary>Turns selected entry rows into local files to commit, pulling in SolidWorks dependencies.</summary>
@@ -44,13 +46,13 @@ public interface IPdmWorkflowService
 	/// <summary>Collects every local file (and its dependencies) under a folder; null on failure.</summary>
 	List<HackFile>? CollectFolderCommitFiles( string folderPath );
 
-	Task LogicalDeleteAsync( ArrayList entryIds );
+	Task LogicalDeleteAsync( IReadOnlyList<int> entryIds );
 	Task RestoreDeletedInDirectoryAsync( int directoryId );
-	Task<bool> PermanentDeleteAsync( ArrayList entryIds );
+	Task<bool> PermanentDeleteAsync( IReadOnlyList<int> entryIds );
 
 	Task<VersionDownloadPlan?> PlanVersionDownloadAsync( int versionId );
 	/// <summary>Downloads the given versions; returns the ids that failed.</summary>
-	Task<IReadOnlyList<int>> DownloadVersionsAsync( ArrayList versionIds );
+	Task<IReadOnlyList<int>> DownloadVersionsAsync( IReadOnlyList<int> versionIds );
 }
 
 public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWorkflowService
@@ -77,35 +79,41 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		_ = defaults?.IdToUser;
 	}
 
-	public Task<ArrayList?> GetDirectoryEntryIdsAsync( int directoryId, bool withSubdirectories, bool withDeleted = false )
-		=> HpDirectory.GetDirectoryEntryIDsAsync( directoryId, withSubdirectories, withDeleted );
+	public async Task<IReadOnlyList<int>> GetDirectoryEntryIdsAsync( int directoryId, bool withSubdirectories, bool withDeleted = false )
+	{
+		Result<IReadOnlyList<int>> ids = await HpDirectory.GetDirectoryEntryIDsAsync( directoryId, withSubdirectories, withDeleted );
+		if( !ids.Ok )
+			Log( StatusMessage.ERROR, $"Could not list the directory's entries: {ids.Error}" );
+		return ids.ValueOr( [] );
+	}
 
 	/// <summary>Adds every entry the given entries' latest versions depend on, without duplicates.</summary>
-	private static async Task<ArrayList> ExpandWithDependenciesAsync( ArrayList entryIds )
+	private async Task<IReadOnlyList<int>> ExpandWithDependenciesAsync( IReadOnlyList<int> entryIds )
 	{
 		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( entryIds, includedFields: [ nameof( HpEntry.latest_version_id ) ] );
-		ArrayList ids = await PdmDownloadOperations.GetAllEntriesAndDependenciesListAsync(
+		Result<IReadOnlyList<int>> dependencies = await PdmDownloadOperations.GetAllEntriesAndDependenciesListAsync(
 			[ .. entries?.Select( e => e.latest_version_id?.id ?? 0 ) ?? [] ] );
+		if( !dependencies.Ok )
+			Log( StatusMessage.WARNING, $"Dependencies could not be listed: {dependencies.Error}" );
 
-		ids.AddRange( entryIds );
-		return ids.ToHashSet<int>().ToArrayList();
+		return [ .. dependencies.ValueOr( [] ).Concat( entryIds ).Distinct() ];
 	}
 
 	#region Get latest
 
-	public async Task GetLatestAsync( ArrayList entryIds )
+	public async Task GetLatestAsync( IReadOnlyList<int> entryIds )
 	{
 		if( entryIds is null or { Count: < 1 } )
 			return;
 
 		CancellationTokenSource cancellation = reporter.BeginOperation();
 		Log( StatusMessage.INFO, "Finding Entry Dependencies..." );
-		ArrayList ids = await ExpandWithDependenciesAsync( entryIds );
+		IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
 
 		await AsyncHelper.AsyncRunner( () => DownloadLatestAsync( ids, cancellation.Token ), "Get Latest", cancellation );
 	}
 
-	private async Task DownloadLatestAsync( ArrayList entryIds, CancellationToken token )
+	private async Task DownloadLatestAsync( IReadOnlyList<int> entryIds, CancellationToken token )
 	{
 		Log( StatusMessage.FOUND, $"{entryIds.Count} entries" );
 		Log( StatusMessage.PROCESSING, "Retrieving all latest versions associated with entries..." );
@@ -164,12 +172,12 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 	#endregion
 	#region Checkout
 
-	public async Task CheckoutAsync( ArrayList entryIds )
+	public async Task CheckoutAsync( IReadOnlyList<int> entryIds )
 	{
 		if( entryIds is null or { Count: < 1 } )
 			return;
 
-		ArrayList ids = await ExpandWithDependenciesAsync( entryIds );
+		IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
 		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids, excludedFields: HeavyEntryFields );
 		if( entries is null or { Length: < 1 } )
 			return;
@@ -183,17 +191,14 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		}, "Checkout Files" );
 	}
 
-	public async Task UnCheckoutAsync( ArrayList entryIds )
+	public async Task UnCheckoutAsync( IReadOnlyList<int> entryIds )
 	{
 		if( entryIds is null or { Count: < 1 } )
 			return;
 
 		int me = OdooDefaults.Instance.OdooId;
-		ArrayList ids = await ExpandWithDependenciesAsync( entryIds );
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids,
-		[
-			new ArrayList { "checkout_user", OperatorConverter.OperatorToString( Operators.Equal ), me }
-		], excludedFields: HeavyEntryFields );
+		IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
+		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids, OdooDomain.Where( "checkout_user", Operators.Equal, me ), excludedFields: HeavyEntryFields );
 		if( entries is null or { Length: < 1 } )
 			return;
 
@@ -276,7 +281,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 
 			if( SwDocumentTypes.IsSolidWorksExtension( item.Type ) )
 			{
-				var (success, files, results) = await ExtensionOdoo.GetHackFileWithDependencies( item, true );
+				var (success, files, results) = await DependencyScanner.GetHackFileWithDependencies( item );
 				if( success )
 				{
 					hackFiles.AddAll( files ?? [] );
@@ -300,7 +305,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 
 	public List<HackFile>? CollectFolderCommitFiles( string folderPath )
 	{
-		if( !ExtensionOdoo.GetHackFolderWithDependencies( folderPath, out List<HackFile> files, out var broken ) )
+		if( !DependencyScanner.GetHackFolderWithDependencies( folderPath, out List<HackFile> files, out var broken ) )
 		{
 			// same rule as committing selected files: a SolidWorks file with missing references is not committed
 			foreach( var result in broken )
@@ -313,27 +318,27 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 	#endregion
 	#region Delete and restore
 
-	public async Task LogicalDeleteAsync( ArrayList entryIds )
+	public async Task LogicalDeleteAsync( IReadOnlyList<int> entryIds )
 	{
 		if( entryIds is null or { Count: < 1 } )
 			return;
 
-		ArrayList ids = await ExpandWithDependenciesAsync( entryIds );
+		IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
 		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids, excludedFields: DeleteExcludedFields );
-		await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.LogicalDeleteEntries( entries, Log ), "Logically Delete Files" );
+		await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, true, Log ), "Logically Delete Files" );
 	}
 
 	public async Task RestoreDeletedInDirectoryAsync( int directoryId )
 	{
 		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( null,
-			searchFilters: [ new ArrayList { "deleted", "=", true }, new ArrayList { "dir_id", "=", directoryId } ],
+			searchFilters: OdooDomain.Where( "deleted", true ).And( "dir_id", directoryId ),
 			excludedFields: DeleteExcludedFields );
 
-		await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.LogicalUnDeleteEntries( entries, Log ), "Logically UnDelete Files" );
+		await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, false, Log ), "Logically UnDelete Files" );
 		reporter.Complete();
 	}
 
-	public async Task<bool> PermanentDeleteAsync( ArrayList entryIds )
+	public async Task<bool> PermanentDeleteAsync( IReadOnlyList<int> entryIds )
 	{
 		bool deleted = false;
 		await AsyncHelper.AsyncRunner( async () =>
@@ -358,21 +363,22 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		if( version is null )
 			return null;
 
-		HpEntry? entry = ( await HpEntry.GetRecordsByIdsAsync( [ version.entry_id ] ) )?.FirstOrDefault();
-		ArrayList versionIds = await PdmDownloadOperations.GetVersionListAsync( versionId );
-		if( !versionIds.Contains( version.id ?? 0 ) )
-			versionIds.Add( version.id ?? 0 );
+		HpEntry? entry = version.entry_id?.id is int entryId ? await HpEntry.GetRecordByIdAsync( entryId ) : null;
+		Result<IReadOnlyList<int>> dependencies = await PdmDownloadOperations.GetVersionListAsync( versionId );
+		if( !dependencies.Ok )
+			Log( StatusMessage.WARNING, $"Dependencies of version {versionId} could not be listed: {dependencies.Error}" );
+		IReadOnlyList<int> versionIds = [ .. dependencies.ValueOr( [] ).Append( versionId ).Distinct() ];
 
 		return new VersionDownloadPlan( version, entry?.latest_version_id == versionId, versionIds );
 	}
 
-	public async Task<IReadOnlyList<int>> DownloadVersionsAsync( ArrayList versionIds )
+	public async Task<IReadOnlyList<int>> DownloadVersionsAsync( IReadOnlyList<int> versionIds )
 	{
 		HpVersion[] versions = await HpVersion.GetRecordsByIdsAsync( versionIds ) ?? [];
 		if( versions.DownloadAll( out List<HpVersion> failed ) )
 			return [];
 
-		return failed.GetIDs().ToArray<int>();
+		return failed.Ids();
 	}
 
 	#endregion

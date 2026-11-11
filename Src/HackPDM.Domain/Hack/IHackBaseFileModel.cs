@@ -29,7 +29,6 @@ public interface IHackBaseFileModel
     public byte[]? FileContents { get; set; }
     public FileInfo? Info { get; set; }
 
-    public Hashtable ComputeHashtable(bool includeEmpty = true, in string[] excludedFieldNames = null);
     
 	protected static T? DefaultType<T>() where T : new() => default;
 }

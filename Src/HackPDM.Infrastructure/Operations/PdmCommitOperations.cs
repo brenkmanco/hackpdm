@@ -25,7 +25,7 @@ public static class PdmCommitOperations
     public static async Task<HpDirectory?> CreateDirectoriesAsync(HackFile? hack)
     {
         if (hack is null) return null;
-        return (await HpDirectory.CreateNew(new ArrayList(DirectorySegments(hack))))?.LastOrDefault()
+        return (await HpDirectory.CreateNew(DirectorySegments(hack)))?.LastOrDefault()
             ?? throw new InvalidOperationException($"{HpDirectory.GetHpModel()} didn't create any records");
     }
 
@@ -55,16 +55,13 @@ public static class PdmCommitOperations
                 continue;
 
             string filePath = PwaPaths.ToServerDirectory(hackArr[i].DirectoryName) ?? hackArr[i].DirectoryName ?? "";
-            ArrayList arrList =
-            [
-                new ArrayList() { "name", "=", hackArr[i].Name },
-                new ArrayList() { "windows_complete_name", "=", ServerWindowsName(hackArr[i]) },
-                new ArrayList() { "deleted", "=", false },
-            ];
+            OdooDomain sameFile = OdooDomain.Where("name", hackArr[i].Name)
+                .And("windows_complete_name", ServerWindowsName(hackArr[i]))
+                .And("deleted", false);
             // a plain search_read: smart_read returned many2one fields as {id, name, model} maps,
             // so checkout_user never matched and a checked-out file could not be committed
             HpEntry? entry = (await HpEntry.GetRecordsBySearchAsync(
-                searchFilter: arrList,
+                searchFilter: sameFile,
                 includedFields: [nameof(HpEntry.id), nameof(HpEntry.name), nameof(HpEntry.dir_id), nameof(HpEntry.checkout_user), nameof(HpEntry.latest_version_id)]))?.FirstOrDefault();
 
             if (entry is not null and { id: not null and not 0 })
@@ -107,10 +104,10 @@ public static class PdmCommitOperations
 
         HpDirectory? dir = await CreateDirectoriesAsync(hack);
 
-        HpEntry entry = await HpEntry.ConvertToEntry(hack, dir?.id ?? 0, commit) ?? new();
+        HpEntry entry = CommitStaging.NewEntry(hack, dir?.id ?? 0, commit) ?? new();
         if (inOdoo)
         {
-            entry = await entry?.FindRemoteEntry() ?? entry;
+            entry = await CommitStaging.FindRemoteEntryAsync(entry) ?? entry;
         }
 
         HpRecordStaged? versionStaged = null;
@@ -118,14 +115,14 @@ public static class PdmCommitOperations
         {
             log?.Invoke(StatusMessage.FOUND, "existing entry found...");
             log?.Invoke(StatusMessage.PROCESSING, "staging local version...");
-            versionStaged = await HpVersion.StageVersion(hack, entry, commit.id ?? 0);
+            versionStaged = await CommitStaging.StageVersionAsync(hack, entry, commit.id ?? 0);
         }
         if (entry.returnType is EntryReturnType.Staged)
         {
-            HpRecordStaged? entryStaged = await entry?.StageEntry();
+            HpRecordStaged? entryStaged = await CommitStaging.StageEntryAsync(entry);
             log?.Invoke(StatusMessage.PROCESSING, "staging local entry...");
             log?.Invoke(StatusMessage.PROCESSING, "staging local version...");
-            versionStaged = await HpVersion.StageVersion(hack, entryStaged);
+            versionStaged = entryStaged is null ? null : await CommitStaging.StageVersionAsync(hack, entryStaged);
         }
         if (entry.returnType is EntryReturnType.Failed)
         {
@@ -146,12 +143,12 @@ public static class PdmCommitOperations
             }
 
             log?.Invoke(StatusMessage.PROCESSING, "staging local version relationships...");
-            if (!await HpVersionRelationship.StageRelationshipRecords(versionStaged))
-                throw new ArgumentException($"Failed to stage version relationships for {versionStaged.payload?["name"]}");
+            if (!await CommitStaging.StageRelationshipsAsync(versionStaged))
+                throw new ArgumentException($"Failed to stage version relationships for {versionStaged.payload?.GetValueOrDefault("name")}");
 
             log?.Invoke(StatusMessage.PROCESSING, "staging local version properties ...");
-            if (!await HpVersionProperty.StagePropertyRecords(versionStaged))
-                throw new ArgumentException($"Failed to stage version properties for {versionStaged.payload?["name"]}");
+            if (!await CommitStaging.StagePropertiesAsync(versionStaged))
+                throw new ArgumentException($"Failed to stage version properties for {versionStaged.payload?.GetValueOrDefault("name")}");
 
             onRecordStaged?.Invoke();
         }

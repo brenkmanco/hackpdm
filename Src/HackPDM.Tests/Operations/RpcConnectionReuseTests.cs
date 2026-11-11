@@ -103,7 +103,7 @@ public class RpcConnectionReuseTests
 			Assert.Equal( 42, response!.Result?.GetInt32() );
 		}
 
-		Assert.True( ExtensionOdoo.ServerClosesConnections( server.Url ) );
+		Assert.True( OdooTransport.ServerClosesConnections( server.Url ) );
 		Assert.Equal( calls, server.Connections );
 	}
 }

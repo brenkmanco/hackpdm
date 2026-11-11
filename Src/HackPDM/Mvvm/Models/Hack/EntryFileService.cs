@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
+using HackPDM.Infrastructure.Odoo;
 using HackPDM.Core;
 using HackPDM.Core.General;
 using HackPDM.Core.Hack;
@@ -187,9 +188,7 @@ public sealed class EntryFileService : IEntryFileService
 		}
 
 		// mirror the Odoo directory structure inside the temp folder
-		string relative = version.HashedValues.TryGetValue<string, ArrayList>( "dir_id", out var dir ) && dir?[ 1 ] is string odooDir
-			? string.Join( "\\", odooDir.Split( " / " )[ 1.. ] )
-			: "";
+		string relative = PwaPaths.ToRelative( OdooValues.Many2OneName( version.HashedValues.GetValueOrDefault( "dir_id" ) ) );
 		string tempPath = Path.Combine( StorageBox.TemporaryPath ?? Path.GetTempPath(), relative );
 		version.DownloadFile( tempPath );
 		return tempPath;
