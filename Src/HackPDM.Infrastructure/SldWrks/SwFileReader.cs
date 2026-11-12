@@ -32,6 +32,17 @@ public sealed partial class SwFileReader : ISwDocumentReader
 
 	#region References
 
+	/// <summary>Lists the files a SolidWorks document references, read straight from the file (see <see cref="GetReferences"/>).</summary>
+	/// <param name="fileName">Path of the SolidWorks file; read fully into memory.</param>
+	/// <param name="deep">Ignored; only direct references are returned.</param>
+	/// <param name="noInterrupt">When true, an unreadable or unrecognised file yields null instead of an exception.</param>
+	/// <returns>
+	/// <c>[file name, stored path]</c> pairs without duplicates, virtual components or the document itself; null when the
+	/// file isn't a SolidWorks document by extension or, with <paramref name="noInterrupt"/>, can't be read.
+	/// </returns>
+	/// <exception cref="IOException">The file can't be read (including <see cref="FileNotFoundException"/>) and <paramref name="noInterrupt"/> is false.</exception>
+	/// <exception cref="UnauthorizedAccessException">Access to the file is denied and <paramref name="noInterrupt"/> is false.</exception>
+	/// <exception cref="InvalidDataException">The file is not a recognised SolidWorks container or its OLE structure is corrupt, and <paramref name="noInterrupt"/> is false.</exception>
 	public List<string[]>? GetDependencies( string fileName, bool deep = false, bool noInterrupt = false )
 	{
 		if( OpenStore( fileName, noInterrupt ) is not { } store )
@@ -40,17 +51,23 @@ public sealed partial class SwFileReader : ISwDocumentReader
 	}
 
 	/// <summary>
-	/// Paths of the files a document references, in stored order, without duplicates, virtual
-	/// components or the document itself (<paramref name="ownFileName"/>, its current file name).
+	/// Extracts the paths of the files a document references, in stored order, without duplicates, virtual
+	/// components (names containing <c>^</c>) or the document itself.
+	/// </summary>
+	/// <param name="store">The document's streams.</param>
+	/// <param name="ownFileName">The document's current file name, so references to itself are dropped; null to keep them.</param>
+	/// <returns>The stored (Windows) paths; empty when no reference stream is found.</returns>
+	/// <remarks>
+	/// Sources, first match wins:
 	/// <list type="number">
 	/// <item>"SwDocContentMgr/SwDocContentMgrInfo" (2015+): the direct references; the first path in
-	/// it is the document itself as it was saved (possibly under an older name).</item>
+	/// it is the document itself as it was saved (possibly under an older name) and is skipped.</item>
 	/// <item>Otherwise "Header2", which can also hold stale references (files no longer used, not
 	/// in the component tree), so when "swXmlContents/COMPINSTANCETREE" exists only paths also
 	/// in that tree are kept.</item>
 	/// <item>Otherwise the component tree itself.</item>
 	/// </list>
-	/// </summary>
+	/// </remarks>
 	public static List<string> GetReferences( SwStreamStore store, string? ownFileName = null )
 	{
 		var paths = new List<string>();
@@ -114,16 +131,27 @@ public sealed partial class SwFileReader : ISwDocumentReader
 
 	private static ReadOnlySpan<byte> PngSignature => [ 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A ];
 
+	/// <summary>Reads the preview image saved in a SolidWorks file.</summary>
+	/// <param name="fileName">Path of the SolidWorks file.</param>
+	/// <returns>The PNG bytes, or null when there is none, the file isn't a SolidWorks file, or it can't be read.</returns>
 	public byte[]? GetPreviewPng( string fileName )
 		=> OpenStore( fileName, noInterrupt: true ) is { } store ? GetPreviewPng( store ) : null;
 
-	/// <summary>The "PreviewPNG" stream (stored by SolidWorks 2009 and later), when it really is a PNG.</summary>
+	/// <summary>Gets the "PreviewPNG" stream (stored by SolidWorks 2009 and later) when it really is a PNG.</summary>
+	/// <param name="store">The document's streams.</param>
+	/// <returns>The PNG bytes, or null when the stream is missing or doesn't start with the PNG signature.</returns>
 	public static byte[]? GetPreviewPng( SwStreamStore store )
 		=> store.Get( "PreviewPNG" ) is { } png && png.AsSpan().StartsWith( PngSignature ) ? png : null;
 
 	#endregion
 	#region Properties
 
+	/// <summary>Reads a SolidWorks file's custom properties straight from the file (see <see cref="ReadProperties"/>).</summary>
+	/// <param name="fileName">Path of the SolidWorks file; read fully into memory.</param>
+	/// <returns>(configuration, name, type, value) tuples as described on <see cref="ISwDocumentReader.GetProperties"/>; null when the file isn't a SolidWorks document by extension.</returns>
+	/// <exception cref="IOException">The file can't be read.</exception>
+	/// <exception cref="UnauthorizedAccessException">Access to the file is denied.</exception>
+	/// <exception cref="InvalidDataException">The file is not a recognised SolidWorks container or its OLE structure is corrupt.</exception>
 	public List<Tuple<string, string, string, object>>? GetProperties( string fileName )
 	{
 		if( OpenStore( fileName, noInterrupt: false ) is not { } store )
@@ -134,6 +162,11 @@ public sealed partial class SwFileReader : ISwDocumentReader
 		return result;
 	}
 
+	/// <summary>One custom property read from a SolidWorks file.</summary>
+	/// <param name="Configuration">The configuration name, or "" for a file-level property.</param>
+	/// <param name="Name">The property name.</param>
+	/// <param name="Type">"text", "number", "date", "yesno", or "" when the type isn't recognised.</param>
+	/// <param name="Value">The value: string, decimal, DateTime or bool to match <paramref name="Type"/>; the raw text or value otherwise.</param>
 	public readonly record struct SwProperty( string Configuration, string Name, string Type, object Value );
 
 	[GeneratedRegex( @"^docProps/Config-(\d+)-Properties\.xml$" )]
@@ -142,7 +175,15 @@ public sealed partial class SwFileReader : ISwDocumentReader
 	[GeneratedRegex( @"^Config-(\d+)-Properties$" )]
 	private static partial Regex ConfigOleStream();
 
-	/// <summary>File properties (configuration "") followed by each configuration's properties.</summary>
+	/// <summary>Reads file-level custom properties (configuration "") followed by each configuration's, in configuration index order.</summary>
+	/// <param name="store">The document's streams.</param>
+	/// <returns>The properties; empty when the file has none. Unparseable XML or property-set streams are skipped.</returns>
+	/// <remarks>
+	/// 2015+ files store properties as XML ("docProps/custom.xml", "docProps/Config-N-Properties.xml"); for those, a
+	/// property's evaluated value (for example of "SW-Mass@Part1.SLDPRT") is used when stored. Older files use OLE property
+	/// sets ("\u0005DocumentSummaryInformation", "Config-N-Properties"), read with <see cref="OlePropertySet"/>.
+	/// Configuration names come from <see cref="ConfigurationNames"/>.
+	/// </remarks>
 	public static List<SwProperty> ReadProperties( SwStreamStore store )
 	{
 		var result = new List<SwProperty>();
@@ -183,10 +224,13 @@ public sealed partial class SwFileReader : ISwDocumentReader
 	}
 
 	/// <summary>
-	/// Configuration index → name, from (in order): the configuration header stream, the
-	/// configuration's cut-list properties, and, for a single-configuration file, the active
-	/// configuration name. "Config-N" when none of them names it.
+	/// Maps configuration indexes (the N in "Config-N-...") to names, from (in order): the configuration header stream
+	/// (<see cref="ConfigHeaderReader.ReadNames"/>), the configuration's cut-list properties, and, for a single-configuration
+	/// file, the active configuration name.
 	/// </summary>
+	/// <param name="store">The document's streams.</param>
+	/// <param name="indexes">The configuration indexes to name; enumerated once.</param>
+	/// <returns>A name for every index in <paramref name="indexes"/>: "Config-N" when none of the sources names it.</returns>
 	public static Dictionary<int, string> ConfigurationNames( SwStreamStore store, IEnumerable<int> indexes )
 	{
 		var names = ConfigHeaderReader.ReadNames( store );

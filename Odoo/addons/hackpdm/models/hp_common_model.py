@@ -164,6 +164,26 @@ class hp_common_model(models.AbstractModel):
 
     @api.model
     def smart_read(self, domain, ids, fields):
+        """Reads records with dotted field paths resolved through relations, for every hp model.
+
+        Each dotted path ("dir_id.parent_id.name") is checked first: every step must be a real field
+        the caller may read, otherwise nothing is read. Plain fields come back as their value; a
+        relational field as ``{"id", "name", "model"}`` (a list of those for x2many); a dotted path as
+        nested values carrying a "path" of the records it went through.
+
+        Args:
+            domain (list | None): Odoo search domain. Combined with ``ids`` when both are given.
+            ids (list[int] | None): Record ids to read.
+            fields (list[str] | None): Field names or dotted field paths. None or empty reads only ids.
+
+        Returns:
+            list[dict]: One dict per record, always with "id", plus one key per requested field;
+            ``[]`` when neither ``domain`` nor ``ids`` is given or nothing matches.
+
+        Raises:
+            UserError: A field path names a field that does not exist.
+            AccessError: The caller may not read a model or field along a path.
+        """
         # domain=None, ids=None, fields=None
         logging.info(f"\nfields: {fields}\nmodel_name: {self._name}\ndomain: {domain}\nIDs: {ids}")
 
@@ -203,8 +223,18 @@ class hp_common_model(models.AbstractModel):
 
     @api.model
     def fast_read(self, ids, fields):
-        """{"<id>": {field: value}} for the records and fields asked for, through the ORM so access
-        rights and record rules apply (unknown fields are left out)."""
+        """Reads plain field values for records, keyed by id, through ``read()`` (access rules apply).
+
+        Args:
+            ids (list[int]): Record ids.
+            fields (list[str]): Field names; names the model does not have are left out silently.
+
+        Returns:
+            dict[str, dict]: ``{"<id>": {field: value}}``; ``{}`` when ``ids`` or ``fields`` is empty.
+
+        Raises:
+            AccessError: The caller may not read the records or one of the fields.
+        """
         if not ids or not fields:
             return {}
         known = [field for field in fields if field in self._fields]
@@ -215,6 +245,20 @@ class hp_common_model(models.AbstractModel):
 
     @api.model
     def related_browse(self, ids, field_name, fields):
+        """Follows a relational field from some records and reads the records it leads to.
+
+        Args:
+            ids (list[int]): Ids of records of this model.
+            field_name (str): Relational field (or dotted path) to follow, e.g. "version_ids".
+            fields (list[str]): Fields to read on the related records.
+
+        Returns:
+            list[dict]: ``read()`` rows of the related records (each once); ``[]`` when ``ids`` is empty.
+
+        Raises:
+            UserError: ``field_name`` names a field that does not exist.
+            AccessError: The caller may not read along the path or the related records.
+        """
         if not ids:
             return []
 
@@ -225,6 +269,20 @@ class hp_common_model(models.AbstractModel):
 
     @api.model
     def related_search_browse(self, search, field_name, fields):
+        """Like :meth:`related_browse`, but finds the starting records with a search.
+
+        Args:
+            search (list): Odoo search domain for records of this model.
+            field_name (str): Relational field (or dotted path) to follow.
+            fields (list[str]): Fields to read on the related records.
+
+        Returns:
+            list[dict]: ``read()`` rows of the related records; ``[]`` when ``search`` is empty.
+
+        Raises:
+            UserError: ``field_name`` names a field that does not exist.
+            AccessError: The caller may not read along the path or the related records.
+        """
         if not search:
             return []
 
@@ -235,6 +293,19 @@ class hp_common_model(models.AbstractModel):
 
     @api.model
     def create_read(self, vals, fields=None):
+        """Creates one record and reads it back in the same call.
+
+        Args:
+            vals (dict): Field values for the new record (the model's own create() rules apply).
+            fields (list[str], optional): Fields to read back. Defaults to every field.
+
+        Returns:
+            list[dict]: A one-item ``read()`` result for the new record.
+
+        Raises:
+            AccessError: The caller may not create records of this model.
+            ValidationError: The values break a constraint (e.g. an unsafe file name).
+        """
         record = self.create(vals)
         # if no fields specified return all readable fields
         if not fields:
@@ -358,6 +429,21 @@ class hp_common_model(models.AbstractModel):
     @api.model
     @api.depends('entry_id', 'file_ext', 'name')
     def migrate_webdav_files_to_records(self):
+        """One-off migration: copies preview images from the old HackPDM database into attachments.
+
+        Administrators only. Commits after every record. Despite the name, the WebDAV file import is
+        commented out; only ``_import_versions_image`` runs. The old database's address and login are
+        hardcoded.
+
+        Args:
+            None.
+
+        Returns:
+            None: nothing.
+
+        Raises:
+            AccessError: The caller is not an administrator.
+        """
         hp_guard.require_admin(self.env, "migrate_webdav_files_to_records")
         web_dav = WebDav()
         hackpdm = Database("hackpdm", "hackpdm", "hackpdm", "alderaan", 5432)

@@ -30,6 +30,13 @@ public partial class SearchOdooViewModel : OperationViewModel
 	private readonly IEntryFileService _files;
 	private readonly Func<IReadOnlyList<string>, string?, Task> _locate;
 
+	/// <summary>Creates the search window's state.</summary>
+	/// <param name="search">Runs searches and lists the searchable properties.</param>
+	/// <param name="workflow">Checks results out and in.</param>
+	/// <param name="files">Opens results.</param>
+	/// <param name="dialogs">Shows messages to the user.</param>
+	/// <param name="reporter">The status window that checkouts log into.</param>
+	/// <param name="locate">Shows a folder (segments below the root) and file in the file manager, usually <see cref="HackPDM.Mvvm.Models.Hack.FileManagerState.RequestLocateAsync"/>.</param>
 	public SearchOdooViewModel(
 		IEntrySearchService search,
 		IPdmWorkflowService workflow,
@@ -100,6 +107,7 @@ public partial class SearchOdooViewModel : OperationViewModel
 	#endregion
 
 	/// <summary>Fills the property and operator pickers (once Odoo metadata is available).</summary>
+	/// <remarks>Lists already filled are left alone, so it is safe to call on every visit. Must run on the UI thread.</remarks>
 	public void LoadLookups()
 	{
 		if( PropertiesSearchable.Count == 0 )
@@ -118,6 +126,7 @@ public partial class SearchOdooViewModel : OperationViewModel
 
 	#region Commands: searching
 
+	/// <summary>Runs the search with the form's filters and shows the results; reports an invalid result limit.</summary>
 	[RelayCommand]
 	private async Task SearchAsync()
 	{
@@ -143,6 +152,7 @@ public partial class SearchOdooViewModel : OperationViewModel
 		await Dialogs.ShowMessageAsync( remoteSearch && rows.Count == 0 ? "No results found." : "Finished!" );
 	}
 
+	/// <summary>Clears the form, the property filters and the results.</summary>
 	[RelayCommand]
 	private void Reset()
 	{
@@ -158,6 +168,7 @@ public partial class SearchOdooViewModel : OperationViewModel
 		SelectedComparer = null;
 	}
 
+	/// <summary>Adds the property filter from the property form to the active filters.</summary>
 	[RelayCommand]
 	private async Task AddPropertyAsync()
 	{
@@ -177,6 +188,7 @@ public partial class SearchOdooViewModel : OperationViewModel
 		} );
 	}
 
+	/// <summary>Removes the selected property filters.</summary>
 	[RelayCommand]
 	private void DeleteProperties()
 	{
@@ -184,6 +196,7 @@ public partial class SearchOdooViewModel : OperationViewModel
 			PropertiesActive.Remove( row );
 	}
 
+	/// <summary>Removes every property filter.</summary>
 	[RelayCommand]
 	private void ResetProperties() => PropertiesActive.Clear();
 
@@ -192,12 +205,15 @@ public partial class SearchOdooViewModel : OperationViewModel
 
 	private int[] SelectedRemoteIds() => RemoteIds( SelectedResults.Select( r => r.Id ) );
 
+	/// <summary>Downloads the latest of the selected remote results and checks them out.</summary>
 	[RelayCommand]
 	private Task CheckoutAsync() => SetCheckoutAsync( checkout: true );
 
+	/// <summary>Releases this user's checkout of the selected remote results.</summary>
 	[RelayCommand]
 	private Task UndoCheckoutAsync() => SetCheckoutAsync( checkout: false );
 
+	/// <summary>Checks the selected remote results out, then opens them.</summary>
 	[RelayCommand]
 	private async Task CheckoutAndOpenAsync()
 	{

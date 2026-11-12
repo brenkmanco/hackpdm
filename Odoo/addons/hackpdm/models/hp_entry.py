@@ -127,6 +127,17 @@ class hp_entry(models.Model):
     )
     
     def init(self):
+        """Creates the case-insensitive unique index on (dir_id, lower(name)) at install/upgrade.
+
+        Odoo calls this when the module is installed or updated; it is not meant for clients. The index
+        is skipped (with a warning) while existing files in one folder still differ only by case.
+
+        Args:
+            None.
+
+        Returns:
+            None: nothing.
+        """
         hp_guard.create_case_insensitive_unique_index(
             self.env.cr, self._table, "hp_entry_dir_name_ci_uniq", "dir_id")
 
@@ -136,6 +147,25 @@ class hp_entry(models.Model):
             hp_guard.check_name(rec.name, "file")
 
     def write(self, vals):
+        """Writes entry fields, guarding checkouts for users who are not administrators.
+
+        A regular user may not change the checkout, name, folder, type or deleted flag of a file another
+        user has checked out, may not check a file out in someone else's name, and may not check out a
+        deleted file. Writing ``is_checked_out=False`` also clears checkout_user, checkout_node and
+        checkout_date. The checkout fields are stored on the latest version (these are related fields),
+        so that version's own guards apply as well.
+
+        Args:
+            vals (dict): Field values to write.
+
+        Returns:
+            bool: True.
+
+        Raises:
+            AccessError: Checking out in someone else's name.
+            UserError: The file is checked out to another user, or is deleted and being checked out.
+            ValidationError: The new name is not a safe file name.
+        """
         if not hp_guard.is_pdm_admin(self.env):
             self._check_user_write(vals)
         if "is_checked_out" in vals and not vals["is_checked_out"]:
@@ -180,6 +210,16 @@ class hp_entry(models.Model):
         return [("checkout_user", "!=" if checked_out else "=", False)]
 
     def first_helper(self, key = lambda x: True):
+        """Returns the first record of this recordset that satisfies a predicate.
+
+        A Python helper; it takes a function, so it cannot be called over RPC.
+
+        Args:
+            key (Callable[[record], bool], optional): The test. Defaults to accepting any record.
+
+        Returns:
+            hp.entry | bool: The first matching record, or False when none matches.
+        """
         try:
             return next(x for x in self if key(x))
         except:
@@ -252,6 +292,18 @@ class hp_entry(models.Model):
 
     @api.model
     def checksum_nonmatches(self, checksum):
+        """Tells whether no version in the vault has the given checksum.
+
+        Not reliable: ``checksum`` is related to the version's ir.attachment, and searches on
+        attachments skip those that belong to a field, so the search never matches and this always
+        returns True. No client calls it.
+
+        Args:
+            checksum (str): SHA-1 checksum, lowercase hex.
+
+        Returns:
+            bool: True when no version was found with that checksum.
+        """
         hp_version = self.env["hp.version"].search([("checksum", "=", checksum)])
         if hp_version:
             return False
@@ -259,6 +311,16 @@ class hp_entry(models.Model):
 
     @api.model
     def checksum_list_nonmatches(self, checksums):
+        """Returns the checksums of versions whose checksum is not in the given list.
+
+        Not reliable, for the same reason as :meth:`checksum_nonmatches`. No client calls it.
+
+        Args:
+            checksums (list[str]): SHA-1 checksums, lowercase hex.
+
+        Returns:
+            list[str]: Checksums of the versions found outside the list.
+        """
         unfound = []
         hp_version = self.env["hp.version"].search([("checksum", "not in", checksums)])
 

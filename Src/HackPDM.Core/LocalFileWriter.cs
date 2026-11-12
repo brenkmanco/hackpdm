@@ -9,6 +9,17 @@ namespace HackPDM.Core;
 /// <summary>Writes downloaded file contents to the working folder.</summary>
 public static class LocalFileWriter
 {
+    /// <summary>Writes a file's downloaded contents to its <see cref="HackPDM.Core.Hack.HackBaseFile.DirectoryName"/> synchronously.</summary>
+    /// <param name="file">The file; its <see cref="HackPDM.Core.Hack.HackBaseFile.FileContents"/> are written to <c>DirectoryName/Name</c>.</param>
+    /// <returns>
+    /// The file's <see cref="HackPDM.Core.Hack.HackFile.FileSize"/> (0 when unknown) after a successful write, or
+    /// <see langword="null"/> when there were no contents or the write failed (the error is printed to the console).
+    /// </returns>
+    /// <remarks>
+    /// Creates the folder if needed and applies <see cref="HackPDM.Core.Hack.HackFile.OverwriteDate"/> as the modified
+    /// date. Unlike <see cref="WriteAsync"/> it does not keep the path inside the working folder, does not clear or set
+    /// the read-only flag, and fails on an existing read-only file.
+    /// </remarks>
     public static long? Write(HackFile file)
     {
         if (file.FileContents == null)
@@ -37,6 +48,23 @@ public static class LocalFileWriter
             return null;
         }
     }
+    /// <summary>Writes a downloaded file's contents into the working folder at its server path.</summary>
+    /// <param name="file">
+    /// The file to write: <see cref="HackPDM.Core.Hack.HackBaseFile.FileContents"/> holds the bytes and
+    /// <see cref="HackPDM.Core.Hack.HackBaseFile.DirectoryName"/> the server path (backslashes allowed, with or without
+    /// the file name).
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when the file was written; <see langword="false"/> when there were no contents, the target
+    /// would fall outside the working folder, or an IO error occurred (errors are printed to the console, not thrown).
+    /// </returns>
+    /// <remarks>
+    /// Creates missing folders and lifts the read-only flag of an existing copy before overwriting it. Afterwards it
+    /// sets <see cref="HackPDM.Core.Hack.HackBaseFile.FullPath"/> to the target, clears
+    /// <see cref="HackPDM.Core.Hack.HackBaseFile.Info"/>, applies <see cref="HackPDM.Core.Hack.HackFile.OverwriteDate"/>
+    /// as the modified date, and makes the file read-only unless <see cref="HackPDM.Core.Hack.HackFile.Owner"/> is true
+    /// (a copy that is not checked out to this user stays read-only).
+    /// </remarks>
     public async static Task<bool> WriteAsync(HackFile file)
     {
         if (file.FileContents == null)

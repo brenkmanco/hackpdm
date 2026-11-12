@@ -1,7 +1,14 @@
 ﻿namespace HackPDM.Infrastructure.Odoo.Models;
 
+/// <summary>Picks the Odoo field names to read or send for a model.</summary>
 public static class OdooFieldSelector
 {
+	/// <summary>Filters a model's field names by an exclude list and an include list, then appends extra names.</summary>
+	/// <param name="modelFields">All the model's field names, in order.</param>
+	/// <param name="excluded">Names to drop; <see langword="null"/> drops none.</param>
+	/// <param name="included">When not <see langword="null"/>, only these names are kept (exclusion still applies).</param>
+	/// <param name="insert">Names appended after the filtered fields if not already present; they need not be model fields.</param>
+	/// <returns>A new array: the kept fields in <paramref name="modelFields"/> order, then the inserted ones.</returns>
 	public static string[] Select(
 		string[] modelFields,
 		string[]? excluded = null,

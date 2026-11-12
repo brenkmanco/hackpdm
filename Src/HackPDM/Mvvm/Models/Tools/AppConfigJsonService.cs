@@ -25,7 +25,10 @@ public static class AppConfigJsonService
 		}
 		""";
 
-	/// <summary>The saved settings file's top-level object, or a sample when there is no file.</summary>
+	/// <summary>Reads the saved settings file as an editable JSON tree.</summary>
+	/// <returns>The file's top-level object; an unrelated sample object when there is no file; an empty object when the top level is not an object.</returns>
+	/// <exception cref="System.Text.Json.JsonException">The file is not valid JSON.</exception>
+	/// <exception cref="System.IO.IOException">The file exists but cannot be read.</exception>
 	public static JsonObject Load()
 	{
 		string path = AppConfigStore.FilePath;
@@ -33,8 +36,16 @@ public static class AppConfigJsonService
 		return JsonNode.Parse( json ) as JsonObject ?? [];
 	}
 
+	/// <summary>Writes a JSON node as indented text.</summary>
+	/// <param name="node">The node to format.</param>
+	/// <returns>The node as indented JSON.</returns>
 	public static string Format( JsonNode node ) => node.ToJsonString( Indented );
 
 	/// <summary>Saves the JSON as the app's settings (fields the app doesn't know are dropped).</summary>
+	/// <param name="json">The full settings document.</param>
+	/// <remarks>Round-trips through <see cref="HackPDM.Mvvm.Views.Common.Settings.GlobalSerializedData"/> before writing,
+	/// so the in-memory settings are not reloaded by this call.</remarks>
+	/// <exception cref="System.Text.Json.JsonException"><paramref name="json"/> is not valid settings JSON.</exception>
+	/// <exception cref="System.IO.IOException">The settings file cannot be written.</exception>
 	public static void Save( string json ) => AppConfigStore.Save( AppConfigStore.Parse( json ) );
 }

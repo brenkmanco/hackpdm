@@ -9,6 +9,9 @@ namespace HackPDM.Mvvm.Views.Common.Helpers;
 /// </summary>
 public static class VisualTreeExtensions
 {
+    /// <summary>Finds the first <see cref="ScrollViewer"/> below an element, searching depth-first.</summary>
+    /// <param name="parent">The element whose descendants are searched (not the element itself).</param>
+    /// <returns>The first scroll viewer found; null when there is none or the element's template is not applied yet.</returns>
     public static ScrollViewer? GetScrollViewer(DependencyObject parent)
     {
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)

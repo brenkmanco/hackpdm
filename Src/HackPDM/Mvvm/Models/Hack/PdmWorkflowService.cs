@@ -21,6 +21,9 @@ using HackPDM.Mvvm.Models.Common;
 namespace HackPDM.Mvvm.Models.Hack;
 
 /// <summary>What will be downloaded when the user asks for a specific historical version.</summary>
+/// <param name="Version">The requested version record.</param>
+/// <param name="IsLatest">Whether <paramref name="Version"/> is its entry's latest version.</param>
+/// <param name="VersionIds">The requested version id plus the ids of every version it depends on, each once.</param>
 public sealed record VersionDownloadPlan( HpVersion Version, bool IsLatest, IReadOnlyList<int> VersionIds );
 
 /// <summary>
@@ -30,33 +33,133 @@ public sealed record VersionDownloadPlan( HpVersion Version, bool IsLatest, IRea
 public interface IPdmWorkflowService
 {
 	/// <summary>Loads the Odoo lookup tables (nodes, settings, types, users...) the file manager needs.</summary>
+	/// <remarks>
+	/// Touches each lazily loaded property of <see cref="HackPDM.Infrastructure.Odoo.OdooDefaults.Instance"/> so the
+	/// server reads happen now instead of on first use. Runs synchronously on the calling thread, so call it off the UI thread.
+	/// </remarks>
 	void PreloadMetadata();
 
-	/// <summary>The directory's entry ids; empty (and logged) when the server call failed.</summary>
+	/// <summary>Lists the ids of the entries stored in a directory.</summary>
+	/// <param name="directoryId">The Odoo id of the directory.</param>
+	/// <param name="withSubdirectories">Whether entries in all subdirectories are included as well.</param>
+	/// <param name="withDeleted">Whether logically deleted entries are included.</param>
+	/// <returns>The entry ids; empty when the server call failed.</returns>
+	/// <remarks>A failed server call is logged as an error to the status window instead of being thrown.
+	/// Calls <see cref="HackPDM.Infrastructure.Odoo.Models.HpDirectory.GetDirectoryEntryIDsAsync(int, bool, bool)"/>.</remarks>
 	Task<IReadOnlyList<int>> GetDirectoryEntryIdsAsync( int directoryId, bool withSubdirectories, bool withDeleted = false );
 
 	/// <summary>Downloads the latest version of each entry and everything it depends on.</summary>
+	/// <param name="entryIds">The entries to download; nothing happens when null or empty.</param>
+	/// <remarks>
+	/// Starts a cancellable operation on the reporter, expands the list with every dependency of the entries'
+	/// latest versions (<see cref="HackPDM.Infrastructure.Operations.PdmDownloadOperations.GetAllEntriesAndDependenciesListAsync"/>),
+	/// then downloads in size-limited batches through
+	/// <see cref="HackPDM.Infrastructure.Operations.PdmDownloadOperations.ProcessDownloadsAsync"/>. Progress is reported per file;
+	/// the final message lists files that failed to download and local copies with changes that were kept rather than overwritten.
+	/// Download errors and cancellation are reported, not thrown.
+	/// </remarks>
 	Task GetLatestAsync( IReadOnlyList<int> entryIds );
+
+	/// <summary>Checks the entries, and every entry their latest versions depend on, out to this user and node.</summary>
+	/// <param name="entryIds">The entries to check out; nothing happens when null or empty.</param>
+	/// <remarks>
+	/// Does not download anything first (see <see cref="CheckoutLatestAsync"/>). Entries that are deleted or held by another
+	/// user are skipped and logged as errors. Calls <see cref="HackPDM.Infrastructure.Operations.PdmCheckoutOperations.CheckOutEntriesAsync"/>,
+	/// which makes the local copies writable, and shows "Completed!" at the end.
+	/// </remarks>
 	Task CheckoutAsync( IReadOnlyList<int> entryIds );
+
 	/// <summary>Gets the latest of each entry (so the local copies are current), then checks them out.</summary>
+	/// <param name="entryIds">The entries to download and check out.</param>
+	/// <remarks>Runs <see cref="GetLatestAsync"/> to completion, then <see cref="CheckoutAsync"/>.</remarks>
 	Task CheckoutLatestAsync( IReadOnlyList<int> entryIds );
+
+	/// <summary>Releases this user's checkout of the entries and of every entry they depend on.</summary>
+	/// <param name="entryIds">The entries to release; nothing happens when null or empty.</param>
+	/// <remarks>
+	/// Only entries checked out to the current user are released, through
+	/// <see cref="HackPDM.Infrastructure.Operations.PdmCheckoutOperations.UnCheckOutEntriesAsync"/>; selected entries held by
+	/// another user are logged as errors and left alone. Local changes are not reverted.
+	/// </remarks>
 	Task UnCheckoutAsync( IReadOnlyList<int> entryIds );
+
+	/// <summary>Commits local files to the server as new entries or new versions in a single PDM commit.</summary>
+	/// <param name="hackFiles">The local files to commit, usually from <see cref="CollectCommitFilesAsync"/> or <see cref="CollectFolderCommitFilesAsync"/>.</param>
+	/// <remarks>
+	/// Files are sorted by <see cref="HackPDM.Infrastructure.Operations.PdmCommitOperations.FilterCommitHackFilesAsync"/> into new files,
+	/// changed files Odoo already knows and unchanged checked-out files. A <see cref="HackPDM.Infrastructure.Odoo.Models.HpPDMCommit"/>
+	/// is created, each changed file is staged with <see cref="HackPDM.Infrastructure.Operations.PdmCommitOperations.CommitRecordAsync"/>
+	/// (stopping at the first failure), and the commit is finalized with
+	/// <see cref="HackPDM.Infrastructure.Odoo.Models.HpPDMCommit.ServerCommit"/>. Unchanged checked-out files are checked back in
+	/// without a new version. A server-side commit failure is logged and shown to the user rather than thrown.
+	/// </remarks>
 	Task CommitAsync( IEnumerable<HackFile> hackFiles );
 
 	/// <summary>Turns selected entry rows into local files to commit, pulling in SolidWorks dependencies.</summary>
+	/// <param name="entries">The selected rows; rows without a local path or file type are skipped.</param>
+	/// <returns>The existing local files to commit, each once; empty when none qualified.</returns>
+	/// <remarks>
+	/// SolidWorks files are expanded with every file they reference through
+	/// <see cref="HackPDM.Infrastructure.Hack.DependencyScanner"/>. A SolidWorks file with missing references is left out
+	/// (its broken references are logged as errors) and the remaining rows are still processed. Other files are included only
+	/// when they exist on disk.
+	/// </remarks>
 	Task<HashSet<HackFile>> CollectCommitFilesAsync( IEnumerable<EntryRow> entries );
-	/// <summary>Collects every local file (and its dependencies) under a folder; null on failure.</summary>
+
+	/// <summary>Collects every local file directly in a folder, plus everything its SolidWorks files reference.</summary>
+	/// <param name="folderPath">The local folder; subfolders are not scanned.</param>
+	/// <returns>The files to commit, each once.</returns>
+	/// <remarks>
+	/// Names the server refuses (such as SolidWorks "~$" lock files) are skipped. SolidWorks files with missing references are
+	/// left out and their broken references logged. Uses
+	/// <see cref="HackPDM.Infrastructure.Hack.DependencyScanner.GetHackFolderWithDependenciesAsync"/>.
+	/// </remarks>
+	/// <exception cref="System.IO.DirectoryNotFoundException"><paramref name="folderPath"/> does not exist.</exception>
 	Task<List<HackFile>> CollectFolderCommitFilesAsync( string folderPath );
 
+	/// <summary>Marks the entries deleted on the server (a logical delete that can be restored).</summary>
+	/// <param name="entryIds">The entries to delete; nothing happens when null or empty.</param>
+	/// <remarks>
+	/// Only the selected entries are deleted, never their dependencies, since those are often shared with other entries.
+	/// Uses <see cref="HackPDM.Infrastructure.Operations.PdmDeleteOperations.SetDeletedAsync"/>; entries the server refuses are logged.
+	/// </remarks>
 	Task LogicalDeleteAsync( IReadOnlyList<int> entryIds );
+
+	/// <summary>Restores every logically deleted entry directly in a directory.</summary>
+	/// <param name="directoryId">The Odoo id of the directory; subdirectories are not included.</param>
+	/// <remarks>Uses <see cref="HackPDM.Infrastructure.Operations.PdmDeleteOperations.SetDeletedAsync"/> and marks the status window's progress complete.</remarks>
 	Task RestoreDeletedInDirectoryAsync( int directoryId );
+
+	/// <summary>Permanently removes entries from the server, with all their versions and attachments.</summary>
+	/// <param name="entryIds">The entries to remove.</param>
+	/// <returns><see langword="true"/> when the entries, versions and attachments were all removed; <see langword="false"/> when the list was empty or any step failed.</returns>
+	/// <remarks>This cannot be undone. Uses <see cref="HackPDM.Infrastructure.Operations.PdmDeleteOperations.PermanentDeleteEntry"/>
+	/// and logs a success line when it completes.</remarks>
 	Task<bool> PermanentDeleteAsync( IReadOnlyList<int> entryIds );
 
+	/// <summary>Works out what downloading a historical version would involve, without downloading anything.</summary>
+	/// <param name="versionId">The Odoo id of the version.</param>
+	/// <returns>The version, whether it is its entry's latest, and the version ids to download (it plus its dependencies);
+	/// <see langword="null"/> when <paramref name="versionId"/> is 0 or the version cannot be read.</returns>
+	/// <remarks>
+	/// Dependencies come from <see cref="HackPDM.Infrastructure.Operations.PdmDownloadOperations.GetVersionListAsync"/>; when that
+	/// call fails a warning is logged and the plan holds only the requested version.
+	/// </remarks>
 	Task<VersionDownloadPlan?> PlanVersionDownloadAsync( int versionId );
-	/// <summary>Downloads the given versions; returns the ids that failed.</summary>
+
+	/// <summary>Downloads the given versions into their local folders.</summary>
+	/// <param name="versionIds">The Odoo ids of the versions to download, typically <see cref="VersionDownloadPlan.VersionIds"/>.</param>
+	/// <returns>The ids of the versions that failed to download; empty when all succeeded.</returns>
+	/// <remarks>Downloads one version at a time with <see cref="HackPDM.Infrastructure.Odoo.VersionFileService.DownloadAllAsync"/>
+	/// and does not report progress to the status window.</remarks>
 	Task<IReadOnlyList<int>> DownloadVersionsAsync( IReadOnlyList<int> versionIds );
 }
 
+/// <summary>
+/// <see cref="IPdmWorkflowService"/> backed by the Infrastructure PDM operations, reporting through an
+/// <see cref="IOperationReporter"/>.
+/// </summary>
+/// <param name="reporter">Receives log lines, progress and the final message of each workflow.</param>
 public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWorkflowService
 {
 	private static readonly string[] HeavyEntryFields = [ "type_id", "cat_id" ];
@@ -65,6 +168,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 
 	private void Log( StatusMessage status, string message ) => reporter.Log( status, message );
 
+	/// <inheritdoc/>
 	public void PreloadMetadata()
 	{
 		// each property loads lazily on first access
@@ -81,6 +185,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		_ = defaults?.IdToUser;
 	}
 
+	/// <inheritdoc/>
 	public async Task<IReadOnlyList<int>> GetDirectoryEntryIdsAsync( int directoryId, bool withSubdirectories, bool withDeleted = false )
 	{
 		Result<IReadOnlyList<int>> ids = await HpDirectory.GetDirectoryEntryIDsAsync( directoryId, withSubdirectories, withDeleted );
@@ -103,6 +208,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 
 	#region Get latest
 
+	/// <inheritdoc/>
 	public async Task GetLatestAsync( IReadOnlyList<int> entryIds )
 	{
 		if( entryIds is null or { Count: < 1 } )
@@ -177,10 +283,13 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 	#endregion
 	#region Checkout
 
+	/// <inheritdoc/>
 	public Task CheckoutAsync( IReadOnlyList<int> entryIds ) => ChangeCheckoutAsync( entryIds, checkout: true );
 
+	/// <inheritdoc/>
 	public Task UnCheckoutAsync( IReadOnlyList<int> entryIds ) => ChangeCheckoutAsync( entryIds, checkout: false );
 
+	/// <inheritdoc/>
 	public async Task CheckoutLatestAsync( IReadOnlyList<int> entryIds )
 	{
 		await GetLatestAsync( entryIds );
@@ -230,6 +339,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 	#endregion
 	#region Commit
 
+	/// <inheritdoc/>
 	public Task CommitAsync( IEnumerable<HackFile> hackFiles )
 	{
 		List<HackFile> files = [ .. hackFiles ];
@@ -299,6 +409,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		await PdmCheckoutOperations.UnCheckOutEntriesAsync( unchanged, OdooDefaults.Instance.OdooId, Log );
 	}
 
+	/// <inheritdoc/>
 	public async Task<HashSet<HackFile>> CollectCommitFilesAsync( IEnumerable<EntryRow> entries )
 	{
 		Log( StatusMessage.PROCESSING, "checking entries and dependencies" );
@@ -332,6 +443,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		return hackFiles;
 	}
 
+	/// <inheritdoc/>
 	public async Task<List<HackFile>> CollectFolderCommitFilesAsync( string folderPath )
 	{
 		var (files, broken) = await DependencyScanner.GetHackFolderWithDependenciesAsync( folderPath );
@@ -348,6 +460,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 	#endregion
 	#region Delete and restore
 
+	/// <inheritdoc/>
 	public async Task LogicalDeleteAsync( IReadOnlyList<int> entryIds )
 	{
 		if( entryIds is null or { Count: < 1 } )
@@ -359,6 +472,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, true, Log ), "Logically Delete Files" );
 	}
 
+	/// <inheritdoc/>
 	public async Task RestoreDeletedInDirectoryAsync( int directoryId )
 	{
 		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( null,
@@ -369,6 +483,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		reporter.Complete();
 	}
 
+	/// <inheritdoc/>
 	public async Task<bool> PermanentDeleteAsync( IReadOnlyList<int> entryIds )
 	{
 		bool deleted = false;
@@ -385,6 +500,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 	#endregion
 	#region Historical versions
 
+	/// <inheritdoc/>
 	public async Task<VersionDownloadPlan?> PlanVersionDownloadAsync( int versionId )
 	{
 		if( versionId is 0 )
@@ -403,6 +519,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		return new VersionDownloadPlan( version, entry?.latest_version_id == versionId, versionIds );
 	}
 
+	/// <inheritdoc/>
 	public async Task<IReadOnlyList<int>> DownloadVersionsAsync( IReadOnlyList<int> versionIds )
 	{
 		HpVersion[] versions = await HpVersion.GetRecordsByIdsAsync( versionIds ) ?? [];

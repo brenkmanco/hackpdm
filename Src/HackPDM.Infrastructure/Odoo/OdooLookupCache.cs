@@ -52,9 +52,17 @@ public sealed record OdooLookupCache
 	public Dictionary<int, IHpUserModel> IdToUser { get; init; } = [];
 
 	/// <summary>
-	/// Reads everything from the server (logged in). A lookup that fails stays empty instead of
-	/// failing the rest; this machine's node is registered when the server doesn't know it yet.
+	/// Reads all reference data from the server (must be logged in) and builds the lookup maps.
+	/// A lookup that fails stays empty instead of failing the rest; this machine's node is registered when the server doesn't know it yet.
 	/// </summary>
+	/// <returns>A new cache. Never throws for server errors: failed reads leave their arrays null and their maps empty.</returns>
+	/// <remarks>
+	/// Reads hp.node, hp.directory id 1 (the root), hp.user, hp.property, hp.type, hp.category, hp.entry.name.filter and
+	/// hp.setting one after another. Side effect: creates an hp.node named after the lower-cased machine name when none
+	/// matches. <see cref="RestrictTypes"/>, <see cref="RestrictProperties"/> and <see cref="SwApi"/> stay null when the
+	/// settings could not be read, and default to true / true / "" when a setting is missing. Extension keys are
+	/// lower-cased with a leading dot (".sldprt"); when two records share a key, the first wins.
+	/// </remarks>
 	public static async Task<OdooLookupCache> LoadAsync()
 	{
 		string machine = Environment.MachineName.ToLower();

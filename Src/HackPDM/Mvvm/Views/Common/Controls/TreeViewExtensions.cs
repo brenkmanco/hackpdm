@@ -19,6 +19,9 @@ public static class TreeViewExtensions
 
 	extension( TreeViewNode node )
 	{
+		/// <summary>The <see cref="TreeData"/> kept for this node.</summary>
+		/// <value>On read, created from the node's content when missing (merging any missing name, tag or icon from it),
+		/// linked back to the node and set as its content. Setting it replaces the data and the content.</value>
 		public TreeData LinkedData
 		{
 			get
@@ -48,6 +51,7 @@ public static class TreeViewExtensions
 	extension( TreeViewNode? node )
 	{
 		/// <summary>Fills <paramref name="collection"/> with the path from the root to this node.</summary>
+		/// <param name="collection">The breadcrumb list to clear and refill; null does nothing.</param>
 		public void UpdateBreadCrumbCollection( ObservableCollection<TreeData>? collection )
 		{
 			collection?.Clear();
@@ -58,6 +62,7 @@ public static class TreeViewExtensions
 		}
 
 		/// <summary>The nodes from the root down to this one.</summary>
+		/// <returns>The path, root first; empty for a null node.</returns>
 		public IEnumerable<TreeViewNode> GetNodePath()
 		{
 			List<TreeViewNode> path = [];
@@ -71,6 +76,8 @@ public static class TreeViewExtensions
 	extension( TreeData node )
 	{
 		/// <summary>Expands every ancestor, selects the node and scrolls to it.</summary>
+		/// <param name="tree">The tree view showing the node.</param>
+		/// <exception cref="ArgumentNullException">The node or <paramref name="tree"/> is null.</exception>
 		public void EnsureVisible( TreeView tree )
 		{
 			ArgumentNullException.ThrowIfNull( node );
@@ -82,7 +89,11 @@ public static class TreeViewExtensions
 		}
 	}
 
-	/// <summary>The node at <paramref name="path"/> ("root\a\b", as <see cref="TreeData.FullPath"/> gives it); null when a folder on the way is missing.</summary>
+	/// <summary>Finds a node by its tree path.</summary>
+	/// <param name="view">The tree view to search.</param>
+	/// <param name="path">The tree path ("root\a\b", as <see cref="TreeData.FullPath"/> gives it); names are compared case-sensitively.</param>
+	/// <returns>The node's data; null when the path is empty or a folder on the way is missing.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="view"/> is null.</exception>
 	public static TreeData? FindTreeNode( this TreeView view, string path )
 	{
 		ArgumentNullException.ThrowIfNull( view );

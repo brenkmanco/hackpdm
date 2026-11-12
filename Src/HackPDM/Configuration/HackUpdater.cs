@@ -14,6 +14,7 @@ using HackPDM.Mvvm.Views.Dialogs;
 
 namespace HackPDM.Configuration;
 
+/// <summary>Checks that this client's version matches the one the Odoo server expects, and offers to install the published one.</summary>
 internal class HackUpdater
 {
 	const long REPO_ID = 28426033L;
@@ -44,11 +45,17 @@ internal class HackUpdater
 
 		return false;
 	}
+	/// <summary>Compares this assembly's version with the client version stored in the Odoo settings.</summary>
+	/// <param name="showOutdatedUpdater">When the versions differ, ask the user whether to download the published version (and run <see cref="UpdaterProcess"/> on Yes).</param>
+	/// <returns><see langword="true"/> when the server's client version equals this assembly's "major.minor.build.revision".</returns>
+	/// <remarks>Reads the cached <see cref="OdooDefaults.Instance"/> settings, so the lookup tables must have been loaded from the server.</remarks>
 	public static async Task<bool> EnsureUpdated(bool showOutdatedUpdater = false)
 	{
 		var info = CurrentVersion();
 		return await IsCorrectOdooVersion(info, showOutdatedUpdater);
 	}
+	/// <summary>Opens the published installer on the network share and exits the app.</summary>
+	/// <remarks>Failures are written to the debug output and the app keeps running.</remarks>
 	public static void UpdaterProcess( )
 	{
 		try

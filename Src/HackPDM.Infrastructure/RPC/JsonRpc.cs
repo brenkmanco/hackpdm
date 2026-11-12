@@ -7,6 +7,8 @@ using System.Text.Json.Serialization;
 
 namespace HackPDM.Infrastructure.RPC;
 
+/// <summary>A JSON-RPC 2.0 request body as Odoo's <c>/jsonrpc</c> endpoint expects it: method <c>"call"</c> with the service, method and arguments in <see cref="Params"/>.</summary>
+/// <remarks>Sent by <see cref="HackPDM.Infrastructure.Odoo.OdooTransport.SendJsonAsync"/>; no <c>id</c> is set.</remarks>
 public class JsonRpcRequest
 {
 	[JsonPropertyName( "jsonrpc" )]
@@ -18,6 +20,7 @@ public class JsonRpcRequest
 	public JsonRpcParams Params { get; set; } = new();
 
 }
+/// <summary>The <c>params</c> object of an Odoo JSON-RPC call: which service method to run and its positional arguments.</summary>
 public class JsonRpcParams
 {
 	[JsonPropertyName( "service" )]
@@ -33,6 +36,7 @@ public class JsonRpcParams
 	public Dictionary<object, object>? Kwargs { get; set; }
 }
 
+/// <summary>A JSON-RPC response: either <see cref="Result"/> or <see cref="Error"/> is set.</summary>
 public class JsonRpcResponse
 {
 	[JsonPropertyName( "jsonrpc" )]
@@ -47,6 +51,7 @@ public class JsonRpcResponse
 	[JsonPropertyName( "error" )]
 	public JsonRpcError? Error { get; set; }
 }
+/// <summary>The <c>error</c> member of a failed JSON-RPC response; Odoo puts the exception type and message in <see cref="Data"/>.</summary>
 public class JsonRpcError
 {
 	// Odoo sends an integer (e.g. 200); JsonElement accepts either form
@@ -59,12 +64,14 @@ public class JsonRpcError
 	[JsonPropertyName( "data" )]
 	public JsonRpcData? Data { get; set; }
 
-	/// <summary>The most specific message available: Odoo puts the real one in data.message.</summary>
+	/// <summary>Builds the most specific error message available: Odoo puts the real one in data.message.</summary>
+	/// <returns><c>"{data.name}: {data.message}"</c> (or just data.message when there is no name); otherwise the top-level message, or "unknown error".</returns>
 	public string Describe()
 		=> !string.IsNullOrEmpty( Data?.Message )
 			? ( string.IsNullOrEmpty( Data?.Name ) ? Data!.Message! : $"{Data!.Name}: {Data.Message}" )
 			: Message ?? "unknown error";
 }
+/// <summary>Odoo's error details: the Python exception name, its message, arguments, and the server traceback in <see cref="Debug"/>.</summary>
 public class JsonRpcData
 {
 	[JsonPropertyName( "name" )]

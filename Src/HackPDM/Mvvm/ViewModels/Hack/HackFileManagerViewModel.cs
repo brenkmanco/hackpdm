@@ -63,6 +63,18 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	/// <summary>The folder those rows are in.</summary>
 	private readonly string? _selectionFolder;
 
+	/// <summary>Creates the page's view model and restores the list settings and selection kept in <paramref name="state"/>.</summary>
+	/// <param name="state">The run-wide file manager state this visit restores from and writes back to.</param>
+	/// <param name="workflow">Runs the PDM operations (get latest, checkout, commit, delete).</param>
+	/// <param name="files">Local file work: opening, deleting, history version downloads.</param>
+	/// <param name="details">Fills the detail tabs and the preview.</param>
+	/// <param name="dialogs">Shows messages and confirmations.</param>
+	/// <param name="reporter">The status window operations log into.</param>
+	/// <param name="directoryTree">Loads the directory tree.</param>
+	/// <param name="entryList">Lists a folder's rows and rebuilds single rows.</param>
+	/// <param name="localFiles">Reports local file changes; subscribed to by <see cref="Activate"/>.</param>
+	/// <remarks>Nothing is loaded and no events are subscribed until <see cref="Activate"/>, <see cref="LoadDirectoryTreeAsync"/>
+	/// and <see cref="LoadEntriesAsync"/> are called.</remarks>
 	public HackFileManagerViewModel(
 		FileManagerState state,
 		IPdmWorkflowService workflow,
@@ -101,6 +113,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	}
 
 	/// <summary>Starts taking locate requests (search window, dependency links); call once the view handles <see cref="LocateRequested"/>.</summary>
+	/// <remarks>The first call also subscribes to local file changes and starts watching the vault folder; later calls only take the pending request.</remarks>
 	/// <returns>The request made while the page was not shown, if any: the view should run it once the tree is up.</returns>
 	public (IReadOnlyList<string> Segments, string? FileName)? Activate()
 	{
@@ -165,6 +178,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	}
 
 	/// <summary>The toolbar's refresh: fetches the tree, and the selected folder's rows, from the server again.</summary>
+	/// <remarks>Marks everything stale and raises <see cref="RefreshRequested"/> for the tree; the view's rebuild then reloads the rows.</remarks>
 	public void RefreshFromServer()
 	{
 		_state.MarkStale( FileManagerRefresh.All );
@@ -194,6 +208,12 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	/// Updates just the rows of changed files in the listed folder; for other folders raises
 	/// <see cref="FolderChanged"/> once per folder ("updated" when its files changed in different ways).
 	/// </summary>
+	/// <param name="batch">The changes reported by the local file watcher.</param>
+	/// <remarks>
+	/// Call on the UI thread. Batches are applied one at a time, in order. When more than 25 files of the listed folder
+	/// changed at once the whole list is reloaded instead. Updated rows become the kept rows in <see cref="FileManagerState"/>.
+	/// Errors are written to standard error rather than thrown.
+	/// </remarks>
 	public async Task ApplyLocalChangesAsync( IReadOnlyList<LocalFileChange> batch )
 	{
 		if( IsDisposed )
@@ -383,6 +403,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	} = [];
 
 	/// <summary>The rows to reselect after the folder's rows are listed again (the selection the page was left with); asked once.</summary>
+	/// <returns>The rows of <see cref="Entries"/> whose names were selected; empty after the first call or when another folder is listed.</returns>
 	public IReadOnlyList<EntryRow> TakeSelectionToRestore()
 	{
 		IReadOnlyList<string> names = _selectionToRestore;
@@ -397,6 +418,8 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	public IReadOnlyCollection<string> ExpandedPaths => _state.ExpandedPaths;
 
 	/// <summary>The view reports a folder being expanded or collapsed.</summary>
+	/// <param name="treePath">The folder's tree path ("root\a\b"); null or empty is ignored.</param>
+	/// <param name="expanded">Whether the folder is now expanded.</param>
 	public void SetExpanded( string? treePath, bool expanded )
 	{
 		if( treePath is null or "" || IsDisposed )
@@ -427,6 +450,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 
 	#endregion
 	/// <summary>Loads the Odoo metadata the page needs before the tree is built.</summary>
+	/// <remarks>Blocks on server calls the first time; call it off the UI thread.</remarks>
 	public void Initialize() => _workflow.PreloadMetadata();
 
 	#region Loading the tree and the entry list
@@ -435,6 +459,9 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	/// Raises <see cref="TreeLoaded"/> with the directory tree: the one kept from an earlier visit when there
 	/// is one and nothing marked it stale, otherwise (or with <paramref name="fromServer"/>) a fresh one.
 	/// </summary>
+	/// <param name="fromServer">Always fetch the tree from the server, ignoring the kept one.</param>
+	/// <remarks>Sets <see cref="IsTreeLoading"/> while it runs and <see cref="IsTreeLoaded"/> when done, even if loading failed.
+	/// A fresh tree is stored in <see cref="FileManagerState"/>.</remarks>
 	public async Task LoadDirectoryTreeAsync( bool fromServer = false )
 	{
 		IsTreeLoaded = false;
@@ -460,6 +487,11 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	/// Loads the rows of <see cref="SelectedDirectory"/> into <see cref="Entries"/>: the rows kept from an
 	/// earlier visit when they are for this folder and not stale, otherwise fresh ones (which are then kept).
 	/// </summary>
+	/// <param name="token">Cancels the load; it is also cancelled when the page is left.</param>
+	/// <remarks>
+	/// Waits for <see cref="IsTreeLoaded"/> first, then applies the kept sort and raises <see cref="GroupingChanged"/>.
+	/// Sets <see cref="IsListLoaded"/> when done unless cancelled. Load errors are written to standard error, not thrown.
+	/// </remarks>
 	public async Task LoadEntriesAsync( CancellationToken token = default )
 	{
 		IsListLoaded = false;
@@ -512,6 +544,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 
 	#region Entry details and preview
 
+	/// <summary>Empties every detail tab (history, parents, children, properties, info).</summary>
 	public void ClearDetails()
 	{
 		OHistories.Clear();
@@ -522,6 +555,11 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	}
 
 	/// <summary>Loads the visible detail tab and the preview for <paramref name="entry"/>; a newer call cancels an older one.</summary>
+	/// <param name="entry">The selected row; null just clears the details and the preview.</param>
+	/// <remarks>
+	/// Only the tab named by <see cref="SelectedDetailTab"/> is filled. The preview is the server's image of the latest version,
+	/// else the preview stored in the local SolidWorks file. Errors go to the debug output.
+	/// </remarks>
 	public async Task ShowEntryDetailsAsync( EntryRow? entry )
 	{
 		await _detailsCancellation.CancelAsync();
@@ -567,6 +605,8 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	}
 
 	/// <summary>Shows the preview image of a specific version (history/parent/child row selection).</summary>
+	/// <param name="versionId">The Odoo version id; null or 0 does nothing.</param>
+	/// <remarks>The current preview is kept when the version has no image.</remarks>
 	public async Task PreviewVersionAsync( int? versionId )
 	{
 		if( versionId is null or 0 )
@@ -589,6 +629,10 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		GroupingChanged?.Invoke();
 	}
 
+	/// <summary>Sorts the entry list by a field and remembers the sort for later visits.</summary>
+	/// <param name="fieldName">One of <see cref="EntryRowKeys.Names"/>; anything else is ignored.</param>
+	/// <param name="descending">Whether to sort from high to low.</param>
+	/// <remarks>Raises <see cref="GroupingChanged"/> so the view rebinds the grid.</remarks>
 	public void SortEntries( string? fieldName, bool descending )
 	{
 		if( !EntryRowKeys.TryGetSortKey( fieldName, out var key ) )
@@ -620,18 +664,23 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		}, completedMessage );
 	}
 
+	/// <summary>Downloads the latest of every entry in the selected folder and its subfolders (deleted ones too while they are shown).</summary>
 	[RelayCommand]
 	private Task GetLatestDirectoryAsync() => RunOnDirectoryAsync( "Getting the latest of", true, ShowInactive, _workflow.GetLatestAsync );
 
+	/// <summary>Downloads the latest of every entry directly in the selected folder (deleted ones too while they are shown).</summary>
 	[RelayCommand]
 	private Task GetLatestDirectoryTopAsync() => RunOnDirectoryAsync( "Getting the latest of", false, ShowInactive, _workflow.GetLatestAsync );
 
+	/// <summary>Downloads the latest of every entry in the selected folder and its subfolders, then checks them out.</summary>
 	[RelayCommand]
 	private Task CheckoutDirectoryAsync() => RunOnDirectoryAsync( "Checking out", true, false, _workflow.CheckoutLatestAsync );
 
+	/// <summary>Releases this user's checkout of every entry in the selected folder and its subfolders.</summary>
 	[RelayCommand]
 	private Task UndoCheckoutDirectoryAsync() => RunOnDirectoryAsync( "Undoing the check out of", true, false, _workflow.UnCheckoutAsync );
 
+	/// <summary>Marks every entry in the selected folder and its subfolders deleted on the server, then reloads the page.</summary>
 	[RelayCommand]
 	private async Task LogicalDeleteDirectoryAsync()
 	{
@@ -639,6 +688,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		Refresh( FileManagerRefresh.All );
 	}
 
+	/// <summary>Restores the deleted entries directly in the selected folder, then reloads the page.</summary>
 	[RelayCommand]
 	private async Task RestoreDirectoryAsync()
 	{
@@ -646,9 +696,11 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		Refresh( FileManagerRefresh.All );
 	}
 
+	/// <summary>Not implemented: tells the user so.</summary>
 	[RelayCommand]
 	private Task RestoreDirectoryRecursiveAsync() => Dialogs.ShowMessageAsync( "Not Implemented Yet" );
 
+	/// <summary>Commits every file directly in the selected local folder, with the files its SolidWorks documents reference.</summary>
 	[RelayCommand]
 	private async Task CommitDirectoryAsync()
 	{
@@ -661,9 +713,11 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		} );
 	}
 
+	/// <summary>Opens the selected folder in the system file browser.</summary>
 	[RelayCommand]
 	private void OpenDirectory() => _files.OpenFolder( SelectedLocalDirectory );
 
+	/// <summary>After confirmation, deletes the selected local folder and everything in it (the server is not touched).</summary>
 	[RelayCommand]
 	private async Task LocalDeleteDirectoryAsync()
 	{
@@ -678,17 +732,21 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	#endregion
 	#region Entry list commands
 
+	/// <summary>Downloads the latest of the selected entries and everything they depend on.</summary>
 	[RelayCommand]
 	private Task GetLatestSelectedAsync() => RunOnIdsAsync( RemoteIds( SelectedEntries ), _workflow.GetLatestAsync );
 
+	/// <summary>Downloads the latest of the selected entries that nobody has checked out, then checks them out.</summary>
 	[RelayCommand]
 	private Task CheckoutSelectedAsync()
 		=> RunOnIdsAsync( RemoteIds( SelectedEntries.Where( e => e.Checkout is null ) ), _workflow.CheckoutLatestAsync );
 
+	/// <summary>Releases this user's checkout of the selected checked-out entries.</summary>
 	[RelayCommand]
 	private Task UndoCheckoutSelectedAsync()
 		=> RunOnIdsAsync( RemoteIds( SelectedEntries.Where( e => e.Checkout is not null ) ), _workflow.UnCheckoutAsync );
 
+	/// <summary>Marks the selected entries deleted on the server, then reloads the page.</summary>
 	[RelayCommand]
 	private async Task LogicalDeleteSelectedAsync()
 	{
@@ -696,6 +754,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		Refresh( FileManagerRefresh.All );
 	}
 
+	/// <summary>Commits the selected rows' local files, with the files their SolidWorks documents reference.</summary>
 	[RelayCommand]
 	private Task CommitSelectedAsync() => RunOperationAsync( async () =>
 	{
@@ -704,12 +763,15 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 			await _workflow.CommitAsync( files );
 	} );
 
+	/// <summary>Opens the selected entries with whichever copy fits their status.</summary>
 	[RelayCommand]
 	private Task OpenSelectedAsync() => OpenSelectedAsync( EntryOpenMode.Open );
 
+	/// <summary>Downloads the latest version of the selected entries to the temp folder and opens it.</summary>
 	[RelayCommand]
 	private Task OpenSelectedLatestRemoteAsync() => OpenSelectedAsync( EntryOpenMode.LatestRemote );
 
+	/// <summary>Opens the local copies of the selected entries.</summary>
 	[RelayCommand]
 	private Task OpenSelectedLatestLocalAsync() => OpenSelectedAsync( EntryOpenMode.LatestLocal );
 
@@ -720,9 +782,11 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 			await Dialogs.ShowMessageAsync( string.Join( Environment.NewLine, errors ) );
 	}
 
+	/// <summary>Opens the folders holding the selected entries' local files.</summary>
 	[RelayCommand]
 	private void OpenSelectedFolders() => _files.OpenContainingFolders( SelectedEntries );
 
+	/// <summary>After confirmation, deletes the selected rows' local files (the server is not touched), then reloads the list.</summary>
 	[RelayCommand]
 	private async Task LocalDeleteSelectedAsync()
 	{
@@ -739,6 +803,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		Refresh( FileManagerRefresh.Entries );
 	}
 
+	/// <summary>Debug builds only: after confirmation, permanently deletes the selected entries and all their versions from the server.</summary>
 	[RelayCommand]
 	private async Task PermanentDeleteSelectedAsync()
 	{
@@ -771,6 +836,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 #endif
 	}
 
+	/// <summary>Not implemented: tells the user so when one eligible row is selected.</summary>
 	[RelayCommand]
 	private async Task UploadIconAsync()
 	{
@@ -810,11 +876,17 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 			await _files.DownloadVersionAsync( version, toTemp: answer is DialogResult.Retry );
 	} );
 
+	/// <summary>Downloads the selected history version into the temp folder.</summary>
 	[RelayCommand] private Task DownloadHistoryToTempAsync() => WithHistoryVersionAsync( version => _files.DownloadVersionAsync( version, toTemp: true ) );
+	/// <summary>Downloads the selected history version into the working folder, overwriting the local copy.</summary>
 	[RelayCommand] private Task DownloadHistoryOverwriteAsync() => WithHistoryVersionAsync( version => _files.DownloadVersionAsync( version, toTemp: false ) );
+	/// <summary>Downloads the selected history version into the temp folder and opens it.</summary>
 	[RelayCommand] private Task OpenHistoryFromTempAsync() => WithHistoryVersionAsync( version => OpenHistoryAsync( version, toTemp: true ) );
+	/// <summary>Downloads the selected history version into the working folder, overwriting the local copy, and opens it.</summary>
 	[RelayCommand] private Task OpenHistoryOverwriteAsync() => WithHistoryVersionAsync( version => OpenHistoryAsync( version, toTemp: false ) );
+	/// <summary>After confirmation, moves (or downloads) the selected history version from the working folder to the temp folder.</summary>
 	[RelayCommand] private Task MoveHistoryToTempAsync() => WithHistoryVersionAsync( version => MoveHistoryAsync( version, toTemp: true ) );
+	/// <summary>After confirmation, moves (or downloads) the selected history version from the temp folder to the working folder.</summary>
 	[RelayCommand] private Task MoveHistoryToWorkingAsync() => WithHistoryVersionAsync( version => MoveHistoryAsync( version, toTemp: false ) );
 
 	private async Task OpenHistoryAsync( HpVersion version, bool toTemp )

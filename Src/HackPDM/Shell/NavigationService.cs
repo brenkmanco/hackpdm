@@ -14,6 +14,7 @@ public sealed class NavigationService : INavigationService
 	/// <summary>Called by the home page once it is built.</summary>
 	internal void Attach( HomeView home ) => _home = new( home );
 
+	/// <inheritdoc/>
 	public void NavigateTo( NavigatePageMenu page )
 	{
 		if( _home is not null && _home.TryGetTarget( out HomeView? home ) )

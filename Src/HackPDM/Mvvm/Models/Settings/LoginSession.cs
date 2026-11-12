@@ -19,7 +19,11 @@ public sealed class LoginSession
 	/// <summary>The server, database and user of the last successful login.</summary>
 	public string? Account { get; private set; }
 
-	/// <summary>Records a successful login; true when it is another account than the last one (what was kept for that one no longer applies).</summary>
+	/// <summary>Records a successful login and remembers which account it was.</summary>
+	/// <param name="account">Identifies the account logged in to (server, database and user).</param>
+	/// <returns><see langword="true"/> when an earlier login in this run was to a different account (compared ignoring case),
+	/// meaning what was kept for that account no longer applies; <see langword="false"/> on the first login or the same account.</returns>
+	/// <remarks>Sets <see cref="IsLoggedIn"/>; it does not clear <see cref="LastErrors"/>.</remarks>
 	public bool LoggedInAs( string account )
 	{
 		IsLoggedIn = true;

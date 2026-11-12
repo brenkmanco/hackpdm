@@ -23,6 +23,8 @@ public partial class HackSettingsViewModel : ObservableObject
 	/// <summary>Raised after a successful save, so a page in its own window can close it.</summary>
 	public event Action? Saved;
 
+	/// <summary>Fills the fields with the current folders, or default locations under Documents and the system temp folder.</summary>
+	/// <param name="dialogs">Shows validation errors and the saved confirmation.</param>
 	public HackSettingsViewModel( IDialogService dialogs )
 	{
 		_dialogs = dialogs;
@@ -34,7 +36,9 @@ public partial class HackSettingsViewModel : ObservableObject
 			: Path.Combine( Path.GetTempPath(), StorageBox.APP_NAME );
 	}
 
-	/// <summary>Why the paths can't be saved; empty when they can (each folder is created if missing).</summary>
+	/// <summary>Checks both folders, creating each one if missing.</summary>
+	/// <returns>Why the paths can't be saved; empty when they can.</returns>
+	/// <remarks>Has a side effect: valid folders are created on disk even when the other one fails.</remarks>
 	public List<string> Validate()
 	{
 		List<string> errors = [];
@@ -45,6 +49,7 @@ public partial class HackSettingsViewModel : ObservableObject
 		return errors;
 	}
 
+	/// <summary>Validates the folders, then applies them to the app settings and raises <see cref="Saved"/>.</summary>
 	[RelayCommand]
 	private async Task SubmitAsync()
 	{

@@ -40,6 +40,7 @@ public static class AppComposition
 	public static CoreSettings Settings => field ??= new( AppSettingsStore.Open() );
 
 	/// <summary>Gives the Hack and Odoo defaults their settings store. Call once at startup.</summary>
+	/// <remarks>Creating the defaults registers them as <c>HackDefaults.Instance</c> and <see cref="OdooDefaults.Instance"/>.</remarks>
 	public static void InitializeDefaults()
 	{
 		_ = new HackDefaults( Settings );
@@ -49,6 +50,7 @@ public static class AppComposition
 	/// <summary>Dialogs and windows shown on behalf of view models.</summary>
 	public static IDialogService Dialogs => field ??= new DialogService();
 
+	/// <summary>The system file pickers.</summary>
 	public static IFilePickerService FilePickers => field ??= new FilePickerService();
 
 	/// <summary>The home page's menu; the home page attaches itself when built.</summary>
@@ -60,9 +62,11 @@ public static class AppComposition
 	/// <summary>App theme, loaded from AppConfig.json. First use needs the app settings (after services are configured).</summary>
 	public static ThemeService Theme => field ??= new( UIStorage.GlobalData.Theme );
 
+	/// <summary>The PDM workflows (get latest, checkout, commit, delete), reporting through <see cref="Reporter"/>.</summary>
 	public static IPdmWorkflowService Workflow => field ??= new PdmWorkflowService( Reporter );
 
 	/// <summary>Hooks the app up to the UI thread. Call once the window's dispatcher exists.</summary>
+	/// <param name="queue">The main window's dispatcher queue; becomes <see cref="UiDispatcher.Current"/>.</param>
 	public static void Initialize( Microsoft.UI.Dispatching.DispatcherQueue queue )
 		=> UiDispatcher.Current = new DispatcherQueueUiDispatcher( queue );
 
@@ -98,10 +102,12 @@ public static class AppComposition
 	public static StatusDialogViewModel StatusLog => field ??= new( Dialogs, () => Reporter.Cancel() );
 
 	/// <summary>The Profile Manager page's view model, made per visit. Logging in as another account forgets the file manager's context.</summary>
+	/// <returns>A new view model sharing the run-wide <see cref="Session"/>.</returns>
 	public static ProfileManagerViewModel CreateProfileManager()
 		=> new( Session, Dialogs, FilePickers, Navigation, () => FileManagerState.Reset() );
 
 	/// <summary>The file manager page's view model, made per visit from <see cref="FileManagerState"/>.</summary>
+	/// <returns>A new view model; the caller disposes it when the page is left.</returns>
 	public static HackFileManagerViewModel CreateFileManager() => new(
 		FileManagerState,
 		Workflow,
@@ -113,13 +119,19 @@ public static class AppComposition
 		new EntryListService(),
 		LocalFiles );
 
-	/// <summary>A settings page's view model, fresh each time the page is built (it loads the current values).</summary>
+	/// <summary>The Hack settings page's view model, fresh each time the page is built (it loads the current values).</summary>
+	/// <returns>A new view model holding the current local folder settings.</returns>
 	public static HackSettingsViewModel CreateHackSettings() => new( Dialogs );
 
+	/// <summary>The Odoo settings page's view model, fresh each time the page is built (it loads the current values).</summary>
+	/// <returns>A new view model holding the current Odoo settings.</returns>
 	public static OdooSettingsViewModel CreateOdooSettings() => new( Dialogs );
 
+	/// <summary>The theme editor page's view model, made per visit.</summary>
+	/// <returns>A new view model editing the run-wide <see cref="Theme"/>.</returns>
 	public static ThemeEditorViewModel CreateThemeEditor() => new( Theme );
 
+	/// <summary>The search window's state, kept for the whole run; locating a result switches to the file manager.</summary>
 	public static SearchOdooViewModel SearchOdoo => field ??= new(
 		new EntrySearchService(),
 		Workflow,

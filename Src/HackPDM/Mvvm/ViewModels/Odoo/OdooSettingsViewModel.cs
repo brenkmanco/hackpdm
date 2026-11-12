@@ -10,7 +10,7 @@ using HackPDM.Mvvm.ViewModels.Common;
 
 namespace HackPDM.Mvvm.ViewModels.Odoo;
 
-/// <summary>The Odoo server and login. Nothing is saved unless every field is valid.</summary>
+/// <summary>The Odoo server and login. Nothing is saved unless the area factor is a valid number (the only field checked).</summary>
 public partial class OdooSettingsViewModel : ObservableObject
 {
 	private readonly IDialogService _dialogs;
@@ -26,6 +26,8 @@ public partial class OdooSettingsViewModel : ObservableObject
 	/// <summary>Raised after a successful save, so a page in its own window can close it.</summary>
 	public event Action? Saved;
 
+	/// <summary>Fills the fields from the current Odoo settings.</summary>
+	/// <param name="dialogs">Shows validation errors and the saved confirmation.</param>
 	public OdooSettingsViewModel( IDialogService dialogs )
 	{
 		_dialogs = dialogs;
@@ -40,9 +42,13 @@ public partial class OdooSettingsViewModel : ObservableObject
 	}
 
 	/// <summary>The server's URL from the address and optional port.</summary>
+	/// <param name="address">The host name or IP address.</param>
+	/// <param name="port">The port; null or empty leaves it out.</param>
+	/// <returns>An http URL such as "http://10.0.0.68:8069".</returns>
 	public static string UrlOf( string address, string? port )
 		=> string.IsNullOrEmpty( port ) ? $"http://{address}" : $"http://{address}:{port}";
 
+	/// <summary>Validates the area factor, then applies every field to the live Odoo settings and raises <see cref="Saved"/>.</summary>
 	[RelayCommand]
 	private async Task SubmitAsync()
 	{

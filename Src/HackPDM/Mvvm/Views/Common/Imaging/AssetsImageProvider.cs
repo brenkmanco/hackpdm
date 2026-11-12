@@ -12,11 +12,15 @@ using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace HackPDM.Mvvm.Views.Common.Imaging;
 
+/// <summary>Registers image assets (key to URI) in one map shared by the whole app.</summary>
 public class AssetsImageProvider
 {
 	internal static readonly Dictionary<string, string> AssetMap;
 	// one decoded image per key, shared by every row that shows it (about 20 distinct icons)
+	/// <summary>Creates a provider without registering any assets.</summary>
 	public AssetsImageProvider() : this([]) {}
+	/// <summary>Creates a provider and adds the given assets to the shared map.</summary>
+	/// <param name="assetMap">Image key to URI; keys already registered keep their first URI.</param>
 	public AssetsImageProvider(Dictionary<string, string>? assetMap)
 	{
 		if (assetMap is not { Count: > 0 }) return;
@@ -29,6 +33,8 @@ public class AssetsImageProvider
 	{
 		AssetMap = new();
 	}
+	/// <summary>Lists the registered image keys.</summary>
+	/// <returns>Every key in the shared map (a live view, not a copy).</returns>
 	public IEnumerable<string> GetAvailableKeys() => AssetMap.Keys;
 
 }

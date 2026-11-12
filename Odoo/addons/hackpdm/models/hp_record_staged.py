@@ -37,6 +37,22 @@ class hp_record_staged(models.TransientModel):
     
     @api.model_create_multi
     def create(self, vals_list):
+        """Stages rows for a commit; a regular user may stage only into their own commit.
+
+        A commit runs with its creator's rights, so rows planted in another user's commit would be
+        created as that user. Only the vault's models can be staged.
+
+        Args:
+            vals_list (list[dict]): One dict per row: committing_id (int, the hp.pdm.commit),
+                target_model (str), payload (dict, the record's field values), and commit_id.
+
+        Returns:
+            hp.record.staged: The new rows.
+
+        Raises:
+            UserError: The commit does not exist, or target_model is not a vault model.
+            AccessError: The commit belongs to another user.
+        """
         if not hp_guard.is_pdm_admin(self.env):
             for vals in vals_list:
                 self._check_own_commit(vals.get("committing_id"))
@@ -45,6 +61,19 @@ class hp_record_staged(models.TransientModel):
         return super().create(vals_list)
 
     def write(self, vals):
+        """Changes staged rows; a regular user may change only rows of their own commit.
+
+        Args:
+            vals (dict): Field values to write (payload, target_id, ...). Moving rows to another
+                commit (committing_id) is allowed only into one of the caller's own commits.
+
+        Returns:
+            bool: True.
+
+        Raises:
+            UserError: A commit does not exist, or target_model is not a vault model.
+            AccessError: A row's commit, or the new commit, belongs to another user.
+        """
         if not hp_guard.is_pdm_admin(self.env):
             for rec in self:
                 self._check_own_commit(rec.committing_id.id)

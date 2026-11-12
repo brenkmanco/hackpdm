@@ -60,6 +60,25 @@ class hp_release_review(models.Model):
     #
     @api.model
     def reviewer_decision(self, review_id, accepted, note:str=None):
+        """Records an administrator's decision on a release review.
+
+        When accepted, creates the hp.release for the reviewed version. The review's own update
+        (accepted, reviewed, note, date, release_id) is built as a command but never written, so the
+        review record itself does not change.
+
+        Args:
+            review_id (int): The hp.release.review id.
+            accepted (bool): Whether the release is accepted.
+            note (str, optional): The reviewer's note. Defaults to None.
+
+        Returns:
+            None: nothing.
+
+        Raises:
+            PermissionError: The caller is not an administrator.
+            IndexError: No review has that id.
+            ValueError: ``accepted`` is None.
+        """
         # Check if the user belongs to a group that has permission
         userCaller = self.env.user
         if not userCaller.has_group('base.group_system'):

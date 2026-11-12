@@ -27,6 +27,10 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 	private readonly IDialogService _dialogs;
 	private int _refreshQueued;
 
+	/// <summary>Creates the window state with a new <see cref="StatusLogSession"/> and subscribes to its messages.</summary>
+	/// <param name="dialogs">Asks the user before closing during an operation.</param>
+	/// <param name="cancelOperation">Cancels the running operation (the Cancel button, or closing while busy).</param>
+	/// <remarks>Registers with <see cref="WeakReferenceMessenger.Default"/> using the session id as the token.</remarks>
 	public StatusDialogViewModel( IDialogService dialogs, Action cancelOperation )
 	{
 		_dialogs = dialogs;
@@ -61,6 +65,9 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 
 	public string SkippedText => $"({SkipCounter}) Skipped";
 
+	/// <summary>How many lines each log list keeps before the oldest are dropped.</summary>
+	/// <value>Read from the app settings at startup (10000 by default); setting it saves the new value but does not
+	/// resize lists that already exist.</value>
 	public static int HistoryLength
 	{
 		get;
@@ -71,8 +78,14 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 		}
 	} = HackDefaults.Instance?.SettingsProvider?.Get( "HistoryLength", 10000 ) ?? 10000;
 
+	/// <summary>Receives a line logged to <see cref="Session"/> and adds it to its list.</summary>
+	/// <param name="message">The logged line.</param>
 	public void Receive( BasicStatusMessage message ) => AddLog( message );
 
+	/// <summary>Picks the list a kind of log line belongs in.</summary>
+	/// <param name="action">The kind of line.</param>
+	/// <returns><see cref="OStatus"/> for processing and success lines, <see cref="OError"/> for warnings and errors,
+	/// <see cref="OInfo"/> for everything else.</returns>
 	public ObservableRingBuffer<BasicStatusMessage> GetCollection( StatusMessage action ) => action switch
 	{
 		StatusMessage.PROCESSING or StatusMessage.SUCCESS => OStatus,
@@ -80,9 +93,13 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 		_ => OInfo,
 	};
 
+	/// <summary>Adds a log line to its list.</summary>
+	/// <param name="message">The line to add.</param>
+	/// <remarks>Safe from any thread: the list is changed later on the UI thread through <see cref="UiDispatcher.Post"/>.</remarks>
 	public void AddLog( BasicStatusMessage message )
 		=> UiDispatcher.Post( () => GetCollection( message.Status ).Add( message ) );
 
+	/// <summary>Cancels the running operation.</summary>
 	[RelayCommand]
 	private void Cancel() => _cancelOperation();
 
@@ -90,6 +107,7 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 	/// Whether the window may close: always when idle; while an operation runs only once the user
 	/// confirms, which also cancels the operation.
 	/// </summary>
+	/// <returns><see langword="true"/> when the window may close.</returns>
 	public async Task<bool> ConfirmCloseAsync()
 	{
 		if( !IsInProcess )
@@ -108,9 +126,16 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 
 	// ---------------------------------------------------------------- progress, from any thread
 
+	/// <summary>Starts the progress over for a new number of items.</summary>
+	/// <param name="total">The number of items the operation will process.</param>
+	/// <remarks>Safe from any thread; the window is refreshed on the UI thread.</remarks>
 	public void ResetProgress( int total )
 		=> Update( () => ( MaxCount, ProcessCounter, SkipCounter, TotalProcessed ) = ( total, 0, 0, 0 ) );
 
+	/// <summary>Adds to the processed and skipped counters.</summary>
+	/// <param name="processed">How many more items were processed.</param>
+	/// <param name="skipped">How many more items were skipped.</param>
+	/// <remarks>Safe from any thread; the window is refreshed on the UI thread.</remarks>
 	public void Advance( int processed, int skipped )
 		=> Update( () =>
 		{
@@ -119,6 +144,9 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 			TotalProcessed = ProcessCounter + SkipCounter;
 		} );
 
+	/// <summary>Sets the processed counter to an absolute value; the skipped counter is kept.</summary>
+	/// <param name="processed">The number of items processed so far.</param>
+	/// <remarks>Safe from any thread; the window is refreshed on the UI thread.</remarks>
 	public void SetProcessed( int processed )
 		=> Update( () =>
 		{
@@ -126,6 +154,8 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 			TotalProcessed = ProcessCounter + SkipCounter;
 		} );
 
+	/// <summary>Fills the progress bar and marks the window idle (<see cref="IsInProcess"/> false).</summary>
+	/// <remarks>Safe from any thread; the window is refreshed on the UI thread.</remarks>
 	public void CompleteProgress()
 		=> Update( () =>
 		{

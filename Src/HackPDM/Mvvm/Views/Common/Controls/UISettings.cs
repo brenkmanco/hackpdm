@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace HackPDM.Mvvm.Views.Common.Controls
 {
+	/// <summary>Shared UI resources.</summary>
 	public class UISettings
 	{
 		private static AssetsImageProvider GetProvider( Dictionary<string, string>? assetmap = null )
@@ -22,6 +23,7 @@ namespace HackPDM.Mvvm.Views.Common.Controls
 				
 		}
 
+		/// <summary>The image provider for the app's bundled assets, created on first use from <see cref="Assets.AssetMap"/>.</summary>
 		public static AssetsImageProvider? ImageProvider 
 		{ 
 			get

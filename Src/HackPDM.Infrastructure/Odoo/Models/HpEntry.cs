@@ -91,6 +91,19 @@ public partial class HpEntry
 		get => field ??= LocalFile?.Name;
 		set;
 	}
+	/// <summary>
+	/// Builds the local file this entry maps to in the working folder, from the server fields that
+	/// were read with the record.
+	/// </summary>
+	/// <returns>
+	/// A <see cref="HackPDM.Core.Hack.HackFile"/> for the entry's <c>windows_complete_name</c> made absolute with
+	/// <see cref="HackPDM.Core.PwaPaths.ToAbsolute(string)"/>; failing that, one for the folder named by <c>dir_id</c>;
+	/// or <see langword="null"/> when neither field was read.
+	/// </returns>
+	/// <remarks>
+	/// Reads the raw values in <c>HashedValues</c>, so it only finds something for records read from the server
+	/// with those fields. The <c>dir_id</c> fallback points at the directory, not at the file. Nothing is read from disk.
+	/// </remarks>
 	public HackFile? GetLocalFile()
 	{
 
@@ -101,8 +114,15 @@ public partial class HpEntry
 		return null;
 	}
 
+	/// <summary>Tells whether the entry can be checked out: nobody has it checked out and it is not deleted.</summary>
+	/// <returns>
+	/// <see langword="true"/> when <c>checkout_user</c> is empty and <c>deleted</c> is <see langword="false"/>;
+	/// an entry whose <c>deleted</c> field was not read (<see langword="null"/>) returns <see langword="false"/>.
+	/// </returns>
 	public bool CanCheckOut() => (checkout_user?.id is null or 0) && deleted is false;
-	/// <summary>Checked out to <paramref name="userId"/> (this user by default).</summary>
+	/// <summary>Tells whether the entry is checked out to the given user, so that user can undo the checkout.</summary>
+	/// <param name="userId">The Odoo user id to compare with <c>checkout_user</c>; <see langword="null"/> uses the logged-in user (<c>OdooDefaults.Instance.OdooId</c>).</param>
+	/// <returns><see langword="true"/> when <c>checkout_user</c> is set and its id equals the user id.</returns>
 	public bool CanUnCheckOut( int? userId = null ) => checkout_user is not null && checkout_user == ( userId ?? OdooDefaults.Instance.OdooId );
 	public override string ToString()
 	{

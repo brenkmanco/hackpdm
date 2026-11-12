@@ -71,6 +71,16 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
         UsualExcludedFields = ["preview_image", "file_contents"];
     }
     
+    /// <summary>
+    /// Finishes a record that was just populated from a server row by setting <see cref="WinPathway"/>
+    /// from the folder the server reported.
+    /// </summary>
+    /// <remarks>
+    /// Uses <c>dir_id</c>'s display name when it was read, otherwise <c>directory_complete_name</c>, each made
+    /// relative with <see cref="HackPDM.Core.PwaPaths.ToRelative(string)"/>. When neither was read,
+    /// <see cref="WinPathway"/> keeps falling back to <c>windows_complete_name</c>. The base
+    /// <see cref="HackPDM.Domain.OdooModels.Models.HpBaseModel.CompleteConstruction"/> always runs afterwards.
+    /// </remarks>
     public override void CompleteConstruction()
     {
         try
@@ -89,7 +99,17 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>, IHpVersionMode
 }
 public partial class HpVersion : HpBaseModelTransport<HpVersion>
 {
-    /// <summary>Each version's properties (null for a version without any), in the server's order.</summary>
+    /// <summary>
+    /// Reads the <c>version_property_ids</c> of the given versions and then fetches those
+    /// <see cref="HpVersionProperty"/> records, one request per version.
+    /// </summary>
+    /// <param name="ids">The hp.version ids whose properties to read.</param>
+    /// <returns>
+    /// One array per version row the server returned, in the server's order (not necessarily the order of
+    /// <paramref name="ids"/>); an entry is <see langword="null"/> for a version without properties. The list is
+    /// empty when the read of the versions fails.
+    /// </returns>
+    /// <remarks>Makes one <c>read</c> call on hp.version plus one read of hp.version.property per version.</remarks>
     public static async Task<List<HpVersionProperty[]?>> GetAllVersionPropertiesAsync(IReadOnlyList<int> ids)
     {
     	const string versionPropField = "version_property_ids";

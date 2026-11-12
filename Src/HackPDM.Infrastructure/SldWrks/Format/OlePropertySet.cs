@@ -15,7 +15,15 @@ public static class OlePropertySet
 
 	private const uint PidDictionary = 0, PidCodePage = 1;
 
-	/// <summary>(name, VT type, value) for each named property of the user-defined section, in dictionary order.</summary>
+	/// <summary>Reads the named properties of the user-defined section of an OLE property set stream.</summary>
+	/// <param name="stream">The raw property set stream, e.g. "\u0005DocumentSummaryInformation" or "Config-N-Properties".</param>
+	/// <returns>
+	/// (name, VT type, value) for each named property, in dictionary order. The value is a short, int, uint, long, float,
+	/// double, bool, <see cref="DateTime"/> or string for the types in <see cref="VarType"/>, and null for other types or a
+	/// truncated value. Empty when the stream isn't a property set or has no user-defined section.
+	/// </returns>
+	/// <remarks>Strings use the section's code page; code pages other than UTF-8, UTF-16 and those built into .NET are read as Latin-1.</remarks>
+	/// <exception cref="ArgumentException">A VT_DATE value is not a valid OLE Automation date.</exception>
 	public static List<(string Name, ushort VarType, object? Value)> ReadUserDefined( byte[] stream )
 	{
 		var result = new List<(string, ushort, object?)>();

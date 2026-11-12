@@ -12,6 +12,10 @@ using HackPDM.Infrastructure.Odoo;
 
 namespace HackPDM.Mvvm.ViewModels.Tools;
 
+/// <summary>
+/// One property or array item in the JSON editor's tree: its key, type, value as text (for primitives)
+/// or children (for objects and arrays), plus the display helpers the tree template binds to.
+/// </summary>
 public partial class JsonNodeViewModel : INotifyPropertyChanged
 {
 	public static JsonNodeType[] AllNodeTypes { get; } = Enum.GetValues<JsonNodeType>();
@@ -74,6 +78,9 @@ public partial class JsonNodeViewModel : INotifyPropertyChanged
 	// Generates index array [0..Depth-1] for rendering vertical left branch guide strips
 	public int[] DepthStrips => [.. Enumerable.Range(0, Depth)];
 
+	/// <summary>The JSON type of the node.</summary>
+	/// <value>Changing it converts the node: a container clears <see cref="RawValue"/> (and renames children between "[i]" and
+	/// "property_i" keys), a primitive drops its children and gets a default value when the current text doesn't fit.</value>
 	public JsonNodeType? NodeType
 	{
 		get;
@@ -166,6 +173,11 @@ public partial class JsonNodeViewModel : INotifyPropertyChanged
 
 	public JsonNodeViewModel? Parent { get; set; }
 
+	/// <summary>Builds the node, and recursively its children, from a parsed JSON value.</summary>
+	/// <param name="key">The property name, or "[i]" for an array item.</param>
+	/// <param name="node">The value; null is a JSON null.</param>
+	/// <param name="parent">The containing node; null for a top-level property.</param>
+	/// <param name="onExpandedChanged">Called when <see cref="IsExpanded"/> changes; not passed on to the children.</param>
 	public JsonNodeViewModel(string key, JsonNode? node, JsonNodeViewModel? parent = null, Action? onExpandedChanged = null)
 	{
 		Key = key;
@@ -260,6 +272,8 @@ public partial class JsonNodeViewModel : INotifyPropertyChanged
 		Validate();
 	}
 
+	/// <summary>Adds an empty string child: a "property_n" key on an object, the next "[n]" index on an array.</summary>
+	/// <remarks>Does nothing on a primitive node.</remarks>
 	public void AddChildProperty()
 	{
 		if (NodeType == JsonNodeType.Object)
@@ -274,6 +288,8 @@ public partial class JsonNodeViewModel : INotifyPropertyChanged
 		}
 	}
 
+	/// <summary>Removes this node from its parent and renumbers the parent's array items.</summary>
+	/// <remarks>Does nothing for a top-level node; those are removed from <see cref="JsonEditorViewModel.RootNodes"/> instead.</remarks>
 	public void DeleteSelf()
 	{
 		Parent?.Children.Remove(this);
@@ -291,6 +307,7 @@ public partial class JsonNodeViewModel : INotifyPropertyChanged
 		}
 	}
 
+	/// <summary>Updates <see cref="HasError"/> and <see cref="ErrorMessage"/>: a number node whose text is not an invariant-culture number is an error.</summary>
 	public void Validate()
 	{
 		HasError = false;
@@ -306,6 +323,8 @@ public partial class JsonNodeViewModel : INotifyPropertyChanged
 		}
 	}
 
+	/// <summary>Converts the node, and recursively its children, back to JSON.</summary>
+	/// <returns>The JSON value; null for a JSON null. An invalid number becomes 0 and an invalid boolean false.</returns>
 	public JsonNode? ToJsonNode()
 	{
 		return NodeType switch

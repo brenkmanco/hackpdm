@@ -6,10 +6,14 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace HackPDM.Mvvm.Views.Common.Controls;
 
+/// <summary>Window helpers: presenter kind, native handle, and the window a page was opened in.</summary>
 public static class WindowExtensions
 {
 	extension( Window window )
 	{
+		/// <summary>Switches the window's presenter (overlapped, full screen, compact overlay...).</summary>
+		/// <param name="kind">The presenter to use.</param>
+		/// <returns><see langword="true"/> when the platform accepted it; any exception is swallowed and gives <see langword="false"/>.</returns>
 		public bool SetWindowType( AppWindowPresenterKind kind )
 		{
 			try
@@ -23,6 +27,7 @@ public static class WindowExtensions
 			}
 		}
 
+		/// <summary>The native window handle (HWND) on Windows; <see cref="IntPtr.Zero"/> on other platforms.</summary>
 #if WINDOWS
 		public IntPtr IntPtrHandle => WinRT.Interop.WindowNative.GetWindowHandle( window );
 #else

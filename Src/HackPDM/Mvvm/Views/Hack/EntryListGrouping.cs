@@ -14,6 +14,10 @@ internal static class EntryListGrouping
 	/// TableView must always receive the flat row list: handing it a grouped CollectionViewSource breaks
 	/// its internal CollectionView and crashes the page. Grouping goes through TableView's GroupDescriptions.
 	/// </summary>
+	/// <param name="grid">The entry list.</param>
+	/// <param name="rows">The flat row list; set as the items source when it isn't already.</param>
+	/// <param name="groupKey">The key to group rows by; null removes the grouping.</param>
+	/// <remarks>Grouping is only applied on Windows; elsewhere only the items source is set. An unchanged key leaves the groups alone.</remarks>
 	public static void Apply( TableView grid, IList rows, Func<EntryRow, IComparable?>? groupKey )
 	{
 		if( !ReferenceEquals( grid.ItemsSource, rows ) )

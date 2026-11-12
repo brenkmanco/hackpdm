@@ -2,6 +2,7 @@ using HackPDM.Infrastructure.Odoo;
 
 namespace HackPDM.Infrastructure.SldWrks
 {
+	/// <summary>Holds the process-wide SolidWorks file reader.</summary>
 	public class SolidWorksUtil
 	{
 		/// <summary>
@@ -9,6 +10,10 @@ namespace HackPDM.Infrastructure.SldWrks
 		/// this is the SolidWorks Document Manager; everywhere else (or when it can't start) the
 		/// managed <see cref="SwFileReader"/>, which needs no SolidWorks components.
 		/// </summary>
+		/// <value>
+		/// Created on first read from <see cref="HackPDM.Infrastructure.Odoo.OdooDefaults.Instance"/>'s SwApi key, so read it only after
+		/// the server settings are loaded, or the managed reader is chosen for the rest of the run. Can be replaced (for example in tests).
+		/// </value>
 		public static ISwDocumentReader? DocMgr
 		{
 			get => field ??= CreateReader();

@@ -20,6 +20,13 @@ public enum EntryOpenTarget
 public static class FileStatusPolicy
 {
 	/// <summary>"Open": prefer the local copy, fall back to the remote one when there is no local copy.</summary>
+	/// <param name="hasRemoteId">Whether the entry exists on the server.</param>
+	/// <param name="status">The entry's status.</param>
+	/// <returns>
+	/// <see cref="EntryOpenTarget.Local"/> for local-only entries and statuses with a local copy;
+	/// <see cref="EntryOpenTarget.Remote"/> for <see cref="FileStatus.Ro"/> and <see cref="FileStatus.Nv"/>;
+	/// otherwise <see cref="EntryOpenTarget.None"/>.
+	/// </returns>
 	public static EntryOpenTarget ForOpen( bool hasRemoteId, FileStatus status )
 	{
 		if( !hasRemoteId )
@@ -34,6 +41,12 @@ public static class FileStatusPolicy
 	}
 
 	/// <summary>"Preview latest remote": only entries that exist remotely.</summary>
+	/// <param name="hasRemoteId">Whether the entry exists on the server.</param>
+	/// <param name="status">The entry's status.</param>
+	/// <returns>
+	/// <see cref="EntryOpenTarget.Remote"/> for a remote entry with a version (not deleted, destroyed or without versions);
+	/// otherwise <see cref="EntryOpenTarget.None"/>.
+	/// </returns>
 	public static EntryOpenTarget ForLatestRemote( bool hasRemoteId, FileStatus status )
 	{
 		if( !hasRemoteId )
@@ -48,6 +61,12 @@ public static class FileStatusPolicy
 	}
 
 	/// <summary>"Latest local": only entries that have a local copy.</summary>
+	/// <param name="hasRemoteId">Whether the entry exists on the server.</param>
+	/// <param name="status">The entry's status.</param>
+	/// <returns>
+	/// <see cref="EntryOpenTarget.Local"/> for local-only entries and statuses with a local copy (not
+	/// <see cref="FileStatus.Ro"/>); otherwise <see cref="EntryOpenTarget.None"/>.
+	/// </returns>
 	public static EntryOpenTarget ForLatestLocal( bool hasRemoteId, FileStatus status )
 	{
 		if( !hasRemoteId )
@@ -62,6 +81,8 @@ public static class FileStatusPolicy
 	}
 
 	/// <summary>Only entries that were never committed can have their icon uploaded.</summary>
+	/// <param name="status">The entry's status.</param>
+	/// <returns><see langword="true"/> for <see cref="FileStatus.Lo"/>, <see cref="FileStatus.Ft"/> and <see cref="FileStatus.If"/>.</returns>
 	public static bool CanUploadIcon( FileStatus status )
 		=> status is FileStatus.Lo or FileStatus.Ft or FileStatus.If;
 }

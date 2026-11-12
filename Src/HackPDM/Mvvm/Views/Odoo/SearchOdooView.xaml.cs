@@ -28,6 +28,8 @@ public sealed partial class SearchOdooView : Page
 			=> ViewModel.SelectedActiveProperties = [ .. OdooSearchPropList.SelectedItems.OfType<SearchPropertiesRow>() ];
 	}
 
+	/// <summary>Remembers the window this page is shown in, so the page can close it.</summary>
+	/// <param name="window">The hosting window.</param>
 	public void StoreWindowInstance( Window window ) => _parentWindow = window;
 
 	private void OdooCancel_Click( object sender, RoutedEventArgs e )

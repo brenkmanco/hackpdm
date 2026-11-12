@@ -12,6 +12,8 @@ using HackPDM.Mvvm.ViewModels.Common;
 namespace HackPDM.Mvvm.ViewModels.Settings;
 
 /// <summary>One editable theme color in the editor list.</summary>
+/// <param name="key">The color's catalog entry.</param>
+/// <param name="isGroupStart">Whether this is the first color of its group.</param>
 public partial class ThemeColorItem( ThemeColorKey key, bool isGroupStart ) : ObservableObject
 {
 	public ThemeColorKey Definition { get; } = key;
@@ -38,6 +40,8 @@ public partial class ThemeEditorViewModel : ObservableObject
 {
 	private readonly IThemeService _theme;
 
+	/// <summary>Builds the color list from <see cref="ThemeColorCatalog.All"/> and reads the current colors and mode.</summary>
+	/// <param name="theme">Applies, edits and saves the theme.</param>
 	public ThemeEditorViewModel( IThemeService theme )
 	{
 		_theme = theme;
@@ -98,6 +102,8 @@ public partial class ThemeEditorViewModel : ObservableObject
 	partial void OnSelectedColorChanged( ThemeColorItem? value ) => PublishSelected();
 
 	/// <summary>The color picker (or hex box) set a new value for the selected color.</summary>
+	/// <param name="color">The new color; applied live but not saved.</param>
+	/// <remarks>Ignored while colors can't be edited (<see cref="IsEditable"/> false), with no selection, or when the color is unchanged.</remarks>
 	public void SetSelectedColor( ArgbColor color )
 	{
 		if( !IsEditable || SelectedColor is not { } item || item.Hex == color.ToString() )
@@ -117,6 +123,7 @@ public partial class ThemeEditorViewModel : ObservableObject
 		}
 	}
 
+	/// <summary>Restores the selected color to the built-in value (not saved yet).</summary>
 	[RelayCommand( CanExecute = nameof( CanResetSelected ) )]
 	private void ResetSelected()
 	{
@@ -130,6 +137,7 @@ public partial class ThemeEditorViewModel : ObservableObject
 
 	private bool CanResetSelected() => IsEditable && SelectedColor is not null;
 
+	/// <summary>Restores every color of the running theme to the built-in values (not saved yet).</summary>
 	[RelayCommand( CanExecute = nameof( IsEditable ) )]
 	private void ResetAll()
 	{
@@ -140,6 +148,7 @@ public partial class ThemeEditorViewModel : ObservableObject
 		StatusText = $"All {EditingThemeText.ToLowerInvariant()} colors restored to the defaults (not saved yet).";
 	}
 
+	/// <summary>Saves the theme to AppConfig.json; a failure is shown in the status text.</summary>
 	[RelayCommand( CanExecute = nameof( HasUnsavedChanges ) )]
 	private void Save()
 	{
@@ -157,6 +166,7 @@ public partial class ThemeEditorViewModel : ObservableObject
 		}
 	}
 
+	/// <summary>Discards unsaved changes and re-applies the theme as last saved.</summary>
 	[RelayCommand( CanExecute = nameof( HasUnsavedChanges ) )]
 	private void Revert()
 	{

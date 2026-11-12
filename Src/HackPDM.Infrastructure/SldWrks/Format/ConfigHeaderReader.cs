@@ -19,7 +19,9 @@ public static partial class ConfigHeaderReader
 	[GeneratedRegex( @"^_MO_VERSION_(\d+)/" )]
 	private static partial Regex VersionStream();
 
-	/// <summary>The document version from its "_MO_VERSION_N/…" streams, or null.</summary>
+	/// <summary>Reads the document version from the name of its "_MO_VERSION_N/..." streams.</summary>
+	/// <param name="store">The document's streams.</param>
+	/// <returns>The first N found, or null when there is no such stream.</returns>
 	public static int? DocumentVersion( SwStreamStore store )
 	{
 		foreach( string name in store.Names )
@@ -28,7 +30,12 @@ public static partial class ConfigHeaderReader
 		return null;
 	}
 
-	/// <summary>Configuration index (the N in "Config-N-…") → name. Empty when the stream is missing or unreadable.</summary>
+	/// <summary>Reads configuration names from "Contents/CMgrHdr2" (or "Contents/CMgrHdr").</summary>
+	/// <param name="store">The document's streams.</param>
+	/// <returns>
+	/// Configuration index (the N in "Config-N-...") to name. Empty when the stream or the document version is missing;
+	/// when the stream stops making sense part-way, the names read before that point.
+	/// </returns>
 	public static Dictionary<int, string> ReadNames( SwStreamStore store )
 	{
 		var names = new Dictionary<int, string>();

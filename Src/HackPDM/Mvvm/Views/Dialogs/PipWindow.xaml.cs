@@ -52,12 +52,16 @@ public sealed partial class PipWindow : Window
 		ReturnRequested?.Invoke( this, EventArgs.Empty );
 	}
 
+	/// <summary>Shows an element in the window, replacing whatever it showed.</summary>
+	/// <param name="element">The element to host; it must not have another parent.</param>
 	public void HostComponent( UIElement element )
 	{
 		PipContentRoot.Children.Clear();
 		PipContentRoot.Children.Add( element );
 	}
 
+	/// <summary>Removes the hosted element so it can be put back elsewhere.</summary>
+	/// <returns>The element that was shown; null when the window was empty.</returns>
 	public UIElement ReleaseComponent()
 	{
 		if( PipContentRoot.Children.Count > 0 )

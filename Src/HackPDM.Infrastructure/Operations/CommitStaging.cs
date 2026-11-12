@@ -24,7 +24,14 @@ public static class CommitStaging
 {
 	// ---------------------------------------------------------------- entries
 
-	/// <summary>A new entry for <paramref name="hack"/> in directory <paramref name="dirId"/>; null for a restricted type.</summary>
+	/// <summary>Builds (but does not send) a new entry for <paramref name="hack"/> in directory <paramref name="dirId"/>.</summary>
+	/// <param name="hack">The local file; kept on the entry as <c>LocalFile</c>.</param>
+	/// <param name="dirId">The server directory id.</param>
+	/// <param name="commit">The commit the entry will be staged under; null leaves <c>commit_id</c> empty.</param>
+	/// <returns>
+	/// The entry, with <c>returnType</c> <see cref="EntryReturnType.Staged"/> and its type and category set from the file
+	/// extension when known; null when the server restricts types and this extension isn't one of them.
+	/// </returns>
 	public static HpEntry? NewEntry( HackFile hack, int dirId, HpPDMCommit? commit = null )
 	{
 		IHpTypeModel? type = TypeOf( hack, out bool restricted );
@@ -47,7 +54,9 @@ public static class CommitStaging
 		return entry;
 	}
 
-	/// <summary>The live server entry with the same name in the same directory, marked as found; null when there is none.</summary>
+	/// <summary>Looks up the live (not deleted) server entry with the same name in the same directory.</summary>
+	/// <param name="entry">The entry to match; its <c>name</c> and <c>dir_id</c> are used.</param>
+	/// <returns>The server entry with <c>returnType</c> set to <see cref="EntryReturnType.GotExisting"/>; null when there is none or the read failed.</returns>
 	public static async Task<HpEntry?> FindRemoteEntryAsync( HpEntry entry )
 	{
 		HpEntry? found = ( await HpEntry.GetRecordsBySearchAsync(
@@ -57,6 +66,9 @@ public static class CommitStaging
 		return found;
 	}
 
+	/// <summary>Stages a new entry as an hp.record.staged row of its commit.</summary>
+	/// <param name="entry">The entry from <see cref="NewEntry"/>; its <c>returnType</c> is set to <see cref="EntryReturnType.Staged"/> or <see cref="EntryReturnType.Failed"/>.</param>
+	/// <returns>The staged record, or null (or one with id 0) when staging failed.</returns>
 	public static async Task<HpRecordStaged?> StageEntryAsync( HpEntry entry )
 	{
 		HpRecordStaged? staged = await entry.StageRecAsync( false );
@@ -75,11 +87,19 @@ public static class CommitStaging
 		=> NewVersion( hack, stagedEntry.id, stagedEntry.payload?.GetValueOrDefault( "dir_id" ) as int?,
 			stagedEntry.payload?.GetValueOrDefault( "windows_complete_name" ) as string, stagedEntry.commit_id );
 
-	/// <summary>Stages a new version of an existing entry; null when it couldn't be.</summary>
+	/// <summary>Stages a new version of an existing server entry, with the file's contents and (for SolidWorks files) its preview.</summary>
+	/// <param name="hack">The local file; its contents are read from disk unless already loaded.</param>
+	/// <param name="entry">The existing server entry.</param>
+	/// <param name="commitId">The id of the commit to stage under.</param>
+	/// <returns>The staged version record; null when the type is restricted, the file can't be read, or staging failed.</returns>
+	/// <remarks>Marks the version with the internal <c>__internal__existing</c> flag so the server attaches it to the existing entry.</remarks>
 	public static Task<HpRecordStaged?> StageVersionAsync( HackFile hack, IHpEntryModel entry, int commitId )
 		=> StageAsync( PrepareVersion( hack, entry, commitId ), existingEntry: true );
 
-	/// <summary>Stages the first version of an entry staged in this commit; null when it couldn't be.</summary>
+	/// <summary>Stages the first version of an entry staged earlier in the same commit.</summary>
+	/// <param name="hack">The local file; its contents are read from disk unless already loaded.</param>
+	/// <param name="stagedEntry">The staged entry from <see cref="StageEntryAsync"/>; its directory, server name and commit are copied.</param>
+	/// <returns>The staged version record; null when the type is restricted, the file can't be read, or staging failed.</returns>
 	public static Task<HpRecordStaged?> StageVersionAsync( HackFile hack, IHpRecordStagedModel stagedEntry )
 		=> StageAsync( PrepareVersion( hack, stagedEntry ), existingEntry: false );
 
@@ -170,7 +190,14 @@ public static class CommitStaging
 		return PwaPaths.ToAbsolute( serverName );
 	}
 
-	/// <summary>Stages a relationship for every file each staged SolidWorks version references.</summary>
+	/// <summary>Stages an hp.version.relationship for every file each staged SolidWorks version references.</summary>
+	/// <param name="versions">Staged versions; ones that aren't SolidWorks files are skipped.</param>
+	/// <returns>True when done (including when there was nothing to stage); false when a file couldn't be read or anything else threw.</returns>
+	/// <remarks>
+	/// Each reference is resolved to a local file under the working folder when possible, else kept as its stored path; the
+	/// server links it by file name and windows_complete_name. All relationships go in one create call, whose own failure is
+	/// not detected.
+	/// </remarks>
 	public static async Task<bool> StageRelationshipsAsync( params HpRecordStaged[] versions )
 	{
 		try
@@ -213,7 +240,10 @@ public static class CommitStaging
 		}
 	}
 
-	/// <summary>Stages the custom properties of each staged SolidWorks version.</summary>
+	/// <summary>Stages the custom properties of each staged SolidWorks version as hp.version.property records.</summary>
+	/// <param name="versions">Staged versions; ones that aren't SolidWorks files are skipped.</param>
+	/// <returns>True when done; false as soon as one version's properties can't be read (nothing is staged then).</returns>
+	/// <remarks>Reads properties through <see cref="SolidWorksUtil.DocMgr"/> and stages them all in one call, whose own failure is not detected.</remarks>
 	public static async Task<bool> StagePropertiesAsync( params HpRecordStaged[] versions )
 	{
 		List<HpVersionProperty> staged = [];

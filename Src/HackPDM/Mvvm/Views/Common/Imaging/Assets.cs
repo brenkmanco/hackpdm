@@ -15,6 +15,7 @@ namespace HackPDM.Mvvm.Views.Common.Imaging;
 /// </summary>
 public static partial class Assets
 {
+	/// <summary>Image key to URI: the bundled images, the extra keys, then the user's local images (which win).</summary>
 	public static readonly Dictionary<string, string> AssetMap;
 
 	/// <summary>Keys that don't match a file name: extensions that share an icon, and extension icons with no Icons/ equivalent.</summary>

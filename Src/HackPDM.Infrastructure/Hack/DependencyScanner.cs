@@ -15,9 +15,19 @@ namespace HackPDM.Infrastructure.Hack;
 public static class DependencyScanner
 {
 	/// <summary>
-	/// <paramref name="file"/> and everything it references. False with the unresolved nodes when
-	/// any reference can't be found.
+	/// Collects <paramref name="file"/> and every local file it references, recursively, by building and
+	/// resolving a <see cref="HackResultTree"/>. Only SolidWorks files have references; any other file yields just itself.
 	/// </summary>
+	/// <param name="file">The local file to start from.</param>
+	/// <returns>
+	/// <c>success</c> true with <c>hackFiles</c> holding the file and all its (transitive) references, each tree node once;
+	/// or <c>success</c> false with an empty file list and <c>hackResults</c> holding the broken nodes (missing, outside
+	/// the working folder, or unreadable) when any part of the tree is broken.
+	/// </returns>
+	/// <remarks>
+	/// Reference resolution reads the SolidWorks files on a thread-pool thread (<see cref="Task.Run(Func{Task})"/>).
+	/// Circular references are skipped. See <see cref="HackResultTree.ResultNode.ProcessDependencies"/>.
+	/// </remarks>
 	public static async Task<(bool success, List<HackFile> hackFiles, List<HackResultTree.ResultNode> hackResults)> GetHackFileWithDependencies( this HackFile file )
 	{
 		HackResultTree hackTree = new( file );
@@ -28,15 +38,24 @@ public static class DependencyScanner
 		return (true, hackFiles, []);
 	}
 
+	/// <summary>Collects the local file of a browser entry and everything it references; see <see cref="GetHackFileWithDependencies(HackFile)"/>.</summary>
+	/// <param name="entry">The entry; its local file is used.</param>
+	/// <returns>The same tuple as <see cref="GetHackFileWithDependencies(HackFile)"/>.</returns>
 	public static Task<(bool success, List<HackFile> hackFiles, List<HackResultTree.ResultNode> hackResults)> GetHackFileWithDependencies( EntryRow entry )
 		=> new HackFile( entry ).GetHackFileWithDependencies();
 
 	/// <summary>
-	/// The files directly in <paramref name="folderPath"/> plus everything its SolidWorks files
-	/// reference, each once. Names the server's entry filters reject (SolidWorks "~$" lock files)
-	/// are left out. A SolidWorks file whose references can't all be found is left out with its
-	/// tree and reported in <c>Broken</c>.
+	/// Collects the files directly in <paramref name="folderPath"/> (not subfolders) plus everything its SolidWorks files
+	/// reference, each once. Names the server's entry filters reject (SolidWorks "~$" lock files) are left out.
 	/// </summary>
+	/// <param name="folderPath">The local folder to scan.</param>
+	/// <returns>
+	/// <c>Files</c>: the folder's files and their references, without duplicates. <c>Broken</c>: the broken nodes of every
+	/// SolidWorks file whose references can't all be found; such a file is left out of <c>Files</c> together with its whole tree.
+	/// </returns>
+	/// <remarks>Files are checked one after another; filtering uses <see cref="PdmCommitOperations.IsFilteredName"/>.</remarks>
+	/// <exception cref="DirectoryNotFoundException"><paramref name="folderPath"/> does not exist.</exception>
+	/// <exception cref="UnauthorizedAccessException">The folder can't be listed.</exception>
 	public static async Task<(List<HackFile> Files, List<HackResultTree.ResultNode> Broken)> GetHackFolderWithDependenciesAsync( string folderPath )
 	{
 		HashSet<HackFile> files = [];

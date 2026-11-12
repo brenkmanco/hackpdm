@@ -67,6 +67,23 @@ public static class OdooTransport
 	private static CancellationTokenSource RequestTimeout( int timeoutMs )
 		=> new( timeoutMs > 0 ? TimeSpan.FromMilliseconds( timeoutMs ) : DefaultRequestTimeout );
 
+	/// <summary>POSTs a JSON-RPC request to <paramref name="url"/> and deserializes the response body.</summary>
+	/// <param name="request">The request to serialize as the JSON body.</param>
+	/// <param name="url">The full endpoint URL, for example the Odoo base URL plus <c>/jsonrpc</c>.</param>
+	/// <param name="timeout">Timeout for the whole request (send and read) in milliseconds; 0 or less means 100 seconds.</param>
+	/// <param name="proxy">An optional HTTP proxy. Each distinct proxy gets its own cached <see cref="HttpClient"/>.</param>
+	/// <param name="token">Cancels the request.</param>
+	/// <returns>The deserialized response, or null when the body is JSON <c>null</c>. A JSON-RPC error is returned in <see cref="JsonRpcResponse.Error"/>, not thrown.</returns>
+	/// <remarks>
+	/// Connections are pooled and reused, except for servers that have answered HTTP/1.0 without keep-alive
+	/// (Odoo's built-in Werkzeug server): once seen, later calls to that host use a client that never reuses
+	/// connections, to avoid "response ended prematurely" failures on a socket the server already closed.
+	/// Connecting times out after 15 seconds regardless of <paramref name="timeout"/>.
+	/// </remarks>
+	/// <exception cref="OperationCanceledException">The timeout elapsed or <paramref name="token"/> was cancelled (thrown as <see cref="TaskCanceledException"/>).</exception>
+	/// <exception cref="HttpRequestException">The connection failed or the server returned a non-success status code.</exception>
+	/// <exception cref="System.Text.Json.JsonException">The response body is not valid JSON-RPC JSON.</exception>
+	/// <exception cref="UriFormatException"><paramref name="url"/> is not an absolute URI.</exception>
 	public async static Task<JsonRpcResponse?> SendJsonAsync( this JsonRpcRequest request, string url, int timeout = 0, IWebProxy? proxy = null, CancellationToken token = default )
 	{
 		using var cts = RequestTimeout( timeout );

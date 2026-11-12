@@ -27,7 +27,9 @@ public static class EntryIcons
 	// creating the provider registers the bundled asset map
 	static EntryIcons() => _ = HackPDM.Mvvm.Views.Common.Controls.UISettings.ImageProvider;
 
-	/// <summary>A bundled asset ("ok", "fo_loc", ...), or null if there is none.</summary>
+	/// <summary>Looks up a bundled (or user-replaced) image by key.</summary>
+	/// <param name="key">The asset key, e.g. "ok", "fo_loc" or a file extension.</param>
+	/// <returns>The image, shared by every caller asking for the same key; null if there is none.</returns>
 	public static ImageSource? Asset( string key )
 	{
 		if( Cache.TryGetValue( key, out var cached ) )
@@ -39,6 +41,9 @@ public static class EntryIcons
 	}
 
 	/// <summary>Icon for a file extension (without the dot).</summary>
+	/// <param name="extension">The extension without the dot; null or empty gives the generic file icon.</param>
+	/// <returns>The bundled icon for the extension, else the icon stored on the server's file type, else the generic file icon.</returns>
+	/// <remarks>A server icon is returned at once and fills in once decoded.</remarks>
 	public static ImageSource? ForType( string? extension )
 	{
 		if( string.IsNullOrEmpty( extension ) )
@@ -46,7 +51,9 @@ public static class EntryIcons
 		return Asset( extension ) ?? ServerTypeIcon( extension ) ?? Asset( GenericFile );
 	}
 
-	/// <summary>Icon for a file status; null for statuses without one (no versions, unknown).</summary>
+	/// <summary>Icon for a file status.</summary>
+	/// <param name="status">The row's status; its lower-case name is the asset key.</param>
+	/// <returns>The status icon; null for statuses without one (no versions, unknown).</returns>
 	public static ImageSource? ForStatus( FileStatus status )
 		=> Asset( status.ToString().ToLowerInvariant() );
 

@@ -41,6 +41,18 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 }
 public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
 {
+    /// <summary>Works out which of the value fields holds this property's value.</summary>
+    /// <returns>
+    /// The first match in this order: <see cref="HackPDM.Shared.GlobalData.PropertyType.Text"/> for a non-empty
+    /// <c>text_value</c> other than "False" (Odoo's empty marker); <see cref="HackPDM.Shared.GlobalData.PropertyType.Date"/>
+    /// when <c>date_value</c> is set; <see cref="HackPDM.Shared.GlobalData.PropertyType.Number"/> when <c>number_value</c>
+    /// is not 0; <see cref="HackPDM.Shared.GlobalData.PropertyType.Yesno"/> when <c>yesno_value</c> is true; otherwise
+    /// <see cref="HackPDM.Shared.GlobalData.PropertyType.None"/>.
+    /// </returns>
+    /// <remarks>
+    /// A <see langword="null"/> <c>number_value</c> also counts as "not 0", so a property with no value set
+    /// reports Number; a yes/no property that is false reports None.
+    /// </remarks>
     public PropertyType GetValueType()
     {
         if (!string.IsNullOrEmpty(text_value) && text_value != "False") return PropertyType.Text;
@@ -50,6 +62,9 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
         return PropertyType.None;
     }
         
+    /// <summary>Gets the text value when <see cref="GetValueType"/> says the property is text.</summary>
+    /// <param name="text">The <c>text_value</c> when the property is text; otherwise <see langword="null"/>.</param>
+    /// <returns><see langword="true"/> when the property's value type is Text.</returns>
     public bool IsText( out string? text )
     {
         PropertyType pType = GetValueType();
@@ -61,6 +76,9 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
         }
         return false;
     }
+    /// <summary>Gets the number value when <see cref="GetValueType"/> says the property is a number.</summary>
+    /// <param name="number">The <c>number_value</c> (0 when null) when the property is a number; otherwise 0.</param>
+    /// <returns><see langword="true"/> when the property's value type is Number.</returns>
     public bool IsNumber( out float number )
     {
         PropertyType pType = GetValueType();
@@ -72,6 +90,9 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
         }
         return false;
     }
+    /// <summary>Gets the yes/no value when <see cref="GetValueType"/> says the property is yes/no.</summary>
+    /// <param name="yesNo">Set to <see langword="true"/> when the property is yes/no; otherwise <see langword="false"/>.</param>
+    /// <returns><see langword="true"/> when the property's value type is Yesno (which only happens when <c>yesno_value</c> is true).</returns>
     public bool IsYesNo(out bool yesNo)
     {
         PropertyType pType = GetValueType();
@@ -83,6 +104,12 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
         }
         return false;
     }
+    /// <summary>Checks whether the property is a date.</summary>
+    /// <param name="date">
+    /// When the property is a date, the <c>text_value</c> field (not <c>date_value</c>), which is usually empty for
+    /// date properties; otherwise <see langword="null"/>.
+    /// </param>
+    /// <returns><see langword="true"/> when the property's value type is Date.</returns>
     public bool IsDate(out string? date)
     {
         PropertyType pType = GetValueType();
@@ -95,10 +122,20 @@ public partial class HpVersionProperty : HpBaseModelTransport<HpVersionProperty>
         return false;
     }
 	/// <summary>
-	/// A custom property read from a SolidWorks file (configuration, name, type, value) as a property
-	/// of version <paramref name="versionId"/>; null when the server doesn't know the property and
-	/// only allows known ones.
+	/// Turns a custom property read from a SolidWorks file into an unsaved property record of a version.
 	/// </summary>
+	/// <param name="config">The SolidWorks configuration name; "" (file-level property) is stored as <see langword="null"/>.</param>
+	/// <param name="name">The property name; looked up in <c>OdooDefaults.Instance.ExtToProp</c> to fill <c>prop_id</c>.</param>
+	/// <param name="type">The SolidWorks property type: "text", "date", "yesno" or "number". Any other type leaves every value field empty.</param>
+	/// <param name="value">The value, boxed as the type implies (string, <see cref="System.DateTime"/>, bool, or a number).</param>
+	/// <param name="versionId">The hp.version id the property belongs to.</param>
+	/// <param name="commitId">The commit the property is staged in.</param>
+	/// <returns>
+	/// The new record (not yet sent to the server), or <see langword="null"/> when the property name is unknown and
+	/// the server's <c>RestrictProperties</c> setting is not explicitly false.
+	/// </returns>
+	/// <exception cref="System.InvalidCastException"><paramref name="value"/> is not of the type that <paramref name="type"/> implies.</exception>
+	/// <exception cref="System.FormatException">A "number" <paramref name="value"/> is a string that is not a number.</exception>
 	public static HpVersionProperty? FromSwProperty( string config, string name, string type, object? value, int versionId, IMany2One? commitId )
 	{
 		IHpPropertyModel? known = null;

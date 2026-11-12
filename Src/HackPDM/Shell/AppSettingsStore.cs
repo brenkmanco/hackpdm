@@ -14,9 +14,13 @@ namespace HackPDM.Shell;
 /// </summary>
 public static class AppSettingsStore
 {
+	/// <summary>The full path of settings.json.</summary>
 	public static string FilePath => Path.Combine( AppDataPaths.Config, "settings.json" );
 
 	/// <summary>The settings file; on its first use, the values earlier versions kept in the packaged app's LocalSettings are brought over.</summary>
+	/// <returns>A settings provider backed by <see cref="FilePath"/>.</returns>
+	/// <remarks>The import only happens when the file did not exist yet and the config folder was not overridden; it never
+	/// overwrites values already in the file, and failures are only written to the debug output.</remarks>
 	public static JsonFileSettingsProvider Open()
 	{
 		JsonFileSettingsProvider settings = new( FilePath );

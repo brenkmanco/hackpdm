@@ -123,9 +123,12 @@ public sealed class One2Many : MultiRecord, IOne2Many
 	public static implicit operator One2Many( int[] ids ) => new( ids );
 }
 
+/// <summary>Helpers for collections of model records.</summary>
 public static class RecordIds
 {
-	/// <summary>The records' ids (records without one left out).</summary>
+	/// <summary>Collects the ids of records.</summary>
+	/// <param name="models">The records.</param>
+	/// <returns>The ids in order, leaving out records whose id is <see langword="null"/> or 0.</returns>
 	public static int[] Ids( this IEnumerable<HackPDM.Domain.OdooModels.Models.HpBaseModel> models )
 		=> [ .. models.Select( model => model.id ).OfType<int>().Where( id => id != 0 ) ];
 }

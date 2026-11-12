@@ -20,6 +20,10 @@ namespace HackPDM.Mvvm.ViewModels.Settings;
 /// Logging in to Odoo, and loading or saving a login profile as JSON. One per visit of the Profile
 /// Manager page; whether the session is logged in lives in <see cref="LoginSession"/>.
 /// </summary>
+/// <param name="session">The run-wide login state this page reads and updates.</param>
+/// <param name="dialogs">Shows errors when a profile can't be read.</param>
+/// <param name="pickers">Chooses profile files to load and save.</param>
+/// <param name="navigation">Moves to the file manager after a login, or to the settings page.</param>
 /// <param name="accountChanged">Called after a login as another server, database or user than the last one.</param>
 public partial class ProfileManagerViewModel(
 	LoginSession session,
@@ -33,6 +37,7 @@ public partial class ProfileManagerViewModel(
 	/// <summary>Why the last login failed.</summary>
 	public ObservableCollection<BasicStatusMessage> OStatus { get; } = new( session.LastErrors );
 
+	/// <summary>Whether this session is logged in; stored in the run-wide <see cref="LoginSession"/>.</summary>
 	public bool IsLoggedIn
 	{
 		get => session.IsLoggedIn;
@@ -70,9 +75,11 @@ public partial class ProfileManagerViewModel(
 		navigation.NavigateTo( NavigatePageMenu.HackFileManager );
 	}
 
+	/// <summary>Opens the configuration page.</summary>
 	[RelayCommand]
 	private void OpenSettings() => navigation.NavigateTo( NavigatePageMenu.Configuration );
 
+	/// <summary>Lets the user pick a profile file and applies its values to the live settings (without logging in).</summary>
 	[RelayCommand]
 	private async Task LoadProfileAsync()
 	{
@@ -95,12 +102,15 @@ public partial class ProfileManagerViewModel(
 		ProfileStore.Apply( profile );
 	}
 
+	/// <summary>Saves the current settings, including the password, to a profile file the user picks.</summary>
 	[RelayCommand]
 	private Task SaveProfileAsync() => SaveAsync( ProfileStore.Current( includePassword: true ) );
 
+	/// <summary>Saves the current settings, without the password, to a profile file the user picks.</summary>
 	[RelayCommand]
 	private Task SaveProfileWithoutPasswordAsync() => SaveAsync( ProfileStore.Current( includePassword: false ) );
 
+	/// <summary>Saves an example profile with placeholder values to a file the user picks.</summary>
 	[RelayCommand]
 	private Task CreateTemplateAsync() => SaveAsync( ProfileStore.Template );
 
@@ -110,7 +120,14 @@ public partial class ProfileManagerViewModel(
 			await ProfileStore.WriteAsync( path, profile );
 	}
 
-	/// <summary>Checks the server, port, credentials and client version; the reasons it can't log in go to <see cref="OStatus"/>.</summary>
+	/// <summary>Checks the server address, port and credentials; the reasons it can't log in go to <see cref="OStatus"/>.</summary>
+	/// <returns><see langword="true"/> when the credentials were accepted.</returns>
+	/// <remarks>
+	/// Re-initializes <see cref="HackPDM.Infrastructure.Odoo.OdooDefaults.Instance"/> (which authenticates against the server),
+	/// then checks the address and the port. The errors are also kept in the <see cref="LoginSession"/> so they show again when
+	/// the page is reopened. Any exception is swallowed and reported as <see langword="false"/> with no message. The client
+	/// version check (<see cref="HackPDM.Configuration.HackUpdater.EnsureUpdated"/>) is never reached in the current code.
+	/// </remarks>
 	public async Task<bool> AbleToLoginAsync()
 	{
 		OStatus.Clear();

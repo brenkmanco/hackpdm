@@ -22,19 +22,28 @@ public sealed record LocalFileChange( string FullPath, LocalChangeKind Kind );
 /// program writes a temporary file and renames it), which should reach the page as one "updated".
 /// Not thread-safe: the watcher locks around it.
 /// </summary>
+/// <param name="quiet">How long a path must go without events before it is handed out.</param>
 public sealed class LocalChangeBatcher( TimeSpan quiet )
 {
 	private readonly Dictionary<string, (LocalChangeKind? Kind, DateTime Due)> _pending = new( StringComparer.Ordinal );
 
 	public int PendingCount => _pending.Count;
 
+	/// <summary>Records an event for a path, merging it with the path's pending change and restarting its quiet period.</summary>
+	/// <param name="path">The full path of the file or folder (compared case-sensitively).</param>
+	/// <param name="kind">What the event reported.</param>
+	/// <param name="now">The current time; the path becomes due at <paramref name="now"/> plus the quiet period.</param>
 	public void Add( string path, LocalChangeKind kind, DateTime now )
 	{
 		LocalChangeKind? merged = _pending.TryGetValue( path, out var earlier ) ? Merge( earlier.Kind, kind ) : kind;
 		_pending[ path ] = ( merged, now + quiet );
 	}
 
-	/// <summary>What the file amounts to after <paramref name="earlier"/> then <paramref name="later"/>; null when nothing (created, then deleted again).</summary>
+	/// <summary>Combines two successive changes to one path into the change they add up to.</summary>
+	/// <param name="earlier">The pending change; null when there is none (or the earlier events came to nothing).</param>
+	/// <param name="later">The new event.</param>
+	/// <returns>The combined change, e.g. deleted then created is <see cref="LocalChangeKind.Updated"/> (a save via rename);
+	/// null when the events cancel out (created, then deleted again).</returns>
 	public static LocalChangeKind? Merge( LocalChangeKind? earlier, LocalChangeKind later ) => ( earlier, later ) switch
 	{
 		(null, _ ) => later,
@@ -45,7 +54,9 @@ public sealed class LocalChangeBatcher( TimeSpan quiet )
 		_ => LocalChangeKind.Updated,
 	};
 
-	/// <summary>The paths quiet since their last event, removed from the batch (paths that came to nothing are dropped).</summary>
+	/// <summary>Removes and returns the paths that have been quiet since their last event.</summary>
+	/// <param name="now">The current time, compared with each path's due time.</param>
+	/// <returns>The due changes; paths whose events came to nothing are removed but not returned.</returns>
 	public List<LocalFileChange> TakeDue( DateTime now )
 	{
 		List<LocalFileChange> due = [];
@@ -68,7 +79,11 @@ public interface ILocalFileWatcher
 	/// <summary>Too many events at once: some were lost, so whatever is shown should be reloaded. Background thread.</summary>
 	event Action? Overflowed;
 
-	/// <summary>Watches <paramref name="folder"/> and everything below it, creating it when missing (again only if it is another folder than now); null stops watching.</summary>
+	/// <summary>Watches <paramref name="folder"/> and everything below it, creating it when missing; null stops watching.</summary>
+	/// <param name="folder">The working folder to watch; null or empty stops watching.</param>
+	/// <remarks>Calling it again with the folder already being watched does nothing; another folder replaces the current watch.
+	/// When the watch cannot be set up (the inotify limit on Linux, for example) the error is written to standard error and
+	/// nothing is watched; no exception is thrown.</remarks>
 	void Watch( string? folder );
 }
 
@@ -86,11 +101,15 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 	private FileSystemWatcher? _watcher;
 	private string? _folder;
 
+	/// <inheritdoc/>
 	public event Action<IReadOnlyList<LocalFileChange>>? Changed;
+	/// <inheritdoc/>
 	public event Action? Overflowed;
 
+	/// <summary>Creates a watcher that is not yet watching anything; call <see cref="Watch"/> to start.</summary>
 	public LocalFileWatcher() => _flush = new Timer( _ => Flush(), null, Timeout.Infinite, Timeout.Infinite );
 
+	/// <inheritdoc/>
 	public void Watch( string? folder )
 	{
 		lock( _gate )
@@ -139,7 +158,9 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 		}
 	}
 
-	/// <summary>Lock files and temporary files programs write while saving.</summary>
+	/// <summary>Whether a path is a lock file or temporary file that programs write while saving, and so is ignored.</summary>
+	/// <param name="path">The full path or file name.</param>
+	/// <returns><see langword="true"/> for "~$" and ".~lock" prefixes, a trailing "~", ".tmp" and ".swp" files, and paths with no file name.</returns>
 	public static bool IsNoise( string path )
 	{
 		string name = Path.GetFileName( path );
@@ -204,6 +225,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 		_folder = null;
 	}
 
+	/// <summary>Stops watching and stops the flush timer; pending changes are not reported.</summary>
 	public void Dispose()
 	{
 		lock( _gate )

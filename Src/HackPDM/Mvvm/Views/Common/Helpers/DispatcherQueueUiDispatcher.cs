@@ -10,10 +10,12 @@ using Microsoft.UI.Dispatching;
 namespace HackPDM.Mvvm.Views.Common.Helpers;
 
 /// <summary><see cref="IUiDispatcher"/> on the main window's <see cref="DispatcherQueue"/>.</summary>
+/// <param name="queue">The UI thread's dispatcher queue.</param>
 public sealed class DispatcherQueueUiDispatcher( DispatcherQueue queue ) : IUiDispatcher
 {
 	public bool HasThreadAccess => queue.HasThreadAccess;
 
+	/// <inheritdoc/>
 	public bool Post( Action action )
 	{
 		if( queue.TryEnqueue( () => Run( action ) ) )
@@ -22,6 +24,7 @@ public sealed class DispatcherQueueUiDispatcher( DispatcherQueue queue ) : IUiDi
 		return false;
 	}
 
+	/// <inheritdoc/>
 	public Task RunAsync( Action action, CancellationToken token = default )
 	{
 		if( token.IsCancellationRequested )
@@ -52,6 +55,7 @@ public sealed class DispatcherQueueUiDispatcher( DispatcherQueue queue ) : IUiDi
 		return tcs.Task;
 	}
 
+	/// <inheritdoc/>
 	public Task RunAsync( Func<Task> action )
 	{
 		if( queue.HasThreadAccess )

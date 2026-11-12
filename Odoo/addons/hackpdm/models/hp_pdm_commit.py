@@ -69,6 +69,17 @@ class hp_pdm_commit(models.Model):
                 rec.duration_seconds = 0
 
     def write(self, vals):
+        """Writes commit fields; only the commit's creator (or an administrator) may.
+
+        Args:
+            vals (dict): Field values to write.
+
+        Returns:
+            bool: True.
+
+        Raises:
+            AccessError: The commit belongs to another user.
+        """
         self._check_commit_owner()
         return super().write(vals)
 
@@ -90,6 +101,20 @@ class hp_pdm_commit(models.Model):
     # ------------------------------------------------------------
     @api.model
     def clear_commit(self, rec_id: int | list[int]):
+        """Throws away a commit's staged rows and resets it so it can be staged again.
+
+        The client calls this when staging fails part-way.
+
+        Args:
+            rec_id (int | list[int]): The hp.pdm.commit id (a list uses its first id).
+
+        Returns:
+            bool: True.
+
+        Raises:
+            UserError: The commit does not exist, or it is already committed.
+            AccessError: The commit belongs to another user.
+        """
         if isinstance(rec_id, list):
             rec_id = rec_id[0]
         record = self.browse([rec_id]).exists()
@@ -115,6 +140,27 @@ class hp_pdm_commit(models.Model):
 
     @api.model
     def start_commit(self, commit_ids: int | list[int]):
+        """Runs commits: creates every staged record of each commit in one all-or-nothing step.
+
+        Records are created model by model (folders, entries, versions, properties, then dependency
+        links). Before anything is created the payloads are checked: unsafe or duplicate names, deleted
+        folders and files, entry name filters, versions of files not checked out to the committer or
+        without contents. A new version checks its file back in. When any check or create fails, the
+        commit's records are rolled back, it is marked errored with the reason, and its staged rows are
+        removed; other commits in the same call still run. Commits already committed, or with nothing
+        staged, are skipped.
+
+        Args:
+            commit_ids (int | list[int]): hp.pdm.commit ids.
+
+        Returns:
+            list[dict]: One row per commit with name, committed (bool), committed_at,
+            commit_finished_at, errored (bool), message_exception (str, why it failed), commit_summary
+            (str), node_by and staged_ids.
+
+        Raises:
+            AccessError: A commit belongs to another user.
+        """
         if isinstance(commit_ids, int):
             commit_ids = [commit_ids]
         records = self.browse(commit_ids).exists()
@@ -148,6 +194,21 @@ class hp_pdm_commit(models.Model):
         ])
 
     def run_commit_job(self):
+        """Creates this commit's staged records and marks it committed.
+
+        Called by :meth:`start_commit` inside a savepoint; call that instead, since it also checks
+        ownership and records failures.
+
+        Args:
+            None.
+
+        Returns:
+            None: nothing.
+
+        Raises:
+            UserError: A staged payload fails its checks.
+            AccessError: The caller may not create one of the records.
+        """
         self.ensure_one()
 
         # ATOMIC BLOCK — all or nothing
@@ -161,6 +222,19 @@ class hp_pdm_commit(models.Model):
 
 
     def handle_commit_failure(self, exc):
+        """Marks this commit errored with the failure's message and removes its staged rows.
+
+        Called by :meth:`start_commit` after a failed run.
+
+        Args:
+            exc (Exception): What made the commit fail; its text is stored in message_exception.
+
+        Returns:
+            None: nothing.
+
+        Raises:
+            AccessError: The commit belongs to another user.
+        """
         self.write({
             "errored": True,
             "message_exception": str(exc),

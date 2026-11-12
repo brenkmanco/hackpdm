@@ -10,6 +10,7 @@ namespace HackPDM.Mvvm.Views.Common.Controls;
 /// <summary>File pickers owned by the main window.</summary>
 public sealed class FilePickerService : IFilePickerService
 {
+	/// <inheritdoc/>
 	public async Task<string?> PickOpenFileAsync( string extension )
 	{
 		FileOpenPicker picker = new() { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
@@ -19,6 +20,7 @@ public sealed class FilePickerService : IFilePickerService
 		return string.IsNullOrEmpty( file?.Path ) ? null : file.Path;
 	}
 
+	/// <inheritdoc/>
 	public async Task<string?> PickSaveFileAsync( string typeLabel, string extension, string suggestedName )
 	{
 		FileSavePicker picker = new()

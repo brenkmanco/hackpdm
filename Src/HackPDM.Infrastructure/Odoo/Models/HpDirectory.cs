@@ -33,7 +33,13 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>, IHpDirecto
 }
 public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 {
-	/// <summary>How far <paramref name="paths"/> (root first) already exists on the server.</summary>
+	/// <summary>Asks the server how much of a folder chain already exists.</summary>
+	/// <param name="paths">The folder names from the root down, starting with the root's name (for example <c>["root", "a", "b"]</c>).</param>
+	/// <returns>
+	/// On success, the index in <paramref name="paths"/> of the deepest existing folder and that folder's
+	/// hp.directory id (0 and 1, the root, when the server's row lacks them); otherwise the RPC error.
+	/// </returns>
+	/// <remarks>Calls the addon method <c>hp.directory.last_available_directory</c>.</remarks>
 	public static async Task<Result<LastAvailableDirectory>> LastAvailableDirectory( IReadOnlyList<string> paths )
 	{
 		Result<OdooRow> last = await OdooRpc.ExecuteAsync<OdooRow>( GetHpModel()!, "last_available_directory", [ paths ] );
@@ -41,9 +47,21 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 	}
 
 	/// <summary>
-	/// Creates the folders of <paramref name="paths"/> (below root) that don't exist yet; the created
-	/// directories, or the existing deepest one when they all exist.
+	/// Creates on the server the folders of a path below the root that don't exist yet, one record at a time,
+	/// each parented to the previous one.
 	/// </summary>
+	/// <param name="paths">The folder names below the root, outermost first; <see cref="HackPDM.Core.PwaPaths.Root"/> is prepended.</param>
+	/// <returns>
+	/// The newly created directories, outermost first; or, when the whole path already exists, a one-element
+	/// array holding the deepest existing directory (that element is <see langword="null"/> if it could not be read).
+	/// </returns>
+	/// <remarks>
+	/// New directories get <c>sandboxed</c> and <c>deleted</c> set to false and category 1 as <c>default_cat</c>
+	/// only when that category exists locally. Creation stops at the first failure, leaving any already
+	/// created folders on the server.
+	/// </remarks>
+	/// <exception cref="HackPDM.Infrastructure.Odoo.OdooException">The <see cref="LastAvailableDirectory"/> call failed.</exception>
+	/// <exception cref="System.InvalidOperationException">The server did not create one of the directories.</exception>
 	public async static Task<HpDirectory[]?> CreateNew( IEnumerable<string> paths )
 	{
 		List<string> path = [ PwaPaths.Root, .. paths ];
@@ -78,7 +96,14 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 		return directories;
 	}
 
-	/// <summary>This directory with every directory (and, with <paramref name="withEntries"/>, entry) below it.</summary>
+	/// <summary>Fetches the tree below this directory in one server call.</summary>
+	/// <param name="withEntries">Whether to include each directory's entries as well as its subdirectories.</param>
+	/// <returns>
+	/// This directory as a <see cref="HackPDM.Infrastructure.Odoo.SubdirectoryDto"/> with every directory (and, with
+	/// <paramref name="withEntries"/>, entry) below it; a failed result when this object was not read from the
+	/// server or the call fails.
+	/// </returns>
+	/// <remarks>Calls <c>hp.directory.get_children_directories_by_id</c> with the long RPC timeout.</remarks>
 	public async Task<Result<SubdirectoryDto>> GetSubdirectoriesAsync( bool withEntries = true )
 	{
 		if( !IsRecord || id is not int directoryId )
@@ -87,7 +112,11 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 		return tree.Map( row => SubdirectoryDto.FromRow( row ?? [] ) );
 	}
 
-	/// <summary>The entries directly in a directory (deleted ones too with <paramref name="showInActive"/>).</summary>
+	/// <summary>Lists the entries directly in a directory (not in its subdirectories).</summary>
+	/// <param name="directoryId">The hp.directory id.</param>
+	/// <param name="showInActive">Whether to include deleted (inactive) entries.</param>
+	/// <returns>The entries as <see cref="HackPDM.Infrastructure.Odoo.RemoteEntryDto"/> values, or the RPC error.</returns>
+	/// <remarks>Calls <c>hp.directory.get_entries</c> with the long RPC timeout.</remarks>
 	public static async Task<Result<IReadOnlyList<RemoteEntryDto>>> GetEntriesAsync( int directoryId, bool showInActive = false )
 	{
 		// hp.directory.get_entries(value) expects value = [directory_id, show_inactive]
@@ -95,9 +124,19 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 		return entries.Map( map => RemoteEntryDto.ListFrom( map ) );
 	}
 
+	/// <summary>Lists the ids of the entries in this directory.</summary>
+	/// <param name="withSubEntries">Whether to include entries in subdirectories.</param>
+	/// <param name="withDeleted">Whether to include deleted entries. Note this overload defaults to <see langword="true"/>, unlike the static one.</param>
+	/// <returns>The entry ids, or a failed result when this directory has no id.</returns>
+	/// <remarks>Forwards to <see cref="GetDirectoryEntryIDsAsync(int, bool, bool)"/> with this record's id.</remarks>
 	public Task<Result<IReadOnlyList<int>>> GetDirectoryEntryIDsAsync( bool withSubEntries = false, bool withDeleted = true )
 		=> GetDirectoryEntryIDsAsync( this.id ?? 0, withSubEntries, withDeleted );
-	/// <summary>The ids of the entries in a directory (and, with <paramref name="withSubEntries"/>, below it).</summary>
+	/// <summary>Lists the ids of the entries in a directory and, optionally, below it.</summary>
+	/// <param name="directoryId">The hp.directory id; 0 returns a failed result without calling the server.</param>
+	/// <param name="withSubEntries">Whether to include entries in subdirectories.</param>
+	/// <param name="withDeleted">Whether to include deleted entries.</param>
+	/// <returns>The entry ids, or the error.</returns>
+	/// <remarks>Calls <c>hp.directory.get_all_entry_ids</c> with the long RPC timeout.</remarks>
 	public static Task<Result<IReadOnlyList<int>>> GetDirectoryEntryIDsAsync( int directoryId, bool withSubEntries = false, bool withDeleted = false )
 		=> directoryId != 0
 			? OdooRpc.ExecuteAsync<IReadOnlyList<int>>( GetHpModel()!, "get_all_entry_ids", [ directoryId, withDeleted, withSubEntries ], OdooRpc.LongTimeout )

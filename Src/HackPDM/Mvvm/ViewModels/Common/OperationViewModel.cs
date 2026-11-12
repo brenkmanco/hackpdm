@@ -10,6 +10,8 @@ using HackPDM.Mvvm.Models.Common;
 namespace HackPDM.Mvvm.ViewModels.Common;
 
 /// <summary>A view model whose commands run PDM operations that report into the status window.</summary>
+/// <param name="dialogs">Shows messages to the user.</param>
+/// <param name="reporter">The status window the operations log into.</param>
 public abstract class OperationViewModel( IDialogService dialogs, IOperationReporter reporter ) : ObservableObject
 {
 	protected IDialogService Dialogs { get; } = dialogs;

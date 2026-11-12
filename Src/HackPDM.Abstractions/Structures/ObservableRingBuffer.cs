@@ -7,6 +7,11 @@ using System.Text;
 
 namespace HackPDM.Abstractions.Structures;
 
+/// <summary>
+/// A fixed-capacity list that drops its oldest item when a new one is added while full, and raises collection
+/// change notifications so it can be bound to a UI list (for example a status log).
+/// </summary>
+/// <typeparam name="T">The item type.</typeparam>
 public class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, INotifyCollectionChanged, INotifyPropertyChanged
 {
 	private readonly T[] _buffer;
@@ -21,6 +26,9 @@ public class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, INotifyCollec
 	public event NotifyCollectionChangedEventHandler? CollectionChanged;
 	public event PropertyChangedEventHandler? PropertyChanged;
 
+	/// <summary>Creates an empty buffer.</summary>
+	/// <param name="capacity">The maximum number of items kept.</param>
+	/// <exception cref="System.ArgumentOutOfRangeException"><paramref name="capacity"/> is 0 or less.</exception>
 	public ObservableRingBuffer( int capacity = 10 )
 	{
 		if( capacity <= 0 )
@@ -30,6 +38,10 @@ public class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, INotifyCollec
 		_buffer = new T[ capacity ];
 	}
 
+	/// <summary>Gets or replaces the item at a position, where 0 is the oldest item.</summary>
+	/// <param name="index">The position, from 0 to <see cref="Count"/> - 1.</param>
+	/// <value>The item; setting it raises a Replace notification.</value>
+	/// <exception cref="System.ArgumentOutOfRangeException"><paramref name="index"/> is outside the stored items.</exception>
 	public T this[ int index ] {
 		get {
 			ValidateIndex( index );
@@ -46,6 +58,12 @@ public class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, INotifyCollec
 		}
 	}
 
+	/// <summary>Appends an item, dropping the oldest one first when the buffer is full.</summary>
+	/// <param name="item">The item to append.</param>
+	/// <remarks>
+	/// When full, raises a Remove notification for index 0 and then an Add notification at the last index;
+	/// <see cref="Count"/> does not change, so no Count property notification is raised then.
+	/// </remarks>
 	public void Add( T item )
 	{
 		if( _count < Capacity ) {
@@ -77,6 +95,7 @@ public class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, INotifyCollec
 		}
 	}
 
+	/// <summary>Removes every item and raises a Reset notification.</summary>
 	public void Clear()
 	{
 		Array.Clear( _buffer, 0, Capacity );
@@ -111,6 +130,9 @@ public class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, INotifyCollec
 
 	IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
+	/// <summary>Finds an item's position, oldest first.</summary>
+	/// <param name="item">The item, compared with the default equality comparer.</param>
+	/// <returns>The position of the first equal item, or -1.</returns>
 	public int IndexOf( T item )
 	{
 		for( int i = 0; i < _count; i++ ) {
@@ -120,7 +142,15 @@ public class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, INotifyCollec
 		return -1;
 	}
 
+	/// <summary>Tells whether the buffer holds an item.</summary>
+	/// <param name="item">The item, compared with the default equality comparer.</param>
+	/// <returns><see langword="true"/> when an equal item is stored.</returns>
 	public bool Contains( T item ) => IndexOf( item ) >= 0;
+	/// <summary>Copies the items, oldest first, into an array.</summary>
+	/// <param name="array">The destination.</param>
+	/// <param name="arrayIndex">Where in <paramref name="array"/> to start.</param>
+	/// <exception cref="System.ArgumentException"><paramref name="array"/> is too short from <paramref name="arrayIndex"/>.</exception>
+	/// <exception cref="System.NullReferenceException"><paramref name="array"/> is <see langword="null"/>.</exception>
 	public void CopyTo( T[] array, int arrayIndex )
 	{
 	
@@ -144,8 +174,19 @@ public class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, INotifyCollec
 			Array.Copy( _buffer, 0, array, arrayIndex + firstSegmentLength, secondSegmentLength );
 		}
 	}
+	/// <summary>Not supported: a ring buffer only drops its oldest item.</summary>
+	/// <param name="item">Ignored.</param>
+	/// <returns>Never returns.</returns>
+	/// <exception cref="System.NotSupportedException">Always.</exception>
 	public bool Remove( T item ) => throw new NotSupportedException( "Arbitrary removes are not supported on RingBuffers." );
+	/// <summary>Not supported: items can only be appended.</summary>
+	/// <param name="index">Ignored.</param>
+	/// <param name="item">Ignored.</param>
+	/// <exception cref="System.NotSupportedException">Always.</exception>
 	public void Insert( int index, T item ) => throw new NotSupportedException( "Arbitrary inserts are not supported on RingBuffers." );
+	/// <summary>Not supported: a ring buffer only drops its oldest item.</summary>
+	/// <param name="index">Ignored.</param>
+	/// <exception cref="System.NotSupportedException">Always.</exception>
 	public void RemoveAt( int index ) => throw new NotSupportedException( "Arbitrary removes are not supported on RingBuffers." );
 
 	#endregion

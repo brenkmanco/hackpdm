@@ -22,14 +22,25 @@ public static class PdmDownloadOperations
 {
     private const int DependencyTimeoutMs = 1000000;
 
-    /// <summary>The entries and every entry they depend on (recursively), each once.</summary>
+    /// <summary>Asks the server for the given entries plus every entry they depend on, recursively, each once.</summary>
+    /// <param name="entryIds">The hp.entry ids to start from.</param>
+    /// <returns>The entry ids, or a failed result with the server's or the transport's error.</returns>
+    /// <remarks>Calls <c>hp.version.get_recursive_dependency_entries</c> with a timeout of about 17 minutes, since large assemblies take long.</remarks>
     public static Task<Result<IReadOnlyList<int>>> GetAllEntriesAndDependenciesListAsync(IReadOnlyList<int> entryIds)
         => OdooRpc.ExecuteAsync<IReadOnlyList<int>>(HpVersion.GetHpModel()!, "get_recursive_dependency_entries", [entryIds], DependencyTimeoutMs);
 
-    /// <summary>The versions and every version they depend on (recursively).</summary>
+    /// <summary>Asks the server for the given versions plus every version they depend on, recursively.</summary>
+    /// <param name="versionIds">The hp.version ids to start from.</param>
+    /// <returns>The version ids, or a failed result with the server's or the transport's error.</returns>
+    /// <remarks>Calls <c>hp.version.get_recursive_dependency_versions</c> with a timeout of about 17 minutes.</remarks>
     public static Task<Result<IReadOnlyList<int>>> GetVersionListAsync(params int[] versionIds)
         => OdooRpc.ExecuteAsync<IReadOnlyList<int>>(HpVersion.GetHpModel()!, "get_recursive_dependency_versions", [versionIds], DependencyTimeoutMs);
 
+    /// <summary>Reads the latest version of each entry (following <c>latest_version_id</c>), without the file contents by default.</summary>
+    /// <param name="entryIDs">The hp.entry ids.</param>
+    /// <param name="excludedFields">Version fields not to read; <c>preview_image</c> and <c>file_contents</c> when null. Pass an empty array to read everything.</param>
+    /// <returns>The versions, or null when there are none or the read failed.</returns>
+    /// <remarks>Uses the addon's <c>related_browse</c> with a 60 second timeout.</remarks>
     public static async Task<HpVersion[]?> GetLatestVersionsAsync(IReadOnlyList<int> entryIDs, string[]? excludedFields = null)
     {
         excludedFields ??= ["preview_image", "file_contents"];
@@ -68,10 +79,14 @@ public static class PdmDownloadOperations
     ];
 
     /// <summary>
-    /// Splits versions into download batches of at most <paramref name="maxCount"/> files and
-    /// <see cref="MaxBatchBytes"/> bytes. Smaller files are packed first, so large files end up
+    /// Splits versions into download batches of at most <paramref name="maxCount"/> files and at most
+    /// <paramref name="maxBytes"/> bytes. Smaller files are packed first, so large files end up
     /// in small batches (or alone).
     /// </summary>
+    /// <param name="versions">The versions to download; null gives no batches.</param>
+    /// <param name="maxCount">Most files per batch; 0 or less means 5.</param>
+    /// <param name="maxBytes">Most file bytes per batch (by <c>file_size</c>); <see cref="MaxBatchBytes"/> when null. A single larger file still gets a batch of its own.</param>
+    /// <returns>The batches, ordered by file size ascending.</returns>
     public static List<List<HpVersion>> BatchBySize(IEnumerable<HpVersion>? versions, int maxCount, long? maxBytes = null)
     {
         long byteBudget = maxBytes ?? MaxBatchBytes;
@@ -97,7 +112,10 @@ public static class PdmDownloadOperations
         return batches;
     }
 
-    /// <summary>RPC timeout for reading <paramref name="fileBytes"/> of file contents (base64 adds a third).</summary>
+    /// <summary>Computes the RPC timeout for reading <paramref name="fileBytes"/> of file contents, allowing for base64 (a third larger) at <see cref="MinThroughputBytesPerSecond"/>.</summary>
+    /// <param name="fileBytes">Total file bytes requested in the call.</param>
+    /// <param name="attempt">The attempt number (1-based); the timeout is multiplied by it so retries wait longer.</param>
+    /// <returns>30 seconds plus the transfer time, times the attempt, clamped to 90 seconds .. 30 minutes, in milliseconds.</returns>
     public static int ContentsTimeoutMs(long fileBytes, int attempt = 1)
     {
         double wireBytes = fileBytes * 4.0 / 3.0;
@@ -106,13 +124,16 @@ public static class PdmDownloadOperations
         return (int)Math.Clamp(ms, MinTimeoutMs, MaxTimeoutMs);
     }
 
-    /// <summary>Outcome of a download run; <see cref="Failed"/> lists every file that was not written.</summary>
+    /// <summary>Outcome of a download run; <see cref="Failed"/> lists every file that was not written. Safe to update from parallel batches.</summary>
     public sealed class DownloadSummary
     {
         private int _downloaded;
         private int _skipped;
+        /// <summary>Number of files read from the server and written (or empty files accepted).</summary>
         public int Downloaded => _downloaded;
+        /// <summary>Number of files not downloaded: already up to date, with no checksum on the server, or kept because of local changes.</summary>
         public int Skipped => _skipped;
+        /// <summary>"path: reason" for each file that could not be downloaded or written.</summary>
         public ConcurrentQueue<string> Failed { get; } = new();
         /// <summary>Local files that were not overwritten because they hold changes no vault version has.</summary>
         public ConcurrentQueue<string> KeptLocalChanges { get; } = new();
@@ -120,6 +141,24 @@ public static class PdmDownloadOperations
         internal void AddSkipped() => Interlocked.Increment(ref _skipped);
     }
 
+    /// <summary>Downloads batches of versions in parallel, at most <paramref name="maxConcurrency"/> batches at a time, and writes them into the working folder.</summary>
+    /// <param name="versionBatches">The batches, for example from <see cref="BatchBySize"/>; null downloads nothing.</param>
+    /// <param name="cToken">Cancels waiting batches and stops running ones between files.</param>
+    /// <param name="maxConcurrency">Most batches in flight at once; values below 1 mean 1.</param>
+    /// <param name="log">Receives status lines; called from several threads at once.</param>
+    /// <param name="onProgress">Receives increments (files queued for download, files skipped); called from several threads at once.</param>
+    /// <returns>The combined summary of all batches.</returns>
+    /// <remarks>See <see cref="ProcessVersionBatchAsync"/> for what happens to each file.</remarks>
+    /// <exception cref="OperationCanceledException"><paramref name="cToken"/> was cancelled.</exception>
+    /// <example>
+    /// <code>
+    /// var versions = await PdmDownloadOperations.GetLatestVersionsAsync( entryIds ) ?? [];
+    /// var batches = PdmDownloadOperations.BatchBySize( versions, OdooDefaults.Instance.DownloadBatchSize );
+    /// var summary = await PdmDownloadOperations.ProcessDownloadsAsync( batches, token, OdooDefaults.Instance.ConcurrencySize, log );
+    /// foreach( string failure in summary.Failed )
+    ///     Console.WriteLine( failure );
+    /// </code>
+    /// </example>
     public static async Task<DownloadSummary> ProcessDownloadsAsync(
         IEnumerable<IEnumerable<HpVersion>> versionBatches,
         CancellationToken cToken,
@@ -154,6 +193,25 @@ public static class PdmDownloadOperations
         return summary;
     }
 
+    /// <summary>Downloads one batch of versions and writes the files that need it into the working folder.</summary>
+    /// <param name="batchVersions">The versions; their <c>checksum</c>, <c>windows_complete_name</c> and <c>file_size</c> must be loaded.</param>
+    /// <param name="cToken">Checked between server reads.</param>
+    /// <param name="log">Receives a status line per file; may be null.</param>
+    /// <param name="onProgress">Receives increments (files queued for download, files skipped); may be null.</param>
+    /// <param name="summary">Collects the outcome; a new, discarded one when null.</param>
+    /// <remarks>
+    /// <para>
+    /// A version is skipped when it has no checksum, when the local copy already matches it, or when the local copy holds
+    /// changes that are in no vault version of the file (it is then listed in <see cref="DownloadSummary.KeptLocalChanges"/>
+    /// and left untouched, also when the vault can't be asked).
+    /// </para>
+    /// <para>
+    /// The rest are read in one call with a size-based timeout (<see cref="ContentsTimeoutMs"/>); files that don't arrive are
+    /// retried one per call up to <see cref="MaxAttempts"/> in total, then recorded in <see cref="DownloadSummary.Failed"/>.
+    /// Files are written through <see cref="LocalFileWriter.WriteAsync"/>, which leaves a copy not checked out to this user read-only.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="OperationCanceledException"><paramref name="cToken"/> was cancelled.</exception>
     public static async Task ProcessVersionBatchAsync(
         IEnumerable<HpVersion> batchVersions,
         CancellationToken cToken,

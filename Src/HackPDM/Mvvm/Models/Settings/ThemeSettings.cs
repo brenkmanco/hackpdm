@@ -29,6 +29,9 @@ public sealed class ThemeSettings
 	/// <summary>Theme resource key → color as "#AARRGGBB", used while the dark theme is active.</summary>
 	public Dictionary<string, string> Dark { get; set; } = [];
 
+	/// <summary>Picks the color overrides for one base theme.</summary>
+	/// <param name="dark">Whether the dark theme is active.</param>
+	/// <returns>The live <see cref="Dark"/> or <see cref="Light"/> dictionary (not a copy), so changes to it are saved with the settings.</returns>
 	public Dictionary<string, string> OverridesFor( bool dark ) => dark ? Dark : Light;
 }
 
@@ -37,6 +40,10 @@ public readonly record struct ArgbColor( byte A, byte R, byte G, byte B )
 {
 	public override string ToString() => $"#{A:X2}{R:X2}{G:X2}{B:X2}";
 
+	/// <summary>Parses a hex color such as "#AARRGGBB" or "#RRGGBB"; the leading "#" and surrounding spaces are optional.</summary>
+	/// <param name="text">The text to parse.</param>
+	/// <param name="color">The parsed color, fully opaque when no alpha was given; <see langword="default"/> when parsing fails.</param>
+	/// <returns><see langword="true"/> when <paramref name="text"/> held 6 or 8 hex digits.</returns>
 	public static bool TryParse( string? text, out ArgbColor color )
 	{
 		color = default;

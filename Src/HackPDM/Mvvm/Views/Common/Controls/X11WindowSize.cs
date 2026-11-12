@@ -20,7 +20,12 @@ internal static partial class X11WindowSize
 	private static IntPtr _display;
 	private static bool _unavailable;
 
-	/// <summary>Resizes <paramref name="window"/>'s X11 client window; false when not on X11 (the caller resizes another way).</summary>
+	/// <summary>Resizes <paramref name="window"/>'s X11 client window.</summary>
+	/// <param name="window">The window to resize.</param>
+	/// <param name="width">The new width in pixels; must be positive.</param>
+	/// <param name="height">The new height in pixels; must be positive.</param>
+	/// <returns><see langword="false"/> when not on X11, the size is not positive, or libX11 or the display is unavailable (the caller resizes another way).</returns>
+	/// <remarks>Opens one display connection of its own on first use and keeps it; calls are serialized with a lock.</remarks>
 	public static bool TryResize( Window window, int width, int height )
 	{
 #if HAS_UNO

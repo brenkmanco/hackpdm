@@ -20,8 +20,28 @@ namespace HackPDM.Infrastructure.Operations;
 /// Infrastructure service for PDM commit staging and directory creation.
 /// Encapsulates server commits, version staging, and relationship linking.
 /// </summary>
+/// <example>
+/// A typical check-in of a set of local files:
+/// <code>
+/// var (newFiles, newVersions, unchanged) = await PdmCommitOperations.FilterCommitHackFilesAsync( files, log );
+/// HpPDMCommit commit = new() { node_by = OdooDefaults.Instance.MyNode?.id };
+/// await commit.CreateCommitAsync();     // opens the hp.pdm.commit on the server
+/// foreach( HackFile file in newFiles )
+///     if( !await PdmCommitOperations.CommitRecordAsync( file, commit, inOdoo: false, log ) )
+///         return;      // the commit was already cleared on the server
+/// foreach( HackFile file in newVersions )
+///     if( !await PdmCommitOperations.CommitRecordAsync( file, commit, inOdoo: true, log ) )
+///         return;
+/// var (committed, error) = await commit.ServerCommit();   // the server turns staged records into real ones
+/// </code>
+/// </example>
 public static class PdmCommitOperations
 {
+    /// <summary>Makes sure the server has the directory chain a local file belongs in, creating missing directories.</summary>
+    /// <param name="hack">The local file; its folder relative to the working folder gives the directory names.</param>
+    /// <returns>The deepest directory (the file's own), or null when <paramref name="hack"/> is null.</returns>
+    /// <remarks>Calls <c>HpDirectory.CreateNew</c> with the folder segments; a file outside the working folder maps to the root.</remarks>
+    /// <exception cref="InvalidOperationException">The server created or returned no directory records.</exception>
     public static async Task<HpDirectory?> CreateDirectoriesAsync(HackFile? hack)
     {
         if (hack is null) return null;
@@ -41,10 +61,20 @@ public static class PdmCommitOperations
         => PwaPaths.ToServerName([.. DirectorySegments(hack), hack.Name ?? ""]);
 
     /// <summary>
-    /// Splits the files into new ones (<c>LocalOnly</c>), new versions of entries checked out to this user
-    /// (<c>RemoteExisting</c>), and entries checked out to this user whose file did not change
-    /// (<c>UnchangedCheckedOut</c>): those get no new version, but committing them checks them back in.
+    /// Sorts files for a commit by looking each one up on the server (by name and windows_complete_name, not deleted).
     /// </summary>
+    /// <param name="hackFiles">The local files to check; enumerated once.</param>
+    /// <param name="log">Receives a status line for every file (queued, found, skipped, or error); may be null.</param>
+    /// <returns>
+    /// <c>LocalOnly</c>: files with no server entry, to be created. <c>RemoteExisting</c>: files whose entry is checked out
+    /// to this user and whose contents changed, to get a new version. <c>UnchangedCheckedOut</c>: entries checked out to this
+    /// user whose file matches the latest version's checksum; they get no new version, but committing them checks them back in.
+    /// </returns>
+    /// <remarks>
+    /// Files are left out of all three lists, with a log line, when their type isn't allowed (server RestrictTypes setting),
+    /// when they are unchanged but checked out to someone else (or nobody), or when they changed but aren't checked out to this user.
+    /// Makes one or two server reads per file, one after another, and computes each file's checksum.
+    /// </remarks>
     public static async Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting, HpEntry[] UnchangedCheckedOut)> FilesNotInOdooSegmentedAsync(
         IEnumerable<HackFile> hackFiles,
         Action<StatusMessage, string>? log = null)
@@ -104,6 +134,27 @@ public static class PdmCommitOperations
         return ([.. hacks], [.. hacksFound], [.. unchanged]);
     }
 
+    /// <summary>
+    /// Stages one local file in an open commit: its directories, its entry (new files only), a new version with the file's
+    /// contents and preview, and for SolidWorks files the version's references and custom properties.
+    /// </summary>
+    /// <param name="hack">The local file to commit; null returns false.</param>
+    /// <param name="commit">The open hp.pdm.commit the records are staged under.</param>
+    /// <param name="inOdoo">True when the file already has a server entry (from <c>RemoteExisting</c>), so a version is staged for that entry instead of a new entry.</param>
+    /// <param name="log">Receives progress and error lines; may be null.</param>
+    /// <param name="onRecordStaged">Called once when the file has been staged successfully (for progress counting).</param>
+    /// <returns>True when everything was staged; false when the file is missing or any step failed.</returns>
+    /// <remarks>
+    /// <para>
+    /// Side effect on failure: the whole commit is cleared on the server (<c>hp.pdm.commit.clear_commit</c>), discarding
+    /// what other files already staged in it, so callers should stop at the first false.
+    /// </para>
+    /// <para>
+    /// A SolidWorks file whose references can't be read is still committed, without relationships or properties, and a
+    /// warning is logged. Nothing is checked in or written to the server's real tables until <c>commit.ServerCommit()</c> runs.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The server created no directory records for the file's folder.</exception>
     public static async Task<bool> CommitRecordAsync(
         HackFile? hack,
         HpPDMCommit commit,
@@ -218,9 +269,21 @@ public static class PdmCommitOperations
         return patterns.Length == 0 ? null : new Regex(string.Join("|", patterns), RegexOptions.IgnoreCase);
     }
 
-    /// <summary>Whether the server would refuse a file of this name (a SolidWorks "~$" lock file, say).</summary>
+    /// <summary>Checks whether the server would refuse a file of this name (a SolidWorks "~$" lock file, say).</summary>
+    /// <param name="name">The file name (not the path); null is treated as "".</param>
+    /// <returns>True when any of the server's hp.entry.name.filter patterns match (case-insensitive); false when there are no patterns.</returns>
+    /// <remarks>The regex is rebuilt from <see cref="OdooDefaults.EntryFilterPatterns"/> on every call.</remarks>
+    /// <exception cref="ArgumentException">A server filter pattern is not a valid .NET regular expression.</exception>
     public static bool IsFilteredName(string? name) => EntryFilter() is { } regex && regex.IsMatch(name ?? "");
 
+    /// <summary>
+    /// Drops files the server's entry name filters reject, then sorts the rest with <see cref="FilesNotInOdooSegmentedAsync"/>.
+    /// This is the entry point for deciding what a commit will do.
+    /// </summary>
+    /// <param name="hackFiles">The local files picked for the commit.</param>
+    /// <param name="log">Receives a status line per file; may be null. Filtered files are dropped without a log line.</param>
+    /// <returns>The same three lists as <see cref="FilesNotInOdooSegmentedAsync"/>.</returns>
+    /// <exception cref="ArgumentException">A server filter pattern is not a valid .NET regular expression.</exception>
     public static async Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting, HpEntry[] UnchangedCheckedOut)> FilterCommitHackFilesAsync(
         IEnumerable<HackFile> hackFiles,
         Action<StatusMessage, string>? log = null)

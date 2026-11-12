@@ -20,25 +20,40 @@ namespace HackPDM.Mvvm.Models.Hack;
 /// <summary>Builds the entry rows for a directory by combining Odoo entries with the files on disk.</summary>
 public interface IEntryListService
 {
+	/// <summary>Lists one folder: a row per Odoo entry (with the status of its local copy) plus a row per local-only file.</summary>
 	/// <param name="directoryId">Odoo directory id; null or 0 for a folder that only exists locally.</param>
-	/// <param name="treePath">The folder's tree path ("root\a\b").</param>
+	/// <param name="treePath">The folder's tree path ("root\a\b"); null lists no local files.</param>
 	/// <param name="includeDeleted">Also list logically deleted entries.</param>
 	/// <param name="filterUnknownTypes">Mark local files with unregistered extensions as filtered.</param>
+	/// <param name="token">Cancels the load between steps (after the server call, after hashing, after scanning the disk).</param>
+	/// <returns>The rows and the remote, local-only and local-and-remote counts shown under the list.</returns>
+	/// <remarks>
+	/// Makes one server call (<see cref="HackPDM.Infrastructure.Odoo.Models.HpDirectory.GetEntriesAsync"/>); if it fails the error
+	/// goes to the debug output and only local files are listed. Local copies of remote entries are read and SHA1-hashed in
+	/// parallel off the calling thread to work out each row's status; local-only files are not hashed.
+	/// </remarks>
+	/// <exception cref="System.OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
 	Task<EntryListResult> LoadAsync( int? directoryId, string? treePath, bool includeDeleted, bool filterUnknownTypes, CancellationToken token );
 
 	/// <summary>
 	/// The row for one file after its local copy changed, from the local disk and the server data the
-	/// <paramref name="existing"/> row was listed with (no server call); null when the row should go
-	/// (a local-only file that was deleted).
+	/// <paramref name="existing"/> row was listed with (no server call).
 	/// </summary>
+	/// <param name="existing">The row currently shown for the file; null when the file was not listed.</param>
+	/// <param name="localPath">The absolute path of the local file.</param>
+	/// <param name="filterUnknownTypes">Mark a local-only file with an unregistered extension as filtered.</param>
+	/// <returns>The rebuilt row; null when the row should go (a local-only file that was deleted).</returns>
+	/// <remarks>The file is read and hashed on a thread-pool thread.</remarks>
 	Task<EntryRow?> RefreshRowAsync( EntryRow? existing, string localPath, bool filterUnknownTypes );
 }
 
+/// <inheritdoc cref="IEntryListService"/>
 public sealed class EntryListService : IEntryListService
 {
 	// how many local files are read + hashed at once; IO bound, so a small multiple of the cores
 	private static readonly int HashConcurrency = Math.Clamp( Environment.ProcessorCount, 2, 8 );
 
+	/// <inheritdoc/>
 	public async Task<EntryListResult> LoadAsync( int? directoryId, string? treePath, bool includeDeleted, bool filterUnknownTypes, CancellationToken token )
 	{
 		List<EntryRow> rows = [];
@@ -111,6 +126,7 @@ public sealed class EntryListService : IEntryListService
 		} );
 	}
 
+	/// <inheritdoc/>
 	public async Task<EntryRow?> RefreshRowAsync( EntryRow? existing, string localPath, bool filterUnknownTypes )
 	{
 		// read and hashed off the UI thread; null when the file is gone

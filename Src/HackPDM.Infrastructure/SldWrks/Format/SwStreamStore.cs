@@ -18,6 +18,7 @@ namespace HackPDM.Infrastructure.SldWrks.Format;
 /// </summary>
 public sealed class SwStreamStore
 {
+	/// <summary>The container layout of a SolidWorks file.</summary>
 	public enum ContainerFormat { Unknown, Ole, Modern }
 
 	private readonly byte[] _data;
@@ -25,6 +26,7 @@ public sealed class SwStreamStore
 	private readonly Dictionary<string, List<Func<byte[]?>>> _sources = new( StringComparer.Ordinal );
 	private readonly Dictionary<string, byte[]?> _decoded = new( StringComparer.Ordinal );
 
+	/// <summary>The detected container layout; <see cref="ContainerFormat.Unknown"/> means no streams were indexed.</summary>
 	public ContainerFormat Format { get; }
 
 	private SwStreamStore( byte[] data )
@@ -38,14 +40,36 @@ public sealed class SwStreamStore
 		}
 	}
 
+	/// <summary>Reads a whole file into memory and indexes its streams. Streams are decompressed only when first read.</summary>
+	/// <param name="path">Path of the SolidWorks file.</param>
+	/// <returns>The store; check <see cref="Format"/> since an unrecognised file gives an empty <see cref="ContainerFormat.Unknown"/> store rather than an error.</returns>
+	/// <exception cref="IOException">The file can't be read (including <see cref="FileNotFoundException"/>).</exception>
+	/// <exception cref="UnauthorizedAccessException">Access to the file is denied.</exception>
+	/// <exception cref="InvalidDataException">An OLE file's sector chain runs past the end of the file.</exception>
+	/// <exception cref="ArgumentOutOfRangeException">An OLE file is shorter than its 512-byte header.</exception>
 	public static SwStreamStore Open( string path ) => new( File.ReadAllBytes( path ) );
+	/// <summary>Indexes the streams of a SolidWorks file already in memory.</summary>
+	/// <param name="data">The whole file; kept (not copied) by the store.</param>
+	/// <returns>The store; check <see cref="Format"/>.</returns>
+	/// <exception cref="InvalidDataException">An OLE file's sector chain runs past the end of the data.</exception>
+	/// <exception cref="ArgumentOutOfRangeException">An OLE file is shorter than its 512-byte header.</exception>
 	public static SwStreamStore FromBytes( byte[] data ) => new( data );
 
+	/// <summary>The names of all indexed streams, such as "Header2" or "docProps/custom.xml" (OLE storages joined with "/", "__ZLB" suffixes removed).</summary>
 	public IEnumerable<string> Names => _sources.Keys;
 
+	/// <summary>Checks whether a stream exists and has an intact copy. This decompresses (and caches) the stream.</summary>
+	/// <param name="name">The stream name, as in <see cref="Names"/>.</param>
+	/// <returns>True when <see cref="Get"/> would return data.</returns>
 	public bool Contains( string name ) => Get( name ) is not null;
 
-	/// <summary>The decompressed stream, or null when it is missing or no copy of it is intact.</summary>
+	/// <summary>Gets a stream's decompressed contents, decompressing it on first use and caching the result.</summary>
+	/// <param name="name">The stream name, as in <see cref="Names"/> (case-sensitive).</param>
+	/// <returns>
+	/// The bytes, or null when the stream is missing or no copy of it is intact. In 2015+ files the first copy whose size and
+	/// CRC-32 match is used, since files can hold stale copies.
+	/// </returns>
+	/// <remarks>Not thread-safe: the cache is a plain dictionary.</remarks>
 	public byte[]? Get( string name )
 	{
 		if( _decoded.TryGetValue( name, out var cached ) )
@@ -68,8 +92,14 @@ public sealed class SwStreamStore
 		return result;
 	}
 
+	/// <summary>Gets a stream's contents decoded as UTF-8 text (used for the XML streams of 2015+ files).</summary>
+	/// <param name="name">The stream name.</param>
+	/// <returns>The text, or null when the stream is missing or damaged.</returns>
 	public string? GetText( string name ) => Get( name ) is { } bytes ? Encoding.UTF8.GetString( bytes ) : null;
 
+	/// <summary>Identifies the container layout from the first bytes of a file.</summary>
+	/// <param name="data">The file's contents (at least the first 64 bytes).</param>
+	/// <returns><see cref="ContainerFormat.Ole"/> for the OLE signature, <see cref="ContainerFormat.Modern"/> when a chunk marker appears in the first 64 bytes, otherwise <see cref="ContainerFormat.Unknown"/>.</returns>
 	public static ContainerFormat DetectFormat( ReadOnlySpan<byte> data )
 	{
 		if( data.Length >= 8 && data[ ..8 ].SequenceEqual( OleSignature ) )

@@ -9,6 +9,7 @@ using FlowDirection = HackPDM.Shared.GlobalData.FlowDirection;
 
 namespace HackPDM.Mvvm.Views.Common.Settings;
 
+/// <summary>Process-wide access to the saved UI settings (AppConfig.json) and the entry-list colors.</summary>
 public static class UIStorage
 {
 	#region Color Settings
@@ -29,6 +30,9 @@ public static class UIStorage
 
 	#region AppSettings
 	private static GlobalSerializedData? _globalData;
+	/// <summary>The app's saved UI settings.</summary>
+	/// <value>Loaded from AppConfig.json by <see cref="AppConfigStore.Load"/> on first read; setting it replaces the
+	/// in-memory copy without saving.</value>
 	public static GlobalSerializedData GlobalData
 	{
 		get => _globalData ??= AppConfigStore.Load();
@@ -39,7 +43,13 @@ public static class UIStorage
 	public static Dictionary<string, OdooEntryColumnID?> Columns => GlobalData.ColumnsSettings.Columns;
 	#endregion
 
+	/// <summary>Builds a UI color from its four channels.</summary>
+	/// <param name="argb">The alpha, red, green and blue channels, in that order.</param>
+	/// <returns>The color.</returns>
 	public static Color ToColor((byte, byte, byte, byte) argb) => Color.FromArgb(argb.Item1, argb.Item2, argb.Item3, argb.Item4);
+	/// <summary>Splits a named color's packed 0xAARRGGBB value into its channels.</summary>
+	/// <param name="names">The named color.</param>
+	/// <returns>The alpha, red, green and blue channels, in that order.</returns>
 	public static (byte, byte, byte, byte) TransformUIntToRGB(ColorNames names)
 		=> (
 				(byte)(((uint)names >> 24) & 0xFF),

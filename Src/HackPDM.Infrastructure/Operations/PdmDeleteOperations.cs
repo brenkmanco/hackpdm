@@ -45,11 +45,20 @@ public static class PdmDeleteOperations
 		return deleted.ValueOr( false );
 	}
 
+	/// <summary>Permanently deletes (<c>unlink</c>) the hp.version.property records of the given versions.</summary>
+	/// <param name="versionIds">The hp.version ids.</param>
+	/// <param name="log">Receives progress and error lines; may be null.</param>
+	/// <returns>True when the properties were deleted or there were none; false when <paramref name="versionIds"/> is null or empty, or the search or delete failed (for example for a user who is not an administrator).</returns>
 	public static Task<bool> PermanentDeleteVersionProperty( IReadOnlyList<int>? versionIds, Action<StatusMessage, string>? log = null )
 		=> versionIds is not { Count: > 0 }
 			? Task.FromResult( false )
 			: UnlinkMatchingAsync( HpVersionProperty.GetHpModel()!, OdooDomain.Where( "version_id", "in", versionIds ), "version properties", log );
 
+	/// <summary>Removes the dependency links of the given versions by clearing their <c>parent_ids</c> and <c>child_ids</c> many2many fields.</summary>
+	/// <param name="versionIds">The hp.version ids.</param>
+	/// <param name="log">Receives progress and error lines; may be null.</param>
+	/// <returns>True when the server accepted the write; false when <paramref name="versionIds"/> is null or empty, or the write failed.</returns>
+	/// <remarks>Only the links are removed (command <c>(5, 0, 0)</c>); the versions at the other end are not deleted.</remarks>
 	public static async Task<bool> PermanentDeleteVersionRelationships( IReadOnlyList<int>? versionIds, Action<StatusMessage, string>? log = null )
 	{
 		if( versionIds is not { Count: > 0 } )
@@ -67,6 +76,14 @@ public static class PdmDeleteOperations
 		return cleared.ValueOr( false );
 	}
 
+	/// <summary>Permanently deletes every version of the given entries, with their properties, relationships and stored file contents.</summary>
+	/// <param name="entryIds">The hp.entry ids whose versions are deleted.</param>
+	/// <param name="log">Receives progress and error lines; may be null.</param>
+	/// <returns>True when every step succeeded (or the entries had no versions); false when <paramref name="entryIds"/> is null or empty, or a step failed.</returns>
+	/// <remarks>
+	/// Runs in order: properties, relationships, the ir.attachment rows holding <c>file_contents</c>, then the versions; it
+	/// stops at the first refused step so versions are never left half-deleted. Cannot be undone. The entries themselves are kept.
+	/// </remarks>
 	public static async Task<bool> PermanentDeleteVersions( IReadOnlyList<int>? entryIds, Action<StatusMessage, string>? log = null )
 	{
 		if( entryIds is not { Count: > 0 } )
@@ -94,6 +111,11 @@ public static class PdmDeleteOperations
 		return attachmentsDeleted && versionsDeleted;
 	}
 
+	/// <summary>Permanently deletes entries from the server, after all their versions (see <see cref="PermanentDeleteVersions"/>).</summary>
+	/// <param name="entryIds">The hp.entry ids.</param>
+	/// <param name="log">Receives progress and error lines; may be null.</param>
+	/// <returns>True when the versions and then the entries were deleted; false when <paramref name="entryIds"/> is null or empty, or any step failed.</returns>
+	/// <remarks>Cannot be undone; normally needs an administrator. Local files are not touched. For a reversible delete use <see cref="SetDeletedAsync"/>.</remarks>
 	public static async Task<bool> PermanentDeleteEntry( IReadOnlyList<int>? entryIds, Action<StatusMessage, string>? log = null )
 	{
 		if( entryIds is not { Count: > 0 } )
@@ -102,7 +124,11 @@ public static class PdmDeleteOperations
 		return versions && await UnlinkAsync( HpEntry.GetHpModel()!, entryIds, "entries", log );
 	}
 
-	/// <summary>Marks the entries deleted (or live again); false when there were none.</summary>
+	/// <summary>Marks entries deleted (or live again) on the server by writing their <c>deleted</c> flag; nothing is removed.</summary>
+	/// <param name="entries">The entries; each one's <c>deleted</c> property is updated in memory before the write.</param>
+	/// <param name="deleted">True to mark deleted, false to restore.</param>
+	/// <param name="log">Receives a line per entry, and an error line for each write the server refused; may be null.</param>
+	/// <returns>False when <paramref name="entries"/> is null or empty; otherwise true, even if some writes failed (see the log).</returns>
 	public static async Task<bool> SetDeletedAsync( HpEntry[]? entries, bool deleted, Action<StatusMessage, string>? log = null )
 	{
 		if( entries is not { Length: > 0 } )

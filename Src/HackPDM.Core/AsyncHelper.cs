@@ -7,6 +7,7 @@ using HackPDM.Core.General;
 
 namespace HackPDM.Core;
 
+/// <summary>Polling helpers for waiting on a condition or a background task.</summary>
 public class AsyncHelper
 {
     private readonly Func<bool> _predicate;
@@ -69,13 +70,21 @@ public class AsyncHelper
         }
         return this;
     }
-    /// <summary>Wait until the predicate condition evaluates to true before continuing.</summary>
-    /// <param name="eval">function to evaluate returning true or false</param>
-    /// <param name="msTimeout">time before exiting function. (t <= 0) means that it continues indefinitely</param>
-    /// <param name="pollingMs">millisecond intervals before checking if the condition is fulfilled</param>
-    /// <param name="token">async cancellation token</param>
+    /// <summary>Polls a condition until it becomes true, the timeout runs out, or the wait is cancelled.</summary>
+    /// <param name="eval">The condition to check; it is first checked after one polling interval, not immediately.</param>
+    /// <param name="pollingMs">Milliseconds between checks.</param>
+    /// <param name="msTimeout">Milliseconds before giving up; 0 or less waits indefinitely.</param>
+    /// <param name="token">Meant to cancel the wait, but currently ignored (the constructor does not store it).</param>
+    /// <returns><see langword="true"/> when the condition became true; <see langword="false"/> on timeout or cancellation.</returns>
+    /// <exception cref="System.ArgumentException"><paramref name="eval"/> is <see langword="null"/>.</exception>
     public static async Task<bool> WaitUntil(Func<bool> eval, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
         => await WaitInternal(eval, true, msTimeout, pollingMs, token);
+    /// <summary>Runs an asynchronous function on the thread pool and waits for it, polling every 500 ms.</summary>
+    /// <param name="function">The work to run.</param>
+    /// <param name="statusHeader">Currently unused.</param>
+    /// <param name="tokenSource">Its token is passed to <see cref="System.Threading.Tasks.Task.Run(System.Func{System.Threading.Tasks.Task}, System.Threading.CancellationToken)"/>; a new source is created when <see langword="null"/>.</param>
+    /// <returns><see langword="false"/> when the task ended cancelled; otherwise <see langword="true"/> once it has completed.</returns>
+    /// <remarks>Exceptions thrown by <paramref name="function"/> are rethrown when the task is awaited.</remarks>
     public static async Task<bool> AsyncRunner(Func<Task> function, string statusHeader = "Status", CancellationTokenSource tokenSource = default)
     {
         tokenSource ??= new();

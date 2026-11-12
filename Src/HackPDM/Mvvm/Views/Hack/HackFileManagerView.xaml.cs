@@ -642,7 +642,11 @@ public sealed partial class HackFileManagerView : Page
 	#endregion
 	#region Accessors used by the smoke tests
 
+	/// <summary>The directory tree control, for the smoke tests.</summary>
+	/// <returns>The page's directory tree view.</returns>
 	public TreeView GetOdooDirectoryTree() => OdooDirectoryTree;
+	/// <summary>The entry list control, for the smoke tests.</summary>
+	/// <returns>The page's entry table.</returns>
 	public TableView GetOdooEntryList() => OdooEntryList;
 	internal TabViewItem HistoryTabItem => HistoryTab;
 	internal TabViewItem? LowerTabIndex

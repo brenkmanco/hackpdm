@@ -230,6 +230,24 @@ class hp_version(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        """Creates versions; for regular users, only of files they may add a version to.
+
+        The first version of a new file needs no checkout; every later one needs the file checked out
+        to the caller. A version cannot be created already checked out (use :meth:`checkout_entry`).
+        Commits go through here too.
+
+        Args:
+            vals_list (list[dict]): One dict per version: entry_id (int), file_contents (str, base64),
+                node_id (int, the committing computer), and other version fields.
+
+        Returns:
+            hp.version: The new versions.
+
+        Raises:
+            UserError: The file does not exist, is deleted, is checked out to another user, or is not
+                checked out to the caller.
+            AccessError: Checkout fields were given.
+        """
         if not hp_guard.is_pdm_admin(self.env):
             for vals in vals_list:
                 if any(vals.get(f) for f in _CHECKOUT_VERSION_FIELDS):
@@ -254,6 +272,23 @@ class hp_version(models.Model):
             raise UserError(f"Cannot add a version: '{entry.name}' is not checked out to you.")
 
     def write(self, vals):
+        """Writes version fields, keeping committed versions fixed for regular users.
+
+        A regular user may not change a version's file, entry, committing node, dependency links or
+        properties (only an administrator can, e.g. for a permanent delete). Checkout fields follow the
+        checkout rules: check out only in your own name, only the holder changes or releases a
+        checkout, and a deleted file cannot be checked out.
+
+        Args:
+            vals (dict): Field values to write.
+
+        Returns:
+            bool: True.
+
+        Raises:
+            AccessError: A fixed field was written, or a checkout in someone else's name.
+            UserError: The checkout belongs to another user, or the file is deleted.
+        """
         if not hp_guard.is_pdm_admin(self.env):
             locked = _IMMUTABLE_VERSION_FIELDS.intersection(vals)
             if locked:
@@ -316,6 +351,19 @@ class hp_version(models.Model):
 
     @api.model
     def get_recursive_dependency(self, version_ids):
+        """Returns the given versions and every version they reference, recursively.
+
+        Follows the parent→child dependency links in SQL, skipping children whose file is deleted, and
+        stops on cycles. Pending ORM changes are written first so links made in the same transaction
+        count.
+
+        Args:
+            version_ids (int | list[int] | Iterable[int]): Starting hp.version ids.
+
+        Returns:
+            set[int] | list: The starting ids plus all dependency version ids; ``[]`` when none were
+            given or the query fails (the error is logged).
+        """
         if not version_ids:
             return []
         if isinstance(version_ids, int):
@@ -355,6 +403,14 @@ class hp_version(models.Model):
 
     @api.model
     def get_recursive_dependency_versions(self, version_ids):
+        """Same as :meth:`get_recursive_dependency`, as a list (for RPC callers).
+
+        Args:
+            version_ids (int | list[int] | Iterable[int]): Starting hp.version ids.
+
+        Returns:
+            list[int]: The starting ids plus all dependency version ids; ``[]`` on no input or error.
+        """
         try:
             if not version_ids:
                 return []
@@ -370,6 +426,21 @@ class hp_version(models.Model):
             return []
     @api.model
     def get_recursive_dependency_entries(self, version_ids, node_id=False, update=False):
+        """Returns the files (entries) of the given versions and everything they depend on.
+
+        The client uses this to widen Get Latest, checkout and undo checkout to an assembly's parts.
+
+        Args:
+            version_ids (list[int]): Starting hp.version ids (usually the files' latest versions).
+            node_id (int | bool, optional): hp.node id whose "latest versions" list is replaced when
+                ``update`` is true. Defaults to False.
+            update (bool, optional): Also store the found versions on that node. Only administrators may
+                write nodes; for anyone else the write fails and an empty list is returned. Defaults to
+                False.
+
+        Returns:
+            list[int]: Unique hp.entry ids; ``[]`` when nothing was found or anything failed (logged).
+        """
         try:
             complete_version_ids = self.get_recursive_dependency_versions(version_ids)
             if len(complete_version_ids) < 1:
@@ -390,6 +461,22 @@ class hp_version(models.Model):
 
     @api.model
     def get_entries_from_children(self, entryID):
+        """Meant to return the file ids an entry's latest version depends on.
+
+        Not usable as written: it adds the starting entry's id on every step, and reads ``child_id``
+        from the child versions, which raises AttributeError as soon as the version has a dependency.
+        Use :meth:`get_recursive_dependency_entries`.
+
+        Args:
+            entryID (int): The hp.entry id.
+
+        Returns:
+            set[int] | None: The starting entry's id, or None.
+
+        Raises:
+            IndexError: No entry has that id.
+            AttributeError: The latest version has dependencies.
+        """
         entry_ids = set()
         entry = self.env["hp.entry"].search([('id', '=', entryID)])[0]
         if entry:
@@ -446,8 +533,23 @@ class hp_version(models.Model):
 
     @api.model
     def checkout_entry(self, version_id, node):
-        """Checks out the entry of version_id to the calling user on node (an hp.node id or name).
-        Returns True; raises UserError when the entry is checked out to someone else or deleted."""
+        """Checks a file out to the caller on the given computer.
+
+        The checkout (user, date, node) is written to the file's latest version, whichever of its
+        versions was passed. The version's node_id (the computer that committed it) is left alone.
+        Checking out a file you already hold refreshes the date and node.
+
+        Args:
+            version_id (int): Any hp.version id of the file to check out.
+            node (int | str): The caller's computer, as an hp.node id or name.
+
+        Returns:
+            bool: True.
+
+        Raises:
+            UserError: ``version_id`` is not an int or does not exist, the node is not found, the file
+                is deleted, or it is checked out to another user.
+        """
         if not isinstance(version_id, int):
             raise UserError(f"checkout_entry expects a version id, got {version_id!r}")
         node_rec = self.env["hp.node"]
@@ -484,6 +586,20 @@ class hp_version(models.Model):
 
     @api.model
     def checkout_entries(self, version_ids, node):
+        """Checks out several files with :meth:`checkout_entry`, all or nothing.
+
+        If one fails, the RPC call fails and none of the checkouts are kept.
+
+        Args:
+            version_ids (list[int]): hp.version ids, one per file.
+            node (int | str): The caller's computer, as an hp.node id or name.
+
+        Returns:
+            bool: True.
+
+        Raises:
+            UserError: As for :meth:`checkout_entry`, for the first file that cannot be checked out.
+        """
         for version_id in version_ids:
             self.checkout_entry(version_id, node)
         return True
@@ -491,6 +607,20 @@ class hp_version(models.Model):
     @api.model
     @api.depends('entry_id', 'file_ext', 'name')
     def migrate_webdav_files_to_records(self):
+        """One-off migration: downloads each version's file from the old WebDAV server into an attachment.
+
+        Administrators only. Versions that already have a file are skipped; commits after every
+        version. The WebDAV address and login are hardcoded.
+
+        Args:
+            None.
+
+        Returns:
+            None: nothing.
+
+        Raises:
+            AccessError: The caller is not an administrator.
+        """
         hp_guard.require_admin(self.env, "migrate_webdav_files_to_records")
         web_dav = WebDav()
         all_records = self.env[self._name].search([])
@@ -531,6 +661,20 @@ class hp_version(models.Model):
     @api.model
     @api.depends('name')
     def migrate_image_from_database(self):
+        """One-off migration: copies preview images from the old HackPDM database into attachments.
+
+        Administrators only. Versions that already have a preview are skipped; commits after every
+        version. The old database's address and login are hardcoded.
+
+        Args:
+            None.
+
+        Returns:
+            None: nothing.
+
+        Raises:
+            AccessError: The caller is not an administrator.
+        """
         hp_guard.require_admin(self.env, "migrate_image_from_database")
         hackpdm = Database("hackpdm", "hackpdm", "hackpdm", "alderaan", 5432)
         hackpdm.start_session()
@@ -566,6 +710,19 @@ class hp_version(models.Model):
 
     @api.model
     def display_all_fnames(self):
+        """Logs every hp.version attachment's id, name, field and filestore path (for debugging).
+
+        Administrators only.
+
+        Args:
+            None.
+
+        Returns:
+            None: nothing (the output goes to the server log).
+
+        Raises:
+            AccessError: The caller is not an administrator.
+        """
         hp_guard.require_admin(self.env, "display_all_fnames")
         all_records = self.env["ir.attachment"].search([("res_model", "=", "hp.version")])
         for record in all_records:
@@ -573,6 +730,17 @@ class hp_version(models.Model):
 
     @api.model
     def cleanup_filestore(self):
+        """Placeholder for a filestore cleanup job; only checks that the caller is an administrator.
+
+        Args:
+            None.
+
+        Returns:
+            None: nothing.
+
+        Raises:
+            AccessError: The caller is not an administrator.
+        """
         hp_guard.require_admin(self.env, "cleanup_filestore")
 
 class hp_version_property(models.Model):
@@ -585,11 +753,36 @@ class hp_version_property(models.Model):
     # rights, after checking the version is one it just created); users cannot add, change or remove them
     @api.model_create_multi
     def create(self, vals_list):
+        """Creates version properties; administrators only (a commit creates them with elevated rights).
+
+        A version's properties are part of what was committed, so users cannot add them directly.
+
+        Args:
+            vals_list (list[dict]): One dict per property: version_id (int), prop_id (int),
+                sw_config_name (str) and one of text_value, number_value, yesno_value, date_value.
+
+        Returns:
+            hp.version.property: The new properties.
+
+        Raises:
+            AccessError: The caller is not an administrator.
+        """
         if not hp_guard.is_pdm_admin(self.env):
             raise AccessError("Version properties are set by committing a new version.")
         return super().create(vals_list)
 
     def write(self, vals):
+        """Changes version properties; administrators only.
+
+        Args:
+            vals (dict): Field values to write.
+
+        Returns:
+            bool: True.
+
+        Raises:
+            AccessError: The caller is not an administrator.
+        """
         if not hp_guard.is_pdm_admin(self.env):
             raise AccessError("Committed version properties cannot be changed.")
         return super().write(vals)

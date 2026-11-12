@@ -16,6 +16,20 @@ namespace HackPDM.Infrastructure.Odoo;
 /// </summary>
 public static class OdooValueConverter
 {
+	/// <summary>Converts a plain value read from Odoo into the CLR value for a property of the given Odoo field type.</summary>
+	/// <param name="type">The Odoo field type declared on the model property.</param>
+	/// <param name="value">The value as produced by <see cref="OdooValues.FromJson"/>.</param>
+	/// <returns>
+	/// The converted value, boxed: int, string, float (Float), decimal (Monetary), bool, <see cref="DateTime"/>,
+	/// <see cref="Many2One"/>, <see cref="One2Many"/>, <see cref="Many2Many"/>, a dictionary (Json / Serialized) or
+	/// <c>byte[]</c> (Binary / Image). Null for a null value, and for <see langword="false"/> on any non-boolean field
+	/// (Odoo's empty value). Unknown field types return <paramref name="value"/> unchanged.
+	/// </returns>
+	/// <remarks>
+	/// Conversion is lenient: a non-numeric Integer is 0, an unparseable date is <see cref="DateTime.MinValue"/>,
+	/// invalid base64 is null, and a malformed many2one becomes an empty reference (id 0).
+	/// </remarks>
+	/// <exception cref="Newtonsoft.Json.JsonException">A Json or Serialized field holds text that is not valid JSON.</exception>
 	public static object? Convert( OdooFieldType type, object? value )
 	{
 		// Odoo sends false for an empty non-boolean field

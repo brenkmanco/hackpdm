@@ -9,8 +9,15 @@ namespace HackPDM.Mvvm.Models.Hack;
 
 // No UI-framework types in this file: view models use these directly.
 
+/// <summary>
+/// One row of the file manager's entry list: a remote entry, a local-only file, or both. Resolves its
+/// local file from the vault path.
+/// </summary>
 public class EntryRow : HackPDM.Domain.Representation.EntryRow
 {
+	/// <summary>The local file for this row.</summary>
+	/// <value>Resolved on first read from <c>FullName</c> (a server path for remote rows, an absolute path for local rows)
+	/// and cached; null when the file does not exist on disk.</value>
 	public override FileInfo? LocalFile
 	{
 		get

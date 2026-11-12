@@ -34,6 +34,9 @@ public partial class HpVersionRelationship : HpBaseModelTransport<HpVersionRelat
 	IMany2One? IHpVersionRelationshipModel.child_id { get => (IMany2One?)child_id; set => child_id = (Many2One?)value; }
 
 	public HpVersionRelationship() { } 
+    /// <summary>Creates an unsaved parent/child link between two versions.</summary>
+    /// <param name="parentId">The hp.version id of the parent (for example the assembly).</param>
+    /// <param name="childId">The hp.version id of the child (for example a part it references).</param>
     public HpVersionRelationship(
         int parentId = 0,
         int childId = 0)

@@ -35,9 +35,16 @@ public partial class HpPDMCommit : HpBaseModelTransport<HpPDMCommit>, IHpPDMComm
 public partial class HpPDMCommit
 { 
 	/// <summary>
-	/// Creates the staged records on the server. start_commit returns the commit rows; a failed
-	/// commit has committed = false and the server's reason in message_exception.
+	/// Asks the server to apply this commit: the hp.record.staged rows staged in it become real records.
 	/// </summary>
+	/// <returns>
+	/// <c>Committed</c> is <see langword="true"/> when the server reports the commit as done; otherwise
+	/// <c>Error</c> holds the RPC error, the server's <c>message_exception</c>, or a generic message.
+	/// </returns>
+	/// <remarks>
+	/// Calls <c>hp.pdm.commit.start_commit</c> with this record's id and copies <c>committed</c>, <c>errored</c>
+	/// and <c>message_exception</c> from the first returned row into this object.
+	/// </remarks>
 	public async Task<(bool Committed, string? Error)> ServerCommit()
 	{
 		Result<IReadOnlyList<OdooRow>> response = await OdooRpc.ExecuteAsync<IReadOnlyList<OdooRow>>(GetHpModel()!, "start_commit", [this.id]);
@@ -53,6 +60,9 @@ public partial class HpPDMCommit
 		}
 		return (false, "the server did not complete the commit");
 	}
+	/// <summary>Asks the server to clear this commit (discard its staged records).</summary>
+	/// <returns><see langword="true"/> when the server reports success; <see langword="false"/> when it doesn't or the call failed.</returns>
+	/// <remarks>Calls <c>hp.pdm.commit.clear_commit</c> with this record's id; the error of a failed call is discarded.</remarks>
 	public async Task<bool> ServerClear()
 		=> (await OdooRpc.ExecuteAsync<bool>(GetHpModel()!, "clear_commit", [this.id])).ValueOr(false);
 }

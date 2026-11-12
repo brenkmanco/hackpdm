@@ -14,6 +14,7 @@ namespace HackPDM.Infrastructure.SldWrks;
 /// </list>
 /// The vault index for the last step is built on first use and kept for this instance's lifetime.
 /// </summary>
+/// <param name="vaultRoot">The local working folder (vault root); null or empty disables the vault-based steps 1 and 4.</param>
 public sealed class SwReferenceResolver( string? vaultRoot )
 {
 	private readonly string? _vaultRoot = string.IsNullOrEmpty( vaultRoot ) ? null : Path.TrimEndingDirectorySeparator( vaultRoot );
@@ -28,12 +29,21 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 	};
 
 	/// <summary>Splits a stored path on both separators: stored paths are Windows paths whatever the OS.</summary>
+	/// <param name="storedPath">The path as stored in a SolidWorks document.</param>
+	/// <returns>The non-empty path segments, drive (e.g. <c>C:</c>) included.</returns>
 	public static string[] Segments( string storedPath )
 		=> storedPath.Split( [ '\\', '/' ], StringSplitOptions.RemoveEmptyEntries );
 
+	/// <summary>Gets the file name of a stored Windows path on any OS (where <see cref="Path.GetFileName(string)"/> wouldn't split on backslashes).</summary>
+	/// <param name="storedPath">The path as stored in a SolidWorks document.</param>
+	/// <returns>The last segment, or "" for an empty path.</returns>
 	public static string FileName( string storedPath ) => Segments( storedPath ) is [ .., var last ] ? last : "";
 
-	/// <summary>The local path of the referenced file, or null when it can't be found.</summary>
+	/// <summary>Finds the local file for a stored reference, trying the steps listed on <see cref="SwReferenceResolver"/> in order.</summary>
+	/// <param name="storedPath">The path as stored in the referencing document.</param>
+	/// <param name="referencingFile">The local path of the document that holds the reference; enables the "next to the referencing document" step.</param>
+	/// <returns>The local path of the referenced file, or null when it can't be found.</returns>
+	/// <remarks>The last step scans every <c>*.sld*</c> file under the vault once (skipping inaccessible folders and reparse points) and caches the index; files added later aren't seen by this instance.</remarks>
 	public string? Resolve( string storedPath, string? referencingFile = null )
 	{
 		string[] segments = Segments( storedPath );

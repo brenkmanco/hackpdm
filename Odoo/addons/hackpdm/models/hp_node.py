@@ -18,4 +18,19 @@ class hp_node(models.Model):
 
     @api.model
     def update_node_latest_versions(self, version_ids):
+        """Replaces the node's list of versions it holds the latest of.
+
+        Declared ``@api.model``, so over RPC it runs on an empty recordset and changes nothing; the
+        client sets the list through ``hp.version.get_recursive_dependency_entries(update=True)``.
+        Regular users cannot write nodes (only administrators can).
+
+        Args:
+            version_ids (list[int]): hp.version ids.
+
+        Returns:
+            None: nothing.
+
+        Raises:
+            AccessError: The caller may not write hp.node records.
+        """
         self.write({"node_latest_ids": [(Command.SET, 0, version_ids)]})

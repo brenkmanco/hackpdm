@@ -9,9 +9,16 @@ namespace HackPDM.Infrastructure.Odoo;
 /// <summary>A row returned by read / search_read: field name to value (see <see cref="OdooValues"/>).</summary>
 public sealed class OdooRow : Dictionary<string, object?>
 {
+	/// <summary>Creates an empty row.</summary>
 	public OdooRow() { }
+	/// <summary>Creates a row holding a copy of <paramref name="values"/>.</summary>
+	/// <param name="values">Field name to value pairs to copy into the row.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="values"/> is null.</exception>
+	/// <exception cref="ArgumentException"><paramref name="values"/> contains duplicate keys.</exception>
 	public OdooRow( IDictionary<string, object?> values ) : base( values ) { }
 
+	/// <summary>The record id from the row's <c>"id"</c> field.</summary>
+	/// <value>The id, or 0 when the row has no integer <c>"id"</c> field.</value>
 	public int Id => this.Int( "id" ) ?? 0;
 }
 
@@ -36,6 +43,18 @@ public static class OdooRpc
 	// ------------------------------------------------------------------ transport
 
 	/// <summary>The one transport: calls <paramref name="method"/> of an Odoo service and returns its raw result.</summary>
+	/// <param name="service">The Odoo JSON-RPC service, such as <c>"common"</c> or <c>"object"</c>.</param>
+	/// <param name="method">The service method, such as <c>"login"</c> or <c>"execute"</c>.</param>
+	/// <param name="args">Positional arguments; each is converted with <see cref="OdooValues.ToRpc"/> (domains and id lists become arrays).</param>
+	/// <param name="timeoutMs">Request timeout in milliseconds; <see cref="ObjectTimeout"/> when null.</param>
+	/// <param name="token">Cancels the request.</param>
+	/// <returns>
+	/// The cloned <c>result</c> element on success (a default <see cref="JsonElement"/> when the server sent none),
+	/// or a failed result with the server's error (see <see cref="JsonRpcError.Describe"/>), "no response from the server",
+	/// or the transport exception's message chain. Timeouts and HTTP errors are returned as failures, not thrown.
+	/// </returns>
+	/// <remarks>Posts to <see cref="OdooDefaults.OdooUrl"/> + <see cref="JsonRpcEndpoint"/> through <see cref="OdooTransport.SendJsonAsync"/>.</remarks>
+	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled. This is the only exception rethrown.</exception>
 	public static async Task<Result<JsonElement>> CallAsync( string service, string method, IReadOnlyList<object?> args, int? timeoutMs = null, CancellationToken token = default )
 	{
 		JsonRpcRequest request = new()
@@ -67,6 +86,23 @@ public static class OdooRpc
 	}
 
 	/// <summary>Calls a model method (<c>object.execute</c>) with the logged-in user and converts the result.</summary>
+	/// <typeparam name="T">
+	/// The type to convert the result to: <see cref="bool"/>, <see cref="int"/>, <see cref="IReadOnlyList{T}"/> of int (ids),
+	/// <see cref="IReadOnlyList{T}"/> of <see cref="OdooRow"/>, a single <see cref="OdooRow"/>, <see cref="object"/> (plain values
+	/// from <see cref="OdooValues.FromJson"/>), <see cref="JsonElement"/>, or any type System.Text.Json can deserialize.
+	/// </typeparam>
+	/// <param name="model">The Odoo model name, such as <c>"hp.entry"</c>.</param>
+	/// <param name="method">The model method to call.</param>
+	/// <param name="args">Positional arguments after the model and method name.</param>
+	/// <param name="timeoutMs">Request timeout in milliseconds; <see cref="ObjectTimeout"/> when null.</param>
+	/// <param name="token">Cancels the request.</param>
+	/// <returns>The converted value, or a failed result with the call's or the conversion's error.</returns>
+	/// <remarks>
+	/// Sends the database, <see cref="OdooDefaults.OdooId"/> and password from <see cref="OdooDefaults.Instance"/>, so
+	/// <see cref="LoginAsync"/> must have succeeded first. Conversion is lenient: <c>bool</c> is true only for JSON true,
+	/// <c>int</c> is 0 for a non-number, and JSON null/false becomes <see langword="default"/> for other types.
+	/// </remarks>
+	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
 	public static async Task<Result<T>> ExecuteAsync<T>( string model, string method, IReadOnlyList<object?> args, int? timeoutMs = null, CancellationToken token = default )
 	{
 		Result<JsonElement> raw = await CallAsync( "object", "execute",
@@ -74,7 +110,15 @@ public static class OdooRpc
 		return raw.Ok ? Convert<T>( raw.Value ) : Result<T>.Fail( raw.Error! );
 	}
 
-	/// <summary>Logs in and sets OdooDefaults.OdooId; the user id, or why it failed.</summary>
+	/// <summary>Logs in with the configured database, user name and password (<c>common.login</c>).</summary>
+	/// <param name="timeoutMs">Request timeout in milliseconds; <see cref="CommonTimeout"/> when null.</param>
+	/// <param name="token">Cancels the request.</param>
+	/// <returns>
+	/// The Odoo user id, or a failed result when the database, user name or password is not set, the call fails,
+	/// or the server rejects the credentials (it returns false, which is reported as "login username or password failed").
+	/// </returns>
+	/// <remarks>Side effect: on success stores the user id in <see cref="OdooDefaults.OdooId"/>, which every later <see cref="ExecuteAsync{T}"/> call sends.</remarks>
+	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
 	public static async Task<Result<int>> LoginAsync( int? timeoutMs = null, CancellationToken token = default )
 	{
 		if( string.IsNullOrEmpty( Settings?.OdooDb ) || string.IsNullOrEmpty( Settings.OdooUser ) || string.IsNullOrEmpty( Settings.OdooPass ) )
@@ -107,34 +151,98 @@ public static class OdooRpc
 
 	// ------------------------------------------------------------------ typed verbs
 
+	/// <summary>Finds the ids of records matching a domain (<c>search</c>).</summary>
+	/// <param name="model">The Odoo model name.</param>
+	/// <param name="domain">The filter; <see cref="OdooDomain.All"/> when null.</param>
+	/// <param name="limit">Maximum number of ids to return (offset 0); no limit when null.</param>
+	/// <param name="timeoutMs">Request timeout in milliseconds; <see cref="ObjectTimeout"/> when null.</param>
+	/// <param name="token">Cancels the request.</param>
+	/// <returns>The matching ids in the model's default order, or a failed result with the error.</returns>
+	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
 	public static Task<Result<IReadOnlyList<int>>> SearchAsync( string model, OdooDomain? domain = null, int? limit = null, int? timeoutMs = null, CancellationToken token = default )
 		=> ExecuteAsync<IReadOnlyList<int>>( model, "search", limit is null ? [ domain ?? OdooDomain.All ] : [ domain ?? OdooDomain.All, 0, limit ], timeoutMs, token );
 
+	/// <summary>Counts the records matching a domain (<c>search_count</c>).</summary>
+	/// <param name="model">The Odoo model name.</param>
+	/// <param name="domain">The filter; <see cref="OdooDomain.All"/> when null.</param>
+	/// <param name="timeoutMs">Request timeout in milliseconds; <see cref="ObjectTimeout"/> when null.</param>
+	/// <param name="token">Cancels the request.</param>
+	/// <returns>The number of matching records, or a failed result with the error.</returns>
+	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
 	public static Task<Result<int>> SearchCountAsync( string model, OdooDomain? domain = null, int? timeoutMs = null, CancellationToken token = default )
 		=> ExecuteAsync<int>( model, "search_count", [ domain ?? OdooDomain.All ], timeoutMs, token );
 
+	/// <summary>Reads records by id (<c>read</c>).</summary>
+	/// <param name="model">The Odoo model name.</param>
+	/// <param name="ids">The record ids to read.</param>
+	/// <param name="fields">Field names to return; an empty list (the default) makes Odoo return every field.</param>
+	/// <param name="timeoutMs">Request timeout in milliseconds; <see cref="ObjectTimeout"/> when null.</param>
+	/// <param name="token">Cancels the request.</param>
+	/// <returns>One row per record read, or a failed result with the server's or the transport's error.</returns>
+	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
 	public static Task<Result<IReadOnlyList<OdooRow>>> ReadAsync( string model, IReadOnlyList<int> ids, IReadOnlyList<string>? fields = null, int? timeoutMs = null, CancellationToken token = default )
 		=> ExecuteAsync<IReadOnlyList<OdooRow>>( model, "read", [ ids, fields ?? [] ], timeoutMs, token );
 
+	/// <summary>Finds and reads records matching a domain in one call (<c>search_read</c>).</summary>
+	/// <param name="model">The Odoo model name.</param>
+	/// <param name="domain">The filter; <see cref="OdooDomain.All"/> when null.</param>
+	/// <param name="fields">Field names to return; an empty list (the default) makes Odoo return every field.</param>
+	/// <param name="limit">Maximum number of rows (offset 0); no limit when null.</param>
+	/// <param name="timeoutMs">Request timeout in milliseconds; <see cref="ObjectTimeout"/> when null. Consider <see cref="LongTimeout"/> for large reads.</param>
+	/// <param name="token">Cancels the request.</param>
+	/// <returns>The matching rows, or a failed result with the error.</returns>
+	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
 	public static Task<Result<IReadOnlyList<OdooRow>>> SearchReadAsync( string model, OdooDomain? domain = null, IReadOnlyList<string>? fields = null, int? limit = null, int? timeoutMs = null, CancellationToken token = default )
 		=> ExecuteAsync<IReadOnlyList<OdooRow>>( model, "search_read",
 			limit is null ? [ domain ?? OdooDomain.All, fields ?? [] ] : [ domain ?? OdooDomain.All, fields ?? [], 0, limit ], timeoutMs, token );
 
+	/// <summary>Creates one record (<c>create</c>).</summary>
+	/// <param name="model">The Odoo model name.</param>
+	/// <param name="values">Field name to value pairs for the new record.</param>
+	/// <param name="timeoutMs">Request timeout in milliseconds; <see cref="ObjectTimeout"/> when null.</param>
+	/// <param name="token">Cancels the request.</param>
+	/// <returns>The new record's id, or a failed result with the error.</returns>
+	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
 	public static Task<Result<int>> CreateAsync( string model, IReadOnlyDictionary<string, object?> values, int? timeoutMs = null, CancellationToken token = default )
 		=> ExecuteAsync<int>( model, "create", [ values ], timeoutMs, token );
 
+	/// <summary>Creates several records in one <c>create</c> call (Odoo's batch create).</summary>
+	/// <param name="model">The Odoo model name.</param>
+	/// <param name="values">One field-value dictionary per record; enumerated once.</param>
+	/// <param name="timeoutMs">Request timeout in milliseconds; <see cref="ObjectTimeout"/> when null.</param>
+	/// <param name="token">Cancels the request.</param>
+	/// <returns>The new ids in the same order as <paramref name="values"/>, or a failed result with the error.</returns>
+	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
 	public static Task<Result<IReadOnlyList<int>>> CreateManyAsync( string model, IEnumerable<IReadOnlyDictionary<string, object?>> values, int? timeoutMs = null, CancellationToken token = default )
 		=> ExecuteAsync<IReadOnlyList<int>>( model, "create", [ values.ToList() ], timeoutMs, token );
 
+	/// <summary>Sets the same field values on every listed record (<c>write</c>).</summary>
+	/// <param name="model">The Odoo model name.</param>
+	/// <param name="ids">The records to update.</param>
+	/// <param name="values">Field name to new value pairs.</param>
+	/// <param name="timeoutMs">Request timeout in milliseconds; <see cref="ObjectTimeout"/> when null.</param>
+	/// <param name="token">Cancels the request.</param>
+	/// <returns>True when the server reports success, or a failed result with the error.</returns>
+	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
 	public static Task<Result<bool>> WriteAsync( string model, IReadOnlyList<int> ids, IReadOnlyDictionary<string, object?> values, int? timeoutMs = null, CancellationToken token = default )
 		=> ExecuteAsync<bool>( model, "write", [ ids, values ], timeoutMs, token );
 
+	/// <summary>Deletes records on the server (<c>unlink</c>).</summary>
+	/// <param name="model">The Odoo model name.</param>
+	/// <param name="ids">The records to delete. When empty, no call is made.</param>
+	/// <param name="timeoutMs">Request timeout in milliseconds; <see cref="ObjectTimeout"/> when null.</param>
+	/// <param name="token">Cancels the request.</param>
+	/// <returns>True on success (immediately for an empty id list), or a failed result with the error.</returns>
+	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
 	public static Task<Result<bool>> UnlinkAsync( string model, IReadOnlyList<int> ids, int? timeoutMs = null, CancellationToken token = default )
 		=> ids.Count == 0
 			? Task.FromResult( Result<bool>.Success( true ) )
 			: ExecuteAsync<bool>( model, "unlink", [ ids ], timeoutMs, token );
 
-	/// <summary>Opens an hp.pdm.commit for this node; its id.</summary>
+	/// <summary>Creates an <c>hp.pdm.commit</c> record owned by this machine's node, to group the versions of one check-in.</summary>
+	/// <param name="timeoutMs">Request timeout in milliseconds; <see cref="ObjectTimeout"/> when null.</param>
+	/// <returns>The new commit's id, or a failed result with the error.</returns>
+	/// <remarks>Sets <c>node_by</c> to <see cref="OdooDefaults.MyNode"/>'s id, or 0 when no node is known. Cannot be cancelled.</remarks>
 	public static Task<Result<int>> CreateCommitAsync( int? timeoutMs = null )
 		=> CreateAsync( OdooDefaultsConstants.HP_PDM_COMMIT, new Dictionary<string, object?> { [ "node_by" ] = Settings?.MyNode?.id ?? 0 }, timeoutMs );
 

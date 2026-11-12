@@ -22,17 +22,47 @@ namespace HackPDM.Mvvm.Models.Hack;
 /// </summary>
 public interface IEntryDetailsService
 {
+	/// <summary>Lists every version of an entry for the history tab.</summary>
+	/// <param name="entry">The selected row; a local-only row (no id) gives no rows.</param>
+	/// <returns>One row per version, newest version id first, with the creating user, file date and size.</returns>
+	/// <remarks>One server call; preview images and file contents are not fetched.</remarks>
 	Task<List<HistoryRow>> GetHistoryAsync( EntryRow entry );
+
+	/// <summary>Lists the versions that reference the entry's latest version (where it is used), for the parents tab.</summary>
+	/// <param name="entry">The selected row; uses its latest version id when known, else its entry id.</param>
+	/// <returns>The parent versions, newest version id first; empty for a local-only row.</returns>
 	Task<List<ParentRow>> GetParentsAsync( EntryRow entry );
+
+	/// <summary>Lists the versions the entry's latest version references, for the children tab.</summary>
+	/// <param name="entry">The selected row; a local-only row (no id) gives no rows.</param>
+	/// <returns>The child versions, newest version id first.</returns>
 	Task<List<ChildrenRow>> GetChildrenAsync( EntryRow entry );
+
+	/// <summary>Lists the stored properties (SolidWorks custom properties) of every version of an entry.</summary>
+	/// <param name="entry">The selected row; a local-only row (no id) gives no rows.</param>
+	/// <returns>One row per property value and configuration, newest version id first.</returns>
+	/// <remarks>Two server reads: the entry's versions, then their properties.</remarks>
 	Task<List<PropertiesRow>> GetPropertiesAsync( EntryRow entry );
+
+	/// <summary>Reads the details of the entry's latest version for the info tab.</summary>
+	/// <param name="entry">The selected row; a local-only row (no id) gives no rows.</param>
+	/// <returns>A single row describing the latest version; empty when there is no version.</returns>
 	Task<List<VersionRow>> GetVersionInfoAsync( EntryRow entry );
+
+	/// <summary>Fetches the preview image stored on the server for a version.</summary>
+	/// <param name="versionId">The Odoo version id; null or 0 gives null.</param>
+	/// <returns>The image bytes; null when the version has no preview or cannot be read.</returns>
 	Task<byte[]?> GetPreviewImageAsync( int? versionId );
 
 	/// <summary>The saved preview of a local SolidWorks file (read from the file itself), or null.</summary>
+	/// <param name="filePath">The local file; anything that is not a SolidWorks document gives null.</param>
+	/// <returns>The preview as PNG bytes; null when the file is not SolidWorks, the SolidWorks document reader is not
+	/// available, or the file has no preview.</returns>
+	/// <remarks>The file is read on a thread-pool thread.</remarks>
 	Task<byte[]?> GetLocalPreviewImageAsync( string? filePath );
 }
 
+/// <inheritdoc cref="IEntryDetailsService"/>
 public sealed class EntryDetailsService : IEntryDetailsService
 {
 	private static readonly string[] NoBlobs = [ "preview_image", "file_contents" ];
@@ -40,6 +70,7 @@ public sealed class EntryDetailsService : IEntryDetailsService
 	private static async Task<HpVersion[]> GetVersionsAsync( int entryId )
 		=> await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>( [ entryId ], "version_ids", excludedFields: NoBlobs ) ?? [];
 
+	/// <inheritdoc/>
 	public async Task<List<HistoryRow>> GetHistoryAsync( EntryRow entry )
 	{
 		if( entry.Id is not int id )
@@ -80,11 +111,13 @@ public sealed class EntryDetailsService : IEntryDetailsService
 		return versions ?? [];
 	}
 
+	/// <inheritdoc/>
 	public async Task<List<ParentRow>> GetParentsAsync( EntryRow entry )
 		=> [ .. ( await GetRelatedVersionsAsync( entry, nameof( HpVersion.parent_ids ) ) )
 			.Select( v => new ParentRow { Version = v.id ?? 0, Name = v.name, BasePath = v.WinPathway } )
 			.OrderByDescending( r => r.Version ) ];
 
+	/// <inheritdoc/>
 	public async Task<List<ChildrenRow>> GetChildrenAsync( EntryRow entry )
 	{
 		if( entry.Id is null )
@@ -95,6 +128,7 @@ public sealed class EntryDetailsService : IEntryDetailsService
 			.OrderByDescending( r => r.Version ) ];
 	}
 
+	/// <inheritdoc/>
 	public async Task<List<PropertiesRow>> GetPropertiesAsync( EntryRow entry )
 	{
 		if( entry.Id is not int id )
@@ -131,6 +165,7 @@ public sealed class EntryDetailsService : IEntryDetailsService
 		return [ .. rows.OrderByDescending( r => r.Version ) ];
 	}
 
+	/// <inheritdoc/>
 	public async Task<List<VersionRow>> GetVersionInfoAsync( EntryRow entry )
 	{
 		if( entry.Id is null )
@@ -160,6 +195,7 @@ public sealed class EntryDetailsService : IEntryDetailsService
 		];
 	}
 
+	/// <inheritdoc/>
 	public async Task<byte[]?> GetPreviewImageAsync( int? versionId )
 	{
 		if( versionId is null or 0 )
@@ -173,6 +209,7 @@ public sealed class EntryDetailsService : IEntryDetailsService
 		return version.preview_image;
 	}
 
+	/// <inheritdoc/>
 	public Task<byte[]?> GetLocalPreviewImageAsync( string? filePath )
 	{
 		if( filePath is null || !SwDocumentTypes.IsSolidWorks( filePath ) || SolidWorksUtil.DocMgr is not { } reader )

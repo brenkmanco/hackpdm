@@ -19,6 +19,7 @@ namespace HackPDM.Mvvm.Models.Odoo;
 /// <param name="CheckedOutToMe">Only entries checked out to the current user.</param>
 /// <param name="DeletedRemotely">List local files whose remote entry is deleted.</param>
 /// <param name="LocalOnly">List local files that have no remote entry.</param>
+/// <param name="MaxResults">The most rows to return.</param>
 /// <param name="Properties">Property filters; an entry must match all of them.</param>
 public sealed record EntrySearchQuery(
 	string FileName,
@@ -32,20 +33,34 @@ public sealed record EntrySearchQuery(
 /// <summary>Searches Odoo entries (and the local PWA) for the search window.</summary>
 public interface IEntrySearchService
 {
-	/// <summary>Results sorted by name, at most <see cref="EntrySearchQuery.MaxResults"/>.</summary>
+	/// <summary>Searches Odoo entries, or the local vault for local-only or remotely deleted files.</summary>
+	/// <param name="query">The search criteria.</param>
+	/// <returns>Results sorted by name, at most <see cref="EntrySearchQuery.MaxResults"/>; local results have no id.</returns>
+	/// <remarks>
+	/// Builds an Odoo domain from the name, checkout and deleted filters (property filters cost one extra server
+	/// call each) and runs one search. For <see cref="EntrySearchQuery.LocalOnly"/> or <see cref="EntrySearchQuery.DeletedRemotely"/>
+	/// the vault is then scanned recursively on a thread-pool thread for files whose name contains
+	/// <see cref="EntrySearchQuery.FileName"/>. The result limit is applied before sorting. A failed server search
+	/// is written to the debug output and treated as no results.
+	/// </remarks>
 	Task<List<SearchRow>> SearchAsync( EntrySearchQuery query );
 
 	/// <summary>Properties the user can filter on.</summary>
+	/// <returns>One row per property known to Odoo; empty before the lookup tables are loaded.</returns>
 	IEnumerable<SearchPropertiesRow> GetSearchableProperties();
 
 	/// <summary>Tree segments below the root folder for a result's directory (used to locate it in the file manager).</summary>
+	/// <param name="row">A search result: remote rows carry the Odoo path "root / a / b", local rows an absolute folder.</param>
+	/// <returns>The folder names below the root, e.g. ["a", "b"]; empty when the row has no directory or a local folder is outside the vault.</returns>
 	IReadOnlyList<string> TreeSegmentsBelowRoot( SearchRow row );
 }
 
+/// <inheritdoc cref="IEntrySearchService"/>
 public sealed class EntrySearchService : IEntrySearchService
 {
 	private static readonly string[] ResultFields = [ "id", "name", "directory_complete_name" ];
 
+	/// <inheritdoc/>
 	public async Task<List<SearchRow>> SearchAsync( EntrySearchQuery query )
 	{
 		OdooDomain domain = await BuildDomainAsync( query );
@@ -63,6 +78,7 @@ public sealed class EntrySearchService : IEntrySearchService
 		return rows;
 	}
 
+	/// <inheritdoc/>
 	public IEnumerable<SearchPropertiesRow> GetSearchableProperties()
 		=> OdooDefaults.Instance?.IdToProp?.Select( pair => new SearchPropertiesRow
 		{
@@ -71,6 +87,7 @@ public sealed class EntrySearchService : IEntrySearchService
 			IsTextOrDate = pair.Value.prop_type == "text",
 		} ) ?? [];
 
+	/// <inheritdoc/>
 	public IReadOnlyList<string> TreeSegmentsBelowRoot( SearchRow row )
 	{
 		if( string.IsNullOrEmpty( row.Directory ) )

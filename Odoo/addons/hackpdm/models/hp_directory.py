@@ -79,6 +79,17 @@ class hp_directory(models.Model):
     #             directory.parent_path_temp = f'{directory.id}/'
 
     def init(self):
+        """Creates the case-insensitive unique index on (parent_id, lower(name)) at install/upgrade.
+
+        Odoo calls this when the module is installed or updated; it is not meant for clients. The index
+        is skipped (with a warning) while existing folders still differ only by case.
+
+        Args:
+            None.
+
+        Returns:
+            None: nothing.
+        """
         hp_guard.create_case_insensitive_unique_index(
             self.env.cr, self._table, "hp_directory_parent_name_ci_uniq", "parent_id")
 
@@ -124,22 +135,50 @@ class hp_directory(models.Model):
 
     @api.model
     def get_dir_id_for_filepath(self, value):
-        """ the client will pass a filepath here and then search for the filepath
-            that is applicable and return the dir_id that it matches
+        """Finds the folder whose parent_path matches the given path and returns its id.
+
+        Args:
+            value (str): The folder's parent_path, the ids of the folder and its ancestors joined by
+                "/" with a trailing "/" (e.g. "1/5/10/"). A " / " separated form is meant to be
+                converted first, but that branch never runs (it tests ``value is str``).
+
+        Returns:
+            int: The hp.directory id.
+
+        Raises:
+            IndexError: No folder has that parent_path.
         """
         record = self._get_record_for_filepath(value, False)
         return record.id
 
     @api.model
     def get_dir_id_for_parentpath(self, value):
-        """ the client will pass a filepath here and then search for the filepath
-            that is applicable and return the dir_id that it matches
+        """Finds the folder whose complete_name matches the given path and returns its id.
+
+        Despite its name this searches complete_name ("root / Projects / Parts"), not parent_path.
+
+        Args:
+            value (str): The folder's complete_name, names joined by " / " starting at "root".
+
+        Returns:
+            int: The hp.directory id.
+
+        Raises:
+            IndexError: No folder has that complete_name.
         """
         record = self._get_record_for_filepath(value, True)
         return record.id
 
     @api.model
     def get_directories(self, value=None):
+        """Placeholder kept for older clients; does nothing.
+
+        Args:
+            value (Any, optional): Ignored. Defaults to None.
+
+        Returns:
+            None: always.
+        """
         pass
 
     #logging.basicConfig(level=logging.DEBUG)
@@ -203,9 +242,20 @@ class hp_directory(models.Model):
 
     @api.model
     def get_children_directories(self, value):
-        """ the client passes a filepath then get all children directory id's relating to
-            this directory id
+        """Returns a folder's whole sub-tree, with entries, found by its path.
 
+        Not usable as written: it calls ``_get_record_for_filepath(value)`` without the required
+        ``is_parent_path`` argument, so every call raises TypeError. The client uses
+        :meth:`get_children_directories_by_id` instead.
+
+        Args:
+            value (str): The folder's path.
+
+        Returns:
+            dict | None: The tree as built by ``_recurse_directories``, or None when no folder matches.
+
+        Raises:
+            TypeError: Always (see above).
         """
         # import pdb
         # pdb.set_trace()
@@ -219,6 +269,22 @@ class hp_directory(models.Model):
 
     @api.model
     def get_children_directories_by_id(self, value, withEntries):
+        """Returns a folder and everything below it as a nested dictionary.
+
+        Each level is ``{"id": int, "name": str, "directories": {name: <level>}, "entries": {name: info}}``.
+        Entries (the same fields as :meth:`get_entries`, without "type") are filled in only when
+        ``withEntries`` is true; deleted entries are left out.
+
+        Args:
+            value (int): The hp.directory id of the top folder.
+            withEntries (bool): Whether to list each folder's entries as well as its sub-folders.
+
+        Returns:
+            dict: The nested tree, or ``{}`` when the folder does not exist.
+
+        Raises:
+            IndexError: No folder has that id (the search result is indexed before it is checked).
+        """
         record = self.env["hp.directory"].search([('id', '=', value)])[0]
         directory_dict = {}
         if record:
@@ -229,6 +295,17 @@ class hp_directory(models.Model):
 
     @api.model
     def get_dir_ids_for_filepaths(self, values):
+        """Resolves several parent_path strings to folder ids, one :meth:`get_dir_id_for_filepath` each.
+
+        Args:
+            values (list[str]): parent_path strings ("1/5/10/").
+
+        Returns:
+            list[int]: The hp.directory ids, in the same order.
+
+        Raises:
+            IndexError: One of the paths matches no folder.
+        """
         list_ids = []
         for value in values:
             list_ids.append(self.get_dir_id_for_filepath(value))
@@ -236,6 +313,21 @@ class hp_directory(models.Model):
 
     @api.model
     def get_entries(self, value):
+        """Lists the files directly in one folder, keyed by file name, for the file manager.
+
+        Each value is a dict with: id (int), type (str, the file extension), checkout (int, the user id
+        holding it or 0), category (str), fullname (str, "<folder complete_name> / <name>"), size (int),
+        latest (int, latest version id), release (int, latest release id or 0), latest_checksum (str),
+        latest_date (datetime) and deleted (bool).
+
+        Args:
+            value (list): A two-item list ``[directory_id (int), show_deleted (bool)]``; deleted files
+                are included only when show_deleted is true.
+
+        Returns:
+            dict[str, dict]: File name to entry info; ``{}`` when the folder does not exist or anything
+            fails (the error is logged, not raised).
+        """
 
         showInactive = value[1]
         value = value[0]
@@ -260,6 +352,19 @@ class hp_directory(models.Model):
 
     @api.model
     def get_all_entry_ids(self, value, withDeleted=False, withSubEntries=True):
+        """Returns the ids of the files in a folder, optionally with every sub-folder's files.
+
+        This is what the client's folder ("tree") actions use to find the files they apply to.
+
+        Args:
+            value (int): The hp.directory id.
+            withDeleted (bool, optional): Include files marked deleted. Defaults to False.
+            withSubEntries (bool, optional): Include the files of all sub-folders, recursively.
+                Defaults to True.
+
+        Returns:
+            list[int]: hp.entry ids; ``[]`` when the folder does not exist or anything fails (logged).
+        """
         entry_list = []
         try:
             record = self.env["hp.directory"].search([('id', '=', value)])[0]
@@ -309,6 +414,24 @@ class hp_directory(models.Model):
     # and the ID of the last last available dir_id
     @api.model
     def last_available_directory(self, paths):
+        """Walks a folder path from the root and reports how far it already exists in the vault.
+
+        The client calls this before a commit to learn which folders it still has to create. Names
+        are matched exactly first, then ignoring case (the same folder on Windows).
+
+        Args:
+            paths (list[str] | list[list[str]]): Folder names from the vault root down, e.g.
+                ``["pwa", "Projects", "Parts"]``; the first name is replaced by "root". A list wrapped
+                in another list (how some RPC callers send it) is unwrapped.
+
+        Returns:
+            dict: ``{"index": int, "dir_id": int, "known": list[int]}`` — the index in ``paths`` of
+            the deepest folder that exists, that folder's id, and the ids of every folder found
+            along the way (root first).
+
+        Raises:
+            UserError: ``paths`` is empty.
+        """
         last_dir = {}
         # if the first array element is pwa change it to root and
         # then if the first array element doesn't equal root then
@@ -326,6 +449,17 @@ class hp_directory(models.Model):
 
     @api.model
     def create_new_details(self, paths):
+        """Unfinished: walks the path like :meth:`last_available_directory` but returns nothing.
+
+        Args:
+            paths (list[str] | list[list[str]]): Folder names from the vault root down.
+
+        Returns:
+            None: always (the walk result is discarded).
+
+        Raises:
+            UserError: ``paths`` is empty.
+        """
         details = {}
         
         if paths and type(paths[0]) == list:
@@ -341,6 +475,14 @@ class hp_directory(models.Model):
 
     @api.model_create_multi
     def create_new_directories(self):
+        """Placeholder; does nothing.
+
+        Args:
+            None.
+
+        Returns:
+            None: always.
+        """
         pass
 
 # file name, file path, checksum, attachment_id (for latest version)

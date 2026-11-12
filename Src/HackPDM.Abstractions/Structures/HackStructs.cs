@@ -4,8 +4,10 @@ using HackPDM.Shared.GlobalData;
 namespace HackPDM.Abstractions;
 
 
+/// <summary>The text and buttons of a message dialog.</summary>
 public struct ContentDialogInfo
 {
+    /// <summary>Creates dialog info with no text and the primary button representation.</summary>
     public ContentDialogInfo() { }
 
     public string Message { get; set; } = null;

@@ -53,6 +53,13 @@ public static class CrossPlatformCredentialManager
 		return null;
 	}
 
+	/// <summary>Reads the login saved under <paramref name="target"/>, from the platform keychain first and then from the fallback file.</summary>
+	/// <param name="target">The credential name, such as the profile's OdooCredentialTarget.</param>
+	/// <returns>The saved user name and password, or null when nothing is saved under <paramref name="target"/> (or the fallback file can't be read).</returns>
+	/// <remarks>
+	/// Side effect: a login found only in the fallback file while a keychain is available is written to the keychain
+	/// and removed from the file. Keychain and file errors are swallowed, not thrown.
+	/// </remarks>
 	public static (string? UserName, string? Password)? ReadCredential( string target )
 		=> ReadCredential( target, forceFallback: false );
 
@@ -69,6 +76,15 @@ public static class CrossPlatformCredentialManager
 		return fromFile;
 	}
 
+	/// <summary>Saves a login under <paramref name="target"/> in the platform keychain, or in the fallback file when there is none.</summary>
+	/// <param name="target">The credential name, such as the profile's OdooCredentialTarget.</param>
+	/// <param name="username">The Odoo user name.</param>
+	/// <param name="password">The Odoo password.</param>
+	/// <remarks>
+	/// After a successful keychain write, any copy in the fallback file is removed. If the keychain write fails, a note goes
+	/// to standard error and the login is written to the fallback file (created readable and writable by the user only on Unix).
+	/// A failure to write the fallback file is also only reported on standard error; nothing is thrown.
+	/// </remarks>
 	public static void WriteCredential( string target, string username, string password )
 		=> WriteCredential( target, username, password, forceFallback: false );
 
@@ -86,6 +102,8 @@ public static class CrossPlatformCredentialManager
 	}
 
 	/// <summary>Forgets the login saved under <paramref name="target"/>, in the keychain and in the fallback file.</summary>
+	/// <param name="target">The credential name to delete.</param>
+	/// <remarks>Deleting a login that isn't saved does nothing. The fallback file is deleted once its last login is removed.</remarks>
 	public static void DeleteCredential( string target )
 	{
 		PlatformStore?.Delete( target );

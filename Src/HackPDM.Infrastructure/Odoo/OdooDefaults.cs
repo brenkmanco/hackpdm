@@ -14,6 +14,8 @@ namespace HackPDM.Infrastructure.Odoo;
 /// </summary>
 public class OdooDefaults : IOdooDefaults
 {
+    /// <summary>The process-wide session used by <see cref="OdooRpc"/> and the models.</summary>
+    /// <value>Starts as an instance with no settings provider; replace it or set its <see cref="Settings"/> before logging in.</value>
     public static IOdooDefaults Instance { get; set; } = new OdooDefaults();
 
     public OdooConnectionSettings Connection { get; private set; }
@@ -21,6 +23,12 @@ public class OdooDefaults : IOdooDefaults
     public OdooLookupCache Lookups { get; set; } = OdooLookupCache.Empty;
 
     private OdooDefaults() => Connection = new OdooConnectionSettings( null! );
+    /// <summary>Creates a session over a settings provider.</summary>
+    /// <param name="settingsProvider">The local settings the connection values are read from.</param>
+    /// <remarks>
+    /// Because <see cref="Instance"/> is never null, this constructor only hands <paramref name="settingsProvider"/> to the
+    /// existing <see cref="Instance"/>; it does not make the new object the global instance.
+    /// </remarks>
     public OdooDefaults(ISettingsProvider settingsProvider)
     {
         Connection = new OdooConnectionSettings( settingsProvider );
@@ -43,7 +51,14 @@ public class OdooDefaults : IOdooDefaults
     public string? OdooSwKey { get => Connection.OdooSwKey; set => Connection.OdooSwKey = value; }
     public decimal? OdooAreaFactor { get => Connection.OdooAreaFactor; set => Connection.OdooAreaFactor = value; }
     public string? OdooCredentialTarget { get => Connection.OdooCredentialTarget; set => Connection.OdooCredentialTarget = value; }
+    /// <summary>Saves the current user name and password in the OS credential store; see <see cref="OdooConnectionSettings.SaveCredentials"/>.</summary>
+    /// <returns>False when the user name or password is empty (nothing saved); otherwise true.</returns>
     public bool SaveCredentials() => Connection.SaveCredentials();
+    /// <summary>Saves a login in the OS credential store; see <see cref="OdooConnectionSettings.TrySetWindowsOdooUserPass"/>.</summary>
+    /// <param name="username">The Odoo user name.</param>
+    /// <param name="password">The Odoo password.</param>
+    /// <param name="credentialName">The credential name; the default target when null.</param>
+    /// <returns>False when the user name or password is empty (nothing saved); otherwise true.</returns>
     public static bool TrySetWindowsOdooUserPass( string? username, string? password, string? credentialName = null )
         => OdooConnectionSettings.TrySetWindowsOdooUserPass( username, password, credentialName );
     #endregion
@@ -53,6 +68,11 @@ public class OdooDefaults : IOdooDefaults
     /// <summary>Why the last login failed; null after a successful one.</summary>
     public string? LoginError { get; private set; }
 
+    /// <summary>Logs in through <see cref="OdooRpc.LoginAsync"/> unless a user id is already set.</summary>
+    /// <remarks>
+    /// Uses a 7 second timeout. Sets <see cref="OdooId"/> (0 on failure) and <see cref="LoginError"/>; a failed login is
+    /// not thrown. Does nothing when <see cref="OdooId"/> is already non-zero.
+    /// </remarks>
     public async Task InitializeLoginAsync()
     {
         if( OdooId is not 0 )
@@ -62,7 +82,9 @@ public class OdooDefaults : IOdooDefaults
         OdooId = login.ValueOr( 0 );
     }
 
-    /// <summary>Logs in when needed, then loads the reference data; complete when this returns.</summary>
+    /// <summary>Logs in when needed, then loads the server's reference data into <see cref="Lookups"/>; complete when this returns.</summary>
+    /// <remarks>Individual lookups that fail are left empty by <see cref="OdooLookupCache.LoadAsync"/> rather than failing the whole call.</remarks>
+    /// <exception cref="Exception">The login failed; the message includes <see cref="LoginError"/>.</exception>
     public async Task InitializeAsync()
     {
         await InitializeLoginAsync();

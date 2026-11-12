@@ -9,6 +9,8 @@ public static class StorageBox
     public const string APP_VERSION = "1.0.0";
     public const string APP_DEVELOPER = "Justin";
     // static one-time initialize
+    /// <summary>The folder for the app's temporary files; the user can change it in the settings.</summary>
+    /// <value>Defaults to an <see cref="APP_NAME"/> folder in the system temp folder; not created here.</value>
     public static string? TemporaryPath
     {
         get => field ??= Path.Combine(Path.GetTempPath(), APP_NAME);

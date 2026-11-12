@@ -10,12 +10,23 @@ namespace HackPDM.Core.Hack;
 /// </summary>
 public static class EntryStatusResolver
 {
-	/// <param name="deleted">Odoo's "deleted" flag; null when the field wasn't returned.</param>
-	/// <param name="checkoutUserId">User the entry is checked out to, or null.</param>
+	/// <summary>Decides the status of an entry that exists on the server.</summary>
+	/// <param name="deleted">Odoo's "deleted" flag; null when the field wasn't returned (treated as deleted).</param>
+	/// <param name="checkoutUserId">User the entry is checked out to, or null / 0.</param>
 	/// <param name="myUserId">The current Odoo user.</param>
-	/// <param name="latestChecksum">Checksum of the latest remote version; null when the entry has no versions.</param>
-	/// <param name="hasLatestVersionField">False when Odoo returned something other than a checksum (e.g. false for "no versions").</param>
+	/// <param name="latestChecksum">
+	/// The latest version's checksum as Odoo returned it: a string, or a bool (Odoo's false) when the entry has no versions.
+	/// </param>
 	/// <param name="localChecksum">Checksum of the local file, or null when there is no local copy.</param>
+	/// <param name="remoteDate">The latest remote version's modified date.</param>
+	/// <param name="localModified">The local file's modified date.</param>
+	/// <returns>
+	/// In order of precedence: <see cref="FileStatus.Dt"/> unless <paramref name="deleted"/> is false;
+	/// <see cref="FileStatus.Cm"/> / <see cref="FileStatus.Co"/> when checked out to this / another user;
+	/// <see cref="FileStatus.NoVersions"/> for a bool checksum; <see cref="FileStatus.Ro"/> without a local copy;
+	/// <see cref="FileStatus.Ok"/> when the checksums match; otherwise <see cref="FileStatus.Nv"/> when the remote date is
+	/// later, else <see cref="FileStatus.Lm"/>; <see cref="FileStatus.Unknown"/> for any other checksum value (including null).
+	/// </returns>
 	public static FileStatus ResolveRemote(
 		bool? deleted,
 		int? checkoutUserId,
@@ -41,11 +52,15 @@ public static class EntryStatusResolver
 		};
 	}
 
-	/// <summary>Status of a file that only exists locally.</summary>
+	/// <summary>Decides the status of a file that only exists locally.</summary>
 	/// <param name="restrictTypes">Server setting: only known file types may be committed.</param>
 	/// <param name="filtered">The user's "filter unknown types" toggle.</param>
 	/// <param name="knownType">The extension is a registered hp.type.</param>
 	/// <param name="ignored">The extension matches an ignore filter.</param>
+	/// <returns>
+	/// <see cref="FileStatus.If"/> when types are restricted and the name is ignored; <see cref="FileStatus.Ft"/> when
+	/// types are restricted or filtered and the type is unknown; otherwise <see cref="FileStatus.Lo"/>.
+	/// </returns>
 	public static FileStatus ResolveLocal( bool restrictTypes, bool filtered, bool knownType, bool ignored )
 	{
 		if( restrictTypes && ignored )

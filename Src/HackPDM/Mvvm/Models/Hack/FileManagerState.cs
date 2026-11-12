@@ -75,6 +75,10 @@ public sealed class FileManagerState
 	public (string Field, bool Descending)? Sort { get; set; }
 
 	/// <summary>Keeps the rows of <paramref name="treePath"/>, unless there are more than <see cref="MaxCachedEntries"/>.</summary>
+	/// <param name="treePath">The tree path ("root\a\b") of the folder the rows belong to.</param>
+	/// <param name="includeDeleted">Whether the rows include deleted entries.</param>
+	/// <param name="result">The loaded rows and counts.</param>
+	/// <remarks>Clears the <see cref="FileManagerRefresh.Entries"/> flag of <see cref="Stale"/>, even when the list was too long to keep.</remarks>
 	public void RememberEntries( string? treePath, bool includeDeleted, EntryListResult result )
 	{
 		bool small = result.Rows.Count <= MaxCachedEntries;
@@ -85,6 +89,10 @@ public sealed class FileManagerState
 	}
 
 	/// <summary>The kept rows of <paramref name="treePath"/>, when they were kept with the same filter and are not stale.</summary>
+	/// <param name="treePath">The tree path of the folder being shown (compared ignoring case).</param>
+	/// <param name="includeDeleted">Whether deleted entries are wanted.</param>
+	/// <param name="result">The kept rows when found; otherwise unspecified (possibly null) and not to be used.</param>
+	/// <returns><see langword="true"/> when kept rows can be shown instead of loading the folder again.</returns>
 	public bool TryGetEntries( string? treePath, bool includeDeleted, out EntryListResult result )
 	{
 		result = _entries!;
@@ -102,6 +110,8 @@ public sealed class FileManagerState
 	/// </summary>
 	public FileManagerRefresh Stale { get; private set; }
 
+	/// <summary>Records that part of the kept state is out of date, so the next visit fetches it again.</summary>
+	/// <param name="what">What changed; marking <see cref="FileManagerRefresh.Entries"/> also drops the kept rows.</param>
 	public void MarkStale( FileManagerRefresh what )
 	{
 		Stale |= what;
@@ -109,7 +119,8 @@ public sealed class FileManagerState
 			_entries = null;
 	}
 
-	/// <summary>The tree was fetched again.</summary>
+	/// <summary>Stores a freshly fetched tree and clears its stale flag.</summary>
+	/// <param name="tree">The new directory tree.</param>
 	public void TreeRefreshed( DirectoryNode tree )
 	{
 		Tree = tree;
@@ -120,9 +131,10 @@ public sealed class FileManagerState
 	public int LivePages { get; set; }
 
 	/// <summary>
-	/// Files changed on disk while the page was not shown (<paramref name="treeFolders"/> are their folders'
-	/// tree paths; null when changes were lost): the kept rows of a folder they touched are stale.
+	/// Files changed on disk while the page was not shown: the kept rows of a folder they touched are stale.
 	/// </summary>
+	/// <param name="treeFolders">The tree paths of the changed files' folders; null when changes were lost, which marks the kept rows stale.</param>
+	/// <remarks>Does nothing while <see cref="LivePages"/> is above zero, since a shown page applies the changes itself.</remarks>
 	public void LocalFilesChanged( IEnumerable<string?>? treeFolders )
 	{
 		if( LivePages > 0 || _entriesPath is not { } kept )
@@ -132,6 +144,7 @@ public sealed class FileManagerState
 	}
 
 	/// <summary>Forgets everything (another server or user logged in).</summary>
+	/// <remarks>The list settings (inactive filter, grouping, sort, detail tab) are kept.</remarks>
 	public void Reset()
 	{
 		Tree = null;
@@ -154,6 +167,9 @@ public sealed class FileManagerState
 	public (IReadOnlyList<string> Segments, string? FileName)? PendingLocate { get; private set; }
 
 	/// <summary>Shows <paramref name="fileName"/> in the folder at <paramref name="segmentsBelowRoot"/>: now when the page is shown, else on the next visit.</summary>
+	/// <param name="segmentsBelowRoot">The folder names from the root down to the target folder, not including the root.</param>
+	/// <param name="fileName">The file to select in that folder; null to select only the folder.</param>
+	/// <returns>A task that completes when the shown page has handled the request, or at once when it was stored in <see cref="PendingLocate"/>.</returns>
 	public Task RequestLocateAsync( IReadOnlyList<string> segmentsBelowRoot, string? fileName )
 	{
 		if( LocateRequested is { } handler )
@@ -162,7 +178,8 @@ public sealed class FileManagerState
 		return Task.CompletedTask;
 	}
 
-	/// <summary>The waiting locate request, which is then cleared.</summary>
+	/// <summary>Takes the waiting locate request, clearing it.</summary>
+	/// <returns>The folder segments and file name of the waiting request; null when there is none.</returns>
 	public (IReadOnlyList<string> Segments, string? FileName)? TakePendingLocate()
 	{
 		var pending = PendingLocate;

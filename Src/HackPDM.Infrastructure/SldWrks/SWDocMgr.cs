@@ -12,9 +12,14 @@ namespace HackPDM.Infrastructure.SldWrks;
 public class SwDocMgr : ISwDocumentReader
 {
     private static SwDMApplication _swDocMgr = default;
+    /// <summary>Returns the Document Manager application created by the last successful <see cref="SwDocMgr(string)"/> call.</summary>
+    /// <returns>The shared application, or null when none could be created (wrong licence key, Document Manager not installed, not Windows).</returns>
     public static SwDMApplication GetApplication() => _swDocMgr;
 
 	// constructor
+	/// <summary>Starts the SolidWorks Document Manager with a licence key and stores it for every instance.</summary>
+	/// <param name="strLicenseKey">The Document Manager licence key (the server's SwApi setting).</param>
+	/// <remarks>Failures are swallowed: check <see cref="GetApplication"/> afterwards. Does nothing outside Windows.</remarks>
 	public SwDocMgr(string strLicenseKey)
     {
         try
@@ -31,6 +36,13 @@ public class SwDocMgr : ISwDocumentReader
         }
     
     }
+    /// <summary>Lists the non-virtual external references of a document through the Document Manager (<c>GetAllExternalReferences4</c>).</summary>
+    /// <param name="fileName">Path of the SolidWorks file; opened read-only.</param>
+    /// <param name="deep">Ignored.</param>
+    /// <param name="noInterrupt">When true, a document that can't be opened yields null instead of an exception.</param>
+    /// <returns><c>[file name, stored full path]</c> pairs; null when the file isn't a SolidWorks document, has no reference list, or (with <paramref name="noInterrupt"/>) can't be opened.</returns>
+    /// <exception cref="Exception">The document can't be opened and <paramref name="noInterrupt"/> is false.</exception>
+    /// <exception cref="NullReferenceException">The Document Manager was not started (see <see cref="GetApplication"/>).</exception>
     public List<string[]>? GetDependencies(string fileName, bool deep=false, bool noInterrupt=false)
     {
         // external references for assembly files (GetAllExternalReferences4)
@@ -90,6 +102,11 @@ public class SwDocMgr : ISwDocumentReader
 
     }
 
+    /// <summary>Reads file-level and per-configuration custom properties through the Document Manager.</summary>
+    /// <param name="fileName">Path of the SolidWorks file; opened read-only.</param>
+    /// <returns>(configuration, name, type, value) tuples as described on <see cref="ISwDocumentReader.GetProperties"/>; drawings have file-level properties only. Null when the file isn't a SolidWorks document.</returns>
+    /// <exception cref="Exception">The document can't be opened.</exception>
+    /// <exception cref="NullReferenceException">The Document Manager was not started (see <see cref="GetApplication"/>).</exception>
     public List<Tuple<string, string, string, object>>? GetProperties(string fileName)
     {
         SwDMDocument swDoc = default(SwDMDocument);
@@ -178,7 +195,9 @@ public class SwDocMgr : ISwDocumentReader
         _ => ("", value),
     };
 
-    /// <summary>Read straight from the file: needs no Document Manager call.</summary>
+    /// <summary>Reads the saved preview straight from the file through <see cref="SwFileReader"/>; needs no Document Manager call.</summary>
+    /// <param name="fileName">Path of the SolidWorks file.</param>
+    /// <returns>The preview as PNG bytes, or null when there is none or the file can't be read.</returns>
     public byte[]? GetPreviewPng(string fileName) => new SwFileReader().GetPreviewPng(fileName);
 
 

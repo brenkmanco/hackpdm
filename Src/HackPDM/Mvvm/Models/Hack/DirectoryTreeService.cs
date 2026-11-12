@@ -16,14 +16,19 @@ namespace HackPDM.Mvvm.Models.Hack;
 /// <summary>Builds the directory tree shown in the file manager: Odoo folders plus local-only ones.</summary>
 public interface IDirectoryTreeService
 {
-	/// <summary>Returns the merged tree, or null when the remote tree couldn't be read.</summary>
+	/// <summary>Loads the directory tree from the server and merges in the folders that exist only in the local vault.</summary>
+	/// <returns>The merged tree with each level sorted, or null when the remote tree couldn't be read.</returns>
+	/// <remarks>Failures (including exceptions) are written to the debug output and return null rather than throwing.
+	/// The local vault is scanned recursively on a thread-pool thread.</remarks>
 	Task<DirectoryNode?> LoadAsync();
 }
 
+/// <inheritdoc cref="IDirectoryTreeService"/>
 public sealed class DirectoryTreeService : IDirectoryTreeService
 {
 	private const string RootName = PwaPaths.Root;
 
+	/// <inheritdoc/>
 	public async Task<DirectoryNode?> LoadAsync()
 	{
 		try

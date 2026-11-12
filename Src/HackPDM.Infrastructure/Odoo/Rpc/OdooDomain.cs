@@ -5,6 +5,10 @@ namespace HackPDM.Infrastructure.Odoo;
 /// <summary>One condition of an Odoo domain: <c>(field, operator, value)</c>.</summary>
 public sealed record DomainTerm( string Field, string Op, object? Value )
 {
+	/// <summary>Creates a term from a typed operator, converting it to Odoo's operator text (for example <see cref="Operators.ILike"/> to <c>"ilike"</c>).</summary>
+	/// <param name="field">The Odoo field name the term tests.</param>
+	/// <param name="op">The comparison operator; converted with <see cref="OpExtension.OperatorConversion(Operators)"/>.</param>
+	/// <param name="value">The value to compare against. Id lists and other enumerables are sent as JSON arrays.</param>
 	public DomainTerm( string field, Operators op, object? value ) : this( field, op.OperatorConversion(), value ) { }
 
 	internal object?[] ToRpc() => [ Field, Op, OdooValues.ToRpc( Value ) ];
@@ -15,6 +19,22 @@ public sealed record DomainTerm( string Field, string Op, object? Value )
 /// <see cref="DomainTerm"/> or one of the operators "&amp;", "|", "!". Immutable; the builders
 /// return new domains. <c>a &amp; b</c> and <c>a | b</c> combine two domains.
 /// </summary>
+/// <remarks>
+/// When a multi-term domain is used as one operand of <c>&amp;</c>, <c>|</c> or <c>!</c>, the implicit
+/// AND between its terms is made explicit with leading <c>"&amp;"</c> operators so the prefix
+/// expression stays correct. Pass the domain itself to <see cref="OdooRpc"/> or
+/// <see cref="Repository{T}"/>; <see cref="ToRpc"/> is what goes over the wire.
+/// </remarks>
+/// <example>
+/// <code>
+/// // name ilike '%.SLDPRT' AND deleted = false AND (checkout_user = 7 OR checkout_user unset)
+/// OdooDomain domain = OdooDomain.Where( "name", Operators.ILike, "%.SLDPRT" )
+///     .And( "deleted", false )
+///     &amp; ( OdooDomain.Where( "checkout_user", 7 ) | OdooDomain.Where( "checkout_user", false ) );
+///
+/// Result&lt;HpEntry[]&gt; entries = await Repository&lt;HpEntry&gt;.SearchReadAsync( domain, FieldSelection.Only( "name", "dir_id" ) );
+/// </code>
+/// </example>
 public sealed class OdooDomain : IReadOnlyList<object>
 {
 	public const string AndOp = "&", OrOp = "|", NotOp = "!";
@@ -26,31 +46,70 @@ public sealed class OdooDomain : IReadOnlyList<object>
 	/// <summary>Matches every record.</summary>
 	public static OdooDomain All { get; } = new( [] );
 
+	/// <summary>Starts a domain with the single term <c>(field, op, value)</c>, using Odoo's operator text as-is.</summary>
+	/// <param name="field">The Odoo field name to test.</param>
+	/// <param name="op">Odoo operator text such as <c>"="</c>, <c>"in"</c> or <c>"ilike"</c>; not validated here.</param>
+	/// <param name="value">The value to compare against.</param>
+	/// <returns>A new one-term domain.</returns>
 	public static OdooDomain Where( string field, string op, object? value ) => All.And( field, op, value );
+	/// <summary>Starts a domain with the single term <c>(field, op, value)</c>, converting a typed operator to Odoo's text.</summary>
+	/// <param name="field">The Odoo field name to test.</param>
+	/// <param name="op">The comparison operator.</param>
+	/// <param name="value">The value to compare against.</param>
+	/// <returns>A new one-term domain.</returns>
 	public static OdooDomain Where( string field, Operators op, object? value ) => All.And( field, op, value );
-	/// <summary><c>(field, "=", value)</c>.</summary>
+	/// <summary>Starts a domain with the equality term <c>(field, "=", value)</c>.</summary>
+	/// <param name="field">The Odoo field name to test.</param>
+	/// <param name="value">The value the field must equal. Pass <see langword="false"/> to match an empty (unset) field.</param>
+	/// <returns>A new one-term domain.</returns>
 	public static OdooDomain Where( string field, object? value ) => All.And( field, "=", value );
-	/// <summary><c>("id", "in", ids)</c>.</summary>
+	/// <summary>Starts a domain matching records whose id is in <paramref name="ids"/>: <c>("id", "in", ids)</c>.</summary>
+	/// <param name="ids">The record ids; enumerated once, immediately.</param>
+	/// <returns>A new one-term domain. An empty id list matches no records.</returns>
 	public static OdooDomain IdIn( IEnumerable<int> ids ) => Where( "id", "in", ids.ToArray() );
 
-	/// <summary>This domain and one more term.</summary>
+	/// <summary>Returns a copy of this domain with one more term appended (implicitly ANDed).</summary>
+	/// <param name="field">The Odoo field name to test.</param>
+	/// <param name="op">Odoo operator text such as <c>"="</c> or <c>"in"</c>.</param>
+	/// <param name="value">The value to compare against.</param>
+	/// <returns>A new domain; this instance is unchanged.</returns>
 	public OdooDomain And( string field, string op, object? value ) => new( [ .. _items, new DomainTerm( field, op, value ) ] );
+	/// <summary>Returns a copy of this domain with one more term appended, converting a typed operator to Odoo's text.</summary>
+	/// <param name="field">The Odoo field name to test.</param>
+	/// <param name="op">The comparison operator.</param>
+	/// <param name="value">The value to compare against.</param>
+	/// <returns>A new domain; this instance is unchanged.</returns>
 	public OdooDomain And( string field, Operators op, object? value ) => And( field, op.OperatorConversion(), value );
-	/// <summary>This domain and <c>(field, "=", value)</c>.</summary>
+	/// <summary>Returns a copy of this domain with the equality term <c>(field, "=", value)</c> appended.</summary>
+	/// <param name="field">The Odoo field name to test.</param>
+	/// <param name="value">The value the field must equal.</param>
+	/// <returns>A new domain; this instance is unchanged.</returns>
 	public OdooDomain And( string field, object? value ) => And( field, "=", value );
+	/// <summary>Combines this domain with another so both must match; same as the <c>&amp;</c> operator.</summary>
+	/// <param name="other">The domain that must also match.</param>
+	/// <returns>A new domain; an empty side is dropped rather than wrapped.</returns>
 	public OdooDomain And( OdooDomain other ) => this & other;
 
-	/// <summary>Both domains must match.</summary>
+	/// <summary>Combines two domains so both must match, as <c>["&amp;", a, b]</c> in prefix notation.</summary>
+	/// <param name="a">The first domain.</param>
+	/// <param name="b">The second domain.</param>
+	/// <returns>The combined domain. If either side is empty, the other side is returned unchanged.</returns>
 	public static OdooDomain operator &( OdooDomain a, OdooDomain b )
 		=> a.IsEmpty ? b : b.IsEmpty ? a : new( [ AndOp, .. a.AsExpression(), .. b.AsExpression() ] );
 
-	/// <summary>Either domain matches (an empty side matches everything, so the result does too).</summary>
+	/// <summary>Combines two domains so either may match, as <c>["|", a, b]</c> in prefix notation.</summary>
+	/// <param name="a">The first domain.</param>
+	/// <param name="b">The second domain.</param>
+	/// <returns>The combined domain. If either side is empty it matches everything, so <see cref="All"/> is returned.</returns>
 	public static OdooDomain operator |( OdooDomain a, OdooDomain b )
 		=> a.IsEmpty || b.IsEmpty ? All : new( [ OrOp, .. a.AsExpression(), .. b.AsExpression() ] );
 
-	/// <summary>The domain does not match.</summary>
+	/// <summary>Negates a domain, as <c>["!", a]</c> in prefix notation.</summary>
+	/// <param name="a">The domain to negate.</param>
+	/// <returns>The negated domain. An empty domain is returned unchanged (it still matches everything, not nothing).</returns>
 	public static OdooDomain operator !( OdooDomain a ) => a.IsEmpty ? a : new( [ NotOp, .. a.AsExpression() ] );
 
+	/// <summary>Whether the domain has no items, which Odoo treats as matching every record.</summary>
 	public bool IsEmpty => _items.Length == 0;
 
 	/// <summary>The terms only (operators left out).</summary>
@@ -79,7 +138,8 @@ public sealed class OdooDomain : IReadOnlyList<object>
 		return count;
 	}
 
-	/// <summary>What is sent over JSON-RPC: terms as <c>[field, op, value]</c> arrays.</summary>
+	/// <summary>Builds the value sent over JSON-RPC: terms become <c>[field, op, value]</c> arrays and operators stay as strings.</summary>
+	/// <returns>A new list in Odoo's prefix notation; values are converted with <see cref="OdooValues.ToRpc"/>.</returns>
 	public List<object?> ToRpc() => [ .. _items.Select( item => item is DomainTerm term ? term.ToRpc() : item ) ];
 
 	public int Count => _items.Length;

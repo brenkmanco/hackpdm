@@ -11,9 +11,15 @@ using HackPDM.Domain.Hack;
 namespace HackPDM.Core.Hack;
 
 
+/// <summary>
+/// The client's local settings (working folder, file size display), read from and written to an
+/// <see cref="HackPDM.Abstractions.ISettingsProvider"/>.
+/// </summary>
 public class HackDefaults : IHackDefaults
 {
 	public ISettingsProvider? SettingsProvider { get; set; }
+	/// <summary>The working folder (the vault's local root) as an absolute path.</summary>
+	/// <value>The <c>PWAPathAbsolute</c> setting; "" when unset or there is no provider. Setting it saves immediately.</value>
 	public string PwaPathAbsolute
 	{
 		get => SettingsProvider?.Get<string>("PWAPathAbsolute") ?? "";
@@ -58,6 +64,11 @@ public class HackDefaults : IHackDefaults
 		get => SettingsProvider?.Get<double>("FileSizeMult") ?? 0;
 		set => SettingsProvider?.Set("FileSizeMult", value);
 	}
+	/// <summary>The factor that converts a size in bytes to the display unit.</summary>
+	/// <value>
+	/// 1 / <see cref="MeasureByteSize"/> ^ <see cref="FileSizeMult"/>, computed on first read and then cached, so later
+	/// changes to those settings are not reflected.
+	/// </value>
 	public double? ByteSizeMultiplier
 	{
 		get
@@ -68,9 +79,18 @@ public class HackDefaults : IHackDefaults
 	} = null;
 	public string? CurrentPath { get; set; } = null;
 
+	/// <summary>The process-wide settings used by <see cref="HackPDM.Core.PwaPaths"/> and the file classes.</summary>
+	/// <value>Starts as an instance with no settings provider, so it is never <see langword="null"/>.</value>
 	public static IHackDefaults Instance { get; set; } = new HackDefaults();
 
+	/// <summary>Creates settings with no provider; every value reads as its default until one is set.</summary>
 	public HackDefaults() { }
+	/// <summary>Connects the global settings to a settings provider.</summary>
+	/// <param name="settingsProvider">The store the settings are read from and written to.</param>
+	/// <remarks>
+	/// Because <see cref="Instance"/> is never <see langword="null"/>, this only gives <paramref name="settingsProvider"/>
+	/// to the existing <see cref="Instance"/>; the new object itself keeps no provider and does not become the instance.
+	/// </remarks>
 	public HackDefaults(ISettingsProvider settingsProvider)
 	{
 		if (Instance is null)

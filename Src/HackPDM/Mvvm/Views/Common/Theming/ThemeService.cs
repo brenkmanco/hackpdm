@@ -43,6 +43,9 @@ public sealed class ThemeService : IThemeService
 
 	private ThemeSettings _settings;
 
+	/// <summary>Creates the service and applies the saved color overrides of the running theme.</summary>
+	/// <param name="settings">The saved theme settings; the service edits this instance.</param>
+	/// <remarks>Must be created on the UI thread after the application exists, since it reads <see cref="Application.Current"/>.</remarks>
 	public ThemeService( ThemeSettings settings )
 	{
 		_settings = settings;
@@ -50,14 +53,19 @@ public sealed class ThemeService : IThemeService
 		ApplyOverrides();
 	}
 
+	/// <inheritdoc/>
 	public AppThemeMode Mode => _settings.Mode;
 
+	/// <inheritdoc/>
 	public bool IsDarkActive => _runningDark;
 
+	/// <inheritdoc/>
 	public bool NeedsRestart => _settings.Mode != _startupMode;
 
+	/// <inheritdoc/>
 	public string SavePath => AppConfigStore.FilePath;
 
+	/// <inheritdoc/>
 	public event Action? ThemeChanged;
 
 	#region Startup
@@ -66,6 +74,7 @@ public sealed class ThemeService : IThemeService
 	/// The mode saved in AppConfig.json, read directly (the full settings can't load this early).
 	/// Called from the App constructor, where the application theme can still be set.
 	/// </summary>
+	/// <returns>The saved mode; the default mode when there is no file or it can't be read or parsed (errors are swallowed).</returns>
 	public static AppThemeMode ReadSavedMode()
 	{
 		try
@@ -88,6 +97,9 @@ public sealed class ThemeService : IThemeService
 	}
 
 	/// <summary>Applies the theme to <paramref name="window"/>'s content. Call after setting <see cref="Window.Content"/>.</summary>
+	/// <param name="window">The window; ignored when its content is not a <see cref="FrameworkElement"/>.</param>
+	/// <remarks>The window is tracked weakly so later mode changes reach it. A root without a background gets one that
+	/// follows the theme.</remarks>
 	public void Attach( Window window )
 	{
 		if( window.Content is not FrameworkElement root )
@@ -105,6 +117,7 @@ public sealed class ThemeService : IThemeService
 
 	#region Mode
 
+	/// <inheritdoc/>
 	public void SetMode( AppThemeMode mode )
 	{
 		if( _settings.Mode == mode )
@@ -137,11 +150,14 @@ public sealed class ThemeService : IThemeService
 
 	#region Colors
 
+	/// <inheritdoc/>
 	public ArgbColor? GetColor( string key )
 		=> FindBrush( key ) is { } brush ? ToArgb( brush.Color ) : null;
 
+	/// <inheritdoc/>
 	public bool IsOverridden( string key ) => _settings.OverridesFor( _runningDark ).ContainsKey( key );
 
+	/// <inheritdoc/>
 	public void SetColor( string key, ArgbColor color )
 	{
 		if( NeedsRestart || !Recolor( key, color ) )
@@ -151,6 +167,7 @@ public sealed class ThemeService : IThemeService
 		ThemeChanged?.Invoke();
 	}
 
+	/// <inheritdoc/>
 	public void ResetColor( string key )
 	{
 		if( NeedsRestart || !_settings.OverridesFor( _runningDark ).Remove( key ) )
@@ -160,6 +177,7 @@ public sealed class ThemeService : IThemeService
 		ThemeChanged?.Invoke();
 	}
 
+	/// <inheritdoc/>
 	public void ResetAll()
 	{
 		if( NeedsRestart )
@@ -172,6 +190,7 @@ public sealed class ThemeService : IThemeService
 		ThemeChanged?.Invoke();
 	}
 
+	/// <inheritdoc/>
 	public void Revert()
 	{
 		// restore everything, then re-apply the theme as saved on disk
@@ -185,6 +204,7 @@ public sealed class ThemeService : IThemeService
 		ThemeChanged?.Invoke();
 	}
 
+	/// <inheritdoc/>
 	public void Save()
 	{
 		UIStorage.GlobalData.Theme = _settings;

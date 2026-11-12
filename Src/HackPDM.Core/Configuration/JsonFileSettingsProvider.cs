@@ -21,6 +21,12 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 	private readonly object _gate = new();
 	private readonly Dictionary<string, JsonElement> _values;
 
+	/// <summary>Opens the settings file, loading its values.</summary>
+	/// <param name="filePath">The JSON file; it need not exist yet and is created on the first change.</param>
+	/// <remarks>
+	/// An unreadable or invalid file is copied to <c>&lt;file&gt;.unreadable-&lt;timestamp&gt;</c>, a message is written to
+	/// standard error, and the provider starts empty; nothing is thrown.
+	/// </remarks>
 	public JsonFileSettingsProvider( string filePath )
 	{
 		FilePath = filePath;
@@ -33,6 +39,11 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 	/// <summary>The file was there when this provider was made (false on the first run).</summary>
 	public bool Existed { get; }
 
+	/// <summary>Reads a setting.</summary>
+	/// <typeparam name="T">The type to deserialize the stored JSON value to.</typeparam>
+	/// <param name="key">The setting name (case-sensitive).</param>
+	/// <param name="defaultValue">Returned when the key is missing, null, or stored as an incompatible type.</param>
+	/// <returns>The stored value, or <paramref name="defaultValue"/>.</returns>
 	public T? Get<T>( string key, T? defaultValue = default )
 	{
 		lock( _gate )
@@ -52,6 +63,11 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 	}
 
 	/// <summary>Saves <paramref name="value"/>; null removes the key.</summary>
+	/// <typeparam name="T">The value's type; it must be JSON-serializable.</typeparam>
+	/// <param name="key">The setting name (case-sensitive).</param>
+	/// <param name="value">The value to store.</param>
+	/// <remarks>The whole file is rewritten at once (through a <c>.tmp</c> file); a failed save is only reported on standard error.</remarks>
+	/// <exception cref="System.NotSupportedException"><paramref name="value"/>'s type cannot be serialized to JSON.</exception>
 	public void Set<T>( string key, T value )
 	{
 		if( value is null )
@@ -66,12 +82,17 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 		}
 	}
 
+	/// <summary>Tells whether a setting is stored.</summary>
+	/// <param name="key">The setting name (case-sensitive).</param>
+	/// <returns><see langword="true"/> when the key exists.</returns>
 	public bool Contains( string key )
 	{
 		lock( _gate )
 			return _values.ContainsKey( key );
 	}
 
+	/// <summary>Deletes a setting and saves the file if it existed.</summary>
+	/// <param name="key">The setting name (case-sensitive).</param>
 	public void Remove( string key )
 	{
 		lock( _gate )
@@ -81,7 +102,9 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 		}
 	}
 
-	/// <summary>Adds the values whose keys are not set yet (bringing settings over from an older store); returns how many.</summary>
+	/// <summary>Adds the values whose keys are not set yet (bringing settings over from an older store).</summary>
+	/// <param name="values">The key/value pairs; null values, existing keys and values JSON can't hold are skipped.</param>
+	/// <returns>How many values were added; the file is saved once when any were.</returns>
 	public int ImportMissing( IEnumerable<KeyValuePair<string, object?>> values )
 	{
 		lock( _gate )

@@ -12,6 +12,11 @@ using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Core.Hack;
 
+/// <summary>
+/// A file of the vault as the client sees it: its local path and disk metadata (date, size, checksum) together
+/// with the ids of the hp.entry / hp.version it belongs to on the server.
+/// </summary>
+/// <remarks>Two instances are equal when they point at the same full path; see <see cref="Equals(object?)"/>.</remarks>
 public class HackFile : HackBaseFile
 {
     // file settings
@@ -23,6 +28,15 @@ public class HackFile : HackBaseFile
             field = value ?? Info?.Extension;
         }
     }
+    /// <summary>The file's last-modified time, normally in UTC.</summary>
+    /// <value>
+    /// When <see cref="OverwriteDate"/> is set, every assignment stores that instead. The first assignment of
+    /// <c>default</c> takes the date from disk.
+    /// </value>
+    /// <remarks>
+    /// Side effect: once a date is set, assigning again while the file exists also writes the value to the file's
+    /// last-write time on disk.
+    /// </remarks>
     public DateTime ModifiedDate 
     {
         get;
@@ -57,6 +71,10 @@ public class HackFile : HackBaseFile
         }
     }
 
+    /// <summary>
+    /// A date that replaces <see cref="ModifiedDate"/> and is written to the local file after a download
+    /// (the server version's date); <c>default</c> when not used.
+    /// </summary>
     public DateTime OverwriteDate { get; set; } = default;
 	
     public string? Checksum { get; set; }
@@ -91,11 +109,33 @@ public class HackFile : HackBaseFile
     }
 
 
+    /// <summary>Creates an empty file description with no path.</summary>
     public HackFile() {}
+    /// <summary>Creates a copy of another file description.</summary>
+    /// <param name="hack">The file to copy.</param>
+    /// <remarks>
+    /// Copies the path, names, date, checksum, size, contents, <see cref="HpVersionId"/> and
+    /// <see cref="HasRemoteVersion"/>, but not <see cref="HpEntryId"/>, <see cref="HasRemoteEntry"/>,
+    /// <see cref="Owner"/> or <see cref="OverwriteDate"/>.
+    /// </remarks>
     public HackFile(HackFile hack)
     {
         AssignToSelf( hack );
     }
+    /// <summary>Creates a file description from known values, for example from server data.</summary>
+    /// <param name="name">The file name with extension.</param>
+    /// <param name="fullPath">The local absolute path; when the file exists there, its <see cref="System.IO.FileInfo"/> is attached.</param>
+    /// <param name="typeExt">The extension (with the dot); taken from the file on disk when <see langword="null"/>.</param>
+    /// <param name="modifiedDate">The modified date; <c>default</c> takes it from the file on disk.</param>
+    /// <param name="sha1Checksum">The SHA-1 checksum in lowercase hex.</param>
+    /// <param name="fileSize">The size in bytes; taken from the file on disk when <see langword="null"/>.</param>
+    /// <param name="hpVersionId">The hp.version id.</param>
+    /// <param name="hpEntryId">The hp.entry id.</param>
+    /// <param name="hasRemoteEntry">Whether the entry exists on the server.</param>
+    /// <param name="hasRemoteVersion">Whether a version exists on the server.</param>
+    /// <param name="basePath">The folder, stored as <see cref="HackBaseFile.DirectoryName"/>.</param>
+    /// <param name="relativePath">The path relative to the working folder, stored as <see cref="HackBaseFile.RelativePath"/>.</param>
+    /// <remarks>No checksum is computed.</remarks>
     public HackFile(
         string name,
         string? fullPath=null,
@@ -134,7 +174,15 @@ public class HackFile : HackBaseFile
         this.HasRemoteVersion = hasRemoteVersion;
         this.FileSize = fileSize;
     }
+    /// <summary>Creates a file description from a file on disk, including its SHA-1 checksum.</summary>
+    /// <param name="file">The file; <see langword="null"/> gives an empty description.</param>
+    /// <remarks>Reads and hashes the whole file when it exists.</remarks>
     public HackFile(FileInfo? file) : this(file, computeChecksum: true) {}
+    /// <summary>Creates a file description from a file on disk.</summary>
+    /// <param name="file">
+    /// The file; <see langword="null"/> gives an empty description. A file that doesn't exist yet gets its name,
+    /// folder, path and extension but no date, size or checksum.
+    /// </param>
     /// <param name="computeChecksum">
     /// false skips reading and hashing the whole file; <see cref="GetChecksum"/> computes it on demand.
     /// </param>
@@ -157,12 +205,27 @@ public class HackFile : HackBaseFile
         if (computeChecksum)
             Checksum = Checksums.OfFile( file.FullName );
     }
+	/// <summary>Creates a file description from a row of the file list.</summary>
+	/// <param name="entry">
+	/// The row; when its <see cref="HackPDM.Domain.Representation.EntryRow.LocalFile"/> is <see langword="null"/> the
+	/// result is empty.
+	/// </param>
+	/// <remarks>
+	/// The path comes from <see cref="HackPDM.Domain.Representation.EntryRow.FullName"/> (made absolute with
+	/// <see cref="PwaPaths.ToAbsolute"/> unless the row is local-only); name, size, date and extension come from disk
+	/// when the file exists, otherwise from the row. The entry and latest-version ids are copied; no checksum is computed.
+	/// </remarks>
 	public HackFile(EntryRow entry)
 	{
 		if (entry.LocalFile is not { }) { NullSelf(); return; }
 		InitializeFromEntryRow(entry, true);
 	}
-    /// <summary>The file at <paramref name="fullPath"/>, hashed, with its RelativePath (see <see cref="GetFromPath"/>).</summary>
+    /// <summary>Creates a file description for a local path, hashing the file.</summary>
+    /// <param name="fullPath">The file's absolute path; <see langword="null"/> gives an empty description.</param>
+    /// <remarks>
+    /// Same as <see cref="GetFromPath"/> with the defaults: reads date and size, computes the SHA-1 checksum, and sets
+    /// <see cref="HackBaseFile.RelativePath"/> to the folder below the root (for example <c>root/a/b</c>) when the file exists.
+    /// </remarks>
     public HackFile(string? fullPath) => AssignToSelf( GetFromPath( fullPath ) );
 	internal void InitializeFromEntryRow(EntryRow entry, bool initFileInfo=false)
 	{
@@ -220,6 +283,9 @@ public class HackFile : HackBaseFile
             catch { }
         }
     }
+    /// <summary>Sets the date to give the local file when it is written (see <see cref="OverwriteDate"/>).</summary>
+    /// <param name="date">The date, normally the server version's modified time.</param>
+    /// <remarks>Only stores the date; it takes effect on the next <see cref="ModifiedDate"/> assignment or file write.</remarks>
     public void SetModifiedDate(DateTime date)
     {
 	    OverwriteDate = date;
@@ -235,6 +301,9 @@ public class HackFile : HackBaseFile
 		FileSize = null;
 		Checksum = null;
 	}
+    /// <summary>Gets the file's SHA-1 checksum, computing and caching it on first use.</summary>
+    /// <returns>The checksum in lowercase hex, "" for an empty file, or <see langword="null"/> when the file can't be read.</returns>
+    /// <remarks>A cached value is not refreshed when the file changes on disk.</remarks>
     public string? GetChecksum() => Checksum ??= Checksums.OfFile( FullPath ) ;
 	private void AssignToSelf(HackFile? hack)
     {
@@ -256,6 +325,18 @@ public class HackFile : HackBaseFile
     /// unless <paramref name="computeChecksum"/> is false; the folder relative to the working folder.
     /// Without <paramref name="initWithFileInfo"/> nothing is read from disk but the date.
     /// </summary>
+    /// <param name="path">The file's path; <see langword="null"/> returns <see langword="null"/>.</param>
+    /// <param name="directory">With <paramref name="initWithFileInfo"/> false, the folder to record instead of the path's own; otherwise ignored.</param>
+    /// <param name="initWithFileInfo">Whether to read the file's metadata through a <see cref="System.IO.FileInfo"/>.</param>
+    /// <param name="computeChecksum">Whether to hash the file (only with <paramref name="initWithFileInfo"/>).</param>
+    /// <returns>
+    /// The file description. When <paramref name="initWithFileInfo"/> is true and the file doesn't exist, it is
+    /// returned without <see cref="HackBaseFile.RelativePath"/> being set.
+    /// </returns>
+    /// <remarks>
+    /// <see cref="HackBaseFile.RelativePath"/> is set to <see cref="PwaPaths.Root"/> joined with the folders below the
+    /// working folder using this OS's separator (just the root for a file outside the working folder).
+    /// </remarks>
 	public static HackFile? GetFromPath(string? path, string? directory = null, bool initWithFileInfo=true, bool computeChecksum=true)
     {
 		if (path is null) return null;

@@ -54,6 +54,7 @@ internal static class SmokeTestRunner
 	private static readonly Stopwatch _total = new();
 	private static int _finished;
 
+	/// <summary>Whether HACKPDM_SMOKE_TEST is set to 1 or true.</summary>
 	public static bool IsEnabled
 		=> Environment.GetEnvironmentVariable( "HACKPDM_SMOKE_TEST" ) is "1" or "true" or "TRUE" or "True";
 
@@ -62,6 +63,12 @@ internal static class SmokeTestRunner
 
 	private static TimeSpan StepTimeout => TimeSpan.FromSeconds( 60 );
 
+	/// <summary>Starts the smoke test on the UI thread; the process exits when it finishes, fails or times out.</summary>
+	/// <remarks>
+	/// Call once the main window and <see cref="UiDispatcher.Current"/> are set up. Hooks unhandled-exception handlers (any
+	/// unhandled exception ends the run with exit code 1), starts the overall timeout and the UI stall probe, then queues the
+	/// steps on the UI thread and returns at once.
+	/// </remarks>
 	public static void Start()
 	{
 		_total.Start();

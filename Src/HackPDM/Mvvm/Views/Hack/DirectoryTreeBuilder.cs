@@ -10,6 +10,8 @@ namespace HackPDM.Mvvm.Views.Hack;
 internal static class DirectoryTreeBuilder
 {
 	/// <summary>Replaces the tree's nodes with <paramref name="root"/>.</summary>
+	/// <param name="tree">The tree view to fill; its current nodes are removed.</param>
+	/// <param name="root">The directory tree to show; each folder gets a local-only, server-only or both icon.</param>
 	public static void Build( TreeView tree, DirectoryNode root )
 	{
 		tree.RootNodes.Clear();

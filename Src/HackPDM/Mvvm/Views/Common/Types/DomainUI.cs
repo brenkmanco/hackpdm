@@ -21,6 +21,8 @@ using TreeView = Microsoft.UI.Xaml.Controls.TreeView;
 
 namespace HackPDM.Mvvm.Views.Common.Types;
 
+/// <summary>The data behind one node of the directory tree view: name, server directory id, icon and the linked <see cref="TreeViewNode"/>.</summary>
+/// <param name="name">The folder name; null shows a placeholder once the node is linked.</param>
 public partial class TreeData(string? name) : HackPDM.Domain.Representation.TreeData, IEnumerable<TreeData>
 {
 	public TreeView? ParentTree { get; internal set; }
@@ -56,6 +58,8 @@ public partial class TreeData(string? name) : HackPDM.Domain.Representation.Tree
 			? null
 			: IsLocal is true && IsRemote is false;
 	}
+	/// <summary>Whether the folder exists in the local vault.</summary>
+	/// <value>Null when not linked to a node; true for a folder with no server id; otherwise checks the disk on every read.</value>
 	public bool? IsLocal
 	{
 		get
@@ -83,6 +87,8 @@ public partial class TreeData(string? name) : HackPDM.Domain.Representation.Tree
 
 	}
 
+	/// <summary>Sorts this node's children, and recursively theirs, by name ignoring case.</summary>
+	/// <remarks>Rebuilds the linked node's child collection; does nothing when the data is not linked to a node.</remarks>
 	public override void SortTree()
 	{
 		var root = Node;

@@ -19,6 +19,9 @@ public sealed partial class HexToBrushConverter : IValueConverter
 	public object ConvertBack( object value, Type targetType, object parameter, string language )
 		=> throw new NotSupportedException();
 
+	/// <summary>Parses a hex color ("#AARRGGBB" or "#RRGGBB").</summary>
+	/// <param name="hex">The text to parse.</param>
+	/// <returns>The color; transparent black (<see langword="default"/>) when the text doesn't parse.</returns>
 	public static Color ToColor( string? hex )
 		=> ArgbColor.TryParse( hex, out var c ) ? Color.FromArgb( c.A, c.R, c.G, c.B ) : default;
 }
