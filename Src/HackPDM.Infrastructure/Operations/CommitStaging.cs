@@ -98,6 +98,11 @@ public static class CommitStaging
 		TypeOf( hack, out bool restricted );
 		if( restricted )
 			return null;
+		// a file that can no longer be read (deleted or moved since it was picked) is not committed
+		// as a version without contents
+		byte[]? contents = hack.FileContents ?? ReadContents( hack );
+		if( contents is null )
+			return null;
 		HpVersion version = new()
 		{
 			name = hack.Name,
@@ -106,7 +111,7 @@ public static class CommitStaging
 			file_ext = hack.TypeExt?[ 1.. ].ToLower(),
 			WinPathway = serverName,
 			node_id = OdooDefaults.Instance.MyNode?.id,
-			file_contents = hack.FileContents ?? ReadContents( hack ),
+			file_contents = contents,
 			preview_image = PreviewOf( hack ),
 			commit_id = commit,
 			HashedValues = { [ "windows_complete_name" ] = serverName },

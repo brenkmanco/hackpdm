@@ -314,7 +314,7 @@ public sealed class SolidWorksLifecycleTests : IAsyncLifetime
 		Assert.DoesNotContain( "checkout_date=-", beforeCommitEntry );
 		Assert.Contains( $"checkout_user={_me}", beforeCommitVersion );
 		Assert.Contains( "is_checkout_version=True", beforeCommitVersion );
-		// the checkout is stored on the version (the entry shows it through latest_version_id); checkout_entry also sets node_id
+		// the checkout is stored on the version (the entry shows it through latest_version_id); node_id is the committing node, which a checkout leaves alone
 		Assert.Contains( $"node_id={OdooDefaults.Instance.MyNode!.id}", beforeCommitVersion );
 		// checking out an assembly checks out what it depends on, so it can be saved
 		foreach( string name in Parts )

@@ -79,10 +79,12 @@ public static class PdmDeleteOperations
 		bool attachmentsDeleted = true;
 		if( versionIds.Length > 0 )
 		{
+			// one step at a time: once one is refused (a user who is not an administrator) the rest must
+			// not run, or the versions lose their links though they are not deleted
 			bool properties = await PermanentDeleteVersionProperty( versionIds, log );
-			bool relationships = await PermanentDeleteVersionRelationships( versionIds, log );
+			bool relationships = properties && await PermanentDeleteVersionRelationships( versionIds, log );
 			// the stored file contents
-			attachmentsDeleted = properties && relationships
+			attachmentsDeleted = relationships
 				&& await UnlinkMatchingAsync( IrAttachment.GetHpModel()!,
 					OdooDomain.Where( "res_id", "in", versionIds ).And( "res_model", HpVersion.GetHpModel() ).And( "res_field", "file_contents" ),
 					"IR attachments", log );

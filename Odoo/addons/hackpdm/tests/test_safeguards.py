@@ -137,8 +137,13 @@ class TestSafeguards(TransactionCase):
             as_bob.write({"entry_id": other.id})
         with self.assertRaises(AccessError):
             as_bob.write({"file_contents": b"aGVsbG8="})
-        # dependency links stay editable (the client clears them before a permanent delete)
-        as_bob.write({"child_ids": [(5, 0, 0)], "parent_ids": [(5, 0, 0)]})
+        # so do its dependency links and the computer that committed it; only an administrator
+        # clears the links (the first step of a permanent delete)
+        with self.assertRaises(AccessError):
+            as_bob.write({"child_ids": [(5, 0, 0)], "parent_ids": [(5, 0, 0)]})
+        with self.assertRaises(AccessError):
+            as_bob.write({"node_id": self.node.id})
+        self.version.write({"child_ids": [(5, 0, 0)], "parent_ids": [(5, 0, 0)]})
 
     def test_version_cannot_depend_on_itself(self):
         with self.assertRaises(ValidationError):

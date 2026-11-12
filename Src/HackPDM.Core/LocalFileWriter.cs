@@ -49,7 +49,12 @@ public static class LocalFileWriter
             if (LocalTargetPath(file) is not { } targetPath) return false;
 
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-            await WriteBytes(targetPath, file.FileContents);
+            // a copy that is not checked out is read-only: an update has to lift that first (it is
+            // set again below), or the write fails
+            if (File.Exists(targetPath) && File.GetAttributes(targetPath).HasFlag(FileAttributes.ReadOnly))
+                File.SetAttributes(targetPath, File.GetAttributes(targetPath) & ~FileAttributes.ReadOnly);
+            if (!await WriteBytes(targetPath, file.FileContents))
+                return false;
 
             // the date and read-only flag are applied through the file's own path
             file.FullPath = targetPath;
@@ -79,7 +84,13 @@ public static class LocalFileWriter
         {
             relative = Path.Combine(relative, name);
         }
-        return Path.Combine(HackDefaults.Instance?.PwaPathAbsolute ?? "", relative);
+        string root = Path.GetFullPath(HackDefaults.Instance?.PwaPathAbsolute ?? "");
+        string target = Path.GetFullPath(Path.Combine(root, relative));
+        // never outside the working folder, whatever names the server sends ("..", a rooted path)
+        string rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
+        return target.StartsWith(rootWithSeparator, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
+            ? target
+            : null;
     }
     private async static Task<bool> WriteBytes(string path, byte[] bytes)
     {

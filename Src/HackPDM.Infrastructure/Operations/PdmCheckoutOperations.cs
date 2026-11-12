@@ -18,7 +18,18 @@ namespace HackPDM.Infrastructure.Operations;
 public static class PdmCheckoutOperations
 {
 	public static Task CheckOutEntriesAsync( HpEntry[] entries, Action<StatusMessage, string>? log = null, Action<int, int>? progress = null )
-		=> ForEachAsync( FilterCheckoutEntries( entries ), CheckOutEntryAsync, "check outs", "Checking out", "check out", log, progress );
+	{
+		int me = OdooDefaults.Instance.OdooId;
+		// say why a file is left out, instead of a silent "0 check outs ... Completed!"
+		foreach( HpEntry entry in entries.Where( e => !e.CanCheckOut() ) )
+		{
+			if( entry.deleted is true )
+				log?.Invoke( StatusMessage.ERROR, $"Cannot check out {entry.name}: it is deleted" );
+			else if( entry.checkout_user?.id is int holder and not 0 && holder != me )
+				log?.Invoke( StatusMessage.ERROR, $"Cannot check out {entry.name}: it is checked out to {entry.checkout_user.name ?? $"user {holder}"}" );
+		}
+		return ForEachAsync( FilterCheckoutEntries( entries ), CheckOutEntryAsync, "check outs", "Checking out", "check out", log, progress );
+	}
 
 	public static Task UnCheckOutEntriesAsync( HpEntry[] entries, int currentUserId, Action<StatusMessage, string>? log = null, Action<int, int>? progress = null )
 		=> ForEachAsync( FilterUnCheckoutEntries( entries, currentUserId ), UnCheckOutEntryAsync, "uncheck outs", "Unchecking out", "undo the check out of", log, progress );

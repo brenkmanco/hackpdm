@@ -58,7 +58,10 @@ public static class PdmCommitOperations
         {
             string? filepath = hackArr[i].TypeExt?.ToLower();
             if (OdooDefaults.Instance.RestrictTypes is true && !OdooDefaults.Instance.ExtToType.ContainsKey(filepath ?? "-=-=-"))
+            {
+                log?.Invoke(StatusMessage.SKIP, $"not a file type the vault accepts, not committed: {hackArr[i].Name}");
                 continue;
+            }
 
             string filePath = PwaPaths.ToServerDirectory(hackArr[i].DirectoryName) ?? hackArr[i].DirectoryName ?? "";
             OdooDomain sameFile = OdooDomain.Where("name", hackArr[i].Name)
@@ -110,6 +113,12 @@ public static class PdmCommitOperations
     {
         if (hack is null)
             return false;
+        if (hack.FullPath is null || !File.Exists(hack.FullPath))
+        {
+            log?.Invoke(StatusMessage.ERROR, $"{hack.Name}: the file is no longer there ({hack.FullPath}); nothing was committed");
+            await commit.ServerClear();
+            return false;
+        }
 
         HpDirectory? dir = await CreateDirectoriesAsync(hack);
 

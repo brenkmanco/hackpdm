@@ -68,6 +68,10 @@ class hp_pdm_commit(models.Model):
             else:
                 rec.duration_seconds = 0
 
+    def write(self, vals):
+        self._check_commit_owner()
+        return super().write(vals)
+
     def _check_commit_owner(self):
         """Only the user who created a commit (or an administrator) may run or reset it."""
         if hp_guard.is_pdm_admin(self.env):
@@ -92,6 +96,8 @@ class hp_pdm_commit(models.Model):
         if not record:
             raise UserError(f"Commit {rec_id} does not exist.")
         record._check_commit_owner()
+        if record.committed:
+            raise UserError(f"Commit {rec_id} is already committed; it cannot be cleared.")
         records = record.staged_ids
 
         if records:
@@ -198,6 +204,8 @@ class hp_pdm_commit(models.Model):
 
         if not entry_name:
             raise UserError("Cannot commit an entry without a file name.")
+        if not dir_id:
+            raise UserError(f"Cannot commit '{entry_name}': it is not in a folder.")
 
         # Check: Directory existence and status
         if dir_id:
@@ -257,6 +265,10 @@ class hp_pdm_commit(models.Model):
         entry_rec = self.env["hp.entry"].browse(entry_id)
         if not entry_rec.exists():
             raise UserError(f"Target entry ID {entry_id} does not exist.")
+        # a version is a file: one sent without contents (the client could not read the file) would
+        # be a version nobody can get back ("" is an empty file, which is fine)
+        if payload.get("file_contents") is None:
+            raise UserError(f"Cannot commit version of '{entry_rec.name}': the file's contents are missing.")
 
         # Check: Deleted check (Dt)
         if entry_rec.deleted:
@@ -268,11 +280,17 @@ class hp_pdm_commit(models.Model):
                 f"Cannot commit version for '{entry_rec.name}': "
                 f"The file is checked out to another user '{entry_rec.checkout_user.name}' ({entry_rec.checkout_user.login}) [Co]."
             )
+        # a new version of a file the vault already has needs the file checked out to the committer
+        # (the first version of a new file does not)
+        if entry_rec.version_ids and not entry_rec.checkout_user:
+            raise UserError(
+                f"Cannot commit version for '{entry_rec.name}': the file is not checked out to you. Check it out first.")
 
-        # If not checked out, allow commit and populate node_id if missing
-        if not entry_rec.checkout_user:
-            if not payload.get("node_id") and self.node_by:
-                payload["node_id"] = self.node_by.id
+        # a new version is never created checked out (the commit checks the file in)
+        for field in ("checkout_user", "checkout_node", "checkout_date", "is_checked_out", "is_checkout_version"):
+            payload.pop(field, None)
+        if not payload.get("node_id") and self.node_by:
+            payload["node_id"] = self.node_by.id
 
         return entry_rec
 
@@ -280,12 +298,11 @@ class hp_pdm_commit(models.Model):
         """Validates and resolves references for an hp.version.property payload."""
         staged_version_id = payload.get("version_id")
         resolved_version_id = summary_model.get("hp.version", {}).get(staged_version_id)
+        # only a version this commit created: a committed version's properties are fixed
         if not resolved_version_id:
-            if not staged_version_id or not self.env["hp.version"].browse(staged_version_id).exists():
-                raise UserError(
-                    f"Cannot create version property: Associated version ID {staged_version_id} was not found."
-                )
-            resolved_version_id = staged_version_id
+            raise UserError(
+                f"Cannot create version property: version {staged_version_id} is not one this commit creates."
+            )
         payload["version_id"] = resolved_version_id
 
     def _handle_version_relationship(self, row, payload: dict, summary_model: dict):
@@ -309,7 +326,8 @@ class hp_pdm_commit(models.Model):
                 child_entry = self.env["hp.entry"].search([("name", "=ilike", _like_literal(dep_filename)), ("deleted", "=", False)], limit=1)
             # a file that references itself (its latest version is the one just created) is no dependency
             if child_entry and child_entry.latest_version_id and child_entry.latest_version_id != parent_version:
-                parent_version.write({"child_ids": [(4, child_entry.latest_version_id.id)]})
+                # links are fixed for users once committed; this version is the one this commit just created
+                parent_version.sudo().write({"child_ids": [(4, child_entry.latest_version_id.id)]})
         row.write({"payload": {"complete": True}})
 
     def _post_create_version(self, version_rec):
@@ -360,6 +378,9 @@ class hp_pdm_commit(models.Model):
                 continue
 
             model = self.env[target_model]
+            if target_model == "hp.version.property":
+                # validated above (a version this commit created); users cannot create them directly
+                model = model.sudo()
             payload = self._own_fields_only(model, payload)
             payload["commit_id"] = row.commit_id.id if row.commit_id else self.id
             rec = model.create(payload)

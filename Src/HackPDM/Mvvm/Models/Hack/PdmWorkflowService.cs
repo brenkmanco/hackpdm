@@ -157,9 +157,12 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		if( summary is null )
 			return;
 
+		string kept = summary.KeptLocalChanges.IsEmpty ? "" :
+			$"\n{summary.KeptLocalChanges.Count} file(s) with local changes were kept, not overwritten:\n"
+			+ string.Join( "\n", summary.KeptLocalChanges.Take( 15 ) );
 		if( summary.Failed.IsEmpty )
 		{
-			await reporter.NotifyAsync( $"Completed! {summary.Downloaded} downloaded, {summary.Skipped} already up to date." );
+			await reporter.NotifyAsync( $"Completed! {summary.Downloaded} downloaded, {summary.Skipped - summary.KeptLocalChanges.Count} already up to date.{kept}" );
 			return;
 		}
 		// never report success when files are missing
@@ -167,7 +170,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		await reporter.NotifyAsync(
 			$"Completed with {failed.Length} file(s) NOT downloaded ({summary.Downloaded} downloaded, {summary.Skipped} up to date):\n"
 			+ string.Join( "\n", failed.Take( 15 ) )
-			+ ( failed.Length > 15 ? $"\n...and {failed.Length - 15} more (see the status log)" : "" ),
+			+ ( failed.Length > 15 ? $"\n...and {failed.Length - 15} more (see the status log)" : "" ) + kept,
 			"Get Latest" );
 	}
 
@@ -194,6 +197,15 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		// only entries checked out to this user are released
 		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids,
 			checkout ? null : OdooDomain.Where( "checkout_user", Operators.Equal, me ), excludedFields: HeavyEntryFields );
+		if( !checkout )
+		{
+			// the selected files someone else holds are left alone; say so rather than a bare "Completed!"
+			HpEntry[]? others = await HpEntry.GetRecordsByIdsAsync( entryIds,
+				OdooDomain.Where( "checkout_user", Operators.NotEqual, me ).And( "checkout_user", Operators.NotEqual, false ),
+				includedFields: [ nameof( HpEntry.id ), nameof( HpEntry.name ), nameof( HpEntry.checkout_user ) ] );
+			foreach( HpEntry other in others ?? [] )
+				Log( StatusMessage.ERROR, $"Cannot undo the check out of {other.name}: it is checked out to {other.checkout_user?.name ?? "another user"}" );
+		}
 		if( entries is null or { Length: < 1 } )
 			return;
 

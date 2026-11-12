@@ -114,6 +114,8 @@ public static class PdmDownloadOperations
         public int Downloaded => _downloaded;
         public int Skipped => _skipped;
         public ConcurrentQueue<string> Failed { get; } = new();
+        /// <summary>Local files that were not overwritten because they hold changes no vault version has.</summary>
+        public ConcurrentQueue<string> KeptLocalChanges { get; } = new();
         internal void AddDownloaded() => Interlocked.Increment(ref _downloaded);
         internal void AddSkipped() => Interlocked.Increment(ref _skipped);
     }
@@ -179,6 +181,17 @@ public static class PdmDownloadOperations
                 continue;
             }
 
+            if (await HasLocalChangesAsync(version))
+            {
+                string shown = Path.Combine(version.WinPathway ?? "", version.name ?? "");
+                log?.Invoke(StatusMessage.WARNING,
+                    $"Kept local changes to {shown}: the local file is not a version from the vault, so it was not overwritten (commit it, or delete the local copy to get the vault's)");
+                summary.KeptLocalChanges.Enqueue(shown);
+                summary.AddSkipped();
+                onProgress?.Invoke(0, 1);
+                continue;
+            }
+
             log?.Invoke(StatusMessage.PROCESSING, $"Downloading latest version: {Path.Combine(version.WinPathway ?? "", version.name ?? "")}");
             processVersions.Add(version);
             onProgress?.Invoke(1, 0);
@@ -186,6 +199,27 @@ public static class PdmDownloadOperations
 
         if (processVersions.Count > 0)
             await DownloadAndWriteAsync(processVersions, cToken, log, summary);
+    }
+
+    /// <summary>
+    /// Whether the local copy of <paramref name="version"/>'s file holds work that is in no version of
+    /// that file in the vault (it was edited, checked out or not): overwriting it would lose that work.
+    /// A copy of any earlier version is just out of date and may be replaced. A missing or unreadable
+    /// file has nothing to lose.
+    /// </summary>
+    private static async Task<bool> HasLocalChangesAsync(HpVersion version)
+    {
+        string? path = PwaPaths.ToAbsolute(version.windows_complete_name);
+        if (path is null || !File.Exists(path) || Checksums.OfFile(path) is not { } local)
+            return false;
+        // the checksums are read, not searched: checksum is related to the stored file's ir.attachment,
+        // and attachments of a field are invisible to searches, so a search on it never matches
+        Result<HpVersion[]> versions = await Repository<HpVersion>.SearchReadAsync(
+            OdooDomain.Where("entry_id.windows_complete_name", version.windows_complete_name),
+            FieldSelection.Only([nameof(HpVersion.checksum)]));
+        // when the vault can't be asked, keep the file: a skipped download can be repeated, lost work can't
+        return !versions.Ok
+            || !versions.Value!.Any(v => string.Equals(v.checksum, local, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

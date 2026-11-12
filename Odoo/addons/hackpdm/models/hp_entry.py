@@ -159,7 +159,7 @@ class hp_entry(models.Model):
             if holder and holder.id != uid:
                 raise UserError(
                     f"'{rec.name}' is checked out to {holder.name}; only they or an administrator can change it.")
-            if vals.get("is_checked_out") and rec.deleted and vals.get("deleted", True):
+            if (vals.get("is_checked_out") or new_holder) and rec.deleted and vals.get("deleted", True):
                 raise UserError(f"'{rec.name}' is deleted and cannot be checked out.")
 
     @api.depends('version_ids.checkout_user')

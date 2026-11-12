@@ -469,6 +469,46 @@ The checkout is stored on the version, as intended, and the entry shows its late
 | Delete the tree (logically) | Everything Dt |
 | Restore | The folder's own entries only. `Sub/` needs its own restore, because the recursive restore is still "Not Implemented Yet" in the file manager. |
 
+## Attack tests: trying to break the client and the addon ✅
+
+`tests/test_attacks.py` (addon) and `Integration/AttackTests.cs` (client) attack the vault through the methods both programs use, as two **regular users**. The other live tests log in as the administrator, who bypasses the server's user-level guards. Each attack was first run against the unfixed code. What got through, and the fix:
+
+**Server (addon): 14 holes**
+
+| Attack | Before | Now |
+|---|---|---|
+| Commit a new version of a file **nobody** has checked out (the client refuses; an older or modified client does not) | accepted | refused: "not checked out to you". The first version of a new file still needs no checkout. |
+| `hp.version.create` directly on such a file | accepted | refused (same rule) |
+| Commit a version that carries `checkout_user` = another user (the file then looks checked out to them) | accepted | checkout fields are dropped from commit payloads; a direct create with them is refused |
+| Stage rows into **another user's** commit (it runs with their rights), or rewrite their staged rows | accepted | refused: staged rows only go into your own commit, and only for the vault's models |
+| Write another user's commit (`committed`, `errored`…) | accepted | refused |
+| `clear_commit` on a finished commit (reset its history) | accepted | refused |
+| Commit properties onto an **existing** version (`version_id` = any version id) | accepted | refused: only versions the commit itself creates |
+| Create/change `hp.version.property` directly | accepted | refused: properties are part of what was committed |
+| Clear or add a committed version's dependency links | accepted | refused (administrators only; the commit links its new version with elevated rights) |
+| Change a version's `node_id` (the committing computer) | accepted | refused. **Checkout no longer writes `node_id`** either: it is the computer that created the version. |
+| Check out a deleted file by writing `checkout_user` (not `is_checked_out`) | accepted | refused |
+| Commit a file with no folder | accepted | refused |
+| Commit a version with no file contents (the client could not read the file) | accepted, a version with no file | refused ("" — an empty file — is still fine) |
+| Permanent delete by a regular user | refused, but only after the dependency links were wiped | refused at the first step, links intact |
+
+Held already: taking, releasing, renaming or deleting a file someone else has checked out (through the entry or the version), checking out in someone else's name, unsafe names, a duplicate name, running another user's commit, deleting vault records, `smart_read` paths to passwords, and the dependency walk writing another computer's list.
+
+**Client: 6 holes**
+
+| Attack | Before | Now |
+|---|---|---|
+| **Get Latest on a checked-out file with unsaved work** | **overwrote the work** | kept. A local file whose contents are in no vault version of that file is not overwritten; Get Latest says which were kept. |
+| Get Latest on a file edited without checking out (Lm) | overwrote it | kept, the same way |
+| Get Latest on an older, unchanged, read-only copy (Nv) | "1 downloaded", file **unchanged**: the write failed on the read-only file and its result was ignored | read-only lifted, file updated, read-only again; a failed write is reported |
+| Commit a file deleted after it was picked | committed a version **with no contents** | refused before staging ("no longer there") |
+| Check out / undo the checkout of a file someone else holds | "0 check outs … Completed!" | says who holds it |
+| Permanent delete by a regular user | cleared the links after the first refusal | stops at the first refused step |
+
+Held already: committing over someone else's checkout (refused by the client, and by the server around it), a new file with an existing name, Windows-reserved and unsafe names (all or nothing: the good file in the same commit is not created), two names differing only in case. A name with no file type ("trailing dot.") is left out and now reported as skipped instead of silently. Downloads are also kept inside the working folder whatever path the server sends.
+
+**Noticed, not changed:** searching `hp.version` on `checksum` never matches (it is related to the field's `ir.attachment`, which searches hide). The client now reads the checksums instead. `hp.entry.checksum_nonmatches` and `checksum_list_nonmatches` use that search, so they are wrong; no client calls them.
+
 ## Order and effort
 
 | Phase | Risk | Est. net lines | Depends on |

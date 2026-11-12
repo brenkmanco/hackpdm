@@ -18,7 +18,10 @@ from . import hp_guard
 _logger = logging.getLogger(__name__)
 
 # a version is a snapshot: once created only an administrator may swap its file or its entry
-_IMMUTABLE_VERSION_FIELDS = frozenset(("entry_id", "file_contents"))
+# what a commit fixed: the file, which entry it belongs to, the computer that committed it, what it
+# references and its properties. Only an administrator changes these (a permanent delete clears the links).
+_IMMUTABLE_VERSION_FIELDS = frozenset(
+    ("entry_id", "file_contents", "node_id", "child_ids", "parent_ids", "version_property_ids"))
 _CHECKOUT_VERSION_FIELDS = frozenset(("checkout_user", "checkout_date", "checkout_node"))
 
 class Database:
@@ -229,6 +232,8 @@ class hp_version(models.Model):
     def create(self, vals_list):
         if not hp_guard.is_pdm_admin(self.env):
             for vals in vals_list:
+                if any(vals.get(f) for f in _CHECKOUT_VERSION_FIELDS):
+                    raise AccessError("A new version cannot be created checked out; use checkout_entry.")
                 self._check_entry_accepts_version(vals.get("entry_id"))
         return super().create(vals_list)
 
@@ -244,6 +249,9 @@ class hp_version(models.Model):
         if entry.checkout_user and entry.checkout_user.id != self.env.uid:
             raise UserError(
                 f"Cannot add a version: '{entry.name}' is checked out to {entry.checkout_user.name}.")
+        # the first version comes with the new file; every later one needs the file checked out
+        if entry.version_ids and not entry.checkout_user:
+            raise UserError(f"Cannot add a version: '{entry.name}' is not checked out to you.")
 
     def write(self, vals):
         if not hp_guard.is_pdm_admin(self.env):
@@ -267,6 +275,8 @@ class hp_version(models.Model):
             if rec.checkout_user and rec.checkout_user.id != self.env.uid:
                 raise UserError(
                     f"'{rec.entry_id.name}' is checked out to {rec.checkout_user.name}; only they or an administrator can change it.")
+            if new_holder and rec.entry_id.deleted:
+                raise UserError(f"'{rec.entry_id.name}' is deleted and cannot be checked out.")
 
     @api.constrains("child_ids", "parent_ids")
     def _check_not_own_dependency(self):
@@ -465,7 +475,7 @@ class hp_version(models.Model):
                 "checkout_date": date,
                 "checkout_node": node_rec.id,
             })
-            v_rec.node_id = node_rec.id
+            # node_id is the computer that committed the version; a checkout does not change it
         elif entry.deleted:
             raise UserError(f"'{entry.name}' is deleted and cannot be checked out")
         else:
@@ -570,6 +580,19 @@ class hp_version_property(models.Model):
     _name = 'hp.version.property'
     _description = 'hp version property'
     _inherit = 'hp.common.model'
+
+    # a version's properties are part of what was committed: a commit creates them (with elevated
+    # rights, after checking the version is one it just created); users cannot add, change or remove them
+    @api.model_create_multi
+    def create(self, vals_list):
+        if not hp_guard.is_pdm_admin(self.env):
+            raise AccessError("Version properties are set by committing a new version.")
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if not hp_guard.is_pdm_admin(self.env):
+            raise AccessError("Committed version properties cannot be changed.")
+        return super().write(vals)
 
     #fields
     sw_config_name = fields.Char(string='solidworks config name')
