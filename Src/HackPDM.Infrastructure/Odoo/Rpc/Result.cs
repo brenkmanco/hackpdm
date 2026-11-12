@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace HackPDM.Infrastructure.Odoo;
 
 /// <summary>
@@ -10,6 +12,7 @@ namespace HackPDM.Infrastructure.Odoo;
 public readonly record struct Result<T>( T? Value, string? Error )
 {
 	/// <summary>Whether the call succeeded (<see cref="Error"/> is null).</summary>
+	[MemberNotNullWhen( false, nameof( Error ) )]
 	public bool Ok => Error is null;
 
 	/// <summary>Creates a successful result.</summary>
@@ -29,13 +32,13 @@ public readonly record struct Result<T>( T? Value, string? Error )
 	/// <summary>Returns the value, throwing when the call failed.</summary>
 	/// <returns>The value (which can still be null for a successful call that returned nothing).</returns>
 	/// <exception cref="OdooException">The call failed; the message is <see cref="Error"/>.</exception>
-	public T Unwrap() => Ok ? Value! : throw new OdooException( Error! );
+	public T Unwrap() => Ok ? Value! : throw new OdooException( Error );
 
 	/// <summary>Transforms a successful value and passes a failure through unchanged.</summary>
 	/// <typeparam name="TOut">The type of the transformed value.</typeparam>
 	/// <param name="map">Applied to the value only when <see cref="Ok"/> is true.</param>
 	/// <returns>The mapped value, or a failed result with the same error.</returns>
-	public Result<TOut> Map<TOut>( Func<T, TOut> map ) => Ok ? Result<TOut>.Success( map( Value! ) ) : Result<TOut>.Fail( Error! );
+	public Result<TOut> Map<TOut>( Func<T, TOut> map ) => Ok ? Result<TOut>.Success( map( Value! ) ) : Result<TOut>.Fail( Error );
 
 	public override string ToString() => Ok ? $"Ok({Value})" : $"Fail({Error})";
 }

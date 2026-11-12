@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices.ComTypes;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace HackPDM.Abstractions.Structures;
@@ -19,7 +21,7 @@ public class Except
 	/// <param name="paramName">The parameter name for the exception; "value" when omitted.</param>
 	/// <returns>This checker.</returns>
 	/// <exception cref="System.ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
-	public Except IsNull<T>( T? value, string? paramName = null ) {
+	public Except IsNull<T>( [NotNull] T? value, [CallerArgumentExpression( nameof( value ) )] string? paramName = null ) {
 		return value is null  
 			? throw new ArgumentNullException( paramName ?? nameof( value ) ) 
 			:  this;
@@ -30,7 +32,7 @@ public class Except
 	/// <param name="paramName">The parameter name for the exception; "value" when omitted.</param>
 	/// <returns>This checker.</returns>
 	/// <exception cref="System.ArgumentNullException"><paramref name="value"/> is not <see langword="null"/> (an odd exception type for this case).</exception>
-	public Except IsNotNull<T>( T? value, string? paramName = null )
+	public Except IsNotNull<T>( T? value, [CallerArgumentExpression( nameof( value ) )] string? paramName = null )
 	{
 		return value is not null  
 			? throw new ArgumentNullException( paramName ?? nameof( value ) ) 

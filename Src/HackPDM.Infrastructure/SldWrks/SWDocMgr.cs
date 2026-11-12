@@ -11,10 +11,13 @@ namespace HackPDM.Infrastructure.SldWrks;
 /// <summary>Windows only: reads SolidWorks files through the licensed SolidWorks Document Manager (COM).</summary>
 public class SwDocMgr : ISwDocumentReader
 {
-    private static SwDMApplication _swDocMgr = default;
+    private static SwDMApplication? _swDocMgr;
     /// <summary>Returns the Document Manager application created by the last successful <see cref="SwDocMgr(string)"/> call.</summary>
     /// <returns>The shared application, or null when none could be created (wrong licence key, Document Manager not installed, not Windows).</returns>
-    public static SwDMApplication GetApplication() => _swDocMgr;
+    public static SwDMApplication? GetApplication() => _swDocMgr;
+
+    private static SwDMApplication Started
+        => _swDocMgr ?? throw new InvalidOperationException("The SolidWorks Document Manager was not started.");
 
 	// constructor
 	/// <summary>Starts the SolidWorks Document Manager with a licence key and stores it for every instance.</summary>
@@ -42,13 +45,13 @@ public class SwDocMgr : ISwDocumentReader
     /// <param name="noInterrupt">When true, a document that can't be opened yields null instead of an exception.</param>
     /// <returns><c>[file name, stored full path]</c> pairs; null when the file isn't a SolidWorks document, has no reference list, or (with <paramref name="noInterrupt"/>) can't be opened.</returns>
     /// <exception cref="Exception">The document can't be opened and <paramref name="noInterrupt"/> is false.</exception>
-    /// <exception cref="NullReferenceException">The Document Manager was not started (see <see cref="GetApplication"/>).</exception>
+    /// <exception cref="InvalidOperationException">The Document Manager was not started (see <see cref="GetApplication"/>).</exception>
     public List<string[]>? GetDependencies(string fileName, bool deep=false, bool noInterrupt=false)
     {
         // external references for assembly files (GetAllExternalReferences4)
         // external references for part files (GetExternalFeatureReferences)
-        SwDMDocument19 swDoc = default;
-        SwDMSearchOption swSearchOpt = default;
+        SwDMDocument19 swDoc;
+        SwDMSearchOption swSearchOpt;
 
         // returns list of string arrays
         // 0: short file name
@@ -64,7 +67,7 @@ public class SwDocMgr : ISwDocumentReader
 
         // get the document
         SwDmDocumentOpenError nRetVal = 0;
-        swDoc = (SwDMDocument19)_swDocMgr.GetDocument(fileName, swDocType, true, out nRetVal);
+        swDoc = (SwDMDocument19)Started.GetDocument(fileName, swDocType, true, out nRetVal);
         if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
         {
             return !noInterrupt ? throw new Exception("Failed to open solidworks file: " + fileName) : null;
@@ -74,7 +77,7 @@ public class SwDocMgr : ISwDocumentReader
         object oBrokenRefVar;
         object oIsVirtual;
         object oTimeStamp;
-        swSearchOpt = _swDocMgr.GetSearchOptionObject();
+        swSearchOpt = Started.GetSearchOptionObject();
         string[] varDepends = (string[])swDoc.GetAllExternalReferences4(swSearchOpt, out oBrokenRefVar, out oIsVirtual, out oTimeStamp);
         if (varDepends == null) return null;
 
@@ -106,11 +109,11 @@ public class SwDocMgr : ISwDocumentReader
     /// <param name="fileName">Path of the SolidWorks file; opened read-only.</param>
     /// <returns>(configuration, name, type, value) tuples as described on <see cref="ISwDocumentReader.GetProperties"/>; drawings have file-level properties only. Null when the file isn't a SolidWorks document.</returns>
     /// <exception cref="Exception">The document can't be opened.</exception>
-    /// <exception cref="NullReferenceException">The Document Manager was not started (see <see cref="GetApplication"/>).</exception>
+    /// <exception cref="InvalidOperationException">The Document Manager was not started (see <see cref="GetApplication"/>).</exception>
     public List<Tuple<string, string, string, object>>? GetProperties(string fileName)
     {
-        SwDMDocument swDoc = default(SwDMDocument);
-        SwDMConfigurationMgr swCfgMgr = default(SwDMConfigurationMgr);
+        SwDMDocument swDoc;
+        SwDMConfigurationMgr swCfgMgr;
 
         // config name
         // property name
@@ -127,7 +130,7 @@ public class SwDocMgr : ISwDocumentReader
 
         // get the document
         SwDmDocumentOpenError nRetVal = 0;
-        swDoc = (SwDMDocument)_swDocMgr.GetDocument(fileName, swDocType, true, out nRetVal);
+        swDoc = (SwDMDocument)Started.GetDocument(fileName, swDocType, true, out nRetVal);
         if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
         {
             throw new Exception("Failed to open solidworks file: " + fileName);

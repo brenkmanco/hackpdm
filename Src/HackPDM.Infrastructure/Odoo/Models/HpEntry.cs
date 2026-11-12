@@ -63,11 +63,10 @@ public partial class HpEntry
 	}
 	private IHpTypeModel? TypeStore
 	{
-		get => field ??= LocalFile is not null 
-			? OdooDefaults.Instance!.ExtToType.TryGetValue( LocalFile?.TypeExt.ToLower(), out IHpTypeModel? itype ) 
-				? itype 
-				: null 
-			: null;
+		get => field ??= LocalFile?.TypeExt is { } ext
+			&& OdooDefaults.Instance.ExtToType.TryGetValue( ext.ToLower(), out IHpTypeModel? itype )
+				? itype
+				: null;
 		set;
 	}
 	public partial Many2One? type_id
@@ -124,8 +123,5 @@ public partial class HpEntry
 	/// <param name="userId">The Odoo user id to compare with <c>checkout_user</c>; <see langword="null"/> uses the logged-in user (<c>OdooDefaults.Instance.OdooId</c>).</param>
 	/// <returns><see langword="true"/> when <c>checkout_user</c> is set and its id equals the user id.</returns>
 	public bool CanUnCheckOut( int? userId = null ) => checkout_user is not null && checkout_user == ( userId ?? OdooDefaults.Instance.OdooId );
-	public override string ToString()
-	{
-		return name;
-	}
+	public override string ToString() => name ?? "";
 }

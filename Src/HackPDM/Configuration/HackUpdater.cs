@@ -32,7 +32,7 @@ internal class HackUpdater
 		string _hackClientVersion = $"{version?.Major}.{version?.Minor}.{version?.Build}.{version?.Revision}";
 		_odooClientVersion = OdooDefaults.Instance?.HpSettings?.FirstOrDefault(s => s.name == OdooDefaultsConstants.ODOO_VERSION_KEY_NAME);
 
-		if (_odooClientVersion is not null && _odooClientVersion.char_value.Equals(_hackClientVersion))
+		if (_odooClientVersion?.char_value == _hackClientVersion)
 			return true;
 
 		if (showOutdatedUpdater && await HackPDM.Shell.AppComposition.Dialogs.ShowMessageAsync( $"Latest version: {_hackClientVersion} doesn't match odoo version: {_odooClientVersion}\n" +

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -93,9 +94,9 @@ public sealed class FileManagerState
 	/// <param name="includeDeleted">Whether deleted entries are wanted.</param>
 	/// <param name="result">The kept rows when found; otherwise unspecified (possibly null) and not to be used.</param>
 	/// <returns><see langword="true"/> when kept rows can be shown instead of loading the folder again.</returns>
-	public bool TryGetEntries( string? treePath, bool includeDeleted, out EntryListResult result )
+	public bool TryGetEntries( string? treePath, bool includeDeleted, [MaybeNullWhen( false )] out EntryListResult result )
 	{
-		result = _entries!;
+		result = _entries;
 		return _entries is not null
 			&& !Stale.HasFlag( FileManagerRefresh.Entries )
 			&& _entriesIncludeDeleted == includeDeleted

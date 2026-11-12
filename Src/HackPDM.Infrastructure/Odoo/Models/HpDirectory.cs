@@ -69,7 +69,7 @@ public partial class HpDirectory : HpBaseModelTransport<HpDirectory>
 		LastAvailableDirectory last = ( await LastAvailableDirectory( path ) ).Unwrap();
 		int nextIndex = last.Index + 1;
 		if( nextIndex >= path.Count )
-			return [ await GetRecordByIdAsync( last.DirectoryId ) ?? null ];
+			return await GetRecordByIdAsync( last.DirectoryId ) is { } existing ? [ existing ] : null;
 
 		// category 1 is the usual default, but it may not exist (a fresh database has no categories),
 		// and referencing a missing record makes the server reject the directory

@@ -505,7 +505,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 				return;
 
 			bool includeDeleted = ShowInactive;
-			if( !_state.TryGetEntries( directory.TreePath, includeDeleted, out EntryListResult result ) )
+			if( !_state.TryGetEntries( directory.TreePath, includeDeleted, out EntryListResult? result ) )
 			{
 				result = await _entryList.LoadAsync( directory.DirectoryId, directory.TreePath, includeDeleted, IsFiltered, token );
 				token.ThrowIfCancellationRequested();

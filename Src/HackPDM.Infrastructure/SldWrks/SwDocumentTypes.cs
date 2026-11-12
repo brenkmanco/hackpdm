@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using SolidWorks.Interop.swdocumentmgr;
 
 namespace HackPDM.Infrastructure.SldWrks;
@@ -21,11 +22,11 @@ public static class SwDocumentTypes
 	/// <summary>Checks whether a file is a SolidWorks part, assembly or drawing, by extension (any case). The file isn't opened.</summary>
 	/// <param name="pathOrName">A file path or name; null is allowed.</param>
 	/// <returns>True for .sldprt, .sldasm and .slddrw.</returns>
-	public static bool IsSolidWorks( string? pathOrName ) => Of( pathOrName ) != SwDmDocumentType.swDmDocumentUnknown;
+	public static bool IsSolidWorks( [NotNullWhen( true )] string? pathOrName ) => Of( pathOrName ) != SwDmDocumentType.swDmDocumentUnknown;
 
 	/// <summary>Checks whether an extension ("sldprt", ".SLDASM", ...) is a SolidWorks document's.</summary>
 	/// <param name="extension">The extension, with or without the leading dot, any case.</param>
 	/// <returns>True for sldprt, sldasm and slddrw; false for null or empty.</returns>
-	public static bool IsSolidWorksExtension( string? extension )
+	public static bool IsSolidWorksExtension( [NotNullWhen( true )] string? extension )
 		=> !string.IsNullOrEmpty( extension ) && ByExtension.ContainsKey( extension.StartsWith( '.' ) ? extension : "." + extension );
 }

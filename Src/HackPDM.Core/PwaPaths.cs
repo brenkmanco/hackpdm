@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -97,7 +98,7 @@ public static class PwaPaths
 	/// <summary>Tells whether a local path is inside the working folder (not merely starting with its name).</summary>
 	/// <param name="localPath">A fully qualified local path.</param>
 	/// <returns><see langword="true"/> for the working folder itself or anything below it; see <see cref="LocalSegments"/>.</returns>
-	public static bool IsInside( string? localPath ) => LocalSegments( localPath ) is not null;
+	public static bool IsInside( [NotNullWhen( true )] string? localPath ) => LocalSegments( localPath ) is not null;
 
 	/// <summary>Builds a server name or tree path from segments below the root.</summary>
 	/// <param name="segments">The folder (and file) names below the root.</param>

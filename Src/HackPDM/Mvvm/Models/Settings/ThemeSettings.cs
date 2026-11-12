@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -44,7 +45,7 @@ public readonly record struct ArgbColor( byte A, byte R, byte G, byte B )
 	/// <param name="text">The text to parse.</param>
 	/// <param name="color">The parsed color, fully opaque when no alpha was given; <see langword="default"/> when parsing fails.</param>
 	/// <returns><see langword="true"/> when <paramref name="text"/> held 6 or 8 hex digits.</returns>
-	public static bool TryParse( string? text, out ArgbColor color )
+	public static bool TryParse( [NotNullWhen( true )] string? text, out ArgbColor color )
 	{
 		color = default;
 		if( string.IsNullOrWhiteSpace( text ) )

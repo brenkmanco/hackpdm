@@ -25,8 +25,8 @@ public interface IHpDirectoryModel : IHpOdooRecord
 }
 public class ExplorerItem
 {
-    public string Name { get; set; }
-    public string IconPath { get; set; } 
+    public string Name { get; set; } = "";
+    public string IconPath { get; set; } = "";
     public bool IsFolder { get; set; }
-    public ObservableCollection<ExplorerItem> Children { get; set; }
+    public ObservableCollection<ExplorerItem> Children { get; set; } = [];
 }

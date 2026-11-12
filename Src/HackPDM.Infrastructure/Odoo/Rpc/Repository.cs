@@ -34,7 +34,7 @@ public readonly record struct FieldSelection( string[]? Excluded = null, string[
 ///     FieldSelection.Only( "name", "latest_version_id" ),
 ///     limit: 50 );
 /// if( !result.Ok )
-///     return Result&lt;int&gt;.Fail( result.Error! );
+///     return Result&lt;int&gt;.Fail( result.Error );
 /// foreach( HpEntry entry in result.Value! )
 ///     Console.WriteLine( $"{entry.id} {entry.name}" );
 /// </code>
@@ -99,7 +99,7 @@ public static class Repository<T> where T : HpBaseModelTransport<T>, new()
 	internal static async Task<Result<T[]>> FetchAsync( Task<Result<IReadOnlyList<OdooRow>>> fetch, FieldSelection fields )
 	{
 		Result<IReadOnlyList<OdooRow>> rows = await fetch;
-		return rows.Ok ? Result<T[]>.Success( Populate( rows.Value!, fields.Excluded ) ) : Result<T[]>.Fail( rows.Error! );
+		return rows.Ok ? Result<T[]>.Success( Populate( rows.Value!, fields.Excluded ) ) : Result<T[]>.Fail( rows.Error );
 	}
 
 	/// <summary>Builds records from rows: assigns each row, then marks the record as read from the server.</summary>

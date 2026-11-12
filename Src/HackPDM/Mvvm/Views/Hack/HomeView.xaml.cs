@@ -76,7 +76,8 @@ public sealed partial class HomeView : Page
 	private void Navigate( Type page, string config )
 	{
 		NavFrame.Navigate( page );
-		WindowHelper.SetWindowConfig( HackApp.Window, WindowConfig.Preset( config ) );
+		if( HackApp.Window is { } window )
+			WindowHelper.SetWindowConfig( window, WindowConfig.Preset( config ) );
 	}
 
 	/// <summary>The Odoo and local settings pages, one above the other.</summary>

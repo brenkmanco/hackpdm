@@ -29,17 +29,7 @@ public sealed partial class JsonEditorView : Page
 	protected override void OnNavigatedFrom( Microsoft.UI.Xaml.Navigation.NavigationEventArgs e )
 	{
 		base.OnNavigatedFrom( e );
-		string? code = null;
-		try
-		{
-			if( _isCodeView )
-				CodeEditor.Document.GetText( TextGetOptions.None, out code );
-		}
-		catch( NotImplementedException )
-		{
-			// RichEditBox.Document is not implemented on every Uno platform: keep the tree instead
-		}
-		ViewModel.Keep( code );
+		ViewModel.Keep( _isCodeView ? GetCodeText() : null );
 	}
 
 	private async void OnExportJsonClick( object sender, RoutedEventArgs e )
@@ -151,13 +141,19 @@ public sealed partial class JsonEditorView : Page
 
 	private bool SyncCodeViewToTree()
 	{
-		CodeEditor.Document.GetText(TextGetOptions.None, out string codeText);
-		if (ViewModel.LoadText(codeText) is not { } error)
+		if (ViewModel.LoadText(GetCodeText()) is not { } error)
 			return true;
 		JsonParseInfoBar.Message = $"JSON Syntax Error: {error}";
 		JsonParseInfoBar.IsOpen = true;
 		return false;
 	}
+#if WINDOWS
+	private string GetCodeText()
+	{
+		CodeEditor.Document.GetText(TextGetOptions.None, out string codeText);
+		return codeText;
+	}
+
 	private void ApplyJsonSyntaxHighlighting(string jsonText)
 	{
 		// Fix index drift: Normalize newlines to match RichEditBox's internal 1-character format (\r)
@@ -192,4 +188,10 @@ public sealed partial class JsonEditorView : Page
 		ColorizePattern(@"\b-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b", colorNumber);    // Numbers
 		ColorizePattern(@"\b(true|false|null)\b", colorKeyword);                  // Booleans & Null
 	}
+#else
+	// Uno does not implement RichEditBox: the code view is a plain TextBox without colours
+	private string GetCodeText() => CodeText.Text;
+
+	private void ApplyJsonSyntaxHighlighting(string jsonText) => CodeText.Text = jsonText;
+#endif
 }

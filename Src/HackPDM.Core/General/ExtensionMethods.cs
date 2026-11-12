@@ -339,7 +339,7 @@ public static class ExtensionConvertMethods
     }
     /// <typeparam name="T">The item type.</typeparam>
     /// <param name="list">The source sequence.</param>
-    extension<T>(IEnumerable<T> list)
+    extension<T>(IEnumerable<T> list) where T : notnull
     {
 	    /// <summary>Copies the sequence into a new <see cref="HackPDM.Domain.Helper.ConcurrentSet{T}"/>.</summary>
 	    /// <returns>A new set holding the distinct items.</returns>

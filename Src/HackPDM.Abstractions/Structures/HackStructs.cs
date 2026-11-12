@@ -10,7 +10,7 @@ public struct ContentDialogInfo
     /// <summary>Creates dialog info with no text and the primary button representation.</summary>
     public ContentDialogInfo() { }
 
-    public string Message { get; set; } = null;
+    public string Message { get; set; } = "";
     public string? Caption { get; set; } = null;
     public string? PrimaryText { get; set; } = null;
     public string? SecondaryText { get; set; } = null;

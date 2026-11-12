@@ -226,7 +226,7 @@ public abstract partial class HpBaseModelTransport<T>
 	/// <returns>The name from the class's <c>[OdooModel]</c> attribute (via the generated map), or <see langword="null"/> when the class has none.</returns>
 	public static string? GetHpModel() => HpModelDictionaryGen.GetValueOrDefault(typeof(T).Name);
 	
-	public override string			ToString() => id.ToString();
+	public override string			ToString() => $"{id}";
 
 	// reads (null when nothing matched or the call failed, as before; Repository<T> gives the error)
 	private static T[]? NullIfEmpty( Result<T[]> result ) => result.Value is { Length: > 0 } records ? records : null;

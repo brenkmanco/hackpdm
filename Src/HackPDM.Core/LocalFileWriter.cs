@@ -27,14 +27,18 @@ public static class LocalFileWriter
             Console.WriteLine($"{file.Name} file contents empty");
             return null;
         }
+        if (file.DirectoryName is not { } combinedPath || file.Name is not { } name)
+        {
+            Console.WriteLine($"{file.Name} has no folder or name to write to");
+            return null;
+        }
         try
         {
-            string combinedPath = file.DirectoryName;//Path.Combine(HackDefaults.Instance.InstancePWAPathAbsolute, file.FilePath);
             if (!Directory.Exists(combinedPath))
             {
                 Directory.CreateDirectory(combinedPath);
             }
-            combinedPath = Path.Combine(combinedPath, file.Name);
+            combinedPath = Path.Combine(combinedPath, name);
 
             File.WriteAllBytes(combinedPath, file.FileContents);
 

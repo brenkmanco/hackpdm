@@ -17,5 +17,5 @@ public interface IIrAttachment : IHpOdooRecord
 	
     [OdooProp(OdooFieldType.Many2One, "res_id")] public IMany2One? res_id {get;set;}
     
-    public string _fileContentsBase64 {get;set;}
+    public string? _fileContentsBase64 {get;set;}
 }

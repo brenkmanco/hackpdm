@@ -17,7 +17,7 @@ public class EntrySearchDomainTests
 		string fileName = "", string comparer = "ilike", bool mine = false, bool deleted = false, bool localOnly = false )
 		=> new( fileName, comparer, mine, deleted, localOnly, MaxResults: 100, Properties: [] );
 
-	private static async Task<object[]> DomainOf( EntrySearchQuery query )
+	private static async Task<object?[]> DomainOf( EntrySearchQuery query )
 		=> [ .. ( await EntrySearchService.BuildDomainAsync( query ) ).ToRpc() ];
 
 	[Fact]
@@ -31,7 +31,7 @@ public class EntrySearchDomainTests
 	[Fact]
 	public async Task AllRemoteFilters_InOrder()
 	{
-		object[] domain = await DomainOf( Query( "bracket.txt", "=", mine: true, deleted: true ) );
+		object?[] domain = await DomainOf( Query( "bracket.txt", "=", mine: true, deleted: true ) );
 
 		Assert.Equal(
 			[

@@ -89,7 +89,7 @@ public class PathConversionTests
 		Assert.Equal( "root / Projects / Parts", PwaPaths.ToServerDirectory( folder ) );
 		Assert.Equal( @"root\Projects\Parts\bracket.txt", PwaPaths.ToServerName( Path.Combine( folder, "bracket.txt" ) ) );
 		Assert.Equal( "root", PwaPaths.ToServerName( pwa.Absolute ) );
-		Assert.Equal( [ "Projects", "Parts" ], PwaPaths.LocalSegments( folder ) );
+		Assert.Equal( [ "Projects", "Parts" ], PwaPaths.LocalSegments( folder ) ?? [] );
 	}
 
 	[Fact]

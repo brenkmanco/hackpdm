@@ -34,7 +34,7 @@ public partial class HackApp : Application
     public static HomeView? HomePage;
     public static Window? Window;
     public static Frame? RootFrame;
-    public static CoreSettings CoreSettings;
+    public static CoreSettings CoreSettings => AppComposition.Settings;
 
 	// To fix CS0121, fully qualify the InitializeComponent() call to specify the correct method.
 	// If your project has both a generated partial method and a user-defined method, use the global:: prefix.
@@ -54,7 +54,7 @@ public partial class HackApp : Application
     /// <summary>Loads the settings, then shows the home page in the main window.</summary>
     private static void ConfigureServices()
     {
-        CoreSettings = AppComposition.Settings;
+        _ = AppComposition.Settings; // load the saved settings before the defaults
         AppComposition.InitializeDefaults();
         Debug.WriteLine( $"Global data loaded from file: {UIStorage.GlobalData.IsLoadedFromFile}" );
         HomePage = new HomeView();

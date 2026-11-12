@@ -6,9 +6,11 @@
     xmlns:conv="using:HackPDM.Mvvm.Views.Common.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:not_win="http://uno.ui/not_win"
     xmlns:tv="using:WinUI.TableView"
     xmlns:vm="using:HackPDM.Mvvm.ViewModels.Settings"
-    mc:Ignorable="d">
+    xmlns:win="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    mc:Ignorable="d not_win">
 
     <Page.Resources>
         <conv:HexToBrushConverter x:Key="HexToBrush" />
@@ -260,7 +262,9 @@
                             <ToggleSwitch IsOn="False" />
                         </StackPanel>
                         <TextBox Grid.Row="4" Header="Disabled text box" IsEnabled="False" Text="Can't edit" />
-                        <RichEditBox Grid.Row="4" Grid.Column="1" Header="Rich edit box" MinHeight="60" />
+                        <!--  RichEditBox is not implemented in Uno: a multi-line text box stands in elsewhere  -->
+                        <win:RichEditBox Grid.Row="4" Grid.Column="1" Header="Rich edit box" MinHeight="60" />
+                        <not_win:TextBox Grid.Row="4" Grid.Column="1" Header="Multi-line text box" MinHeight="60" AcceptsReturn="True" TextWrapping="Wrap" />
                     </Grid>
                 </Border>
 

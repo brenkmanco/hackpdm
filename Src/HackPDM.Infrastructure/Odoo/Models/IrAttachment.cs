@@ -22,9 +22,9 @@ public partial class IrAttachment : HpBaseModelTransport<IrAttachment>, IIrAttac
 
 	[OdooProp(OdooFieldType.Many2One, "res_id")] public Many2One? res_id { get; set; }
 	IMany2One? IIrAttachment.res_id { get =>(IMany2One?)res_id; set => res_id = (Many2One?)value; }
-	string IIrAttachment._fileContentsBase64 { get; set; }
+	string? IIrAttachment._fileContentsBase64 { get; set; }
 
-	private string _fileContentsBase64;
+	private string? _fileContentsBase64;
     public IrAttachment() { }
     /// <summary>Creates an unsaved attachment record with the given field values.</summary>
     /// <param name="name">The attachment's file name.</param>
@@ -39,11 +39,11 @@ public partial class IrAttachment : HpBaseModelTransport<IrAttachment>, IIrAttac
         string name,
         int resId = 0,
         int fileSize = 0,
-        string resModel = null,
-        string checksum = null,
-        string mimetype = null,
+        string? resModel = null,
+        string? checksum = null,
+        string? mimetype = null,
         string type = "binary",
-        string fileContentsBase64 = null)
+        string? fileContentsBase64 = null)
     {
         this.name = name;
         this.res_id = resId;
@@ -63,7 +63,7 @@ public partial class IrAttachment : HpBaseModelTransport<IrAttachment>
     /// read failed, or the server returned nothing.
     /// </returns>
     /// <remarks>Reads <c>ir.attachment.datas</c> and keeps the result in this object as well.</remarks>
-    public async Task<string> DownloadContents()
+    public async Task<string?> DownloadContents()
     {
         const string datas = "datas";
         if (this.IsRecord || this.id != 0)

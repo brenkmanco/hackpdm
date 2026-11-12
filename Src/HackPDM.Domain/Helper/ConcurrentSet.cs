@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -14,6 +15,7 @@ namespace HackPDM.Domain.Helper;
 /// are not atomic with respect to concurrent changes. Enumeration order is unspecified.
 /// </remarks>
 public class ConcurrentSet<T> : ISet<T>, IReadOnlyCollection<T>, IDisposable
+	where T : notnull
 {
 	private ConcurrentDictionary<T, bool?> _fakeBag;
 	private bool _disposedValue;
@@ -37,7 +39,7 @@ public class ConcurrentSet<T> : ISet<T>, IReadOnlyCollection<T>, IDisposable
 	public ConcurrentSet( ConcurrentBag<T> bag )
 	{
 		_fakeBag = new();
-		while ( bag.TryTake( out T item ) )
+		while ( bag.TryTake( out T? item ) )
 		{
 			_fakeBag.TryAdd(item, null);
 		}
@@ -86,7 +88,7 @@ public class ConcurrentSet<T> : ISet<T>, IReadOnlyCollection<T>, IDisposable
 	/// <summary>Removes and returns some element of the set.</summary>
 	/// <param name="item">The removed element, or the default when the set was empty.</param>
 	/// <returns><see langword="true"/> when an element was removed.</returns>
-	public bool TryTake( out T item )
+	public bool TryTake( [MaybeNullWhen( false )] out T item )
 	{
 		foreach ( var key in _fakeBag.Keys )
 		{
@@ -203,8 +205,7 @@ public class ConcurrentSet<T> : ISet<T>, IReadOnlyCollection<T>, IDisposable
 		{
 			if ( disposing )
 			{
-				// TODO: dispose managed state (managed objects)
-				_fakeBag = null;
+				_fakeBag.Clear();
 			}
 
 			// TODO: free unmanaged resources (unmanaged objects) and override finalizer

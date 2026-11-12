@@ -136,6 +136,8 @@ public static partial class WindowHelper
             X11WindowSize.TryResize(window, width, height);
         }
 
+#if WINDOWS
+        // caption button colours exist on Windows only; Uno's desktop title bar has no such settings
         var titleBar = window.AppWindow?.TitleBar;
 
         if (titleBar == null) return;
@@ -147,6 +149,7 @@ public static partial class WindowHelper
         // Optional: Match the hover/press states to your custom background color
         titleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(25, 255, 255, 255);
         titleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(50, 255, 255, 255);
+#endif
     }
 }
 

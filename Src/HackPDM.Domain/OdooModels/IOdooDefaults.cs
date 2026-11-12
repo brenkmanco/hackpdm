@@ -76,6 +76,6 @@ public interface IOdooDefaultBase
 /// <summary>An <see cref="IOdooDefaultBase"/> with a process-wide instance.</summary>
 public interface IOdooDefaults : IOdooDefaultBase
 {
-    /// <summary>The process-wide session.</summary>
-    public static virtual IOdooDefaults Instance { get; set; }
+    /// <summary>The process-wide session; every implementation keeps its own.</summary>
+    public static abstract IOdooDefaults Instance { get; set; }
 }

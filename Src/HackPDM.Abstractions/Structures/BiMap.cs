@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Diagnostics.CodeAnalysis;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -27,6 +28,8 @@ namespace HackPDM.Abstractions
 		IDictionary,
 		IDeserializationCallback,
 		ISerializable
+		where TKey : notnull
+		where TValue : notnull
 	{
 		public Dictionary<TKey, TValue> Forward { get; }
 		public Dictionary<TValue, TKey> Backward { get; }
@@ -182,7 +185,7 @@ namespace HackPDM.Abstractions
 		/// <param name="key">The value.</param>
 		/// <param name="value">The key when found; otherwise the default.</param>
 		/// <returns><see langword="true"/> when the value is mapped.</returns>
-		public bool TryGetValue(TValue key, out TKey value)
+		public bool TryGetValue(TValue key, [MaybeNullWhen(false)] out TKey value)
 			=> ((IDictionary<TValue, TKey>)Backward).TryGetValue(key, out value);
 
 		public void CopyTo(Array array, int index)
@@ -218,39 +221,42 @@ namespace HackPDM.Abstractions
 
 		/// <summary>Removes a key and its value from both directions.</summary>
 		/// <param name="key">The key.</param>
-		/// <returns><see langword="true"/> when both sides had an entry to remove.</returns>
-		/// <remarks>Finds the backward entry by a linear scan.</remarks>
+		/// <returns><see langword="true"/> when the key was mapped and both entries were removed.</returns>
 		public bool Remove(TKey key)
-			=> ((IDictionary<TValue, TKey>)Backward).Remove(Backward.FirstOrDefault(valCollect => key.Equals(valCollect.Value)).Key) & ((IDictionary<TKey, TValue>)Forward).Remove(key);
-		/// <summary>Removes the pair's key from the forward side and its value from the backward side.</summary>
-		/// <param name="item">The pair; the two sides are removed independently, without checking they belong together.</param>
-		/// <returns><see langword="true"/> when both removals succeeded.</returns>
+		{
+			if (!Forward.TryGetValue(key, out TValue? value)) return false;
+			Forward.Remove(key);
+			Backward.Remove(value);
+			return true;
+		}
+		/// <summary>Removes the pair from both directions when the key maps to that value.</summary>
+		/// <param name="item">The key and the value it must map to.</param>
+		/// <returns><see langword="true"/> when the pair was in the map and was removed.</returns>
 		public bool Remove(KeyValuePair<TKey, TValue> item)
-			=> Forward.Remove(item.Key) & Backward.Remove(item.Value);
-		/// <summary>Removes a key through the non-generic dictionary interface.</summary>
-		/// <param name="key">The key.</param>
-		/// <remarks>
-		/// The backward entry removed is not the one belonging to <paramref name="key"/>: the scan's condition ignores the
-		/// entry it tests, so the first backward entry is removed whenever <paramref name="key"/>, read as a value, is mapped.
-		/// </remarks>
-		/// <exception cref="System.InvalidCastException"><paramref name="key"/> is not a <typeparamref name="TValue"/>.</exception>
+			=> Forward.TryGetValue(item.Key, out TValue? value)
+				&& EqualityComparer<TValue>.Default.Equals(value, item.Value)
+				&& Remove(item.Key);
+		/// <summary>Removes a key and its value through the non-generic dictionary interface.</summary>
+		/// <param name="key">The key; anything that is not a <typeparamref name="TKey"/> is ignored.</param>
 		public void Remove(object key)
 		{
-			((IDictionary)Backward).Remove(Backward.FirstOrDefault(valCollect => TryGetValue((TValue)key, out _)).Key);
-			((IDictionary)Forward).Remove(key);
+			if (key is TKey typedKey) Remove(typedKey);
 		}
-		/// <summary>Removes a pair given in value-to-key order.</summary>
-		/// <param name="item">The value and its key.</param>
-		/// <returns><see langword="true"/> when both removals succeeded.</returns>
-		/// <remarks>The forward entry removed is the first one in the map, not necessarily the pair's (the scan's condition is always true).</remarks>
+		/// <summary>Removes a pair given in value-to-key order from both directions.</summary>
+		/// <param name="item">The value and the key it must map to.</param>
+		/// <returns><see langword="true"/> when the pair was in the map and was removed.</returns>
 		public bool Remove(KeyValuePair<TValue, TKey> item)
-			=> Forward.Remove(Forward.FirstOrDefault(keyCollect => item.Key.Equals(item.Key)).Key) & ((ICollection<KeyValuePair<TValue, TKey>>)Backward).Remove(item);
-		/// <summary>Meant to remove a value and its key from both directions.</summary>
+			=> Remove(new KeyValuePair<TKey, TValue>(item.Value, item.Key));
+		/// <summary>Removes a value and its key from both directions.</summary>
 		/// <param name="key">The value.</param>
-		/// <returns>Does not return normally unless <typeparamref name="TKey"/> and <typeparamref name="TValue"/> are the same type.</returns>
-		/// <exception cref="System.InvalidCastException">Always when the two types differ: <see cref="Forward"/> is cast to the reversed dictionary type.</exception>
+		/// <returns><see langword="true"/> when the value was mapped and both entries were removed.</returns>
 		public bool Remove(TValue key)
-			=> ((IDictionary<TValue, TKey>)Forward).Remove(Forward.FirstOrDefault(valCollect => key.Equals(valCollect.Value)).Value) & ((IDictionary<TValue, TKey>)Backward).Remove(key);
+		{
+			if (!Backward.TryGetValue(key, out TKey? mappedKey)) return false;
+			Backward.Remove(key);
+			Forward.Remove(mappedKey);
+			return true;
+		}
 
 		public void OnDeserialization(object sender)
 			=> ((IDeserializationCallback)Forward).OnDeserialization(sender);

@@ -51,6 +51,11 @@ public sealed class PreviewImageLoader : IPreviewImageLoader
 	/// <inheritdoc/>
 	public async Task<ImageSource?> FromFileIconAsync( string? filePath, uint size = 512 )
 	{
+#if !WINDOWS
+		// shell thumbnails are a Windows feature: Uno does not implement StorageFile.GetThumbnailAsync
+		await Task.CompletedTask;
+		return null;
+#else
 		try
 		{
 			if( string.IsNullOrEmpty( filePath ) || !File.Exists( filePath ) )
@@ -70,5 +75,6 @@ public sealed class PreviewImageLoader : IPreviewImageLoader
 			Debug.WriteLine( $"Failed to get icon: {ex.Message}" );
 			return null;
 		}
+#endif
 	}
 }

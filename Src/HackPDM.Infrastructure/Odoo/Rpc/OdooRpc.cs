@@ -107,7 +107,7 @@ public static class OdooRpc
 	{
 		Result<JsonElement> raw = await CallAsync( "object", "execute",
 			[ Settings.OdooDb, Settings.OdooId, Settings.OdooPass, model, method, .. args ], timeoutMs, token );
-		return raw.Ok ? Convert<T>( raw.Value ) : Result<T>.Fail( raw.Error! );
+		return raw.Ok ? Convert<T>( raw.Value ) : Result<T>.Fail( raw.Error );
 	}
 
 	/// <summary>Logs in with the configured database, user name and password (<c>common.login</c>).</summary>
@@ -125,7 +125,7 @@ public static class OdooRpc
 			return Result<int>.Fail( "the database, user name and password must be set" );
 		Result<JsonElement> raw = await CallAsync( "common", "login", [ Settings.OdooDb, Settings.OdooUser, Settings.OdooPass ], timeoutMs ?? CommonTimeout, token );
 		if( !raw.Ok )
-			return Result<int>.Fail( raw.Error! );
+			return Result<int>.Fail( raw.Error );
 		int uid = raw.Value.ValueKind switch
 		{
 			JsonValueKind.Number => raw.Value.GetInt32(),

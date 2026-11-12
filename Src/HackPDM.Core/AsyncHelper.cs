@@ -15,11 +15,10 @@ public class AsyncHelper
     private readonly double _timeoutMs;
     private readonly int _pollDelayMsInt;
     private readonly int _timeoutMsInt;
-    private int _totalPollMs = 0;
     private bool _signal = false;
     private bool _timedOut = false;
     private bool _wasCancelled = false;
-    private CancellationToken _token;
+    private readonly CancellationToken _token;
     private AsyncHelper(Func<bool> eval, int millisecondTimeout = -1, int pollingMilliseconds = 1000, CancellationToken token = default)
     {
         if (eval is null) throw new ArgumentException("predicate must not be null");
@@ -28,12 +27,13 @@ public class AsyncHelper
         _pollDelayMsInt = pollingMilliseconds;
         _pollDelayMs = Convert.ToDouble(pollingMilliseconds);
         _timeoutMs = Convert.ToDouble(millisecondTimeout);
+        _token = token;
     }
     // WaitUntil: wantTrue = true 
     // WaitWhile: wantTrue = false
     private async Task<AsyncHelper> InitializeAsync(bool wantTrue = true)
         => await InitializeAsync(null, wantTrue);
-    private async Task<AsyncHelper> InitializeAsync(Action action, bool wantTrue = true)
+    private async Task<AsyncHelper> InitializeAsync(Action? action, bool wantTrue = true)
     {
         bool indefinite = _timeoutMs <= 0;
         var timeout = DateTime.UtcNow;
@@ -62,11 +62,7 @@ public class AsyncHelper
                 break;
             }
             if (!wantTrue ^ _predicate()) _signal = true;
-            else
-            {
-                //_totalPollMs += min;
-                if (action is not null) action();
-            }
+            else action?.Invoke();
         }
         return this;
     }
@@ -74,7 +70,7 @@ public class AsyncHelper
     /// <param name="eval">The condition to check; it is first checked after one polling interval, not immediately.</param>
     /// <param name="pollingMs">Milliseconds between checks.</param>
     /// <param name="msTimeout">Milliseconds before giving up; 0 or less waits indefinitely.</param>
-    /// <param name="token">Meant to cancel the wait, but currently ignored (the constructor does not store it).</param>
+    /// <param name="token">Cancels the wait; a cancelled wait returns <see langword="false"/>.</param>
     /// <returns><see langword="true"/> when the condition became true; <see langword="false"/> on timeout or cancellation.</returns>
     /// <exception cref="System.ArgumentException"><paramref name="eval"/> is <see langword="null"/>.</exception>
     public static async Task<bool> WaitUntil(Func<bool> eval, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default)
@@ -85,7 +81,7 @@ public class AsyncHelper
     /// <param name="tokenSource">Its token is passed to <see cref="System.Threading.Tasks.Task.Run(System.Func{System.Threading.Tasks.Task}, System.Threading.CancellationToken)"/>; a new source is created when <see langword="null"/>.</param>
     /// <returns><see langword="false"/> when the task ended cancelled; otherwise <see langword="true"/> once it has completed.</returns>
     /// <remarks>Exceptions thrown by <paramref name="function"/> are rethrown when the task is awaited.</remarks>
-    public static async Task<bool> AsyncRunner(Func<Task> function, string statusHeader = "Status", CancellationTokenSource tokenSource = default)
+    public static async Task<bool> AsyncRunner(Func<Task> function, string statusHeader = "Status", CancellationTokenSource? tokenSource = null)
     {
         tokenSource ??= new();
         var task = Task.Run(() => function(), tokenSource.Token);

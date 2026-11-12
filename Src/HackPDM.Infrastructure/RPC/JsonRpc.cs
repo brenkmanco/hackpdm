@@ -30,7 +30,7 @@ public class JsonRpcParams
 	public string? Method { get; set; }
 
 	[JsonPropertyName( "args" )]
-	public List<object>? Args { get; set; }
+	public List<object?>? Args { get; set; }
 
 	[JsonPropertyName( "kwargs" )]
 	public Dictionary<object, object>? Kwargs { get; set; }
@@ -84,7 +84,7 @@ public class JsonRpcData
 	public string? Message { get; set; }
 
 	[JsonPropertyName( "arguments" )]
-	public List<object>? Args { get; set; }
+	public List<object?>? Args { get; set; }
 
 	[JsonPropertyName( "context" )]
 	public Dictionary<string, JsonElement>? Context { get; set; }

@@ -29,7 +29,7 @@ namespace HackPDM.Mvvm.Views.Dialogs;
 public sealed partial class PipWindow : Window
 {
 	// The explicit callback event for MainWindow to listen to
-	public event EventHandler ReturnRequested;
+	public event EventHandler? ReturnRequested;
 
 	public PipWindow()
 	{
@@ -62,7 +62,7 @@ public sealed partial class PipWindow : Window
 
 	/// <summary>Removes the hosted element so it can be put back elsewhere.</summary>
 	/// <returns>The element that was shown; null when the window was empty.</returns>
-	public UIElement ReleaseComponent()
+	public UIElement? ReleaseComponent()
 	{
 		if( PipContentRoot.Children.Count > 0 )
 		{

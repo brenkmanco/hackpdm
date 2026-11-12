@@ -259,8 +259,8 @@ public class HackFile : HackBaseFile
 	}
     internal void ApplyModifiedDateToLocal()
     {
-        if (OverwriteDate == default) return;
-        Info ??= new(FullPath);
+        if (OverwriteDate == default || FullPath is not { } fullPath) return;
+        Info ??= new(fullPath);
         if (Exists is true)
         {
             try

@@ -120,8 +120,5 @@ public partial class HpVersion : HpBaseModelTransport<HpVersion>
     	return versionProperties;
     }
 
-	public override string ToString()
-    {
-        return name;
-    }
+	public override string ToString() => name ?? "";
 }

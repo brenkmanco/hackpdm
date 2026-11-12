@@ -6,8 +6,10 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="using:HackPDM.Mvvm.ViewModels.Tools"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:not_win="http://uno.ui/not_win"
+    xmlns:win="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     d:DataContext="{d:DesignInstance Type=local:JsonNodeViewModel}"
-    mc:Ignorable="d">
+    mc:Ignorable="d not_win">
 
     <Grid
         Padding="32,24"
@@ -270,7 +272,8 @@
                 BorderThickness="1"
                 CornerRadius="8">
 
-                <RichEditBox
+                <!--  Windows: RichEditBox with syntax colours. Uno does not implement RichEditBox, so plain text elsewhere  -->
+                <win:RichEditBox
                     x:Name="CodeEditor"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Stretch"
@@ -280,6 +283,19 @@
                     FontFamily="Consolas, Cascadia Code, Courier New"
                     FontSize="14"
                     IsSpellCheckEnabled="False" />
+                <not_win:TextBox
+                    x:Name="CodeText"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    AcceptsReturn="True"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    FontFamily="Consolas, Cascadia Code, Courier New"
+                    FontSize="14"
+                    IsSpellCheckEnabled="False"
+                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                    ScrollViewer.VerticalScrollBarVisibility="Auto"
+                    TextWrapping="NoWrap" />
             </Border>
         </Grid>
     </Grid>

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using HackPDM.Infrastructure.Odoo;
 
 namespace HackPDM.Infrastructure.SldWrks
@@ -14,7 +15,8 @@ namespace HackPDM.Infrastructure.SldWrks
 		/// Created on first read from <see cref="HackPDM.Infrastructure.Odoo.OdooDefaults.Instance"/>'s SwApi key, so read it only after
 		/// the server settings are loaded, or the managed reader is chosen for the rest of the run. Can be replaced (for example in tests).
 		/// </value>
-		public static ISwDocumentReader? DocMgr
+		[AllowNull]
+		public static ISwDocumentReader DocMgr
 		{
 			get => field ??= CreateReader();
 			set;
