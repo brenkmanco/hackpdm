@@ -98,7 +98,16 @@ public static partial class WindowHelper
         window.SetWindowType(windowConfig.WindowKind);
         _animationCts.Cancel();
         _animationCts = new CancellationTokenSource();
-        window.AppWindow?.MoveAndResize(new Windows.Graphics.RectInt32 { X = windowConfig.PositionAndSize.x, Y = windowConfig.PositionAndSize.y, Width = windowConfig.PositionAndSize.z, Height = windowConfig.PositionAndSize.w });
+        var (x, y, width, height) = (windowConfig.PositionAndSize.x, windowConfig.PositionAndSize.y, windowConfig.PositionAndSize.z, windowConfig.PositionAndSize.w);
+        if (window.AppWindow is { } appWindow)
+        {
+            // separate Move + Resize, not MoveAndResize: Uno's desktop (Skia) heads leave MoveAndResize
+            // unimplemented (it does nothing), while Move and Resize work on every platform
+            appWindow.Move(new Windows.Graphics.PointInt32 { X = x, Y = y });
+            appWindow.Resize(new Windows.Graphics.SizeInt32 { Width = width, Height = height });
+            // on X11 that resize goes to the window manager's frame, which it ignores once the window is shown
+            X11WindowSize.TryResize(window, width, height);
+        }
 
         var titleBar = window.AppWindow?.TitleBar;
 

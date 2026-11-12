@@ -1,6 +1,14 @@
 import logging
 from odoo import models, fields, api
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
+
+from . import hp_guard
+
+# checkout state: kept on the entry's latest version (hp.version.checkout_*), shown here through
+# latest_version_id; set by hp.version.checkout_entry, cleared by un-checkout and by a commit
+_CHECKOUT_FIELDS = ("is_checked_out", "checkout_user", "checkout_node", "checkout_date")
+# what only the user holding the checkout (or an administrator) may change
+_HOLDER_ONLY_FIELDS = frozenset(_CHECKOUT_FIELDS + ("deleted", "name", "dir_id", "type_id"))
 
 class hp_entry_name_filter(models.Model):
     #base fields
@@ -36,10 +44,12 @@ class hp_entry(models.Model):
         string='windows directory path',
     )
 
+    # the checkout lives on the latest version; these read and write it there. A commit makes a new
+    # (not checked out) latest version, so committing checks the entry in by itself.
     checkout_date = fields.Datetime(
+        related='latest_version_id.checkout_date',
+        readonly=False,
         string='checkout date',
-        compute='_compute_checkout_info',
-        store=True,
     )
     latest_date = fields.Datetime(
         related='latest_version_id.file_modify_stamp',
@@ -51,9 +61,11 @@ class hp_entry(models.Model):
         store=True,
     )
     is_checked_out = fields.Boolean(
-        default=False,
+        compute='_compute_is_checked_out',
+        inverse='_inverse_is_checked_out',
+        search='_search_is_checked_out',
         string='is checked out',
-        help='Indicates whether the entry is currently checked out',
+        help='Whether the latest version is checked out (has a checkout user); setting it to False releases it',
     )
     latest_file_size = fields.Integer(
         related='latest_version_id.file_size',
@@ -88,16 +100,14 @@ class hp_entry(models.Model):
         string='category id',
     )
     checkout_user = fields.Many2one(
-        comodel_name='res.users',
+        related='latest_version_id.checkout_user',
+        readonly=False,
         string='checkout user',
-        compute='_compute_checkout_info',
-        store=True,
     )
     checkout_node = fields.Many2one(
-        comodel_name='hp.node',
+        related='latest_version_id.checkout_node',
+        readonly=False,
         string='checkout node',
-        compute='_compute_checkout_info',
-        store=True,
     )
 
     version_ids = fields.One2many(
@@ -116,27 +126,64 @@ class hp_entry(models.Model):
         string='version properties',
     )
     
+    def init(self):
+        hp_guard.create_case_insensitive_unique_index(
+            self.env.cr, self._table, "hp_entry_dir_name_ci_uniq", "dir_id")
+
+    @api.constrains("name")
+    def _check_name_path_safe(self):
+        for rec in self:
+            hp_guard.check_name(rec.name, "file")
+
+    def write(self, vals):
+        if not hp_guard.is_pdm_admin(self.env):
+            self._check_user_write(vals)
+        if "is_checked_out" in vals and not vals["is_checked_out"]:
+            # releasing a checkout clears who/where/when held it
+            vals = dict(vals, checkout_user=False, checkout_node=False, checkout_date=False)
+        return super().write(vals)
+
+    def _check_user_write(self, vals):
+        """A user may not take over, clear, delete, rename or move an entry another user has
+        checked out, nor check an entry out in someone else's name."""
+        if not _HOLDER_ONLY_FIELDS.intersection(vals):
+            return
+        uid = self.env.uid
+        new_holder = vals.get("checkout_user")
+        if isinstance(new_holder, (list, tuple)):
+            new_holder = new_holder[0] if new_holder else False
+        if new_holder and new_holder != uid:
+            raise AccessError("You can only check entries out to yourself.")
+        for rec in self:
+            holder = rec.checkout_user
+            if holder and holder.id != uid:
+                raise UserError(
+                    f"'{rec.name}' is checked out to {holder.name}; only they or an administrator can change it.")
+            if vals.get("is_checked_out") and rec.deleted and vals.get("deleted", True):
+                raise UserError(f"'{rec.name}' is deleted and cannot be checked out.")
+
+    @api.depends('version_ids.checkout_user')
+    def _compute_is_checked_out(self):
+        for rec in self:
+            rec.is_checked_out = bool(rec.checkout_user)
+
+    def _inverse_is_checked_out(self):
+        # only releasing is done this way; checking out goes through hp.version.checkout_entry
+        for rec in self:
+            if not rec.is_checked_out and rec.latest_version_id:
+                rec.latest_version_id.write({"checkout_user": False, "checkout_date": False, "checkout_node": False})
+
+    def _search_is_checked_out(self, operator, value):
+        if operator not in ("=", "!="):
+            raise UserError(f"Unsupported search on is_checked_out: {operator} {value!r}")
+        checked_out = bool(value) == (operator == "=")
+        return [("checkout_user", "!=" if checked_out else "=", False)]
+
     def first_helper(self, key = lambda x: True):
         try:
             return next(x for x in self if key(x))
         except:
             return False
-
-    @api.depends('is_checked_out',
-                 'latest_version_id',
-                 'latest_version_id.checkout_date',
-                 'latest_version_id.checkout_node',
-                 'latest_version_id.checkout_user')
-    def _compute_checkout_info(self):
-        for record in self:
-            if record.is_checked_out:
-                record.checkout_date = record.latest_version_id.checkout_date
-                record.checkout_node = record.latest_version_id.checkout_node
-                record.checkout_user = record.latest_version_id.checkout_user
-            else:
-                record.checkout_date = False
-                record.checkout_node = False
-                record.checkout_user = False
 
     @api.depends('directory_complete_name', 'name')
     def _compute_windows_path(self):
@@ -182,7 +229,9 @@ class hp_entry(models.Model):
         matching = set(self.env["hp.version"].search(version_domain).ids)
         return [("id", "in", [entry for entry, latest in latest_by_entry.items() if latest in matching])]
 
-    #@api.depends('version_ids')
+    # not stored, but its cached value must follow new versions: the checkout fields are read through
+    # it, so a commit that reads them before adding a version would otherwise keep seeing the old latest
+    @api.depends('version_ids')
     def _compute_latest_version(self):
         for record in self:
             if record.version_ids:

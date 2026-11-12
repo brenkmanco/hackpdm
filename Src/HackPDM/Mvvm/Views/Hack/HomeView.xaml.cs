@@ -64,7 +64,7 @@ public sealed partial class HomeView : Page
 			ShowConfiguration();
 			return;
 		}
-		if( page == NavigatePageMenu.HackFileManager && !AppComposition.ProfileManager.IsLoggedIn )
+		if( page == NavigatePageMenu.HackFileManager && !AppComposition.Session.IsLoggedIn )
 		{
 			Navigate( typeof( NotLoggedInView ), "NotLoggedIn" );
 			return;
@@ -81,17 +81,8 @@ public sealed partial class HomeView : Page
 
 	/// <summary>The Odoo and local settings pages, one above the other.</summary>
 	private void ShowConfiguration()
-	{
-		Frame odooFrame = new();
-		Frame hackFrame = new();
-		StackPanel stack = new();
-		stack.Children.Add( odooFrame );
-		stack.Children.Add( hackFrame );
-		NavFrame.Content = new ScrollView { Content = stack };
-		odooFrame.Navigate( typeof( OdooSettingsView ) );
-		hackFrame.Navigate( typeof( HackSettingsView ) );
-		WindowHelper.SetWindowConfig( HackApp.Window, WindowConfig.Preset( "ConfigSettings" ) );
-	}
+		// navigated to like every other page, so the page it replaces is told it was left
+		=> Navigate( typeof( ConfigurationView ), "ConfigSettings" );
 
 	private void HomeNavigator_BackRequested( NavigationView sender, NavigationViewBackRequestedEventArgs args )
 	{

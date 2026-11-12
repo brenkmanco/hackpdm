@@ -1,8 +1,15 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+using HackPDM.Core;
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Mvvm.Models.Hack;
 using HackPDM.Mvvm.Models.Odoo;
+using HackPDM.Mvvm.Models.Settings;
+using HackPDM.Mvvm.Models.Tools;
 using HackPDM.Mvvm.ViewModels.Common;
 using HackPDM.Mvvm.ViewModels.Hack;
 using HackPDM.Mvvm.ViewModels.Odoo;
@@ -15,16 +22,22 @@ using HackPDM.Mvvm.Views.Dialogs;
 namespace HackPDM.Shell;
 
 /// <summary>
-/// Composition root: the one place that picks concrete models and views for the view models, and
-/// holds the app's long-lived view models (one of each). Models and view models only see
-/// interfaces; nothing below this layer news up a view.
+/// Composition root: the one place that picks concrete models and views for the view models. Models
+/// and view models only see interfaces; nothing below this layer news up a view.
+/// <para>
+/// Lifetimes: the services and the models that hold a page's context (<see cref="Session"/>,
+/// <see cref="FileManagerState"/>, <see cref="JsonDraft"/>) live for the whole run, so that leaving a page and
+/// coming back shows what it showed. A page's view model is made by a <c>Create…</c> factory when the
+/// page is entered and disposed when it is left. The few view models still held here back windows,
+/// not pages (the status window, the search window).
+/// </para>
 /// </summary>
 public static class AppComposition
 {
 	// ---------------------------------------------------------------- settings and services
 
 	/// <summary>The app's persisted key/value settings.</summary>
-	public static CoreSettings Settings => field ??= new( new ModernSettingsProvider() );
+	public static CoreSettings Settings => field ??= new( AppSettingsStore.Open() );
 
 	/// <summary>Gives the Hack and Odoo defaults their settings store. Call once at startup.</summary>
 	public static void InitializeDefaults()
@@ -53,21 +66,52 @@ public static class AppComposition
 	public static void Initialize( Microsoft.UI.Dispatching.DispatcherQueue queue )
 		=> UiDispatcher.Current = new DispatcherQueueUiDispatcher( queue );
 
+	// ---------------------------------------------------------------- models kept for the whole run
+
+	/// <summary>Whether the user is logged in (the Profile Manager page's model).</summary>
+	public static LoginSession Session => field ??= new();
+
+	/// <summary>The file manager's tree, selection and rows, kept between visits of the page.</summary>
+	public static FileManagerState FileManagerState => field ??= new();
+
+	/// <summary>
+	/// Watches the working folder for the whole run. The file manager page applies the changes while it is
+	/// shown; meanwhile they only mark its kept rows stale.
+	/// </summary>
+	public static LocalFileWatcher LocalFiles => field ??= CreateLocalFileWatcher();
+
+	private static LocalFileWatcher CreateLocalFileWatcher()
+	{
+		LocalFileWatcher watcher = new();
+		watcher.Changed += batch => UiDispatcher.Post( () => FileManagerState.LocalFilesChanged(
+			[ .. batch.Select( change => PwaPaths.ToServerName( System.IO.Path.GetDirectoryName( change.FullPath ) ) ) ] ) );
+		watcher.Overflowed += () => UiDispatcher.Post( () => FileManagerState.LocalFilesChanged( null ) );
+		return watcher;
+	}
+
+	/// <summary>Unsaved edits of the JSON editor, kept between visits of the page.</summary>
+	public static JsonEditorDraft JsonDraft => field ??= new();
+
 	// ---------------------------------------------------------------- view models
 
 	/// <summary>The status window's log and progress, kept while the window is closed.</summary>
 	public static StatusDialogViewModel StatusLog => field ??= new( Dialogs, () => Reporter.Cancel() );
 
-	public static ProfileManagerViewModel ProfileManager => field ??= new( Dialogs, FilePickers, Navigation );
+	/// <summary>The Profile Manager page's view model, made per visit. Logging in as another account forgets the file manager's context.</summary>
+	public static ProfileManagerViewModel CreateProfileManager()
+		=> new( Session, Dialogs, FilePickers, Navigation, () => FileManagerState.Reset() );
 
-	public static HackFileManagerViewModel FileManager => field ??= new(
+	/// <summary>The file manager page's view model, made per visit from <see cref="FileManagerState"/>.</summary>
+	public static HackFileManagerViewModel CreateFileManager() => new(
+		FileManagerState,
 		Workflow,
 		new EntryFileService(),
 		new EntryDetailsService(),
 		Dialogs,
 		Reporter,
 		new DirectoryTreeService(),
-		new EntryListService() );
+		new EntryListService(),
+		LocalFiles );
 
 	/// <summary>A settings page's view model, fresh each time the page is built (it loads the current values).</summary>
 	public static HackSettingsViewModel CreateHackSettings() => new( Dialogs );
@@ -82,5 +126,13 @@ public static class AppComposition
 		new EntryFileService(),
 		Dialogs,
 		Reporter,
-		( segments, fileName ) => FileManager.RequestLocateAsync( segments, fileName ) );
+		LocateInFileManagerAsync );
+
+	/// <summary>Shows a file in the file manager: right away when its page is shown, else after switching to it.</summary>
+	private static Task LocateInFileManagerAsync( IReadOnlyList<string> segments, string? fileName )
+	{
+		Task located = FileManagerState.RequestLocateAsync( segments, fileName );
+		Navigation.NavigateTo( HackPDM.Shared.GlobalData.NavigatePageMenu.HackFileManager );
+		return located;
+	}
 }

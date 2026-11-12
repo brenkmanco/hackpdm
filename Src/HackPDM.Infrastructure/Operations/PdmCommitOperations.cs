@@ -40,13 +40,19 @@ public static class PdmCommitOperations
     internal static string ServerWindowsName(HackFile hack)
         => PwaPaths.ToServerName([.. DirectorySegments(hack), hack.Name ?? ""]);
 
-    public static async Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting)> FilesNotInOdooSegmentedAsync(
+    /// <summary>
+    /// Splits the files into new ones (<c>LocalOnly</c>), new versions of entries checked out to this user
+    /// (<c>RemoteExisting</c>), and entries checked out to this user whose file did not change
+    /// (<c>UnchangedCheckedOut</c>): those get no new version, but committing them checks them back in.
+    /// </summary>
+    public static async Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting, HpEntry[] UnchangedCheckedOut)> FilesNotInOdooSegmentedAsync(
         IEnumerable<HackFile> hackFiles,
         Action<StatusMessage, string>? log = null)
     {
         HackFile[] hackArr = [.. hackFiles];
         List<HackFile> hacks = [];
         List<HackFile> hacksFound = [];
+        List<HpEntry> unchanged = [];
 
         for (int i = 0; i < hackArr.Length; i++)
         {
@@ -62,34 +68,37 @@ public static class PdmCommitOperations
             // so checkout_user never matched and a checked-out file could not be committed
             HpEntry? entry = (await HpEntry.GetRecordsBySearchAsync(
                 searchFilter: sameFile,
-                includedFields: [nameof(HpEntry.id), nameof(HpEntry.name), nameof(HpEntry.dir_id), nameof(HpEntry.checkout_user), nameof(HpEntry.latest_version_id)]))?.FirstOrDefault();
+                includedFields: [nameof(HpEntry.id), nameof(HpEntry.name), nameof(HpEntry.dir_id), nameof(HpEntry.checkout_user), nameof(HpEntry.latest_version_id), nameof(HpEntry.windows_complete_name)]))?.FirstOrDefault();
 
             if (entry is not null and { id: not null and not 0 })
             {
-                if (entry.checkout_user?.id == OdooDefaults.Instance.OdooId)
+                bool mine = entry.checkout_user?.id == OdooDefaults.Instance.OdooId;
+                // an unchanged file has nothing to commit, whoever has it checked out (e.g. a part that
+                // came along with its assembly); one checked out to this user is checked back in
+                if (await LatestChecksumAsync(entry) is { Length: > 0 } latest
+                    && string.Equals(latest, hackArr[i].GetChecksum(), StringComparison.OrdinalIgnoreCase))
                 {
-                    // committing an unchanged file would only add an identical version
-                    if (await LatestChecksumAsync(entry) is { Length: > 0 } latest
-                        && string.Equals(latest, hackArr[i].GetChecksum(), StringComparison.OrdinalIgnoreCase))
-                    {
-                        log?.Invoke(StatusMessage.SKIP, $"unchanged since the latest version, not committed: {filePath}");
-                        continue;
-                    }
+                    log?.Invoke(StatusMessage.SKIP, mine
+                        ? $"unchanged since the latest version, checked in without a new version: {filePath}"
+                        : $"unchanged since the latest version, nothing to commit: {filePath}");
+                    if (mine)
+                        unchanged.Add(entry);
+                    continue;
+                }
+                if (mine)
+                {
                     log?.Invoke(StatusMessage.FOUND, $"entry found remotely for: {filePath}");
                     hacksFound.Add(hackArr[i]);
                     continue;
                 }
-                else
-                {
-                    log?.Invoke(StatusMessage.ERROR, $"entry found remotely but is not checked out to current user: {filePath}");
-                    continue;
-                }
+                log?.Invoke(StatusMessage.ERROR, $"entry found remotely but is not checked out to current user: {filePath}");
+                continue;
             }
 
             log?.Invoke(StatusMessage.INFO, $"Queued commit for {hackArr[i].Name} (Checksum: {hackArr[i].Checksum}) for: {filePath}");
             hacks.Add(hackArr[i]);
         }
-        return ([.. hacks], [.. hacksFound]);
+        return ([.. hacks], [.. hacksFound], [.. unchanged]);
     }
 
     public static async Task<bool> CommitRecordAsync(
@@ -203,7 +212,7 @@ public static class PdmCommitOperations
     /// <summary>Whether the server would refuse a file of this name (a SolidWorks "~$" lock file, say).</summary>
     public static bool IsFilteredName(string? name) => EntryFilter() is { } regex && regex.IsMatch(name ?? "");
 
-    public static async Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting)> FilterCommitHackFilesAsync(
+    public static async Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting, HpEntry[] UnchangedCheckedOut)> FilterCommitHackFilesAsync(
         IEnumerable<HackFile> hackFiles,
         Action<StatusMessage, string>? log = null)
     {

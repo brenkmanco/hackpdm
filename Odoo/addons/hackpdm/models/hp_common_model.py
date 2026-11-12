@@ -1,6 +1,10 @@
+import io
 import logging
 
 from odoo import fields, models, api
+from odoo.exceptions import UserError
+
+from . import hp_guard
 
 import datetime as dt
 import numpy as np
@@ -115,6 +119,19 @@ class hp_common_model(models.AbstractModel):
            else:
                return {"value": value, "path": arr} if len(arr) > 0 else value
 
+    def _check_field_path(self, path):
+        """Each step of a dotted field path ("dir_id.parent_id.name") must exist and be readable by
+        the caller: record[field] in Python skips the field-group checks read() makes."""
+        model = self
+        for name in path.split("."):
+            field = model._fields.get(name)
+            if field is None:
+                raise UserError(f"Unknown field '{name}' on {model._name} (in '{path}').")
+            model.check_access_rights("read")
+            model.check_field_access_rights("read", [name])
+            if field.relational:
+                model = self.env[field.comodel_name]
+
     def _resolve_field(self, record, parts, arr, depth):
         """Recursively resolve dot-notated fields into rich structures."""
         field = parts[0]
@@ -157,9 +174,9 @@ class hp_common_model(models.AbstractModel):
         if not domain and not ids:
             return []
 
-        if fields is None or len(fields) == 0:
-            fields = [field for field in fields if field in self._fields]
-
+        fields = list(fields or [])
+        for field in fields:
+            self._check_field_path(field)
 
         if not domain:
             records = Model.browse(ids)
@@ -186,48 +203,22 @@ class hp_common_model(models.AbstractModel):
 
     @api.model
     def fast_read(self, ids, fields):
-        #logging.info(f"ids {ids}\n\nfields: {fields}\n")
+        """{"<id>": {field: value}} for the records and fields asked for, through the ORM so access
+        rights and record rules apply (unknown fields are left out)."""
         if not ids or not fields:
-            return []
-
-        # sql query
-        model_fields = [field for field in fields if field in self._fields]
-        compute_field = [field for field in fields if field in self._fields[field].compute]
-        stored_fields = [field for field in fields if field not in self._fields or not self._fields[field].compute]
-        logging.info(f"\nfields: {model_fields}\n\ncompute_fields: {compute_field}\n\nstored_fields: {stored_fields}\n")
-
-        fields_str = ', '.join(stored_fields)
-        query = f"SELECT id, {fields_str} FROM {self._table} WHERE id = ANY(%s)"
-
-        logging.info(f"\nquery: {query}")
-
-        self.env.cr.execute(query, (ids,))
-        results = self.env.cr.fetchall()
-        #logging.info(f"results: {results}")
-
-        # convert results to a list
-        dict_ids = {}
-        for row in results:
-            all_fields = {}
-            for i, field in enumerate(fields, start=1):
-                all_fields[field] = row[i]
-
-            dict_ids[str(row[0])] = all_fields
-
-        for key, value in dict_ids.items():
-            obj = self.browse(int(key))
-            for field in fields:
-                if field not in stored_fields:
-                    value[field] = getattr(obj, field)
-
-        #logging.info(dict_ids)
-        return dict_ids
+            return {}
+        known = [field for field in fields if field in self._fields]
+        return {
+            str(row["id"]): {field: row[field] for field in known if field in row}
+            for row in self.browse(ids).read(known)
+        }
 
     @api.model
     def related_browse(self, ids, field_name, fields):
         if not ids:
             return []
 
+        self._check_field_path(field_name)
         recordset = self.browse(ids)
         related_records = recordset.mapped(field_name)
         return related_records.read(fields)
@@ -237,6 +228,7 @@ class hp_common_model(models.AbstractModel):
         if not search:
             return []
 
+        self._check_field_path(field_name)
         recordset = self.search(search)
         related_records = recordset.mapped(field_name)
         return related_records.read(fields)
@@ -332,7 +324,7 @@ class hp_common_model(models.AbstractModel):
             self.env.cr.commit()
 
 
-    def getImageBytes(self, database1:Database, record):
+    def _get_image_bytes(self, database1:Database, record):
         table1 = database1.get_table("hp_version")
         stmt = select(table1.c.preview_image).where(table1.c.version_id == record.id)
         return database1.execute(stmt).first()[0]
@@ -349,7 +341,7 @@ class hp_common_model(models.AbstractModel):
                 continue
 
             try:
-                image = self.getImageBytes(hackpdm, record)
+                image = self._get_image_bytes(hackpdm, record)
                 if image != None and image != b'':
                     attachment = record._create_attachment(image, "preview_image")
                     if (attachment != None):
@@ -366,6 +358,7 @@ class hp_common_model(models.AbstractModel):
     @api.model
     @api.depends('entry_id', 'file_ext', 'name')
     def migrate_webdav_files_to_records(self):
+        hp_guard.require_admin(self.env, "migrate_webdav_files_to_records")
         web_dav = WebDav()
         hackpdm = Database("hackpdm", "hackpdm", "hackpdm", "alderaan", 5432)
         #odoopdm = Database("moony", "moony", "odoopdm", "10.0.0.52", 5432)

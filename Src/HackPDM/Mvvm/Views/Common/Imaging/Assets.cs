@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-using Windows.Storage;
+using HackPDM.Shared.GlobalData;
 
 using SB = HackPDM.Shared.GlobalData.StorageBox;
 
@@ -30,7 +30,12 @@ public static partial class Assets
 		( "settings", "ExtensionIcons/settings.png" ),
 	];
 
-	private static StorageFolder Storage => ApplicationData.Current.LocalFolder;
+	/// <summary>
+	/// Images the user adds to replace or extend the bundled ones, keyed by file name without extension
+	/// (HackPDM/Assets/Images in <see cref="AppDataPaths.Data"/>). A plain folder, not the packaged app's
+	/// LocalFolder, so it works unpackaged on Windows and on every other platform.
+	/// </summary>
+	public static string LocalImagesFolder => Path.Combine( AppDataPaths.Data, SB.ASSETSFOLDER, SB.IMAGEFOLDER );
 
 	static Assets()
 	{
@@ -42,22 +47,21 @@ public static partial class Assets
 		LoadInLocalDictionary();
 	}
 
-	private static async void LoadInLocalDictionary()
+	private static void LoadInLocalDictionary()
 	{
-		const string msDir = $"{SB.LOCALPREFIX}/{SB.ASSETSFOLDER}/{SB.IMAGEFOLDER}";
-
-		// async void (it runs from the static constructor): any exception here would crash the app
+		// runs from the static constructor: any exception here would break every icon
 		try
 		{
-			var assetFolder = await Storage.CreateFolderAsync( SB.ASSETSFOLDER, CreationCollisionOption.OpenIfExists );
-			var imageFolder = await assetFolder.CreateFolderAsync( SB.IMAGEFOLDER, CreationCollisionOption.OpenIfExists );
-			foreach( StorageFile file in await imageFolder.GetFilesAsync() )
+			string folder = LocalImagesFolder;
+			if( !Directory.Exists( folder ) )
+				return;
+			foreach( string file in Directory.EnumerateFiles( folder ) )
 			{
 				// keyed like the built-in entries (no extension); a local image replaces a built-in one
-				AssetMap[ Path.GetFileNameWithoutExtension( file.Name ) ] = $"{msDir}/{file.Name}";
+				AssetMap[ Path.GetFileNameWithoutExtension( file ) ] = new Uri( file ).AbsoluteUri;
 			}
 		}
-		catch( Exception e )
+		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{
 			System.Diagnostics.Debug.WriteLine( $"local image assets not loaded: {e.Message}" );
 		}

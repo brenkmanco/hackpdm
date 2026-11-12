@@ -1,20 +1,25 @@
 import io
 import os
 from odoo import models, fields, api, Command
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from webdav3.client import Client
 import hashlib as hash
 import base64
 import logging
 import urllib.parse
 import magic
-import pdb
 
 import sqlalchemy
 from sqlalchemy import Connection, Engine, MetaData, Table, create_engine, select, text, update
 from sqlalchemy.orm import Mapped, Session, sessionmaker, relationship
 
+from . import hp_guard
+
 _logger = logging.getLogger(__name__)
+
+# a version is a snapshot: once created only an administrator may swap its file or its entry
+_IMMUTABLE_VERSION_FIELDS = frozenset(("entry_id", "file_contents"))
+_CHECKOUT_VERSION_FIELDS = frozenset(("checkout_user", "checkout_date", "checkout_node"))
 
 class Database:
     sessionURL = ""
@@ -117,8 +122,8 @@ class hp_version(models.Model):
         string='windows directory path name',
     )
 
+    # the checkout is kept on the version (the entry shows its latest version's); set by checkout_entry
     checkout_date = fields.Datetime(
-        related='entry_id.checkout_date',
         string='checkout date',
     )
     file_modify_stamp = fields.Datetime(
@@ -171,11 +176,12 @@ class hp_version(models.Model):
         string='node'
     )
     checkout_user = fields.Many2one(
-        related='entry_id.checkout_user',
+        comodel_name='res.users',
+        index=True,
         string='user that checked out entry'
     )
     checkout_node = fields.Many2one(
-        related='entry_id.checkout_node',
+        comodel_name='hp.node',
         string='node that has checked out entry'
     )
     attachment_id = fields.Many2one(
@@ -219,10 +225,59 @@ class hp_version(models.Model):
         comodel_name='hp.node',
     )
 
-    @api.depends('entry_id.is_checked_out', 'entry_id.latest_version_id')
+    @api.model_create_multi
+    def create(self, vals_list):
+        if not hp_guard.is_pdm_admin(self.env):
+            for vals in vals_list:
+                self._check_entry_accepts_version(vals.get("entry_id"))
+        return super().create(vals_list)
+
+    def _check_entry_accepts_version(self, entry_id):
+        """A new version may not be added to a deleted entry, or to one another user has checked out."""
+        if not entry_id:
+            return
+        entry = self.env["hp.entry"].browse(entry_id).exists()
+        if not entry:
+            raise UserError(f"Entry {entry_id} does not exist.")
+        if entry.deleted:
+            raise UserError(f"Cannot add a version: '{entry.name}' is deleted.")
+        if entry.checkout_user and entry.checkout_user.id != self.env.uid:
+            raise UserError(
+                f"Cannot add a version: '{entry.name}' is checked out to {entry.checkout_user.name}.")
+
+    def write(self, vals):
+        if not hp_guard.is_pdm_admin(self.env):
+            locked = _IMMUTABLE_VERSION_FIELDS.intersection(vals)
+            if locked:
+                raise AccessError(
+                    f"Committed versions cannot be changed ({', '.join(sorted(locked))}); commit a new version instead.")
+            if _CHECKOUT_VERSION_FIELDS.intersection(vals):
+                self._check_checkout_write(vals)
+        return super().write(vals)
+
+    def _check_checkout_write(self, vals):
+        """The checkout (now kept here) follows the entry's rules: a user checks out only in their own
+        name, and only the holder (or an administrator) changes or releases a checkout."""
+        new_holder = vals.get("checkout_user")
+        if isinstance(new_holder, (list, tuple)):
+            new_holder = new_holder[0] if new_holder else False
+        if new_holder and new_holder != self.env.uid:
+            raise AccessError("You can only check entries out to yourself.")
+        for rec in self:
+            if rec.checkout_user and rec.checkout_user.id != self.env.uid:
+                raise UserError(
+                    f"'{rec.entry_id.name}' is checked out to {rec.checkout_user.name}; only they or an administrator can change it.")
+
+    @api.constrains("child_ids", "parent_ids")
+    def _check_not_own_dependency(self):
+        for rec in self:
+            if rec in rec.child_ids or rec in rec.parent_ids:
+                raise ValidationError(f"Version {rec.id} cannot depend on itself.")
+
+    @api.depends('checkout_user', 'entry_id.version_ids')
     def _compute_is_checkout_version(self):
         for record in self:
-            record.is_checkout_version = record.entry_id.is_checked_out and record.id == record.entry_id.latest_version_id.id
+            record.is_checkout_version = bool(record.checkout_user) and record.id == record.entry_id.latest_version_id.id
 
     @api.depends('entry_id.latest_version_id')
     def _compute_is_latest_version(self):
@@ -272,6 +327,8 @@ class hp_version(models.Model):
             )
             SELECT DISTINCT version_id FROM dependency_versions;
         """
+        # the query reads the tables directly: write pending ORM changes (links, deleted flags) first
+        self.env.flush_all()
         try:
             self.env.cr.execute(query_versions, (version_ids,))
             version_results = self.env.cr.fetchall()
@@ -392,19 +449,22 @@ class hp_version(models.Model):
             raise UserError(f"checkout_entry: node {node!r} not found")
         node_rec.ensure_one()
         v_model = self.env["hp.version"]
-        v_rec = v_model.browse(version_id)
-        # version found
-        v_rec.ensure_one()
+        v_rec = v_model.browse(version_id).exists()
+        if not v_rec:
+            raise UserError(f"checkout_entry: version {version_id} does not exist")
         
         entry = v_rec.entry_id
         date = fields.Datetime.now()
         
         # check out only if it isn't checked out or if same user
         if (not entry.checkout_user or entry.checkout_user.id == self.env.uid) and entry.deleted != True:
-            entry.checkout_user = self.env.uid
-            entry.checkout_date = date
-            entry.checkout_node = node_rec.id
-            entry.is_checked_out = True
+            # kept on the latest version (the one the entry shows), whichever version was asked for
+            latest = entry.latest_version_id or v_rec
+            latest.write({
+                "checkout_user": self.env.uid,
+                "checkout_date": date,
+                "checkout_node": node_rec.id,
+            })
             v_rec.node_id = node_rec.id
         elif entry.deleted:
             raise UserError(f"'{entry.name}' is deleted and cannot be checked out")
@@ -421,6 +481,7 @@ class hp_version(models.Model):
     @api.model
     @api.depends('entry_id', 'file_ext', 'name')
     def migrate_webdav_files_to_records(self):
+        hp_guard.require_admin(self.env, "migrate_webdav_files_to_records")
         web_dav = WebDav()
         all_records = self.env[self._name].search([])
 
@@ -442,7 +503,7 @@ class hp_version(models.Model):
             self.env.cr.commit()
 
 
-    def getImageBytes(self, database1:Database, record):
+    def _get_image_bytes(self, database1:Database, record):
         lost_on_step = 0
         try:
             # Use raw SQL to bypass SQLAlchemy Table reflection entirely
@@ -460,6 +521,7 @@ class hp_version(models.Model):
     @api.model
     @api.depends('name')
     def migrate_image_from_database(self):
+        hp_guard.require_admin(self.env, "migrate_image_from_database")
         hackpdm = Database("hackpdm", "hackpdm", "hackpdm", "alderaan", 5432)
         hackpdm.start_session()
         all_records = self.env[self._name].search([])
@@ -471,7 +533,7 @@ class hp_version(models.Model):
                 continue
 
             try:
-                image = self.getImageBytes(hackpdm, record)
+                image = self._get_image_bytes(hackpdm, record)
                 if image != None:
                     raw_image = bytes(image)
                     attachment = record._create_attachment(raw_image, "preview_image")
@@ -494,13 +556,14 @@ class hp_version(models.Model):
 
     @api.model
     def display_all_fnames(self):
+        hp_guard.require_admin(self.env, "display_all_fnames")
         all_records = self.env["ir.attachment"].search([("res_model", "=", "hp.version")])
         for record in all_records:
             logging.info(f"attachment id = {record.id}\nname = {record.name}\nres_model = {record.res_model}\nres_id = {record.res_id}\nres_fields = {record.res_field}\nfname = {record.store_fname}\n")
 
     @api.model
     def cleanup_filestore(self):
-        attachment = self.env["ir.attachment"]
+        hp_guard.require_admin(self.env, "cleanup_filestore")
 
 class hp_version_property(models.Model):
     #base fields

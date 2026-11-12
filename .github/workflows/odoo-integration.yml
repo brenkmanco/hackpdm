@@ -74,6 +74,18 @@ jobs:
           echo "hackpdm module state: $state"
           test "$state" = "installed"
 
+      # post_install TransactionCases in Odoo/addons/hackpdm/tests, in a database of their own (rolled
+      # back, but the ids they use are not, and the client needs the seeded root to be hp.directory 1)
+      - name: Run hackpdm addon server tests
+        run: |
+          docker run --rm --network host \
+            -e HOST=localhost -e USER=odoo -e PASSWORD=odoo \
+            -v "$GITHUB_WORKSPACE/Odoo/addons:/mnt/extra-addons:ro" \
+            "$ODOO_IMAGE" \
+            odoo -d "${ODOO_DB}_tests" -i hackpdm --without-demo=all --test-enable --test-tags /hackpdm --stop-after-init 2>&1 | tee odoo-tests.log
+          test "${PIPESTATUS[0]}" -eq 0
+          for suite in TestSafeguards TestServerFunctions; do grep -q "Starting $suite" odoo-tests.log; done
+
       - name: Start Odoo server
         id: odoo
         run: |
@@ -124,6 +136,10 @@ jobs:
           HACKPDM_SMOKE_MIN_ENTRIES: "3"
           HACKPDM_SMOKE_REPORT: ${{ github.workspace }}/TestResults/smoke-report.json
           HACKPDM_SMOKE_TIMEOUT: "240"
+          # settings, data and the saved login in the job's temp folder; no keychain on the runner
+          HACKPDM_CONFIG_DIR: ${{ runner.temp }}/hackpdm/config
+          HACKPDM_DATA_DIR: ${{ runner.temp }}/hackpdm/data
+          HACKPDM_CREDENTIAL_STORE: file
         run: |
           command -v xvfb-run >/dev/null || { sudo apt-get update && sudo apt-get install -y xvfb; }
           mkdir -p TestResults

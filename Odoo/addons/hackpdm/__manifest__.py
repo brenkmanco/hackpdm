@@ -1,6 +1,6 @@
 {
     'name': 'hackpdm',
-    'version': '16.0.1.0.0',
+    'version': '16.0.1.1.0',
     'category': 'Engineering',
     'summary': 'product data management',
     'description': 'engineering product data management system',

@@ -45,10 +45,20 @@ namespace HackPDM.Mvvm.Views.Hack;
 /// <summary>
 /// View for <see cref="HackFileManagerViewModel"/>. Only builds and drives controls: every PDM
 /// operation is a view-model command, and the view reacts to the view model's refresh requests.
+/// <para>
+/// Each visit gets a new page and a new view model (disposed in <see cref="OnNavigatedFrom"/>); what the
+/// user was looking at comes back from the session's FileManagerState: the tree with its expanded
+/// folders, the selected folder and rows, the open detail tab and the sort.
+/// </para>
 /// </summary>
 public sealed partial class HackFileManagerView : Page
 {
-	public HackFileManagerViewModel ViewModel => AppComposition.FileManager;
+	public HackFileManagerViewModel ViewModel { get; } = AppComposition.CreateFileManager();
+
+	private bool _loaded;
+	private bool _left;
+	/// <summary>The first listing of this visit restores the kept row selection and sort arrow.</summary>
+	private bool _restorePending = true;
 
 
 	/// <summary>Tree node currently selected (the smoke tests read it).</summary>
@@ -77,37 +87,65 @@ public sealed partial class HackFileManagerView : Page
 	{
 		InitializeComponent();
 		ApplyColumnSettings();
-		ViewModel.HackLoaded = false;
-		Loaded += ( _, _ ) =>
-		{
-			if( !ViewModel.HackLoaded )
-				LoadHackMan();
-		};
+		Loaded += ( _, _ ) => LoadHackMan();
 	}
 
 	protected override void OnNavigatedTo( NavigationEventArgs e )
 	{
 		base.OnNavigatedTo( e );
-		if( !ViewModel.HackLoaded )
-			LoadHackMan();
+		LoadHackMan();
+	}
+
+	/// <summary>The page is left: its view model goes; the session state keeps what it showed.</summary>
+	protected override void OnNavigatedFrom( NavigationEventArgs e )
+	{
+		base.OnNavigatedFrom( e );
+		Leave();
+	}
+
+	private void Leave()
+	{
+		if( _left )
+			return;
+		_left = true;
+		_treeSelectionCancellation.Cancel();
+		ViewModel.RefreshRequested -= OnRefreshRequested;
+		ViewModel.GroupingChanged -= OnGroupingChanged;
+		ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+		ViewModel.TreeLoaded -= OnTreeLoadedAsync;
+		ViewModel.LocateRequested -= OnLocateRequestedAsync;
+		ViewModel.FolderChanged -= OnFolderChanged;
+		ViewModel.RowReplaced -= OnRowReplaced;
+		ViewModel.Dispose();
+		_pipWindow?.Close();
 	}
 
 	private void LoadHackMan()
 	{
-		ViewModel.HackLoaded = true;
+		if( _loaded || _left )
+			return;
+		_loaded = true;
 		ViewModel.Initialize();
 
 		OdooDirectoryTree.ItemsSource = _treeItems;
 		OnGroupingChanged();
-		ViewModel.SelectedDetailTab = ( VersionTabs.SelectedItem as TabViewItem )?.Name;
+		// the tab open when the page was last left, else the default one
+		if( VersionTabs.TabItems.OfType<TabViewItem>().FirstOrDefault( t => t.Name == ViewModel.SelectedDetailTab ) is { } keptTab )
+			VersionTabs.SelectedItem = keptTab;
+		else
+			ViewModel.SelectedDetailTab = ( VersionTabs.SelectedItem as TabViewItem )?.Name;
 
 		ViewModel.RefreshRequested += OnRefreshRequested;
 		ViewModel.GroupingChanged += OnGroupingChanged;
 		ViewModel.PropertyChanged += OnViewModelPropertyChanged;
 		ViewModel.TreeLoaded += OnTreeLoadedAsync;
 		ViewModel.LocateRequested += OnLocateRequestedAsync;
+		ViewModel.FolderChanged += OnFolderChanged;
+		ViewModel.RowReplaced += OnRowReplaced;
 
 		OdooDirectoryTree.SelectionChanged += OdooDirectoryTree_SelectionChanged;
+		OdooDirectoryTree.Expanding += ( _, e ) => ViewModel.SetExpanded( e.Node?.LinkedData.FullPath, true );
+		OdooDirectoryTree.Collapsed += ( _, e ) => ViewModel.SetExpanded( e.Node?.LinkedData.FullPath, false );
 		OdooDirectoryTree.RightTapped += OdooDirectoryTree_RightTapped;
 		OdooDirectoryBreadcrumb.ItemClicked += OdooDirectoryBreadcrumb_ItemClicked;
 		OdooEntryList.SelectionChanged += OdooEntryList_SelectionChanged;
@@ -132,24 +170,21 @@ public sealed partial class HackFileManagerView : Page
 			if( OdooDirectoryTree.SelectedNode is { } node )
 				SelectDirectory( node );
 		};
-		Unloaded += ( _, _ ) =>
-		{
-			_treeSelectionCancellation.Cancel();
-			ViewModel.RefreshRequested -= OnRefreshRequested;
-			ViewModel.GroupingChanged -= OnGroupingChanged;
-			ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
-			ViewModel.TreeLoaded -= OnTreeLoadedAsync;
-			ViewModel.LocateRequested -= OnLocateRequestedAsync;
-		};
 
-		_ = LoadTreeAfterLayoutAsync();
+		// a search made while this page was not shown waits until the tree is up
+		var pendingLocate = ViewModel.Activate();
+		_ = LoadTreeAfterLayoutAsync( pendingLocate );
 	}
 
-	private async Task LoadTreeAfterLayoutAsync()
+	private async Task LoadTreeAfterLayoutAsync( (IReadOnlyList<string> Segments, string? FileName)? pendingLocate )
 	{
-		// let the page render before the (slow) tree request starts
-		await Task.Delay( 500 );
+		// let the page render before the tree is built (fetching it is slow; the kept one is not)
+		await Task.Delay( ViewModel.HasKeptTree ? 50 : 500 );
+		if( _left )
+			return;
 		await ViewModel.LoadDirectoryTreeAsync();
+		if( pendingLocate is var (segments, fileName) && !_left )
+			await OnLocateRequestedAsync( segments, fileName );
 	}
 
 	#endregion
@@ -200,6 +235,11 @@ public sealed partial class HackFileManagerView : Page
 	{
 		DirectoryTreeBuilder.Build( OdooDirectoryTree, root );
 
+		// the folders that were open stay open
+		foreach( string path in ViewModel.ExpandedPaths.ToList() )
+			if( OdooDirectoryTree.FindTreeNode( path ) is { Node: { } open } )
+				open.IsExpanded = true;
+
 		if( OdooDirectoryTree.FindTreeNode( ViewModel.LastSelectedNodePath ?? "" ) is { Node: { } node } data )
 		{
 			data.EnsureVisible( OdooDirectoryTree );
@@ -249,6 +289,93 @@ public sealed partial class HackFileManagerView : Page
 			OdooEntryImage.Source = image;
 	}
 
+	/// <summary>A row was rebuilt from its changed file: if it was selected, the new one is (which also refreshes the details and preview).</summary>
+	private void OnRowReplaced( EntryRow? old, EntryRow? row )
+	{
+		if( old is null || row is null || ViewModel.SelectedEntries is not { Count: > 0 } selected || !selected.Contains( old ) )
+			return;
+		if( selected.Count == 1 )
+			OdooEntryList.SelectedItem = row;
+		else
+			OdooEntryList.SelectedItems.Add( row );
+	}
+
+	#endregion
+	#region Live changes in other folders (tree badges)
+
+	private const string ChangeBadgeTag = "change-badge";
+
+	/// <summary>
+	/// Shows "( + ) created", "( . ) updated" or "( - ) deleted" next to the folder for a few seconds. A folder
+	/// that isn't visible (inside a collapsed one, or not in the tree yet) badges its nearest visible parent.
+	/// </summary>
+	private void OnFolderChanged( string treePath, LocalChangeKind kind )
+	{
+		if( VisibleNodeFor( treePath ) is not { } node
+			|| OdooDirectoryTree.ContainerFromNode( node ) is not TreeViewItem { Content: Panel panel } )
+			return;
+
+		RemoveBadges( panel );
+		var (text, color) = kind switch
+		{
+			LocalChangeKind.Created => ( "( + ) created", Windows.UI.Color.FromArgb( 255, 0x2E, 0x9E, 0x44 ) ),
+			LocalChangeKind.Deleted => ( "( - ) deleted", Windows.UI.Color.FromArgb( 255, 0xD1, 0x34, 0x38 ) ),
+			_ => ( "( . ) updated", Windows.UI.Color.FromArgb( 255, 0xC7, 0x84, 0x00 ) ),
+		};
+		TextBlock badge = new()
+		{
+			Text = text,
+			Tag = ChangeBadgeTag,
+			FontSize = Math.Max( 9, UIStorage.ColumnsInfo.FontSize - 1 ),
+			Margin = new Thickness( 8, 0, 0, 0 ),
+			VerticalAlignment = VerticalAlignment.Center,
+			Foreground = new SolidColorBrush( color ),
+			Opacity = 0,
+		};
+		panel.Children.Add( badge );
+
+		// fade in, hold, fade out, then go
+		var fade = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimationUsingKeyFrames();
+		fade.KeyFrames.Add( new Microsoft.UI.Xaml.Media.Animation.LinearDoubleKeyFrame { KeyTime = TimeSpan.FromMilliseconds( 200 ), Value = 1 } );
+		fade.KeyFrames.Add( new Microsoft.UI.Xaml.Media.Animation.LinearDoubleKeyFrame { KeyTime = TimeSpan.FromMilliseconds( 2400 ), Value = 1 } );
+		fade.KeyFrames.Add( new Microsoft.UI.Xaml.Media.Animation.LinearDoubleKeyFrame { KeyTime = TimeSpan.FromMilliseconds( 3200 ), Value = 0 } );
+		Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget( fade, badge );
+		Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty( fade, nameof( Opacity ) );
+		var story = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
+		story.Children.Add( fade );
+		story.Completed += ( _, _ ) => panel.Children.Remove( badge );
+		story.Begin();
+		BadgesShown++;
+	}
+
+	/// <summary>How many change badges this page has shown (the smoke tests read it).</summary>
+	internal int BadgesShown { get; private set; }
+
+	/// <summary>The node of <paramref name="treePath"/>, or of its nearest parent that is in the tree and not inside a collapsed folder.</summary>
+	private TreeViewNode? VisibleNodeFor( string treePath )
+	{
+		string[] parts = treePath.Split( PwaPaths.NameSeparator, StringSplitOptions.RemoveEmptyEntries );
+		TreeViewNode? node = null;
+		IEnumerable<TreeViewNode> level = OdooDirectoryTree.RootNodes;
+		foreach( string part in parts )
+		{
+			TreeViewNode? next = level.FirstOrDefault( n => string.Equals( n.LinkedData.Name, part, StringComparison.OrdinalIgnoreCase ) );
+			if( next is null )
+				break;
+			node = next;
+			if( !node.IsExpanded )
+				break; // its children are not shown
+			level = node.Children;
+		}
+		return node;
+	}
+
+	private static void RemoveBadges( Panel panel )
+	{
+		foreach( var old in panel.Children.OfType<TextBlock>().Where( t => ChangeBadgeTag.Equals( t.Tag ) ).ToList() )
+			panel.Children.Remove( old );
+	}
+
 	#endregion
 	#region Directory tree
 
@@ -283,7 +410,36 @@ public sealed partial class HackFileManagerView : Page
 		_treeSelectionCancellation.Cancel();
 		_treeSelectionCancellation = new();
 		ViewModel.IsListLoaded = false;
-		return TreeSelectionTask = ViewModel.LoadEntriesAsync( _treeSelectionCancellation.Token );
+		return TreeSelectionTask = LoadAndRestoreAsync( _treeSelectionCancellation.Token );
+	}
+
+	private async Task LoadAndRestoreAsync( CancellationToken token )
+	{
+		await ViewModel.LoadEntriesAsync( token );
+		if( !_restorePending || token.IsCancellationRequested || _left )
+			return;
+		_restorePending = false;
+		RestoreSortArrow();
+		IReadOnlyList<EntryRow> rows = ViewModel.TakeSelectionToRestore();
+		if( rows.Count == 0 )
+			return;
+		if( rows.Count == 1 )
+			OdooEntryList.SelectedItem = rows[ 0 ];
+		else
+			foreach( EntryRow row in rows )
+				OdooEntryList.SelectedItems.Add( row );
+		OdooEntryList.ScrollIntoView( rows[ 0 ] );
+	}
+
+	/// <summary>Shows the kept sort on its column header.</summary>
+	private void RestoreSortArrow()
+	{
+		if( ViewModel.EntrySort is not var (field, descending) )
+			return;
+		foreach( var column in OdooEntryList.Columns )
+			column.SortDirection = column.SortMemberPath == field
+				? descending ? SortDirection.Descending : SortDirection.Ascending
+				: null;
 	}
 
 	private void OdooDirectoryTree_RightTapped( object sender, RightTappedRoutedEventArgs e )
@@ -309,7 +465,12 @@ public sealed partial class HackFileManagerView : Page
 	private void TreeViewItem_Loaded( object sender, RoutedEventArgs e )
 	{
 		if( sender is TreeViewItem item )
+		{
 			item.FontSize = UIStorage.ColumnsInfo.FontSize;
+			// a recycled container must not carry another folder's badge
+			if( item.Content is Panel panel )
+				RemoveBadges( panel );
+		}
 	}
 
 	private void TreeViewItem_Unloaded( object sender, RoutedEventArgs e )
@@ -422,7 +583,7 @@ public sealed partial class HackFileManagerView : Page
 	}
 
 	private void Refresh_Click( object sender, RoutedEventArgs e )
-		=> OnRefreshRequested( FileManagerRefresh.Tree );
+		=> ViewModel.RefreshFromServer();
 
 	private void Search_Click( object sender, RoutedEventArgs e )
 	{

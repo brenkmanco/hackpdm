@@ -28,6 +28,10 @@
     <Compile Include="..\HackPDM\Mvvm\Models\Odoo\EntrySearchService.cs" Link="Linked\EntrySearchService.cs" />
     <Compile Include="..\HackPDM\Mvvm\Models\Hack\PdmWorkflowService.cs" Link="Linked\PdmWorkflowService.cs" />
     <Compile Include="..\HackPDM\Mvvm\Models\Hack\EntryRow.cs" Link="Linked\EntryRow.cs" />
+    <Compile Include="..\HackPDM\Mvvm\Models\Hack\EntryListService.cs" Link="Linked\EntryListService.cs" />
+    <Compile Include="..\HackPDM\Mvvm\Models\Hack\EntryListResult.cs" Link="Linked\EntryListResult.cs" />
+    <Compile Include="..\HackPDM\Mvvm\Models\Hack\FileManagerState.cs" Link="Linked\FileManagerState.cs" />
+    <Compile Include="..\HackPDM\Mvvm\Models\Hack\LocalFileWatcher.cs" Link="Linked\LocalFileWatcher.cs" />
     <Compile Include="..\HackPDM\Mvvm\Models\Common\IOperationReporter.cs" Link="Linked\IOperationReporter.cs" />
   </ItemGroup>
 

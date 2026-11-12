@@ -17,12 +17,6 @@ using EntryRow = HackPDM.Mvvm.Models.Hack.EntryRow;
 
 namespace HackPDM.Mvvm.Models.Hack;
 
-/// <summary>Rows for one directory plus the counts shown under the entry list.</summary>
-/// <param name="RemoteCount">Entries Odoo has in this directory.</param>
-/// <param name="LocalOnlyCount">Files on disk with no remote entry.</param>
-/// <param name="LocalAndRemoteCount">Remote entries that also exist on disk.</param>
-public sealed record EntryListResult( List<EntryRow> Rows, int RemoteCount, int LocalOnlyCount, int LocalAndRemoteCount );
-
 /// <summary>Builds the entry rows for a directory by combining Odoo entries with the files on disk.</summary>
 public interface IEntryListService
 {
@@ -31,6 +25,13 @@ public interface IEntryListService
 	/// <param name="includeDeleted">Also list logically deleted entries.</param>
 	/// <param name="filterUnknownTypes">Mark local files with unregistered extensions as filtered.</param>
 	Task<EntryListResult> LoadAsync( int? directoryId, string? treePath, bool includeDeleted, bool filterUnknownTypes, CancellationToken token );
+
+	/// <summary>
+	/// The row for one file after its local copy changed, from the local disk and the server data the
+	/// <paramref name="existing"/> row was listed with (no server call); null when the row should go
+	/// (a local-only file that was deleted).
+	/// </summary>
+	Task<EntryRow?> RefreshRowAsync( EntryRow? existing, string localPath, bool filterUnknownTypes );
 }
 
 public sealed class EntryListService : IEntryListService
@@ -55,7 +56,7 @@ public sealed class EntryListService : IEntryListService
 				localByRemotePath = await HashLocalCopiesAsync( remote );
 				token.ThrowIfCancellationRequested();
 				foreach( RemoteEntryDto entry in remote )
-					rows.Add( await CreateRemoteRowAsync( entry, localByRemotePath ) );
+					rows.Add( CreateRemoteRow( entry, await LocalCopyAsync( entry, localByRemotePath ) ) );
 			}
 		}
 
@@ -110,12 +111,22 @@ public sealed class EntryListService : IEntryListService
 		} );
 	}
 
-	private static async Task<EntryRow> CreateRemoteRowAsync( RemoteEntryDto entry, Dictionary<string, Task<HackFile>> localByRemotePath )
+	public async Task<EntryRow?> RefreshRowAsync( EntryRow? existing, string localPath, bool filterUnknownTypes )
 	{
-		HackFile? local = !string.IsNullOrWhiteSpace( entry.FullName ) && localByRemotePath.TryGetValue( entry.FullName, out var hashing )
+		// read and hashed off the UI thread; null when the file is gone
+		HackFile? local = await Task.Run( () => File.Exists( localPath ) && HackFile.GetFromPath( localPath ) is { Exists: true } hack ? hack : null );
+		if( existing?.Remote is { } remote )
+			return CreateRemoteRow( remote, local );
+		return local is null ? null : CreateLocalRow( local, filterUnknownTypes );
+	}
+
+	private static async Task<HackFile?> LocalCopyAsync( RemoteEntryDto entry, Dictionary<string, Task<HackFile>> localByRemotePath )
+		=> !string.IsNullOrWhiteSpace( entry.FullName ) && localByRemotePath.TryGetValue( entry.FullName, out var hashing )
 			? await hashing // already finished
 			: null;
 
+	private static EntryRow CreateRemoteRow( RemoteEntryDto entry, HackFile? local )
+	{
 		var checkout = entry.CheckoutUserId is int userId ? OdooDefaults.Instance.IdToUser.GetValueOrDefault( userId ) : null;
 
 		FileStatus status = EntryStatusResolver.ResolveRemote(
@@ -145,6 +156,7 @@ public sealed class EntryListService : IEntryListService
 				? OdooDefaults.Instance.HpCategories?.FirstOrDefault( c => c.name?.Equals( category ) is true )
 				: null,
 			FullName = entry.FullName,
+			Remote = entry,
 		};
 	}
 

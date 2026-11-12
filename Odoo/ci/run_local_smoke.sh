@@ -72,6 +72,16 @@ state=$(docker exec "$PG" psql -U odoo -d "$ODOO_DB" -tAc "select state from ir_
 echo "hackpdm module state: $state"
 [[ "$state" == installed ]]
 
+log "Running the hackpdm addon's server tests"
+# post_install TransactionCases, in a database of their own: their rows are rolled back but the ids
+# they used are not, and the client needs the seeded root folder to be hp.directory 1
+docker run --rm --network "$NET" "${ODOO_ENV[@]}" "$ODOO_IMAGE" \
+	odoo -d "${ODOO_DB}_tests" -i hackpdm --without-demo=all --test-enable --test-tags /hackpdm --stop-after-init >"$RESULTS/odoo-tests.log" 2>&1 \
+	|| { grep -E "FAIL|ERROR" "$RESULTS/odoo-tests.log" | tail -40; echo "addon tests failed (see $RESULTS/odoo-tests.log)"; exit 1; }
+for suite in TestSafeguards TestServerFunctions; do grep -q "Starting $suite" "$RESULTS/odoo-tests.log" || { echo "addon tests $suite did not run"; exit 1; }; done
+! grep -E "^.* (ERROR|CRITICAL) .*(FAIL|ERROR):" "$RESULTS/odoo-tests.log" || exit 1
+grep -E "tests? .*(passed|failed)|of [0-9]+ tests" "$RESULTS/odoo-tests.log" | tail -2 || true
+
 log "Starting Odoo on $ODOO_URL"
 docker run -d --name "$ODOO" --network "$NET" -p "${ODOO_PORT}:8069" "${ODOO_ENV[@]}" "$ODOO_IMAGE" \
 	odoo -d "$ODOO_DB" --db-filter="^${ODOO_DB}\$" >/dev/null
@@ -100,6 +110,9 @@ if [[ "$MODE" != --tests-only ]]; then
 		HACKPDM_ODOO_DB="$ODOO_DB" HACKPDM_ODOO_USER="$ODOO_USER" HACKPDM_ODOO_PASSWORD="$ODOO_PASSWORD" \
 		HACKPDM_SMOKE_DIRECTORY=Parts HACKPDM_SMOKE_MIN_ENTRIES=3 \
 		HACKPDM_SMOKE_REPORT="$RESULTS/smoke-report.json" HACKPDM_SMOKE_TIMEOUT=240
+	# settings, data and the saved login go to a throw-away folder, not your own settings and keychain
+	SMOKE_HOME=$(mktemp -d)
+	export HACKPDM_CONFIG_DIR="$SMOKE_HOME/config" HACKPDM_DATA_DIR="$SMOKE_HOME/data" HACKPDM_CREDENTIAL_STORE=file
 	APP=(dotnet Src/HackPDM/bin/x64/Debug/net10.0-desktop/HackPDM.dll)
 	set +e
 	if command -v xvfb-run >/dev/null; then
@@ -109,6 +122,7 @@ if [[ "$MODE" != --tests-only ]]; then
 		DISPLAY="${DISPLAY:-:0}" timeout 300 "${APP[@]}" 2>&1 | tee "$RESULTS/smoke.log"
 	fi
 	smoke=${PIPESTATUS[0]}
+	rm -rf "$SMOKE_HOME"
 	set -e
 	echo "smoke exit code: $smoke"
 	[[ -f "$RESULTS/smoke-report.json" ]] && cat "$RESULTS/smoke-report.json"

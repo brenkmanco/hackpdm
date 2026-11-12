@@ -16,15 +16,35 @@ using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Mvvm.ViewModels.Settings;
 
-/// <summary>Logging in to Odoo, and loading or saving a login profile as JSON.</summary>
-public partial class ProfileManagerViewModel( IDialogService dialogs, IFilePickerService pickers, INavigationService navigation ) : ObservableObject
+/// <summary>
+/// Logging in to Odoo, and loading or saving a login profile as JSON. One per visit of the Profile
+/// Manager page; whether the session is logged in lives in <see cref="LoginSession"/>.
+/// </summary>
+/// <param name="accountChanged">Called after a login as another server, database or user than the last one.</param>
+public partial class ProfileManagerViewModel(
+	LoginSession session,
+	IDialogService dialogs,
+	IFilePickerService pickers,
+	INavigationService navigation,
+	Action? accountChanged = null ) : ObservableObject
 {
 	private const string ProfileExtension = ".json";
 
 	/// <summary>Why the last login failed.</summary>
-	public ObservableCollection<BasicStatusMessage> OStatus { get; } = [];
+	public ObservableCollection<BasicStatusMessage> OStatus { get; } = new( session.LastErrors );
 
-	[ObservableProperty] public partial bool IsLoggedIn { get; set; }
+	public bool IsLoggedIn
+	{
+		get => session.IsLoggedIn;
+		set
+		{
+			if( session.IsLoggedIn == value )
+				return;
+			session.IsLoggedIn = value;
+			OnPropertyChanged();
+		}
+	}
+
 	[ObservableProperty] public partial bool IsLoggingIn { get; set; }
 
 	/// <summary>Logs in; on success saves the credentials and opens the file manager.</summary>
@@ -42,7 +62,10 @@ public partial class ProfileManagerViewModel( IDialogService dialogs, IFilePicke
 		}
 		if( !IsLoggedIn )
 			return;
-		// the login is verified, so keep the credentials in the Windows Credential Manager
+		var odoo = OdooDefaults.Instance!;
+		if( session.LoggedInAs( $"{odoo.OdooUrl}|{odoo.OdooDb}|{odoo.OdooUser}" ) )
+			accountChanged?.Invoke();
+		// the login is verified, so keep the credentials in the system keychain (see CrossPlatformCredentialManager)
 		( OdooDefaults.Instance as OdooDefaults )?.SaveCredentials();
 		navigation.NavigateTo( NavigatePageMenu.HackFileManager );
 	}
@@ -90,6 +113,8 @@ public partial class ProfileManagerViewModel( IDialogService dialogs, IFilePicke
 	/// <summary>Checks the server, port, credentials and client version; the reasons it can't log in go to <see cref="OStatus"/>.</summary>
 	public async Task<bool> AbleToLoginAsync()
 	{
+		OStatus.Clear();
+		session.LastErrors = [];
 		try
 		{
 			List<string> errors = [];
@@ -118,6 +143,7 @@ public partial class ProfileManagerViewModel( IDialogService dialogs, IFilePicke
 
 			foreach( string message in errors )
 				OStatus.Add( new BasicStatusMessage { Status = StatusMessage.ERROR, Message = message } );
+			session.LastErrors = [ .. OStatus ];
 			return errors.Count == 0;
 		}
 		catch

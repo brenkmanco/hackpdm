@@ -229,9 +229,16 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		if( files.Count == 0 )
 			return;
 
-		var (localOnly, remoteExisting) = await PdmCommitOperations.FilterCommitHackFilesAsync( files, Log );
+		var (localOnly, remoteExisting, unchanged) = await PdmCommitOperations.FilterCommitHackFilesAsync( files, Log );
 		if( localOnly is null or [] && remoteExisting is null or [] )
 		{
+			if( unchanged.Length > 0 )
+			{
+				// nothing changed, but the files were checked out: committing them checks them back in
+				await CheckInUnchangedAsync( unchanged );
+				await reporter.NotifyAsync( "Completed!" );
+				return;
+			}
 			Log( StatusMessage.ERROR, "--- No entries to commit ---" );
 			return;
 		}
@@ -256,15 +263,28 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		}
 
 		var (committed, error) = await commit.ServerCommit();
-		reporter.Complete();
 		if( !committed )
 		{
+			reporter.Complete();
 			// nothing was created on the server; never report a failed commit as done
 			Log( StatusMessage.ERROR, $"Commit failed on the server: {error}" );
 			await reporter.NotifyAsync( $"Commit failed: {error}", "Commit Files" );
 			return;
 		}
+		// the committed entries are checked in by the server; the unchanged ones that came along
+		// (e.g. the parts of a checked-out assembly) are released here
+		await CheckInUnchangedAsync( unchanged );
+		reporter.Complete();
 		await reporter.NotifyAsync( "Completed!" );
+	}
+
+	/// <summary>Releases the checkout of entries that were committed without changes (no new version).</summary>
+	private async Task CheckInUnchangedAsync( HpEntry[] unchanged )
+	{
+		if( unchanged.Length == 0 )
+			return;
+		Log( StatusMessage.INFO, $"{unchanged.Length} unchanged file(s): checked in without a new version" );
+		await PdmCheckoutOperations.UnCheckOutEntriesAsync( unchanged, OdooDefaults.Instance.OdooId, Log );
 	}
 
 	public async Task<HashSet<HackFile>> CollectCommitFilesAsync( IEnumerable<EntryRow> entries )
@@ -321,8 +341,9 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		if( entryIds is null or { Count: < 1 } )
 			return;
 
-		IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids, excludedFields: DeleteExcludedFields );
+		// only the selected entries: what they depend on (an assembly's parts) is often used by other
+		// entries too, and deleting an assembly must not take its parts with it
+		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( entryIds, excludedFields: DeleteExcludedFields );
 		await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, true, Log ), "Logically Delete Files" );
 	}
 

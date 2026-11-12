@@ -57,6 +57,10 @@ public class EntryRow : HackPDM.Domain.Representation.EntryRow
 			return field;
 		}
 	}
+	/// <summary>The server's description of this entry when the row was listed; null for a local-only file.
+	/// Lets one row be rebuilt when its local file changes, without asking the server again.</summary>
+	public HackPDM.Infrastructure.Odoo.RemoteEntryDto? Remote { get; init; }
+
 	// need IsLocal to be hit so that LocalFile is evaluated
 	public override bool? IsOnlyLocal => IsRemote is false & IsLocal is true;
 	public override bool? IsOnlyRemote => IsRemote is true & IsLocal is false;

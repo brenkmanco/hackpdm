@@ -49,7 +49,6 @@ public static class StorageBox
     #endregion
     #region Assets and Storage Paths
         public const string ASSETSPREFIX    = "ms-appx:///";
-        public const string LOCALPREFIX     = "ms-appdata:///local";
         public const string ASSETSFOLDER    = "Assets";
         public const string IMAGEFOLDER     = "Images";
 

@@ -21,9 +21,9 @@ public static class ProfileStore
 		OdooPort = "8069",
 		PWAPathAbsolute = @"C:\path\to\pwa",
 		Username = "{username}",
-		Password = "{password} -leave password blank if you dont want to save password to file. " +
-			"Windows Credential Manager will pick it up with OdooCredentialTarget and Odoo Settings Window" +
-			"Allows for saving to Windows Credential Manager directly",
+		Password = "{password} - leave blank to keep the password out of this file. " +
+			"After a login, the password is saved in the system keychain (Windows Credential Manager, " +
+			"the Secret Service on Linux, the macOS Keychain) under OdooCredentialTarget.",
 	};
 
 	/// <summary>The live settings as a profile; the password only when <paramref name="includePassword"/>.</summary>

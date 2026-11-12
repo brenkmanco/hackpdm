@@ -27,40 +27,55 @@ using EntryRow = HackPDM.Mvvm.Models.Hack.EntryRow;
 
 namespace HackPDM.Mvvm.ViewModels.Hack;
 
-/// <summary>What the view should reload after a view-model operation.</summary>
-[Flags]
-public enum FileManagerRefresh
-{
-	None = 0,
-	Entries = 1,
-	Tree = 2,
-	All = Entries | Tree,
-}
-
 /// <summary>
 /// State and commands for the Hack file manager page. Holds no references to controls:
 /// the view pushes selection in, invokes commands, and reacts to <see cref="RefreshRequested"/>
 /// and <see cref="GroupingChanged"/>.
+/// <para>
+/// One instance per visit: created when the page is entered, restored from the session's
+/// <see cref="FileManagerState"/>, which it keeps up to date, and disposed when the page is left.
+/// Operations started from it (commits, downloads) keep running after that; when they finish they
+/// mark the state stale, so the next visit fetches what they changed.
+/// </para>
 /// </summary>
-public partial class HackFileManagerViewModel : OperationViewModel
+public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 {
+	private readonly FileManagerState _state;
 	private readonly IPdmWorkflowService _workflow;
 	private readonly IEntryFileService _files;
 	private readonly IEntryDetailsService _details;
 	private readonly IDirectoryTreeService _directoryTree;
 	private readonly IEntryListService _entryList;
+	private readonly ILocalFileWatcher _localFiles;
+	/// <summary>One batch of local file changes at a time, in the order they came.</summary>
+	private readonly SemaphoreSlim _localChangesGate = new( 1, 1 );
+	/// <summary>More changed files than this in the shown folder at once (a whole download) reload the list instead.</summary>
+	private const int MaxSingleRowUpdates = 25;
+	private bool _active;
 
 	private CancellationTokenSource _detailsCancellation = new();
+	/// <summary>Cancelled when the page is left: the loads that only fill this page.</summary>
+	private readonly CancellationTokenSource _pageCancellation = new();
+	/// <summary>Set while the constructor copies the kept state in, so the change hooks don't write it back or reload.</summary>
+	private readonly bool _restoring;
+	/// <summary>Rows that were selected when the page was last left; reselected once their folder is listed.</summary>
+	private IReadOnlyList<string> _selectionToRestore;
+	/// <summary>The folder those rows are in.</summary>
+	private readonly string? _selectionFolder;
 
 	public HackFileManagerViewModel(
+		FileManagerState state,
 		IPdmWorkflowService workflow,
 		IEntryFileService files,
 		IEntryDetailsService details,
 		IDialogService dialogs,
 		IOperationReporter reporter,
 		IDirectoryTreeService directoryTree,
-		IEntryListService entryList ) : base( dialogs, reporter )
+		IEntryListService entryList,
+		ILocalFileWatcher localFiles ) : base( dialogs, reporter )
 	{
+		_state = state;
+		_localFiles = localFiles;
 		_workflow = workflow;
 		_files = files;
 		_details = details;
@@ -74,6 +89,58 @@ public partial class HackFileManagerViewModel : OperationViewModel
 			[ StorageBox.PROPERTIES_TAB ] = async entry => OProperties.ReplaceAll( await _details.GetPropertiesAsync( entry ) ),
 			[ StorageBox.INFO_TAB ] = async entry => OVersions.ReplaceAll( await _details.GetVersionInfoAsync( entry ) ),
 		};
+
+		_restoring = true;
+		ShowInactive = state.ShowInactive;
+		IsGroupingEnabled = state.IsGroupingEnabled;
+		if( EntryRowKeys.TryGetGroupKey( state.GroupField, out var groupKey ) )
+			_groupKey = groupKey;
+		_selectionToRestore = state.SelectedEntryNames;
+		_selectionFolder = state.SelectedPath;
+		_restoring = false;
+	}
+
+	/// <summary>Starts taking locate requests (search window, dependency links); call once the view handles <see cref="LocateRequested"/>.</summary>
+	/// <returns>The request made while the page was not shown, if any: the view should run it once the tree is up.</returns>
+	public (IReadOnlyList<string> Segments, string? FileName)? Activate()
+	{
+		if( !_active && !IsDisposed )
+		{
+			_active = true;
+			_state.LivePages++;
+			_state.LocateRequested += ForwardLocateAsync;
+			_localFiles.Changed += OnLocalFilesChanged;
+			_localFiles.Overflowed += OnLocalChangesLost;
+			_localFiles.Watch( PwaPaths.Vault );
+		}
+		return _state.TakePendingLocate();
+	}
+
+	private Task ForwardLocateAsync( IReadOnlyList<string> segments, string? fileName )
+		=> LocateRequested?.Invoke( segments, fileName ) ?? Task.CompletedTask;
+
+	public bool IsDisposed { get; private set; }
+
+	/// <summary>A directory tree from an earlier visit can be shown without asking the server.</summary>
+	public bool HasKeptTree => _state.Tree is not null && !_state.Stale.HasFlag( FileManagerRefresh.Tree );
+
+	/// <summary>The page was left: stops the loads that only served it and lets go of the session state's events.</summary>
+	public void Dispose()
+	{
+		if( IsDisposed )
+			return;
+		IsDisposed = true;
+		if( _active )
+		{
+			_active = false;
+			_state.LivePages--;
+			_state.LocateRequested -= ForwardLocateAsync;
+			_localFiles.Changed -= OnLocalFilesChanged;
+			_localFiles.Overflowed -= OnLocalChangesLost;
+		}
+		_pageCancellation.Cancel();
+		_detailsCancellation.Cancel();
+		GC.SuppressFinalize( this );
 	}
 
 	/// <summary>How each detail tab is filled for an entry.</summary>
@@ -90,7 +157,133 @@ public partial class HackFileManagerViewModel : OperationViewModel
 	/// <summary>Raised when another page (search) asks to show a file: tree segments below root, then the file name.</summary>
 	public event Func<IReadOnlyList<string>, string?, Task>? LocateRequested;
 
-	private void Refresh( FileManagerRefresh what ) => RefreshRequested?.Invoke( what );
+	/// <summary>Something changed on the server: the kept copy is stale, and the page (if still shown) reloads it.</summary>
+	private void Refresh( FileManagerRefresh what )
+	{
+		_state.MarkStale( what );
+		RefreshRequested?.Invoke( what );
+	}
+
+	/// <summary>The toolbar's refresh: fetches the tree, and the selected folder's rows, from the server again.</summary>
+	public void RefreshFromServer()
+	{
+		_state.MarkStale( FileManagerRefresh.All );
+		// rebuilding the tree reselects the folder, which lists its (now stale, so fetched) rows
+		RefreshRequested?.Invoke( FileManagerRefresh.Tree );
+	}
+
+	/// <summary>A file changed in a folder other than the one listed: its tree path, and how (for the tree's badge).</summary>
+	public event Action<string, LocalChangeKind>? FolderChanged;
+	/// <summary>A row of the list was rebuilt (old, new; either null for an added or removed row), so the view can keep it selected.</summary>
+	public event Action<EntryRow?, EntryRow?>? RowReplaced;
+
+	#endregion
+	#region Live updates from the local disk
+
+	private void OnLocalFilesChanged( IReadOnlyList<LocalFileChange> batch )
+		=> UiDispatcher.Post( () => _ = ApplyLocalChangesAsync( batch ) );
+
+	private void OnLocalChangesLost()
+		=> UiDispatcher.Post( () =>
+		{
+			if( !IsDisposed )
+				Refresh( FileManagerRefresh.Entries );
+		} );
+
+	/// <summary>
+	/// Updates just the rows of changed files in the listed folder; for other folders raises
+	/// <see cref="FolderChanged"/> once per folder ("updated" when its files changed in different ways).
+	/// </summary>
+	public async Task ApplyLocalChangesAsync( IReadOnlyList<LocalFileChange> batch )
+	{
+		if( IsDisposed )
+			return;
+		await _localChangesGate.WaitAsync();
+		try
+		{
+			string? listed = IsListLoaded ? LastSelectedNodePath : null;
+			List<LocalFileChange> here = [];
+			Dictionary<string, LocalChangeKind> elsewhere = new( StringComparer.OrdinalIgnoreCase );
+			foreach( LocalFileChange change in batch )
+			{
+				if( PwaPaths.ToServerName( Path.GetDirectoryName( change.FullPath ) ) is not { } folder )
+					continue;
+				if( listed is not null && string.Equals( folder, listed, StringComparison.OrdinalIgnoreCase ) )
+				{
+					// the list shows files only; a folder created here appears in the tree after a refresh
+					if( !Directory.Exists( change.FullPath ) )
+						here.Add( change );
+				}
+				else
+					elsewhere[ folder ] = elsewhere.TryGetValue( folder, out var earlier ) && earlier != change.Kind
+						? LocalChangeKind.Updated
+						: change.Kind;
+			}
+
+			foreach( var (folder, kind) in elsewhere )
+				FolderChanged?.Invoke( folder, kind );
+
+			if( here.Count > MaxSingleRowUpdates )
+			{
+				Refresh( FileManagerRefresh.Entries );
+				return;
+			}
+			bool changed = false;
+			foreach( LocalFileChange change in here )
+				changed |= await RefreshRowAsync( change.FullPath, listed! );
+			if( changed && !IsDisposed )
+				KeepListedRows();
+		}
+		catch( Exception e )
+		{
+			Console.Error.WriteLine( $"live update failed: {e}" );
+		}
+		finally
+		{
+			_localChangesGate.Release();
+		}
+	}
+
+	/// <summary>Rebuilds, adds or removes the row of one file of the listed folder; false when the folder changed meanwhile.</summary>
+	private async Task<bool> RefreshRowAsync( string localPath, string listedFolder )
+	{
+		string name = Path.GetFileName( localPath );
+		EntryRow? old = Entries.FirstOrDefault( r => string.Equals( r.Name, name, StringComparison.OrdinalIgnoreCase ) );
+		EntryRow? row = await _entryList.RefreshRowAsync( old, localPath, IsFiltered );
+		if( IsDisposed || !IsListLoaded || !string.Equals( LastSelectedNodePath, listedFolder, StringComparison.OrdinalIgnoreCase ) )
+			return false;
+
+		// look again: the list may have changed while the file was read
+		int index = old is null ? -1 : Entries.IndexOf( old );
+		if( index < 0 )
+			index = Entries.ToList().FindIndex( r => string.Equals( r.Name, name, StringComparison.OrdinalIgnoreCase ) );
+		EntryRow? replaced = index >= 0 ? Entries[ index ] : null;
+		if( row is null )
+		{
+			if( index < 0 )
+				return false;
+			Entries.RemoveAt( index );
+		}
+		else if( index >= 0 )
+			Entries[ index ] = row;
+		else
+			Entries.Add( row );
+		RowReplaced?.Invoke( replaced, row );
+		return true;
+	}
+
+	/// <summary>The listed rows (with their live updates) become the kept rows; the counts follow them.</summary>
+	private void KeepListedRows()
+	{
+		List<EntryRow> rows = [ .. Entries ];
+		EntryListResult result = new(
+			rows,
+			RemoteCount: rows.Count( r => r.Id is > 0 ),
+			LocalOnlyCount: rows.Count( r => r.ReprType == EntryReprType.Local ),
+			LocalAndRemoteCount: rows.Count( r => r.ReprType == EntryReprType.Both ) );
+		_state.RememberEntries( LastSelectedNodePath, ShowInactive, result );
+		UpdateEntryLabels( result );
+	}
 
 	#endregion
 	#region Load state (read by the view, SearchOdoo and the smoke tests)
@@ -99,7 +292,6 @@ public partial class HackFileManagerViewModel : OperationViewModel
 	public bool IsTreeLoaded { get; set; }
 	public bool IsListLoaded { get; set; }
 	public bool IsFiltered { get; set; } = true;
-	public bool HackLoaded { get; set; }
 
 
 	/// <summary>True while the directory tree is being fetched; drives the loading ring.</summary>
@@ -124,13 +316,22 @@ public partial class HackFileManagerViewModel : OperationViewModel
 	[ObservableProperty] public partial bool ShowInactive { get; set; }
 	partial void OnShowInactiveChanged( bool value )
 	{
+		if( _restoring )
+			return;
+		_state.ShowInactive = value;
 		Entries.Clear();
-		Refresh( FileManagerRefresh.Entries );
+		RefreshRequested?.Invoke( FileManagerRefresh.Entries );
 	}
 
 	/// <summary>Group the entry list (by status, or by the field picked in "Group By").</summary>
 	[ObservableProperty] public partial bool IsGroupingEnabled { get; set; }
-	partial void OnIsGroupingEnabledChanged( bool value ) => GroupingChanged?.Invoke();
+	partial void OnIsGroupingEnabledChanged( bool value )
+	{
+		if( _restoring )
+			return;
+		_state.IsGroupingEnabled = value;
+		GroupingChanged?.Invoke();
+	}
 
 	/// <summary>Rows of the selected directory.</summary>
 	public RangeObservableCollection<EntryRow> Entries { get; } = new();
@@ -153,25 +354,71 @@ public partial class HackFileManagerViewModel : OperationViewModel
 	/// <summary>The directory selected in the tree.</summary>
 	public DirectoryRef? SelectedDirectory
 	{
-		get;
+		get => _state.SelectedDirectory;
 		set
 		{
-			field = value;
+			_state.SelectedDirectory = value;
 			LastSelectedNodePath = value?.TreePath;
 		}
 	}
 
 	/// <summary>Tree path ("root\a\b") of the selected directory, used to restore selection after a reload.</summary>
-	public string? LastSelectedNodePath { get; set; }
+	public string? LastSelectedNodePath
+	{
+		get => _state.SelectedPath;
+		set => _state.SelectedPath = value;
+	}
 
 	/// <summary>Rows selected in the entry list.</summary>
-	public IReadOnlyList<EntryRow> SelectedEntries { get; set; } = [];
+	public IReadOnlyList<EntryRow> SelectedEntries
+	{
+		get;
+		set
+		{
+			field = value;
+			// the list empties its selection while it is refilled; that is not the user's choice
+			if( IsListLoaded && !IsDisposed )
+				_state.SelectedEntryNames = [ .. value.Select( r => r.Name ).OfType<string>() ];
+		}
+	} = [];
+
+	/// <summary>The rows to reselect after the folder's rows are listed again (the selection the page was left with); asked once.</summary>
+	public IReadOnlyList<EntryRow> TakeSelectionToRestore()
+	{
+		IReadOnlyList<string> names = _selectionToRestore;
+		_selectionToRestore = [];
+		// only in the folder they were selected in (a locate request may have opened another one)
+		if( names.Count == 0 || !string.Equals( LastSelectedNodePath, _selectionFolder, StringComparison.OrdinalIgnoreCase ) )
+			return [];
+		return [ .. Entries.Where( r => r.Name is { } name && names.Contains( name ) ) ];
+	}
+
+	/// <summary>Tree paths of the folders to expand when the tree is rebuilt.</summary>
+	public IReadOnlyCollection<string> ExpandedPaths => _state.ExpandedPaths;
+
+	/// <summary>The view reports a folder being expanded or collapsed.</summary>
+	public void SetExpanded( string? treePath, bool expanded )
+	{
+		if( treePath is null or "" || IsDisposed )
+			return;
+		if( expanded )
+			_state.ExpandedPaths.Add( treePath );
+		else
+			_state.ExpandedPaths.Remove( treePath );
+	}
+
+	/// <summary>The kept sort of the entry list (field, descending), for the column header arrow.</summary>
+	public (string Field, bool Descending)? EntrySort => _state.Sort;
 
 	/// <summary>Version selected in the History tab.</summary>
 	public HistoryRow? SelectedHistory { get; set; }
 
 	/// <summary>Name of the visible detail tab (one of the StorageBox *_TAB constants).</summary>
-	public string? SelectedDetailTab { get; set; }
+	public string? SelectedDetailTab
+	{
+		get => _state.SelectedDetailTab;
+		set => _state.SelectedDetailTab = value;
+	}
 
 	private string SelectedLocalDirectory => _files.ResolveLocalDirectory( LastSelectedNodePath );
 	private int SelectedDirectoryId => SelectedDirectory?.DirectoryId ?? 0;
@@ -184,14 +431,22 @@ public partial class HackFileManagerViewModel : OperationViewModel
 
 	#region Loading the tree and the entry list
 
-	/// <summary>Fetches the directory tree and raises <see cref="TreeLoaded"/>.</summary>
-	public async Task LoadDirectoryTreeAsync()
+	/// <summary>
+	/// Raises <see cref="TreeLoaded"/> with the directory tree: the one kept from an earlier visit when there
+	/// is one and nothing marked it stale, otherwise (or with <paramref name="fromServer"/>) a fresh one.
+	/// </summary>
+	public async Task LoadDirectoryTreeAsync( bool fromServer = false )
 	{
 		IsTreeLoaded = false;
 		IsTreeLoading = true;
 		try
 		{
-			if( await _directoryTree.LoadAsync() is { } root && TreeLoaded is { } handler )
+			DirectoryNode? root = !fromServer && !_state.Stale.HasFlag( FileManagerRefresh.Tree ) && _state.Tree is { } kept
+				? kept
+				: await _directoryTree.LoadAsync();
+			if( root is not null && !ReferenceEquals( root, _state.Tree ) )
+				_state.TreeRefreshed( root );
+			if( root is not null && !IsDisposed && TreeLoaded is { } handler )
 				await handler( root );
 		}
 		finally
@@ -201,10 +456,15 @@ public partial class HackFileManagerViewModel : OperationViewModel
 		}
 	}
 
-	/// <summary>Loads the rows of <see cref="SelectedDirectory"/> into <see cref="Entries"/>.</summary>
+	/// <summary>
+	/// Loads the rows of <see cref="SelectedDirectory"/> into <see cref="Entries"/>: the rows kept from an
+	/// earlier visit when they are for this folder and not stale, otherwise fresh ones (which are then kept).
+	/// </summary>
 	public async Task LoadEntriesAsync( CancellationToken token = default )
 	{
 		IsListLoaded = false;
+		using var linked = CancellationTokenSource.CreateLinkedTokenSource( token, _pageCancellation.Token );
+		token = linked.Token;
 		try
 		{
 			await AsyncHelper.WaitUntil( () => IsTreeLoaded, 100, -1, token );
@@ -212,12 +472,18 @@ public partial class HackFileManagerViewModel : OperationViewModel
 			if( SelectedDirectory is not { } directory )
 				return;
 
-			EntryListResult result = await _entryList.LoadAsync( directory.DirectoryId, directory.TreePath, ShowInactive, IsFiltered, token );
-			token.ThrowIfCancellationRequested();
+			bool includeDeleted = ShowInactive;
+			if( !_state.TryGetEntries( directory.TreePath, includeDeleted, out EntryListResult result ) )
+			{
+				result = await _entryList.LoadAsync( directory.DirectoryId, directory.TreePath, includeDeleted, IsFiltered, token );
+				token.ThrowIfCancellationRequested();
+				_state.RememberEntries( directory.TreePath, includeDeleted, result );
+			}
 
 			UpdateEntryLabels( result );
 			Entries.ReplaceAll( result.Rows );
-			_groupKey = GroupByStatus;
+			if( _state.Sort is var (field, descending) && EntryRowKeys.TryGetSortKey( field, out var sortKey ) )
+				Entries.Sort( sortKey, descending );
 			GroupingChanged?.Invoke();
 		}
 		catch( OperationCanceledException ) { }
@@ -229,7 +495,7 @@ public partial class HackFileManagerViewModel : OperationViewModel
 		finally
 		{
 			// RestartEntries, SearchOdoo and the smoke tests wait on this flag
-			if( !token.IsCancellationRequested )
+			if( !linked.IsCancellationRequested )
 				IsListLoaded = true;
 		}
 	}
@@ -241,10 +507,6 @@ public partial class HackFileManagerViewModel : OperationViewModel
 		EntriesLabelLocal = $"LO: {Count( result.LocalOnlyCount )}";
 		EntriesLabelRemote = $"RO: {Count( result.RemoteCount - result.LocalAndRemoteCount )}";
 	}
-
-	/// <summary>Asks the view to select the folder at <paramref name="segmentsBelowRoot"/> and the file in it.</summary>
-	public Task RequestLocateAsync( IReadOnlyList<string> segmentsBelowRoot, string? fileName )
-		=> LocateRequested?.Invoke( segmentsBelowRoot, fileName ) ?? Task.CompletedTask;
 
 	#endregion
 
@@ -323,6 +585,7 @@ public partial class HackFileManagerViewModel : OperationViewModel
 		if( !EntryRowKeys.TryGetGroupKey( propertyName, out var key ) )
 			return;
 		_groupKey = key;
+		_state.GroupField = propertyName;
 		GroupingChanged?.Invoke();
 	}
 
@@ -332,6 +595,7 @@ public partial class HackFileManagerViewModel : OperationViewModel
 			return;
 
 		Entries.Sort( key, descending );
+		_state.Sort = ( fieldName!, descending );
 		GroupingChanged?.Invoke();
 	}
 

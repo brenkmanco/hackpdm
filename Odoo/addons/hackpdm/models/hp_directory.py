@@ -1,5 +1,8 @@
 from odoo import models, fields, api
+from odoo.exceptions import UserError
 import logging
+
+from . import hp_guard
 
 class hp_directory(models.Model):
     _name = 'hp.directory'
@@ -74,6 +77,15 @@ class hp_directory(models.Model):
     #             directory.parent_path_temp = f'{directory.parent_id.id}/{directory.id}/'
     #         else:
     #             directory.parent_path_temp = f'{directory.id}/'
+
+    def init(self):
+        hp_guard.create_case_insensitive_unique_index(
+            self.env.cr, self._table, "hp_directory_parent_name_ci_uniq", "parent_id")
+
+    @api.constrains("name")
+    def _check_name_path_safe(self):
+        for directory in self:
+            hp_guard.check_name(directory.name, "folder")
 
     @api.depends('name', 'parent_id', 'parent_id.complete_name')
     def _compute_complete_name(self):
@@ -267,9 +279,14 @@ class hp_directory(models.Model):
     def _recurse_directories_finding(self, directory, paths:list[str], index:int, forClient:bool, directories:list):
         directories.append(directory.id)
         if (index < len(paths) - 1):
-            for direct in directory.child_ids:
-                if (paths[index + 1] == direct.name):
-                    return self._recurse_directories_finding(direct, paths, index + 1, forClient, directories)
+            wanted = paths[index + 1]
+            children = directory.child_ids
+            # the exact name first; otherwise the same name in another case, which is the same
+            # folder on Windows (and creating it again would break the case-insensitive unique index)
+            match = children.filtered(lambda d: d.name == wanted)[:1] \
+                or children.filtered(lambda d: (d.name or "").casefold() == (wanted or "").casefold())[:1]
+            if match:
+                return self._recurse_directories_finding(match, paths, index + 1, forClient, directories)
 
         # if there are no children inside of directory equal to the name
         # in paths[index] then the previous index
@@ -296,8 +313,10 @@ class hp_directory(models.Model):
         # if the first array element is pwa change it to root and
         # then if the first array element doesn't equal root then
         # the beginning of the path isn't going to be found
-        if (type(paths[0]) == list):
+        if paths and type(paths[0]) == list:
             paths = paths[0]
+        if not paths:
+            raise UserError("Expected a path of folder names, got an empty one.")
         paths[0] = "root"
 
         records = self.env["hp.directory"].search([("id", "=", 1)])
@@ -309,8 +328,10 @@ class hp_directory(models.Model):
     def create_new_details(self, paths):
         details = {}
         
-        if (type(paths[0]) == list):
+        if paths and type(paths[0]) == list:
             paths = paths[0]
+        if not paths:
+            raise UserError("Expected a path of folder names, got an empty one.")
         paths[0] = "root"
 
         records = self.env["hp.directory"].search([("id", "=", 1)])

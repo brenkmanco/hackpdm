@@ -82,28 +82,18 @@ public static class TreeViewExtensions
 		}
 	}
 
-	private static TreeData? RecurseNode( this TreeData? node, ReadOnlySpan<string> paths )
-	{
-		foreach( TreeData child in node?.Children ?? [] )
-		{
-			if( child.Name == paths[ 0 ] )
-				return paths.Length == 1 ? node : node.RecurseNode( paths[ 1.. ] );
-		}
-		return default;
-	}
-
+	/// <summary>The node at <paramref name="path"/> ("root\a\b", as <see cref="TreeData.FullPath"/> gives it); null when a folder on the way is missing.</summary>
 	public static TreeData? FindTreeNode( this TreeView view, string path )
 	{
 		ArgumentNullException.ThrowIfNull( view );
-		Span<string> pathSpan = path.Split( "\\" ).AsSpan();
-		if( view.RootNodes as List<TreeViewNode> is not { } roots )
+		string[] parts = path.Split( '\\', StringSplitOptions.RemoveEmptyEntries );
+		if( parts.Length == 0 )
 			return null;
-		foreach( TreeViewNode root in roots )
-		{
-			TreeData treeData = root.LinkedData;
-			if( treeData.Name == pathSpan[ 0 ] )
-				return pathSpan.Length == 1 ? treeData : treeData.RecurseNode( pathSpan[ 1.. ] );
-		}
-		return default;
+		// (this used to return the parent of the folder it found, and needed RootNodes to be a
+		// List<TreeViewNode>: a rebuilt tree reselected the wrong folder, or none)
+		TreeViewNode? node = view.RootNodes.FirstOrDefault( root => root.LinkedData.Name == parts[ 0 ] );
+		foreach( string part in parts.AsSpan( 1 ) )
+			node = node?.Children.FirstOrDefault( child => child.LinkedData.Name == part );
+		return node?.LinkedData;
 	}
 }

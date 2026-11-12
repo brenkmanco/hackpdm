@@ -18,11 +18,28 @@ namespace HackPDM.Mvvm.Views.Tools;
 /// <summary>Edits AppConfig.json as a tree or as text; the tree lives in <see cref="JsonEditorViewModel"/>.</summary>
 public sealed partial class JsonEditorView : Page
 {
-	public JsonEditorViewModel ViewModel { get; } = new();
+	public JsonEditorViewModel ViewModel { get; } = new( HackPDM.Shell.AppComposition.JsonDraft );
 
 	public JsonEditorView()
 	{
 		InitializeComponent();
+	}
+
+	/// <summary>The page is left: what the editor shows is kept for the next visit.</summary>
+	protected override void OnNavigatedFrom( Microsoft.UI.Xaml.Navigation.NavigationEventArgs e )
+	{
+		base.OnNavigatedFrom( e );
+		string? code = null;
+		try
+		{
+			if( _isCodeView )
+				CodeEditor.Document.GetText( TextGetOptions.None, out code );
+		}
+		catch( NotImplementedException )
+		{
+			// RichEditBox.Document is not implemented on every Uno platform: keep the tree instead
+		}
+		ViewModel.Keep( code );
 	}
 
 	private async void OnExportJsonClick( object sender, RoutedEventArgs e )
@@ -128,7 +145,8 @@ public sealed partial class JsonEditorView : Page
 
 	private void SyncTreeToCodeView()
 	{
-		ApplyJsonSyntaxHighlighting(ViewModel.ToJson());
+		// text kept from the last visit that didn't parse has no tree: show it as it was typed
+		ApplyJsonSyntaxHighlighting(ViewModel.RootNodes.Count == 0 && ViewModel.KeptText is { } kept ? kept : ViewModel.ToJson());
 	}
 
 	private bool SyncCodeViewToTree()

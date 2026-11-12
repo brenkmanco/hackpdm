@@ -268,6 +268,207 @@ Every phase was checked against the code. Gate after the fixes: live 223/223 + S
 
 ---
 
+## Server-side safeguards (Odoo addon) ✅
+
+The addon no longer relies on the client to behave. Shared helpers live in `Odoo/addons/hackpdm/models/hp_guard.py`. "Admin" means superuser mode or `base.group_system`, and admins bypass the user-level guards.
+
+- **Path-safe names**: `@api.constrains` on `hp.entry.name` and `hp.directory.name` reject:
+  - empty names, `.` and `..`
+  - `<>:"/\|?*` and control characters
+  - a trailing space or dot
+  - Windows device names (CON, NUL.txt, COM1…)
+  - names over 255 characters
+
+  This stops a stored name such as `..\..\x.dll` from making clients write outside the vault.
+- **Case-insensitive uniqueness**: unique indexes on `(COALESCE(dir_id,0), lower(name))` for entries and on `(COALESCE(parent_id,0), lower(name))` for folders, created in `init()`.
+  - If existing rows already collide, the index is skipped and a warning is logged.
+  - The commit check (`_validate_entry_payload`) also matches with `=ilike`.
+- **Checkout ownership** (`hp.entry.write`):
+  - Users cannot clear, delete, rename, move or retype an entry that another user has checked out.
+  - Users cannot set `checkout_user` to anyone but themselves.
+  - Deleted entries cannot be checked out.
+  - Releasing a checkout (`is_checked_out = False`) clears the user, node and date.
+- **Bug fixed**: the checkout fields pointed in a loop. The entry's `checkout_*` were computed from `latest_version_id.checkout_*`, and those were related fields pointing back at the entry, so any read in the middle of a checkout recomputed them to empty. The fix is in "Checkout kept on the version" below. An earlier fix here stored the fields on the entry, which went against the intended design and was undone.
+- **Versions**:
+  - Users cannot create a version on a deleted entry, or on one checked out to someone else.
+  - `entry_id` and `file_contents` of an existing version are read-only for users.
+  - A version cannot be its own parent or child. Commits skip self-references.
+  - `checkout_entry` reports a missing version clearly.
+- **Commits**: `start_commit` and `clear_commit` run only for the commit's creator or an admin, and ignore or report missing ids.
+- **Reads**:
+  - `fast_read` goes through the ORM (`read()`). It used to be raw SQL that bypassed access rules, and was broken anyway.
+  - `smart_read` works without `fields`.
+  - `smart_read`, `related_browse` and `related_search_browse` check every step of a dotted field path for existence and read rights.
+- **Maintenance jobs** (`migrate_*`, `display_all_fnames`, `cleanup_filestore`) are admin-only. They read every record and commit mid-transaction.
+  - `getImageBytes` is now private (`_get_image_bytes`), and `import pdb` is gone.
+  - The hardcoded WebDAV and Postgres credentials in `hp_version.py` and `hp_common_model.py` are still there. They need moving to configuration (for example `ir.config_parameter`) and rotating.
+- **Tests**: `Odoo/addons/hackpdm/tests/test_safeguards.py` has 21 post_install TransactionCases, using two `base.group_user` users. The function tests below add 19 more.
+  - Both `Odoo/ci/run_local_smoke.sh` and the GitHub workflow run them in a separate `<db>_tests` database: the rows they create are rolled back, but the ids they use are not, and the client needs the seeded root folder to be `hp.directory` 1.
+  - Gate: addon 21/21, live 223/223, SMOKE TEST PASSED.
+
+### Server functions checked end to end ✅
+
+`Odoo/addons/hackpdm/tests/test_functions.py` (19 tests) drives every RPC method the client uses, with the client's own payload shapes, as a regular `base.group_user` user. It covers:
+
+- **Commits**
+  - The full commit flow: a new entry, its first version, a new version of a checked-out file, a SolidWorks reference and a custom property.
+  - Commit results: summary, checksum, size, contents, check-in on commit, parent/child links.
+  - Atomic failure with the reason recorded; refusal of a file checked out to someone else.
+  - `clear_commit`, and `start_commit` being idempotent.
+- **Checkout**: by node id or name, re-checkout, the client's un-checkout write, bad arguments.
+- **Delete**: marking deleted, restoring, and the admin permanent-delete sequence.
+- **Folders**: `get_entries`, `get_all_entry_ids`, `get_children_directories_by_id`, the path walk behind `last_available_directory`, and folder creation the way the client does it.
+- **Dependencies**: recursive dependencies, including cycles and deleted entries.
+- **Generic reads**: `related_browse` and `smart_read` with dotted fields.
+
+Bugs these tests found and fixed:
+
+- **Failed commits crashed for regular users.** Users may not delete `hp.record.staged` rows, so a failing commit or `clear_commit` raised an access error. The commit was then never marked as errored.
+  - The staged rows of the caller's own commit are now removed with elevated rights. Ownership is checked first.
+- **Commit payloads wrote through to shared records.** A version payload's `file_ext` and an entry payload's `cat_id` are related fields, so they overwrote the shared `hp.type` record. Computed fields could likewise overwrite server values.
+  - `_own_fields_only` now creates each staged record from its own stored fields only.
+- **`last_available_directory` matched folder names case-sensitively.** A local `parts` folder next to a server `Parts` folder would be created again, which the unique index now refuses.
+  - An exact match is tried first, then a case-insensitive one.
+- **`get_recursive_dependency` missed recent changes.** It is raw SQL, and could miss links or deleted flags written earlier in the same transaction. It now flushes first.
+
+## Navigation keeps context ✅
+
+Rule: **models outlive the page, view models live for one visit.** `AppComposition` holds the models that carry a page's context for the whole run. A page's view model is made by a `Create…` factory when the page is entered, starts from that model, writes its changes back, and is disposed in `OnNavigatedFrom`. Models hold plain data only, with no observable collections or events a page binds to, so a page that is gone is never kept alive by a long-lived object.
+
+| Page | Kept model | Kept between visits | Not kept (reloaded when needed) |
+|---|---|---|---|
+| File manager | `FileManagerState` | directory tree, expanded folders, selected folder, that folder's rows (≤ `MaxCachedEntries` = 5000), selected rows, detail tab, show-deleted, grouping, sort, a pending locate request | preview images, the detail tabs' rows (history, parents, children, properties), longer entry lists |
+| Profile Manager | `LoginSession` | logged in, last login errors, the account (server, database, user) | — |
+| JSON editor | `JsonEditorDraft` | the editor's content, including unparsed code-view text | — |
+| Settings pages | the settings store | saved values | unsaved edits (these forms show the saved values) |
+
+- **Staleness:**
+  - A view-model operation that changes the server (commit, delete, restore, …) marks the state stale through `Refresh`, even when it finishes after the page was left. The next visit then fetches the tree or rows again instead of showing the kept copy.
+  - The toolbar refresh (`RefreshFromServer`) marks everything stale.
+  - Logging in as another account (`LoginSession.LoggedInAs`) resets `FileManagerState`.
+- **Locate requests:** the search window goes through `FileManagerState.RequestLocateAsync`. It runs at once when the file manager is shown. Otherwise it waits, and the search window switches to the file manager, which runs the waiting request once its tree is up.
+- **Configurations:** the menu item is now a page (`ConfigurationView`) that is navigated to like the others. Before, it replaced the frame's content directly, so the page it replaced was never told it was left.
+- **Bug fixed:** `TreeViewExtensions.FindTreeNode` returned the parent of the folder it found, and needed `RootNodes` to be a `List<TreeViewNode>`. A rebuilt tree reselected the wrong folder, or none.
+- **Tests:**
+  - `FileManagerStateTests`, offline: which rows are kept, the size cap, staleness, locate requests, reset.
+  - Smoke step "leave and come back (context kept)": switches to the Profile Manager and back, then checks:
+    - the old view model was disposed, and a new one was made;
+    - the same tree object and the same row objects are shown;
+    - the folder, the selected row and the History tab are back.
+
+## Live local file changes ✅
+
+- **Watcher:** `LocalFileWatcher` (Models/Hack) is one `FileSystemWatcher` over the whole working folder, held by `AppComposition` for the whole run.
+  - `LocalChangeBatcher` collects events per path. Once a path has been quiet for 400 ms, it hands that path on once, as the single change its events add up to. For example, a save done as delete + create becomes "updated", and create then delete becomes nothing.
+  - Lock and temporary files are ignored (`~$…`, `.~lock…`, `…~`, `.tmp`, `.swp`).
+  - A buffer overflow reloads the listed folder.
+  - If the working folder does not exist yet (nothing downloaded), the watcher creates it, so it is watched from the start.
+  - A folder that appears (made with its parents, copied or moved in) is scanned for files already inside it. Without the scan, files written before inotify watched the new folder would raise no event.
+- **One row, not the whole list:** a change in the listed folder rebuilds only that file's row (`IEntryListService.RefreshRowAsync`):
+  - The file is hashed off the UI thread.
+  - The server data the row already holds (`EntryRow.Remote`) is reused, so there is no server call.
+  - The row is replaced, added or removed in place, and the other row objects are kept.
+  - A selected row stays selected.
+  - With more than 25 changes in the folder at once, the folder is reloaded instead.
+- **Other folders:** a change in a folder that is not listed shows a short badge on that folder in the tree, or on its nearest visible parent. The badge fades in, holds, fades out and is removed. The texts are:
+  - "( + ) created", in green;
+  - "( . ) updated", in amber;
+  - "( - ) deleted", in red.
+- **While the page is not shown:** changes that touch the kept folder mark its kept rows stale (`FileManagerState.LocalFilesChanged`), so the next visit lists them again.
+- **Window size bug fixed:** going to a page did not resize the window. There were two causes:
+  - Uno's desktop heads leave `AppWindow.MoveAndResize` unimplemented, so the call did nothing. `WindowHelper.SetWindowConfig` now calls `Move` and `Resize` separately.
+  - On X11, once a window is shown, Uno resizes the window manager's frame, and reparenting window managers (Cinnamon/Muffin, Mutter) ignore that. `X11WindowSize` also resizes the app's own client window through libX11, which the window manager honours.
+- **Tests:**
+  - `LocalFileWatcherTests`, offline: the merge rules, the quiet period, the noise filter, a real watcher on a temp folder, and a missing working folder with a file written right after its folders are made.
+  - The smoke step "navigate to file manager" now waits for the window to reach the file manager preset size.
+  - Smoke step "live file changes (one row, tree badge)" checks three things:
+    - a remote row's local copy is rebuilt while the other rows stay the same objects;
+    - an added file appears as one row and is removed again;
+    - a file in another folder shows a tree badge.
+
+## Cross-platform settings and credentials ✅
+
+Before this, the app depended on Windows in three places, and two of them only worked when the app was packaged (MSIX):
+
+| What | Was | Now |
+|---|---|---|
+| Server address, port, database, licence key, area factor, credential target | `ApplicationData.Current.LocalSettings`. Needs package identity on Windows, and only holds WinRT primitives, so `AreaFactor` (a `decimal`) was never saved. | `JsonFileSettingsProvider` (Core/Configuration): `settings.json` in `AppDataPaths.Config`, i.e. `%APPDATA%\HackPDM` or `~/.config/HackPDM`. Every change is written through a temporary file. |
+| The login password | Windows Credential Manager (Meziantou). Elsewhere, an AES file whose key is a constant in the program. | The system keychain on each platform, through `ICredentialStore` (Infrastructure/Credentials). See below. |
+| User images that replace the bundled icons | `ApplicationData.Current.LocalFolder` with `ms-appdata:///` URIs | A plain folder, `AppDataPaths.Data/Assets/Images` (`%LOCALAPPDATA%\HackPDM` or `~/.local/share/HackPDM`), with `file://` URIs |
+
+- **Credential stores:**
+  - Windows: Credential Manager, with the same targets as before, so logins already saved there keep working.
+  - Linux: the Secret Service (GNOME Keyring, KWallet, KeePassXC), called directly through `libsecret-1.so.0`. Items use the schema `org.hackpdm.Credential` with a `target` attribute.
+  - macOS: the login keychain (service "HackPDM", account = target).
+  - Without a keychain (headless machines, CI, no Secret Service running), the login falls back to the old file, now readable by the user only. That file is still only obscured, not protected.
+  - A login found in the file while a keychain is available is moved into the keychain.
+- **Moving old settings over:** on first use, `AppSettingsStore` copies whatever the packaged app had in `LocalSettings` into `settings.json`.
+- **Test isolation:** `HACKPDM_CONFIG_DIR`, `HACKPDM_DATA_DIR` and `HACKPDM_CREDENTIAL_STORE=file` move settings, data and the saved login out of the user's profile. The local gate and CI set them for the smoke test, so it no longer writes the test server and admin login into your own settings.
+- **Tests:**
+  - `JsonFileSettingsProviderTests`: types kept across runs (including `decimal`), defaults, null removes a key, importing old values, an unreadable file.
+  - `CredentialStoreTests`: keychain first, moving a login from the file, falling back when the keychain is unreachable, file permissions.
+  - `SecretService_RoundTrip_WhenAskedFor` uses the real Secret Service when `HACKPDM_TEST_KEYRING=1`.
+- **Not verified here:** the macOS Keychain store has not run on a Mac, and the Windows build (net10.0-windows) cannot be built on Linux.
+
+## SolidWorks assembly life cycle, end to end ✅
+
+`SolidWorksLifecycleTests` takes one KitBot sub-assembly (a screw and two nuts) through the life cycle against the live server. Operations go through `PdmWorkflowService`, and every status is read through `EntryListService`, as the file manager shows it. It needs the gitignored KitBot samples, so CI skips it.
+
+| Step | Status |
+|---|---|
+| 1. Local-only assembly and parts | Lo |
+| 2. Commit. The client checks for an entry of that name in that directory; the server builds the records from 14 `hp.record.staged` rows (4 entries, 4 versions, 3 relationships, 3 properties). | Ok |
+| 3. Local files moved out of the working folder | Ro |
+| 4. Get latest of the assembly. Its parts are downloaded too, into the same folder, byte-identical. | Ok |
+| 5. Assembly changed. Downloaded files that are not checked out are read-only by design, so this had to be cleared first. | Lm (parts Ok) |
+| 6. Originals moved back. They are the latest version, so the status is Ok, not Nv. | Ok |
+| 7. Downloaded parts moved back; the changed assembly stays outside | Ro (parts Ok) |
+| 8. Checkout: get latest, then check out. The parts are checked out too. | Cm |
+| 9. Changed assembly committed: a new version through staging (1 version, 3 relationships) | Ok (parts Ok) |
+| 10. The first version put back while the server has a newer one | Nv |
+| 11. Logical delete: the entry and its versions are kept | Dt (parts Ok) |
+| 12. Permanent delete: the entry and both versions are removed; the local file stays | Lo |
+
+Two bugs found and fixed:
+- **Parts stayed checked out after a commit.** Checking out an assembly checks out its parts. The commit then skipped them as unchanged and never released them. Unchanged files checked out to you are now checked back in, without a new version, both when other files are committed and when nothing changed at all.
+  - An unchanged file held by someone else is now a plain skip, not an error: there is nothing to commit.
+  - A changed file held by someone else is still refused.
+- **Logical delete took the parts with it.** `LogicalDeleteAsync` widened the selection to every entry the latest versions depend on. An assembly's parts are often shared with other assemblies (the KitBot nuts are used by about 20), so deleting one assembly deleted them for everyone. It now marks only the selected entries. Permanent delete already did this.
+
+## Checkout kept on the version ✅
+
+The checkout is stored on the version, as intended, and the entry shows its latest version's:
+
+| Field | hp.version | hp.entry |
+|---|---|---|
+| `checkout_user`, `checkout_date`, `checkout_node` | stored | related to `latest_version_id.checkout_*`, writable (a write goes to the latest version) |
+| `is_checked_out` | related to the entry | computed: the latest version has a checkout user. Setting it to False releases the checkout; it can be searched. |
+| `is_checkout_version` | this version has the checkout and is the latest | – |
+
+- **Checking out** (`hp.version.checkout_entry`) writes the checkout to the entry's latest version, whichever version id it was given. It still also sets that version's `node_id`.
+- **Committing** adds a new latest version with no checkout, so the entry is checked in by itself. `_post_create_version` also clears the checkout from the previous version, so no stale checkout is left on older versions.
+- **Guards** moved with the data: on a version, a user can check out only in their own name, and only the holder (or an administrator) can change or release a checkout. The entry's guards are unchanged.
+- **Cache bug fixed:** `hp.entry.latest_version_id` had its `@api.depends('version_ids')` commented out. Once it was read, a commit that added a version kept seeing the old latest version, and linked a new assembly to its part's previous version. The dependency is restored.
+- **Migration:** the addon is now 16.0.1.1.0. `migrations/16.0.1.1.0/post-migrate.py` copies the checkout from the old `hp_entry` columns onto each checked-out entry's latest version, so the upgrade releases nothing.
+- **Tests:**
+  - Server: the checkout is stored on the latest version, is searchable by user and by `is_checked_out`, and a commit clears it from the previous version. A separate test runs the migration against the old columns.
+  - Client: the lifecycle test reads the fields on the entry and on the version after the checkout and after the commit.
+
+## Folder (tree) actions and undo checkout ✅
+
+`FolderActionsTests` uses a folder with one KitBot assembly and its parts, and a `Sub/` folder with another. It runs what the tree's menu runs: the folder's entry ids, then the workflow.
+
+| Action | Result |
+|---|---|
+| Commit folder | Commits the folder's own files and the files they reference. **Not its sub-folders**: unlike the other tree actions, there is no recursive commit. |
+| Get latest, folder only | Top folder Ok, `Sub/` still Ro |
+| Get latest, with sub-folders | Everything Ok |
+| Check out the tree | Everything Cm, and writable |
+| Undo the check out of the tree | Everything Ok, and read-only again |
+| Undo check out of one assembly | Releases the assembly and its parts. A local change is kept, not reverted, so the assembly shows Lm. |
+| Delete the tree (logically) | Everything Dt |
+| Restore | The folder's own entries only. `Sub/` needs its own restore, because the recursive restore is still "Not Implemented Yet" in the file manager. |
+
 ## Order and effort
 
 | Phase | Risk | Est. net lines | Depends on |

@@ -9,10 +9,30 @@ using HackPDM.Mvvm.Models.Tools;
 
 namespace HackPDM.Mvvm.ViewModels.Tools;
 
-/// <summary>The settings file as an editable tree of top-level properties.</summary>
+/// <summary>
+/// The settings file as an editable tree of top-level properties. One per visit of the page: it starts
+/// from what the editor showed when the page was last left (<see cref="JsonEditorDraft"/>).
+/// </summary>
 public partial class JsonEditorViewModel : ObservableObject
 {
+	private readonly JsonEditorDraft _draft;
+
+	public JsonEditorViewModel( JsonEditorDraft draft )
+	{
+		_draft = draft;
+		// text that no longer parses (left mid-edit in the code view) is still kept for that view
+		if( draft.Text is { } text )
+			LoadText( text );
+	}
+
 	public ObservableCollection<JsonNodeViewModel> RootNodes { get; } = [];
+
+	/// <summary>The text the code view should start with: the kept text, which may not parse yet.</summary>
+	public string? KeptText => _draft.Text;
+
+	/// <summary>The page is left: keeps the tree (or, from the code view, its text as typed).</summary>
+	public void Keep( string? codeText = null )
+		=> _draft.Text = codeText ?? ( RootNodes.Count > 0 ? ToJson() : null );
 
 	/// <summary>Loads the saved settings file (or a sample when there is none).</summary>
 	[RelayCommand]

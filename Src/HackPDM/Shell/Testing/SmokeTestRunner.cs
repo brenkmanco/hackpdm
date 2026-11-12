@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using HackPDM.Mvvm.ViewModels.Common;
+using HackPDM.Core;
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Shared.GlobalData;
@@ -19,6 +20,8 @@ using HackPDM.Mvvm.Views.Common.Types;
 using Microsoft.UI.Xaml;
 using HackPDM.Mvvm.Views.Hack;
 using HackPDM.Mvvm.Views.Settings;
+
+using EntryRow = HackPDM.Mvvm.Models.Hack.EntryRow;
 
 namespace HackPDM.Shell.Testing;
 
@@ -140,7 +143,7 @@ internal static class SmokeTestRunner
 			&& await Step( "login", async () =>
 			{
 				// same call the Profile Manager "Login" button makes
-				var pm = AppComposition.ProfileManager;
+				var pm = AppComposition.CreateProfileManager();
 				pm.IsLoggedIn = await pm.AbleToLoginAsync();
 				if( !pm.IsLoggedIn )
 				{
@@ -161,7 +164,14 @@ internal static class SmokeTestRunner
 				await WaitUntil( () => frame.Content is HackFileManagerView { IsLoaded: true }, "HackFileManager page loaded",
 					() => $"frame shows {frame.Content?.GetType().Name ?? "nothing"}" );
 				page = (HackFileManagerView)frame.Content;
-				return "HackFileManager loaded";
+
+				// the window takes the file manager's size (its preset), not the Profile Manager's
+				var preset = WindowConfig.Preset( "HackFileManager" ).PositionAndSize;
+				var appWindow = HackApp.Window!.AppWindow;
+				string Size() => $"{appWindow.Size.Width}x{appWindow.Size.Height}";
+				await WaitUntil( () => appWindow.Size.Width >= preset.z * 0.9 && appWindow.Size.Height >= preset.w * 0.9,
+					$"window resized to the file manager preset {preset.z}x{preset.w}", () => $"window is {Size()}" );
+				return $"HackFileManager loaded, window {Size()}";
 			} )
 			&& await Step( "load directory tree", async () =>
 			{
@@ -217,6 +227,79 @@ internal static class SmokeTestRunner
 
 				await WaitUntil( () => vm.OHistories.Count > 0, $"history rows for {entry.Name}" );
 				return $"{entry.Name}: {vm.OHistories.Count} history row(s)";
+			} )
+			&& await Step( "leave and come back (context kept)", async () =>
+			{
+				// a new page and view model each visit; the tree, folder, rows, selection and tab come back
+				// from the session's FileManagerState without asking the server again
+				var before = page!;
+				var oldVm = before.ViewModel;
+				string? folder = oldVm.LastSelectedNodePath;
+				var selected = before.GetOdooEntryList().SelectedItem as EntryRow
+					?? throw new InvalidOperationException( "no entry selected before leaving" );
+				EntryRow firstRow = oldVm.Entries[ 0 ];
+				var keptTree = AppComposition.FileManagerState.Tree;
+				var frame = HackApp.HomePage!.ContentFrame;
+
+				AppComposition.Navigation.NavigateTo( NavigatePageMenu.ProfileManager );
+				await WaitUntil( () => frame.Content is HackPDM.Mvvm.Views.Settings.ProfileManagerView, "Profile Manager shown" );
+				if( !oldVm.IsDisposed )
+					throw new InvalidOperationException( "the file manager's view model was not disposed when its page was left" );
+
+				var sw = Stopwatch.StartNew();
+				AppComposition.Navigation.NavigateTo( NavigatePageMenu.HackFileManager );
+				await WaitUntil( () => frame.Content is HackFileManagerView { IsLoaded: true } p && p != before, "file manager shown again" );
+				page = (HackFileManagerView)frame.Content;
+				var vm = page.ViewModel;
+				if( ReferenceEquals( vm, oldVm ) )
+					throw new InvalidOperationException( "the view model was reused instead of made for the new visit" );
+
+				await WaitUntil( () => vm.IsListLoaded && page.LastSelectedNode?.LinkedData.FullPath == folder,
+					$"folder {folder} selected again", () => $"selected {page.LastSelectedNode?.LinkedData.FullPath ?? "nothing"}" );
+				await WaitUntil( () => ( page.GetOdooEntryList().SelectedItem as EntryRow )?.Name == selected.Name,
+					$"{selected.Name} selected again" );
+				await WaitUntil( () => vm.OHistories.Count > 0, "history tab filled again" );
+
+				if( !ReferenceEquals( AppComposition.FileManagerState.Tree, keptTree ) )
+					throw new InvalidOperationException( "the directory tree was fetched again instead of kept" );
+				if( !vm.Entries.Any( r => ReferenceEquals( r, firstRow ) ) )
+					throw new InvalidOperationException( "the folder's rows were fetched again instead of kept" );
+				if( page.LowerTabIndex?.Name != page.HistoryTabItem.Name )
+					throw new InvalidOperationException( $"detail tab not restored: {page.LowerTabIndex?.Name}" );
+
+				return $"back in {sw.ElapsedMilliseconds} ms: {folder}, {vm.Entries.Count} kept rows, {selected.Name} selected, history tab";
+			} )
+			&& await Step( "live file changes (one row, tree badge)", async () =>
+			{
+				// the file watcher rebuilds just the changed file's row; other folders get a badge
+				var vm = page!.ViewModel;
+				string listed = PwaPaths.ToAbsolute( vm.LastSelectedNodePath )!;
+				Directory.CreateDirectory( listed );
+				EntryRow edited = vm.Entries.FirstOrDefault( e => e.Id is > 0 )
+					?? throw new InvalidOperationException( "no remote row to edit" );
+				List<EntryRow> others = [ .. vm.Entries.Where( e => e != edited ) ];
+
+				// a local copy appears for a remote-only row: that row is rebuilt as local + remote
+				await File.WriteAllTextAsync( Path.Combine( listed, edited.Name! ), "changed locally" );
+				await WaitUntil( () => vm.Entries.Any( e => e.Name == edited.Name && !ReferenceEquals( e, edited ) && e.ReprType == EntryReprType.Both ),
+					$"{edited.Name} rebuilt as a local + remote row",
+					() => string.Join( ", ", vm.Entries.Select( e => $"{e.Name}:{e.ReprType}" ) ) );
+				if( others.Any( o => !vm.Entries.Contains( o ) ) )
+					throw new InvalidOperationException( "other rows were rebuilt too (the whole list reloaded)" );
+
+				// a new file adds a row; deleting it removes the row
+				string added = Path.Combine( listed, "smoke-live.txt" );
+				await File.WriteAllTextAsync( added, "new" );
+				await WaitUntil( () => vm.Entries.Any( e => e.Name == "smoke-live.txt" && e.ReprType == EntryReprType.Local ), "new local row" );
+				File.Delete( added );
+				await WaitUntil( () => vm.Entries.All( e => e.Name != "smoke-live.txt" ), "deleted file's row removed" );
+
+				// a file in a folder that is not listed: a badge on that folder
+				int badges = page.BadgesShown;
+				await File.WriteAllTextAsync( Path.Combine( PwaPaths.Vault, "smoke-elsewhere.txt" ), "x" );
+				await WaitUntil( () => page.BadgesShown > badges, "a change badge on the root folder" );
+
+				return $"{edited.Name} rebuilt, {others.Count} other rows untouched, added + removed a row, badge shown";
 			} );
 	}
 

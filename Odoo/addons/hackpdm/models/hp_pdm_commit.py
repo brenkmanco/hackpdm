@@ -4,7 +4,9 @@ import logging
 import re
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
+
+from . import hp_guard
 
 def _like_literal(value):
     """value for an =ilike domain that matches only itself (case-insensitively, as Windows and
@@ -66,10 +68,18 @@ class hp_pdm_commit(models.Model):
             else:
                 rec.duration_seconds = 0
 
+    def _check_commit_owner(self):
+        """Only the user who created a commit (or an administrator) may run or reset it."""
+        if hp_guard.is_pdm_admin(self.env):
+            return
+        for record in self:
+            if record.create_uid.id != self.env.uid:
+                raise AccessError(f"Commit {record.id} belongs to another user.")
+
     def _rollback_records_staged(self, staged_ids):
-        staged = self.env["hp.record.staged"].browse(staged_ids)
-        #staged.write({"payload": False})
-        staged.unlink()
+        # users may not delete hp.record.staged rows; the caller owns this commit (checked in
+        # start_commit / clear_commit), so its own staged rows are removed with elevated rights
+        self.env["hp.record.staged"].browse(staged_ids).sudo().unlink()
 
     # ------------------------------------------------------------ 
     # CLIENT CALLS THIS — resets commit records
@@ -78,12 +88,14 @@ class hp_pdm_commit(models.Model):
     def clear_commit(self, rec_id: int | list[int]):
         if isinstance(rec_id, list):
             rec_id = rec_id[0]
-        record = self.browse([rec_id])
-        record.ensure_one()
+        record = self.browse([rec_id]).exists()
+        if not record:
+            raise UserError(f"Commit {rec_id} does not exist.")
+        record._check_commit_owner()
         records = record.staged_ids
 
         if records:
-            records.unlink()
+            record._rollback_records_staged(records.ids)
             record.write({
                 "committed": False, 
                 "errored": False, 
@@ -99,7 +111,8 @@ class hp_pdm_commit(models.Model):
     def start_commit(self, commit_ids: int | list[int]):
         if isinstance(commit_ids, int):
             commit_ids = [commit_ids]
-        records = self.browse(commit_ids)
+        records = self.browse(commit_ids).exists()
+        records._check_commit_owner()
 
         for record in records:
             if record.committed or not record.staged_ids:
@@ -207,8 +220,9 @@ class hp_pdm_commit(models.Model):
 
         # Check: Collision check (Lo vs existing)
         if dir_id and entry_name:
+            # case-insensitive: "Part.SLDPRT" and "part.sldprt" are the same file on Windows
             existing_entry = self.env["hp.entry"].search([
-                ("name", "=", entry_name),
+                ("name", "=ilike", _like_literal(entry_name)),
                 ("dir_id", "=", dir_id),
             ], limit=1)
             if existing_entry:
@@ -293,22 +307,36 @@ class hp_pdm_commit(models.Model):
                     [("windows_complete_name", "=ilike", _like_literal(dep_windows_name)), ("deleted", "=", False)], limit=1)
             if not child_entry:
                 child_entry = self.env["hp.entry"].search([("name", "=ilike", _like_literal(dep_filename)), ("deleted", "=", False)], limit=1)
-            if child_entry and child_entry.latest_version_id:
+            # a file that references itself (its latest version is the one just created) is no dependency
+            if child_entry and child_entry.latest_version_id and child_entry.latest_version_id != parent_version:
                 parent_version.write({"child_ids": [(4, child_entry.latest_version_id.id)]})
         row.write({"payload": {"complete": True}})
 
     def _post_create_version(self, version_rec):
-        """Post-creation hook for hp.version to uncheckout/check-in the entry."""
+        """Checks the entry in after a new version: the checkout is kept on the version that was
+        checked out (the previous latest), and the new latest version has none, so that one is cleared."""
         entry_rec = version_rec.entry_id
         if entry_rec:
-            entry_vals = {
-                "checkout_user": False,
-                "checkout_date": False,
-                "checkout_node": False,
-            }
-            if "is_checked_out" in entry_rec._fields:
-                entry_vals["is_checked_out"] = False
-            entry_rec.write(entry_vals)
+            held = entry_rec.version_ids.filtered(lambda v: v.checkout_user and v != version_rec)
+            if held:
+                held.write({"checkout_user": False, "checkout_date": False, "checkout_node": False})
+
+    @staticmethod
+    def _own_fields_only(model, payload: dict):
+        """The payload without the fields create() would write somewhere else: a related field
+        (a version's file_ext is its entry's type's file_ext, an entry's cat_id its type's category)
+        writes through to that shared record, and a computed field without an inverse (an entry's
+        windows_complete_name) would overwrite the server's own value. Unknown keys are dropped too."""
+        own = {}
+        for key, value in payload.items():
+            field = model._fields.get(key)
+            if field is None:
+                logging.warning("commit: ignoring unknown field %s on %s", key, model._name)
+            elif field.related or (field.compute and not field.inverse):
+                continue
+            else:
+                own[key] = value
+        return own
 
     def _create_records(self, staged, summary_model):
         for index, row in enumerate(staged, start=1):
@@ -332,6 +360,7 @@ class hp_pdm_commit(models.Model):
                 continue
 
             model = self.env[target_model]
+            payload = self._own_fields_only(model, payload)
             payload["commit_id"] = row.commit_id.id if row.commit_id else self.id
             rec = model.create(payload)
             summary_model.setdefault(target_model, {}).setdefault(row.id, rec.id)
