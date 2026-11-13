@@ -9,10 +9,13 @@ using System.Threading.Tasks;
 
 using HackPDM.Mvvm.ViewModels.Common;
 using HackPDM.Core;
+using HackPDM.Core.Graph;
+using HackPDM.Core.Theming;
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Mvvm.Views.Common.Controls;
+using HackPDM.Mvvm.Views.Common.Theming;
 using HackPDM.Shell;
 using HackPDM.UI.Types;
 using HackPDM.Mvvm.Views.Common.Types;
@@ -354,21 +357,21 @@ internal static class SmokeTestRunner
 			throw new InvalidOperationException( $"expected 4 links, got {graph.Layout.Edges.Count}" );
 
 		// parents: the selected file rightmost
-		page.SetDirection( HackPDM.Core.Graph.GraphDirection.Parents );
+		page.SetDirection( GraphDirection.Parents );
 		page.SelectEntries( "bolt.sldprt" );
 		await Expect( "parents of bolt.sldprt", "bolt.sldprt", "arm.sldasm", "frame.sldasm", "frame.slddrw" );
 		if( graph.Layout.Nodes.Any( n => n.Node.Name != "bolt.sldprt" && n.X >= X( "bolt.sldprt" ) ) )
 			throw new InvalidOperationException( $"bolt.sldprt is not rightmost: {Dump()}" );
 
 		// both: the selected file in the middle
-		page.SetDirection( HackPDM.Core.Graph.GraphDirection.Both );
+		page.SetDirection( GraphDirection.Both );
 		page.SelectEntries( "arm.sldasm" );
 		await Expect( "both around arm.sldasm", "arm.sldasm", "frame.sldasm", "frame.slddrw", "bolt.sldprt", "plate.sldprt" );
 		if( !( X( "frame.sldasm" ) < X( "arm.sldasm" ) && X( "arm.sldasm" ) < X( "plate.sldprt" ) ) )
 			throw new InvalidOperationException( $"arm.sldasm is not in the middle: {Dump()}" );
 
 		// several files at once
-		page.SetDirection( HackPDM.Core.Graph.GraphDirection.Children );
+		page.SetDirection( GraphDirection.Children );
 		page.SetSelectAll( true );
 		await WaitUntil( () => page.Roots.Count == 5 && page.PendingLoad is { IsCompleted: true }, "all 5 files as roots",
 			() => $"{page.Roots.Count} roots" );
@@ -411,6 +414,10 @@ internal static class SmokeTestRunner
 		await WaitUntil( () => page.DetailsText.StartsWith( "no preview" ), "preview looked up", () => page.DetailsText );
 
 		string shot = await SaveScreenshotAsync( page );
+
+		// themes: the app's colors and shapes, with the open details kept
+		shot += await ThemeChecksAsync( page, frameAsm );
+
 		graph.SelectNode( frameAsm );
 		page.CloseDetailsForTest();
 		if( page.DetailsOpen )
@@ -418,12 +425,98 @@ internal static class SmokeTestRunner
 		return $"children/parents/both laid out, 5 roots with select all, zoom {before.Zoom:0.00}->{after.Zoom:0.00}, details card + tables{shot}";
 	}
 
+	/// <summary>
+	/// The theme presets. Normally: switched live (not saved) from Dark / Default: Navy blue recolors the running app,
+	/// Light previews until a restart, every style redraws the graph and recolors the panels; then back to Dark / Default.
+	/// With HACKPDM_SMOKE_THEME ("Palette:Form") the app started in that preset: what only startup sets is checked
+	/// (base theme, density, corners, recolored brushes) and the graph, file manager and settings are pictured.
+	/// </summary>
+	private static async Task<string> ThemeChecksAsync( DependencyGraphView page, int fileId )
+	{
+		var theme = AppComposition.Theme;
+		var graph = page.GraphView;
+		var resources = Application.Current.Resources;
+		var root = (FrameworkElement)HackApp.Window!.Content!;
+		uint Argb( string key ) => ( (Microsoft.UI.Xaml.Media.SolidColorBrush)resources[ key ] ).Color is var c
+			? (uint)c.A << 24 | (uint)c.R << 16 | (uint)c.G << 8 | c.B : 0;
+		void Check( bool ok, string what )
+		{
+			if( !ok )
+				throw new InvalidOperationException( $"{theme.Palette} + {theme.Form}: {what}" );
+		}
+		void CheckColors( AppPalette p, AppForm f )
+		{
+			foreach( var (key, argb) in p.Brushes )
+				Check( Argb( key ) == argb, $"{key} is {Argb( key ):X8}, the preset says {argb:X8}" );
+			Check( Argb( ThemeService.PanelStrokeKey ) == ThemePresets.PanelStroke( p, f ), "panel border color" );
+		}
+
+		string? startup = Environment.GetEnvironmentVariable( ThemeService.SmokeThemeVariable );
+		if( startup is { Length: > 0 } )
+		{
+			AppPalette p = ThemePresets.Palette( theme.Palette );
+			AppForm f = ThemePresets.Form( theme.Form );
+			Check( $"{theme.Palette}:{theme.Form}" == startup, $"started as {theme.Palette}:{theme.Form}, asked for {startup}" );
+			Check( Application.Current.RequestedTheme == ( p.IsDark ? ApplicationTheme.Dark : ApplicationTheme.Light ), "base theme" );
+			Check( ThemeService.IsCompactDensity( resources ) == f.CompactDensity, $"compact density should be {f.CompactDensity}" );
+			Check( ( (CornerRadius)resources[ ThemeService.PanelCornerKey ] ).TopLeft == f.PanelCornerRadius, "panel corners" );
+			Check( ( (CornerRadius)resources[ "ControlCornerRadius" ] ).TopLeft == f.ControlCornerRadius, "control corners" );
+			Check( !theme.NeedsRestart && !theme.StyleNeedsRestart, "a restart asked for right after starting" );
+			CheckColors( p, f );
+			Check( graph.Theme == theme.GraphTheme, "graph colors" );
+
+			string tag = startup.Replace( ':', '-' ).ToLowerInvariant();
+			string shots = await SaveScreenshotAsync( root, $"{tag}-graph" );
+			var frame = HackApp.HomePage!.ContentFrame;
+			AppComposition.Navigation.NavigateTo( NavigatePageMenu.HackFileManager );
+			await WaitUntil( () => frame.Content is HackFileManagerView { IsLoaded: true } fm && fm.ViewModel.IsListLoaded, "file manager shown" );
+			shots += await SaveScreenshotAsync( root, $"{tag}-files" );
+			AppComposition.Navigation.NavigateTo( NavigatePageMenu.Settings );
+			await WaitUntil( () => frame.Content is ApplicationSettingsView { IsLoaded: true }, "settings shown" );
+			await Task.Delay( 1000 );
+			shots += await SaveScreenshotAsync( root, $"{tag}-settings" );
+			return $"; started as {startup}: density, corners, colors as the preset{shots}";
+		}
+
+		uint darkPage = Argb( "ApplicationPageBackgroundThemeBrush" );
+		List<string> seen = [];
+		foreach( var (palette, form) in new[] { (PaletteName.NavyBlue, FormName.Fancy), (PaletteName.Light, FormName.Modern), (PaletteName.Dark, FormName.Compact) } )
+		{
+			theme.SetPalette( palette );
+			theme.SetForm( form );
+			AppPalette p = ThemePresets.Palette( palette );
+			AppForm f = ThemePresets.Form( form );
+			await WaitUntil( () => graph.Theme == theme.GraphTheme && graph.Layout.Nodes.Count == 5, $"{palette} + {form} graph drawn",
+				() => $"{graph.Theme.Palette.Name} + {graph.Theme.Form.Name}, {graph.Layout.Nodes.Count} boxes" );
+			Check( graph.SelectedNode?.Id == fileId && page.DetailsOpen, "the clicked file's details were lost" );
+			var box = graph.Layout.Find( fileId )!;
+			Check( Math.Abs( box.Width - GraphLayout.BoxSize( box.Node.Size, graph.Theme.Form.Layout ).Width ) < 0.01, "graph box size" );
+			bool live = p.IsDark == ( Application.Current.RequestedTheme == ApplicationTheme.Dark );
+			Check( theme.NeedsRestart != live, live ? "asks for a restart" : "should ask for a restart (other base theme)" );
+			if( live )
+				CheckColors( p, f );
+			else
+				Check( Argb( ThemeService.PanelStrokeKey ) == ThemePresets.PanelStroke( p, f ), "panel border color" );
+			Check( root.RequestedTheme == ( p.IsDark ? ElementTheme.Dark : ElementTheme.Light ), "window preview theme" );
+			Check( theme.StyleNeedsRestart, "a style switch should ask for a restart (controls)" );
+			seen.Add( $"{palette}+{form}{( live ? " live" : " preview" )}" + await SaveScreenshotAsync( root, $"live-{palette}-{form}".ToLowerInvariant() ) );
+		}
+		theme.SetPalette( PaletteName.Dark );
+		theme.SetForm( FormName.Default );
+		await WaitUntil( () => graph.Theme == GraphTheme.Default, "back to Dark + Default" );
+		Check( Argb( "ApplicationPageBackgroundThemeBrush" ) == darkPage, "dark colors not restored" );
+		Check( !theme.NeedsRestart && !theme.StyleNeedsRestart, "still asks for a restart after switching back" );
+		return "; themes: " + string.Join( ", ", seen );
+	}
+
 	/// <summary>Saves <paramref name="element"/> as a PNG to HACKPDM_SMOKE_SCREENSHOT, if set; says where (or why not).</summary>
-	private static async Task<string> SaveScreenshotAsync( UIElement element )
+	private static async Task<string> SaveScreenshotAsync( UIElement element, string? suffix = null )
 	{
 		string? path = Environment.GetEnvironmentVariable( "HACKPDM_SMOKE_SCREENSHOT" );
 		if( path is not { Length: > 0 } )
 			return "";
+		if( suffix is not null )
+			path = Path.Combine( Path.GetDirectoryName( path ) ?? "", $"{Path.GetFileNameWithoutExtension( path )}-{suffix}{Path.GetExtension( path )}" );
 		try
 		{
 			await Task.Delay( 300 );

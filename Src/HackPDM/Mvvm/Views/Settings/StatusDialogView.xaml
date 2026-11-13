@@ -56,7 +56,7 @@
             Grid.ColumnSpan="2"
             Height="5"
             HorizontalAlignment="Stretch"
-            Background="Gray" />
+            Background="{ThemeResource ControlStrongStrokeColorDefaultBrush}" />
 
         <!--  Info List  -->
         <tv:TableView

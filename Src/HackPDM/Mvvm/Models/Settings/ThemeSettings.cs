@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json.Serialization;
 
+using HackPDM.Core.Theming;
+
 namespace HackPDM.Mvvm.Models.Settings;
 
 /// <summary>Which base theme the app uses.</summary>
@@ -22,7 +24,20 @@ public enum AppThemeMode
 /// </summary>
 public sealed class ThemeSettings
 {
+	/// <summary>The base light/dark theme; it follows <see cref="Palette"/> (kept for settings saved before the presets).</summary>
 	public AppThemeMode Mode { get; set; } = AppThemeMode.Dark;
+
+	/// <summary>The color preset; null in settings saved before the presets, which then follow <see cref="Mode"/>.</summary>
+	[JsonConverter( typeof( JsonStringEnumConverter<PaletteName> ) )]
+	public PaletteName? Palette { get; set; }
+
+	/// <summary>The shape preset.</summary>
+	[JsonConverter( typeof( JsonStringEnumConverter<FormName> ) )]
+	public FormName Form { get; set; } = FormName.Default;
+
+	/// <summary>The color preset in use: <see cref="Palette"/>, or for older settings Light when the mode was Light, else Dark.</summary>
+	[JsonIgnore]
+	public PaletteName EffectivePalette => Palette ?? ( Mode == AppThemeMode.Light ? PaletteName.Light : PaletteName.Dark );
 
 	/// <summary>Theme resource key → color as "#AARRGGBB", used while the light theme is active.</summary>
 	public Dictionary<string, string> Light { get; set; } = [];

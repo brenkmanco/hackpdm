@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using HackPDM.Core;
 using HackPDM.Core.Graph;
+using HackPDM.Core.Theming;
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.Models;
@@ -71,6 +72,9 @@ public sealed partial class DependencyGraphView : Page
 	public DependencyGraphView()
 	{
 		InitializeComponent();
+		Graph.Theme = AppComposition.Theme.GraphTheme;
+		AppComposition.Theme.ThemeChanged += OnThemeChanged;
+		Unloaded += ( _, _ ) => AppComposition.Theme.ThemeChanged -= OnThemeChanged;
 		FolderTree.SelectionChanged += ( _, _ ) => _ = LoadEntriesAsync();
 		EntryList.SelectionChanged += ( _, _ ) => OnEntrySelectionChanged();
 		SelectAll.Checked += ( _, _ ) => SetAllSelected( true );
@@ -315,7 +319,8 @@ public sealed partial class DependencyGraphView : Page
 				return;
 			}
 			_graph = graph.Value!;
-			Graph.Show( await Task.Run( () => GraphLayout.Arrange( _graph, direction ), load.Token ) );
+			GraphForm form = Graph.Theme.Form;
+			Graph.Show( await Task.Run( () => GraphLayout.Arrange( _graph, direction, form.Layout ), load.Token ) );
 			// the open details stay open when their file is still in the graph
 			if( _detailNode is { } open && Graph.SelectNode( open.Id ) )
 				Graph.EnsureVisible( open.Id, DetailPanelSpace );
@@ -357,6 +362,25 @@ public sealed partial class DependencyGraphView : Page
 		Status.Text = text;
 	}
 
+	// ------------------------------------------------------------------ theme
+
+	/// <summary>The app's theme changed (Settings → Theme): redraw the graph in its colors and shapes, no server call.</summary>
+	private void OnThemeChanged()
+	{
+		GraphTheme theme = AppComposition.Theme.GraphTheme;
+		if( theme == Graph.Theme )
+			return;
+		Graph.Theme = theme;
+		if( _detailNode is { } shown )
+			InfoHeader.Background = new SolidColorBrush( Graph.HeaderColor( shown ) );
+		if( _graph.Nodes.Count == 0 )
+			return;
+		Graph.Show( GraphLayout.Arrange( _graph, Direction, theme.Form.Layout ) );
+		// the open details stay on their file
+		if( _detailNode is { } open && Graph.SelectNode( open.Id ) )
+			Graph.EnsureVisible( open.Id, DetailPanelSpace );
+	}
+
 	// ------------------------------------------------------------------ details of the clicked file
 
 	/// <summary>Closes the details panel, as its close button does (the smoke tests).</summary>
@@ -385,7 +409,7 @@ public sealed partial class DependencyGraphView : Page
 		}
 		bool same = _detailNode?.Id == node.Id && DetailsOpen;
 		_detailNode = node;
-		FillInfoCard( node );
+		FillInfoCard( node, keepPreview: same );
 		DetailPanel.Visibility = Visibility.Visible;
 		if( DetailTabs.SelectedItem is null )
 			DetailTabs.SelectedIndex = 0;
@@ -403,9 +427,9 @@ public sealed partial class DependencyGraphView : Page
 		DetailPanel.Visibility = Visibility.Collapsed;
 	}
 
-	private void FillInfoCard( GraphNode node )
+	private void FillInfoCard( GraphNode node, bool keepPreview = false )
 	{
-		InfoHeader.Background = new SolidColorBrush( NodeGraphView.HeaderColor( node ) );
+		InfoHeader.Background = new SolidColorBrush( Graph.HeaderColor( node ) );
 		InfoName.Text = node.Name;
 		string type = node.TypeName.Length > 0 ? node.TypeName : node.Ext.ToUpperInvariant() + " file";
 		InfoType.Text = node.Category.Length > 0 ? $"{type} · {node.Category}" : type;
@@ -430,6 +454,8 @@ public sealed partial class DependencyGraphView : Page
 		InfoUsedBy.Text = Related( _graph.Edges.Where( e => e.Child == node.Id ).Select( e => e.Parent ), GraphDirection.Children );
 		InfoLocate.IsEnabled = !node.Deleted && node.Path.Contains( '\\' );
 
+		if( keepPreview )
+			return;
 		InfoPreview.Source = null;
 		InfoPreviewNone.Text = "loading…";
 		InfoPreviewNone.Visibility = Visibility.Visible;

@@ -60,14 +60,14 @@
 			<Setter Property="Height" Value="35" />
 			<Setter Property="MinHeight" Value="25" />
 		</Style> -->
+		<!--  text keeps the theme's color (a fixed white was invisible on light presets)  -->
 		<Style TargetType="TextBlock">
 			<Setter Property="FontSize" Value="11" />
-			<Setter Property="FontWeight" Value="Light" />
-			<Setter Property="Foreground" Value="White" />
+			<Setter Property="FontWeight" Value="Normal" />
 		</Style>
 	</Page.Resources>
 
-	<Grid Margin="12" CornerRadius="10">
+	<Grid Margin="12" CornerRadius="{StaticResource HackPanelCornerRadius}">
 		<!--  TreeView for Directories  -->
 		<SplitView
 			Grid.RowSpan="4"
@@ -87,9 +87,9 @@
 						Grid.Row="0"
 						Margin="5,0,5,10"
 						VerticalAlignment="Top"
-						BorderBrush="DimGray"
-						BorderThickness="3"
-						CornerRadius="10"
+						BorderBrush="{StaticResource HackPanelStrokeBrush}"
+						BorderThickness="{StaticResource HackPanelBorderThickness}"
+						CornerRadius="{StaticResource HackPanelCornerRadius}"
 						ItemsSource="{x:Bind BreadcrumbPath}"
 						Visibility="Visible">
 						<BreadcrumbBar.ItemTemplate>
@@ -106,11 +106,11 @@
 							x:Name="OdooDirectoryTree"
 							Margin="0,0,10,0"
 							VerticalAlignment="Top"
-							BorderBrush="DimGray"
-							BorderThickness="3"
+							BorderBrush="{StaticResource HackPanelStrokeBrush}"
+							BorderThickness="{StaticResource HackPanelBorderThickness}"
 							CanDrag="True"
 							CanDragItems="False"
-							CornerRadius="10"
+							CornerRadius="{StaticResource HackPanelCornerRadius}"
 							Visibility="Visible">
 							<TreeView.ContextFlyout>
 								<MenuFlyout>

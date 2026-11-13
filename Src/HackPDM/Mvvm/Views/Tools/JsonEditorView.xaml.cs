@@ -162,12 +162,13 @@ public sealed partial class JsonEditorView : Page
 		var doc = CodeEditor.Document;
 		doc.SetText(TextSetOptions.None, normalizedJson);
 
-		// Dark-Theme IDE Color Tokens
-		Color colorKey = Color.FromArgb(255, 156, 220, 254);     // Light Blue (#9CDCFE)
-		Color colorString = Color.FromArgb(255, 206, 145, 120);  // Terra Cotta / Amber (#CE9178)
-		Color colorNumber = Color.FromArgb(255, 181, 206, 168);  // Pale Green (#B5CEA8)
-		Color colorKeyword = Color.FromArgb(255, 86, 156, 214);  // Deep Blue / Keyword (#569CD6)
-		Color colorPunct = Color.FromArgb(255, 212, 212, 212);   // Off-White Punctuation (#D4D4D4)
+		// IDE color tokens for the page's light or dark theme (the light set stays readable on white)
+		bool dark = ActualTheme != ElementTheme.Light;
+		Color colorKey = dark ? Color.FromArgb(255, 156, 220, 254) : Color.FromArgb(255, 4, 81, 165);       // #9CDCFE / #0451A5
+		Color colorString = dark ? Color.FromArgb(255, 206, 145, 120) : Color.FromArgb(255, 163, 21, 21);   // #CE9178 / #A31515
+		Color colorNumber = dark ? Color.FromArgb(255, 181, 206, 168) : Color.FromArgb(255, 9, 134, 88);    // #B5CEA8 / #098658
+		Color colorKeyword = dark ? Color.FromArgb(255, 86, 156, 214) : Color.FromArgb(255, 0, 0, 255);     // #569CD6 / #0000FF
+		Color colorPunct = dark ? Color.FromArgb(255, 212, 212, 212) : Color.FromArgb(255, 59, 59, 59);     // #D4D4D4 / #3B3B3B
 
 		// 1. Base Punctuation Tint
 		ITextRange fullRange = doc.GetRange(0, normalizedJson.Length);

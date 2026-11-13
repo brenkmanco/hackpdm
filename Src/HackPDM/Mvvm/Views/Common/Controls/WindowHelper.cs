@@ -147,8 +147,10 @@ public static partial class WindowHelper
         titleBar.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
 
         // Optional: Match the hover/press states to your custom background color
-        titleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(25, 255, 255, 255);
-        titleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(50, 255, 255, 255);
+        // a light tint on dark presets, a dark one on light presets, so the hover shows on either
+        byte tint = HackPDM.Shell.AppComposition.Theme.IsDarkActive ? (byte)255 : (byte)0;
+        titleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(25, tint, tint, tint);
+        titleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(50, tint, tint, tint);
 #endif
     }
 }

@@ -49,21 +49,33 @@
             <StackPanel Spacing="6">
                 <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Theme" />
                 <ComboBox
-                    Header="Base theme"
+                    x:Name="PalettePicker"
+                    Header="Colors"
                     HorizontalAlignment="Stretch"
-                    ItemsSource="{x:Bind ViewModel.Modes}"
-                    SelectedIndex="{x:Bind ViewModel.SelectedModeIndex, Mode=TwoWay}" />
+                    ItemsSource="{x:Bind ViewModel.PaletteTitles}"
+                    SelectedIndex="{x:Bind ViewModel.SelectedPaletteIndex, Mode=TwoWay}" />
+                <ComboBox
+                    x:Name="FormPicker"
+                    Header="Style"
+                    HorizontalAlignment="Stretch"
+                    ItemsSource="{x:Bind ViewModel.FormTitles}"
+                    SelectedIndex="{x:Bind ViewModel.SelectedFormIndex, Mode=TwoWay}" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind ViewModel.FormDescription, Mode=OneWay}"
+                    TextWrapping="Wrap" />
                 <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap">
                     <Run Text="Editing the" />
                     <Run FontWeight="SemiBold" Text="{x:Bind ViewModel.EditingThemeText, Mode=OneWay}" />
-                    <Run Text="theme. Color changes apply live." />
+                    <Run Text="colors. Color changes apply live, on top of the preset." />
                 </TextBlock>
                 <InfoBar
                     IsClosable="False"
                     IsOpen="True"
                     Message="{x:Bind ViewModel.RestartNotice, Mode=OneWay}"
                     Severity="Warning"
-                    Visibility="{x:Bind ViewModel.IsEditable, Mode=OneWay, Converter={StaticResource BoolToVisibility}, ConverterParameter=Invert}" />
+                    Visibility="{x:Bind ViewModel.ShowRestartNotice, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
 
             <ListView

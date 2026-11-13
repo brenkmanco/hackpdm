@@ -10,24 +10,15 @@
 
     <Page.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.ThemeDictionaries>
-                <ResourceDictionary x:Key="Dark">
-                    <Style
-                        x:Key="DarkButtonActiveStyle1"
-                        BasedOn="{StaticResource DefaultButtonStyle}"
-                        TargetType="Button">
-                        <Setter Property="Background" Value="CornflowerBlue" />
-                        <Setter Property="Opacity" Value="0.9" />
-                    </Style>
-                    <Style
-                        x:Key="DarkButtonStyle1"
-                        BasedOn="{StaticResource DefaultButtonStyle}"
-                        TargetType="Button">
-                        <Setter Property="Background" Value="DarkSlateGray" />
-                        <Setter Property="Opacity" Value="0.8" />
-                    </Style>
-                </ResourceDictionary>
-            </ResourceDictionary.ThemeDictionaries>
+            <!--  theme brushes, so the buttons follow every color preset  -->
+            <Style
+                x:Key="ChoiceDefaultButtonStyle"
+                BasedOn="{StaticResource AccentButtonStyle}"
+                TargetType="Button" />
+            <Style
+                x:Key="ChoiceButtonStyle"
+                BasedOn="{StaticResource DefaultButtonStyle}"
+                TargetType="Button" />
         </ResourceDictionary>
     </Page.Resources>
     <Grid x:Name="gridRoot">

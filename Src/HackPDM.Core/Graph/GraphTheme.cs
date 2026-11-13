@@ -1,21 +1,6 @@
+using HackPDM.Core.Theming;
+
 namespace HackPDM.Core.Graph;
-
-/// <summary>The color presets of the dependency graph.</summary>
-public enum GraphPaletteName
-{
-	Dark,
-	Light,
-	NavyBlue,
-}
-
-/// <summary>The shape presets of the dependency graph: box sizes, spacing, corners, links and ports.</summary>
-public enum GraphFormName
-{
-	Compact,
-	Default,
-	Modern,
-	Fancy,
-}
 
 /// <summary>How the colored part of a box is drawn.</summary>
 public enum HeaderStyle
@@ -52,7 +37,7 @@ public enum NodeKind
 
 /// <summary>The colors of the graph, as 0xAARRGGBB.</summary>
 public sealed record GraphPalette(
-	GraphPaletteName Name,
+	PaletteName Name,
 	string Title,
 	uint Backdrop,
 	uint GridLine,
@@ -87,7 +72,7 @@ public sealed record GraphPalette(
 /// <param name="ShadowDepth">How far the box's shadow falls; 0 for none.</param>
 /// <param name="ShowGrid">Whether a grid is drawn behind the graph.</param>
 public sealed record GraphForm(
-	GraphFormName Name,
+	FormName Name,
 	string Title,
 	LayoutOptions Layout,
 	HeaderStyle Header,
@@ -109,7 +94,7 @@ public sealed record GraphForm(
 public sealed record GraphTheme( GraphPalette Palette, GraphForm Form )
 {
 	/// <summary>Dark colors, default shapes: what the graph looked like before themes.</summary>
-	public static GraphTheme Default { get; } = new( GraphThemes.Palette( GraphPaletteName.Dark ), GraphThemes.Form( GraphFormName.Default ) );
+	public static GraphTheme Default { get; } = new( GraphThemes.Palette( PaletteName.Dark ), GraphThemes.Form( FormName.Default ) );
 }
 
 /// <summary>The built-in palettes and forms.</summary>
@@ -118,7 +103,7 @@ public static class GraphThemes
 	/// <summary>Every palette, in menu order.</summary>
 	public static IReadOnlyList<GraphPalette> Palettes { get; } =
 	[
-		new( GraphPaletteName.Dark, "Dark",
+		new( PaletteName.Dark, "Dark",
 			Backdrop: 0xFF1E1E20, GridLine: 0xFF2A2A2E, Body: 0xFF2E2E32, BodyBorder: 0xFF141416,
 			Text: 0xFFDCDCE1, HeaderText: 0xFFFFFFFF, SubText: 0xFF96969E,
 			Link: 0xC8C8C8CD, LinkHighlight: 0xFFFFAA3C, Port: 0xFFF08C1E,
@@ -128,17 +113,17 @@ public static class GraphThemes
 				[ NodeKind.Assembly ] = 0xFF2E7D46, [ NodeKind.Part ] = 0xFF285FAA, [ NodeKind.Drawing ] = 0xFF783C96,
 				[ NodeKind.Pdf ] = 0xFFAA4632, [ NodeKind.Other ] = 0xFF555F69, [ NodeKind.Deleted ] = 0xFF8C2828,
 			} ),
-		new( GraphPaletteName.Light, "Light",
+		new( PaletteName.Light, "Light",
 			Backdrop: 0xFFF3F4F6, GridLine: 0xFFE3E5E9, Body: 0xFFFFFFFF, BodyBorder: 0xFFC9CED6,
 			Text: 0xFF1F2328, HeaderText: 0xFFFFFFFF, SubText: 0xFF59636E,
-			Link: 0xFF8C959F, LinkHighlight: 0xFFD9630B, Port: 0xFFE07B12,
+			Link: 0xFF737C87, LinkHighlight: 0xFFC2570A, Port: 0xFFE07B12,
 			RootBorder: 0xFFE07B12, SelectedBorder: 0xFF0969DA, Shadow: 0x30000000,
 			Headers: new Dictionary<NodeKind, uint>
 			{
 				[ NodeKind.Assembly ] = 0xFF2D7A47, [ NodeKind.Part ] = 0xFF2563B8, [ NodeKind.Drawing ] = 0xFF7B4BA6,
 				[ NodeKind.Pdf ] = 0xFFB4462F, [ NodeKind.Other ] = 0xFF5B6470, [ NodeKind.Deleted ] = 0xFFA3302F,
 			} ),
-		new( GraphPaletteName.NavyBlue, "Navy blue",
+		new( PaletteName.NavyBlue, "Navy blue",
 			Backdrop: 0xFF0B1A30, GridLine: 0xFF14274A, Body: 0xFF13294B, BodyBorder: 0xFF07111F,
 			Text: 0xFFE6EDF7, HeaderText: 0xFFFFFFFF, SubText: 0xFF9FB3CF,
 			Link: 0xFF6F8DB8, LinkHighlight: 0xFFF2B134, Port: 0xFFF2B134,
@@ -153,22 +138,22 @@ public static class GraphThemes
 	/// <summary>Every form, in menu order.</summary>
 	public static IReadOnlyList<GraphForm> Forms { get; } =
 	[
-		new( GraphFormName.Compact, "Compact",
+		new( FormName.Compact, "Compact",
 			new LayoutOptions { ColumnGap = 70, RowGap = 12, Margin = 24, MinWidth = 130, MinHeight = 30, MaxWidth = 200, MaxHeight = 52 },
 			HeaderStyle.Band, LinkStyle.Curve, HeaderHeight: 30, CornerRadius: 3, BorderThickness: 1, RootBorderThickness: 2,
 			TitleSize: 11, ShowFolder: false, ShowSizeLine: false, PortSize: 7, HollowPorts: false, LinkThickness: 1.5,
 			ShadowDepth: 0, ShowGrid: false ),
-		new( GraphFormName.Default, "Default",
+		new( FormName.Default, "Default",
 			new LayoutOptions(),
 			HeaderStyle.Band, LinkStyle.Curve, HeaderHeight: 26, CornerRadius: 6, BorderThickness: 1.5, RootBorderThickness: 2.5,
 			TitleSize: 12.5, ShowFolder: true, ShowSizeLine: true, PortSize: 11, HollowPorts: false, LinkThickness: 2,
 			ShadowDepth: 0, ShowGrid: false ),
-		new( GraphFormName.Modern, "Modern",
+		new( FormName.Modern, "Modern",
 			new LayoutOptions { ColumnGap = 140, RowGap = 32, Margin = 48, MinWidth = 180, MinHeight = 64, MaxWidth = 300, MaxHeight = 128 },
 			HeaderStyle.Strip, LinkStyle.Elbow, HeaderHeight: 5, CornerRadius: 12, BorderThickness: 1, RootBorderThickness: 2,
 			TitleSize: 13, ShowFolder: true, ShowSizeLine: true, PortSize: 10, HollowPorts: true, LinkThickness: 1.6,
 			ShadowDepth: 3, ShowGrid: true ),
-		new( GraphFormName.Fancy, "Fancy",
+		new( FormName.Fancy, "Fancy",
 			new LayoutOptions { ColumnGap = 150, RowGap = 36, Margin = 56, MinWidth = 190, MinHeight = 72, MaxWidth = 310, MaxHeight = 140 },
 			HeaderStyle.Gradient, LinkStyle.GlowCurve, HeaderHeight: 30, CornerRadius: 9, BorderThickness: 1.5, RootBorderThickness: 3,
 			TitleSize: 13, ShowFolder: true, ShowSizeLine: true, PortSize: 13, HollowPorts: false, LinkThickness: 2.4,
@@ -176,15 +161,16 @@ public static class GraphThemes
 	];
 
 	/// <summary>The palette named <paramref name="name"/>.</summary>
-	public static GraphPalette Palette( GraphPaletteName name ) => Palettes.First( p => p.Name == name );
+	public static GraphPalette Palette( PaletteName name ) => Palettes.First( p => p.Name == name );
 
 	/// <summary>The form named <paramref name="name"/>.</summary>
-	public static GraphForm Form( GraphFormName name ) => Forms.First( f => f.Name == name );
+	public static GraphForm Form( FormName name ) => Forms.First( f => f.Name == name );
 
 	/// <summary>The theme for two saved names; an unknown or missing name falls back to Dark / Default.</summary>
-	public static GraphTheme From( string? palette, string? form ) => new(
-		Palette( Enum.TryParse( palette, out GraphPaletteName p ) && Enum.IsDefined( p ) ? p : GraphPaletteName.Dark ),
-		Form( Enum.TryParse( form, out GraphFormName f ) && Enum.IsDefined( f ) ? f : GraphFormName.Default ) );
+	public static GraphTheme From( string? palette, string? form ) => From( ThemePresets.ParsePalette( palette ), ThemePresets.ParseForm( form ) );
+
+	/// <summary>The graph's colors and shapes for the app's palette and form.</summary>
+	public static GraphTheme From( PaletteName palette, FormName form ) => new( Palette( palette ), Form( form ) );
 
 	/// <summary>The kind of a file, from its extension and whether it is deleted.</summary>
 	public static NodeKind KindOf( GraphNode node ) => node.Deleted
@@ -198,20 +184,6 @@ public static class GraphThemes
 			_ => NodeKind.Other,
 		};
 
-	/// <summary>The WCAG contrast ratio of two opaque colors (1 to 21).</summary>
-	public static double Contrast( uint a, uint b )
-	{
-		double la = Luminance( a ), lb = Luminance( b );
-		return ( Math.Max( la, lb ) + 0.05 ) / ( Math.Min( la, lb ) + 0.05 );
-	}
-
-	private static double Luminance( uint argb )
-	{
-		static double Channel( uint c )
-		{
-			double s = c / 255.0;
-			return s <= 0.03928 ? s / 12.92 : Math.Pow( ( s + 0.055 ) / 1.055, 2.4 );
-		}
-		return 0.2126 * Channel( ( argb >> 16 ) & 0xFF ) + 0.7152 * Channel( ( argb >> 8 ) & 0xFF ) + 0.0722 * Channel( argb & 0xFF );
-	}
+	/// <summary>The WCAG contrast ratio of two colors (1 to 21).</summary>
+	public static double Contrast( uint front, uint back ) => ThemePresets.Contrast( front, back );
 }

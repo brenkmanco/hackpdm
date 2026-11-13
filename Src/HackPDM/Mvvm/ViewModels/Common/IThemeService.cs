@@ -8,6 +8,24 @@ namespace HackPDM.Mvvm.ViewModels.Common;
 public interface IThemeService
 {
 	/// <summary>The base mode currently applied (and saved by <see cref="Save"/>).</summary>
+	/// <summary>The color preset in use (it decides <see cref="Mode"/>).</summary>
+	HackPDM.Core.Theming.PaletteName Palette { get; }
+
+	/// <summary>The shape preset in use.</summary>
+	HackPDM.Core.Theming.FormName Form { get; }
+
+	/// <summary>The style was changed since startup: controls get its corners and density after a restart (panels and the graph change at once).</summary>
+	bool StyleNeedsRestart { get; }
+
+	/// <summary>The dependency graph's colors and shapes for the current presets.</summary>
+	HackPDM.Core.Graph.GraphTheme GraphTheme { get; }
+
+	/// <summary>Switches the color preset: live when it builds on the running light/dark theme, else previewed until a restart (<see cref="NeedsRestart"/>). Not saved until <see cref="Save"/>.</summary>
+	void SetPalette( HackPDM.Core.Theming.PaletteName palette );
+
+	/// <summary>Switches the shape preset; panels and the graph follow at once, controls after a restart. Not saved until <see cref="Save"/>.</summary>
+	void SetForm( HackPDM.Core.Theming.FormName form );
+
 	AppThemeMode Mode { get; }
 
 	/// <summary>Whether the app is running with the dark theme: the theme whose colors are being edited.</summary>

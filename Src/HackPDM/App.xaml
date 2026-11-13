@@ -12,7 +12,10 @@
 				<!--  Other merged dictionaries here  -->
 				<ResourceDictionary Source="ms-appx:///Microsoft.UI.Xaml/DensityStyles/Compact.xaml" />
 			</ResourceDictionary.MergedDictionaries>
-			<!--  Other app resources here  -->
+			<!--  the app's panels (folder tree, lists, graph frame): set from the theme presets at startup (ThemeService)  -->
+			<SolidColorBrush x:Key="HackPanelStrokeBrush" Color="DimGray" />
+			<CornerRadius x:Key="HackPanelCornerRadius">10</CornerRadius>
+			<Thickness x:Key="HackPanelBorderThickness">3</Thickness>
 		</ResourceDictionary>
 	</Application.Resources>
 </Application>

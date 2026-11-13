@@ -42,12 +42,11 @@ public partial class HackApp : Application
 	public HackApp()
     {
 		InitializeComponent();
-		// menus, flyouts and dialogs follow the application theme, which can only be set this early
-		switch (HackPDM.Mvvm.Views.Common.Theming.ThemeService.ReadSavedMode())
-		{
-			case AppThemeMode.Dark: RequestedTheme = ApplicationTheme.Dark; break;
-			case AppThemeMode.Light: RequestedTheme = ApplicationTheme.Light; break;
-		}
+		// menus, flyouts and dialogs follow the application theme, and controls take their corners and
+		// density from the resources, all of which can only be set this early
+		var (palette, form) = HackPDM.Mvvm.Views.Common.Theming.ThemeService.ReadSavedTheme();
+		RequestedTheme = HackPDM.Core.Theming.ThemePresets.Palette(palette).IsDark ? ApplicationTheme.Dark : ApplicationTheme.Light;
+		HackPDM.Mvvm.Views.Common.Theming.ThemeService.ApplyStartupResources(Resources, palette, form);
         Setup();
     }
 

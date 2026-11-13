@@ -6,6 +6,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
+using HackPDM.Core.Theming;
 using HackPDM.Mvvm.Models.Settings;
 using HackPDM.Mvvm.ViewModels.Common;
 
@@ -51,12 +52,20 @@ public partial class ThemeEditorViewModel : ObservableObject
 			Colors.Add( new( key, key.Group != previousGroup ) );
 			previousGroup = key.Group;
 		}
-		SelectedModeIndex = Array.IndexOf( Modes, _theme.Mode );
+		SelectedPaletteIndex = PaletteIndex( _theme.Palette );
+		SelectedFormIndex = FormIndex( _theme.Form );
 		Refresh();
 		SelectedColor = Colors.FirstOrDefault();
 	}
 
-	public AppThemeMode[] Modes { get; } = Enum.GetValues<AppThemeMode>();
+	/// <summary>The color presets, in menu order.</summary>
+	public string[] PaletteTitles { get; } = [ .. ThemePresets.Palettes.Select( p => p.Title ) ];
+
+	/// <summary>The shape presets, in menu order.</summary>
+	public string[] FormTitles { get; } = [ .. ThemePresets.Forms.Select( f => f.Title ) ];
+
+	private static int PaletteIndex( PaletteName name ) => ThemePresets.Palettes.ToList().FindIndex( p => p.Name == name );
+	private static int FormIndex( FormName name ) => ThemePresets.Forms.ToList().FindIndex( f => f.Name == name );
 
 	public ObservableCollection<ThemeColorItem> Colors { get; } = [];
 
@@ -65,7 +74,15 @@ public partial class ThemeEditorViewModel : ObservableObject
 	/// <summary>Raised when the selected color's value changes outside the color picker (selection, reset, mode switch).</summary>
 	public event Action<ArgbColor?>? SelectedColorValueChanged;
 
-	[ObservableProperty] public partial int SelectedModeIndex { get; set; }
+	[ObservableProperty] public partial int SelectedPaletteIndex { get; set; } = -1;
+
+	[ObservableProperty] public partial int SelectedFormIndex { get; set; } = -1;
+
+	/// <summary>What the selected style looks like.</summary>
+	[ObservableProperty] public partial string FormDescription { get; set; } = "";
+
+	/// <summary>A restart is needed to finish a palette or style switch.</summary>
+	[ObservableProperty] public partial bool ShowRestartNotice { get; set; }
 
 	[ObservableProperty]
 	[NotifyCanExecuteChangedFor( nameof( ResetSelectedCommand ) )]
@@ -89,14 +106,26 @@ public partial class ThemeEditorViewModel : ObservableObject
 	[NotifyCanExecuteChangedFor( nameof( SaveCommand ), nameof( RevertCommand ) )]
 	public partial bool HasUnsavedChanges { get; set; }
 
-	partial void OnSelectedModeIndexChanged( int value )
+	partial void OnSelectedPaletteIndexChanged( int value )
 	{
-		if( value < 0 || value >= Modes.Length || Modes[ value ] == _theme.Mode )
+		if( value < 0 || value >= ThemePresets.Palettes.Count || ThemePresets.Palettes[ value ].Name == _theme.Palette )
 			return;
-		_theme.SetMode( Modes[ value ] );
+		_theme.SetPalette( ThemePresets.Palettes[ value ].Name );
 		HasUnsavedChanges = true;
 		Refresh();
 		PublishSelected();
+	}
+
+	partial void OnSelectedFormIndexChanged( int value )
+	{
+		if( value < 0 || value >= ThemePresets.Forms.Count )
+			return;
+		FormDescription = ThemePresets.Forms[ value ].Description;
+		if( ThemePresets.Forms[ value ].Name == _theme.Form )
+			return;
+		_theme.SetForm( ThemePresets.Forms[ value ].Name );
+		HasUnsavedChanges = true;
+		Refresh();
 	}
 
 	partial void OnSelectedColorChanged( ThemeColorItem? value ) => PublishSelected();
@@ -156,8 +185,8 @@ public partial class ThemeEditorViewModel : ObservableObject
 		{
 			_theme.Save();
 			HasUnsavedChanges = false;
-			StatusText = _theme.NeedsRestart
-				? $"Saved {DateTime.Now:t}. Restart HackPDM to finish switching to {Modes[ SelectedModeIndex ]}."
+			StatusText = _theme.NeedsRestart || _theme.StyleNeedsRestart
+				? $"Saved {DateTime.Now:t}. Restart HackPDM to finish switching to {ThemePresets.Palette( _theme.Palette ).Title} / {ThemePresets.Form( _theme.Form ).Title}."
 				: $"Saved {DateTime.Now:t}. Loaded automatically at startup.";
 		}
 		catch( Exception e )
@@ -172,7 +201,8 @@ public partial class ThemeEditorViewModel : ObservableObject
 	{
 		_theme.Revert();
 		HasUnsavedChanges = false;
-		SelectedModeIndex = Array.IndexOf( Modes, _theme.Mode );
+		SelectedPaletteIndex = PaletteIndex( _theme.Palette );
+		SelectedFormIndex = FormIndex( _theme.Form );
 		Refresh();
 		PublishSelected();
 		StatusText = "Unsaved changes discarded.";
@@ -186,11 +216,15 @@ public partial class ThemeEditorViewModel : ObservableObject
 			item.Hex = _theme.GetColor( item.Key )?.ToString() ?? "";
 			item.IsOverridden = _theme.IsOverridden( item.Key );
 		}
-		EditingThemeText = _theme.IsDarkActive ? "Dark" : "Light";
+		EditingThemeText = ThemePresets.Palette( _theme.Palette ).Title;
 		IsEditable = !_theme.NeedsRestart;
-		RestartNotice = IsEditable
-			? ""
-			: $"Previewing {_theme.Mode}. Save, then restart HackPDM to finish the switch and edit its colors (menus and dialogs also follow it after the restart).";
+		List<string> notices = [];
+		if( _theme.NeedsRestart )
+			notices.Add( $"Previewing {EditingThemeText}. Save, then restart HackPDM to finish the switch and edit its colors (menus and dialogs also follow it after the restart)." );
+		if( _theme.StyleNeedsRestart )
+			notices.Add( $"Panels and the dependency graph already show the {ThemePresets.Form( _theme.Form ).Title} style; save and restart HackPDM for buttons, lists and other controls to take its corners and spacing." );
+		RestartNotice = string.Join( " ", notices );
+		ShowRestartNotice = notices.Count > 0;
 	}
 
 	private void PublishSelected()

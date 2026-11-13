@@ -11,7 +11,10 @@ namespace HackPDM.Mvvm.Views.Common.Settings;
 /// </summary>
 public static class AppConfigStore
 {
-	public static string FilePath { get; } = Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.Personal ), "AppConfig.json" );
+	/// <remarks>In the config folder when HACKPDM_CONFIG_DIR overrides it (tests, smoke runs), so they never touch the user's own file.</remarks>
+	public static string FilePath { get; } = Path.Combine(
+		HackPDM.Shared.GlobalData.AppDataPaths.IsConfigOverridden ? HackPDM.Shared.GlobalData.AppDataPaths.Config : Environment.GetFolderPath( Environment.SpecialFolder.Personal ),
+		"AppConfig.json" );
 
 	public static JsonSerializerOptions Options { get; } = new()
 	{

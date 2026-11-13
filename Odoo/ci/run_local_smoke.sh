@@ -9,6 +9,8 @@
 #   ODOO_PORT=8069   host port Odoo is published on
 #   KEEP=1           leave the containers running afterwards (re-runs reuse nothing; they start clean)
 #   NO_BUILD=1       skip building the desktop client
+#   SMOKE_THEMES="NavyBlue:Fancy Light:Modern Light:Compact"
+#                    themes the client is also started in (one more smoke run each; "" for none)
 #
 # Needs: docker (your user in the `docker` group), python3, dotnet; xvfb-run is used when
 # installed, otherwise the client window opens on your current $DISPLAY.
@@ -110,23 +112,35 @@ if [[ "$MODE" != --tests-only ]]; then
 		HACKPDM_ODOO_DB="$ODOO_DB" HACKPDM_ODOO_USER="$ODOO_USER" HACKPDM_ODOO_PASSWORD="$ODOO_PASSWORD" \
 		HACKPDM_SMOKE_DIRECTORY=Parts HACKPDM_SMOKE_MIN_ENTRIES=3 \
 		HACKPDM_SMOKE_REPORT="$RESULTS/smoke-report.json" HACKPDM_SMOKE_SCREENSHOT="$RESULTS/dependency-graph.png" HACKPDM_SMOKE_TIMEOUT=240
-	# settings, data and the saved login go to a throw-away folder, not your own settings and keychain
-	SMOKE_HOME=$(mktemp -d)
-	export HACKPDM_CONFIG_DIR="$SMOKE_HOME/config" HACKPDM_DATA_DIR="$SMOKE_HOME/data" HACKPDM_CREDENTIAL_STORE=file
 	APP=(dotnet Src/HackPDM/bin/x64/Debug/net10.0-desktop/HackPDM.dll)
-	set +e
-	if command -v xvfb-run >/dev/null; then
-		timeout 300 xvfb-run -a -s "-screen 0 1600x1000x24" "${APP[@]}" 2>&1 | tee "$RESULTS/smoke.log"
-	else
-		echo "(xvfb-run not installed: using DISPLAY=${DISPLAY:-:0}, a window will open)"
-		DISPLAY="${DISPLAY:-:0}" timeout 300 "${APP[@]}" 2>&1 | tee "$RESULTS/smoke.log"
-	fi
-	smoke=${PIPESTATUS[0]}
-	rm -rf "$SMOKE_HOME"
-	set -e
-	echo "smoke exit code: $smoke"
+	# one run per theme: the first in the saved default (Dark / Default, switching presets live), then the app
+	# started in each of SMOKE_THEMES ("Palette:Form"), which checks what only a start can set and takes pictures
+	run_smoke() {
+		local theme="$1" tag="${1:+-${1//:/-}}" code
+		tag="${tag,,}"
+		# settings, data and the saved login go to a throw-away folder, not your own settings and keychain
+		SMOKE_HOME=$(mktemp -d)
+		export HACKPDM_CONFIG_DIR="$SMOKE_HOME/config" HACKPDM_DATA_DIR="$SMOKE_HOME/data" HACKPDM_CREDENTIAL_STORE=file \
+			HACKPDM_SMOKE_THEME="$theme" HACKPDM_SMOKE_REPORT="$RESULTS/smoke-report$tag.json"
+		set +e
+		if command -v xvfb-run >/dev/null; then
+			timeout 300 xvfb-run -a -s "-screen 0 1600x1000x24" "${APP[@]}" 2>&1 | tee "$RESULTS/smoke$tag.log"
+		else
+			echo "(xvfb-run not installed: using DISPLAY=${DISPLAY:-:0}, a window will open)"
+			DISPLAY="${DISPLAY:-:0}" timeout 300 "${APP[@]}" 2>&1 | tee "$RESULTS/smoke$tag.log"
+		fi
+		code=${PIPESTATUS[0]}
+		rm -rf "$SMOKE_HOME"
+		set -e
+		echo "smoke${theme:+ ($theme)} exit code: $code"
+		[[ "$code" == 0 ]] || status=1
+	}
+	run_smoke ""
 	[[ -f "$RESULTS/smoke-report.json" ]] && cat "$RESULTS/smoke-report.json"
-	[[ "$smoke" == 0 ]] || status=1
+	for theme in ${SMOKE_THEMES-NavyBlue:Fancy Light:Modern Light:Compact}; do
+		log "Client smoke test, started as $theme"
+		run_smoke "$theme"
+	done
 fi
 
 docker logs "$ODOO" >"$RESULTS/odoo-server.log" 2>&1 || true

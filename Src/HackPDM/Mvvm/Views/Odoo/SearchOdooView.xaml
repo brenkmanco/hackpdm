@@ -256,9 +256,13 @@
                     Style="{ThemeResource AccentButtonStyle}">
                     <Button.Resources>
                         <ResourceDictionary>
-                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="PaleVioletRed" />
-                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="DarkRed" />
-                            <SolidColorBrush x:Key="ButtonBackground" Color="LightPink" />
+                            <!--  a red "stop" button in every color preset (the accent style reads the AccentButton* keys)  -->
+                            <SolidColorBrush x:Key="AccentButtonBackground" Color="{ThemeResource SystemFillColorCritical}" />
+                            <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Opacity="0.85" Color="{ThemeResource SystemFillColorCritical}" />
+                            <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Opacity="0.7" Color="{ThemeResource SystemFillColorCritical}" />
+                            <SolidColorBrush x:Key="AccentButtonForeground" Color="White" />
+                            <SolidColorBrush x:Key="AccentButtonForegroundPointerOver" Color="White" />
+                            <SolidColorBrush x:Key="AccentButtonForegroundPressed" Color="White" />
                         </ResourceDictionary>
                     </Button.Resources>
                 </Button>

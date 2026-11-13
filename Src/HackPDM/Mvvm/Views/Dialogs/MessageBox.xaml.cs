@@ -85,7 +85,7 @@ public sealed partial class MessageBox : Page
 			Button button = new()
 			{
 				Content = new TextBlock { Text = spec.Label },
-				Style = (Style)Resources[ spec.IsDefault ? "DarkButtonActiveStyle1" : "DarkButtonStyle1" ],
+				Style = (Style)Resources[ spec.IsDefault ? "ChoiceDefaultButtonStyle" : "ChoiceButtonStyle" ],
 				HorizontalAlignment = HorizontalAlignment.Stretch,
 				VerticalAlignment = VerticalAlignment.Center,
 				Height = 30,

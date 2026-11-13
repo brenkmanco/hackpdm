@@ -38,9 +38,9 @@
 			<TreeView
 				x:Name="FolderTree"
 				VerticalAlignment="Top"
-				BorderBrush="DimGray"
-				BorderThickness="3"
-				CornerRadius="10"
+				BorderBrush="{StaticResource HackPanelStrokeBrush}"
+				BorderThickness="{StaticResource HackPanelBorderThickness}"
+				CornerRadius="{StaticResource HackPanelCornerRadius}"
 				SelectionMode="Single">
 				<TreeView.ItemTemplate>
 					<DataTemplate x:DataType="types:TreeData">
@@ -62,9 +62,9 @@
 		<!--  files of the folder  -->
 		<Grid
 			Grid.Column="1"
-			BorderBrush="DimGray"
-			BorderThickness="3"
-			CornerRadius="10"
+			BorderBrush="{StaticResource HackPanelStrokeBrush}"
+			BorderThickness="{StaticResource HackPanelBorderThickness}"
+			CornerRadius="{StaticResource HackPanelCornerRadius}"
 			RowSpacing="4">
 			<Grid.RowDefinitions>
 				<RowDefinition Height="Auto" />
@@ -142,16 +142,16 @@
 			</StackPanel>
 			<Border
 				Grid.Row="1"
-				BorderBrush="DimGray"
-				BorderThickness="3"
-				CornerRadius="10">
+				BorderBrush="{StaticResource HackPanelStrokeBrush}"
+				BorderThickness="{StaticResource HackPanelBorderThickness}"
+				CornerRadius="{StaticResource HackPanelCornerRadius}">
 				<Grid>
 					<local:NodeGraphView x:Name="Graph" />
 					<TextBlock
 						x:Name="Hint"
 						HorizontalAlignment="Center"
 						VerticalAlignment="Center"
-						Foreground="Gray"
+						Foreground="{ThemeResource TextFillColorSecondaryBrush}"
 						IsHitTestVisible="False"
 						Text="Pick one or more files to see their dependencies" />
 
@@ -163,9 +163,9 @@
 						Padding="10"
 						VerticalAlignment="Bottom"
 						Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-						BorderBrush="DimGray"
+						BorderBrush="{StaticResource HackPanelStrokeBrush}"
 						BorderThickness="1"
-						CornerRadius="8"
+						CornerRadius="{StaticResource HackPanelCornerRadius}"
 						Visibility="Collapsed">
 						<Grid ColumnSpacing="12">
 							<Grid.ColumnDefinitions>
@@ -200,7 +200,7 @@
 									<Border
 										Width="110"
 										Height="90"
-										Background="#202024"
+										Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
 										CornerRadius="4">
 										<Grid>
 											<Image x:Name="InfoPreview" Stretch="Uniform" />
@@ -209,7 +209,7 @@
 												HorizontalAlignment="Center"
 												VerticalAlignment="Center"
 												FontSize="11"
-												Foreground="Gray"
+												Foreground="{ThemeResource TextFillColorSecondaryBrush}"
 												Text="no preview" />
 										</Grid>
 									</Border>

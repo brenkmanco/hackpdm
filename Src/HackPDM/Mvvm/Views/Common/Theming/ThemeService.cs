@@ -5,6 +5,8 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 
+using HackPDM.Core.Graph;
+using HackPDM.Core.Theming;
 using HackPDM.Mvvm.Models.Settings;
 using HackPDM.Mvvm.ViewModels.Common;
 using HackPDM.Mvvm.Views.Common.Settings;
@@ -18,8 +20,10 @@ using Color = Windows.UI.Color;
 namespace HackPDM.Mvvm.Views.Common.Theming;
 
 /// <summary>
-/// Applies the saved <see cref="ThemeSettings"/>: sets the light/dark mode on every window and
-/// recolors the shared Fluent theme brushes in place, so controls update live without reloading.
+/// Applies the saved <see cref="ThemeSettings"/>: the color preset (<see cref="PaletteName"/>) sets the light/dark
+/// mode on every window and recolors the shared Fluent theme brushes in place, so controls update live; the
+/// user's own color changes go on top. The shape preset (<see cref="FormName"/>) sets control corners and density
+/// at startup (<see cref="ApplyStartupResources"/>) and the app's panel borders.
 /// </summary>
 /// <remarks>
 /// Uno resolves theme resources against the theme the application started with (the light and dark
@@ -29,6 +33,12 @@ namespace HackPDM.Mvvm.Views.Common.Theming;
 public sealed class ThemeService : IThemeService
 {
 	private const string PageBackgroundKey = "ApplicationPageBackgroundThemeBrush";
+
+	/// <summary>The app's own panel resources (folder tree, lists, graph frame); defaults in App.xaml, set from the presets.</summary>
+	public const string PanelStrokeKey = "HackPanelStrokeBrush", PanelCornerKey = "HackPanelCornerRadius", PanelThicknessKey = "HackPanelBorderThickness";
+
+	/// <summary>Picks the theme the app starts with instead of the saved one (smoke runs only): "Palette:Form".</summary>
+	public const string SmokeThemeVariable = "HACKPDM_SMOKE_THEME";
 
 	// window roots the theme is applied to (weak: windows close without telling us)
 	private readonly List<WeakReference<FrameworkElement>> _roots = [];
@@ -40,6 +50,7 @@ public sealed class ThemeService : IThemeService
 	// the theme the application is running with: the only one whose colors can be changed live
 	private readonly bool _runningDark = Application.Current.RequestedTheme == ApplicationTheme.Dark;
 	private readonly AppThemeMode _startupMode;
+	private readonly FormName _startupForm;
 
 	private ThemeSettings _settings;
 
@@ -49,9 +60,28 @@ public sealed class ThemeService : IThemeService
 	public ThemeService( ThemeSettings settings )
 	{
 		_settings = settings;
-		_startupMode = settings.Mode;
+		// the app started with the preset's base mode and shape (see the App constructor)
+		var (palette, form) = StartupTheme( settings );
+		_settings.Palette = palette;
+		_settings.Form = form;
+		_settings.Mode = ThemePresets.Palette( palette ).IsDark ? AppThemeMode.Dark : AppThemeMode.Light;
+		_startupMode = _settings.Mode;
+		_startupForm = form;
 		ApplyOverrides();
+		UpdatePanelBrush();
 	}
+
+	/// <inheritdoc/>
+	public PaletteName Palette => _settings.EffectivePalette;
+
+	/// <inheritdoc/>
+	public FormName Form => _settings.Form;
+
+	/// <inheritdoc/>
+	public bool StyleNeedsRestart => _settings.Form != _startupForm;
+
+	/// <inheritdoc/>
+	public GraphTheme GraphTheme => GraphThemes.From( Palette, Form );
 
 	/// <inheritdoc/>
 	public AppThemeMode Mode => _settings.Mode;
@@ -71,30 +101,75 @@ public sealed class ThemeService : IThemeService
 	#region Startup
 
 	/// <summary>
-	/// The mode saved in AppConfig.json, read directly (the full settings can't load this early).
+	/// The presets saved in AppConfig.json, read directly (the full settings can't load this early).
 	/// Called from the App constructor, where the application theme can still be set.
 	/// </summary>
-	/// <returns>The saved mode; the default mode when there is no file or it can't be read or parsed (errors are swallowed).</returns>
-	public static AppThemeMode ReadSavedMode()
+	/// <returns>The saved palette and form; for settings from before the presets, Light when the saved mode was Light,
+	/// else Dark, and Default. Missing or unreadable files give Dark / Default (errors are swallowed). In a smoke run,
+	/// <see cref="SmokeThemeVariable"/> wins.</returns>
+	public static (PaletteName Palette, FormName Form) ReadSavedTheme()
 	{
 		try
 		{
-			// only the mode: the full settings need converters for types that can't load this early
 			string path = AppConfigStore.FilePath;
 			if( !File.Exists( path ) )
-				return new ThemeSettings().Mode;
+				return StartupTheme( new ThemeSettings() );
 			using JsonDocument doc = JsonDocument.Parse( File.ReadAllText( path ) );
-			return doc.RootElement.TryGetProperty( "Theme", out var theme )
-				&& theme.TryGetProperty( nameof( ThemeSettings.Mode ), out var mode )
-				&& Enum.TryParse( mode.GetString(), out AppThemeMode parsed )
-					? parsed
-					: new ThemeSettings().Mode;
+			ThemeSettings saved = new();
+			if( doc.RootElement.TryGetProperty( "Theme", out var theme ) )
+			{
+				if( theme.TryGetProperty( nameof( ThemeSettings.Mode ), out var mode ) && Enum.TryParse( mode.GetString(), out AppThemeMode m ) )
+					saved.Mode = m;
+				if( theme.TryGetProperty( nameof( ThemeSettings.Palette ), out var palette ) && palette.ValueKind == JsonValueKind.String )
+					saved.Palette = ThemePresets.ParsePalette( palette.GetString(), saved.EffectivePalette );
+				if( theme.TryGetProperty( nameof( ThemeSettings.Form ), out var form ) && form.ValueKind == JsonValueKind.String )
+					saved.Form = ThemePresets.ParseForm( form.GetString() );
+			}
+			return StartupTheme( saved );
 		}
 		catch
 		{
-			return new ThemeSettings().Mode;
+			return StartupTheme( new ThemeSettings() );
 		}
 	}
+
+	/// <summary>The theme to start with: the saved one, or in a smoke run the one <see cref="SmokeThemeVariable"/> names.</summary>
+	private static (PaletteName, FormName) StartupTheme( ThemeSettings saved )
+	{
+		if( HackPDM.Shell.Testing.SmokeTestRunner.IsEnabled
+			&& Environment.GetEnvironmentVariable( SmokeThemeVariable )?.Split( ':' ) is [ var palette, var form ] )
+			return (ThemePresets.ParsePalette( palette ), ThemePresets.ParseForm( form ));
+		return (saved.EffectivePalette, saved.Form);
+	}
+
+	/// <summary>
+	/// Sets the shape preset's resources before any page is built: control and overlay corners, Fluent's compact or
+	/// standard density, and the app's panel corners, borders and border color. Called from the App constructor.
+	/// </summary>
+	/// <param name="resources">The application's resources (App.xaml, with the Compact density dictionary merged in).</param>
+	/// <param name="palette">The color preset (for the panel border color).</param>
+	/// <param name="form">The shape preset.</param>
+	/// <remarks>Fluent controls read these when they are created, so a later change needs a restart.</remarks>
+	public static void ApplyStartupResources( ResourceDictionary resources, PaletteName palette, FormName form )
+	{
+		AppForm f = ThemePresets.Form( form );
+		if( form != FormName.Default )
+		{
+			resources[ "ControlCornerRadius" ] = new CornerRadius( f.ControlCornerRadius );
+			resources[ "OverlayCornerRadius" ] = new CornerRadius( f.OverlayCornerRadius );
+		}
+		resources[ PanelCornerKey ] = new CornerRadius( f.PanelCornerRadius );
+		resources[ PanelThicknessKey ] = new Thickness( f.PanelBorderThickness );
+		if( resources.TryGetValue( PanelStrokeKey, out object? stroke ) && stroke is SolidColorBrush brush )
+			brush.Color = ToColor( ThemePresets.PanelStroke( ThemePresets.Palette( palette ), f ) );
+		if( !f.CompactDensity
+			&& resources.MergedDictionaries.FirstOrDefault( d => d.Source?.OriginalString.EndsWith( "Compact.xaml", StringComparison.OrdinalIgnoreCase ) == true ) is { } compact )
+			resources.MergedDictionaries.Remove( compact );
+	}
+
+	/// <summary>Whether Fluent's compact density is in use (the smoke tests).</summary>
+	public static bool IsCompactDensity( ResourceDictionary resources )
+		=> resources.MergedDictionaries.Any( d => d.Source?.OriginalString.EndsWith( "Compact.xaml", StringComparison.OrdinalIgnoreCase ) == true );
 
 	/// <summary>Applies the theme to <paramref name="window"/>'s content. Call after setting <see cref="Window.Content"/>.</summary>
 	/// <param name="window">The window; ignored when its content is not a <see cref="FrameworkElement"/>.</param>
@@ -127,6 +202,45 @@ public sealed class ThemeService : IThemeService
 			ApplyMode( root );
 		ThemeChanged?.Invoke();
 	}
+
+	/// <inheritdoc/>
+	public void SetPalette( PaletteName palette )
+	{
+		if( _settings.Palette == palette )
+			return;
+		// back to the built-in colors, then the new preset (and the user's own changes) on top
+		foreach( string key in _originals.Keys.ToList() )
+			Restore( key, toOriginal: true );
+		_settings.Palette = palette;
+		_settings.Mode = ThemePresets.Palette( palette ).IsDark ? AppThemeMode.Dark : AppThemeMode.Light;
+		ApplyOverrides();
+		UpdatePanelBrush();
+		foreach( var root in LiveRoots() )
+			ApplyMode( root );
+		ThemeChanged?.Invoke();
+	}
+
+	/// <inheritdoc/>
+	public void SetForm( FormName form )
+	{
+		if( _settings.Form == form )
+			return;
+		_settings.Form = form;
+		UpdatePanelBrush();
+		ThemeChanged?.Invoke();
+	}
+
+	/// <summary>Whether the palette's colors can be set now: it builds on the theme the app is running with.</summary>
+	private bool PresetApplies => ThemePresets.Palette( Palette ).IsDark == _runningDark;
+
+	/// <summary>Recolors the app's panel border brush (shared by every panel, so they change live).</summary>
+	private void UpdatePanelBrush()
+	{
+		if( Application.Current.Resources.TryGetValue( PanelStrokeKey, out object? value ) && value is SolidColorBrush brush )
+			brush.Color = ToColor( ThemePresets.PanelStroke( ThemePresets.Palette( Palette ), ThemePresets.Form( Form ) ) );
+	}
+
+	private static Color ToColor( uint argb ) => Color.FromArgb( (byte)( argb >> 24 ), (byte)( argb >> 16 ), (byte)( argb >> 8 ), (byte)argb );
 
 	private void ApplyMode( FrameworkElement root )
 	{
@@ -195,10 +309,11 @@ public sealed class ThemeService : IThemeService
 	{
 		// restore everything, then re-apply the theme as saved on disk
 		foreach( string key in _originals.Keys.ToList() )
-			Restore( key );
+			Restore( key, toOriginal: true );
 		_settings = AppConfigStore.Load().Theme;
 		UIStorage.GlobalData.Theme = _settings;
 		ApplyOverrides();
+		UpdatePanelBrush();
 		foreach( var root in LiveRoots() )
 			ApplyMode( root );
 		ThemeChanged?.Invoke();
@@ -211,8 +326,13 @@ public sealed class ThemeService : IThemeService
 		AppConfigStore.Save( UIStorage.GlobalData );
 	}
 
+	/// <summary>The preset's colors, then the user's own changes; nothing while the preset needs the other base theme (a restart).</summary>
 	private void ApplyOverrides()
 	{
+		if( !PresetApplies )
+			return;
+		foreach( var (key, argb) in ThemePresets.Palette( Palette ).Brushes )
+			Recolor( key, new ArgbColor( (byte)( argb >> 24 ), (byte)( argb >> 16 ), (byte)( argb >> 8 ), (byte)argb ) );
 		foreach( var (key, hex) in _settings.OverridesFor( _runningDark ) )
 		{
 			if( ArgbColor.TryParse( hex, out var color ) )
@@ -229,9 +349,14 @@ public sealed class ThemeService : IThemeService
 		return true;
 	}
 
-	private void Restore( string key )
+	/// <summary>Puts a color back to the preset's value (or, with <paramref name="toOriginal"/> or when the preset leaves it alone, the built-in one).</summary>
+	private void Restore( string key, bool toOriginal = false )
 	{
-		if( _originals.TryGetValue( key, out var original ) && FindBrush( key ) is { } brush )
+		if( FindBrush( key ) is not { } brush )
+			return;
+		if( !toOriginal && PresetApplies && ThemePresets.Palette( Palette ).Brushes.TryGetValue( key, out uint preset ) )
+			brush.Color = ToColor( preset );
+		else if( _originals.TryGetValue( key, out var original ) )
 			brush.Color = original;
 	}
 
