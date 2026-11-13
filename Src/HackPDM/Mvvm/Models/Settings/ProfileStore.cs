@@ -18,7 +18,8 @@ public static class ProfileStore
 		OdooAddress = "10.0.0.68",
 		OdooCredentialTarget = StorageBox.DEFAULT_ODOO_CREDENTIALS,
 		OdooDb = "odoopdm",
-		OdooPort = "8069",
+		OdooPort = "443",
+		OdooUseHttps = true,
 		PWAPathAbsolute = @"C:\path\to\pwa",
 		Username = "{username}",
 		Password = "{password} - leave blank to keep the password out of this file. " +
@@ -37,6 +38,7 @@ public static class ProfileStore
 		{
 			OdooAddress = odoo.OdooAddress ?? "",
 			OdooPort = odoo.OdooPort ?? "",
+			OdooUseHttps = odoo.OdooUseHttps,
 			OdooDb = odoo.OdooDb ?? "",
 			OdooCredentialTarget = odoo.OdooCredentialTarget ?? "",
 			PWAPathAbsolute = HackDefaults.Instance?.PwaPathAbsolute ?? "",
@@ -60,6 +62,8 @@ public static class ProfileStore
 			odoo.OdooPort = profile.OdooPort;
 		if( !string.IsNullOrEmpty( profile.OdooDb ) )
 			odoo.OdooDb = profile.OdooDb;
+		if( profile.OdooUseHttps is bool useHttps )
+			odoo.OdooUseHttps = useHttps;
 		if( !string.IsNullOrEmpty( profile.OdooCredentialTarget ) )
 			odoo.OdooCredentialTarget = profile.OdooCredentialTarget;
 		if( !string.IsNullOrEmpty( profile.PWAPathAbsolute ) )

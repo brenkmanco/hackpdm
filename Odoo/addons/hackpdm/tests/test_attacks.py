@@ -22,7 +22,7 @@ class TestAttacks(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         users = cls.env["res.users"].with_context(no_reset_password=True)
-        group_user = cls.env.ref("base.group_user")
+        group_user = cls.env.ref("hackpdm.group_pdm_user")
         cls.alice = users.create({"name": "Alice Attack", "login": "hp_atk_alice", "groups_id": [(6, 0, group_user.ids)]})
         cls.bob = users.create({"name": "Bob Attack", "login": "hp_atk_bob", "groups_id": [(6, 0, group_user.ids)]})
         cls.node = cls.env["hp.node"].create({"name": "hp-atk-node"})
@@ -299,3 +299,47 @@ class TestAttacks(TransactionCase):
             except REFUSED:
                 continue
             self.assertNotIn("admin", repr(rows))
+
+    # ------------------------------------------------------------ access groups
+
+    def test_cannot_read_someone_elses_staged_rows(self):
+        alices = self._commit(self.alice)
+        row = self._stage(self.alice, alices, "hp.entry", {"name": "secret.txt", "dir_id": self.folder.id})
+        self._next_rpc()
+        Staged = self.env["hp.record.staged"].with_user(self.bob)
+        self.assertFalse(Staged.search([("id", "=", row.id)]))
+        with self.assertRaises(AccessError):
+            Staged.browse(row.id).read(["payload"])
+        self.assertTrue(self.env["hp.record.staged"].with_user(self.alice).search([("id", "=", row.id)]))
+
+    def test_administrator_reads_every_staged_row(self):
+        admin = self.env["res.users"].with_context(no_reset_password=True).create(
+            {"name": "Admin Attack", "login": "hp_atk_admin", "groups_id": [(6, 0, self.env.ref("hackpdm.group_pdm_admin").ids)]})
+        row = self._stage(self.alice, self._commit(self.alice), "hp.entry", {"name": "a.txt", "dir_id": self.folder.id})
+        self._next_rpc()
+        self.assertTrue(self.env["hp.record.staged"].with_user(admin).search([("id", "=", row.id)]))
+
+    def test_viewer_reads_but_cannot_check_out_or_commit(self):
+        viewer = self.env["res.users"].with_context(no_reset_password=True).create(
+            {"name": "Viewer Attack", "login": "hp_atk_viewer", "groups_id": [(6, 0, self.env.ref("hackpdm.group_pdm_viewer").ids)]})
+        self.assertEqual(self.env["hp.entry"].with_user(viewer).browse(self.part.id).name, "part.sldprt")
+        self.env["hp.node"].with_user(viewer).create({"name": "hp-atk-viewer-node"})
+        with self.assertRaises(AccessError):
+            self._checkout(viewer, self.part_v1)
+        with self.assertRaises(AccessError):
+            self._commit(viewer)
+        with self.assertRaises(AccessError):
+            self.env["hp.entry"].with_user(viewer).create({"name": "v.txt", "dir_id": self.folder.id})
+
+    def test_regular_user_cannot_run_admin_jobs_or_touch_hp_test(self):
+        self.assertFalse(self.alice.has_group("hackpdm.group_pdm_admin"))
+        with self.assertRaises(AccessError):
+            self.env["hp.test"].with_user(self.alice).search([])
+
+    def test_settings_administrators_are_pdm_administrators(self):
+        self.assertTrue(self.env.ref("base.user_admin").has_group("hackpdm.group_pdm_admin"))
+
+    def test_new_internal_users_start_as_engineers(self):
+        user = self.env["res.users"].with_context(no_reset_password=True).create({"name": "Fresh", "login": "hp_atk_fresh"})
+        self.assertTrue(user.has_group("hackpdm.group_pdm_user"))
+        self.assertFalse(user.has_group("hackpdm.group_pdm_admin"))

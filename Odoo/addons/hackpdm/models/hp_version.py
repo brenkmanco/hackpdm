@@ -2,18 +2,14 @@ import io
 import os
 from odoo import models, fields, api, Command
 from odoo.exceptions import AccessError, UserError, ValidationError
-from webdav3.client import Client
 import hashlib as hash
 import base64
 import logging
 import urllib.parse
 import magic
 
-import sqlalchemy
-from sqlalchemy import Connection, Engine, MetaData, Table, create_engine, select, text, update
-from sqlalchemy.orm import Mapped, Session, sessionmaker, relationship
-
 from . import hp_guard
+from . import hp_legacy
 
 _logger = logging.getLogger(__name__)
 
@@ -21,82 +17,9 @@ _logger = logging.getLogger(__name__)
 # what a commit fixed: the file, which entry it belongs to, the computer that committed it, what it
 # references and its properties. Only an administrator changes these (a permanent delete clears the links).
 _IMMUTABLE_VERSION_FIELDS = frozenset(
-    ("entry_id", "file_contents", "node_id", "child_ids", "parent_ids", "version_property_ids"))
+    ("entry_id", "file_contents", "attachment_id", "node_id", "child_ids", "parent_ids", "version_property_ids"))
 _CHECKOUT_VERSION_FIELDS = frozenset(("checkout_user", "checkout_date", "checkout_node"))
 
-class Database:
-    sessionURL = ""
-    engine:Engine = None
-    connection:Connection = None
-    metadata:MetaData = None
-    session:Session = None
-    
-    def __init__(self, db_username:str, db_password:str, db_name:str, db_hostname:str, db_port):
-        self.sessionURL = f'postgresql://{db_username}:{db_password}@{db_hostname}:{db_port}/{db_name}'
-
-        self.engine = create_engine(self.sessionURL)
-        self.connection = self.engine.connect()
-        self.metadata = MetaData()
-        self._Session = sessionmaker(bind=self.engine)
-
-    def get_table(self, table_name):
-        return Table(table_name, self.metadata, autoload_with=self.engine)
-
-    def start_session(self):
-        self.session = self._Session()
-
-    # def execute(self, statement):
-    #     return self.session.execute(statement)
-class WebDav():
-    logging.basicConfig(level=logging.DEBUG)
-    logger = logging.getLogger(__name__)
-    local_path = "~/dev/tempDirectory"
-
-    def __init__(self, client:Client):
-        self.client = client
-    def __init__(self, options:dict[str, any]):
-        self.client = Client(options)
-    def __init__(self):
-        options = {
-            'webdav_hostname': "http://hackpdm.zip.azi/webdav",
-            'webdav_port': 80,
-            'webdav_login': "mtaylor",
-            'webdav_password': "mtaylor",
-            'webdav_override_methods': {
-                'check': 'GET',
-            },
-            'webdav_timeout': 30,
-        }
-        self.client = Client(options)
-
-    def files_in_entry(self, entry_id:int):
-        try:
-            directory_path = urllib.parse.quote(f"/{entry_id}")
-            return self.client.list(directory_path)
-        except:
-            logging.error(f"entry '{entry_id}' doesn't exist")
-            return []
-
-    def get_file_from_webdav(self, entry_id:int, version_id:int, file_extension:str):
-        file_path = urllib.parse.quote(f"/{entry_id}/{version_id}.{file_extension}")
-        file_info = {}
-        try:
-            file_info = self.client.info(file_path)
-            buffer = io.BytesIO()
-
-            self.client.download_from(remote_path=file_path, buff=buffer)
-            buffer.seek(0)
-            file_contents = buffer.read()
-
-            return file_contents
-        except Exception as e:
-            if f"{version_id}.{file_extension}" in self.files_in_entry(entry_id):
-                logging.error(e)
-            else:
-                logging.error(f"file version '{version_id}' doesn't exist")
-        return b''
-
-        #print(f"File information: {file_info}")
 
 class hp_version(models.Model):
 
@@ -501,6 +424,53 @@ class hp_version(models.Model):
         return None
 
     @api.model
+    def read_contents(self, version_id, offset=0, length=None):
+        """Reads part of a version's file, so a large file can be downloaded in pieces.
+
+        Args:
+            version_id (int): The hp.version id.
+            offset (int): Where to start reading, in bytes.
+            length (int | None): How many bytes to read; at most 8 MiB (also when None).
+
+        Returns:
+            dict: data (str, the bytes base64-encoded; shorter than length at the end of the file),
+            size (int, the whole file's size) and checksum (str, its SHA-1).
+
+        Raises:
+            AccessError: The caller may not read the version.
+            UserError: The version does not exist, or offset / length are invalid.
+        """
+        from .hp_upload import MAX_CHUNK_BYTES
+        if not isinstance(version_id, int) or isinstance(version_id, bool):
+            raise UserError(f"read_contents expects a version id, got {version_id!r}")
+        if not isinstance(offset, int) or offset < 0:
+            raise UserError(f"read_contents: invalid offset {offset!r}")
+        if length is None:
+            length = MAX_CHUNK_BYTES
+        if not isinstance(length, int) or length < 0:
+            raise UserError(f"read_contents: invalid length {length!r}")
+        length = min(length, MAX_CHUNK_BYTES)
+        version = self.browse(version_id).exists()
+        if not version:
+            raise UserError(f"read_contents: version {version_id} does not exist")
+        version.check_access_rights("read")
+        version.check_access_rule("read")
+        attachment = version.sudo().attachment_id
+        if not attachment:
+            return {"data": "", "size": 0, "checksum": ""}
+        if attachment.store_fname:
+            with open(attachment._full_path(attachment.store_fname), "rb") as stored:
+                stored.seek(offset)
+                piece = stored.read(length)
+        else:
+            piece = (attachment.raw or b"")[offset:offset + length]
+        return {
+            "data": base64.b64encode(piece).decode(),
+            "size": attachment.file_size,
+            "checksum": attachment.checksum or "",
+        }
+
+    @api.model
     def _create_attachment(self, file_contents:bytes, field_name:str):
         file_name = f"{self.id}.{self.name}"
         file_contents_b64 = base64.b64encode(file_contents).decode('utf-8')
@@ -610,7 +580,8 @@ class hp_version(models.Model):
         """One-off migration: downloads each version's file from the old WebDAV server into an attachment.
 
         Administrators only. Versions that already have a file are skipped; commits after every
-        version. The WebDAV address and login are hardcoded.
+        version. The WebDAV address and login come from the ``hackpdm.legacy_webdav_*`` system
+        parameters (see ``hp_legacy``).
 
         Args:
             None.
@@ -620,9 +591,10 @@ class hp_version(models.Model):
 
         Raises:
             AccessError: The caller is not an administrator.
+            UserError: A ``hackpdm.legacy_webdav_*`` system parameter is not set.
         """
         hp_guard.require_admin(self.env, "migrate_webdav_files_to_records")
-        web_dav = WebDav()
+        web_dav = hp_legacy.LegacyWebDav(self.env)
         all_records = self.env[self._name].search([])
 
         for record in all_records:
@@ -643,28 +615,14 @@ class hp_version(models.Model):
             self.env.cr.commit()
 
 
-    def _get_image_bytes(self, database1:Database, record):
-        lost_on_step = 0
-        try:
-            # Use raw SQL to bypass SQLAlchemy Table reflection entirely
-            stmt = text(f"SELECT preview_image FROM hp_version WHERE version_id = {record.id}")
-            lost_on_step = 1
-
-            result = database1.connection.execute(stmt).first()
-
-            lost_on_step = 2
-            return result[0] if result else None
-        except Exception as e:
-            logging.error(f"query error on step: {lost_on_step} | error: {e}")
-            return None
-
     @api.model
     @api.depends('name')
     def migrate_image_from_database(self):
         """One-off migration: copies preview images from the old HackPDM database into attachments.
 
         Administrators only. Versions that already have a preview are skipped; commits after every
-        version. The old database's address and login are hardcoded.
+        version. The old database comes from the ``hackpdm.legacy_db_url`` system parameter (see
+        ``hp_legacy``).
 
         Args:
             None.
@@ -674,10 +632,10 @@ class hp_version(models.Model):
 
         Raises:
             AccessError: The caller is not an administrator.
+            UserError: The ``hackpdm.legacy_db_url`` system parameter is not set.
         """
         hp_guard.require_admin(self.env, "migrate_image_from_database")
-        hackpdm = Database("hackpdm", "hackpdm", "hackpdm", "alderaan", 5432)
-        hackpdm.start_session()
+        hackpdm = hp_legacy.LegacyDatabase(self.env)
         all_records = self.env[self._name].search([])
 
         for record in all_records:
@@ -687,9 +645,8 @@ class hp_version(models.Model):
                 continue
 
             try:
-                image = self._get_image_bytes(hackpdm, record)
-                if image != None:
-                    raw_image = bytes(image)
+                raw_image = hackpdm.preview_image(record.id)
+                if raw_image:
                     attachment = record._create_attachment(raw_image, "preview_image")
                     if (attachment != None):
                         logging.info(f"attachment id {attachment.id} created for version record {attachment.res_id} named: {attachment.name}")

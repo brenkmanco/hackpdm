@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- HackPDM access levels. Each level implies the one below it:
+       Viewer        reads the vault and registers its own machine (hp.node);
+       Engineer      also checks out, commits and edits file metadata;
+       Administrator full access, maintenance jobs and release reviews.
+     Settings administrators (base.group_system) are HackPDM administrators, and every new internal user
+     starts as an Engineer (base.default_user); demote them on the user form. -->
+<odoo>
+    <record id="module_category_hackpdm" model="ir.module.category">
+        <field name="name">HackPDM</field>
+        <field name="description">Access to the HackPDM vault.</field>
+        <field name="sequence">50</field>
+    </record>
+
+    <record id="group_pdm_viewer" model="res.groups">
+        <field name="name">Viewer</field>
+        <field name="category_id" ref="module_category_hackpdm"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="comment">Reads files and history; cannot check out or commit.</field>
+    </record>
+
+    <record id="group_pdm_user" model="res.groups">
+        <field name="name">Engineer</field>
+        <field name="category_id" ref="module_category_hackpdm"/>
+        <field name="implied_ids" eval="[(4, ref('group_pdm_viewer'))]"/>
+        <field name="comment">Checks out and commits files.</field>
+    </record>
+
+    <record id="group_pdm_admin" model="res.groups">
+        <field name="name">Administrator</field>
+        <field name="category_id" ref="module_category_hackpdm"/>
+        <field name="implied_ids" eval="[(4, ref('group_pdm_user'))]"/>
+        <field name="comment">Full access, including maintenance jobs and release reviews.</field>
+    </record>
+
+    <record id="base.group_system" model="res.groups">
+        <field name="implied_ids" eval="[(4, ref('group_pdm_admin'))]"/>
+    </record>
+
+    <record id="base.default_user" model="res.users">
+        <field name="groups_id" eval="[(4, ref('group_pdm_user'))]"/>
+    </record>
+</odoo>

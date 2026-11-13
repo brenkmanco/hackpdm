@@ -29,6 +29,9 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 	/// <summary>Why the last create / write / stage of this record failed; null after a success.</summary>
 	public string? LastError { get; protected internal set; }
 
+	/// <summary>The timeout of this record's <c>create</c> call in milliseconds; <see cref="OdooRpc.LongTimeout"/> when null. Set it for a record carrying file contents.</summary>
+	internal int? CreateTimeoutMs { get; set; }
+
 	/// <summary>Builds the field/value dictionary sent to the server when this record is created or staged.</summary>
 	/// <param name="includeEmpty">Whether fields whose value is <see langword="null"/> are included (as null).</param>
 	/// <param name="excludedFieldNames">Model fields to leave out.</param>
@@ -99,7 +102,7 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 	/// </remarks>
 	public async virtual Task<int> CreateAsync( bool withEmpty = false, string[]? excludedFields = null, string[]? insertFIelds = null )
 	{
-		Result<int> created = await OdooRpc.CreateAsync( HpModel!, ComputeValues( withEmpty, excludedFields ), OdooRpc.LongTimeout );
+		Result<int> created = await OdooRpc.CreateAsync( HpModel!, ComputeValues( withEmpty, excludedFields ), CreateTimeoutMs ?? OdooRpc.LongTimeout );
 		LastError = created.Error;
 		id = created.ValueOr( 0 );
 		IsRecord = id != 0;

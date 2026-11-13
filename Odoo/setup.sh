@@ -4,7 +4,10 @@
 OdooVenvName="odoo-venv"
 OdooDir="$(pwd)"
 PsqlName="odoo"
-PsqlPass="odoo"
+# Passwords come from the environment, or are generated; they are written only to config/odoo.conf.
+PsqlPass="${PSQL_PASS:-$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')}"
+OdooMasterPass="${ODOO_MASTER_PASS:-$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')}"
+OdooDbName="${ODOO_DB:-odoopdm}"
 FileStoreDir="/mnt/datastore"
 
 # Prepare environment
@@ -20,7 +23,9 @@ sudo systemctl enable postgresql
 sudo systemctl start postgresql
 
 # Create PostgreSQL user
-sudo su - postgres -c "createuser -s $PsqlName"
+# Odoo only needs to create databases, not to be a PostgreSQL superuser.
+sudo su - postgres -c "createuser --createdb --no-superuser --no-createrole $PsqlName"
+sudo su - postgres -c "psql -c \"ALTER USER $PsqlName WITH PASSWORD '$PsqlPass';\""
 
 # Install Odoo source
 sudo mkdir -p /opt
@@ -59,7 +64,15 @@ addons_path = /opt/odoo/addons,$OdooDir/addons
 without_demo = True
 default_productivity_apps = True
 logfile = /var/log/odoo/odoo.log
+; Hardening: see config/odoo.conf.example for what each option does.
+admin_passwd = $OdooMasterPass
+list_db = False
+dbfilter = ^$OdooDbName\$
+db_name = $OdooDbName
+proxy_mode = True
+http_interface = 127.0.0.1
 EOF
+chmod 600 "$OdooDir/config/odoo.conf"
 
 # Create log directory
 sudo mkdir -p /var/log/odoo

@@ -291,6 +291,17 @@ public static class PdmDownloadOperations
         Dictionary<int, HpVersion> pending = versions.Where(v => v.id is > 0).DistinctBy(v => v.id).ToDictionary(v => v.id!.Value);
         Dictionary<int, string> lastError = [];
 
+        // large files come in pieces, each with its own retries (ContentTransfer), one file at a time
+        foreach (HpVersion large in pending.Values.Where(v => ContentTransfer.IsLarge(v.file_size)).ToList())
+        {
+            cToken.ThrowIfCancellationRequested();
+            pending.Remove(large.id!.Value);
+            if (await DownloadLargeAsync(large, cToken) is { } error)
+                Fail(large, error);
+            else
+                summary.AddDownloaded();
+        }
+
         for (int attempt = 1; attempt <= MaxAttempts && pending.Count > 0; attempt++)
         {
             cToken.ThrowIfCancellationRequested();
@@ -345,5 +356,24 @@ public static class PdmDownloadOperations
             summary.Failed.Enqueue($"{name}: {reason}");
             log?.Invoke(StatusMessage.ERROR, $"Failed to download {name} after {MaxAttempts} attempt(s): {reason}");
         }
+    }
+
+    private static readonly string[] LargeFileFields = [.. ContentFields.Where(f => f != nameof(HpVersion.file_contents)), nameof(HpVersion.checksum)];
+
+    /// <summary>Downloads one large file in pieces to a temporary file, checks it, and moves it into the working folder.</summary>
+    /// <returns>Null when the file is in place; otherwise why not.</returns>
+    private static async Task<string?> DownloadLargeAsync(HpVersion requested, CancellationToken cToken)
+    {
+        Result<HpVersion[]> read = await Repository<HpVersion>.ReadAsync([requested.id!.Value], FieldSelection.Only(LargeFileFields), OdooRpc.LongTimeout);
+        if (read.Value is not [{ } version, ..])
+            return read.Error ?? "the version could not be read";
+        Result<string> temp = await ContentTransfer.DownloadToTempFileAsync(version, cToken);
+        if (!temp.Ok)
+            return temp.Error;
+        if (await LocalFileWriter.WriteFromFileAsync(version.ToHackFile(contentsInFile: true), temp.Value!))
+            return null;
+        try { File.Delete(temp.Value!); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        // a local write problem will not be fixed by downloading again
+        return "could not write the file locally";
     }
 }

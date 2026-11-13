@@ -15,6 +15,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
@@ -50,9 +51,18 @@
             Grid.Column="1"
             Margin="0,5,0,5" />
 
+        <!--  HTTPS: Odoo sends the password with every request  -->
+        <CheckBox
+            x:Name="chkUseHttps"
+            Grid.Row="2"
+            Grid.Column="1"
+            Margin="0,5,0,5"
+            Content="Use HTTPS (recommended: without it the password is sent unencrypted)"
+            IsChecked="{x:Bind ViewModel.OdooUseHttps, Mode=TwoWay}" />
+
         <!--  Odoo DB  -->
         <TextBlock
-            Grid.Row="2"
+            Grid.Row="3"
             Grid.Column="0"
             Margin="0,0,10,0"
             VerticalAlignment="Center"
@@ -60,13 +70,13 @@
         <TextBox
             x:Name="txtOdooDb"
             Text="{x:Bind ViewModel.OdooDb, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-            Grid.Row="2"
+            Grid.Row="3"
             Grid.Column="1"
             Margin="0,5,0,5" />
 
         <!--  Odoo User  -->
         <TextBlock
-            Grid.Row="3"
+            Grid.Row="4"
             Grid.Column="0"
             Margin="0,0,10,0"
             VerticalAlignment="Center"
@@ -74,27 +84,27 @@
         <TextBox
             x:Name="txtOdooUser"
             Text="{x:Bind ViewModel.OdooUser, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-            Grid.Row="3"
+            Grid.Row="4"
             Grid.Column="1"
             Margin="0,5,0,5" />
 
         <!--  Odoo Pass  -->
         <TextBlock
-            Grid.Row="4"
+            Grid.Row="5"
             Grid.Column="0"
             Margin="0,0,10,0"
             VerticalAlignment="Center"
-            Text="Odoo Pass" />
+            Text="Password or API key" />
         <PasswordBox
             x:Name="txtOdooPass"
             Password="{x:Bind ViewModel.OdooPass, Mode=TwoWay}"
-            Grid.Row="4"
+            Grid.Row="5"
             Grid.Column="1"
             Margin="0,5,0,5" />
 
         <!--  SW Key  -->
         <TextBlock
-            Grid.Row="5"
+            Grid.Row="6"
             Grid.Column="0"
             Margin="0,0,10,0"
             VerticalAlignment="Center"
@@ -102,13 +112,13 @@
         <TextBox
             x:Name="txtSwKey"
             Text="{x:Bind ViewModel.OdooSwKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-            Grid.Row="5"
+            Grid.Row="6"
             Grid.Column="1"
             Margin="0,5,0,5" />
 
         <!--  Area Factor  -->
         <TextBlock
-            Grid.Row="6"
+            Grid.Row="7"
             Grid.Column="0"
             Margin="0,0,10,0"
             VerticalAlignment="Center"
@@ -116,14 +126,14 @@
         <TextBox
             x:Name="txtAreaFactor"
             Text="{x:Bind ViewModel.OdooAreaFactor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-            Grid.Row="6"
+            Grid.Row="7"
             Grid.Column="1"
             Margin="0,5,0,5" />
 
         <!--  Submit Button  -->
         <Button
             x:Name="btnSubmit"
-            Grid.Row="7"
+            Grid.Row="8"
             Grid.Column="0"
             Grid.ColumnSpan="2"
             Margin="0,10,0,0"

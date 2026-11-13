@@ -57,6 +57,9 @@ public static class OdooRpc
 	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled. This is the only exception rethrown.</exception>
 	public static async Task<Result<JsonElement>> CallAsync( string service, string method, IReadOnlyList<object?> args, int? timeoutMs = null, CancellationToken token = default )
 	{
+		// every request carries the password: never send it unencrypted to another computer unless the user chose to
+		if( OdooEndpoint.InsecureReason( Settings.OdooUrl, allowPlainHttp: !Settings.OdooUseHttps ) is { } insecure )
+			return Result<JsonElement>.Fail( insecure );
 		JsonRpcRequest request = new()
 		{
 			Params = new()

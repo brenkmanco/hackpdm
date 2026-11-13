@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- removes uploads (and their spool files) that were committed, or never committed within a day -->
+    <record id="ir_cron_hp_upload_gc" model="ir.cron">
+        <field name="name">HackPDM: remove stale uploads</field>
+        <field name="model_id" ref="model_hp_upload"/>
+        <field name="state">code</field>
+        <field name="code">model._gc_uploads()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="numbercall">-1</field>
+        <field name="active" eval="True"/>
+    </record>
+</odoo>

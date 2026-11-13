@@ -16,7 +16,7 @@ class TestSafeguards(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         users = cls.env["res.users"].with_context(no_reset_password=True)
-        group_user = cls.env.ref("base.group_user")
+        group_user = cls.env.ref("hackpdm.group_pdm_user")
         cls.alice = users.create({"name": "Alice Safeguard", "login": "hp_alice", "groups_id": [(6, 0, group_user.ids)]})
         cls.bob = users.create({"name": "Bob Safeguard", "login": "hp_bob", "groups_id": [(6, 0, group_user.ids)]})
         cls.node = cls.env["hp.node"].create({"name": "hp-safeguard-node"})

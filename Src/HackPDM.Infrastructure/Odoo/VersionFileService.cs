@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using HackPDM.Core;
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo.Models;
+using HackPDM.Infrastructure.Operations;
 
 namespace HackPDM.Infrastructure.Odoo;
 
@@ -49,13 +50,15 @@ public static class VersionFileService
 		return version.preview_image is { Length: > 0 };
 	}
 
-	/// <summary>Downloads the stored file contents of a version (a <c>read</c> of its <c>file_contents</c> field).</summary>
+	/// <summary>Downloads the stored file contents of a version: a <c>read</c> of its <c>file_contents</c> field, or in pieces for a large file (<see cref="ContentTransfer"/>).</summary>
 	/// <param name="version">The version to download; it is not modified.</param>
-	/// <returns>The decoded bytes, or null for an empty (file_size 0) or unsaved version, or when the read failed.</returns>
+	/// <returns>The decoded bytes, or null for an empty (file_size 0) or unsaved version, or when the download failed.</returns>
 	public static async Task<byte[]?> DownloadContentsAsync( this HpVersion version )
 	{
 		if( version.file_size == 0 || version.id is not int id || id == 0 )
 			return null;
+		if( ContentTransfer.IsLarge( version.file_size ) )
+			return ( await ContentTransfer.DownloadBytesAsync( version ) ).Value;
 		// JSON-RPC returns binary fields as base64 strings
 		var rows = await OdooRpc.ReadAsync( HpVersion.GetHpModel()!, [ id ], [ FileContents ] );
 		return rows.Value is [ var row, .. ] ? FileOperations.ConvertFromBase64( row.Text( FileContents ) ) : null;
@@ -139,17 +142,18 @@ public static class VersionFileService
 
 	/// <summary>Builds the <see cref="HackFile"/> to write for a version whose file_contents have been read.</summary>
 	/// <param name="version">The version.</param>
+	/// <param name="contentsInFile">Whether the contents were downloaded to a file instead (a large file): folder, date and size are then filled without them.</param>
 	/// <returns>
 	/// A file named after the version; <c>Owner</c> is whether the current user has it checked out (null when nobody does).
-	/// Contents, folder, modified date and size are filled only when <c>file_contents</c> is non-empty.
+	/// Contents, folder, modified date and size are filled only when <c>file_contents</c> is non-empty or <paramref name="contentsInFile"/>.
 	/// </returns>
-	public static HackFile ToHackFile( this HpVersion version )
+	public static HackFile ToHackFile( this HpVersion version, bool contentsInFile = false )
 	{
 		HackFile hack = new( version.name!, null )
 		{
 			Owner = version.checkout_user?.id is not null ? OdooDefaults.Instance?.OdooId == version.checkout_user.id : null,
 		};
-		if( version.file_contents is not { Length: > 0 } )
+		if( version.file_contents is not { Length: > 0 } && !contentsInFile )
 			return hack;
 		hack.FileContents = version.file_contents;
 		hack.DirectoryName = version.WinPathway;

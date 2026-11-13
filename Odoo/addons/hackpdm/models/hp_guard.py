@@ -23,8 +23,8 @@ MAX_NAME_LENGTH = 255
 
 
 def is_pdm_admin(env):
-    """Superuser mode or a member of Settings (base.group_system): may bypass the user-level guards."""
-    return env.su or env.user.has_group("base.group_system")
+    """Superuser mode or a HackPDM administrator (Settings administrators are ones): may bypass the user-level guards."""
+    return env.su or env.user.has_group("hackpdm.group_pdm_admin")
 
 
 def require_admin(env, what):

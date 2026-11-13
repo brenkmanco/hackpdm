@@ -19,6 +19,8 @@ public interface IOdooDefaultBase
 	string? OdooDb { get; set; }
 	/// <summary>The server's base URL, which the JSON-RPC endpoint path is appended to.</summary>
 	string? OdooUrl { get; set; }
+	/// <summary>Whether to connect with HTTPS; when <see langword="false"/> the user accepts sending the password unencrypted.</summary>
+	bool OdooUseHttps { get; set; }
 	/// <summary>The SolidWorks Document Manager license key used to read SolidWorks files.</summary>
 	string? OdooSwKey { get; set; }
 	decimal? OdooAreaFactor { get; set; }

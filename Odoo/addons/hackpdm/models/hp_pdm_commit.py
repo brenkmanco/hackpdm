@@ -341,7 +341,12 @@ class hp_pdm_commit(models.Model):
             raise UserError(f"Target entry ID {entry_id} does not exist.")
         # a version is a file: one sent without contents (the client could not read the file) would
         # be a version nobody can get back ("" is an empty file, which is fine)
-        if payload.get("file_contents") is None:
+        # a large file arrives as a finished hp.upload (upload_id) instead of inline file_contents
+        if payload.get("upload_id") is not None:
+            if payload.get("file_contents") is not None:
+                raise UserError(f"Cannot commit version of '{entry_rec.name}': both file contents and an upload were sent.")
+            self.env["hp.upload"]._committable(payload["upload_id"])
+        elif payload.get("file_contents") is None:
             raise UserError(f"Cannot commit version of '{entry_rec.name}': the file's contents are missing.")
 
         # Check: Deleted check (Dt)
@@ -451,6 +456,7 @@ class hp_pdm_commit(models.Model):
                 self._handle_version_relationship(row, payload, summary_model)
                 continue
 
+            upload_id = payload.pop("upload_id", None) if target_model == "hp.version" else None
             model = self.env[target_model]
             if target_model == "hp.version.property":
                 # validated above (a version this commit created); users cannot create them directly
@@ -464,6 +470,8 @@ class hp_pdm_commit(models.Model):
 
             # Dispatch post-creation actions
             if target_model == "hp.version":
+                if upload_id is not None:
+                    self.env["hp.upload"]._committable(upload_id)._attach_to(rec)
                 self._post_create_version(rec)
         
     # ------------------------------------------------------------

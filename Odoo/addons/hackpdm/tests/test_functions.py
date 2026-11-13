@@ -19,7 +19,7 @@ class TestServerFunctions(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        group_user = cls.env.ref("base.group_user")
+        group_user = cls.env.ref("hackpdm.group_pdm_user")
         cls.alice = cls.env["res.users"].with_context(no_reset_password=True).create(
             {"name": "Alice Functions", "login": "hp_fn_alice", "groups_id": [(6, 0, group_user.ids)]})
         cls.node = cls.env["hp.node"].create({"name": "hp-fn-node"})

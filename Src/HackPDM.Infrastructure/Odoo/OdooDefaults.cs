@@ -48,6 +48,7 @@ public class OdooDefaults : IOdooDefaults
     public string? OdooPort { get => Connection.OdooPort; set => Connection.OdooPort = value; }
     public string? OdooDb { get => Connection.OdooDb; set => Connection.OdooDb = value; }
     public string? OdooUrl { get => Connection.OdooUrl; set => Connection.OdooUrl = value; }
+    public bool OdooUseHttps { get => Connection.OdooUseHttps; set => Connection.OdooUseHttps = value; }
     public string? OdooSwKey { get => Connection.OdooSwKey; set => Connection.OdooSwKey = value; }
     public decimal? OdooAreaFactor { get => Connection.OdooAreaFactor; set => Connection.OdooAreaFactor = value; }
     public string? OdooCredentialTarget { get => Connection.OdooCredentialTarget; set => Connection.OdooCredentialTarget = value; }

@@ -109,19 +109,46 @@ public static class CommitStaging
 			return null;
 		if( existingEntry )
 			version.HashedValues[ "__internal__existing" ] = true;
-		HpRecordStaged? staged = await version.StageRecAsync();
-		return staged?.id is not null and not 0 ? staged : null;
+
+		// a large file is uploaded in pieces first and staged by its upload id, not inline
+		int? uploadId = null;
+		if( version.HashedValues.GetValueOrDefault( UploadSource ) is string path )
+		{
+			Result<int> uploaded = await ContentTransfer.UploadFileAsync( path );
+			if( !uploaded.Ok )
+			{
+				version.LastError = uploaded.Error;
+				Debug.WriteLine( $"upload of {path} failed: {uploaded.Error}" );
+				return null;
+			}
+			uploadId = uploaded.Value;
+		}
+
+		HpRecordStaged? staged = version.PreStageRec();
+		if( staged is null )
+			return null;
+		if( uploadId is { } id )
+			staged.payload![ "upload_id" ] = id;
+		staged.CreateTimeoutMs = ContentTransfer.TimeoutMs( version.file_contents?.Length ?? 0 );
+		await staged.CreateAsync();
+		version.LastError = staged.LastError;
+		return staged.id is not null and not 0 ? staged : null;
 	}
+
+	/// <summary>The <c>HashedValues</c> key holding the path of a large file to upload in pieces instead of sending its contents inline.</summary>
+	internal const string UploadSource = "__upload_source";
 
 	private static HpVersion? NewVersion( HackFile hack, Many2One? entryId, Many2One? dirId, string? serverName, IMany2One? commit )
 	{
 		TypeOf( hack, out bool restricted );
 		if( restricted )
 			return null;
+		// a large file still on disk is uploaded in pieces when it is staged (see StageAsync)
+		string? uploadFrom = hack.FileContents is null && LargeFileOnDisk( hack ) ? hack.FullPath : null;
 		// a file that can no longer be read (deleted or moved since it was picked) is not committed
 		// as a version without contents
-		byte[]? contents = hack.FileContents ?? ReadContents( hack );
-		if( contents is null )
+		byte[]? contents = uploadFrom is null ? hack.FileContents ?? ReadContents( hack ) : null;
+		if( contents is null && uploadFrom is null )
 			return null;
 		HpVersion version = new()
 		{
@@ -136,7 +163,21 @@ public static class CommitStaging
 			commit_id = commit,
 			HashedValues = { [ "windows_complete_name" ] = serverName },
 		};
+		if( uploadFrom is not null )
+			version.HashedValues[ UploadSource ] = uploadFrom;
 		return version;
+	}
+
+	private static bool LargeFileOnDisk( HackFile hack )
+	{
+		try
+		{
+			return hack.FullPath is { Length: > 0 } path && File.Exists( path ) && ContentTransfer.IsLarge( new FileInfo( path ).Length );
+		}
+		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException )
+		{
+			return false;
+		}
 	}
 
 	private static byte[]? ReadContents( HackFile hack )

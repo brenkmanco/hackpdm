@@ -76,6 +76,26 @@ public static class LocalFileWriter
             Console.WriteLine($"{file.Name} file contents empty");
             return false;
         }
+        byte[] contents = file.FileContents;
+        return await PlaceAsync(file, target => WriteBytes(target, contents));
+    }
+
+    /// <summary>
+    /// Moves a downloaded file from <paramref name="sourcePath"/> into the working folder at its server path, the way
+    /// <see cref="WriteAsync"/> writes one from memory (same target, read-only and date handling).
+    /// </summary>
+    /// <param name="file">The file: <see cref="HackPDM.Core.Hack.HackBaseFile.DirectoryName"/> holds the server path; its contents are not used.</param>
+    /// <param name="sourcePath">The downloaded file, for example a temporary file; it is moved, not copied.</param>
+    /// <returns><see langword="true"/> when the file is in place; <see langword="false"/> when the target would fall outside the working folder or an IO error occurred.</returns>
+    public static Task<bool> WriteFromFileAsync(HackFile file, string sourcePath)
+        => PlaceAsync(file, target =>
+        {
+            File.Move(sourcePath, target, overwrite: true);
+            return Task.FromResult(true);
+        });
+
+    private static async Task<bool> PlaceAsync(HackFile file, Func<string, Task<bool>> write)
+    {
         try
         {
             if (LocalTargetPath(file) is not { } targetPath) return false;
@@ -85,7 +105,7 @@ public static class LocalFileWriter
             // set again below), or the write fails
             if (File.Exists(targetPath) && File.GetAttributes(targetPath).HasFlag(FileAttributes.ReadOnly))
                 File.SetAttributes(targetPath, File.GetAttributes(targetPath) & ~FileAttributes.ReadOnly);
-            if (!await WriteBytes(targetPath, file.FileContents))
+            if (!await write(targetPath))
                 return false;
 
             // the date and read-only flag are applied through the file's own path

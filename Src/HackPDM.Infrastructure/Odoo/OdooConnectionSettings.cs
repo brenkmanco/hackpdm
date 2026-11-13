@@ -84,20 +84,23 @@ public sealed class OdooConnectionSettings( ISettingsProvider settings )
         get => field ??= Settings.Get<string>("OdooDb");
         set => Settings.Set("OdooDb", field = value);
     }
+    /// <summary>Whether to connect to the server with HTTPS.</summary>
+    /// <value>
+    /// <see langword="true"/> unless the user turned it off. When off, the password is sent unencrypted, which
+    /// <see cref="OdooEndpoint.InsecureReason"/> then accepts for any server.
+    /// </value>
+    public bool OdooUseHttps
+    {
+        get => _useHttps ??= Settings.Get("OdooUseHttps", true);
+        set => Settings.Set("OdooUseHttps", (_useHttps = value).Value);
+    }
+    private bool? _useHttps;
+
     /// <summary>The server's base URL, used by <see cref="OdooRpc"/> for every call.</summary>
-    /// <value>Built once as <c>http://{OdooAddress}:{port}</c> (no port part when the OdooPort setting is empty) unless set explicitly; later address or port changes don't update a URL already built.</value>
+    /// <value>Built once by <see cref="OdooEndpoint.BuildUrl"/> from the address, port and <see cref="OdooUseHttps"/> unless set explicitly; later address or port changes don't update a URL already built.</value>
     public string? OdooUrl 
     {
-        get 
-        {
-            if (field is not null) return field;
-            string? port = Settings.Get<string>("OdooPort");
-            port = port is null or "" ? "" : $":{port}";
-
-            field = $"http://{OdooAddress}{port}";
-            
-            return field;
-        }
+        get => field ??= OdooEndpoint.BuildUrl(OdooAddress, Settings.Get<string>("OdooPort"), OdooUseHttps);
         set
         {
             field = value;

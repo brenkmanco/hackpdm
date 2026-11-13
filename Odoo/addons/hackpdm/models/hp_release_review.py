@@ -81,7 +81,7 @@ class hp_release_review(models.Model):
         """
         # Check if the user belongs to a group that has permission
         userCaller = self.env.user
-        if not userCaller.has_group('base.group_system'):
+        if not userCaller.has_group('hackpdm.group_pdm_admin'):
             raise PermissionError(_(f"{userCaller.name} attempted to review a release with insufficient permissions."))
 
         review = self.env["hp.release.review"].search([

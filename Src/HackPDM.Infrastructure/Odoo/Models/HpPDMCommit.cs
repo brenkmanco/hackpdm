@@ -33,7 +33,10 @@ public partial class HpPDMCommit : HpBaseModelTransport<HpPDMCommit>, IHpPDMComm
 	IOne2Many? IHpPDMCommitModel.staged_ids { get => (IOne2Many?)staged_ids; set => staged_ids = (One2Many?)value; }
 }
 public partial class HpPDMCommit
-{ 
+{
+	/// <summary>How long the server may take to apply a commit, in milliseconds: it stores every file of the commit.</summary>
+	public static int CommitTimeoutMs { get; set; } = 15 * 60_000;
+
 	/// <summary>
 	/// Asks the server to apply this commit: the hp.record.staged rows staged in it become real records.
 	/// </summary>
@@ -47,9 +50,18 @@ public partial class HpPDMCommit
 	/// </remarks>
 	public async Task<(bool Committed, string? Error)> ServerCommit()
 	{
-		Result<IReadOnlyList<OdooRow>> response = await OdooRpc.ExecuteAsync<IReadOnlyList<OdooRow>>(GetHpModel()!, "start_commit", [this.id]);
+		Result<IReadOnlyList<OdooRow>> response = await OdooRpc.ExecuteAsync<IReadOnlyList<OdooRow>>(GetHpModel()!, "start_commit", [this.id], CommitTimeoutMs);
 		if (!response.Ok)
+		{
+			// the reply may be what was lost (a timeout, a dropped connection): the commit says whether it went through
+			Result<IReadOnlyList<OdooRow>> state = await OdooRpc.ReadAsync(GetHpModel()!, [this.id ?? 0], ["committed"]);
+			if (state.Value is [var saved, ..] && saved.Bool("committed"))
+			{
+				committed = true;
+				return (true, null);
+			}
 			return (false, response.Error);
+		}
 		if (response.Value is [var row, ..])
 		{
 			bool committed = row.Bool("committed");

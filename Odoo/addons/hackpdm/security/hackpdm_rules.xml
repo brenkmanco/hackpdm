@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- hp.record.staged rows hold the field values (and file contents) of commits that are not finished yet.
+     A user sees only the rows of their own commits; HackPDM administrators see all of them. -->
+<odoo>
+    <record id="rule_hp_record_staged_own" model="ir.rule">
+        <field name="name">hp.record.staged: own commits only</field>
+        <field name="model_id" ref="model_hp_record_staged"/>
+        <field name="domain_force">[('committing_id.create_uid', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('group_pdm_viewer'))]"/>
+    </record>
+
+    <record id="rule_hp_record_staged_admin" model="ir.rule">
+        <field name="name">hp.record.staged: administrators see all</field>
+        <field name="model_id" ref="model_hp_record_staged"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_pdm_admin'))]"/>
+    </record>
+
+    <!-- a file being uploaded in pieces belongs to whoever started the upload -->
+    <record id="rule_hp_upload_own" model="ir.rule">
+        <field name="name">hp.upload: own uploads only</field>
+        <field name="model_id" ref="model_hp_upload"/>
+        <field name="domain_force">[('create_uid', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('group_pdm_user'))]"/>
+    </record>
+
+    <record id="rule_hp_upload_admin" model="ir.rule">
+        <field name="name">hp.upload: administrators see all</field>
+        <field name="model_id" ref="model_hp_upload"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_pdm_admin'))]"/>
+    </record>
+</odoo>

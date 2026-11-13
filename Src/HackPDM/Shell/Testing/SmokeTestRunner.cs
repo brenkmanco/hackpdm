@@ -135,7 +135,7 @@ internal static class SmokeTestRunner
 				var odoo = OdooDefaults.Instance;
 				odoo.OdooAddress = address;
 				odoo.OdooPort = port;
-				odoo.OdooUrl = $"http://{address}:{port}";
+				odoo.OdooUrl = $"http://{address}:{port}"; // plain HTTP is accepted to this computer only
 				odoo.OdooDb = db;
 				odoo.OdooUser = Env( "HACKPDM_ODOO_USER", "admin" );
 				odoo.OdooPass = Env( "HACKPDM_ODOO_PASSWORD", "admin" );

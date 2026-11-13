@@ -5,12 +5,8 @@ from odoo import fields, models, api
 from odoo.exceptions import UserError
 
 from . import hp_guard
+from . import hp_legacy
 
-import datetime as dt
-import numpy as np
-
-# pyrefly: ignore [missing-import]
-from webdav3.client import Client
 import hashlib as hash
 import base64
 import logging
@@ -18,79 +14,6 @@ import urllib.parse
 # pyrefly: ignore [missing-import]
 import magic
 
-# pyrefly: ignore [missing-import]
-import sqlalchemy
-# pyrefly: ignore [missing-import]
-from sqlalchemy import MetaData, Table, create_engine, select, update
-# pyrefly: ignore [missing-import]
-from sqlalchemy.orm import Mapped, sessionmaker, relationship
-
-class Database:
-    def __init__(self, db_username:str, db_password:str, db_name:str, db_hostname:str, db_port):
-        self.sessionURL = f'postgresql://{db_username}:{db_password}@{db_hostname}:{db_port}/{db_name}'
-
-        self.engine = create_engine(self.sessionURL)
-        self.connection = self.engine.connect()
-        self.metadata = MetaData()
-        self._Session = sessionmaker(bind=self.engine)
-
-    def get_table(self, table_name):
-        return Table(table_name, self.metadata, autoload_with=self.engine)
-
-    def start_session(self):
-        self.session = self._Session()
-
-    def execute(self, statement):
-        return self.session.execute(statement)
-class WebDav():
-    logging.basicConfig(level=logging.DEBUG)
-    logger = logging.getLogger(__name__)
-    local_path = "~/dev/tempDirectory"
-
-    def __init__(self, client:Client):
-        self.client = client
-    def __init__(self, options:dict[str, any]):
-        self.client = Client(options)
-    def __init__(self):
-        options = {
-            'webdav_hostname': "http://hackpdm.zip.azi/webdav",
-            'webdav_port': 80,
-            'webdav_login': "mtaylor",
-            'webdav_password': "mtaylor",
-            'webdav_override_methods': {
-                'check': 'GET',
-            },
-            'webdav_timeout': 30,
-        }
-        self.client = Client(options)
-
-    def files_in_entry(self, entry_id:int):
-        try:
-            directory_path = urllib.parse.quote(f"/{entry_id}")
-            return self.client.list(directory_path)
-        except:
-            logging.error(f"entry '{entry_id}' doesn't exist")
-            return []
-
-    def get_file_from_webdav(self, entry_id:int, version_id:int, file_extension:str):
-        file_path = urllib.parse.quote(f"/{entry_id}/{version_id}.{file_extension}")
-        file_info = {}
-        try:
-            file_info = self.client.info(file_path)
-            buffer = io.BytesIO()
-
-            self.client.download_from(remote_path=file_path, buff=buffer)
-            buffer.seek(0)
-            file_contents = buffer.read()
-
-            return file_contents
-        except Exception as e:
-            if f"{version_id}.{file_extension}" in self.files_in_entry(entry_id):
-                logging.error(e)
-            else:
-                logging.error(f"file version '{version_id}' doesn't exist")
-        return b''
-        #print(f"File information: {file_info}")
 
 class hp_common_model(models.AbstractModel):
     #base fields
@@ -344,7 +267,7 @@ class hp_common_model(models.AbstractModel):
         ])
         return attachments
 
-    def _import_versions(self, web_dav:WebDav):
+    def _import_versions(self, web_dav):
         all_records = self.env["hp.version"].search([])
 
         for record in all_records:
@@ -365,44 +288,9 @@ class hp_common_model(models.AbstractModel):
                 logging.warning(f"didn't create attachment {record.id}.{record.name}")
             self.env.cr.commit()
 
-    def _import_records(self, database1:Database, table_name:str):
-        all_records = self.env[table_name.replace("_", ".")].search([])
-        table1 = database1.get_table(table_name)
-
-        for record in all_records:
-            try:
-                stmt = table1.select().where(table1.c.id == record.id)
-                results = database1.execute(stmt)
-
-
-            except Exception as e:
-                logging.error(e)
-
-
-            if record.name and len(attachment)>0:
-                logging.info(f"version record {attachment[0].res_id} has attachment id {attachment[0].id} named: {attachment[0].name}")
-                continue
-            file_contents = web_dav.get_file_from_webdav(record.entry_id.id, record.id, record.file_ext)
-            if file_contents != b'':
-                try:
-                    attachment = record._create_attachment(file_contents, "file_contents")
-                except:
-                    logging.warning(f"didn't create attachment {record.id}.{record.name}")
-                if (attachment != None):
-                    logging.info(f"attachment id {attachment.id} created for version record {attachment.res_id} named: {attachment.name}")
-            else:
-                logging.warning(f"didn't create attachment {record.id}.{record.name}")
-            self.env.cr.commit()
-
-
-    def _get_image_bytes(self, database1:Database, record):
-        table1 = database1.get_table("hp_version")
-        stmt = select(table1.c.preview_image).where(table1.c.version_id == record.id)
-        return database1.execute(stmt).first()[0]
-
     @api.model
     @api.depends('name')
-    def _import_versions_image(self, hackpdm:Database):
+    def _import_versions_image(self, hackpdm):
         all_records = self.env[self._name].search([])
 
         for record in all_records:
@@ -412,8 +300,8 @@ class hp_common_model(models.AbstractModel):
                 continue
 
             try:
-                image = self._get_image_bytes(hackpdm, record)
-                if image != None and image != b'':
+                image = hackpdm.preview_image(record.id)
+                if image:
                     attachment = record._create_attachment(image, "preview_image")
                     if (attachment != None):
                         logging.info(f"attachment id {attachment.id} created for version record {attachment.res_id} named: {attachment.name}")
@@ -432,8 +320,8 @@ class hp_common_model(models.AbstractModel):
         """One-off migration: copies preview images from the old HackPDM database into attachments.
 
         Administrators only. Commits after every record. Despite the name, the WebDAV file import is
-        commented out; only ``_import_versions_image`` runs. The old database's address and login are
-        hardcoded.
+        commented out; only ``_import_versions_image`` runs. The old database comes from the
+        ``hackpdm.legacy_db_url`` system parameter (see ``hp_legacy``).
 
         Args:
             None.
@@ -445,9 +333,5 @@ class hp_common_model(models.AbstractModel):
             AccessError: The caller is not an administrator.
         """
         hp_guard.require_admin(self.env, "migrate_webdav_files_to_records")
-        web_dav = WebDav()
-        hackpdm = Database("hackpdm", "hackpdm", "hackpdm", "alderaan", 5432)
-        #odoopdm = Database("moony", "moony", "odoopdm", "10.0.0.52", 5432)
-        #self._import_versions(web_dav)
-        hackpdm.start_session()
+        hackpdm = hp_legacy.LegacyDatabase(self.env)
         self._import_versions_image(hackpdm)

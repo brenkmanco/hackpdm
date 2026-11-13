@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Mvvm.ViewModels.Common;
+using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Mvvm.ViewModels.Odoo;
 
@@ -22,6 +23,8 @@ public partial class OdooSettingsViewModel : ObservableObject
 	[ObservableProperty] public partial string OdooAreaFactor { get; set; }
 	[ObservableProperty] public partial string OdooUser { get; set; }
 	[ObservableProperty] public partial string OdooPass { get; set; }
+	/// <summary>Whether to connect with HTTPS; turning it off sends the password unencrypted.</summary>
+	[ObservableProperty] public partial bool OdooUseHttps { get; set; }
 
 	/// <summary>Raised after a successful save, so a page in its own window can close it.</summary>
 	public event Action? Saved;
@@ -39,14 +42,15 @@ public partial class OdooSettingsViewModel : ObservableObject
 		OdooAreaFactor = defaults.OdooAreaFactor?.ToString( CultureInfo.CurrentCulture ) ?? "1";
 		OdooUser = defaults.OdooUser ?? "";
 		OdooPass = defaults.OdooPass ?? "";
+		OdooUseHttps = defaults.OdooUseHttps;
 	}
 
 	/// <summary>The server's URL from the address and optional port.</summary>
 	/// <param name="address">The host name or IP address.</param>
 	/// <param name="port">The port; null or empty leaves it out.</param>
 	/// <returns>An http URL such as "http://10.0.0.68:8069".</returns>
-	public static string UrlOf( string address, string? port )
-		=> string.IsNullOrEmpty( port ) ? $"http://{address}" : $"http://{address}:{port}";
+	public static string UrlOf( string address, string? port, bool useHttps )
+		=> OdooEndpoint.BuildUrl( address, port, useHttps );
 
 	/// <summary>Validates the area factor, then applies every field to the live Odoo settings and raises <see cref="Saved"/>.</summary>
 	[RelayCommand]
@@ -58,7 +62,12 @@ public partial class OdooSettingsViewModel : ObservableObject
 			await _dialogs.ShowMessageAsync( "Area Factor must be a decimal number" );
 			return;
 		}
+		string url = UrlOf( OdooAddress, OdooPort, OdooUseHttps );
+		if( !OdooUseHttps && OdooEndpoint.InsecureReason( url, allowPlainHttp: false ) is not null
+			&& !await _dialogs.ConfirmAsync( "Without HTTPS your password is sent unencrypted, and anyone on the network can read it. Save anyway?", "Unencrypted connection", MessageBoxIcon.Warning ) )
+			return;
 		var defaults = OdooDefaults.Instance;
+		defaults.OdooUseHttps = OdooUseHttps;
 		defaults.OdooAddress = OdooAddress;
 		defaults.OdooPort = OdooPort;
 		defaults.OdooDb = OdooDb;
@@ -66,7 +75,7 @@ public partial class OdooSettingsViewModel : ObservableObject
 		defaults.OdooAreaFactor = areaFactor;
 		defaults.OdooUser = OdooUser;
 		defaults.OdooPass = OdooPass;
-		defaults.OdooUrl = UrlOf( OdooAddress, OdooPort );
+		defaults.OdooUrl = url;
 		// the page is usually shown inside the main window, where nothing else shows that it worked
 		await _dialogs.ShowMessageAsync( "Odoo settings saved" );
 		Saved?.Invoke();

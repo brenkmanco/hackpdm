@@ -1,0 +1,51 @@
+; HackPDM production server configuration. Copy to odoo.conf, replace every <...> value, and keep the
+; copy readable only by the account Odoo runs as (chmod 600). Never commit the filled-in copy.
+;
+; Odoo must sit behind a reverse proxy (nginx, Caddy, ...) that terminates TLS: the HackPDM client
+; refuses to send the password over plain HTTP to anything but localhost.
+[options]
+
+; ---- database ---------------------------------------------------------------------------------
+db_host = localhost
+db_port = 5432
+; A role with CREATEDB only, not a PostgreSQL superuser (Odoo refuses to run as "postgres").
+db_user = odoo
+db_password = <database password>
+; Serve this one database: the client has no database picker, so nothing else should be reachable.
+db_name = <database name>
+dbfilter = ^<database name>$
+; Hide the database manager (/web/database/*): it can create, copy, back up and drop databases.
+list_db = False
+; Master password for the database manager. Use a long random value, e.g.
+;   python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+; Odoo replaces it with a hash the first time it is changed from the web UI.
+admin_passwd = <long random master password>
+
+; ---- network ----------------------------------------------------------------------------------
+; Listen on loopback only; the reverse proxy is the only way in.
+http_interface = 127.0.0.1
+http_port = 8069
+; Trust X-Forwarded-* from the proxy, so Odoo sees the client's address and the https scheme.
+proxy_mode = True
+; Live chat / bus port; only needed when the web UI is used through the proxy.
+gevent_port = 8072
+
+; ---- workers and limits -----------------------------------------------------------------------
+; Run multi-process (needed for the time and memory limits below). Roughly 2 x CPU cores + 1.
+workers = 5
+max_cron_threads = 1
+; A worker is recycled after limit_request requests, and a request is killed past the time and
+; memory limits. HackPDM sends file contents base64-encoded in JSON-RPC (Odoo 16 caps a request
+; body at 128 MB), so allow enough time and memory for the largest commit you expect.
+limit_request = 8192
+limit_time_cpu = 600
+limit_time_real = 1200
+limit_memory_soft = 2147483648
+limit_memory_hard = 2684354560
+
+; ---- files and logs ---------------------------------------------------------------------------
+data_dir = /var/lib/odoo
+addons_path = /opt/odoo/addons,/opt/hackpdm/Odoo/addons
+logfile = /var/log/odoo/odoo.log
+log_level = info
+without_demo = all

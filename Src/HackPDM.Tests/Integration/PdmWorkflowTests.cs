@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
+using HackPDM.Infrastructure.Operations;
 using HackPDM.Mvvm.Models.Common;
 using HackPDM.Mvvm.Models.Hack;
 using HackPDM.Shared.GlobalData;
@@ -179,6 +180,98 @@ public class PdmWorkflowTests : IAsyncLifetime
 		// a second get latest has nothing new to fetch
 		await _service.GetLatestAsync( ids );
 		Assert.Contains( _reporter.Notices, n => n.Contains( "0 downloaded, 2 already up to date" ) );
+	}
+
+	[OdooFact]
+	public async Task LargeFiles_GoInPieces_ThroughCommitGetLatestNewVersionAndHistory()
+	{
+		long inline = ContentTransfer.InlineLimitBytes;
+		int chunk = ContentTransfer.ChunkBytes;
+		// small limits, so a test-sized file takes several pieces (and a last, shorter one)
+		ContentTransfer.InlineLimitBytes = 64 * 1024;
+		ContentTransfer.ChunkBytes = 100 * 1024;
+		try
+		{
+			byte[] first = RandomNumberGenerator.GetBytes( 350 * 1024 + 7 );
+			string a = WriteFile( "big.txt", "" );
+			File.WriteAllBytes( a, first );
+			await CommitAsync( a );
+			AssertNoErrors();
+
+			var entry = await RequireEntryAsync( "big.txt" );
+			int entryId = Convert.ToInt32( entry[ "id" ] );
+			int firstVersion = Id( entry[ "latest_version_id" ] );
+			var stored = await VersionAsync( firstVersion );
+			Assert.Equal( Sha1( a ), stored[ "checksum" ] );
+			Assert.Equal( (long)first.Length, Convert.ToInt64( stored[ "file_size" ] ) );
+			// it really went through an upload, not inline
+			Assert.NotEmpty( ( await OdooRpc.SearchAsync( "hp.upload",
+				OdooDomain.Where( "size", first.Length ).And( "state", "used" ).And( "checksum", Sha1( a ) ) ) ).Unwrap() );
+
+			// get latest into another working folder: in pieces, checked, moved into place
+			UseVault( _otherVault );
+			await _service.GetLatestAsync( [ entryId ] );
+			AssertNoErrors();
+			Assert.Equal( first, File.ReadAllBytes( LocalPath( _otherVault, "big.txt" ) ) );
+			// the temporary download file was moved, not left behind
+			Assert.DoesNotContain( Directory.EnumerateFiles( Path.GetTempPath(), "hackpdm-*.part" ), f => File.GetLastWriteTimeUtc( f ) > DateTime.UtcNow.AddMinutes( -5 ) );
+
+			// a new version of the existing file
+			UseVault( _vault );
+			await _service.CheckoutAsync( [ entryId ] );
+			byte[] second = RandomNumberGenerator.GetBytes( 200 * 1024 );
+			File.SetAttributes( a, FileAttributes.Normal );
+			File.WriteAllBytes( a, second );
+			await CommitAsync( a );
+			AssertNoErrors();
+			entry = await RequireEntryAsync( "big.txt" );
+			Assert.Equal( 2, entry.RefIds( "version_ids" ).Count );
+			Assert.Equal( Sha1( a ), ( await VersionAsync( Id( entry[ "latest_version_id" ] ) ) )[ "checksum" ] );
+
+			// the first version, fetched on its own (into memory, in pieces)
+			var plan = await _service.PlanVersionDownloadAsync( firstVersion );
+			Assert.NotNull( plan );
+			UseVault( _otherVault );
+			File.SetAttributes( LocalPath( _otherVault, "big.txt" ), FileAttributes.Normal );
+			Assert.Empty( await _service.DownloadVersionsAsync( plan.VersionIds ) );
+			Assert.Equal( first, File.ReadAllBytes( LocalPath( _otherVault, "big.txt" ) ) );
+		}
+		finally
+		{
+			ContentTransfer.InlineLimitBytes = inline;
+			ContentTransfer.ChunkBytes = chunk;
+		}
+	}
+
+	[OdooFact]
+	public async Task LargeUpload_ContinuesFromWhatTheServerHas_AndRefusesADamagedFile()
+	{
+		int chunk = ContentTransfer.ChunkBytes;
+		ContentTransfer.ChunkBytes = 1000;
+		try
+		{
+			byte[] data = RandomNumberGenerator.GetBytes( 3500 );
+			using MemoryStream stream = new( data );
+			Result<int> uploaded = await ContentTransfer.UploadAsync( stream );
+			Assert.True( uploaded.Ok, uploaded.Error );
+			var row = ( await OdooRpc.ReadAsync( "hp.upload", [ uploaded.Value ], [ "state", "received", "size" ] ) ).Unwrap()[ 0 ];
+			Assert.Equal( "done", row[ "state" ] );
+			Assert.Equal( 3500, row.Int( "received" ) );
+
+			// a piece sent past a gap (as after a lost call) is not written: the server says where to go on
+			string sha1 = Convert.ToHexStringLower( SHA1.HashData( data ) );
+			var begun = ( await OdooRpc.ExecuteAsync<OdooRow>( "hp.upload", "upload_begin", [ data.Length, sha1 ] ) ).Unwrap();
+			int id = begun.Int( "id" ) ?? 0;
+			Assert.Equal( 0, ( await OdooRpc.ExecuteAsync<int>( "hp.upload", "upload_chunk", [ id, 1000, Convert.ToBase64String( data, 1000, 1000 ) ] ) ).Unwrap() );
+			Assert.Equal( 1000, ( await OdooRpc.ExecuteAsync<int>( "hp.upload", "upload_chunk", [ id, 0, Convert.ToBase64String( data, 0, 1000 ) ] ) ).Unwrap() );
+			// a damaged file is not accepted
+			Assert.Equal( 3500, ( await OdooRpc.ExecuteAsync<int>( "hp.upload", "upload_chunk", [ id, 1000, Convert.ToBase64String( new byte[ 2500 ] ) ] ) ).Unwrap() );
+			Assert.False( ( await OdooRpc.ExecuteAsync<bool>( "hp.upload", "upload_finish", [ id ] ) ).Unwrap() );
+		}
+		finally
+		{
+			ContentTransfer.ChunkBytes = chunk;
+		}
 	}
 
 	[OdooFact]
