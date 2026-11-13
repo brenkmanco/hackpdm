@@ -9,6 +9,9 @@ Creates (idempotently, keyed on names):
     root/Projects
     root/Projects/Parts       <- bracket.txt, plate.txt, readme.txt (one version each)
     root/Library
+    root/Projects/Assembly    <- dependencies for the dependency graph page:
+                                 frame.slddrw -> frame.sldasm -> arm.sldasm -> bolt.sldprt, plate.sldprt
+                                                              -> bolt.sldprt
 """
 import base64
 import sys
@@ -63,6 +66,27 @@ for name in ("bracket.txt", "plate.txt", "readme.txt"):
         "entry_id": entry,
         "dir_id": parts,
         "file_contents": base64.b64encode(content).decode(),
+    })
+
+# dependencies: a version's children are set when it is created (they cannot change later),
+# so children first; sizes differ so the graph's boxes do too
+assembly = ensure("hp.directory", [("name", "=", "Assembly"), ("parent_id", "=", projects)],
+                  {"name": "Assembly", "parent_id": projects})
+type_ids = {ext: call("hp.type", "search", [("file_ext", "=", ext)], limit=1)[0]
+            for ext in ("sldprt", "sldasm", "slddrw")}
+latest = {}
+for name, size, children in (("bolt.sldprt", 30_000, []), ("plate.sldprt", 400_000, []),
+                             ("arm.sldasm", 1_500_000, ["bolt.sldprt", "plate.sldprt"]),
+                             ("frame.sldasm", 6_000_000, ["arm.sldasm", "bolt.sldprt"]),
+                             ("frame.slddrw", 250_000, ["frame.sldasm"])):
+    entry = ensure("hp.entry", [("name", "=", name), ("dir_id", "=", assembly)],
+                   {"name": name, "dir_id": assembly, "type_id": type_ids[name.rsplit(".", 1)[1]]})
+    found = call("hp.version", "search", [("entry_id", "=", entry)], limit=1, order="id desc")
+    latest[name] = found[0] if found else call("hp.version", "create", {
+        "entry_id": entry,
+        "dir_id": assembly,
+        "file_contents": base64.b64encode(name.encode().ljust(size, b".")).decode(),
+        "child_ids": [(6, 0, [latest[c] for c in children])],
     })
 
 summary = {

@@ -2,4 +2,19 @@
   <PropertyGroup>
     <LangVersion>preview</LangVersion>
   </PropertyGroup>
+
+  <!-- The one HackPDM version: the client's assembly, file and package versions all come from it.
+       Release builds override it from the git tag (vX.Y.Z): dotnet publish -p:HackPdmVersion=X.Y.Z
+       The server's hp.settings "client_version" is the oldest client version it accepts. -->
+  <PropertyGroup>
+    <HackPdmVersion Condition="'$(HackPdmVersion)' == ''">1.1.0</HackPdmVersion>
+    <Version>$(HackPdmVersion)</Version>
+    <AssemblyVersion>$(HackPdmVersion).0</AssemblyVersion>
+    <FileVersion>$(HackPdmVersion).0</FileVersion>
+    <InformationalVersion>$(HackPdmVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- Uno single project: the package (MSIX) manifest's version -->
+    <ApplicationDisplayVersion>$(HackPdmVersion)</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+  </PropertyGroup>
 </Project>

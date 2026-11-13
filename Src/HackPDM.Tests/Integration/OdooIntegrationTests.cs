@@ -49,6 +49,21 @@ public sealed class OdooFactAttribute : FactAttribute
 	}
 }
 
+/// <summary>A live-Odoo test that moves a very large file; it runs only when <c>HACKPDM_BIG_FILE_MB</c> gives the size in MB.</summary>
+public sealed class BigFileFactAttribute : FactAttribute
+{
+	/// <summary>The file size to test with, in MB; 0 when the test is not enabled.</summary>
+	public static int SizeMb => int.TryParse( Environment.GetEnvironmentVariable( "HACKPDM_BIG_FILE_MB" ), out int mb ) && mb > 0 ? mb : 0;
+
+	public BigFileFactAttribute()
+	{
+		if( !OdooTestServer.IsConfigured )
+			Skip = "ODOO_URL not set; live Odoo integration tests skipped.";
+		else if( SizeMb == 0 )
+			Skip = "HACKPDM_BIG_FILE_MB not set; the large-file test is skipped (it moves hundreds of MB).";
+	}
+}
+
 internal sealed class InMemorySettingsProvider : ISettingsProvider
 {
 	private readonly ConcurrentDictionary<string, object?> _values = new();

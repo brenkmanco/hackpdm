@@ -308,7 +308,137 @@ internal static class SmokeTestRunner
 				await WaitUntil( () => page.BadgesShown > badges, "a change badge on the root folder" );
 
 				return $"{edited.Name} rebuilt, {others.Count} other rows untouched, added + removed a row, badge shown";
-			} );
+			} )
+			&& await Step( "dependency graph (children, parents, both, zoom)", DependencyGraphStepAsync );
+	}
+
+	/// <summary>
+	/// The dependency graph page on the seeded Projects\Assembly folder:
+	/// frame.slddrw -> frame.sldasm -> arm.sldasm -> bolt.sldprt, plate.sldprt; frame.sldasm -> bolt.sldprt.
+	/// </summary>
+	private static async Task<string> DependencyGraphStepAsync()
+	{
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.DependencyGraph );
+		var frame = HackApp.HomePage!.ContentFrame;
+		await WaitUntil( () => frame.Content is DependencyGraphView { IsLoaded: true }, "dependency graph page loaded",
+			() => $"frame shows {frame.Content?.GetType().Name ?? "nothing"}" );
+		var page = (DependencyGraphView)frame.Content;
+		var graph = page.GraphView;
+
+		TreeData? folder = null;
+		await WaitUntil( () => ( folder = Flatten( page.Folders.RootNodes.Select( n => n.LinkedData ) )
+			.FirstOrDefault( d => d.Name == "Assembly" ) ) is not null, "Assembly folder in the tree" );
+		await page.OpenFolderAsync( folder!.Node! );
+		await WaitUntil( () => page.Entries.Count == 5, "5 files listed in Assembly",
+			() => string.Join( ", ", page.Entries.Select( e => e.Name ) ) );
+
+		HashSet<string> Shown() => [ .. graph.Layout.Nodes.Select( n => n.Node.Name ) ];
+		string Dump() => $"[{string.Join( ", ", graph.Layout.Nodes.Select( n => $"{n.Node.Name}@{n.Layer}" ) )}]";
+		double X( string name ) => graph.Layout.Nodes.First( n => n.Node.Name == name ).X;
+		async Task Expect( string what, params string[] names )
+		{
+			await WaitUntil( () => Shown().SetEquals( names ) && page.PendingLoad is { IsCompleted: true }, what, Dump );
+			await WaitStable( () => graph.Layout.Nodes.Count + page.Roots.Count * 1000 );
+			if( !Shown().SetEquals( names ) )
+				throw new InvalidOperationException( $"{what}: shows {Dump()}" );
+		}
+
+		// children (the default): the selected file leftmost
+		page.SelectEntries( "frame.sldasm" );
+		await Expect( "children of frame.sldasm", "frame.sldasm", "arm.sldasm", "bolt.sldprt", "plate.sldprt" );
+		if( graph.Layout.Nodes.Any( n => n.Node.Name != "frame.sldasm" && n.X <= X( "frame.sldasm" ) ) )
+			throw new InvalidOperationException( $"frame.sldasm is not leftmost: {Dump()}" );
+		if( X( "bolt.sldprt" ) <= X( "arm.sldasm" ) )
+			throw new InvalidOperationException( $"bolt is not right of arm (it is used through arm): {Dump()}" );
+		if( graph.Layout.Edges.Count != 4 )
+			throw new InvalidOperationException( $"expected 4 links, got {graph.Layout.Edges.Count}" );
+
+		// parents: the selected file rightmost
+		page.SetDirection( HackPDM.Core.Graph.GraphDirection.Parents );
+		page.SelectEntries( "bolt.sldprt" );
+		await Expect( "parents of bolt.sldprt", "bolt.sldprt", "arm.sldasm", "frame.sldasm", "frame.slddrw" );
+		if( graph.Layout.Nodes.Any( n => n.Node.Name != "bolt.sldprt" && n.X >= X( "bolt.sldprt" ) ) )
+			throw new InvalidOperationException( $"bolt.sldprt is not rightmost: {Dump()}" );
+
+		// both: the selected file in the middle
+		page.SetDirection( HackPDM.Core.Graph.GraphDirection.Both );
+		page.SelectEntries( "arm.sldasm" );
+		await Expect( "both around arm.sldasm", "arm.sldasm", "frame.sldasm", "frame.slddrw", "bolt.sldprt", "plate.sldprt" );
+		if( !( X( "frame.sldasm" ) < X( "arm.sldasm" ) && X( "arm.sldasm" ) < X( "plate.sldprt" ) ) )
+			throw new InvalidOperationException( $"arm.sldasm is not in the middle: {Dump()}" );
+
+		// several files at once
+		page.SetDirection( HackPDM.Core.Graph.GraphDirection.Children );
+		page.SetSelectAll( true );
+		await WaitUntil( () => page.Roots.Count == 5 && page.PendingLoad is { IsCompleted: true }, "all 5 files as roots",
+			() => $"{page.Roots.Count} roots" );
+
+		// zoom and pan
+		page.SelectEntries( "frame.slddrw" );
+		await Expect( "children of frame.slddrw", "frame.slddrw", "frame.sldasm", "arm.sldasm", "bolt.sldprt", "plate.sldprt" );
+		var before = graph.View;
+		graph.ZoomBy( 2 );
+		graph.PanBy( 30, -20 );
+		var after = graph.View;
+		if( Math.Abs( after.Zoom - Math.Min( before.Zoom * 2, NodeGraphView.MaxZoom ) ) > 1e-6 )
+			throw new InvalidOperationException( $"zoom {before.Zoom} -> {after.Zoom}" );
+		graph.Fit();
+		if( Math.Abs( graph.View.Zoom - before.Zoom ) > 1e-6 )
+			throw new InvalidOperationException( $"fit gave {graph.View.Zoom}, first fit was {before.Zoom}" );
+
+		var sizes = graph.Layout.Nodes.OrderBy( n => n.Node.Size ).Select( n => n.Width ).ToList();
+		if( !sizes.SequenceEqual( sizes.Order() ) || sizes[ 0 ] >= sizes[ ^1 ] )
+			throw new InvalidOperationException( "boxes do not grow with the file size" );
+
+		// clicking a box opens its details: an info card and the file manager's tables
+		int frameAsm = graph.Layout.Nodes.First( n => n.Node.Name == "frame.sldasm" ).Node.Id;
+		page.ShowDetailTab( "History" );
+		graph.SelectNode( frameAsm );
+		await WaitUntil( () => page.DetailsOpen && page.HistoryRows.Count == 1, "details of frame.sldasm with 1 history row",
+			() => $"open={page.DetailsOpen} history={page.HistoryRows.Count}" );
+		string card = page.DetailsText;
+		foreach( string expected in new[] { "frame.sldasm", "SolidWorks assembly", "1 version", "Not checked out", @"root\Projects\Assembly", "2 files: arm.sldasm, bolt.sldprt", "frame.slddrw" } )
+			if( !card.Contains( expected ) )
+				throw new InvalidOperationException( $"info card lacks '{expected}': {card}" );
+		page.ShowDetailTab( "Dependents" );
+		await WaitUntil( () => page.ChildRows.Count == 2, "Dependents table: arm and bolt", () => $"{page.ChildRows.Count} rows" );
+		page.ShowDetailTab( "Where Used" );
+		await WaitUntil( () => page.ParentRows.Count == 1, "Where Used table: frame.slddrw", () => $"{page.ParentRows.Count} rows" );
+		page.ShowDetailTab( "History" );
+		await WaitUntil( () => page.HistoryRows.Count == 1, "History table again" );
+
+		// the seeded files have no preview image: the card says so once the server answered
+		await WaitUntil( () => page.DetailsText.StartsWith( "no preview" ), "preview looked up", () => page.DetailsText );
+
+		string shot = await SaveScreenshotAsync( page );
+		graph.SelectNode( frameAsm );
+		page.CloseDetailsForTest();
+		if( page.DetailsOpen )
+			throw new InvalidOperationException( "details did not close" );
+		return $"children/parents/both laid out, 5 roots with select all, zoom {before.Zoom:0.00}->{after.Zoom:0.00}, details card + tables{shot}";
+	}
+
+	/// <summary>Saves <paramref name="element"/> as a PNG to HACKPDM_SMOKE_SCREENSHOT, if set; says where (or why not).</summary>
+	private static async Task<string> SaveScreenshotAsync( UIElement element )
+	{
+		string? path = Environment.GetEnvironmentVariable( "HACKPDM_SMOKE_SCREENSHOT" );
+		if( path is not { Length: > 0 } )
+			return "";
+		try
+		{
+			await Task.Delay( 300 );
+			var bitmap = new Microsoft.UI.Xaml.Media.Imaging.RenderTargetBitmap();
+			await bitmap.RenderAsync( element );
+			var pixels = await bitmap.GetPixelsAsync();
+			byte[] bgra = System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions.ToArray( pixels );
+			Directory.CreateDirectory( Path.GetDirectoryName( Path.GetFullPath( path ) )! );
+			await File.WriteAllBytesAsync( path, Png.FromBgra( bgra, bitmap.PixelWidth, bitmap.PixelHeight ) );
+			return $"; screenshot {bitmap.PixelWidth}x{bitmap.PixelHeight} at {path}";
+		}
+		catch( Exception e )
+		{
+			return $"; no screenshot: {e.GetType().Name}: {e.Message}";
+		}
 	}
 
 	// ------------------------------------------------------------------ helpers

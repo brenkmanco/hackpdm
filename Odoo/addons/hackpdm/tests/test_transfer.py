@@ -87,12 +87,35 @@ class TestTransfer(TransactionCase):
         self.assertEqual(version.checksum, hashlib.sha1(self.big).hexdigest())
         self.assertEqual(base64.b64decode(version.file_contents), self.big)
         self.assertEqual(self.env["hp.upload"].sudo().browse(upload_id).state, "used")
+        # stored in the filestore under its SHA-1, as Odoo stores attachments, and not text-indexed
+        attachment = version.sudo().attachment_id
+        self.assertEqual(attachment.store_fname, f"{version.checksum[:2]}/{version.checksum}")
+        self.assertTrue(os.path.isfile(attachment._full_path(attachment.store_fname)))
+        self.assertFalse(attachment.index_content)
 
         # read back in pieces, by anyone who may read the vault
         got, last = self._read_all(self.viewer, version.id, 3 * 1024 * 1024)
         self.assertEqual(got, self.big)
         self.assertEqual(last["size"], len(self.big))
         self.assertEqual(last["checksum"], version.checksum)
+
+    def test_text_file_upload_is_not_indexed(self):
+        # Odoo indexes a text attachment by scanning it all in memory; an upload skips that
+        data = b"plain text words " * 1000
+        result = self._commit_new_file(self.alice, "notes.txt", self._upload(self.alice, data))
+        self.assertTrue(result["committed"], result["message_exception"])
+        version = self.env["hp.entry"].search([("name", "=", "notes.txt"), ("dir_id", "=", self.folder.id)]).latest_version_id
+        self.assertFalse(version.sudo().attachment_id.index_content)
+        self.assertEqual(base64.b64decode(version.file_contents), data)
+
+    def test_same_file_twice_shares_the_stored_copy(self):
+        data = b"identical contents"
+        for name in ("one.bin", "two.bin"):
+            self.assertTrue(self._commit_new_file(self.alice, name, self._upload(self.alice, data))["committed"])
+        versions = self.env["hp.entry"].search([("name", "in", ["one.bin", "two.bin"])]).latest_version_id
+        self.assertEqual(len(set(versions.sudo().attachment_id.mapped("store_fname"))), 1)
+        for version in versions:
+            self.assertEqual(base64.b64decode(version.file_contents), data)
 
     def test_empty_file_upload(self):
         upload_id = self._upload(self.alice, b"")

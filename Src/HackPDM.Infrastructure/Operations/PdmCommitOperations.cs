@@ -180,18 +180,19 @@ public static class PdmCommitOperations
         }
 
         HpRecordStaged? versionStaged = null;
+        string? stageError = null;
         if (entry.returnType is EntryReturnType.GotExisting)
         {
             log?.Invoke(StatusMessage.FOUND, "existing entry found...");
             log?.Invoke(StatusMessage.PROCESSING, "staging local version...");
-            versionStaged = await CommitStaging.StageVersionAsync(hack, entry, commit.id ?? 0);
+            versionStaged = await CommitStaging.StageVersionAsync(hack, entry, commit.id ?? 0, e => stageError = e);
         }
         if (entry.returnType is EntryReturnType.Staged)
         {
             HpRecordStaged? entryStaged = await CommitStaging.StageEntryAsync(entry);
             log?.Invoke(StatusMessage.PROCESSING, "staging local entry...");
             log?.Invoke(StatusMessage.PROCESSING, "staging local version...");
-            versionStaged = entryStaged is null ? null : await CommitStaging.StageVersionAsync(hack, entryStaged);
+            versionStaged = entryStaged is null ? null : await CommitStaging.StageVersionAsync(hack, entryStaged, e => stageError = e);
         }
         if (entry.returnType is EntryReturnType.Failed)
         {
@@ -203,7 +204,7 @@ public static class PdmCommitOperations
         try
         {
             if (versionStaged is not { id: not 0 })
-                throw new ArgumentException("Version staging failed, Version is null or has an id of 0");
+                throw new ArgumentException($"Could not stage {hack.Name}: {stageError ?? "the version was not created"}");
 
             if (!CanReadReferences(hack, log))
             {

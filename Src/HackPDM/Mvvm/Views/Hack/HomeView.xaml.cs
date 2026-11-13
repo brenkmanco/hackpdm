@@ -25,6 +25,7 @@ public sealed partial class HomeView : Page
 	private static readonly Dictionary<NavigatePageMenu, (Type Page, string Config)> Pages = new()
 	{
 		[ NavigatePageMenu.HackFileManager ] = ( typeof( HackFileManagerView ), "HackFileManager" ),
+		[ NavigatePageMenu.DependencyGraph ] = ( typeof( DependencyGraphView ), "DependencyGraph" ),
 		[ NavigatePageMenu.ProfileManager ] = ( typeof( ProfileManagerView ), "ProfileManager" ),
 		[ NavigatePageMenu.JsonEditor ] = ( typeof( JsonEditorView ), "DynamicJsonForm" ),
 		[ NavigatePageMenu.Settings ] = ( typeof( ApplicationSettingsView ), "AppSettings" ),
@@ -64,7 +65,7 @@ public sealed partial class HomeView : Page
 			ShowConfiguration();
 			return;
 		}
-		if( page == NavigatePageMenu.HackFileManager && !AppComposition.Session.IsLoggedIn )
+		if( page is NavigatePageMenu.HackFileManager or NavigatePageMenu.DependencyGraph && !AppComposition.Session.IsLoggedIn )
 		{
 			Navigate( typeof( NotLoggedInView ), "NotLoggedIn" );
 			return;

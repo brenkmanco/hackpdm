@@ -134,9 +134,25 @@ public class AddonSeedDataTests
 		var row = await ReadAsync( "hp.settings", "hp_settings_client_version", "name", "description", "type", "char_value" );
 
 		Assert.Equal( "client_version", row[ "name" ] );
-		Assert.Equal( "hackpdm client version", row[ "description" ] );
+		Assert.Equal( "oldest HackPDM client version the server accepts", row[ "description" ] );
 		Assert.Equal( "char", row[ "type" ] );
 		Assert.Equal( "1.0.0.27", row[ "char_value" ] );
+		// this client is new enough for the seeded server
+		Assert.False( HackPDM.Infrastructure.Operations.ClientUpdate.IsOutdated( HackPDM.Infrastructure.Operations.ClientUpdate.Current, row[ "char_value" ] as string ) );
+	}
+
+	[OdooFact]
+	public async Task Settings_ClientDownload_AreSeededEmpty()
+	{
+		await OdooTestServer.LoginAsync();
+		foreach( string xmlId in new[] { "hp_settings_client_download_url", "hp_settings_client_download_sha256" } )
+		{
+			var row = await ReadAsync( "hp.settings", xmlId, "name", "type", "char_value" );
+			Assert.Equal( xmlId[ "hp_settings_".Length.. ], row[ "name" ] );
+			Assert.Equal( "char", row[ "type" ] );
+			// empty until an administrator publishes a release
+			Assert.True( row[ "char_value" ] is false or "", $"{xmlId} = {row[ "char_value" ]}" );
+		}
 	}
 
 	// ---------------------------------------------------------------- hp.test records

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 
+using HackPDM.Core;
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Operations;
@@ -241,6 +242,41 @@ public class PdmWorkflowTests : IAsyncLifetime
 			ContentTransfer.InlineLimitBytes = inline;
 			ContentTransfer.ChunkBytes = chunk;
 		}
+	}
+
+	[BigFileFact]
+	public async Task VeryLargeFile_CommitAndGetLatest()
+	{
+		long size = BigFileFactAttribute.SizeMb * 1024L * 1024 + 4321;
+		string a = WriteFile( "huge.txt", "" );
+		// written in blocks: the test should not need the whole file in memory either
+		await using( FileStream file = File.Create( a ) )
+		{
+			byte[] block = new byte[ 1024 * 1024 ];
+			for( long written = 0; written < size; written += block.Length )
+			{
+				RandomNumberGenerator.Fill( block );
+				await file.WriteAsync( block.AsMemory( 0, (int)Math.Min( block.Length, size - written ) ) );
+			}
+		}
+		string expected = Checksums.OfFile( a )!;
+
+		var clock = System.Diagnostics.Stopwatch.StartNew();
+		await CommitAsync( a );
+		TimeSpan commitTime = clock.Elapsed;
+		AssertNoErrors();
+		var entry = await RequireEntryAsync( "huge.txt" );
+		var stored = await VersionAsync( Id( entry[ "latest_version_id" ] ) );
+		Assert.Equal( expected, stored[ "checksum" ] );
+		Assert.Equal( size, Convert.ToInt64( stored[ "file_size" ] ) );
+
+		UseVault( _otherVault );
+		clock.Restart();
+		await _service.GetLatestAsync( [ Convert.ToInt32( entry[ "id" ] ) ] );
+		TimeSpan downloadTime = clock.Elapsed;
+		AssertNoErrors();
+		Assert.Equal( expected, Checksums.OfFile( LocalPath( _otherVault, "huge.txt" ) ) );
+		Console.WriteLine( $"[big file] {size / 1024 / 1024} MB: commit {commitTime.TotalSeconds:F1}s, get latest {downloadTime.TotalSeconds:F1}s" );
 	}
 
 	[OdooFact]

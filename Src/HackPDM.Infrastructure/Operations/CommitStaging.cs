@@ -93,17 +93,17 @@ public static class CommitStaging
 	/// <param name="commitId">The id of the commit to stage under.</param>
 	/// <returns>The staged version record; null when the type is restricted, the file can't be read, or staging failed.</returns>
 	/// <remarks>Marks the version with the internal <c>__internal__existing</c> flag so the server attaches it to the existing entry.</remarks>
-	public static Task<HpRecordStaged?> StageVersionAsync( HackFile hack, IHpEntryModel entry, int commitId )
-		=> StageAsync( PrepareVersion( hack, entry, commitId ), existingEntry: true );
+	public static Task<HpRecordStaged?> StageVersionAsync( HackFile hack, IHpEntryModel entry, int commitId, Action<string>? reportError = null )
+		=> StageAsync( PrepareVersion( hack, entry, commitId ), existingEntry: true, reportError );
 
 	/// <summary>Stages the first version of an entry staged earlier in the same commit.</summary>
 	/// <param name="hack">The local file; its contents are read from disk unless already loaded.</param>
 	/// <param name="stagedEntry">The staged entry from <see cref="StageEntryAsync"/>; its directory, server name and commit are copied.</param>
 	/// <returns>The staged version record; null when the type is restricted, the file can't be read, or staging failed.</returns>
-	public static Task<HpRecordStaged?> StageVersionAsync( HackFile hack, IHpRecordStagedModel stagedEntry )
-		=> StageAsync( PrepareVersion( hack, stagedEntry ), existingEntry: false );
+	public static Task<HpRecordStaged?> StageVersionAsync( HackFile hack, IHpRecordStagedModel stagedEntry, Action<string>? reportError = null )
+		=> StageAsync( PrepareVersion( hack, stagedEntry ), existingEntry: false, reportError );
 
-	private static async Task<HpRecordStaged?> StageAsync( HpVersion? version, bool existingEntry )
+	private static async Task<HpRecordStaged?> StageAsync( HpVersion? version, bool existingEntry, Action<string>? reportError )
 	{
 		if( version is null )
 			return null;
@@ -118,7 +118,7 @@ public static class CommitStaging
 			if( !uploaded.Ok )
 			{
 				version.LastError = uploaded.Error;
-				Debug.WriteLine( $"upload of {path} failed: {uploaded.Error}" );
+				reportError?.Invoke( $"upload of {Path.GetFileName( path )} failed: {uploaded.Error}" );
 				return null;
 			}
 			uploadId = uploaded.Value;
@@ -132,7 +132,10 @@ public static class CommitStaging
 		staged.CreateTimeoutMs = ContentTransfer.TimeoutMs( version.file_contents?.Length ?? 0 );
 		await staged.CreateAsync();
 		version.LastError = staged.LastError;
-		return staged.id is not null and not 0 ? staged : null;
+		if( staged.id is not null and not 0 )
+			return staged;
+		reportError?.Invoke( $"the server refused the version: {staged.LastError}" );
+		return null;
 	}
 
 	/// <summary>The <c>HashedValues</c> key holding the path of a large file to upload in pieces instead of sending its contents inline.</summary>
@@ -233,11 +236,10 @@ public static class CommitStaging
 
 	/// <summary>Stages an hp.version.relationship for every file each staged SolidWorks version references.</summary>
 	/// <param name="versions">Staged versions; ones that aren't SolidWorks files are skipped.</param>
-	/// <returns>True when done (including when there was nothing to stage); false when a file couldn't be read or anything else threw.</returns>
+	/// <returns>True when done (including when there was nothing to stage); false when a file couldn't be read, the server refused the rows, or anything else threw.</returns>
 	/// <remarks>
 	/// Each reference is resolved to a local file under the working folder when possible, else kept as its stored path; the
-	/// server links it by file name and windows_complete_name. All relationships go in one create call, whose own failure is
-	/// not detected.
+	/// server links it by file name and windows_complete_name. All relationships go in one create call; its failure returns false.
 	/// </remarks>
 	public static async Task<bool> StageRelationshipsAsync( params HpRecordStaged[] versions )
 	{
@@ -270,8 +272,11 @@ public static class CommitStaging
 					},
 				} ) );
 			}
-			if( staged.Count > 0 )
-				await HpRecordStaged.MultiCreateAsync( staged );
+			if( staged.Count > 0 && await HpRecordStaged.MultiCreateAsync( staged ) is { Ok: false } failed )
+			{
+				Debug.WriteLine( $"unable to stage relationships: {failed.Error}" );
+				return false;
+			}
 			return true;
 		}
 		catch( Exception e )
@@ -284,7 +289,7 @@ public static class CommitStaging
 	/// <summary>Stages the custom properties of each staged SolidWorks version as hp.version.property records.</summary>
 	/// <param name="versions">Staged versions; ones that aren't SolidWorks files are skipped.</param>
 	/// <returns>True when done; false as soon as one version's properties can't be read (nothing is staged then).</returns>
-	/// <remarks>Reads properties through <see cref="SolidWorksUtil.DocMgr"/> and stages them all in one call, whose own failure is not detected.</remarks>
+	/// <remarks>Reads properties through <see cref="SolidWorksUtil.DocMgr"/> and stages them all in one call; its failure returns false.</remarks>
 	public static async Task<bool> StagePropertiesAsync( params HpRecordStaged[] versions )
 	{
 		List<HpVersionProperty> staged = [];
@@ -305,8 +310,11 @@ public static class CommitStaging
 				return false;
 			}
 		}
-		if( staged.Count > 0 )
-			await HpVersionProperty.MultiStageAsync( staged );
+		if( staged.Count > 0 && await HpVersionProperty.MultiStageAsync( staged ) is { Ok: false } failed )
+		{
+			Debug.WriteLine( $"unable to stage properties: {failed.Error}" );
+			return false;
+		}
 		return true;
 	}
 }

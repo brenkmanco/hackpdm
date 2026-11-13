@@ -49,7 +49,12 @@ public static class OdooDefaultsConstants
 	public const string IR_ATTACHMENT_NAME = "ir_attachment";
 	public const string IR_MODEL_NAME = "ir_model";
 	// odoo name identifiers
+	/// <summary>hp.settings: the oldest client version the server accepts.</summary>
 	public const string ODOO_VERSION_KEY_NAME = "client_version";
+	/// <summary>hp.settings: where the current client installer is downloaded from (https URL, or a file or network-share path).</summary>
+	public const string CLIENT_DOWNLOAD_URL_NAME = "client_download_url";
+	/// <summary>hp.settings: the SHA-256 (hex) of that installer; the updater refuses a file that does not match.</summary>
+	public const string CLIENT_DOWNLOAD_SHA256_NAME = "client_download_sha256";
 	public const string SW_KEY_NAME = "swdocmgr_key";
 	public const string RESTRICT_PROP_NAME = "restrict_properties";
 	public const string RESTRICT_TYPES_NAME = "restrict_types";

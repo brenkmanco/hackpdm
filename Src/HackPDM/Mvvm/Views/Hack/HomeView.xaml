@@ -33,6 +33,15 @@
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
 
+            <NavigationViewItem
+                x:Name="GraphNav"
+                Content="Dependency Graph"
+                Tag="DependencyGraph">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE71D;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+
             <NavigationViewItemHeader Content="Settings" />
 
             <NavigationViewItem

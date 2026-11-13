@@ -13,12 +13,6 @@
             <field name="type">bool</field>
             <field name="bool_value" eval="True"/>
         </record>
-        <record id="hp_settings_client_version" model="hp.settings">
-            <field name="name">client_version</field>
-            <field name="description">hackpdm client version</field>
-            <field name="type">char</field>
-            <field name="char_value">1.0.0.27</field>
-        </record>
         <record id="hp_test_data_one" model="hp.test">
             <!-- Binary: base64-encoded "hello" -->
             <!-- <field name="binary" type="base64">aGVsbG8=</field> -->
@@ -70,5 +64,25 @@
             <field name="monetary">21.99</field>
         </record>
 
+    </data>
+
+    <!-- Kept as the administrator sets them: never reset by a module upgrade -->
+    <data noupdate="1">
+        <record id="hp_settings_client_version" model="hp.settings">
+            <field name="name">client_version</field>
+            <field name="description">oldest HackPDM client version the server accepts</field>
+            <field name="type">char</field>
+            <field name="char_value">1.0.0.27</field>
+        </record>
+        <record id="hp_settings_client_download_url" model="hp.settings">
+            <field name="name">client_download_url</field>
+            <field name="description">where clients download the installer (https URL, or a file or network-share path)</field>
+            <field name="type">char</field>
+        </record>
+        <record id="hp_settings_client_download_sha256" model="hp.settings">
+            <field name="name">client_download_sha256</field>
+            <field name="description">SHA-256 of the installer at client_download_url; clients refuse a file that does not match</field>
+            <field name="type">char</field>
+        </record>
     </data>
 </odoo>

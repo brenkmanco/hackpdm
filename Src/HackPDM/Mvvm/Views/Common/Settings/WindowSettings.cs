@@ -38,6 +38,7 @@ public class WindowSettings
 		{ "DynamicJsonForm",      new () { Title = "Json Editor",			PositionAndSize = (0, 0, 1600, 900) }},
 		{ "ConfigSettings",				new () { Title = "Configuration Settings", PositionAndSize = (0, 0, 700, 400) }},
 		{ "HackFileManager",		new () { Title = "Hack File Manager",	PositionAndSize = (0, 0, 1600, 900) }},
+		{ "DependencyGraph",		new () { Title = "Dependency Graph",	PositionAndSize = (0, 0, 1600, 900) }},
 		{ "NotLoggedIn",			new () { Title = "Not Logged In",		PositionAndSize = (0, 0, 1600, 900) }},
 		{ nameof(MessageBox),			new () { Title = "Info",				PositionAndSize = (0, 0, 450, 250), WindowKind = AppWindowPresenterKind.CompactOverlay }},
 		{ "AppSettings",				new () { Title = "Settings",				PositionAndSize = (0, 0, 1400, 950) }},

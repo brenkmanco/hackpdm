@@ -17,6 +17,7 @@ public enum NavigatePageMenu
     Configuration,
     JsonEditor,
     Settings,
+    DependencyGraph,
 }
 
 public enum ColumnGroup

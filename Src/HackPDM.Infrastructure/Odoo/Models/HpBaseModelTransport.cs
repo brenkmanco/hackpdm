@@ -194,17 +194,17 @@ public abstract partial class HpBaseModelTransport<T> : HpBaseModelTransport whe
 	/// <summary>Creates several records of this model with a single <c>create</c> call.</summary>
 	/// <param name="records">The records to create; their own <c>id</c>s are not updated.</param>
 	/// <param name="withEmpty">Whether to send fields whose value is <see langword="null"/>.</param>
-	/// <returns>The new ids in the order of <paramref name="records"/>, or an empty list when the call failed (the error is discarded).</returns>
-	public static async Task<IReadOnlyList<int>> MultiCreateAsync( IEnumerable<HpBaseModelTransport<T>> records, bool withEmpty = false )
-		=> ( await OdooRpc.CreateManyAsync( GetHpModel()!, records.Select( v => v.ComputeValues( withEmpty ) ) ) ).ValueOr( [] );
+	/// <returns>The new ids in the order of <paramref name="records"/>, or the server's error.</returns>
+	public static Task<Result<IReadOnlyList<int>>> MultiCreateAsync( IEnumerable<HpBaseModelTransport<T>> records, bool withEmpty = false )
+		=> OdooRpc.CreateManyAsync( GetHpModel()!, records.Select( v => v.ComputeValues( withEmpty ) ) );
 	/// <summary>Stages several records (as hp.record.staged rows) with a single <c>create</c> call.</summary>
 	/// <param name="records">The records to stage; each needs a <c>commit_id</c>, and records without one are silently skipped.</param>
 	/// <param name="withEmpty">Whether the payloads include fields whose value is <see langword="null"/>.</param>
-	/// <returns>The ids of the hp.record.staged rows, or an empty list when the call failed (the error is discarded).</returns>
+	/// <returns>The ids of the hp.record.staged rows, or the server's error.</returns>
 	/// <remarks>Each payload is built with <see cref="PreStageRec"/>.</remarks>
-	public static async Task<IReadOnlyList<int>> MultiStageAsync( IEnumerable<HpBaseModelTransport<T>> records, bool withEmpty = false )
-		=> ( await OdooRpc.CreateManyAsync( OdooDefaultsConstants.HP_RECORD_STAGED,
-			records.Select( v => v.PreStageRec( withEmpty )?.ComputeValues( false ) ).OfType<Dictionary<string, object?>>() ) ).ValueOr( [] );
+	public static Task<Result<IReadOnlyList<int>>> MultiStageAsync( IEnumerable<HpBaseModelTransport<T>> records, bool withEmpty = false )
+		=> OdooRpc.CreateManyAsync( OdooDefaultsConstants.HP_RECORD_STAGED,
+			records.Select( v => v.PreStageRec( withEmpty )?.ComputeValues( false ) ).OfType<Dictionary<string, object?>>() );
 }
 public abstract partial class HpBaseModelTransport<T> 
 {

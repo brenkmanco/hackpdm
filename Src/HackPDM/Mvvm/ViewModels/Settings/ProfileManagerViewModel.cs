@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 using HackPDM.Configuration;
+using HackPDM.Infrastructure.Operations;
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Mvvm.Models.Settings;
@@ -125,8 +126,9 @@ public partial class ProfileManagerViewModel(
 	/// <remarks>
 	/// Re-initializes <see cref="HackPDM.Infrastructure.Odoo.OdooDefaults.Instance"/> (which authenticates against the server),
 	/// then checks the address and the port. The errors are also kept in the <see cref="LoginSession"/> so they show again when
-	/// the page is reopened. Any exception is swallowed and reported as <see langword="false"/> with no message. The client
-	/// version check (<see cref="HackPDM.Configuration.HackUpdater.EnsureUpdated"/>) is never reached in the current code.
+	/// the page is reopened. Any exception is swallowed and reported as <see langword="false"/> with no message. Once logged
+	/// in, a client older than the server's <c>client_version</c> is refused and offered the update
+	/// (<see cref="HackPDM.Configuration.HackUpdater.EnsureUpdated"/>).
 	/// </remarks>
 	public async Task<bool> AbleToLoginAsync()
 	{
@@ -146,7 +148,11 @@ public partial class ProfileManagerViewModel(
 				switch( status )
 				{
 					case 1:
-						return true;
+						// logged in: the server may still require a newer client
+						if( await HackUpdater.EnsureUpdated( true ) )
+							return true;
+						errors.Add( $"this client ({ClientUpdate.CurrentText}) is older than the server requires; install the update" );
+						break;
 					case 0:
 						errors.Add( "invalid odoo credentials" );
 						break;
@@ -155,8 +161,6 @@ public partial class ProfileManagerViewModel(
 						break;
 				}
 			}
-			else if( !await HackUpdater.EnsureUpdated( true ) )
-				errors.Add( "running outdated client version" );
 
 			foreach( string message in errors )
 				OStatus.Add( new BasicStatusMessage { Status = StatusMessage.ERROR, Message = message } );

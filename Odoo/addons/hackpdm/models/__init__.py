@@ -11,5 +11,6 @@ from . import hp_settings
 from . import hp_release_review
 from . import hp_record_staged
 from . import hp_upload
+from . import hp_dependency_graph
 from . import hp_pdm_commit
 from . import hp_test

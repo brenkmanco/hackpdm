@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import secrets
+import shutil
 from datetime import timedelta
 
 from odoo import api, fields, models
@@ -150,24 +151,54 @@ class hp_upload(models.Model):
 
         Called by the commit, after the version was created. The caller must have checked that the
         upload belongs to the committer (:meth:`_committable`).
+
+        With file storage (Odoo's default) the spool file is put into the filestore under its SHA-1,
+        the way Odoo stores attachments, by a hard link (or a streamed copy across file systems): the
+        file is never read into memory, and it is not text-indexed (Odoo indexes a text attachment by
+        scanning all of it in memory, which fails for a file of a gigabyte). When the commit is rolled
+        back, Odoo's filestore clean-up removes the unreferenced file.
         """
         self.ensure_one()
-        with open(self._spool_path(), "rb") as spool:
-            raw = spool.read()
-        attachment = self.env["ir.attachment"].sudo().create({
+        Attachment = self.env["ir.attachment"].sudo()
+        values = {
             "name": f"{version.id}.{version.name}",
             "type": "binary",
-            "raw": raw,
             "res_model": version._name,
             "res_field": "file_contents",
             "res_id": version.id,
-        })
+            "mimetype": self._spool_mimetype(),
+        }
+        if Attachment._storage() == "file":
+            fname = f"{self.checksum[:2]}/{self.checksum}"
+            target = Attachment._full_path(fname)
+            if not os.path.isfile(target):
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                Attachment._mark_for_gc(fname)
+                _link_or_copy(self._spool_path(), target)
+            attachment = Attachment.create(values)
+            self.env.cr.execute(
+                "UPDATE ir_attachment SET store_fname = %s, checksum = %s, file_size = %s, index_content = NULL, db_datas = NULL"
+                " WHERE id = %s", [fname, self.checksum, self.size, attachment.id])
+            attachment.invalidate_recordset()
+        else:
+            # database storage: Odoo needs the bytes in memory anyway
+            with open(self._spool_path(), "rb") as spool:
+                attachment = Attachment.create(dict(values, raw=spool.read()))
         version.sudo().write({"attachment_id": attachment.id})
         self.sudo().write({"state": "used"})
         # only once the commit is saved: a commit rolled back after this still has its spool file
         path = self._spool_path()
         self.env.cr.postcommit.add(lambda: _remove_file(path))
         return attachment
+
+    def _spool_mimetype(self):
+        """The file type from its first bytes (as hp.version does for files sent inline)."""
+        try:
+            import magic
+            with open(self._spool_path(), "rb") as spool:
+                return magic.Magic(mime=True).from_buffer(spool.read(8192)) or "application/octet-stream"
+        except Exception:  # noqa: BLE001 - a missing libmagic only loses the type
+            return "application/octet-stream"
 
     @api.model
     def _committable(self, upload_id):
@@ -222,6 +253,14 @@ class hp_upload(models.Model):
 
     def _remove_spool(self):
         _remove_file(self._spool_path())
+
+
+def _link_or_copy(source, target):
+    """Hard-links source to target (instant, no copy), or copies it in blocks when that is not possible."""
+    try:
+        os.link(source, target)
+    except OSError:
+        shutil.copyfile(source, target)
 
 
 def _remove_file(path):

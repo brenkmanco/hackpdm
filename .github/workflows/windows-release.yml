@@ -1,0 +1,168 @@
+name: Windows build
+
+# Builds the Windows client (the main platform) in Release, runs the unit tests on Windows, and
+# packages a self-contained win-x64 build as a zip and a per-user installer, each with its SHA-256.
+# A tag vX.Y.Z builds version X.Y.Z and publishes a GitHub release with those files.
+#
+# Code signing runs only when these repository secrets are set:
+#   WINDOWS_CERT_PFX_BASE64  the code-signing certificate (.pfx), base64-encoded
+#   WINDOWS_CERT_PASSWORD    its password
+#
+# To roll a release out to clients: put the installer where clients can reach it and set the server's
+# hp.settings client_download_url (its URL or path), client_download_sha256 (the .sha256 file's hash)
+# and client_version (X.Y.Z, the oldest client allowed).
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+    paths:
+      - "Src/**"
+      - "installer/**"
+      - "global.json"
+      - "Directory.Build.props"
+      - ".github/workflows/windows-release.yml"
+  pull_request:
+    paths:
+      - "Src/**"
+      - "installer/**"
+      - "global.json"
+      - "Directory.Build.props"
+      - ".github/workflows/windows-release.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      WINDOWS_TFM: net10.0-windows10.0.26100.0
+      # "true" when the signing certificate secret is set (a step's if cannot read secrets)
+      HAS_CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # vX.Y.Z tag -> X.Y.Z; otherwise the version in Directory.Build.props
+      - name: Version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -match '^refs/tags/v(\d+\.\d+\.\d+)$') {
+            $version = $Matches[1]
+          } elseif ((Get-Content Directory.Build.props -Raw) -match '<HackPdmVersion[^>]*>([^<]+)</HackPdmVersion>') {
+            $version = $Matches[1].Trim()
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "could not work out the version (got '$version')" }
+          "HACKPDM_VERSION=$version" >> $env:GITHUB_ENV
+          Write-Host "Building HackPDM $version"
+
+      # no Odoo here: the live-server tests skip themselves; they run in odoo-integration.yml
+      - name: Unit tests (Windows)
+        run: >-
+          dotnet test Src/HackPDM.Tests/HackPDM.Tests.csproj -c Release
+          -p:HackPdmVersion=${{ env.HACKPDM_VERSION }}
+          --logger "trx;LogFileName=windows-tests.trx" --results-directory TestResults
+
+      - name: Publish (Release, self-contained win-x64)
+        run: >-
+          dotnet publish Src/HackPDM/HackPDM.csproj -c Release -f ${{ env.WINDOWS_TFM }}
+          -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:SelfContained=true
+          -p:WindowsPackageType=None -p:HackPdmVersion=${{ env.HACKPDM_VERSION }}
+          -o publish/HackPDM
+
+      - name: Check the built version
+        shell: pwsh
+        run: |
+          $exe = Get-Item publish/HackPDM/HackPDM.exe
+          $file = $exe.VersionInfo.FileVersion
+          if ($file -ne "$env:HACKPDM_VERSION.0") { throw "HackPDM.exe is version $file, expected $env:HACKPDM_VERSION.0" }
+
+      - name: Sign the app
+        if: env.HAS_CERT == 'true'
+        env:
+          CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP cert.pfx
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+          $files = Get-ChildItem publish/HackPDM -Include HackPDM.exe,HackPDM*.dll -Recurse
+          & $signtool.FullName sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f $pfx /p $env:CERT_PASSWORD $files.FullName
+          if ($LASTEXITCODE -ne 0) { throw "signing failed" }
+          Remove-Item $pfx
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:HACKPDM_VERSION" "/DSourceDir=..\publish\HackPDM" "/DOutputDir=..\artifacts" installer\HackPDM.iss
+          if ($LASTEXITCODE -ne 0) { throw "installer build failed" }
+
+      - name: Sign the installer
+        if: env.HAS_CERT == 'true'
+        env:
+          CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP cert.pfx
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+          & $signtool.FullName sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f $pfx /p $env:CERT_PASSWORD (Get-ChildItem artifacts\*-setup.exe).FullName
+          if ($LASTEXITCODE -ne 0) { throw "signing failed" }
+          Remove-Item $pfx
+
+      - name: Zip and checksums
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Compress-Archive -Path publish/HackPDM/* -DestinationPath "artifacts/HackPDM-$env:HACKPDM_VERSION-win-x64.zip"
+          Get-ChildItem artifacts -File | Where-Object Extension -ne '.sha256' | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Set-Content -NoNewline -Encoding ascii "$($_.FullName).sha256"
+            Write-Host "$hash  $($_.Name)"
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hackpdm-${{ env.HACKPDM_VERSION }}-win-x64
+          path: artifacts
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-test-results
+          path: TestResults
+          if-no-files-found: ignore
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hackpdm-*-win-x64
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true

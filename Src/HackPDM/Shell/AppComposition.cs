@@ -141,7 +141,7 @@ public static class AppComposition
 		LocateInFileManagerAsync );
 
 	/// <summary>Shows a file in the file manager: right away when its page is shown, else after switching to it.</summary>
-	private static Task LocateInFileManagerAsync( IReadOnlyList<string> segments, string? fileName )
+	internal static Task LocateInFileManagerAsync( IReadOnlyList<string> segments, string? fileName )
 	{
 		Task located = FileManagerState.RequestLocateAsync( segments, fileName );
 		Navigation.NavigateTo( HackPDM.Shared.GlobalData.NavigatePageMenu.HackFileManager );
