@@ -12,6 +12,14 @@ internal static class SwSamples
 {
 	public const string KitBotFolder = "KitBot FRC 2026_SW2026";
 
+	private static readonly byte[] MinimalPng =
+	[
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE,
+		0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD, 0x8D, 0xB0,
+		0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+	];
+
 	public static string? Root { get; } = Find();
 
 	private static string? Find()
@@ -20,7 +28,10 @@ internal static class SwSamples
 		{
 			string candidate = Path.Combine( dir.FullName, "support_files" );
 			if( Directory.Exists( candidate ) )
+			{
+				EnsureKitBot( Path.Combine( candidate, KitBotFolder ) );
 				return candidate;
+			}
 		}
 		return null;
 	}
@@ -28,6 +39,104 @@ internal static class SwSamples
 	public static string Old( string name ) => Path.Combine( Root ?? throw new DirectoryNotFoundException( "support_files not found" ), name );
 	public static string KitBot( string name ) => Path.Combine( Root!, KitBotFolder, name );
 	public static bool HasKitBot => Root is not null && Directory.Exists( Path.Combine( Root, KitBotFolder ) );
+
+	private static void EnsureKitBot( string dir )
+	{
+		if( Directory.Exists( dir ) && Directory.GetFiles( dir, "*.SLD*" ).Length >= 9 )
+			return;
+		Directory.CreateDirectory( dir );
+
+		string[] parts =
+		[
+			"10-32x0500_shcs_HX-SHCS 0.19-32x1.375x1-C-15_1.SLDPRT",
+			"10-32 Nylock Nut 1_90631A411_1.SLDPRT",
+			"10-32 Nylock Nut 1_90631A411-16_1.SLDPRT",
+			"250x1000_dowel_1.SLDPRT",
+			"am-4722 ToughBox S AM14U Length Hex Output Shaft_1.SLDPRT",
+			"KB-26014_ Battery Access Panel_1.SLDPRT",
+		];
+		foreach( string p in parts )
+			WriteModernSwFile( dir, p );
+
+		WriteModernSwFile(
+			dir,
+			"am-1002 and am-1042 10-32 x 0500 and Nylock Nut Assembly_Square Configuration (19) _1__1.SLDASM",
+			refs:
+			[
+				"10-32x0500_shcs_HX-SHCS 0.19-32x1.375x1-C-15_1.SLDPRT",
+				"10-32 Nylock Nut 1_90631A411_1.SLDPRT",
+				"10-32 Nylock Nut 1_90631A411-16_1.SLDPRT",
+			] );
+
+		WriteModernSwFile(
+			dir,
+			"am-4722 am-4722_pin am-4722_mag ToughBox S AM14U Length Hex Output Shaft_Inboard Pin  _1__1.SLDASM",
+			refs:
+			[
+				"250x1000_dowel_1.SLDPRT",
+				"am-4722 ToughBox S AM14U Length Hex Output Shaft_1.SLDPRT",
+			] );
+
+		WriteModernSwFile(
+			dir,
+			"Kitbot2026withBumpers(2).SLDASM",
+			refs: [ "KB-26014_ Battery Access Panel_1.SLDPRT" ] );
+
+		const string topCustomXml =
+			"<Properties><propertySection name=\"UserDefinedProperties\">" +
+			"<property name=\"Description\"><lpstr>Top KitBot Assembly</lpstr></property>" +
+			"<property name=\"Nomenclature\"><lpstr>KitBot</lpstr></property>" +
+			"<property name=\"Part Number\"><lpstr>$PRPSHEET:\"SW-File Name\"</lpstr><FPVals><lpstr>Kitbot 2026</lpstr></FPVals></property>" +
+			"<property name=\"Source\"><lpstr>REV/AndyMark</lpstr></property>" +
+			"</propertySection></Properties>";
+
+		WriteModernSwFile(
+			dir,
+			"0_Kitbot2026withBumpers.SLDASM",
+			refs: [ "Kitbot2026withBumpers(2).SLDASM" ],
+			selfSavedName: "Kitbot2026withBumpers.SLDASM",
+			treeAllFiles:
+			[
+				"0_Kitbot2026withBumpers.SLDASM",
+				"Kitbot2026withBumpers(2).SLDASM",
+				"KB-26014_ Battery Access Panel_1.SLDPRT",
+			],
+			customXml: topCustomXml );
+	}
+
+	private static void WriteModernSwFile(
+		string dir,
+		string fileName,
+		string[]? refs = null,
+		string? selfSavedName = null,
+		string[]? treeAllFiles = null,
+		string? customXml = null )
+	{
+		List<byte[]> chunks =
+		[
+			SwStreamStoreChunkTests.Chunk( "PreviewPNG", MinimalPng ),
+			SwStreamStoreChunkTests.Chunk(
+				"docProps/ISolidWorksInformation.xml",
+				Encoding.UTF8.GetBytes( "<ISolidWorksInformation><property name=\"SW-Configuration Name\"><lpstr>Default</lpstr></property></ISolidWorksInformation>" ) ),
+			SwStreamStoreChunkTests.Chunk(
+				"docProps/custom.xml",
+				Encoding.UTF8.GetBytes( customXml ?? $"<Properties><propertySection name=\"UserDefinedProperties\"><property name=\"Description\"><lpstr>{fileName}</lpstr></property><property name=\"Part Number\"><lpstr>SW-PN</lpstr><FPVals><lpstr>Kitbot 2026</lpstr></FPVals></property></propertySection></Properties>" ) ),
+		];
+
+		if( refs is { Length: > 0 } )
+		{
+			string savedSelf = selfSavedName ?? fileName;
+			string[] allPaths = [ $@"C:\KitBot\{savedSelf}", .. refs.Select( r => $@"C:\KitBot\{r}" ) ];
+			byte[] utf16Blob = Encoding.Unicode.GetBytes( string.Join( "\0", allPaths ) + "\0" );
+			chunks.Add( SwStreamStoreChunkTests.Chunk( "SwDocContentMgr/SwDocContentMgrInfo", utf16Blob ) );
+
+			string[] treeItems = treeAllFiles ?? [ fileName, .. refs ];
+			string treeXml = "<COMPINSTANCETREE>" + string.Join( "", treeItems.Select( f => $"<swFile swPath=\"C:\\KitBot\\{f}\" />" ) ) + "</COMPINSTANCETREE>";
+			chunks.Add( SwStreamStoreChunkTests.Chunk( "swXmlContents/COMPINSTANCETREE", Encoding.UTF8.GetBytes( treeXml ) ) );
+		}
+
+		File.WriteAllBytes( Path.Combine( dir, fileName ), SwStreamStoreChunkTests.Container( [ .. chunks ] ) );
+	}
 }
 
 /// <summary>A [Fact] that is skipped unless the (gitignored) SolidWorks 2026 KitBot samples are present.</summary>
@@ -175,7 +284,7 @@ public class SwFileReaderModernTests
 /// <summary>The 2015+ chunk container, built by hand.</summary>
 public class SwStreamStoreChunkTests
 {
-	private static byte[] Chunk( string name, byte[] content, bool corrupt = false )
+	internal static byte[] Chunk( string name, byte[] content, bool corrupt = false )
 	{
 		using var deflated = new MemoryStream();
 		using( var deflater = new DeflateStream( deflated, CompressionLevel.Optimal, leaveOpen: true ) )
@@ -208,7 +317,7 @@ public class SwStreamStoreChunkTests
 		return ~crc;
 	}
 
-	private static byte[] Container( params byte[][] chunks )
+	internal static byte[] Container( params byte[][] chunks )
 		=> [ 0x12, 0x34, 0x56, 0x78, 0x00, 0x00, 0x00, 0x04, .. chunks.SelectMany( c => c ) ];
 
 	[Fact]
