@@ -46,12 +46,12 @@ public static class ContentTransfer
 	/// <param name="token">Cancels the upload.</param>
 	/// <returns>The verified <c>hp.upload</c> id, to stage as a version's <c>upload_id</c>; or why it failed.</returns>
 	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
-	public static async Task<Result<int>> UploadFileAsync( string path, CancellationToken token = default )
+	public static async Task<Result<int>> UploadFileAsync( string path, CancellationToken token = default, Action<long>? onBytes = null )
 	{
 		try
 		{
 			await using FileStream stream = new( path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, useAsync: true );
-			return await UploadAsync( stream, token );
+			return await UploadAsync( stream, token, onBytes );
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{
@@ -62,10 +62,11 @@ public static class ContentTransfer
 	/// <summary>Uploads the contents of <paramref name="stream"/> in pieces.</summary>
 	/// <param name="stream">A readable, seekable stream; read from its start.</param>
 	/// <param name="token">Cancels the upload.</param>
+	/// <param name="onBytes">Called with each acknowledged byte delta as chunks are uploaded.</param>
 	/// <returns>The verified <c>hp.upload</c> id; or why it failed.</returns>
 	/// <remarks>When the server finds the file damaged (its SHA-1 does not match), it is sent once more.</remarks>
 	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
-	public static async Task<Result<int>> UploadAsync( Stream stream, CancellationToken token = default )
+	public static async Task<Result<int>> UploadAsync( Stream stream, CancellationToken token = default, Action<long>? onBytes = null )
 	{
 		long size = stream.Length;
 		stream.Position = 0;
@@ -81,7 +82,7 @@ public static class ContentTransfer
 
 		for( int round = 1; round <= 2; round++ )
 		{
-			if( await SendChunksAsync( id, stream, size, chunk, token ) is { Ok: false } sent )
+			if( await SendChunksAsync( id, stream, size, chunk, token, onBytes ) is { Ok: false } sent )
 				return Result<int>.Fail( sent.Error );
 			// the server reads the whole file back to check it
 			Result<bool> finished = await OdooRpc.ExecuteAsync<bool>( UploadModel, "upload_finish", [ id ], TimeoutMs( size ), token );
@@ -93,7 +94,7 @@ public static class ContentTransfer
 		return Result<int>.Fail( "the file arrived damaged twice (did it change while it was being sent?)" );
 	}
 
-	private static async Task<Result<bool>> SendChunksAsync( int id, Stream stream, long size, int chunk, CancellationToken token )
+	private static async Task<Result<bool>> SendChunksAsync( int id, Stream stream, long size, int chunk, CancellationToken token, Action<long>? onBytes )
 	{
 		byte[] buffer = new byte[ (int)Math.Min( chunk, Math.Max( size, 1 ) ) ];
 		long offset = 0;
@@ -128,7 +129,10 @@ public static class ContentTransfer
 				failures++;
 				lastError = $"the server is at byte {reply.Value}";
 			}
-			offset = Math.Clamp( reply.Value, 0, size );
+			long next = Math.Clamp( reply.Value, 0, size );
+			if( next > offset )
+				onBytes?.Invoke( next - offset );
+			offset = next;
 		}
 		return Result<bool>.Success( true );
 	}
@@ -140,9 +144,10 @@ public static class ContentTransfer
 	/// <param name="size">The file's size in bytes (its <c>file_size</c>).</param>
 	/// <param name="destination">Where the bytes are written, from its current position.</param>
 	/// <param name="token">Cancels the download.</param>
+	/// <param name="onBytes">Called with each piece's byte length as it arrives.</param>
 	/// <returns>The SHA-1 (lower-case hex) of the bytes written; or why the download failed.</returns>
 	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
-	public static async Task<Result<string>> DownloadAsync( int versionId, long size, Stream destination, CancellationToken token = default )
+	public static async Task<Result<string>> DownloadAsync( int versionId, long size, Stream destination, CancellationToken token = default, Action<long>? onBytes = null )
 	{
 		using IncrementalHash sha1 = IncrementalHash.CreateHash( HashAlgorithmName.SHA1 );
 		long offset = 0;
@@ -174,6 +179,7 @@ public static class ContentTransfer
 			sha1.AppendData( piece );
 			offset += piece.Length;
 			failures = 0;
+			onBytes?.Invoke( piece.Length );
 		}
 		return Result<string>.Success( Convert.ToHexStringLower( sha1.GetHashAndReset() ) );
 	}
@@ -182,10 +188,10 @@ public static class ContentTransfer
 	/// <param name="version">The version; needs <c>id</c> and <c>file_size</c>.</param>
 	/// <param name="token">Cancels the download.</param>
 	/// <returns>The file's bytes; or why the download failed.</returns>
-	public static async Task<Result<byte[]>> DownloadBytesAsync( HpVersion version, CancellationToken token = default )
+	public static async Task<Result<byte[]>> DownloadBytesAsync( HpVersion version, CancellationToken token = default, Action<long>? onBytes = null )
 	{
 		using MemoryStream memory = new( (int)Math.Min( version.file_size ?? 0, int.MaxValue ) );
-		Result<string> got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, memory, token );
+		Result<string> got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, memory, token, onBytes );
 		if( !got.Ok )
 			return Result<byte[]>.Fail( got.Error );
 		return Mismatch( version, got.Value ) is { } error ? Result<byte[]>.Fail( error ) : Result<byte[]>.Success( memory.ToArray() );
@@ -194,15 +200,16 @@ public static class ContentTransfer
 	/// <summary>Downloads a version's file in pieces into a new temporary file, checking it against the version's <c>checksum</c> when known.</summary>
 	/// <param name="version">The version; needs <c>id</c> and <c>file_size</c>.</param>
 	/// <param name="token">Cancels the download.</param>
+	/// <param name="onBytes">Called with each piece's byte length as it arrives.</param>
 	/// <returns>The temporary file's path (the caller moves or deletes it); or why the download failed, with nothing left behind.</returns>
-	public static async Task<Result<string>> DownloadToTempFileAsync( HpVersion version, CancellationToken token = default )
+	public static async Task<Result<string>> DownloadToTempFileAsync( HpVersion version, CancellationToken token = default, Action<long>? onBytes = null )
 	{
 		string temp = Path.Combine( Path.GetTempPath(), $"hackpdm-{Guid.NewGuid():N}.part" );
 		Result<string> got;
 		try
 		{
 			await using( FileStream file = new( temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true ) )
-				got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, file, token );
+				got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, file, token, onBytes );
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{

@@ -1,6 +1,7 @@
 using HackPDM.Mvvm.ViewModels.Settings;
 using HackPDM.Shell;
 
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
 namespace HackPDM.Mvvm.Views.Settings;
@@ -15,4 +16,7 @@ public sealed partial class ProfileManagerView : Page
 		InitializeComponent();
 		HackApp.Window?.Title = "Profile Manager - HackPDM";
 	}
+
+	private void OpenStatusLog_Click( object sender, RoutedEventArgs e )
+		=> AppComposition.Dialogs.ShowStatusWindow();
 }

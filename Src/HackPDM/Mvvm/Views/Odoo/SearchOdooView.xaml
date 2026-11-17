@@ -51,13 +51,14 @@
                         x:Name="FileNameTextbox"
                         MinWidth="250"
                         HorizontalAlignment="Stretch"
+                        KeyDown="FileNameTextbox_KeyDown"
                         Text="{x:Bind ViewModel.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 </StackPanel>
 
                 <StackPanel
                     Margin="0,8,0,0"
                     Orientation="Horizontal"
-                    Spacing="24">
+                    Spacing="10">
                     <CheckBox
                         x:Name="OdooCheckedMe"
                         Content="Checked Out to Me"
@@ -85,7 +86,8 @@
                         Text="Max Results" />
                     <TextBox
                         x:Name="OdooMaxRes"
-                        Width="60"
+                        MinWidth="68"
+                        KeyDown="FileNameTextbox_KeyDown"
                         Text="{x:Bind ViewModel.MaxResults, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 </StackPanel>
             </StackPanel>
@@ -137,6 +139,7 @@
                             x:Name="OdooSearchPropValue"
                             MinWidth="150"
                             IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
+                            KeyDown="OdooSearchPropValue_KeyDown"
                             Text="{x:Bind ViewModel.PropertyValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
 
@@ -198,18 +201,15 @@
             x:Name="OdooSearchResults"
             Grid.Row="2"
             Margin="0,16,0,0"
+            AutoGenerateColumns="False"
+            IsReadOnly="True"
             DoubleTapped="OdooSearchResults_DoubleTapped"
             ItemsSource="{x:Bind ViewModel.SearchResultsList, Mode=OneWay}"
             SelectionMode="Extended">
 
             <tv:TableView.Columns>
                 <tv:TableViewTextColumn
-                    Width="0"
-                    Binding="{Binding Id}"
-                    Header="ID" />
-
-                <tv:TableViewTextColumn
-                    Width="350"
+                    Width="320"
                     Binding="{Binding Name}"
                     Header="File Name" />
                 <tv:TableViewTextColumn
@@ -252,20 +252,7 @@
                 <Button
                     x:Name="btnCancel"
                     Click="OdooCancel_Click"
-                    Content="Cancel"
-                    Style="{ThemeResource AccentButtonStyle}">
-                    <Button.Resources>
-                        <ResourceDictionary>
-                            <!--  a red "stop" button in every color preset (the accent style reads the AccentButton* keys)  -->
-                            <SolidColorBrush x:Key="AccentButtonBackground" Color="{ThemeResource SystemFillColorCritical}" />
-                            <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Opacity="0.85" Color="{ThemeResource SystemFillColorCritical}" />
-                            <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Opacity="0.7" Color="{ThemeResource SystemFillColorCritical}" />
-                            <SolidColorBrush x:Key="AccentButtonForeground" Color="White" />
-                            <SolidColorBrush x:Key="AccentButtonForegroundPointerOver" Color="White" />
-                            <SolidColorBrush x:Key="AccentButtonForegroundPressed" Color="White" />
-                        </ResourceDictionary>
-                    </Button.Resources>
-                </Button>
+                    Content="Close" />
                 <Button
                     x:Name="btnReset"
                     Command="{x:Bind ViewModel.ResetCommand}"

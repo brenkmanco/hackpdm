@@ -27,6 +27,8 @@ public sealed class DialogService : IDialogService
 	// the one status window: showing it again brings it to the front instead of opening another
 	private Microsoft.UI.Xaml.Window? _statusWindow;
 
+	internal StatusDialogView? CurrentStatusPage { get; private set; }
+
 	/// <inheritdoc/>
 	public void ShowStatusWindow()
 	{
@@ -37,10 +39,12 @@ public sealed class DialogService : IDialogService
 		}
 		WindowHelper.CreateWindowAndPage<StatusDialogView>( out var page, out var window );
 		page.ParentWindow = window;
+		CurrentStatusPage = page;
 		_statusWindow = window;
 		window.Closed += ( _, _ ) =>
 		{
 			page.ParentWindow = null;
+			CurrentStatusPage = null;
 			_statusWindow = null;
 		};
 	}

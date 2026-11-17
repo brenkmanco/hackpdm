@@ -13,8 +13,10 @@
     mc:Ignorable="d">
     <Grid Margin="12">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="3*" />
-            <RowDefinition Height="5" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="2*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -24,10 +26,17 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
+        <TextBlock
+            Grid.Row="0"
+            Grid.ColumnSpan="2"
+            Margin="0,0,0,4"
+            FontWeight="SemiBold"
+            Text="Operations" />
+
         <!--  Main Status List  -->
         <tv:TableView
             x:Name="StatusList"
-            Grid.Row="0"
+            Grid.Row="1"
             Grid.ColumnSpan="2"
             Margin="0,0,0,5"
             AutoGenerateColumns="False"
@@ -38,32 +47,45 @@
             
             <tv:TableView.Columns>
                 <tv:TableViewTextColumn
-                    Width="120"
-                    Binding="{xaml:Binding Status}"
-                    Header="Action"
-                    SortDirection="Descending"/>
+                    Width="128"
+                    Binding="{Binding Status}"
+                    Header="Action" />
                 <tv:TableViewTextColumn
-                    Width="1158"
-                    Binding="{xaml:Binding Message}"
-                    Header="Description" 
-                    SortDirection="Descending"/>
+                    Width="*"
+                    Binding="{Binding Message}"
+                    Header="Description" />
             </tv:TableView.Columns>
         </tv:TableView>
 
-        <!--  Splitter between StatusList and the two lower lists  -->
-        <SplitView
-            Grid.Row="1"
+        <!--  Divider between StatusList and the two lower lists  -->
+        <Border
+            Grid.Row="2"
             Grid.ColumnSpan="2"
-            Height="5"
+            Height="2"
+            Margin="0,4"
             HorizontalAlignment="Stretch"
             Background="{ThemeResource ControlStrongStrokeColorDefaultBrush}" />
+
+        <TextBlock
+            Grid.Row="3"
+            Grid.Column="0"
+            Margin="0,0,5,4"
+            FontWeight="SemiBold"
+            Text="Info" />
+
+        <TextBlock
+            Grid.Row="3"
+            Grid.Column="1"
+            Margin="5,0,0,4"
+            FontWeight="SemiBold"
+            Text="Warnings &amp; Errors" />
 
         <!--  Info List  -->
         <tv:TableView
             x:Name="InfoList"
-            Grid.Row="2"
+            Grid.Row="4"
             Grid.Column="0"
-            Margin="0,5,5,5"
+            Margin="0,0,5,5"
             AutoGenerateColumns="False"
             CanSortColumns="True"
             IsReadOnly="True"
@@ -71,24 +93,22 @@
             RowDetailsVisibilityMode="Collapsed">
             <tv:TableView.Columns>
                 <tv:TableViewTextColumn
-                    Width="120"
-                    Binding="{xaml:Binding Status}"
-                    Header="Action" 
-                    SortDirection="Descending"/>
+                    Width="128"
+                    Binding="{Binding Status}"
+                    Header="Action" />
                 <tv:TableViewTextColumn
-                    Width="1158"
-                    Binding="{xaml:Binding Message}"
-                    Header="Description" 
-                    SortDirection="Descending"/>
+                    Width="*"
+                    Binding="{Binding Message}"
+                    Header="Description" />
             </tv:TableView.Columns>
         </tv:TableView>
 
         <!--  Error List  -->
         <tv:TableView
             x:Name="ErrorList"
-            Grid.Row="2"
+            Grid.Row="4"
             Grid.Column="1"
-            Margin="5,5,0,5"
+            Margin="5,0,0,5"
             AutoGenerateColumns="False"
             CanSortColumns="True"
             IsReadOnly="True"
@@ -96,15 +116,13 @@
             RowDetailsVisibilityMode="Collapsed">
             <tv:TableView.Columns>
                 <tv:TableViewTextColumn
-                    Width="120"
-                    Binding="{xaml:Binding Status}"
-                    Header="Action" 
-                    SortDirection="Descending"/>
+                    Width="128"
+                    Binding="{Binding Status}"
+                    Header="Action" />
                 <tv:TableViewTextColumn
-                    Width="1158"
-                    Binding="{xaml:Binding Message}"
-                    Header="Description" 
-                    SortDirection="Descending"/>
+                    Width="*"
+                    Binding="{Binding Message}"
+                    Header="Description" />
             </tv:TableView.Columns>
         </tv:TableView>
 
@@ -113,48 +131,63 @@
             x:Name="fileCheckStatus"
             Maximum="{x:Bind ViewModel.MaxCount, Mode=OneWay}"
             Value="{x:Bind ViewModel.TotalProcessed, Mode=OneWay}"
-            Grid.Row="3"
+            Grid.Row="5"
             Grid.ColumnSpan="2"
             Height="15"
+            Margin="0,4,0,4"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Center" />
 
-        <!--  Progress Text and Status Labels  -->
+        <!--  Progress Text and Transfer Metrics  -->
         <StackPanel
-            Grid.Row="4"
+            Grid.Row="6"
             Grid.Column="0"
-            VerticalAlignment="Bottom"
-            Orientation="Horizontal">
+            Margin="0,6,0,0"
+            VerticalAlignment="Center"
+            Orientation="Horizontal"
+            Spacing="16">
             <TextBlock
                 x:Name="ProgressText"
-                Margin="0,0,10,0"
+                VerticalAlignment="Center"
                 Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}" />
+            <TextBlock
+                x:Name="SkippedLabel"
+                VerticalAlignment="Center"
+                Text="{x:Bind ViewModel.SkippedText, Mode=OneWay}" />
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+                <TextBlock
+                    x:Name="Downloaded"
+                    Text="{x:Bind ViewModel.DownloadedText, Mode=OneWay}" />
+                <TextBlock
+                    x:Name="TotalDownload"
+                    Text="{x:Bind ViewModel.SessionDownloadedText, Mode=OneWay}" />
+            </StackPanel>
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+                <TextBlock
+                    x:Name="Uploaded"
+                    Text="{x:Bind ViewModel.UploadedText, Mode=OneWay}" />
+                <TextBlock
+                    x:Name="TotalUpload"
+                    Text="{x:Bind ViewModel.SessionUploadedText, Mode=OneWay}" />
+            </StackPanel>
         </StackPanel>
-
-        <!--  Skipped Label  -->
-        <TextBlock
-            x:Name="SkippedLabel"
-            Grid.Row="4"
-            Grid.Column="0"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Bottom"
-            Text="{x:Bind ViewModel.SkippedText, Mode=OneWay}" />
 
         <!--  Control Buttons  -->
         <StackPanel
-            Grid.Row="4"
+            Grid.Row="6"
             Grid.Column="1"
             HorizontalAlignment="Right"
             Orientation="Horizontal">
             <Button
                 x:Name="StatusSettings"
                 Margin="0,0,10,0"
-                Content="configure settings" 
+                Content="Configure Settings"
                 Click="StatusSettings_Click"/>
             <CheckBox
                 x:Name="cbxAutoClose"
                 Margin="0,0,10,0"
-                Content="Close When Complete" />
+                Content="Close When Complete"
+                IsChecked="{x:Bind ViewModel.AutoClose, Mode=TwoWay}" />
             <Button
                 x:Name="cmdCancel"
                 Margin="0,0,10,0"

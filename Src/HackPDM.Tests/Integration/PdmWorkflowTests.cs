@@ -26,6 +26,8 @@ internal sealed class RecordingReporter : IOperationReporter
 	public void SetTotal( int total ) { }
 	public void Advance( int processed, int skipped = 0 ) { }
 	public void SetProcessed( int processed ) { }
+	public void AddDownloadedBytes( long bytes ) { }
+	public void AddUploadedBytes( long bytes ) { }
 	public void Complete() { }
 	public Task NotifyAsync( string message, string caption = "Status" ) { Notices.Enqueue( $"{caption}: {message}" ); return Task.CompletedTask; }
 

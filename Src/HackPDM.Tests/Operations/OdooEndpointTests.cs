@@ -40,4 +40,12 @@ public class OdooEndpointTests
 	[InlineData( "ftp://pdm.example.com" )]
 	public void MissingOrOtherSchemes_AreRefused( string? url )
 		=> Assert.NotNull( OdooEndpoint.InsecureReason( url, allowPlainHttp: true ) );
+
+	[Theory]
+	[InlineData( "pdm.example.com", "", true, "pdm.example.com", 443 )]
+	[InlineData( "pdm.example.com", "", false, "pdm.example.com", 80 )]
+	[InlineData( "https://pdm.example.com:8443", "", true, "pdm.example.com", 8443 )]
+	[InlineData( "localhost", "8069", false, "localhost", 8069 )]
+	public void ResolveEndpoint_HandlesFullUrlsAndDefaultPorts( string address, string port, bool useHttps, string expectedHost, int expectedPort )
+		=> Assert.Equal( (expectedHost, expectedPort), OdooConnection.ResolveEndpoint( address, port, useHttps ) );
 }

@@ -164,7 +164,8 @@ public static class PdmDownloadOperations
         CancellationToken cToken,
         int maxConcurrency = 2,
         Action<StatusMessage, string>? log = null,
-        Action<int, int>? onProgress = null)
+        Action<int, int>? onProgress = null,
+        Action<long>? onBytesDownloaded = null)
     {
         DownloadSummary summary = new();
         using SemaphoreSlim throttler = new(Math.Max(1, maxConcurrency));
@@ -178,7 +179,7 @@ public static class PdmDownloadOperations
                 try
                 {
                     cToken.ThrowIfCancellationRequested();
-                    await ProcessVersionBatchAsync(batch, cToken, log, onProgress, summary);
+                    await ProcessVersionBatchAsync(batch, cToken, log, onProgress, summary, onBytesDownloaded);
                 }
                 finally
                 {
@@ -217,7 +218,8 @@ public static class PdmDownloadOperations
         CancellationToken cToken,
         Action<StatusMessage, string>? log = null,
         Action<int, int>? onProgress = null,
-        DownloadSummary? summary = null)
+        DownloadSummary? summary = null,
+        Action<long>? onBytesDownloaded = null)
     {
         summary ??= new();
         List<HpVersion> processVersions = [];
@@ -252,11 +254,10 @@ public static class PdmDownloadOperations
 
             log?.Invoke(StatusMessage.PROCESSING, $"Downloading latest version: {Path.Combine(version.WinPathway ?? "", version.name ?? "")}");
             processVersions.Add(version);
-            onProgress?.Invoke(1, 0);
         }
 
         if (processVersions.Count > 0)
-            await DownloadAndWriteAsync(processVersions, cToken, log, summary);
+            await DownloadAndWriteAsync(processVersions, cToken, log, summary, onProgress, onBytesDownloaded);
     }
 
     /// <summary>
@@ -286,7 +287,12 @@ public static class PdmDownloadOperations
     /// Files still missing after <see cref="MaxAttempts"/> are logged and added to the summary.
     /// </summary>
     private static async Task DownloadAndWriteAsync(
-        List<HpVersion> versions, CancellationToken cToken, Action<StatusMessage, string>? log, DownloadSummary summary)
+        List<HpVersion> versions,
+        CancellationToken cToken,
+        Action<StatusMessage, string>? log,
+        DownloadSummary summary,
+        Action<int, int>? onProgress,
+        Action<long>? onBytesDownloaded)
     {
         Dictionary<int, HpVersion> pending = versions.Where(v => v.id is > 0).DistinctBy(v => v.id).ToDictionary(v => v.id!.Value);
         Dictionary<int, string> lastError = [];
@@ -296,10 +302,11 @@ public static class PdmDownloadOperations
         {
             cToken.ThrowIfCancellationRequested();
             pending.Remove(large.id!.Value);
-            if (await DownloadLargeAsync(large, cToken) is { } error)
+            if (await DownloadLargeAsync(large, cToken, onBytesDownloaded) is { } error)
                 Fail(large, error);
             else
                 summary.AddDownloaded();
+            onProgress?.Invoke(1, 0);
         }
 
         for (int attempt = 1; attempt <= MaxAttempts && pending.Count > 0; attempt++)
@@ -333,22 +340,31 @@ public static class PdmDownloadOperations
                         continue;
                     }
 
+                    long downloadedSize = got.file_contents?.Length ?? (got.file_size ?? 0);
+                    if (downloadedSize > 0)
+                        onBytesDownloaded?.Invoke(downloadedSize);
+
                     if (got.file_contents is { Length: > 0 } && !await LocalFileWriter.WriteAsync(got.ToHackFile()))
                     {
                         // a local write problem will not be fixed by downloading again
                         pending.Remove(id);
                         Fail(requested, "could not write the file locally");
+                        onProgress?.Invoke(1, 0);
                         continue;
                     }
 
                     pending.Remove(id);
                     summary.AddDownloaded();
+                    onProgress?.Invoke(1, 0);
                 }
             }
         }
 
         foreach (HpVersion version in pending.Values)
+        {
             Fail(version, lastError.GetValueOrDefault(version.id ?? 0, "unknown error"));
+            onProgress?.Invoke(1, 0);
+        }
 
         void Fail(HpVersion version, string reason)
         {
@@ -362,12 +378,12 @@ public static class PdmDownloadOperations
 
     /// <summary>Downloads one large file in pieces to a temporary file, checks it, and moves it into the working folder.</summary>
     /// <returns>Null when the file is in place; otherwise why not.</returns>
-    private static async Task<string?> DownloadLargeAsync(HpVersion requested, CancellationToken cToken)
+    private static async Task<string?> DownloadLargeAsync(HpVersion requested, CancellationToken cToken, Action<long>? onBytesDownloaded)
     {
         Result<HpVersion[]> read = await Repository<HpVersion>.ReadAsync([requested.id!.Value], FieldSelection.Only(LargeFileFields), OdooRpc.LongTimeout);
         if (read.Value is not [{ } version, ..])
             return read.Error ?? "the version could not be read";
-        Result<string> temp = await ContentTransfer.DownloadToTempFileAsync(version, cToken);
+        Result<string> temp = await ContentTransfer.DownloadToTempFileAsync(version, cToken, onBytesDownloaded);
         if (!temp.Ok)
             return temp.Error;
         if (await LocalFileWriter.WriteFromFileAsync(version.ToHackFile(contentsInFile: true), temp.Value!))

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -150,6 +150,7 @@ public sealed partial class HackFileManagerView : Page
 		OdooDirectoryBreadcrumb.ItemClicked += OdooDirectoryBreadcrumb_ItemClicked;
 		OdooEntryList.SelectionChanged += OdooEntryList_SelectionChanged;
 		OdooEntryList.Sorting += OdooEntryList_Sorting;
+		OdooEntryList.DoubleTapped += ( _, _ ) => ViewModel.OpenSelectedCommand.Execute( null );
 		OdooHistory.SelectionChanged += OdooHistory_SelectionChanged;
 		OdooHistory.DoubleTapped += ( _, _ ) => ViewModel.DownloadHistoryWithDependenciesCommand.Execute( null );
 		OdooParents.SelectionChanged += ( _, e ) => PreviewVersion( ( e.AddedItems.FirstOrDefault() as Domain.Representation.ParentRow )?.Version );
@@ -594,6 +595,9 @@ public sealed partial class HackFileManagerView : Page
 
 	private void ManageTypes_Click( object sender, RoutedEventArgs e )
 		=> WindowHelper.CreateWindowPage<OdooFileTypeManagerView>().Title = "Manage Types";
+
+	private void StatusWindow_Click( object sender, RoutedEventArgs e )
+		=> AppComposition.Dialogs.ShowStatusWindow();
 
 	private void OnTogglePipClicked( object sender, RoutedEventArgs e )
 	{

@@ -16,11 +16,24 @@ public sealed partial class ApplicationSettingsView : Page
 	private void SettingsSections_SelectionChanged( SelectorBar sender, SelectorBarSelectionChangedEventArgs args )
 		=> ShowSection( sender.SelectedItem );
 
+	/// <summary>Switches the active tab (for example <c>"Status"</c> or <c>"Theme"</c>).</summary>
+	public void SelectSection( string sectionName )
+	{
+		SelectorBarItem target = sectionName switch
+		{
+			"Status" => StatusSection,
+			_ => ThemeSection,
+		};
+		SettingsSections.SelectedItem = target;
+		ShowSection( target );
+	}
+
 	private void ShowSection( SelectorBarItem? item )
 	{
 		Type? page = item?.Name switch
 		{
 			nameof( ThemeSection ) => typeof( ThemeEditorView ),
+			nameof( StatusSection ) => typeof( StatusSettingsView ),
 			_ => null,
 		};
 		if( page is null || SectionFrame.CurrentSourcePageType == page )

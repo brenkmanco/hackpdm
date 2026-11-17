@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 
@@ -35,7 +36,8 @@ public static class AppSettingsStore
 		{
 			// throws when the app runs unpackaged on Windows: then earlier versions could not have saved anything there
 			var values = Windows.Storage.ApplicationData.Current.LocalSettings.Values
-				.Select( v => new KeyValuePair<string, object?>( v.Key, v.Value ) )
+				.Where( v => !IsUnoInternalKey( v.Key ) )
+				.Select( v => new KeyValuePair<string, object?>( v.Key, UnwrapLocalSettingValue( v.Value ) ) )
 				.ToList();
 			int imported = settings.ImportMissing( values );
 			if( imported > 0 )
@@ -45,5 +47,36 @@ public static class AppSettingsStore
 		{
 			System.Diagnostics.Debug.WriteLine( $"settings: no packaged settings to bring over ({e.Message})" );
 		}
+	}
+
+	private static bool IsUnoInternalKey( string key )
+		=> key.StartsWith( "__UNO__", StringComparison.Ordinal ) || key.StartsWith( "__Uno.", StringComparison.Ordinal );
+
+	/// <summary>
+	/// Uno Platform's non-Windows LocalSettings enumerator yields raw "CLRType:value" strings (e.g. "System.String:localhost").
+	/// Unwraps known primitive prefixes back to CLR values so settings.json stores plain JSON values.
+	/// </summary>
+	internal static object? UnwrapLocalSettingValue( object? value )
+	{
+		if( value is not string raw )
+			return value;
+
+		int sep = raw.IndexOf( ':' );
+		if( sep <= 0 )
+			return raw;
+
+		ReadOnlySpan<char> typeName = raw.AsSpan( 0, sep );
+		ReadOnlySpan<char> payload = raw.AsSpan( sep + 1 );
+		return typeName switch
+		{
+			"System.String" => payload.ToString(),
+			"System.Boolean" when bool.TryParse( payload, out bool b ) => b,
+			"System.Int32" when int.TryParse( payload, NumberStyles.Integer, CultureInfo.InvariantCulture, out int i ) => i,
+			"System.Int64" when long.TryParse( payload, NumberStyles.Integer, CultureInfo.InvariantCulture, out long l ) => l,
+			"System.Double" when double.TryParse( payload, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double d ) => d,
+			"System.Single" when float.TryParse( payload, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out float f ) => f,
+			"System.Decimal" when decimal.TryParse( payload, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal m ) => m,
+			_ => raw,
+		};
 	}
 }

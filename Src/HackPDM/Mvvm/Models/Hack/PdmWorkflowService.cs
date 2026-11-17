@@ -215,10 +215,17 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 			return;
 
 		CancellationTokenSource cancellation = reporter.BeginOperation();
-		Log( StatusMessage.INFO, "Finding Entry Dependencies..." );
-		IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
+		try
+		{
+			Log( StatusMessage.INFO, "Finding Entry Dependencies..." );
+			IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
 
-		await AsyncHelper.AsyncRunner( () => DownloadLatestAsync( ids, cancellation.Token ), "Get Latest", cancellation );
+			await AsyncHelper.AsyncRunner( () => DownloadLatestAsync( ids, cancellation.Token ), "Get Latest", cancellation );
+		}
+		finally
+		{
+			reporter.Complete();
+		}
 	}
 
 	private async Task DownloadLatestAsync( IReadOnlyList<int> entryIds, CancellationToken token )
@@ -246,7 +253,8 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 				token,
 				OdooDefaults.Instance.ConcurrencySize,
 				log: Log,
-				onProgress: ( processed, skipped ) => reporter.Advance( processed, skipped ) );
+				onProgress: ( processed, skipped ) => reporter.Advance( processed, skipped ),
+				onBytesDownloaded: bytes => reporter.AddDownloadedBytes( bytes ) );
 		}
 		catch( OperationCanceledException )
 		{
@@ -301,33 +309,41 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		if( entryIds is null or { Count: < 1 } )
 			return;
 
-		int me = OdooDefaults.Instance.OdooId;
-		IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
-		// only entries checked out to this user are released
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids,
-			checkout ? null : OdooDomain.Where( "checkout_user", Operators.Equal, me ), excludedFields: HeavyEntryFields );
-		if( !checkout )
+		reporter.BeginOperation();
+		try
 		{
-			// the selected files someone else holds are left alone; say so rather than a bare "Completed!"
-			HpEntry[]? others = await HpEntry.GetRecordsByIdsAsync( entryIds,
-				OdooDomain.Where( "checkout_user", Operators.NotEqual, me ).And( "checkout_user", Operators.NotEqual, false ),
-				includedFields: [ nameof( HpEntry.id ), nameof( HpEntry.name ), nameof( HpEntry.checkout_user ) ] );
-			foreach( HpEntry other in others ?? [] )
-				Log( StatusMessage.ERROR, $"Cannot undo the check out of {other.name}: it is checked out to {other.checkout_user?.name ?? "another user"}" );
-		}
-		if( entries is null or { Length: < 1 } )
-			return;
+			int me = OdooDefaults.Instance.OdooId;
+			IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
+			// only entries checked out to this user are released
+			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids,
+				checkout ? null : OdooDomain.Where( "checkout_user", Operators.Equal, me ), excludedFields: HeavyEntryFields );
+			if( !checkout )
+			{
+				// the selected files someone else holds are left alone; say so rather than a bare "Completed!"
+				HpEntry[]? others = await HpEntry.GetRecordsByIdsAsync( entryIds,
+					OdooDomain.Where( "checkout_user", Operators.NotEqual, me ).And( "checkout_user", Operators.NotEqual, false ),
+					includedFields: [ nameof( HpEntry.id ), nameof( HpEntry.name ), nameof( HpEntry.checkout_user ) ] );
+				foreach( HpEntry other in others ?? [] )
+					Log( StatusMessage.ERROR, $"Cannot undo the check out of {other.name}: it is checked out to {other.checkout_user?.name ?? "another user"}" );
+			}
+			if( entries is null or { Length: < 1 } )
+				return;
 
-		await AsyncHelper.AsyncRunner( async () =>
+			await AsyncHelper.AsyncRunner( async () =>
+			{
+				reporter.SetTotal( entries.Length );
+				if( checkout )
+					await PdmCheckoutOperations.CheckOutEntriesAsync( entries, Log, OnCheckoutProgress );
+				else
+					await PdmCheckoutOperations.UnCheckOutEntriesAsync( entries, me, Log, OnCheckoutProgress );
+				reporter.Complete();
+				await reporter.NotifyAsync( "Completed!" );
+			}, checkout ? "Checkout Files" : "UnCheckout Files" );
+		}
+		finally
 		{
-			reporter.SetTotal( entries.Length );
-			if( checkout )
-				await PdmCheckoutOperations.CheckOutEntriesAsync( entries, Log, OnCheckoutProgress );
-			else
-				await PdmCheckoutOperations.UnCheckOutEntriesAsync( entries, me, Log, OnCheckoutProgress );
 			reporter.Complete();
-			await reporter.NotifyAsync( "Completed!" );
-		}, checkout ? "Checkout Files" : "UnCheckout Files" );
+		}
 	}
 
 	private void OnCheckoutProgress( int processed, int total )
@@ -365,39 +381,48 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 			return;
 		}
 
-		HpPDMCommit commit = new() { node_by = OdooDefaults.Instance?.MyNode?.id };
-		await commit.CreateCommitAsync();
-
 		reporter.BeginOperation();
-		reporter.SetTotal( ( localOnly?.Length ?? 0 ) + ( remoteExisting?.Length ?? 0 ) );
-		Log( StatusMessage.PROCESSING, "--- Preparing to stage records ---" );
-
-		// new files first, then new versions of files Odoo already knows
-		var staged = ( localOnly ?? [] ).Select( f => (file: f, inOdoo: false) )
-			.Concat( ( remoteExisting ?? [] ).Select( f => (file: f, inOdoo: true) ) );
-		foreach( var (file, inOdoo) in staged )
+		try
 		{
-			if( !await PdmCommitOperations.CommitRecordAsync( file, commit, inOdoo, Log, () => reporter.Advance( 1 ) ) )
+			HpPDMCommit commit = new() { node_by = OdooDefaults.Instance?.MyNode?.id };
+			await commit.CreateCommitAsync();
+
+			reporter.SetTotal( ( localOnly?.Length ?? 0 ) + ( remoteExisting?.Length ?? 0 ) );
+			Log( StatusMessage.PROCESSING, "--- Preparing to stage records ---" );
+
+			// new files first, then new versions of files Odoo already knows
+			var staged = ( localOnly ?? [] ).Select( f => (file: f, inOdoo: false) )
+				.Concat( ( remoteExisting ?? [] ).Select( f => (file: f, inOdoo: true) ) );
+			foreach( var (file, inOdoo) in staged )
 			{
-				reporter.Complete();
+				if( !await PdmCommitOperations.CommitRecordAsync(
+					file,
+					commit,
+					inOdoo,
+					Log,
+					() => reporter.Advance( 1 ),
+					bytes => reporter.AddUploadedBytes( bytes ) ) )
+					return;
+			}
+
+			var (committed, error) = await commit.ServerCommit();
+			if( !committed )
+			{
+				// nothing was created on the server; never report a failed commit as done
+				Log( StatusMessage.ERROR, $"Commit failed on the server: {error}" );
+				await reporter.NotifyAsync( $"Commit failed: {error}", "Commit Files" );
 				return;
 			}
+			// the committed entries are checked in by the server; the unchanged ones that came along
+			// (e.g. the parts of a checked-out assembly) are released here
+			await CheckInUnchangedAsync( unchanged );
+			reporter.Complete();
+			await reporter.NotifyAsync( "Completed!" );
 		}
-
-		var (committed, error) = await commit.ServerCommit();
-		if( !committed )
+		finally
 		{
 			reporter.Complete();
-			// nothing was created on the server; never report a failed commit as done
-			Log( StatusMessage.ERROR, $"Commit failed on the server: {error}" );
-			await reporter.NotifyAsync( $"Commit failed: {error}", "Commit Files" );
-			return;
 		}
-		// the committed entries are checked in by the server; the unchanged ones that came along
-		// (e.g. the parts of a checked-out assembly) are released here
-		await CheckInUnchangedAsync( unchanged );
-		reporter.Complete();
-		await reporter.NotifyAsync( "Completed!" );
 	}
 
 	/// <summary>Releases the checkout of entries that were committed without changes (no new version).</summary>
@@ -466,35 +491,58 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		if( entryIds is null or { Count: < 1 } )
 			return;
 
-		// only the selected entries: what they depend on (an assembly's parts) is often used by other
-		// entries too, and deleting an assembly must not take its parts with it
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( entryIds, excludedFields: DeleteExcludedFields );
-		await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, true, Log ), "Logically Delete Files" );
+		reporter.BeginOperation();
+		try
+		{
+			// only the selected entries: what they depend on (an assembly's parts) is often used by other
+			// entries too, and deleting an assembly must not take its parts with it
+			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( entryIds, excludedFields: DeleteExcludedFields );
+			await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, true, Log ), "Logically Delete Files" );
+		}
+		finally
+		{
+			reporter.Complete();
+		}
 	}
 
 	/// <inheritdoc/>
 	public async Task RestoreDeletedInDirectoryAsync( int directoryId )
 	{
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( null,
-			searchFilters: OdooDomain.Where( "deleted", true ).And( "dir_id", directoryId ),
-			excludedFields: DeleteExcludedFields );
+		reporter.BeginOperation();
+		try
+		{
+			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( null,
+				searchFilters: OdooDomain.Where( "deleted", true ).And( "dir_id", directoryId ),
+				excludedFields: DeleteExcludedFields );
 
-		await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, false, Log ), "Logically UnDelete Files" );
-		reporter.Complete();
+			await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, false, Log ), "Logically UnDelete Files" );
+		}
+		finally
+		{
+			reporter.Complete();
+		}
 	}
 
 	/// <inheritdoc/>
 	public async Task<bool> PermanentDeleteAsync( IReadOnlyList<int> entryIds )
 	{
 		bool deleted = false;
-		await AsyncHelper.AsyncRunner( async () =>
+		reporter.BeginOperation();
+		try
 		{
-			// DeleteEntry also removes versions, version properties, version relationships and attachments
-			deleted = await PdmDeleteOperations.PermanentDeleteEntry( entryIds, Log );
-			if( deleted )
-				Log( StatusMessage.SUCCESS, "Completed permanent delete" );
-		}, "Permanently Delete Files" );
-		return deleted;
+			await AsyncHelper.AsyncRunner( async () =>
+			{
+				// DeleteEntry also removes versions, version properties, version relationships and attachments
+				deleted = await PdmDeleteOperations.PermanentDeleteEntry( entryIds, Log );
+				if( deleted )
+					Log( StatusMessage.SUCCESS, "Completed permanent delete" );
+			}, "Permanently Delete Files" );
+			return deleted;
+		}
+		finally
+		{
+			reporter.Complete();
+		}
 	}
 
 	#endregion

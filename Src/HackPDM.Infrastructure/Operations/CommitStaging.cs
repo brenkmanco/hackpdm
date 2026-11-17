@@ -93,17 +93,17 @@ public static class CommitStaging
 	/// <param name="commitId">The id of the commit to stage under.</param>
 	/// <returns>The staged version record; null when the type is restricted, the file can't be read, or staging failed.</returns>
 	/// <remarks>Marks the version with the internal <c>__internal__existing</c> flag so the server attaches it to the existing entry.</remarks>
-	public static Task<HpRecordStaged?> StageVersionAsync( HackFile hack, IHpEntryModel entry, int commitId, Action<string>? reportError = null )
-		=> StageAsync( PrepareVersion( hack, entry, commitId ), existingEntry: true, reportError );
+	public static Task<HpRecordStaged?> StageVersionAsync( HackFile hack, IHpEntryModel entry, int commitId, Action<string>? reportError = null, Action<long>? onBytesUploaded = null )
+		=> StageAsync( PrepareVersion( hack, entry, commitId ), existingEntry: true, reportError, onBytesUploaded );
 
 	/// <summary>Stages the first version of an entry staged earlier in the same commit.</summary>
 	/// <param name="hack">The local file; its contents are read from disk unless already loaded.</param>
 	/// <param name="stagedEntry">The staged entry from <see cref="StageEntryAsync"/>; its directory, server name and commit are copied.</param>
 	/// <returns>The staged version record; null when the type is restricted, the file can't be read, or staging failed.</returns>
-	public static Task<HpRecordStaged?> StageVersionAsync( HackFile hack, IHpRecordStagedModel stagedEntry, Action<string>? reportError = null )
-		=> StageAsync( PrepareVersion( hack, stagedEntry ), existingEntry: false, reportError );
+	public static Task<HpRecordStaged?> StageVersionAsync( HackFile hack, IHpRecordStagedModel stagedEntry, Action<string>? reportError = null, Action<long>? onBytesUploaded = null )
+		=> StageAsync( PrepareVersion( hack, stagedEntry ), existingEntry: false, reportError, onBytesUploaded );
 
-	private static async Task<HpRecordStaged?> StageAsync( HpVersion? version, bool existingEntry, Action<string>? reportError )
+	private static async Task<HpRecordStaged?> StageAsync( HpVersion? version, bool existingEntry, Action<string>? reportError, Action<long>? onBytesUploaded )
 	{
 		if( version is null )
 			return null;
@@ -114,7 +114,7 @@ public static class CommitStaging
 		int? uploadId = null;
 		if( version.HashedValues.GetValueOrDefault( UploadSource ) is string path )
 		{
-			Result<int> uploaded = await ContentTransfer.UploadFileAsync( path );
+			Result<int> uploaded = await ContentTransfer.UploadFileAsync( path, onBytes: onBytesUploaded );
 			if( !uploaded.Ok )
 			{
 				version.LastError = uploaded.Error;
@@ -129,11 +129,16 @@ public static class CommitStaging
 			return null;
 		if( uploadId is { } id )
 			staged.payload![ "upload_id" ] = id;
-		staged.CreateTimeoutMs = ContentTransfer.TimeoutMs( version.file_contents?.Length ?? 0 );
+		int inlineBytes = version.file_contents?.Length ?? 0;
+		staged.CreateTimeoutMs = ContentTransfer.TimeoutMs( inlineBytes );
 		await staged.CreateAsync();
 		version.LastError = staged.LastError;
 		if( staged.id is not null and not 0 )
+		{
+			if( uploadId is null && inlineBytes > 0 )
+				onBytesUploaded?.Invoke( inlineBytes );
 			return staged;
+		}
 		reportError?.Invoke( $"the server refused the version: {staged.LastError}" );
 		return null;
 	}

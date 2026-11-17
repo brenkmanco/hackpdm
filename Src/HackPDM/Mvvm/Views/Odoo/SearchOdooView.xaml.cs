@@ -42,4 +42,22 @@ public sealed partial class SearchOdooView : Page
 
 	private void OdooSearchResults_DoubleTapped( object sender, DoubleTappedRoutedEventArgs e )
 		=> ViewModel.LocateCommand.Execute( OdooSearchResults.SelectedItem as SearchRow );
+
+	private void FileNameTextbox_KeyDown( object sender, KeyRoutedEventArgs e )
+	{
+		if( e.Key == Windows.System.VirtualKey.Enter && ViewModel.SearchCommand.CanExecute( null ) )
+		{
+			e.Handled = true;
+			ViewModel.SearchCommand.Execute( null );
+		}
+	}
+
+	private void OdooSearchPropValue_KeyDown( object sender, KeyRoutedEventArgs e )
+	{
+		if( e.Key == Windows.System.VirtualKey.Enter && ViewModel.AddPropertyCommand.CanExecute( null ) )
+		{
+			e.Handled = true;
+			ViewModel.AddPropertyCommand.Execute( null );
+		}
+	}
 }

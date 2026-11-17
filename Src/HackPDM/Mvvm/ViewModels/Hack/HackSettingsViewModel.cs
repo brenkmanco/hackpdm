@@ -63,6 +63,7 @@ public partial class HackSettingsViewModel : ObservableObject
 		HackDefaults.Instance?.PwaPathAbsolute = PwaPath;
 		HackDefaults.Instance?.PwaPathRelative = new DirectoryInfo( PwaPath ).Name;
 		StorageBox.TemporaryPath = TempFolderPath;
+		HackDefaults.Instance?.SettingsProvider?.Set( "TemporaryPath", TempFolderPath );
 		// the page is usually shown inside the main window, where nothing else shows that it worked
 		await _dialogs.ShowMessageAsync( "Hack settings saved" );
 		Saved?.Invoke();

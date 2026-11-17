@@ -62,7 +62,7 @@ public sealed partial class MessageBox : Page
 	{
 		_window = window;
 		_result = result;
-		gridRoot.Margin = new Thickness( 15, 15, 15, 5 );
+		gridRoot.Margin = new Thickness( 4 );
 		gridRoot.UseLayoutRounding = true;
 		gridRoot.CornerRadius = new CornerRadius( 10 );
 
@@ -70,17 +70,19 @@ public sealed partial class MessageBox : Page
 		{
 			Content = new TextBlock
 			{
-				Text = $"- {message}",
-				FontSize = 15,
-				FontFamily = new FontFamily( "Calibri" ),
+				Text = message,
+				FontSize = 14,
 				TextAlignment = TextAlignment.DetectFromContent,
 				TextWrapping = TextWrapping.WrapWholeWords,
+				IsTextSelectionEnabled = true,
 			},
 		};
 		gridRoot.Children.Add( text );
 		text.SetGrid( 0, 0, 3, 4 );
 
-		foreach( ButtonSpec spec in Layouts.GetValueOrDefault( buttons ) ?? Layouts[ MessageBoxButtons.OK ] )
+		ButtonSpec[] specs = Layouts.GetValueOrDefault( buttons ) ?? Layouts[ MessageBoxButtons.OK ];
+		ButtonSpec? defaultSpec = Array.Find( specs, s => s.IsDefault ) ?? specs[ ^1 ];
+		foreach( ButtonSpec spec in specs )
 		{
 			Button button = new()
 			{
@@ -88,12 +90,27 @@ public sealed partial class MessageBox : Page
 				Style = (Style)Resources[ spec.IsDefault ? "ChoiceDefaultButtonStyle" : "ChoiceButtonStyle" ],
 				HorizontalAlignment = HorizontalAlignment.Stretch,
 				VerticalAlignment = VerticalAlignment.Center,
-				Height = 30,
+				Height = 32,
 			};
 			button.Click += ( _, _ ) => Close( spec.Result );
 			gridRoot.Children.Add( button );
 			button.SetGrid( ButtonRow, spec.Column );
 		}
+
+		window.Closed += ( _, _ ) => result.TrySetResult( DialogResult.Cancel );
+		KeyDown += ( _, e ) =>
+		{
+			if( e.Key == Windows.System.VirtualKey.Escape )
+			{
+				e.Handled = true;
+				Close( DialogResult.Cancel );
+			}
+			else if( e.Key == Windows.System.VirtualKey.Enter && defaultSpec is not null )
+			{
+				e.Handled = true;
+				Close( defaultSpec.Result );
+			}
+		};
 	}
 
 	private void Close( DialogResult result )
@@ -116,6 +133,7 @@ public sealed partial class MessageBox : Page
 			{
 				MessageBox page = new();
 				Window window = WindowHelper.CreateWindow<Window>( "MessageBox" );
+				window.Title = string.IsNullOrWhiteSpace( caption ) ? "Info" : caption;
 				( window.Content as Frame )?.Content = page;
 				page.Show( message, buttons, window, result );
 			} );

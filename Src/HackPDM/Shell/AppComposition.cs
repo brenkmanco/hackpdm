@@ -45,6 +45,8 @@ public static class AppComposition
 	{
 		_ = new HackDefaults( Settings );
 		_ = new OdooDefaults( Settings );
+		if( Settings.Get<string>( "TemporaryPath" ) is { Length: > 0 } tempPath )
+			HackPDM.Shared.GlobalData.StorageBox.TemporaryPath = tempPath;
 	}
 
 	/// <summary>Dialogs and windows shown on behalf of view models.</summary>
@@ -130,6 +132,10 @@ public static class AppComposition
 	/// <summary>The theme editor page's view model, made per visit.</summary>
 	/// <returns>A new view model editing the run-wide <see cref="Theme"/>.</returns>
 	public static ThemeEditorViewModel CreateThemeEditor() => new( Theme );
+
+	/// <summary>The status settings page's view model, made per visit.</summary>
+	/// <returns>A new view model editing the run-wide <see cref="StatusLog"/> settings.</returns>
+	public static StatusSettingsViewModel CreateStatusSettings() => new( StatusLog, Dialogs );
 
 	/// <summary>The search window's state, kept for the whole run; locating a result switches to the file manager.</summary>
 	public static SearchOdooViewModel SearchOdoo => field ??= new(

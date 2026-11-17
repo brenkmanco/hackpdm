@@ -8,6 +8,7 @@
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	xmlns:types="using:HackPDM.Mvvm.Views.Common.Types"
 	xmlns:tv="using:WinUI.TableView"
+	Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
 	mc:Ignorable="d">
 
 	<Page.Resources>

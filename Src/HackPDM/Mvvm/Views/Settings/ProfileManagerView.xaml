@@ -9,13 +9,14 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:rep="using:HackPDM.Domain.Representation"
     xmlns:xaml="using:Microsoft.UI.Xaml"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     mc:Ignorable="d">
     <Grid Margin="12">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="40" />
+            <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
@@ -61,31 +62,30 @@
             Padding="5,5,5,5"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Bottom"
-            Content="Odoo Login" />
-        <Canvas
+            Content="Odoo Login"
+            Style="{StaticResource AccentButtonStyle}" />
+        <StackPanel
             x:Name="InfoOrLoad"
             Grid.Row="1"
             Grid.Column="3"
-            Width="32"
-            Height="32"
-            Margin="5,5,5,5"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center">
+            Margin="5,5,0,5"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            Orientation="Horizontal"
+            Spacing="6">
             <ProgressRing
                 x:Name="OdooLoginProgressRing"
-                HorizontalAlignment="Stretch"
-                VerticalAlignment="Stretch"
+                Width="24"
+                Height="24"
+                VerticalAlignment="Center"
                 IsActive="{x:Bind ViewModel.IsLoggingIn, Mode=OneWay}" />
             <CommandBar
                 x:Name="MoreTools"
-                HorizontalAlignment="Stretch"
-                VerticalAlignment="Stretch"
+                VerticalAlignment="Center"
                 DefaultLabelPosition="Right">
                 <AppBarButton
                     x:Name="AdditionalTools"
-                    HorizontalAlignment="Stretch"
-                    VerticalAlignment="Stretch"
-                    Icon="Help">
+                    Icon="More">
                     <AppBarButton.Flyout>
                         <MenuFlyout>
                             <MenuFlyoutItem
@@ -107,11 +107,16 @@
                                 x:Name="CreateTemplateSettingsJson"
                                 Command="{x:Bind ViewModel.CreateTemplateCommand}"
                                 Text="Create Template Json" />
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem
+                                x:Name="OpenStatusLogBtn"
+                                Click="OpenStatusLog_Click"
+                                Text="Status Log" />
                         </MenuFlyout>
                     </AppBarButton.Flyout>
                 </AppBarButton>
             </CommandBar>
-        </Canvas>
+        </StackPanel>
         <!--  Status List View  -->
         <tv:TableView
             x:Name="ProfileManStatusList"
@@ -129,7 +134,7 @@
                 <!--<TextBlock Grid.Column="0" Text="{data:Binding Status}" />
 				<TextBlock Grid.Column="1" Text="{data:Binding Message}" />-->
                 <tv:TableViewTextColumn
-                    Width="Auto"
+                    Width="140"
                     Binding="{Binding Status}"
                     Header="Action" />
                 <tv:TableViewTextColumn

@@ -312,7 +312,71 @@ internal static class SmokeTestRunner
 
 				return $"{edited.Name} rebuilt, {others.Count} other rows untouched, added + removed a row, badge shown";
 			} )
-			&& await Step( "dependency graph (children, parents, both, zoom)", DependencyGraphStepAsync );
+			&& await Step( "dependency graph (children, parents, both, zoom)", DependencyGraphStepAsync )
+			&& await Step( "capture affected visuals", CaptureAffectedVisualsAsync );
+	}
+
+	private static async Task<string> CaptureAffectedVisualsAsync()
+	{
+		if( Environment.GetEnvironmentVariable( "HACKPDM_SMOKE_SCREENSHOT" ) is not { Length: > 0 }
+			|| Environment.GetEnvironmentVariable( ThemeService.SmokeThemeVariable ) is { Length: > 0 } )
+			return "skipped (no screenshot path or theme matrix run)";
+
+		var frame = HackApp.HomePage!.ContentFrame;
+		List<string> saved = [];
+
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.HackFileManager );
+		await WaitUntil( () => frame.Content is HackFileManagerView { IsLoaded: true } fm && fm.ViewModel.IsListLoaded, "HackFileManager shown with entries" );
+		await Task.Delay( 400 );
+		saved.Add( await SaveScreenshotAsync( (UIElement)frame.Content, "file-manager" ) );
+
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.ProfileManager );
+		await WaitUntil( () => frame.Content is ProfileManagerView { IsLoaded: true }, "ProfileManager shown" );
+		await Task.Delay( 400 );
+		saved.Add( await SaveScreenshotAsync( (UIElement)frame.Content, "profile-manager" ) );
+
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.Configuration );
+		await WaitUntil( () => frame.Content is ConfigurationView { IsLoaded: true }, "ConfigurationView shown" );
+		await Task.Delay( 400 );
+		saved.Add( await SaveScreenshotAsync( (UIElement)frame.Content, "configuration" ) );
+
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.Settings );
+		await WaitUntil( () => frame.Content is ApplicationSettingsView { IsLoaded: true }, "ApplicationSettingsView shown" );
+		( (ApplicationSettingsView)frame.Content ).SelectSection( "Status" );
+		await Task.Delay( 500 );
+		saved.Add( await SaveScreenshotAsync( (UIElement)frame.Content, "status-settings" ) );
+
+		// Populate representative statuses + metrics and open StatusDialogView
+		var statusVm = AppComposition.StatusLog;
+		statusVm.AutoClose = false;
+		statusVm.ResetProgress( 5 );
+		statusVm.AddLog( new( ) { Status = StatusMessage.PROCESSING, Message = "Downloading latest version: Projects\\Parts\\bracket.txt" } );
+		statusVm.AddLog( new( ) { Status = StatusMessage.SUCCESS, Message = "Committed 2 file(s) to Projects\\Assembly" } );
+		statusVm.AddLog( new( ) { Status = StatusMessage.INFO, Message = "Found 5 entries in Projects\\Assembly" } );
+		statusVm.AddLog( new( ) { Status = StatusMessage.WARNING, Message = "Kept local changes to Projects\\Parts\\plate.txt" } );
+		statusVm.Advance( 3, 1 );
+		statusVm.AddDownloadedBytes( 1_572_864 );
+		statusVm.AddUploadedBytes( 524_288 );
+		AppComposition.Dialogs.ShowStatusWindow();
+		await WaitUntil( () => AppComposition.Dialogs is HackPDM.Mvvm.Views.Dialogs.DialogService ds && ds.CurrentStatusPage is { IsLoaded: true }, "StatusDialogView shown" );
+		var statusPage = ( (HackPDM.Mvvm.Views.Dialogs.DialogService)AppComposition.Dialogs ).CurrentStatusPage!;
+		await Task.Delay( 400 );
+		saved.Add( await SaveScreenshotAsync( statusPage, "status-dialog" ) );
+		statusPage.ParentWindow?.Close();
+
+		WindowHelper.CreateWindowAndPage<HackPDM.Mvvm.Views.Odoo.SearchOdooView>( out var searchPage, out var searchWindow );
+		searchPage.StoreWindowInstance( searchWindow );
+		await WaitUntil( () => searchPage.IsLoaded, "SearchOdooView shown" );
+		await Task.Delay( 400 );
+		saved.Add( await SaveScreenshotAsync( searchPage, "search" ) );
+		searchWindow.Close();
+
+		AppComposition.Session.IsLoggedIn = false;
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.HackFileManager );
+		await WaitUntil( () => frame.Content is NotLoggedInView { IsLoaded: true }, "NotLoggedInView shown" );
+		saved.Add( await SaveScreenshotAsync( (UIElement)frame.Content, "not-logged-in" ) );
+
+		return string.Join( "", saved );
 	}
 
 	/// <summary>

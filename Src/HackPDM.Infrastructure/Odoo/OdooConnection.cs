@@ -10,31 +10,35 @@ public static class OdooConnection
 	/// <returns>1 when <see cref="OdooDefaults.OdooId"/> is non-zero (logged in), 0 when not.</returns>
 	public static int CorrectUserId() => OdooDefaults.Instance.OdooId is 0 ? 0 : 1;
 
-	/// <summary>Checks whether the configured server host answers an ICMP ping.</summary>
-	/// <returns>True when the ping succeeds; false when no address is set, the ping fails, or it can't be sent.</returns>
-	/// <remarks>Uses <see cref="Ping"/> with its default timeout (5 seconds). Hosts that block ICMP report false even when the server is reachable.</remarks>
+	/// <summary>Extracts the target host and port from the configured Odoo settings (including full URLs and default HTTPS/HTTP ports).</summary>
+	internal static (string Host, int Port)? ResolveEndpoint( string? address, string? portText, bool useHttps )
+	{
+		string url = OdooEndpoint.BuildUrl( address, portText, useHttps );
+		if( string.IsNullOrEmpty( url ) || !Uri.TryCreate( url, UriKind.Absolute, out Uri? uri ) || string.IsNullOrEmpty( uri.Host ) || uri.Port <= 0 )
+			return null;
+		return (uri.Host, uri.Port);
+	}
+
+	/// <summary>Checks whether the configured server host answers an ICMP ping, falling back to DNS resolution when ICMP is blocked.</summary>
+	/// <returns>True when the ping succeeds or the host resolves in DNS; false when no address is set or resolution fails.</returns>
 	public static async Task<bool> CorrectOdooAddress()
 	{
-		if( string.IsNullOrWhiteSpace( OdooDefaults.Instance.OdooAddress ) )
+		if( ResolveEndpoint( OdooDefaults.Instance.OdooAddress, OdooDefaults.Instance.OdooPort, OdooDefaults.Instance.OdooUseHttps ) is not { Host: var host } )
 			return false;
-		string address = OdooDefaults.Instance.OdooAddress!;
 		try
 		{
 			using Ping pinger = new();
-			return await pinger.SendPingAsync( address ) is { Status: IPStatus.Success };
+			if( await pinger.SendPingAsync( host ) is { Status: IPStatus.Success } )
+				return true;
 		}
-		catch( PingException )
+		catch( Exception e ) when( e is PingException or InvalidOperationException or ArgumentException )
 		{
-			try
-			{
-				return ( await System.Net.Dns.GetHostAddressesAsync( address ) ).Length > 0;
-			}
-			catch
-			{
-				return false;
-			}
 		}
-		catch( Exception e ) when( e is InvalidOperationException or ArgumentException )
+		try
+		{
+			return ( await System.Net.Dns.GetHostAddressesAsync( host ) ).Length > 0;
+		}
+		catch
 		{
 			return false;
 		}
@@ -45,13 +49,13 @@ public static class OdooConnection
 	/// <remarks>Opens and immediately closes a plain TCP connection; no HTTP request is sent.</remarks>
 	public static async Task<bool> CorrectOdooPort()
 	{
-		if( OdooDefaults.Instance.OdooAddress is not { } address || !int.TryParse( OdooDefaults.Instance.OdooPort, out int port ) )
+		if( ResolveEndpoint( OdooDefaults.Instance.OdooAddress, OdooDefaults.Instance.OdooPort, OdooDefaults.Instance.OdooUseHttps ) is not var (host, port) )
 			return false;
 		try
 		{
 			using TcpClient client = new();
 			using CancellationTokenSource timeout = new( TimeSpan.FromSeconds( 5 ) );
-			await client.ConnectAsync( address, port, timeout.Token );
+			await client.ConnectAsync( host, port, timeout.Token );
 			return true;
 		}
 		catch( Exception e ) when( e is SocketException or OperationCanceledException )

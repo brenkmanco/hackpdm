@@ -11,6 +11,7 @@
 	xmlns:sys="using:System"
 	xmlns:types="using:HackPDM.Mvvm.Views.Common.Types"
 	xmlns:ui="using:CommunityToolkit.WinUI"
+	Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
 	mc:Ignorable="d">
 
 
@@ -129,14 +130,14 @@
 									<MenuFlyoutItem x:Name="TreeCommit" Text="Commit"
 										Command="{x:Bind ViewModel.CommitDirectoryCommand}" />
 									<MenuFlyoutSeparator />
-									<MenuFlyoutItem x:Name="TreeAnalyze" Text="Analyze" />
+									<MenuFlyoutItem x:Name="TreeAnalyze" IsEnabled="False" Text="Analyze (Soon)" />
 									<MenuFlyoutSeparator />
 									<MenuFlyoutSubItem x:Name="TreeDelete" Text="Delete">
 										<MenuFlyoutItem x:Name="TreeLocalDelete" Text="Local"
 										Command="{x:Bind ViewModel.LocalDeleteDirectoryCommand}" />
 										<MenuFlyoutItem x:Name="TreeLogicalDelete" Text="Logical"
 										Command="{x:Bind ViewModel.LogicalDeleteDirectoryCommand}" />
-										<MenuFlyoutItem x:Name="TreePermanentDelete" Text="Permanent" />
+										<MenuFlyoutItem x:Name="TreePermanentDelete" IsEnabled="False" Text="Permanent (Soon)" />
 									</MenuFlyoutSubItem>
 									<MenuFlyoutSubItem x:Name="TreeUndelete" Text="Restore">
 										<MenuFlyoutItem x:Name="TreeRestoreAll" Text="All"
@@ -169,23 +170,22 @@
 			</SplitView.Pane>
 			<Grid x:Name="EntryContentGrid">
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="Auto" />
 					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="Auto" MinWidth="300" />
+					<ColumnDefinition Width="Auto" />
 				</Grid.ColumnDefinitions>
 				<Grid.RowDefinitions>
 					<RowDefinition Height="*" />
-					<RowDefinition Height="*" MaxHeight="15" />
-					<RowDefinition Height="*" MaxHeight="250" />
-					<RowDefinition Height="*" MaxHeight="30" />
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="296" />
 				</Grid.RowDefinitions>
 				<!--  TabView for file lists  -->
 				<TabView
 					x:Name="ListTabs"
 					Grid.Row="0"
-					Grid.Column="1"
+					Grid.Column="0"
 					Grid.ColumnSpan="2"
-					Margin="0,0,10,0">
+					Margin="0,0,0,4"
+					IsAddTabButtonVisible="False">
 
 					<TabViewItem
 						x:Name="RootEntryList"
@@ -231,7 +231,7 @@
 									<MenuFlyoutSeparator />
 									<MenuFlyoutItem Text="Commit" Command="{x:Bind ViewModel.CommitSelectedCommand}" />
 									<MenuFlyoutSeparator />
-									<MenuFlyoutItem Text="Restore" />
+									<MenuFlyoutItem IsEnabled="False" Text="Restore (Soon)" />
 									<MenuFlyoutItem Text="Upload Icon" Command="{x:Bind ViewModel.UploadIconCommand}" />
 									<MenuFlyoutSeparator />
 									<MenuFlyoutSubItem x:Name="EntryDelete" Text="Delete">
@@ -256,8 +256,9 @@
 				</TabView>
 				<Grid
 					Grid.Row="1"
-					Grid.Column="1"
-					Grid.ColumnSpan="3">
+					Grid.Column="0"
+					Grid.ColumnSpan="2"
+					Margin="0,4,0,6">
 					<Grid.ColumnDefinitions>
 						<ColumnDefinition Width="*" />
 						<ColumnDefinition Width="*" />
@@ -290,11 +291,12 @@
 				<TabView
 					x:Name="VersionTabs"
 					Grid.Row="2"
-					Grid.Column="1"
-					MaxHeight="400"
-					Margin="10,0,0,0"
+					Grid.Column="0"
+					Margin="0,0,12,0"
+					VerticalAlignment="Stretch"
+					IsAddTabButtonVisible="False"
 					SelectionChanged="VersionTabs_SelectionChanged">
-					<TabViewItem x:Name="HistoryTab" Header="History">
+					<TabViewItem x:Name="HistoryTab" Header="History" IsClosable="False">
 
 						<tv:TableView
 							x:Name="OdooHistory"
@@ -332,7 +334,7 @@
 							</tv:TableView.ContextFlyout>
 						</tv:TableView>
 					</TabViewItem>
-					<TabViewItem x:Name="ParentTab" Header="Where Used">
+					<TabViewItem x:Name="ParentTab" Header="Where Used" IsClosable="False">
 						<tv:TableView
 							x:Name="OdooParents"
 							AutoGenerateColumns="False"
@@ -346,7 +348,7 @@
 							</tv:TableView.Columns>
 						</tv:TableView>
 					</TabViewItem>
-					<TabViewItem x:Name="ChildTab" Header="Dependents">
+					<TabViewItem x:Name="ChildTab" Header="Dependents" IsClosable="False">
 						<tv:TableView
 							x:Name="OdooChildren"
 							AutoGenerateColumns="False"
@@ -360,7 +362,7 @@
 							</tv:TableView.Columns>
 						</tv:TableView>
 					</TabViewItem>
-					<TabViewItem x:Name="PropertiesTab" Header="Properties">
+					<TabViewItem x:Name="PropertiesTab" Header="Properties" IsClosable="False">
 						<tv:TableView
 							x:Name="OdooProperties"
 							AutoGenerateColumns="False"
@@ -375,7 +377,7 @@
 							</tv:TableView.Columns>
 						</tv:TableView>
 					</TabViewItem>
-					<TabViewItem x:Name="InfoTab" Header="Info">
+					<TabViewItem x:Name="InfoTab" Header="Info" IsClosable="False">
 						<tv:TableView
 							x:Name="OdooVersionInfoList"
 							AutoGenerateColumns="False"
@@ -400,25 +402,20 @@
 				<!--  Bottom Controls  -->
 				<Grid
 					Grid.Row="2"
-					Grid.RowSpan="2"
-					Grid.Column="3"
-					BorderThickness="4">
-					<Grid.ColumnDefinitions>
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="Auto" MaxWidth="10" />
-					</Grid.ColumnDefinitions>
+					Grid.Column="1"
+					VerticalAlignment="Stretch">
 					<Grid.RowDefinitions>
 						<RowDefinition Height="*" />
-						<RowDefinition Height="40" />
+						<RowDefinition Height="Auto" />
 					</Grid.RowDefinitions>
 					<!--  Image Panel  -->
 
-					<StackPanel
+					<Grid
 						x:Name="ImageSlot"
 						Grid.Row="0"
 						Width="256"
-						Height="256">
+						Height="256"
+						HorizontalAlignment="Right">
 						<ProgressRing
 							x:Name="LoadRing"
 							Width="256"
@@ -450,7 +447,7 @@
 							</Button>
 						</Grid>
 
-					</StackPanel>
+					</Grid>
 					<CommandBar
 						x:Name="MoreTools"
 						Grid.Row="1"
@@ -466,6 +463,8 @@
 							VerticalAlignment="Center"
 							Checked="Anchor_Checked"
 							Icon="Pin"
+							Label="Pin"
+							ToolTipService.ToolTip="Keep Window Always on Top"
 							Unchecked="Anchor_Checked" />
 						<AppBarToggleButton
 							x:Name="ShowInactive"
@@ -477,7 +476,9 @@
 							x:Name="ShowHidden"
 							VerticalAlignment="Center"
 							Icon="View"
-							Label="Ignore Filter" />
+							IsEnabled="False"
+							Label="Ignore Filter"
+							ToolTipService.ToolTip="Not implemented yet" />
 						<AppBarButton
 							x:Name="AdditionalTools"
 							VerticalAlignment="Center"
@@ -488,6 +489,8 @@
 									<MenuFlyoutItem x:Name="OdooRefreshDropdown" Click="Refresh_Click" Text="Refresh View" />
 									<MenuFlyoutItem x:Name="OdooSearchDropdown" Click="Search_Click" Text="Search" />
 									<MenuFlyoutItem x:Name="OdooManageTypesDropdown" Click="ManageTypes_Click" Text="Manage File Types" />
+									<MenuFlyoutSeparator />
+									<MenuFlyoutItem x:Name="StatusWindowDropdown" Click="StatusWindow_Click" Text="Status Log" />
 								</MenuFlyout>
 							</AppBarButton.Flyout>
 						</AppBarButton>

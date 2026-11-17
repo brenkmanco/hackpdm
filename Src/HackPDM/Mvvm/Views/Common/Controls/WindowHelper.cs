@@ -128,12 +128,15 @@ public static partial class WindowHelper
         var (x, y, width, height) = (windowConfig.PositionAndSize.x, windowConfig.PositionAndSize.y, windowConfig.PositionAndSize.z, windowConfig.PositionAndSize.w);
         if (window.AppWindow is { } appWindow)
         {
+            var current = appWindow.Position;
+            var (targetX, targetY, targetW, targetH) = FitRelativeToCurrentPosition(appWindow, current, x, y, width, height);
             // separate Move + Resize, not MoveAndResize: Uno's desktop (Skia) heads leave MoveAndResize
             // unimplemented (it does nothing), while Move and Resize work on every platform
-            appWindow.Move(new Windows.Graphics.PointInt32 { X = x, Y = y });
-            appWindow.Resize(new Windows.Graphics.SizeInt32 { Width = width, Height = height });
+            if (targetX != current.X || targetY != current.Y)
+                appWindow.Move(new Windows.Graphics.PointInt32 { X = targetX, Y = targetY });
+            appWindow.Resize(new Windows.Graphics.SizeInt32 { Width = targetW, Height = targetH });
             // on X11 that resize goes to the window manager's frame, which it ignores once the window is shown
-            X11WindowSize.TryResize(window, width, height);
+            X11WindowSize.TryResize(window, targetW, targetH);
         }
 
 #if WINDOWS
@@ -152,6 +155,41 @@ public static partial class WindowHelper
         titleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(25, tint, tint, tint);
         titleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(50, tint, tint, tint);
 #endif
+    }
+
+    private static (int X, int Y, int Width, int Height) FitRelativeToCurrentPosition(
+        AppWindow appWindow, Windows.Graphics.PointInt32 current, int x, int y, int width, int height)
+    {
+        int targetX = x != 0 ? x : current.X;
+        int targetY = y != 0 ? y : current.Y;
+        int targetW = Math.Max(200, width);
+        int targetH = Math.Max(150, height);
+        try
+        {
+#if WINDOWS
+            if (DisplayArea.GetFromWindowId(appWindow.Id, DisplayAreaFallback.Nearest) is { WorkArea: { Width: > 0, Height: > 0 } work })
+            {
+                targetW = Math.Min(targetW, work.Width);
+                targetH = Math.Min(targetH, work.Height);
+                targetX = Math.Clamp(targetX, work.X, work.X + work.Width - targetW);
+                targetY = Math.Clamp(targetY, work.Y, work.Y + work.Height - targetH);
+            }
+#else
+            _ = appWindow;
+            if (X11WindowSize.TryGetScreenSize(out int screenW, out int screenH))
+            {
+                targetW = Math.Min(targetW, screenW);
+                targetH = Math.Min(targetH, screenH);
+                targetX = Math.Clamp(targetX, 0, Math.Max(0, screenW - targetW));
+                targetY = Math.Clamp(targetY, 0, Math.Max(0, screenH - targetH));
+            }
+#endif
+        }
+        catch
+        {
+            // Display info may not be available in headless environments; keep current position and requested size
+        }
+        return (targetX, targetY, targetW, targetH);
     }
 }
 

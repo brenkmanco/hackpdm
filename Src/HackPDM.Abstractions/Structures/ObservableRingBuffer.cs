@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -12,16 +12,19 @@ namespace HackPDM.Abstractions.Structures;
 /// change notifications so it can be bound to a UI list (for example a status log).
 /// </summary>
 /// <typeparam name="T">The item type.</typeparam>
-public class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, INotifyCollectionChanged, INotifyPropertyChanged
+public class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList, INotifyCollectionChanged, INotifyPropertyChanged
 {
-	private readonly T[] _buffer;
+	private T[] _buffer;
 	private int _head; // Index of the oldest item (public index 0)
 	private int _tail; // Index for the next inserted item
 	private int _count;
 
-	public int Capacity { get; }
+	public int Capacity { get; private set; }
 	public int Count => _count;
 	public bool IsReadOnly => false;
+	bool IList.IsFixedSize => false;
+	bool ICollection.IsSynchronized => false;
+	object ICollection.SyncRoot => this;
 
 	public event NotifyCollectionChangedEventHandler? CollectionChanged;
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -108,6 +111,34 @@ public class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, INotifyCollec
 		OnCollectionChanged( new NotifyCollectionChangedEventArgs( NotifyCollectionChangedAction.Reset ) );
 	}
 
+	/// <summary>Changes the buffer capacity, keeping up to <paramref name="newCapacity"/> newest items.</summary>
+	/// <param name="newCapacity">The new maximum number of items kept.</param>
+	/// <exception cref="System.ArgumentOutOfRangeException"><paramref name="newCapacity"/> is 0 or less.</exception>
+	public void Resize( int newCapacity )
+	{
+		if( newCapacity <= 0 )
+			throw new ArgumentOutOfRangeException( nameof( newCapacity ), "Capacity must be greater than zero." );
+		if( newCapacity == Capacity )
+			return;
+
+		int keep = Math.Min( _count, newCapacity );
+		int startOffset = _count - keep;
+		T[] next = new T[ newCapacity ];
+		for( int i = 0; i < keep; i++ )
+			next[ i ] = this[ startOffset + i ];
+
+		_buffer = next;
+		Capacity = newCapacity;
+		_head = 0;
+		_count = keep;
+		_tail = keep % newCapacity;
+
+		OnPropertyChanged( nameof( Capacity ) );
+		OnPropertyChanged( nameof( Count ) );
+		OnPropertyChanged( "Item[]" );
+		OnCollectionChanged( new NotifyCollectionChangedEventArgs( NotifyCollectionChangedAction.Reset ) );
+	}
+
 	private void ValidateIndex( int index )
 	{
 		if( index < 0 || index >= _count )
@@ -188,6 +219,39 @@ public class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, INotifyCollec
 	/// <param name="index">Ignored.</param>
 	/// <exception cref="System.NotSupportedException">Always.</exception>
 	public void RemoveAt( int index ) => throw new NotSupportedException( "Arbitrary removes are not supported on RingBuffers." );
+
+	object? IList.this[ int index ]
+	{
+		get => this[ index ];
+		set => this[ index ] = (T)value!;
+	}
+
+	int IList.Add( object? value )
+	{
+		Add( (T)value! );
+		return _count - 1;
+	}
+
+	bool IList.Contains( object? value ) => value is T item && Contains( item );
+
+	int IList.IndexOf( object? value ) => value is T item ? IndexOf( item ) : -1;
+
+	void IList.Insert( int index, object? value ) => Insert( index, (T)value! );
+
+	void IList.Remove( object? value ) => throw new NotSupportedException( "Arbitrary removes are not supported on RingBuffers." );
+
+	void IList.RemoveAt( int index ) => RemoveAt( index );
+
+	void ICollection.CopyTo( Array array, int index )
+	{
+		if( array is T[] typed )
+		{
+			CopyTo( typed, index );
+			return;
+		}
+		for( int i = 0; i < _count; i++ )
+			array.SetValue( this[ i ], index + i );
+	}
 
 	#endregion
 }

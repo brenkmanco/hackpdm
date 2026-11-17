@@ -26,6 +26,11 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 	private readonly Action _cancelOperation;
 	private readonly IDialogService _dialogs;
 	private int _refreshQueued;
+	private bool _isInProcess;
+	private bool _autoClose;
+
+	/// <summary>Raised on the UI thread when an operation finishes (<see cref="CompleteProgress"/>).</summary>
+	public event Action? OperationCompleted;
 
 	/// <summary>Creates the window state with a new <see cref="StatusLogSession"/> and subscribes to its messages.</summary>
 	/// <param name="dialogs">Asks the user before closing during an operation.</param>
@@ -35,6 +40,7 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 	{
 		_dialogs = dialogs;
 		_cancelOperation = cancelOperation;
+		_autoClose = HackDefaults.Instance?.SettingsProvider?.Get( "StatusAutoClose", false ) ?? false;
 		Session = new StatusLogSession();
 		WeakReferenceMessenger.Default.Register( this, Session.SessionId );
 	}
@@ -47,12 +53,32 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 	public ObservableRingBuffer<BasicStatusMessage> OError { get; } = new( HistoryLength );
 
 	/// <summary>True from the start of an operation until it completes or is cancelled.</summary>
-	public bool IsInProcess { get; set; }
+	public bool IsInProcess
+	{
+		get { lock( _gate ) return _isInProcess; }
+		set => SetInProcess( value );
+	}
+
+	/// <summary>Whether the status window should close automatically once the operation completes.</summary>
+	public bool AutoClose
+	{
+		get => _autoClose;
+		set
+		{
+			if( !SetProperty( ref _autoClose, value ) )
+				return;
+			HackDefaults.Instance?.SettingsProvider?.Set( "StatusAutoClose", value );
+		}
+	}
 
 	public int MaxCount { get; private set; }
 	public int TotalProcessed { get; private set; }
 	public int SkipCounter { get; private set; }
 	private int ProcessCounter { get; set; }
+	public long DownloadedBytes { get; private set; }
+	public long SessionDownloadedBytes { get; private set; }
+	public long UploadedBytes { get; private set; }
+	public long SessionUploadedBytes { get; private set; }
 
 	public string ProgressText
 	{
@@ -64,6 +90,10 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 	}
 
 	public string SkippedText => $"({SkipCounter}) Skipped";
+	public string DownloadedText => $"Downloaded: {ByteSize.Format( DownloadedBytes )}";
+	public string SessionDownloadedText => $"Session Downloaded: {ByteSize.Format( SessionDownloadedBytes )}";
+	public string UploadedText => $"Uploaded: {ByteSize.Format( UploadedBytes )}";
+	public string SessionUploadedText => $"Session Uploaded: {ByteSize.Format( SessionUploadedBytes )}";
 
 	/// <summary>How many lines each log list keeps before the oldest are dropped.</summary>
 	/// <value>Read from the app settings at startup (10000 by default); setting it saves the new value but does not
@@ -100,8 +130,60 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 		=> UiDispatcher.Post( () => GetCollection( message.Status ).Add( message ) );
 
 	/// <summary>Cancels the running operation.</summary>
-	[RelayCommand]
+	[RelayCommand( CanExecute = nameof( CanCancel ) )]
 	private void Cancel() => _cancelOperation();
+
+	private bool CanCancel() => IsInProcess;
+
+	/// <summary>Updates <see cref="IsInProcess"/> safely from any thread and refreshes UI command state.</summary>
+	public void SetInProcess( bool inProcess )
+	{
+		lock( _gate )
+		{
+			if( _isInProcess == inProcess )
+				return;
+			_isInProcess = inProcess;
+		}
+		UiDispatcher.Post( () =>
+		{
+			OnPropertyChanged( nameof( IsInProcess ) );
+			CancelCommand.NotifyCanExecuteChanged();
+		} );
+	}
+
+	/// <summary>Updates <see cref="HistoryLength"/>, persists it, and resizes the log buffers.</summary>
+	public void SetHistoryLength( int length )
+	{
+		if( length <= 0 )
+			throw new ArgumentOutOfRangeException( nameof( length ), "History length must be positive." );
+		HistoryLength = length;
+		UiDispatcher.Post( () =>
+		{
+			OStatus.Resize( length );
+			OInfo.Resize( length );
+			OError.Resize( length );
+		} );
+	}
+
+	/// <summary>Clears all status log lists and resets counters when idle.</summary>
+	public void ClearLogs()
+	{
+		if( IsInProcess )
+			return;
+		lock( _gate )
+		{
+			( MaxCount, ProcessCounter, SkipCounter, TotalProcessed ) = ( 0, 0, 0, 0 );
+			DownloadedBytes = 0;
+			UploadedBytes = 0;
+		}
+		UiDispatcher.Post( () =>
+		{
+			OStatus.Clear();
+			OInfo.Clear();
+			OError.Clear();
+			NotifyProgressChanged();
+		} );
+	}
 
 	/// <summary>
 	/// Whether the window may close: always when idle; while an operation runs only once the user
@@ -119,7 +201,7 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 		if( close )
 		{
 			_cancelOperation();
-			IsInProcess = false;
+			SetInProcess( false );
 		}
 		return close;
 	}
@@ -130,7 +212,36 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 	/// <param name="total">The number of items the operation will process.</param>
 	/// <remarks>Safe from any thread; the window is refreshed on the UI thread.</remarks>
 	public void ResetProgress( int total )
-		=> Update( () => ( MaxCount, ProcessCounter, SkipCounter, TotalProcessed ) = ( total, 0, 0, 0 ) );
+		=> Update( () =>
+		{
+			( MaxCount, ProcessCounter, SkipCounter, TotalProcessed ) = ( total, 0, 0, 0 );
+			DownloadedBytes = 0;
+			UploadedBytes = 0;
+		} );
+
+	/// <summary>Adds downloaded bytes to the current operation and session totals.</summary>
+	public void AddDownloadedBytes( long bytes )
+	{
+		if( bytes <= 0 )
+			return;
+		Update( () =>
+		{
+			DownloadedBytes += bytes;
+			SessionDownloadedBytes += bytes;
+		} );
+	}
+
+	/// <summary>Adds uploaded bytes to the current operation and session totals.</summary>
+	public void AddUploadedBytes( long bytes )
+	{
+		if( bytes <= 0 )
+			return;
+		Update( () =>
+		{
+			UploadedBytes += bytes;
+			SessionUploadedBytes += bytes;
+		} );
+	}
 
 	/// <summary>Adds to the processed and skipped counters.</summary>
 	/// <param name="processed">How many more items were processed.</param>
@@ -157,12 +268,26 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 	/// <summary>Fills the progress bar and marks the window idle (<see cref="IsInProcess"/> false).</summary>
 	/// <remarks>Safe from any thread; the window is refreshed on the UI thread.</remarks>
 	public void CompleteProgress()
-		=> Update( () =>
+	{
+		bool wasInProcess;
+		lock( _gate )
 		{
+			wasInProcess = _isInProcess;
 			ProcessCounter = Math.Max( MaxCount - SkipCounter, 0 );
 			TotalProcessed = MaxCount;
-			IsInProcess = false;
+			_isInProcess = false;
+		}
+		UiDispatcher.Post( () =>
+		{
+			NotifyProgressChanged();
+			if( wasInProcess )
+			{
+				OnPropertyChanged( nameof( IsInProcess ) );
+				CancelCommand.NotifyCanExecuteChanged();
+				OperationCompleted?.Invoke();
+			}
 		} );
+	}
 
 	private void Update( Action change )
 	{
@@ -174,10 +299,19 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 		UiDispatcher.Post( () =>
 		{
 			Volatile.Write( ref _refreshQueued, 0 );
-			OnPropertyChanged( nameof( MaxCount ) );
-			OnPropertyChanged( nameof( TotalProcessed ) );
-			OnPropertyChanged( nameof( ProgressText ) );
-			OnPropertyChanged( nameof( SkippedText ) );
+			NotifyProgressChanged();
 		} );
+	}
+
+	private void NotifyProgressChanged()
+	{
+		OnPropertyChanged( nameof( MaxCount ) );
+		OnPropertyChanged( nameof( TotalProcessed ) );
+		OnPropertyChanged( nameof( ProgressText ) );
+		OnPropertyChanged( nameof( SkippedText ) );
+		OnPropertyChanged( nameof( DownloadedText ) );
+		OnPropertyChanged( nameof( SessionDownloadedText ) );
+		OnPropertyChanged( nameof( UploadedText ) );
+		OnPropertyChanged( nameof( SessionUploadedText ) );
 	}
 }

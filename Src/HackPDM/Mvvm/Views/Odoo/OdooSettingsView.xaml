@@ -140,7 +140,8 @@
             HorizontalAlignment="Stretch"
             VerticalAlignment="Bottom"
             Command="{x:Bind ViewModel.SubmitCommand}"
-            Content="Submit" />
+            Content="Save"
+            Style="{StaticResource AccentButtonStyle}" />
     </Grid>
 </Page>
 
