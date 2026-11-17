@@ -15,13 +15,26 @@ public static class OdooConnection
 	/// <remarks>Uses <see cref="Ping"/> with its default timeout (5 seconds). Hosts that block ICMP report false even when the server is reachable.</remarks>
 	public static async Task<bool> CorrectOdooAddress()
 	{
+		if( string.IsNullOrWhiteSpace( OdooDefaults.Instance.OdooAddress ) )
+			return false;
+		string address = OdooDefaults.Instance.OdooAddress!;
 		try
 		{
 			using Ping pinger = new();
-			return OdooDefaults.Instance.OdooAddress is { } address
-				&& await pinger.SendPingAsync( address ) is { Status: IPStatus.Success };
+			return await pinger.SendPingAsync( address ) is { Status: IPStatus.Success };
 		}
-		catch( Exception e ) when( e is PingException or InvalidOperationException or ArgumentException )
+		catch( PingException )
+		{
+			try
+			{
+				return ( await System.Net.Dns.GetHostAddressesAsync( address ) ).Length > 0;
+			}
+			catch
+			{
+				return false;
+			}
+		}
+		catch( Exception e ) when( e is InvalidOperationException or ArgumentException )
 		{
 			return false;
 		}
