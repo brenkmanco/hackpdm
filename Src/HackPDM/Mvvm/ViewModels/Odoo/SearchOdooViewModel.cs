@@ -64,6 +64,20 @@ public partial class SearchOdooViewModel : OperationViewModel
 	[ObservableProperty] public partial string FileName { get; set; } = string.Empty;
 	[ObservableProperty] public partial string MaxResults { get; set; } = DefaultMaxResults;
 	[ObservableProperty] public partial OperatorsRow? SelectedComparer { get; set; }
+	[ObservableProperty] public partial bool IsSearching { get; set; }
+	[ObservableProperty]
+	[NotifyPropertyChangedFor( nameof( QuickResultsPlaceholder ) )]
+	public partial string SearchStatusText { get; set; } = string.Empty;
+
+	/// <summary>Placeholder shown on the compact combolist summarizing the latest search result count.</summary>
+	public string QuickResultsPlaceholder => SearchResultsList.Count > 0
+		? $"{SearchResultsList.Count} result(s) — pick to navigate"
+		: string.IsNullOrEmpty( SearchStatusText )
+			? "Search results (empty)"
+			: SearchStatusText;
+
+	/// <summary>Raised when a search finishes (passes matching result count).</summary>
+	public event Action<int>? SearchCompleted;
 
 	[ObservableProperty]
 	[NotifyPropertyChangedFor( nameof( IsLocalOnlyEnabled ) )]
@@ -130,26 +144,40 @@ public partial class SearchOdooViewModel : OperationViewModel
 	[RelayCommand]
 	private async Task SearchAsync()
 	{
-		if( !int.TryParse( MaxResults, out int maxResults ) )
+		if( !int.TryParse( MaxResults, out int maxResults ) || maxResults <= 0 )
 		{
-			await Dialogs.ShowMessageAsync( "Invalid max results value. Please enter a valid number." );
+			await Dialogs.ShowMessageAsync( "Max Results must be a positive whole number.", "Invalid Limit", MessageBoxButtons.OK, MessageBoxIcon.Warning );
 			return;
 		}
 
-		EntrySearchQuery query = new(
-			FileName,
-			SelectedComparer?.OpRepr ?? "=",
-			CheckedOutMe,
-			DeletedRemotely,
-			LocalOnly,
-			maxResults,
-			LocalOnly ? [] : [ .. PropertiesActive ] );
+		IsSearching = true;
+		SearchStatusText = "Searching…";
+		try
+		{
+			EntrySearchQuery query = new(
+				FileName,
+				SelectedComparer?.OpRepr ?? "=",
+				CheckedOutMe,
+				DeletedRemotely,
+				LocalOnly,
+				maxResults,
+				LocalOnly ? [] : [ .. PropertiesActive ] );
 
-		List<SearchRow> rows = await _search.SearchAsync( query );
-		SearchResultsList.ReplaceAll( rows );
-
-		bool remoteSearch = !LocalOnly && !DeletedRemotely;
-		await Dialogs.ShowMessageAsync( remoteSearch && rows.Count == 0 ? "No results found." : "Finished!" );
+			List<SearchRow> rows = await _search.SearchAsync( query );
+			SearchResultsList.ReplaceAll( rows );
+			SearchStatusText = rows.Count switch
+			{
+				0 => "No matching files found.",
+				1 => "1 file found",
+				_ => $"{rows.Count} files found",
+			};
+			OnPropertyChanged( nameof( QuickResultsPlaceholder ) );
+			SearchCompleted?.Invoke( rows.Count );
+		}
+		finally
+		{
+			IsSearching = false;
+		}
 	}
 
 	/// <summary>Clears the form, the property filters and the results.</summary>
@@ -165,7 +193,10 @@ public partial class SearchOdooViewModel : OperationViewModel
 		MaxResults = DefaultMaxResults;
 		SearchResultsList.Clear();
 		PropertiesActive.Clear();
-		SelectedComparer = null;
+		SearchStatusText = string.Empty;
+		OnPropertyChanged( nameof( QuickResultsPlaceholder ) );
+		SelectedComparer = OperatorList.FirstOrDefault( o => o.Operator == Operators.ILike );
+		SelectedPropertyOperator = OperatorList.FirstOrDefault( o => o.Operator == Operators.Equal );
 	}
 
 	/// <summary>Adds the property filter from the property form to the active filters.</summary>
@@ -174,7 +205,7 @@ public partial class SearchOdooViewModel : OperationViewModel
 	{
 		if( SelectedProperty is not { } property || SelectedPropertyOperator is not { } op )
 		{
-			await Dialogs.ShowMessageAsync( "Add Property Name and Comparator" );
+			await Dialogs.ShowMessageAsync( "Select both a Property and a Comparer before adding a filter.", "Missing Filter Field", MessageBoxButtons.OK, MessageBoxIcon.Information );
 			return;
 		}
 
@@ -186,6 +217,7 @@ public partial class SearchOdooViewModel : OperationViewModel
 			Name = property.Name,
 			Text = property.Text,
 		} );
+		PropertyValue = string.Empty;
 	}
 
 	/// <summary>Removes the selected property filters.</summary>

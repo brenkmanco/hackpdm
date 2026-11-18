@@ -9,36 +9,56 @@
     mc:Ignorable="d">
     <ScrollViewer>
         <StackPanel
-            MaxWidth="760"
-            Margin="20"
+            MaxWidth="820"
+            Margin="24,20"
             HorizontalAlignment="Stretch"
             Spacing="16">
+            <StackPanel Spacing="2">
+                <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Configuration" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="Manage Odoo server authentication credentials and local working workspace paths." />
+            </StackPanel>
+
             <Border
-                Padding="12"
+                Padding="16"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="6">
-                <StackPanel Spacing="8">
-                    <TextBlock
-                        FontSize="18"
-                        FontWeight="SemiBold"
-                        Text="Odoo Connection" />
+                <StackPanel Spacing="10">
+                    <StackPanel Spacing="2">
+                        <TextBlock
+                            FontSize="16"
+                            FontWeight="SemiBold"
+                            Text="Odoo Connection" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Endpoint host, database, login account, and SolidWorks Document Manager key." />
+                    </StackPanel>
                     <Frame x:Name="OdooFrame" />
                 </StackPanel>
             </Border>
 
             <Border
-                Padding="12"
+                Padding="16"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="6">
-                <StackPanel Spacing="8">
-                    <TextBlock
-                        FontSize="18"
-                        FontWeight="SemiBold"
-                        Text="Local Folders" />
+                <StackPanel Spacing="10">
+                    <StackPanel Spacing="2">
+                        <TextBlock
+                            FontSize="16"
+                            FontWeight="SemiBold"
+                            Text="Local Folders" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Local vault directory (PWA) and temporary preview/working folder." />
+                    </StackPanel>
                     <Frame x:Name="HackFrame" />
                 </StackPanel>
             </Border>

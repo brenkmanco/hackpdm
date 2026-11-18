@@ -32,6 +32,7 @@
             Text="Odoo Address" />
         <TextBox
             x:Name="txtOdooAddress"
+            PlaceholderText="localhost or pdm.example.com"
             Text="{x:Bind ViewModel.OdooAddress, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="0"
             Grid.Column="1"
@@ -46,6 +47,7 @@
             Text="Odoo Port" />
         <TextBox
             x:Name="txtOdooPort"
+            PlaceholderText="8069 (or 443 for HTTPS)"
             Text="{x:Bind ViewModel.OdooPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="1"
             Grid.Column="1"
@@ -69,6 +71,7 @@
             Text="Odoo DB" />
         <TextBox
             x:Name="txtOdooDb"
+            PlaceholderText="Database name (e.g. odoopdm)"
             Text="{x:Bind ViewModel.OdooDb, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="3"
             Grid.Column="1"
@@ -83,6 +86,7 @@
             Text="Odoo User" />
         <TextBox
             x:Name="txtOdooUser"
+            PlaceholderText="Username or email"
             Text="{x:Bind ViewModel.OdooUser, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="4"
             Grid.Column="1"
@@ -97,6 +101,8 @@
             Text="Password or API key" />
         <PasswordBox
             x:Name="txtOdooPass"
+            KeyDown="TxtOdooPass_KeyDown"
+            PlaceholderText="Password or Odoo API key"
             Password="{x:Bind ViewModel.OdooPass, Mode=TwoWay}"
             Grid.Row="5"
             Grid.Column="1"
@@ -111,6 +117,7 @@
             Text="SW Key" />
         <TextBox
             x:Name="txtSwKey"
+            PlaceholderText="Optional SolidWorks Document Manager key"
             Text="{x:Bind ViewModel.OdooSwKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             Grid.Row="6"
             Grid.Column="1"

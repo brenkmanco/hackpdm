@@ -32,7 +32,7 @@ public class WindowSettings
 	[JsonPropertyName( "Windows" )]
 	public Dictionary<string, WindowConfig> PresetWindowConfig { get; set; } = new ()
 	{
-		{ "ProfileManager",		new () { Title = "Profile Manager",     PositionAndSize = (0, 0, 660, 440) }},
+		{ "ProfileManager",		new () { Title = "Profile Manager",     PositionAndSize = (0, 0, 820, 580) }},
 		{ "OdooSettings",			new () { Title = "Odoo Settings",		PositionAndSize = (0, 0, 620, 520) }},
 		{ "HackSettings",			new () { Title = "Hack Settings",		PositionAndSize = (0, 0, 560, 320) }},
 		{ "DynamicJsonForm",      new () { Title = "Json Editor",			PositionAndSize = (0, 0, 1440, 860) }},
@@ -43,6 +43,7 @@ public class WindowSettings
 		{ nameof(MessageBox),			new () { Title = "Info",				PositionAndSize = (0, 0, 450, 240), WindowKind = AppWindowPresenterKind.CompactOverlay }},
 		{ nameof(StatusDialogView),		new () { Title = "Status",				PositionAndSize = (0, 0, 1180, 700) }},
 		{ nameof(SearchOdooView),		new () { Title = "Search Files",		PositionAndSize = (0, 0, 1160, 760) }},
+		{ nameof(OdooFileTypeManagerView), new () { Title = "File Types & Filters", PositionAndSize = (0, 0, 920, 620) }},
 		{ nameof(ApplicationSettingsView), new () { Title = "Settings",			PositionAndSize = (0, 0, 960, 680) }},
 		{ "AppSettings",				new () { Title = "Settings",				PositionAndSize = (0, 0, 1280, 820) }},
 		{ "TemplateWindow",				new () { Title = "Template Window",		PositionAndSize = (0, 0, 500, 300) }},

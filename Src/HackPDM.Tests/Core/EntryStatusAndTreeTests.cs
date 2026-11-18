@@ -101,4 +101,52 @@ public class DirectoryTreeMergerTests
 		root.SortRecursive();
 		Assert.Equal( [ "A", "b", "c" ], root.Children.Select( c => c.Name ) );
 	}
+
+	[Fact]
+	public void CountsAllFoldersRecursively()
+	{
+		var root = new DirectoryNode( "root", 1 );
+		DirectoryTreeMerger.AddLocalDirectories( root, [ @"root\Library", @"root\Projects\Assembly", @"root\Projects\Parts" ] );
+		Assert.Equal( 5, root.CountRecursive() );
+	}
+
+	[Fact]
+	public void FilterPreservesAncestorsAndMatchingBranches()
+	{
+		var root = new DirectoryNode( "root", 1 );
+		DirectoryTreeMerger.AddLocalDirectories( root, [ @"root\Library", @"root\Projects\Assembly", @"root\Projects\Parts" ] );
+		root.SortRecursive();
+
+		DirectoryNode? filtered = root.Filter( "part" );
+		Assert.NotNull( filtered );
+		Assert.Equal( 3, filtered!.CountRecursive() );
+		Assert.Null( filtered.FindChild( "Library" ) );
+		var projects = filtered.FindChild( "Projects" );
+		Assert.NotNull( projects );
+		Assert.Null( projects!.FindChild( "Assembly" ) );
+		Assert.NotNull( projects.FindChild( "Parts" ) );
+	}
+
+	[Fact]
+	public void FilterIncludesSubtreeWhenParentMatches()
+	{
+		var root = new DirectoryNode( "root", 1 );
+		DirectoryTreeMerger.AddLocalDirectories( root, [ @"root\Library", @"root\Projects\Assembly", @"root\Projects\Parts" ] );
+
+		DirectoryNode? filtered = root.Filter( "projects" );
+		Assert.NotNull( filtered );
+		var projects = filtered!.FindChild( "Projects" );
+		Assert.NotNull( projects );
+		Assert.Equal( 2, projects!.Children.Count );
+		Assert.Null( filtered.FindChild( "Library" ) );
+	}
+
+	[Fact]
+	public void FilterReturnsNullWhenNothingMatches()
+	{
+		var root = new DirectoryNode( "root", 1 );
+		DirectoryTreeMerger.AddLocalDirectories( root, [ @"root\Library", @"root\Projects\Parts" ] );
+		Assert.Null( root.Filter( "nonexistent" ) );
+		Assert.Same( root, root.Filter( "   " ) );
+	}
 }

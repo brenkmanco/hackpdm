@@ -65,6 +65,10 @@
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Text="{x:Bind ViewModel.FormDescription, Mode=OneWay}"
                     TextWrapping="Wrap" />
+                <CheckBox
+                    x:Name="ShowTreeBranchLinesBox"
+                    Content="Show branching guide lines in folder trees"
+                    IsChecked="{x:Bind ViewModel.ShowTreeBranchLines, Mode=TwoWay}" />
                 <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap">
                     <Run Text="Editing the" />
                     <Run FontWeight="SemiBold" Text="{x:Bind ViewModel.EditingThemeText, Mode=OneWay}" />

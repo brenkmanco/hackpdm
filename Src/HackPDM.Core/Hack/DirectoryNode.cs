@@ -31,6 +31,59 @@ public sealed class DirectoryNode( string name, int directoryId = 0 )
 		foreach( var child in Children )
 			child.SortRecursive();
 	}
+
+	/// <summary>Total number of folders in this subtree, including this node.</summary>
+	public int CountRecursive()
+	{
+		int count = 1;
+		foreach( var child in Children )
+			count += child.CountRecursive();
+		return count;
+	}
+
+	/// <summary>
+	/// Returns a filtered copy of this subtree keeping folders matching <paramref name="query"/>
+	/// (case-insensitive) and their ancestor chain, or <see langword="null"/> if nothing matches.
+	/// </summary>
+	public DirectoryNode? Filter( string? query )
+	{
+		string term = query?.Trim() ?? "";
+		if( term.Length == 0 )
+			return this;
+		return FilterNode( this, term, isRoot: true );
+	}
+
+	private static DirectoryNode? FilterNode( DirectoryNode node, string term, bool isRoot )
+	{
+		List<DirectoryNode> matchedChildren = [];
+		foreach( DirectoryNode child in node.Children )
+		{
+			if( FilterNode( child, term, isRoot: false ) is { } kept )
+				matchedChildren.Add( kept );
+		}
+
+		bool selfMatches = node.Name.Contains( term, StringComparison.OrdinalIgnoreCase );
+		if( matchedChildren.Count > 0 )
+		{
+			var copy = CloneShallow( node );
+			copy.Children.AddRange( matchedChildren );
+			return copy;
+		}
+		if( selfMatches && ( !isRoot || node.Children.Count == 0 ) )
+			return CloneSubtree( node );
+		return null;
+	}
+
+	private static DirectoryNode CloneShallow( DirectoryNode node )
+		=> new( node.Name, node.DirectoryId ) { ExistsLocally = node.ExistsLocally };
+
+	private static DirectoryNode CloneSubtree( DirectoryNode node )
+	{
+		var copy = CloneShallow( node );
+		foreach( DirectoryNode child in node.Children )
+			copy.Children.Add( CloneSubtree( child ) );
+		return copy;
+	}
 }
 
 /// <summary>Merges the folders found on disk into the remote directory tree.</summary>
@@ -48,16 +101,30 @@ public static class DirectoryTreeMerger
 	/// <remarks>Children are appended unsorted; call <see cref="DirectoryNode.SortRecursive"/> afterwards if order matters.</remarks>
 	public static void AddLocalDirectories( DirectoryNode root, IEnumerable<string> localTreePaths )
 	{
+		Dictionary<DirectoryNode, Dictionary<string, DirectoryNode>> childMaps = [];
+
+		Dictionary<string, DirectoryNode> ChildrenOf( DirectoryNode parent )
+		{
+			if( childMaps.TryGetValue( parent, out var map ) )
+				return map;
+			map = new Dictionary<string, DirectoryNode>( parent.Children.Count, StringComparer.Ordinal );
+			foreach( DirectoryNode existing in parent.Children )
+				map.TryAdd( existing.Name, existing );
+			childMaps[ parent ] = map;
+			return map;
+		}
+
 		foreach( string path in localTreePaths )
 		{
 			DirectoryNode node = root;
 			foreach( string segment in path.Split( Separators, StringSplitOptions.RemoveEmptyEntries ).Skip( 1 ) )
 			{
-				DirectoryNode? child = node.FindChild( segment );
-				if( child is null )
+				var map = ChildrenOf( node );
+				if( !map.TryGetValue( segment, out DirectoryNode? child ) )
 				{
 					child = new DirectoryNode( segment );
 					node.Children.Add( child );
+					map[ segment ] = child;
 				}
 				child.ExistsLocally = true;
 				node = child;

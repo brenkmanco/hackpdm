@@ -35,6 +35,16 @@ public sealed class FilePickerService : IFilePickerService
 		return string.IsNullOrEmpty( file?.Path ) ? null : file.Path;
 	}
 
+	/// <inheritdoc/>
+	public async Task<string?> PickFolderAsync()
+	{
+		FolderPicker picker = new() { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+		AttachToWindow( picker );
+		picker.FileTypeFilter.Add( "*" );
+		var folder = await picker.PickSingleFolderAsync().AsTask();
+		return string.IsNullOrEmpty( folder?.Path ) ? null : folder.Path;
+	}
+
 	private static void AttachToWindow( object picker )
 	{
 #if WINDOWS

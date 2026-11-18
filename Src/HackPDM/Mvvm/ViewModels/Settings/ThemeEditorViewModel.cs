@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using HackPDM.Core.Theming;
 using HackPDM.Mvvm.Models.Settings;
 using HackPDM.Mvvm.ViewModels.Common;
+using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Mvvm.ViewModels.Settings;
 
@@ -40,12 +41,15 @@ public partial class ThemeColorItem( ThemeColorKey key, bool isGroupStart ) : Ob
 public partial class ThemeEditorViewModel : ObservableObject
 {
 	private readonly IThemeService _theme;
+	private readonly LoginSession? _session;
 
 	/// <summary>Builds the color list from <see cref="ThemeColorCatalog.All"/> and reads the current colors and mode.</summary>
 	/// <param name="theme">Applies, edits and saves the theme.</param>
-	public ThemeEditorViewModel( IThemeService theme )
+	/// <param name="session">Optional session status log shared with the Profile Manager.</param>
+	public ThemeEditorViewModel( IThemeService theme, LoginSession? session = null )
 	{
 		_theme = theme;
+		_session = session;
 		string? previousGroup = null;
 		foreach( var key in ThemeColorCatalog.All )
 		{
@@ -54,6 +58,7 @@ public partial class ThemeEditorViewModel : ObservableObject
 		}
 		SelectedPaletteIndex = PaletteIndex( _theme.Palette );
 		SelectedFormIndex = FormIndex( _theme.Form );
+		ShowTreeBranchLines = _theme.ShowTreeBranchLines;
 		Refresh();
 		SelectedColor = Colors.FirstOrDefault();
 	}
@@ -77,6 +82,8 @@ public partial class ThemeEditorViewModel : ObservableObject
 	[ObservableProperty] public partial int SelectedPaletteIndex { get; set; } = -1;
 
 	[ObservableProperty] public partial int SelectedFormIndex { get; set; } = -1;
+
+	[ObservableProperty] public partial bool ShowTreeBranchLines { get; set; } = true;
 
 	/// <summary>What the selected style looks like.</summary>
 	[ObservableProperty] public partial string FormDescription { get; set; } = "";
@@ -126,6 +133,14 @@ public partial class ThemeEditorViewModel : ObservableObject
 		_theme.SetForm( ThemePresets.Forms[ value ].Name );
 		HasUnsavedChanges = true;
 		Refresh();
+	}
+
+	partial void OnShowTreeBranchLinesChanged( bool value )
+	{
+		if( value == _theme.ShowTreeBranchLines )
+			return;
+		_theme.SetShowTreeBranchLines( value );
+		HasUnsavedChanges = true;
 	}
 
 	partial void OnSelectedColorChanged( ThemeColorItem? value ) => PublishSelected();
@@ -185,13 +200,19 @@ public partial class ThemeEditorViewModel : ObservableObject
 		{
 			_theme.Save();
 			HasUnsavedChanges = false;
+			string paletteTitle = ThemePresets.Palette( _theme.Palette ).Title;
+			string formTitle = ThemePresets.Form( _theme.Form ).Title;
 			StatusText = _theme.NeedsRestart || _theme.StyleNeedsRestart
-				? $"Saved {DateTime.Now:t}. Restart HackPDM to finish switching to {ThemePresets.Palette( _theme.Palette ).Title} / {ThemePresets.Form( _theme.Form ).Title}."
+				? $"Saved {DateTime.Now:t}. Restart HackPDM to finish switching to {paletteTitle} / {formTitle}."
 				: $"Saved {DateTime.Now:t}. Loaded automatically at startup.";
+			_session?.LogInfo( ProfileStatusCategory.Settings, $"Saved theme settings ({paletteTitle} / {formTitle}, branch lines: {(ShowTreeBranchLines ? "shown" : "hidden")})." );
+			if( _theme.NeedsRestart || _theme.StyleNeedsRestart )
+				_session?.LogWarning( ProfileStatusCategory.Settings, $"Restart HackPDM to finish applying {paletteTitle} / {formTitle} theme changes." );
 		}
 		catch( Exception e )
 		{
 			StatusText = $"Save failed: {e.Message}";
+			_session?.LogError( ProfileStatusCategory.Settings, $"Failed to save theme settings to '{SavePath}': {e.Message}" );
 		}
 	}
 
@@ -203,9 +224,11 @@ public partial class ThemeEditorViewModel : ObservableObject
 		HasUnsavedChanges = false;
 		SelectedPaletteIndex = PaletteIndex( _theme.Palette );
 		SelectedFormIndex = FormIndex( _theme.Form );
+		ShowTreeBranchLines = _theme.ShowTreeBranchLines;
 		Refresh();
 		PublishSelected();
 		StatusText = "Unsaved changes discarded.";
+		_session?.LogInfo( ProfileStatusCategory.Settings, "Reverted unsaved theme settings changes." );
 	}
 
 	private void Refresh( ThemeColorItem? only = null )

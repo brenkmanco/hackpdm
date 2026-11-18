@@ -86,12 +86,16 @@ public class OdooDefaults : IOdooDefaults
     /// <summary>Logs in when needed, then loads the server's reference data into <see cref="Lookups"/>; complete when this returns.</summary>
     /// <remarks>Individual lookups that fail are left empty by <see cref="OdooLookupCache.LoadAsync"/> rather than failing the whole call.</remarks>
     /// <exception cref="Exception">The login failed; the message includes <see cref="LoginError"/>.</exception>
-    public async Task InitializeAsync()
+    public Task InitializeAsync() => InitializeAsync( progress: null );
+
+    /// <summary>Logs in when needed and loads reference data while reporting loading stage messages.</summary>
+    public async Task InitializeAsync( IProgress<string>? progress )
     {
+        progress?.Report( "Signing in to Odoo…" );
         await InitializeLoginAsync();
         if( OdooId is 0 )
             throw new Exception( $"login failed: {LoginError ?? "no user id"}" );
-        Lookups = await OdooLookupCache.LoadAsync();
+        Lookups = await OdooLookupCache.LoadAsync( progress );
     }
     #endregion
 

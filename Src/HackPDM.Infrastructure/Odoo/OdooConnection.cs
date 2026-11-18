@@ -11,7 +11,7 @@ public static class OdooConnection
 	public static int CorrectUserId() => OdooDefaults.Instance.OdooId is 0 ? 0 : 1;
 
 	/// <summary>Extracts the target host and port from the configured Odoo settings (including full URLs and default HTTPS/HTTP ports).</summary>
-	internal static (string Host, int Port)? ResolveEndpoint( string? address, string? portText, bool useHttps )
+	public static (string Host, int Port)? ResolveEndpoint( string? address, string? portText, bool useHttps )
 	{
 		string url = OdooEndpoint.BuildUrl( address, portText, useHttps );
 		if( string.IsNullOrEmpty( url ) || !Uri.TryCreate( url, UriKind.Absolute, out Uri? uri ) || string.IsNullOrEmpty( uri.Host ) || uri.Port <= 0 )

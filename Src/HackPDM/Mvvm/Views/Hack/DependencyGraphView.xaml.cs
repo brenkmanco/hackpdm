@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +16,7 @@ using HackPDM.Domain.Representation;
 using HackPDM.Mvvm.Models.Common;
 using HackPDM.Mvvm.Models.Hack;
 using HackPDM.Mvvm.Views.Common.Controls;
+using HackPDM.Mvvm.Views.Common.Settings;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Shell;
 
@@ -27,6 +29,7 @@ using Microsoft.UI.Xaml.Navigation;
 using Windows.System;
 
 using DetailRow = HackPDM.Mvvm.Models.Hack.EntryRow;
+using TreeData = HackPDM.Mvvm.Views.Common.Types.TreeData;
 
 namespace HackPDM.Mvvm.Views.Hack;
 
@@ -63,6 +66,8 @@ public sealed partial class DependencyGraphView : Page
 	private const double DetailPanelSpace = 336;
 
 	// the file manager's detail tables, for the clicked file
+	public ObservableCollection<TreeData> BreadcrumbPath { get; } = [];
+	private TreeData? _selectedFolderData;
 	public RangeObservableCollection<HistoryRow> HistoryRows { get; } = [];
 	public RangeObservableCollection<ParentRow> ParentRows { get; } = [];
 	public RangeObservableCollection<ChildrenRow> ChildRows { get; } = [];
@@ -73,9 +78,26 @@ public sealed partial class DependencyGraphView : Page
 	{
 		InitializeComponent();
 		Graph.Theme = AppComposition.Theme.GraphTheme;
+		GraphBranchLinesToggle.IsChecked = AppComposition.Theme.ShowTreeBranchLines;
+		ApplyGraphPaneLayout();
 		AppComposition.Theme.ThemeChanged += OnThemeChanged;
 		Unloaded += ( _, _ ) => AppComposition.Theme.ThemeChanged -= OnThemeChanged;
-		FolderTree.SelectionChanged += ( _, _ ) => _ = LoadEntriesAsync();
+		FolderTree.SelectionChanged += ( _, _ ) =>
+		{
+			SyncFolderSelection();
+			_ = LoadEntriesAsync();
+		};
+		FolderTree.Expanding += ( _, e ) =>
+		{
+			e.Node?.LinkedData.NotifyBranchChanged();
+			TreeBranchGuides.RefreshTree( FolderTree, selectedNode: FolderTree.SelectedNode, updateSelection: true );
+		};
+		FolderTree.Collapsed += ( _, e ) =>
+		{
+			e.Node?.LinkedData.NotifyBranchChanged();
+			TreeBranchGuides.RefreshTree( FolderTree, selectedNode: FolderTree.SelectedNode, updateSelection: true );
+		};
+		FolderBreadcrumb.ItemClicked += FolderBreadcrumb_ItemClicked;
 		EntryList.SelectionChanged += ( _, _ ) => OnEntrySelectionChanged();
 		SelectAll.Checked += ( _, _ ) => SetAllSelected( true );
 		SelectAll.Unchecked += ( _, _ ) => SetAllSelected( false );
@@ -129,9 +151,9 @@ public sealed partial class DependencyGraphView : Page
 	/// <summary>Opens <paramref name="node"/>'s folder (the smoke tests).</summary>
 	internal Task OpenFolderAsync( TreeViewNode node )
 	{
-		for( TreeViewNode? open = node.Parent; open is not null; open = open.Parent )
-			open.IsExpanded = true;
+		node.LinkedData.EnsureVisible( FolderTree );
 		FolderTree.SelectedNode = node;
+		SyncFolderSelection();
 		return PendingLoad = LoadEntriesAsync();
 	}
 
@@ -175,7 +197,9 @@ public sealed partial class DependencyGraphView : Page
 
 	private async Task LoadTreeAfterLayoutAsync()
 	{
-		await Task.Delay( AppComposition.FileManagerState.Tree is null ? 500 : 50 );
+		TreeLoadingOverlay.Visibility = Visibility.Visible;
+		TreeBusyRing.IsActive = true;
+		await Task.Delay( AppComposition.FileManagerState.Tree is null ? 30 : 16 );
 		await LoadTreeAsync();
 	}
 
@@ -191,23 +215,33 @@ public sealed partial class DependencyGraphView : Page
 
 	private async Task LoadTreeAsync()
 	{
-		DirectoryNode? root = AppComposition.FileManagerState.Tree ?? await new DirectoryTreeService().LoadAsync();
-		if( root is null )
+		try
 		{
-			Status.Text = "The folder tree could not be read from the server.";
-			return;
+			TreeLoadingOverlay.Visibility = Visibility.Visible;
+			TreeBusyRing.IsActive = true;
+			DirectoryNode? root = AppComposition.FileManagerState.Tree ?? await new DirectoryTreeService().LoadAsync();
+			if( root is null )
+			{
+				Status.Text = "The folder tree could not be read from the server.";
+				return;
+			}
+			AppComposition.FileManagerState.Tree ??= root;
+			DirectoryTreeBuilder.Build( FolderTree, root );
+			TreeViewNode first = FolderTree.RootNodes[ 0 ];
+			first.LinkedData.IsExpanded = true;
+			// start in the folder the file manager has open
+			string? path = AppComposition.FileManagerState.SelectedPath;
+			FolderTree.SelectedNode = ( path is null ? null : FolderTree.FindTreeNode( path )?.Node ) ?? first;
+			if( FolderTree.SelectedNode is { } node )
+				node.LinkedData.EnsureVisible( FolderTree );
+			SyncFolderSelection();
+			await LoadEntriesAsync();
 		}
-		AppComposition.FileManagerState.Tree ??= root;
-		DirectoryTreeBuilder.Build( FolderTree, root );
-		TreeViewNode first = FolderTree.RootNodes[ 0 ];
-		first.IsExpanded = true;
-		// start in the folder the file manager has open
-		string? path = AppComposition.FileManagerState.SelectedPath;
-		FolderTree.SelectedNode = ( path is null ? null : FolderTree.FindTreeNode( path )?.Node ) ?? first;
-		if( FolderTree.SelectedNode is { } node )
-			for( TreeViewNode? open = node.Parent; open is not null; open = open.Parent )
-				open.IsExpanded = true;
-		await LoadEntriesAsync();
+		finally
+		{
+			TreeBusyRing.IsActive = false;
+			TreeLoadingOverlay.Visibility = Visibility.Collapsed;
+		}
 	}
 
 	private async Task LoadEntriesAsync()
@@ -229,6 +263,9 @@ public sealed partial class DependencyGraphView : Page
 		}
 
 		Busy.IsActive = true;
+		EntryBusyBar.Visibility = Visibility.Visible;
+		EntryBusyOverlay.Visibility = Visibility.Visible;
+		EntryBusyRing.IsActive = true;
 		try
 		{
 			Result<IReadOnlyList<RemoteEntryDto>> rows = await HpDirectory.GetEntriesAsync( id );
@@ -247,7 +284,12 @@ public sealed partial class DependencyGraphView : Page
 		finally
 		{
 			if( _entriesLoad == load )
+			{
 				Busy.IsActive = false;
+				EntryBusyRing.IsActive = false;
+				EntryBusyBar.Visibility = Visibility.Collapsed;
+				EntryBusyOverlay.Visibility = Visibility.Collapsed;
+			}
 		}
 	}
 
@@ -310,6 +352,8 @@ public sealed partial class DependencyGraphView : Page
 			if( debounce )
 				await Task.Delay( 150, load.Token );
 			Busy.IsActive = true;
+			GraphBusyOverlay.Visibility = roots.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+			GraphBusyRing.IsActive = roots.Count > 0;
 			Result<DependencyGraph> graph = await DependencyGraphLoader.LoadAsync( roots, direction, load.Token );
 			if( load.IsCancellationRequested )
 				return;
@@ -336,7 +380,11 @@ public sealed partial class DependencyGraphView : Page
 		finally
 		{
 			if( _graphLoad == load )
+			{
 				Busy.IsActive = false;
+				GraphBusyRing.IsActive = false;
+				GraphBusyOverlay.Visibility = Visibility.Collapsed;
+			}
 		}
 	}
 
@@ -367,6 +415,11 @@ public sealed partial class DependencyGraphView : Page
 	/// <summary>The app's theme changed (Settings → Theme): redraw the graph in its colors and shapes, no server call.</summary>
 	private void OnThemeChanged()
 	{
+		bool show = AppComposition.Theme.ShowTreeBranchLines;
+		if( GraphBranchLinesToggle.IsChecked != show )
+			GraphBranchLinesToggle.IsChecked = show;
+		TreeBranchGuides.RefreshTree( FolderTree, showLines: show, selectedNode: FolderTree.SelectedNode, updateSelection: true );
+
 		GraphTheme theme = AppComposition.Theme.GraphTheme;
 		if( theme == Graph.Theme )
 			return;
@@ -556,5 +609,86 @@ public sealed partial class DependencyGraphView : Page
 		string[] parts = node.Path.Split( '\\', StringSplitOptions.RemoveEmptyEntries );
 		// the path starts with the root folder and ends with the file
 		return parts.Length < 2 ? Task.CompletedTask : AppComposition.LocateInFileManagerAsync( parts[ 1..^1 ], node.Name );
+	}
+
+	private void SyncFolderSelection()
+	{
+		TreeViewNode? node = FolderTree.SelectedNode;
+		if( _selectedFolderData is not null && !ReferenceEquals( _selectedFolderData.Node, node ) )
+			_selectedFolderData.IsSelectedInTree = false;
+		_selectedFolderData = node?.LinkedData;
+		if( _selectedFolderData is not null )
+			_selectedFolderData.IsSelectedInTree = true;
+		node?.UpdateBreadCrumbCollection( BreadcrumbPath );
+		TreeBranchGuides.RefreshTree( FolderTree, showLines: AppComposition.Theme.ShowTreeBranchLines, selectedNode: node, updateSelection: true );
+	}
+
+	private void FolderBreadcrumb_ItemClicked( BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args )
+	{
+		if( args.Item is not TreeData { Node: { } node } data )
+			return;
+		FolderTree.SelectedNode = node;
+		data.EnsureVisible( FolderTree );
+		SyncFolderSelection();
+	}
+
+	private void BranchLinesToggle_Click( object sender, RoutedEventArgs e )
+	{
+		bool show = GraphBranchLinesToggle.IsChecked == true;
+		AppComposition.Theme.SetShowTreeBranchLines( show );
+		TreeBranchGuides.RefreshTree( FolderTree, showLines: show, selectedNode: FolderTree.SelectedNode, updateSelection: true );
+	}
+
+	private void ExpandAllFolders_Click( object sender, RoutedEventArgs e )
+	{
+		FolderTree.SetAllExpanded( true );
+		TreeBranchGuides.RefreshTree( FolderTree, selectedNode: FolderTree.SelectedNode, updateSelection: true );
+	}
+
+	private void CollapseAllFolders_Click( object sender, RoutedEventArgs e )
+	{
+		FolderTree.SetAllExpanded( false );
+		TreeBranchGuides.RefreshTree( FolderTree, selectedNode: FolderTree.SelectedNode, updateSelection: true );
+	}
+
+	private void ApplyGraphPaneLayout()
+	{
+		var layout = UIStorage.WorkspaceLayout;
+		bool showFolders = ToggleFoldersPaneBtn.IsChecked == true;
+		bool showFiles = ToggleFilesPaneBtn.IsChecked == true;
+
+		GraphFoldersCard.Visibility = showFolders ? Visibility.Visible : Visibility.Collapsed;
+		GraphFoldersSplitter.Visibility = showFolders ? Visibility.Visible : Visibility.Collapsed;
+		GraphFoldersCol.Width = showFolders ? new GridLength( Math.Clamp( layout.GraphFoldersWidth, 180, 480 ) ) : new GridLength( 0 );
+
+		GraphFilesCard.Visibility = showFiles ? Visibility.Visible : Visibility.Collapsed;
+		GraphFilesSplitter.Visibility = showFiles ? Visibility.Visible : Visibility.Collapsed;
+		GraphFilesCol.Width = showFiles ? new GridLength( Math.Clamp( layout.GraphFilesWidth, 180, 480 ) ) : new GridLength( 0 );
+	}
+
+	private void ToggleSidePanes_Click( object sender, RoutedEventArgs e )
+		=> ApplyGraphPaneLayout();
+
+	private void GraphFoldersSplitter_DragDelta( double delta )
+	{
+		double next = Math.Clamp( GraphFoldersCol.Width.Value + delta, 180, 480 );
+		GraphFoldersCol.Width = new GridLength( next );
+		UIStorage.WorkspaceLayout.GraphFoldersWidth = next;
+	}
+
+	private void GraphFilesSplitter_DragDelta( double delta )
+	{
+		double next = Math.Clamp( GraphFilesCol.Width.Value + delta, 180, 480 );
+		GraphFilesCol.Width = new GridLength( next );
+		UIStorage.WorkspaceLayout.GraphFilesWidth = next;
+	}
+
+	private void GraphSplitter_DragCompleted()
+	{
+		try
+		{
+			AppConfigStore.Save( UIStorage.GlobalData );
+		}
+		catch { }
 	}
 }

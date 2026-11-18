@@ -35,6 +35,9 @@ public sealed class ThemeSettings
 	[JsonConverter( typeof( JsonStringEnumConverter<FormName> ) )]
 	public FormName Form { get; set; } = FormName.Default;
 
+	/// <summary>Whether folder trees draw branching guide lines connecting parent and child folders.</summary>
+	public bool ShowTreeBranchLines { get; set; } = true;
+
 	/// <summary>The color preset in use: <see cref="Palette"/>, or for older settings Light when the mode was Light, else Dark.</summary>
 	[JsonIgnore]
 	public PaletteName EffectivePalette => Palette ?? ( Mode == AppThemeMode.Light ? PaletteName.Light : PaletteName.Dark );

@@ -84,6 +84,9 @@ public sealed class ThemeService : IThemeService
 	public GraphTheme GraphTheme => GraphThemes.From( Palette, Form );
 
 	/// <inheritdoc/>
+	public bool ShowTreeBranchLines => _settings.ShowTreeBranchLines;
+
+	/// <inheritdoc/>
 	public AppThemeMode Mode => _settings.Mode;
 
 	/// <inheritdoc/>
@@ -227,6 +230,15 @@ public sealed class ThemeService : IThemeService
 			return;
 		_settings.Form = form;
 		UpdatePanelBrush();
+		ThemeChanged?.Invoke();
+	}
+
+	/// <inheritdoc/>
+	public void SetShowTreeBranchLines( bool show )
+	{
+		if( _settings.ShowTreeBranchLines == show )
+			return;
+		_settings.ShowTreeBranchLines = show;
 		ThemeChanged?.Invoke();
 	}
 

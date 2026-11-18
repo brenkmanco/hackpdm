@@ -21,4 +21,7 @@ public class GlobalSerializedData
 
 	[JsonPropertyName( "Theme" )]
 	public ThemeSettings Theme { get; set; } = new();
+
+	[JsonPropertyName( "WorkspaceLayout" )]
+	public WorkspaceLayoutSettings WorkspaceLayout { get; set; } = new();
 }

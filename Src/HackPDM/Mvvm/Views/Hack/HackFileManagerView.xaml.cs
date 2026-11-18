@@ -12,6 +12,7 @@ using HackPDM.Core;
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Mvvm.Models.Hack;
+using HackPDM.Mvvm.Models.Settings;
 using HackPDM.Mvvm.Views.Dialogs;
 using HackPDM.Mvvm.Views.Common.Controls;
 using HackPDM.Mvvm.Views.Common.Settings;
@@ -80,6 +81,25 @@ public sealed partial class HackFileManagerView : Page
 	private readonly ObservableCollection<TreeData> _treeItems = [];
 	private CancellationTokenSource _treeSelectionCancellation = new();
 	private PipWindow? _pipWindow;
+	private DirectoryNode? _fullTreeRoot;
+	private int _totalTreeFolderCount;
+	private bool _isFilteringTree;
+	private TreeData? _selectedTreeData;
+	private int _copyFeedbackVersion;
+
+	private ColumnDefinition? _foldersCol;
+	private ColumnDefinition? _inspectorRightCol;
+	private RowDefinition? _inspectorBottomRow;
+	private ColumnDefinition? _previewBottomCol;
+	private RowDefinition? _previewRightRow;
+
+	private string? _draggingPaneTag;
+	private bool _isDraggingGrip;
+	private string? _activeDropZone;
+
+	private static readonly SolidColorBrush SyncedDotBrush = new( Windows.UI.Color.FromArgb( 255, 0xC6, 0x97, 0x49 ) );
+	private static readonly SolidColorBrush LocalDotBrush = new( Windows.UI.Color.FromArgb( 255, 0x3F, 0xB9, 0x50 ) );
+	private static readonly SolidColorBrush RemoteDotBrush = new( Windows.UI.Color.FromArgb( 255, 0x58, 0xB4, 0xFF ) );
 
 	#region Construction and loading
 
@@ -116,6 +136,7 @@ public sealed partial class HackFileManagerView : Page
 		ViewModel.LocateRequested -= OnLocateRequestedAsync;
 		ViewModel.FolderChanged -= OnFolderChanged;
 		ViewModel.RowReplaced -= OnRowReplaced;
+		AppComposition.Theme.ThemeChanged -= OnThemeChanged;
 		ViewModel.Dispose();
 		_pipWindow?.Close();
 	}
@@ -144,19 +165,38 @@ public sealed partial class HackFileManagerView : Page
 		ViewModel.RowReplaced += OnRowReplaced;
 
 		OdooDirectoryTree.SelectionChanged += OdooDirectoryTree_SelectionChanged;
-		OdooDirectoryTree.Expanding += ( _, e ) => ViewModel.SetExpanded( e.Node?.LinkedData.FullPath, true );
-		OdooDirectoryTree.Collapsed += ( _, e ) => ViewModel.SetExpanded( e.Node?.LinkedData.FullPath, false );
+		OdooDirectoryTree.Expanding += ( _, e ) =>
+		{
+			if( !_isFilteringTree )
+				ViewModel.SetExpanded( e.Node?.LinkedData.FullPath, true );
+			e.Node?.LinkedData.NotifyBranchChanged();
+			TreeBranchGuides.RefreshTree( OdooDirectoryTree, selectedNode: OdooDirectoryTree.SelectedNode, updateSelection: true );
+		};
+		OdooDirectoryTree.Collapsed += ( _, e ) =>
+		{
+			if( !_isFilteringTree )
+				ViewModel.SetExpanded( e.Node?.LinkedData.FullPath, false );
+			e.Node?.LinkedData.NotifyBranchChanged();
+			TreeBranchGuides.RefreshTree( OdooDirectoryTree, selectedNode: OdooDirectoryTree.SelectedNode, updateSelection: true );
+		};
 		OdooDirectoryTree.RightTapped += OdooDirectoryTree_RightTapped;
 		OdooDirectoryBreadcrumb.ItemClicked += OdooDirectoryBreadcrumb_ItemClicked;
+		BranchLinesToggleButton.IsChecked = AppComposition.Theme.ShowTreeBranchLines;
+		AppComposition.Theme.ThemeChanged += OnThemeChanged;
+		TreeBranchGuides.RefreshTree( OdooDirectoryTree, showLines: AppComposition.Theme.ShowTreeBranchLines );
+		ApplyWorkspaceLayout();
 		OdooEntryList.SelectionChanged += OdooEntryList_SelectionChanged;
 		OdooEntryList.Sorting += OdooEntryList_Sorting;
 		OdooEntryList.DoubleTapped += ( _, _ ) => ViewModel.OpenSelectedCommand.Execute( null );
+		HackChangesList.DoubleTapped += ( _, _ ) => FocusEntryFromChanges( HackChangesList.SelectedItem as EntryRow );
+		OdooChangesList.DoubleTapped += ( _, _ ) => FocusEntryFromChanges( OdooChangesList.SelectedItem as EntryRow );
 		OdooHistory.SelectionChanged += OdooHistory_SelectionChanged;
 		OdooHistory.DoubleTapped += ( _, _ ) => ViewModel.DownloadHistoryWithDependenciesCommand.Execute( null );
 		OdooParents.SelectionChanged += ( _, e ) => PreviewVersion( ( e.AddedItems.FirstOrDefault() as Domain.Representation.ParentRow )?.Version );
 		OdooParents.DoubleTapped += OdooParents_DoubleTapped;
 		OdooChildren.SelectionChanged += ( _, e ) => PreviewVersion( ( e.AddedItems.FirstOrDefault() as Domain.Representation.ChildrenRow )?.Version );
 		OdooChildren.DoubleTapped += OdooChildren_DoubleTapped;
+		KeyDown += HackFileManagerView_KeyDown;
 
 		// submenu headers can't hold a command, so double-tapping one runs its default action
 		EntryOpen.DoubleTapped += ( _, _ ) => ViewModel.OpenSelectedCommand.Execute( null );
@@ -173,14 +213,15 @@ public sealed partial class HackFileManagerView : Page
 		};
 
 		// a search made while this page was not shown waits until the tree is up
+		ViewModel.IsTreeLoading = true;
 		var pendingLocate = ViewModel.Activate();
 		_ = LoadTreeAfterLayoutAsync( pendingLocate );
 	}
 
 	private async Task LoadTreeAfterLayoutAsync( (IReadOnlyList<string> Segments, string? FileName)? pendingLocate )
 	{
-		// let the page render before the tree is built (fetching it is slow; the kept one is not)
-		await Task.Delay( ViewModel.HasKeptTree ? 50 : 500 );
+		// Yield briefly so the page entrance transition starts cleanly before building the tree
+		await Task.Delay( ViewModel.HasKeptTree ? 16 : 30 );
 		if( _left )
 			return;
 		await ViewModel.LoadDirectoryTreeAsync();
@@ -213,7 +254,18 @@ public sealed partial class HackFileManagerView : Page
 			// a settings file from before a column existed gets that column's default
 			OdooEntryColumn? saved = ( UIStorage.Columns.GetValueOrDefault( property ) ?? defaults.GetValueOrDefault( property ) )?.Column;
 			column.Header = saved?.Header ?? property;
-			column.Width = saved?.AutoSize is true ? GridLength.Auto : new GridLength( saved?.Width is > 0 ? saved.Width : 100 );
+			if( saved?.AutoSize is true )
+			{
+				column.MinWidth = saved.Width > 0 ? saved.Width : 180;
+				column.Width = new GridLength( 1, GridUnitType.Star );
+			}
+			else
+			{
+				double width = saved?.Width is > 0 ? saved.Width : 100;
+				if( property is nameof( EntryRow.LocalDate ) or nameof( EntryRow.RemoteDate ) && width <= 100 )
+					width = 155;
+				column.Width = new GridLength( width );
+			}
 		}
 
 		foreach( string field in EntryRowKeys.Names )
@@ -234,12 +286,48 @@ public sealed partial class HackFileManagerView : Page
 	/// <summary>Rebuilds the tree nodes and reselects the directory that was selected before.</summary>
 	private Task OnTreeLoadedAsync( DirectoryNode root )
 	{
-		DirectoryTreeBuilder.Build( OdooDirectoryTree, root );
+		_fullTreeRoot = root;
+		_totalTreeFolderCount = root.CountRecursive();
+		RebuildDisplayedTree( FolderFilterBox.Text );
+		return Task.CompletedTask;
+	}
 
-		// the folders that were open stay open
-		foreach( string path in ViewModel.ExpandedPaths.ToList() )
-			if( OdooDirectoryTree.FindTreeNode( path ) is { Node: { } open } )
-				open.IsExpanded = true;
+	private void RebuildDisplayedTree( string? filterText )
+	{
+		if( _fullTreeRoot is null )
+			return;
+
+		string query = filterText?.Trim() ?? "";
+		_isFilteringTree = query.Length > 0;
+		DirectoryNode? displayRoot = _isFilteringTree ? _fullTreeRoot.Filter( query ) : _fullTreeRoot;
+
+		if( displayRoot is null )
+		{
+			OdooDirectoryTree.RootNodes.Clear();
+			EmptyTreeFilterPanel.Visibility = Visibility.Visible;
+			TreeSummaryText.Text = $"0 / {_totalTreeFolderCount} folders matching \"{query}\"";
+			return;
+		}
+
+		EmptyTreeFilterPanel.Visibility = Visibility.Collapsed;
+		DirectoryTreeBuilder.Build( OdooDirectoryTree, displayRoot );
+
+		if( _isFilteringTree )
+		{
+			OdooDirectoryTree.SetAllExpanded( true );
+		}
+		else if( ViewModel.ExpandedPaths.Count == 0 && OdooDirectoryTree.RootNodes.FirstOrDefault() is { } firstRoot )
+		{
+			firstRoot.LinkedData.IsExpanded = true;
+			ViewModel.SetExpanded( firstRoot.LinkedData.FullPath, true );
+		}
+		else
+		{
+			// the folders that were open stay open
+			foreach( string path in ViewModel.ExpandedPaths.ToList() )
+				if( OdooDirectoryTree.FindTreeNode( path ) is { Node: { } open } )
+					open.LinkedData.IsExpanded = true;
+		}
 
 		if( OdooDirectoryTree.FindTreeNode( ViewModel.LastSelectedNodePath ?? "" ) is { Node: { } node } data )
 		{
@@ -247,7 +335,15 @@ public sealed partial class HackFileManagerView : Page
 			OdooDirectoryTree.SelectedNode = node;
 			SelectDirectory( node );
 		}
-		return Task.CompletedTask;
+		else if( !_isFilteringTree )
+		{
+			TreeBranchGuides.RefreshTree( OdooDirectoryTree, showLines: AppComposition.Theme.ShowTreeBranchLines, selectedNode: OdooDirectoryTree.SelectedNode, updateSelection: true );
+		}
+
+		int shownCount = displayRoot.CountRecursive();
+		TreeSummaryText.Text = _isFilteringTree
+			? $"{shownCount} / {_totalTreeFolderCount} folders matching \"{query}\""
+			: $"{_totalTreeFolderCount} folder{(_totalTreeFolderCount == 1 ? "" : "s")}";
 	}
 
 	private async Task ReloadEntriesAsync()
@@ -287,7 +383,10 @@ public sealed partial class HackFileManagerView : Page
 			Debug.WriteLine( $"preview failed to load: {ex.Message}" );
 		}
 		if( request == _previewRequest )
+		{
 			OdooEntryImage.Source = image;
+			NoPreviewPanel.Visibility = image is null ? Visibility.Visible : Visibility.Collapsed;
+		}
 	}
 
 	/// <summary>A row was rebuilt from its changed file: if it was selected, the new one is (which also refreshes the details and preview).</summary>
@@ -352,6 +451,9 @@ public sealed partial class HackFileManagerView : Page
 	/// <summary>How many change badges this page has shown (the smoke tests read it).</summary>
 	internal int BadgesShown { get; private set; }
 
+	/// <summary>Switches between the Entries and Changes tabs (for smoke visual checks).</summary>
+	internal void ShowTopTab( bool changes ) => ListTabs.SelectedItem = changes ? ChangesTab : RootEntryList;
+
 	/// <summary>The node of <paramref name="treePath"/>, or of its nearest parent that is in the tree and not inside a collapsed folder.</summary>
 	private TreeViewNode? VisibleNodeFor( string treePath )
 	{
@@ -383,10 +485,170 @@ public sealed partial class HackFileManagerView : Page
 	private void SelectDirectory( TreeViewNode? node )
 	{
 		LastSelectedNode = node;
+		if( _selectedTreeData is not null && !ReferenceEquals( _selectedTreeData.Node, node ) )
+			_selectedTreeData.IsSelectedInTree = false;
+		_selectedTreeData = node?.LinkedData;
+		if( _selectedTreeData is not null )
+			_selectedTreeData.IsSelectedInTree = true;
+
 		ViewModel.SelectedDirectory = node?.LinkedData is { } data
 			? new DirectoryRef( data.Name ?? "", data.DirectoryId ?? 0, data.FullPath ?? data.Name ?? "", data.IsRemoteOnly is true )
 			: null;
 		node?.UpdateBreadCrumbCollection( BreadcrumbPath );
+		UpdateBreadcrumbBarControls( node );
+		TreeBranchGuides.RefreshTree( OdooDirectoryTree, showLines: AppComposition.Theme.ShowTreeBranchLines, selectedNode: node, updateSelection: true );
+	}
+
+	private void UpdateBreadcrumbBarControls( TreeViewNode? node )
+	{
+		NavigateUpButton.IsEnabled = node?.Parent is { Depth: >= 0 };
+		CopyPathButton.IsEnabled = node is not null;
+
+		int childCount = node?.Children.Count ?? 0;
+		if( childCount > 0 )
+		{
+			SubfolderMenuLabel.Text = $"{childCount} subfolder{(childCount == 1 ? "" : "s")}";
+			SubfolderMenuButton.Visibility = Visibility.Visible;
+		}
+		else
+		{
+			SubfolderMenuButton.Visibility = Visibility.Collapsed;
+		}
+
+		if( node?.LinkedData is { } data )
+		{
+			CurrentFolderOriginText.Text = data.OriginLabel;
+			CurrentFolderOriginDot.Fill = data.Origin switch
+			{
+				FolderOriginKind.LocalOnly => LocalDotBrush,
+				FolderOriginKind.RemoteOnly => RemoteDotBrush,
+				_ => SyncedDotBrush,
+			};
+			CurrentFolderOriginPill.Visibility = Visibility.Visible;
+		}
+		else
+		{
+			CurrentFolderOriginPill.Visibility = Visibility.Collapsed;
+		}
+	}
+
+	private void OnThemeChanged()
+	{
+		bool show = AppComposition.Theme.ShowTreeBranchLines;
+		if( BranchLinesToggleButton.IsChecked != show )
+			BranchLinesToggleButton.IsChecked = show;
+		TreeBranchGuides.RefreshTree( OdooDirectoryTree, showLines: show, selectedNode: LastSelectedNode, updateSelection: true );
+	}
+
+	private void BranchLinesToggle_Click( object sender, RoutedEventArgs e )
+	{
+		bool show = BranchLinesToggleButton.IsChecked == true;
+		AppComposition.Theme.SetShowTreeBranchLines( show );
+		TreeBranchGuides.RefreshTree( OdooDirectoryTree, showLines: show, selectedNode: LastSelectedNode, updateSelection: true );
+	}
+
+	private void ExpandAllFolders_Click( object sender, RoutedEventArgs e )
+	{
+		OdooDirectoryTree.SetAllExpanded( true );
+		if( !_isFilteringTree )
+			RecordExpandedState();
+		TreeBranchGuides.RefreshTree( OdooDirectoryTree, selectedNode: LastSelectedNode, updateSelection: true );
+	}
+
+	private void CollapseAllFolders_Click( object sender, RoutedEventArgs e )
+	{
+		OdooDirectoryTree.SetAllExpanded( false );
+		if( !_isFilteringTree )
+			RecordExpandedState();
+		TreeBranchGuides.RefreshTree( OdooDirectoryTree, selectedNode: LastSelectedNode, updateSelection: true );
+	}
+
+	private void RecordExpandedState()
+	{
+		foreach( TreeViewNode root in OdooDirectoryTree.RootNodes )
+			RecordExpandedRecursive( root );
+	}
+
+	private void RecordExpandedRecursive( TreeViewNode node )
+	{
+		ViewModel.SetExpanded( node.LinkedData.FullPath, node.IsExpanded );
+		foreach( TreeViewNode child in node.Children )
+			RecordExpandedRecursive( child );
+	}
+
+	private void FolderFilterBox_TextChanged( object sender, TextChangedEventArgs e )
+	{
+		ClearFilterButton.Visibility = string.IsNullOrWhiteSpace( FolderFilterBox.Text )
+			? Visibility.Collapsed
+			: Visibility.Visible;
+		RebuildDisplayedTree( FolderFilterBox.Text );
+	}
+
+	private void ClearFilterButton_Click( object sender, RoutedEventArgs e )
+	{
+		FolderFilterBox.Text = string.Empty;
+		ClearFilterButton.Visibility = Visibility.Collapsed;
+	}
+
+	private void NavigateUp_Click( object sender, RoutedEventArgs e )
+	{
+		if( LastSelectedNode?.Parent is { Depth: >= 0 } parent )
+			JumpToTreeNode( parent );
+	}
+
+	private void SubfolderMenuButton_Click( object sender, RoutedEventArgs e )
+	{
+		if( LastSelectedNode is not { Children.Count: > 0 } node )
+			return;
+
+		var flyout = new MenuFlyout();
+		foreach( TreeViewNode child in node.Children )
+		{
+			TreeData data = child.LinkedData;
+			string suffix = data.Origin == FolderOriginKind.Synced ? "" : $"  [{data.OriginLabel}]";
+			var item = new MenuFlyoutItem
+			{
+				Text = $"{data.Name}{suffix}",
+				Icon = new FontIcon { Glyph = "\uE8B7" },
+			};
+			TreeViewNode captured = child;
+			item.Click += ( _, _ ) => JumpToTreeNode( captured );
+			flyout.Items.Add( item );
+		}
+		flyout.ShowAt( SubfolderMenuButton );
+	}
+
+	private async void CopyPath_Click( object sender, RoutedEventArgs e )
+	{
+		string? path = ViewModel.LastSelectedNodePath ?? LastSelectedNode?.LinkedData.FullPath;
+		if( string.IsNullOrWhiteSpace( path ) )
+			return;
+		try
+		{
+			var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+			package.SetText( path );
+			Windows.ApplicationModel.DataTransfer.Clipboard.SetContent( package );
+		}
+		catch
+		{
+			// Headless environments without a clipboard service still show feedback without crashing
+		}
+
+		int version = ++_copyFeedbackVersion;
+		CopyPathIcon.Glyph = "\uE8FB";
+		CopyPathLabel.Text = "Copied";
+		await Task.Delay( 1400 );
+		if( _left || version != _copyFeedbackVersion )
+			return;
+		CopyPathIcon.Glyph = "\uE8C8";
+		CopyPathLabel.Text = "Copy path";
+	}
+
+	private void JumpToTreeNode( TreeViewNode node )
+	{
+		node.LinkedData.EnsureVisible( OdooDirectoryTree );
+		OdooDirectoryTree.SelectedNode = node;
+		SelectDirectory( node );
 	}
 
 	private async void OdooDirectoryTree_SelectionChanged( TreeView sender, TreeViewSelectionChangedEventArgs args )
@@ -453,14 +715,10 @@ public sealed partial class HackFileManagerView : Page
 
 	private void OdooDirectoryBreadcrumb_ItemClicked( BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args )
 	{
-		if( args.Item is not TreeData { Node: { } node } data )
+		if( args.Item is not TreeData { Node: { } node } )
 			return;
 
-		OdooDirectoryTree.SelectedNode = node;
-		data.EnsureVisible( OdooDirectoryTree );
-		SelectDirectory( node );
-		foreach( var child in node.Children )
-			child.IsExpanded = false;
+		JumpToTreeNode( node );
 	}
 
 	private void TreeViewItem_Loaded( object sender, RoutedEventArgs e )
@@ -586,15 +844,52 @@ public sealed partial class HackFileManagerView : Page
 	private void Refresh_Click( object sender, RoutedEventArgs e )
 		=> ViewModel.RefreshFromServer();
 
-	private void Search_Click( object sender, RoutedEventArgs e )
+	private void FocusEntryFromChanges( EntryRow? entry )
 	{
-		WindowHelper.CreateWindowAndPage<SearchOdooView>( out var page, out var window );
-		window.Title = "Search Files";
-		page.StoreWindowInstance( window );
+		if( entry is null )
+			return;
+		ListTabs.SelectedItem = RootEntryList;
+		OdooEntryList.SelectedItem = entry;
+		OdooEntryList.Focus( FocusState.Programmatic );
+		OdooEntryList.ScrollIntoView( entry );
 	}
 
+	private void HackFileManagerView_KeyDown( object sender, KeyRoutedEventArgs e )
+	{
+		var ctrlDown = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread( Windows.System.VirtualKey.Control )
+			.HasFlag( Windows.UI.Core.CoreVirtualKeyStates.Down );
+		var altDown = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread( Windows.System.VirtualKey.Menu )
+			.HasFlag( Windows.UI.Core.CoreVirtualKeyStates.Down );
+
+		if( e.Key == Windows.System.VirtualKey.F5 )
+		{
+			e.Handled = true;
+			ViewModel.RefreshFromServer();
+		}
+		else if( e.Key == Windows.System.VirtualKey.F && ctrlDown )
+		{
+			e.Handled = true;
+			Search_Click( sender, e );
+		}
+		else if( e.Key == Windows.System.VirtualKey.Up && altDown )
+		{
+			if( LastSelectedNode?.Parent is { Depth: >= 0 } parent )
+			{
+				e.Handled = true;
+				JumpToTreeNode( parent );
+			}
+		}
+	}
+
+	private void Search_Click( object sender, RoutedEventArgs e )
+		=> AppComposition.Dialogs.ShowSearchWindow();
+
 	private void ManageTypes_Click( object sender, RoutedEventArgs e )
-		=> WindowHelper.CreateWindowPage<OdooFileTypeManagerView>().Title = "Manage Types";
+	{
+		WindowHelper.CreateWindowAndPage<OdooFileTypeManagerView>( out var page, out var window );
+		window.Title = "File Types & Filters";
+		page.StoreWindowInstance( window );
+	}
 
 	private void StatusWindow_Click( object sender, RoutedEventArgs e )
 		=> AppComposition.Dialogs.ShowStatusWindow();
@@ -620,7 +915,7 @@ public sealed partial class HackFileManagerView : Page
 		if( _pipWindow is null )
 			return;
 
-		if( _pipWindow.ReleaseComponent() is { } component )
+		if( _pipWindow.ReleaseComponent() is { } component && !ImageSlot.Children.Contains( component ) )
 			ImageSlot.Children.Add( component );
 		_pipWindow.Closed -= OnPipWindowClosed;
 		_pipWindow.Close();
@@ -644,11 +939,520 @@ public sealed partial class HackFileManagerView : Page
 	}
 
 	#endregion
+	#region Rearrangeable & Dockable Workspace Layout
+
+	private static WorkspaceLayoutSettings LayoutSettings => UIStorage.WorkspaceLayout;
+
+	private void ApplyWorkspaceLayout()
+	{
+		var layout = LayoutSettings;
+		bool showFolders = layout.ShowFoldersPane;
+		bool showDetails = layout.ShowDetailsPane;
+		bool showPreview = layout.ShowPreviewPane;
+		bool hasInspector = showDetails || showPreview;
+
+		ToggleFolderPaneButton.IsChecked = showFolders;
+		MenuShowFolders.IsChecked = showFolders;
+		MenuShowDetails.IsChecked = showDetails;
+		MenuShowPreview.IsChecked = showPreview;
+
+		FoldersPaneCard.Visibility = showFolders ? Visibility.Visible : Visibility.Collapsed;
+		FoldersSplitter.Visibility = showFolders ? Visibility.Visible : Visibility.Collapsed;
+		DetailsAndPreviewHost.Visibility = hasInspector ? Visibility.Visible : Visibility.Collapsed;
+		InspectorSplitter.Visibility = hasInspector ? Visibility.Visible : Visibility.Collapsed;
+		DetailsPaneCard.Visibility = showDetails ? Visibility.Visible : Visibility.Collapsed;
+		PreviewPaneCard.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
+		DetailsPreviewSplitter.Visibility = showDetails && showPreview ? Visibility.Visible : Visibility.Collapsed;
+
+		WorkspaceGrid.RowDefinitions.Clear();
+		WorkspaceGrid.ColumnDefinitions.Clear();
+		_foldersCol = null;
+		_inspectorRightCol = null;
+		_inspectorBottomRow = null;
+
+		if( layout.DetailsDock == DetailsDockPosition.Bottom )
+		{
+			int col = 0;
+			int mainCol;
+			if( showFolders && layout.FoldersDock == FolderDockSide.Left )
+			{
+				_foldersCol = new ColumnDefinition { Width = new GridLength( Math.Clamp( layout.FoldersPaneWidth, 190, 520 ) ) };
+				WorkspaceGrid.ColumnDefinitions.Add( _foldersCol );
+				Grid.SetColumn( FoldersPaneCard, col );
+				Grid.SetColumn( FoldersSplitter, col + 1 );
+				WorkspaceGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = GridLength.Auto } );
+				col += 2;
+			}
+
+			mainCol = col++;
+			WorkspaceGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1, GridUnitType.Star ) } );
+
+			if( showFolders && layout.FoldersDock == FolderDockSide.Right )
+			{
+				WorkspaceGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = GridLength.Auto } );
+				Grid.SetColumn( FoldersSplitter, col++ );
+				_foldersCol = new ColumnDefinition { Width = new GridLength( Math.Clamp( layout.FoldersPaneWidth, 190, 520 ) ) };
+				WorkspaceGrid.ColumnDefinitions.Add( _foldersCol );
+				Grid.SetColumn( FoldersPaneCard, col++ );
+			}
+
+			WorkspaceGrid.RowDefinitions.Add( new RowDefinition { Height = new GridLength( 1, GridUnitType.Star ) } );
+			int rowSpan = 1;
+			if( hasInspector )
+			{
+				WorkspaceGrid.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
+				_inspectorBottomRow = new RowDefinition { Height = new GridLength( Math.Clamp( layout.DetailsPaneHeight, 140, 520 ) ) };
+				WorkspaceGrid.RowDefinitions.Add( _inspectorBottomRow );
+				rowSpan = 3;
+
+				InspectorSplitter.Orientation = Orientation.Horizontal;
+				Grid.SetRow( InspectorSplitter, 1 );
+				Grid.SetColumn( InspectorSplitter, mainCol );
+				Grid.SetColumnSpan( InspectorSplitter, 1 );
+				Grid.SetRowSpan( InspectorSplitter, 1 );
+
+				Grid.SetRow( DetailsAndPreviewHost, 2 );
+				Grid.SetColumn( DetailsAndPreviewHost, mainCol );
+				Grid.SetRowSpan( DetailsAndPreviewHost, 1 );
+				Grid.SetColumnSpan( DetailsAndPreviewHost, 1 );
+			}
+
+			Grid.SetRow( EntriesPaneCard, 0 );
+			Grid.SetColumn( EntriesPaneCard, mainCol );
+			Grid.SetRowSpan( EntriesPaneCard, 1 );
+			Grid.SetColumnSpan( EntriesPaneCard, 1 );
+
+			if( showFolders )
+			{
+				Grid.SetRow( FoldersPaneCard, 0 );
+				Grid.SetRowSpan( FoldersPaneCard, rowSpan );
+				Grid.SetRow( FoldersSplitter, 0 );
+				Grid.SetRowSpan( FoldersSplitter, rowSpan );
+			}
+		}
+		else
+		{
+			WorkspaceGrid.RowDefinitions.Add( new RowDefinition { Height = new GridLength( 1, GridUnitType.Star ) } );
+			int col = 0;
+
+			if( showFolders && layout.FoldersDock == FolderDockSide.Left )
+			{
+				_foldersCol = new ColumnDefinition { Width = new GridLength( Math.Clamp( layout.FoldersPaneWidth, 190, 520 ) ) };
+				WorkspaceGrid.ColumnDefinitions.Add( _foldersCol );
+				Grid.SetRow( FoldersPaneCard, 0 );
+				Grid.SetRowSpan( FoldersPaneCard, 1 );
+				Grid.SetColumn( FoldersPaneCard, col++ );
+
+				WorkspaceGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = GridLength.Auto } );
+				Grid.SetRow( FoldersSplitter, 0 );
+				Grid.SetRowSpan( FoldersSplitter, 1 );
+				Grid.SetColumn( FoldersSplitter, col++ );
+			}
+
+			WorkspaceGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1, GridUnitType.Star ) } );
+			Grid.SetRow( EntriesPaneCard, 0 );
+			Grid.SetRowSpan( EntriesPaneCard, 1 );
+			Grid.SetColumn( EntriesPaneCard, col++ );
+
+			if( hasInspector )
+			{
+				WorkspaceGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = GridLength.Auto } );
+				InspectorSplitter.Orientation = Orientation.Vertical;
+				Grid.SetRow( InspectorSplitter, 0 );
+				Grid.SetRowSpan( InspectorSplitter, 1 );
+				Grid.SetColumn( InspectorSplitter, col++ );
+
+				_inspectorRightCol = new ColumnDefinition { Width = new GridLength( Math.Clamp( layout.DetailsRightWidth, 260, 720 ) ) };
+				WorkspaceGrid.ColumnDefinitions.Add( _inspectorRightCol );
+				Grid.SetRow( DetailsAndPreviewHost, 0 );
+				Grid.SetRowSpan( DetailsAndPreviewHost, 1 );
+				Grid.SetColumn( DetailsAndPreviewHost, col++ );
+			}
+
+			if( showFolders && layout.FoldersDock == FolderDockSide.Right )
+			{
+				WorkspaceGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = GridLength.Auto } );
+				Grid.SetRow( FoldersSplitter, 0 );
+				Grid.SetRowSpan( FoldersSplitter, 1 );
+				Grid.SetColumn( FoldersSplitter, col++ );
+
+				_foldersCol = new ColumnDefinition { Width = new GridLength( Math.Clamp( layout.FoldersPaneWidth, 190, 520 ) ) };
+				WorkspaceGrid.ColumnDefinitions.Add( _foldersCol );
+				Grid.SetRow( FoldersPaneCard, 0 );
+				Grid.SetRowSpan( FoldersPaneCard, 1 );
+				Grid.SetColumn( FoldersPaneCard, col++ );
+			}
+		}
+
+		ArrangeInspectorHost( layout, showDetails, showPreview );
+	}
+
+	private void ArrangeInspectorHost( WorkspaceLayoutSettings layout, bool showDetails, bool showPreview )
+	{
+		DetailsAndPreviewHost.RowDefinitions.Clear();
+		DetailsAndPreviewHost.ColumnDefinitions.Clear();
+		_previewBottomCol = null;
+		_previewRightRow = null;
+
+		if( !showDetails && !showPreview )
+			return;
+
+		bool previewFirst = layout.PreviewPlacement == PreviewDockPlacement.BeforeDetails;
+
+		if( layout.DetailsDock == DetailsDockPosition.Bottom )
+		{
+			DetailsAndPreviewHost.RowDefinitions.Add( new RowDefinition { Height = new GridLength( 1, GridUnitType.Star ) } );
+			DetailsPreviewSplitter.Orientation = Orientation.Vertical;
+
+			if( showDetails && showPreview )
+			{
+				double previewWidth = Math.Clamp( layout.PreviewPaneSize, 180, 560 );
+				if( previewFirst )
+				{
+					_previewBottomCol = new ColumnDefinition { Width = new GridLength( previewWidth ) };
+					DetailsAndPreviewHost.ColumnDefinitions.Add( _previewBottomCol );
+					DetailsAndPreviewHost.ColumnDefinitions.Add( new ColumnDefinition { Width = GridLength.Auto } );
+					DetailsAndPreviewHost.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1, GridUnitType.Star ) } );
+					SetHostCell( PreviewPaneCard, 0, 0 );
+					SetHostCell( DetailsPreviewSplitter, 0, 1 );
+					SetHostCell( DetailsPaneCard, 0, 2 );
+				}
+				else
+				{
+					DetailsAndPreviewHost.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1, GridUnitType.Star ) } );
+					DetailsAndPreviewHost.ColumnDefinitions.Add( new ColumnDefinition { Width = GridLength.Auto } );
+					_previewBottomCol = new ColumnDefinition { Width = new GridLength( previewWidth ) };
+					DetailsAndPreviewHost.ColumnDefinitions.Add( _previewBottomCol );
+					SetHostCell( DetailsPaneCard, 0, 0 );
+					SetHostCell( DetailsPreviewSplitter, 0, 1 );
+					SetHostCell( PreviewPaneCard, 0, 2 );
+				}
+			}
+			else
+			{
+				DetailsAndPreviewHost.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1, GridUnitType.Star ) } );
+				SetHostCell( showDetails ? DetailsPaneCard : PreviewPaneCard, 0, 0 );
+			}
+		}
+		else
+		{
+			DetailsAndPreviewHost.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1, GridUnitType.Star ) } );
+			DetailsPreviewSplitter.Orientation = Orientation.Horizontal;
+
+			if( showDetails && showPreview )
+			{
+				double previewHeight = Math.Clamp( layout.PreviewPaneSize, 150, 460 );
+				if( previewFirst )
+				{
+					_previewRightRow = new RowDefinition { Height = new GridLength( previewHeight ) };
+					DetailsAndPreviewHost.RowDefinitions.Add( _previewRightRow );
+					DetailsAndPreviewHost.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
+					DetailsAndPreviewHost.RowDefinitions.Add( new RowDefinition { Height = new GridLength( 1, GridUnitType.Star ) } );
+					SetHostCell( PreviewPaneCard, 0, 0 );
+					SetHostCell( DetailsPreviewSplitter, 1, 0 );
+					SetHostCell( DetailsPaneCard, 2, 0 );
+				}
+				else
+				{
+					DetailsAndPreviewHost.RowDefinitions.Add( new RowDefinition { Height = new GridLength( 1, GridUnitType.Star ) } );
+					DetailsAndPreviewHost.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
+					_previewRightRow = new RowDefinition { Height = new GridLength( previewHeight ) };
+					DetailsAndPreviewHost.RowDefinitions.Add( _previewRightRow );
+					SetHostCell( DetailsPaneCard, 0, 0 );
+					SetHostCell( DetailsPreviewSplitter, 1, 0 );
+					SetHostCell( PreviewPaneCard, 2, 0 );
+				}
+			}
+			else
+			{
+				DetailsAndPreviewHost.RowDefinitions.Add( new RowDefinition { Height = new GridLength( 1, GridUnitType.Star ) } );
+				SetHostCell( showDetails ? DetailsPaneCard : PreviewPaneCard, 0, 0 );
+			}
+		}
+	}
+
+	private static void SetHostCell( FrameworkElement element, int row, int col )
+	{
+		Grid.SetRow( element, row );
+		Grid.SetColumn( element, col );
+		Grid.SetRowSpan( element, 1 );
+		Grid.SetColumnSpan( element, 1 );
+	}
+
+	private void FoldersSplitter_DragDelta( double delta )
+	{
+		if( _foldersCol is null )
+			return;
+		double sign = LayoutSettings.FoldersDock == FolderDockSide.Left ? 1 : -1;
+		double next = Math.Clamp( _foldersCol.Width.Value + delta * sign, 190, 520 );
+		_foldersCol.Width = new GridLength( next );
+		LayoutSettings.FoldersPaneWidth = next;
+	}
+
+	private void InspectorSplitter_DragDelta( double delta )
+	{
+		if( LayoutSettings.DetailsDock == DetailsDockPosition.Bottom && _inspectorBottomRow is not null )
+		{
+			double next = Math.Clamp( _inspectorBottomRow.Height.Value - delta, 140, 520 );
+			_inspectorBottomRow.Height = new GridLength( next );
+			LayoutSettings.DetailsPaneHeight = next;
+		}
+		else if( LayoutSettings.DetailsDock == DetailsDockPosition.Right && _inspectorRightCol is not null )
+		{
+			double next = Math.Clamp( _inspectorRightCol.Width.Value - delta, 260, 720 );
+			_inspectorRightCol.Width = new GridLength( next );
+			LayoutSettings.DetailsRightWidth = next;
+		}
+	}
+
+	private void DetailsPreviewSplitter_DragDelta( double delta )
+	{
+		double sign = LayoutSettings.PreviewPlacement == PreviewDockPlacement.BeforeDetails ? 1 : -1;
+		if( LayoutSettings.DetailsDock == DetailsDockPosition.Bottom && _previewBottomCol is not null )
+		{
+			double next = Math.Clamp( _previewBottomCol.Width.Value + delta * sign, 180, 560 );
+			_previewBottomCol.Width = new GridLength( next );
+			LayoutSettings.PreviewPaneSize = next;
+		}
+		else if( LayoutSettings.DetailsDock == DetailsDockPosition.Right && _previewRightRow is not null )
+		{
+			double next = Math.Clamp( _previewRightRow.Height.Value + delta * sign, 150, 460 );
+			_previewRightRow.Height = new GridLength( next );
+			LayoutSettings.PreviewPaneSize = next;
+		}
+	}
+
+	private void OnSplitterDragCompleted() => SaveWorkspaceLayout();
+
+	private static void SaveWorkspaceLayout()
+	{
+		try
+		{
+			AppConfigStore.Save( UIStorage.GlobalData );
+		}
+		catch
+		{
+			// Non-fatal in smoke / read-only config directories
+		}
+	}
+
+	private void ToggleFolderPane_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.ShowFoldersPane = ToggleFolderPaneButton.IsChecked == true;
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void PresetBalanced_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.ApplyPreset( WorkspaceLayoutPreset.Balanced );
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void PresetRightInspector_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.ApplyPreset( WorkspaceLayoutPreset.RightInspector );
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void PresetRightSidebar_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.ApplyPreset( WorkspaceLayoutPreset.RightSidebar );
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void PresetFocusEntries_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.ApplyPreset( WorkspaceLayoutPreset.FocusEntries );
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void MenuTogglePane_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.ShowFoldersPane = MenuShowFolders.IsChecked;
+		LayoutSettings.ShowDetailsPane = MenuShowDetails.IsChecked;
+		LayoutSettings.ShowPreviewPane = MenuShowPreview.IsChecked;
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void DockFoldersLeft_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.FoldersDock = FolderDockSide.Left;
+		LayoutSettings.ShowFoldersPane = true;
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void DockFoldersRight_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.FoldersDock = FolderDockSide.Right;
+		LayoutSettings.ShowFoldersPane = true;
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void HideFoldersPane_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.ShowFoldersPane = false;
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void ToggleInspectorDock_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.DetailsDock = LayoutSettings.DetailsDock == DetailsDockPosition.Bottom
+			? DetailsDockPosition.Right
+			: DetailsDockPosition.Bottom;
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void DockInspectorBottom_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.DetailsDock = DetailsDockPosition.Bottom;
+		LayoutSettings.ShowDetailsPane = true;
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void DockInspectorRight_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.DetailsDock = DetailsDockPosition.Right;
+		LayoutSettings.ShowDetailsPane = true;
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void SwapPreviewPlacement_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.PreviewPlacement = LayoutSettings.PreviewPlacement == PreviewDockPlacement.AfterDetails
+			? PreviewDockPlacement.BeforeDetails
+			: PreviewDockPlacement.AfterDetails;
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void HideDetailsPane_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.ShowDetailsPane = false;
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void HidePreviewPane_Click( object sender, RoutedEventArgs e )
+	{
+		LayoutSettings.ShowPreviewPane = false;
+		ApplyWorkspaceLayout();
+		SaveWorkspaceLayout();
+	}
+
+	private void FoldersGrip_PointerPressed( object sender, PointerRoutedEventArgs e )
+		=> StartPaneDrag( "Folders", FoldersDragGrip, e );
+
+	private void DetailsGrip_PointerPressed( object sender, PointerRoutedEventArgs e )
+		=> StartPaneDrag( "Details", DetailsDragGrip, e );
+
+	private void PreviewGrip_PointerPressed( object sender, PointerRoutedEventArgs e )
+		=> StartPaneDrag( "Preview", PreviewDragGrip, e );
+
+	private void StartPaneDrag( string paneTag, UIElement grip, PointerRoutedEventArgs e )
+	{
+		_draggingPaneTag = paneTag;
+		_isDraggingGrip = true;
+		_activeDropZone = null;
+		grip.CapturePointer( e.Pointer );
+
+		ZoneLeft.Visibility = paneTag == "Folders" ? Visibility.Visible : Visibility.Collapsed;
+		ZoneRight.Visibility = paneTag is "Folders" or "Details" ? Visibility.Visible : Visibility.Collapsed;
+		ZoneBottom.Visibility = paneTag == "Details" ? Visibility.Visible : Visibility.Collapsed;
+		ZoneSwapPreview.Visibility = paneTag is "Preview" or "Details" ? Visibility.Visible : Visibility.Collapsed;
+
+		UpdateDropZoneHighlights( null );
+		DockDropOverlay.Visibility = Visibility.Visible;
+		e.Handled = true;
+	}
+
+	private void PaneGrip_PointerMoved( object sender, PointerRoutedEventArgs e )
+	{
+		if( !_isDraggingGrip || _draggingPaneTag is null )
+			return;
+		var pos = e.GetCurrentPoint( WorkspaceGrid ).Position;
+		double w = Math.Max( 1, WorkspaceGrid.ActualWidth );
+		double h = Math.Max( 1, WorkspaceGrid.ActualHeight );
+		double nx = pos.X / w;
+		double ny = pos.Y / h;
+
+		string? zone = _draggingPaneTag switch
+		{
+			"Folders" => nx < 0.45 ? "Left" : "Right",
+			"Details" => nx > 0.65 && ny < 0.72 ? "Right" : ny > 0.55 ? "Bottom" : null,
+			"Preview" => ny > 0.35 ? "SwapPreview" : null,
+			_ => null,
+		};
+
+		if( zone != _activeDropZone )
+		{
+			_activeDropZone = zone;
+			UpdateDropZoneHighlights( zone );
+		}
+	}
+
+	private void PaneGrip_PointerReleased( object sender, PointerRoutedEventArgs e )
+	{
+		if( !_isDraggingGrip )
+			return;
+		if( sender is UIElement grip )
+			grip.ReleasePointerCaptures();
+
+		string? pane = _draggingPaneTag;
+		string? zone = _activeDropZone;
+		_draggingPaneTag = null;
+		_isDraggingGrip = false;
+		_activeDropZone = null;
+		DockDropOverlay.Visibility = Visibility.Collapsed;
+
+		if( pane == "Folders" && zone is "Left" or "Right" )
+		{
+			LayoutSettings.FoldersDock = zone == "Left" ? FolderDockSide.Left : FolderDockSide.Right;
+			ApplyWorkspaceLayout();
+			SaveWorkspaceLayout();
+		}
+		else if( pane == "Details" && zone is "Right" or "Bottom" )
+		{
+			LayoutSettings.DetailsDock = zone == "Right" ? DetailsDockPosition.Right : DetailsDockPosition.Bottom;
+			ApplyWorkspaceLayout();
+			SaveWorkspaceLayout();
+		}
+		else if( pane == "Preview" && zone == "SwapPreview" )
+		{
+			SwapPreviewPlacement_Click( sender, e );
+		}
+	}
+
+	private void UpdateDropZoneHighlights( string? activeZone )
+	{
+		ZoneLeft.Opacity = activeZone == "Left" ? 0.95 : 0.25;
+		ZoneRight.Opacity = activeZone == "Right" ? 0.95 : 0.25;
+		ZoneBottom.Opacity = activeZone == "Bottom" ? 0.95 : 0.25;
+		ZoneSwapPreview.Opacity = activeZone == "SwapPreview" ? 0.95 : 0.25;
+	}
+
+	#endregion
 	#region Accessors used by the smoke tests
 
 	/// <summary>The directory tree control, for the smoke tests.</summary>
 	/// <returns>The page's directory tree view.</returns>
 	public TreeView GetOdooDirectoryTree() => OdooDirectoryTree;
+	internal void ApplyLayoutPresetForTest( WorkspaceLayoutPreset preset )
+	{
+		LayoutSettings.ApplyPreset( preset );
+		ApplyWorkspaceLayout();
+	}
 	/// <summary>The entry list control, for the smoke tests.</summary>
 	/// <returns>The page's entry table.</returns>
 	public TableView GetOdooEntryList() => OdooEntryList;

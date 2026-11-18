@@ -58,24 +58,19 @@ public sealed record OdooLookupCache
 	/// <returns>A new cache. Never throws for server errors: failed reads leave their arrays null and their maps empty.</returns>
 	/// <remarks>
 	/// Reads hp.node, hp.directory id 1 (the root), hp.user, hp.property, hp.type, hp.category, hp.entry.name.filter and
-	/// hp.setting one after another. Side effect: creates an hp.node named after the lower-cased machine name when none
+	/// hp.setting concurrently. Side effect: creates an hp.node named after the lower-cased machine name when none
 	/// matches. <see cref="RestrictTypes"/>, <see cref="RestrictProperties"/> and <see cref="SwApi"/> stay null when the
 	/// settings could not be read, and default to true / true / "" when a setting is missing. Extension keys are
 	/// lower-cased with a leading dot (".sldprt"); when two records share a key, the first wins.
 	/// </remarks>
-	public static async Task<OdooLookupCache> LoadAsync()
+	public static Task<OdooLookupCache> LoadAsync() => LoadAsync( progress: null );
+
+	/// <summary>Reads all reference data concurrently while reporting loading stages.</summary>
+	public static async Task<OdooLookupCache> LoadAsync( IProgress<string>? progress )
 	{
 		string machine = Environment.MachineName.ToLower();
 		HpNode[]? nodes = null;
 		IHpNodeModel? myNode = null;
-		await TryHelper.TryAsync( async () =>
-		{
-			nodes = await HpNode.GetAllRecordsAsync();
-			myNode = nodes?.FirstOrDefault( node => node.name?.Equals( machine ) is true )
-				?? await RegisterNodeAsync( machine )
-				?? throw new ArgumentNullException( nameof( HpNode ), "Unable to register new node" );
-		} );
-
 		HpDirectory? root = null;
 		HpUser[]? users = null;
 		HpProperty[]? properties = null;
@@ -83,14 +78,31 @@ public sealed record OdooLookupCache
 		HpCategory[]? categories = null;
 		HpEntryNameFilter[]? filters = null;
 		HpSetting[]? settings = null;
-		await TryHelper.TryAsync( async () => root = await HpDirectory.GetRecordByIdAsync( 1 ) );
-		await TryHelper.TryAsync( async () => users = await HpUser.GetAllRecordsAsync() );
-		await TryHelper.TryAsync( async () => properties = await HpProperty.GetAllRecordsAsync() );
-		await TryHelper.TryAsync( async () => types = await HpType.GetAllRecordsAsync() );
-		await TryHelper.TryAsync( async () => categories = await HpCategory.GetAllRecordsAsync() );
-		await TryHelper.TryAsync( async () => filters = await HpEntryNameFilter.GetAllRecordsAsync() );
-		// read (even with no rows): the restrictions are decided; unread they stay undecided (null)
-		bool settingsRead = await TryHelper.TryAsync( async () => settings = await HpSetting.GetAllRecordsAsync() );
+		bool settingsRead = false;
+
+		progress?.Report( "Loading workspace metadata (nodes, users, types, settings)…" );
+		await Task.WhenAll(
+			TryHelper.TryAsync( async () => nodes = await HpNode.GetAllRecordsAsync() ),
+			TryHelper.TryAsync( async () => root = await HpDirectory.GetRecordByIdAsync( 1 ) ),
+			TryHelper.TryAsync( async () => users = await HpUser.GetAllRecordsAsync() ),
+			TryHelper.TryAsync( async () => properties = await HpProperty.GetAllRecordsAsync() ),
+			TryHelper.TryAsync( async () => types = await HpType.GetAllRecordsAsync() ),
+			TryHelper.TryAsync( async () => categories = await HpCategory.GetAllRecordsAsync() ),
+			TryHelper.TryAsync( async () => filters = await HpEntryNameFilter.GetAllRecordsAsync() ),
+			// read (even with no rows): the restrictions are decided; unread they stay undecided (null)
+			TryHelper.TryAsync( async () => { settings = await HpSetting.GetAllRecordsAsync(); settingsRead = true; } )
+		);
+
+		myNode = nodes?.FirstOrDefault( node => node.name?.Equals( machine ) is true );
+		if( myNode is null && nodes is not null )
+		{
+			progress?.Report( $"Registering workstation node '{machine}'…" );
+			await TryHelper.TryAsync( async () =>
+			{
+				myNode = await RegisterNodeAsync( machine )
+					?? throw new ArgumentNullException( nameof( HpNode ), "Unable to register new node" );
+			} );
+		}
 
 		// a setting missing on the server keeps its default instead of failing the rest
 		IHpSettingModel? Setting( string name ) => settings?.FirstOrDefault( setting => setting.name == name );

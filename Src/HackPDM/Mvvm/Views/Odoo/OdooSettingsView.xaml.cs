@@ -16,4 +16,13 @@ public sealed partial class OdooSettingsView : Page
 		InitializeComponent();
 		ViewModel.Saved += () => this.Window?.Close();
 	}
+
+	private void TxtOdooPass_KeyDown( object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e )
+	{
+		if( e.Key == Windows.System.VirtualKey.Enter && ViewModel.SubmitCommand.CanExecute( null ) )
+		{
+			e.Handled = true;
+			ViewModel.SubmitCommand.Execute( null );
+		}
+	}
 }

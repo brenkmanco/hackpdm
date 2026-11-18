@@ -51,6 +51,30 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 	public ObservableRingBuffer<BasicStatusMessage> OStatus { get; } = new( HistoryLength );
 	public ObservableRingBuffer<BasicStatusMessage> OInfo { get; } = new( HistoryLength );
 	public ObservableRingBuffer<BasicStatusMessage> OError { get; } = new( HistoryLength );
+	public ObservableRingBuffer<BasicStatusMessage> OWarnings { get; } = new( HistoryLength );
+	public ObservableRingBuffer<BasicStatusMessage> OErrorsOnly { get; } = new( HistoryLength );
+
+	public int ProcessingCount { get; private set; }
+	public int SuccessCount { get; private set; }
+	public int InfoCount => OInfo.Count;
+	public int WarningCount => OWarnings.Count;
+	public int ErrorCount => OErrorsOnly.Count;
+	public string ProcessingSummaryText => IsInProcess ? $"Processing ({ProcessingCount})" : ( ProcessingCount + SuccessCount ) > 0 ? $"Processing ({ProcessingCount + SuccessCount})" : "Processing (0)";
+	public string InfoSummaryText => $"Info ({InfoCount})";
+	public string WarningSummaryText => $"Warnings ({WarningCount})";
+	public string ErrorSummaryText => $"Errors ({ErrorCount})";
+	public string LatestProcessingMessage { get; private set; } = "Idle";
+	public string LatestInfoMessage { get; private set; } = string.Empty;
+	public string CompactProgressText
+	{
+		get
+		{
+			if( MaxCount <= 0 )
+				return IsInProcess ? "Working…" : "Idle";
+			float percent = TotalProcessed / (float)MaxCount * 100f;
+			return $"{TotalProcessed} / {MaxCount} ({percent:F0}%)";
+		}
+	}
 
 	/// <summary>True from the start of an operation until it completes or is cancelled.</summary>
 	public bool IsInProcess
@@ -127,7 +151,34 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 	/// <param name="message">The line to add.</param>
 	/// <remarks>Safe from any thread: the list is changed later on the UI thread through <see cref="UiDispatcher.Post"/>.</remarks>
 	public void AddLog( BasicStatusMessage message )
-		=> UiDispatcher.Post( () => GetCollection( message.Status ).Add( message ) );
+		=> UiDispatcher.Post( () =>
+		{
+			GetCollection( message.Status ).Add( message );
+			switch( message.Status )
+			{
+				case StatusMessage.WARNING:
+					OWarnings.Add( message );
+					break;
+				case StatusMessage.ERROR:
+					OErrorsOnly.Add( message );
+					break;
+				case StatusMessage.PROCESSING:
+					ProcessingCount++;
+					if( message.Message is { Length: > 0 } procMsg )
+						LatestProcessingMessage = procMsg;
+					break;
+				case StatusMessage.SUCCESS:
+					SuccessCount++;
+					if( message.Message is { Length: > 0 } succMsg )
+						LatestProcessingMessage = succMsg;
+					break;
+				default:
+					if( message.Message is { Length: > 0 } infoMsg )
+						LatestInfoMessage = infoMsg;
+					break;
+			}
+			NotifyCategoryCountsChanged();
+		} );
 
 	/// <summary>Cancels the running operation.</summary>
 	[RelayCommand( CanExecute = nameof( CanCancel ) )]
@@ -147,6 +198,8 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 		UiDispatcher.Post( () =>
 		{
 			OnPropertyChanged( nameof( IsInProcess ) );
+			OnPropertyChanged( nameof( ProcessingSummaryText ) );
+			OnPropertyChanged( nameof( CompactProgressText ) );
 			CancelCommand.NotifyCanExecuteChanged();
 		} );
 	}
@@ -162,6 +215,8 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 			OStatus.Resize( length );
 			OInfo.Resize( length );
 			OError.Resize( length );
+			OWarnings.Resize( length );
+			OErrorsOnly.Resize( length );
 		} );
 	}
 
@@ -181,7 +236,14 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 			OStatus.Clear();
 			OInfo.Clear();
 			OError.Clear();
+			OWarnings.Clear();
+			OErrorsOnly.Clear();
+			ProcessingCount = 0;
+			SuccessCount = 0;
+			LatestProcessingMessage = "Idle";
+			LatestInfoMessage = string.Empty;
 			NotifyProgressChanged();
+			NotifyCategoryCountsChanged();
 		} );
 	}
 
@@ -308,10 +370,26 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 		OnPropertyChanged( nameof( MaxCount ) );
 		OnPropertyChanged( nameof( TotalProcessed ) );
 		OnPropertyChanged( nameof( ProgressText ) );
+		OnPropertyChanged( nameof( CompactProgressText ) );
 		OnPropertyChanged( nameof( SkippedText ) );
 		OnPropertyChanged( nameof( DownloadedText ) );
 		OnPropertyChanged( nameof( SessionDownloadedText ) );
 		OnPropertyChanged( nameof( UploadedText ) );
 		OnPropertyChanged( nameof( SessionUploadedText ) );
+	}
+
+	private void NotifyCategoryCountsChanged()
+	{
+		OnPropertyChanged( nameof( ProcessingCount ) );
+		OnPropertyChanged( nameof( SuccessCount ) );
+		OnPropertyChanged( nameof( InfoCount ) );
+		OnPropertyChanged( nameof( WarningCount ) );
+		OnPropertyChanged( nameof( ErrorCount ) );
+		OnPropertyChanged( nameof( ProcessingSummaryText ) );
+		OnPropertyChanged( nameof( InfoSummaryText ) );
+		OnPropertyChanged( nameof( WarningSummaryText ) );
+		OnPropertyChanged( nameof( ErrorSummaryText ) );
+		OnPropertyChanged( nameof( LatestProcessingMessage ) );
+		OnPropertyChanged( nameof( LatestInfoMessage ) );
 	}
 }

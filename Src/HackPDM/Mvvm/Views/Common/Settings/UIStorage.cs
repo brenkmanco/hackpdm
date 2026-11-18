@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using HackPDM.Shared.GlobalData;
+using HackPDM.Mvvm.Models.Settings;
 using HackPDM.Mvvm.Views.Common.Controls;
 using HackPDM.UI.Types;
 using Microsoft.UI.Xaml.Media;
@@ -41,6 +42,7 @@ public static class UIStorage
 	public static ColorSettings ColorData => GlobalData.EColors;
 	public static OdooEntryColumns ColumnsInfo => GlobalData.ColumnsSettings;
 	public static Dictionary<string, OdooEntryColumnID?> Columns => GlobalData.ColumnsSettings.Columns;
+	public static WorkspaceLayoutSettings WorkspaceLayout => GlobalData.WorkspaceLayout;
 	#endregion
 
 	/// <summary>Builds a UI color from its four channels.</summary>

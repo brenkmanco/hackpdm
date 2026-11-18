@@ -1,0 +1,78 @@
+{
+  "passed": true,
+  "exitCode": 0,
+  "totalMs": 11853,
+  "steps": [
+    {
+      "Name": "configure",
+      "Passed": true,
+      "DurationMs": 20,
+      "MaxUiStallMs": 0,
+      "Detail": "http://localhost:8069 db=odoopdm user=admin pwa=/tmp/hackpdm-smoke-e2f6b076cf424bb589e2d612cfa6af76"
+    },
+    {
+      "Name": "login",
+      "Passed": true,
+      "DurationMs": 917,
+      "MaxUiStallMs": 379,
+      "Detail": "uid=2 node=beemo root=root"
+    },
+    {
+      "Name": "navigate to file manager",
+      "Passed": true,
+      "DurationMs": 508,
+      "MaxUiStallMs": 282,
+      "Detail": "HackFileManager loaded, window 1506x950"
+    },
+    {
+      "Name": "load directory tree",
+      "Passed": true,
+      "DurationMs": 206,
+      "MaxUiStallMs": 102,
+      "Detail": "5 nodes; opening root\\Projects\\Parts (id 3)"
+    },
+    {
+      "Name": "open directory (entries)",
+      "Passed": true,
+      "DurationMs": 1082,
+      "MaxUiStallMs": 131,
+      "Detail": "3 entries [Ro/Remote=3] grid rows=3; first: bracket.txt, plate.txt, readme.txt"
+    },
+    {
+      "Name": "select entry (history)",
+      "Passed": true,
+      "DurationMs": 111,
+      "MaxUiStallMs": 16,
+      "Detail": "bracket.txt: 1 history row(s)"
+    },
+    {
+      "Name": "leave and come back (context kept)",
+      "Passed": true,
+      "DurationMs": 531,
+      "MaxUiStallMs": 254,
+      "Detail": "back in 501 ms: root\\Projects\\Parts, 3 kept rows, bracket.txt selected, history tab"
+    },
+    {
+      "Name": "live file changes (one row, tree badge)",
+      "Passed": true,
+      "DurationMs": 2052,
+      "MaxUiStallMs": 39,
+      "Detail": "bracket.txt rebuilt, 2 other rows untouched, added \u002B removed a row, badge shown"
+    },
+    {
+      "Name": "dependency graph (children, parents, both, zoom)",
+      "Passed": true,
+      "DurationMs": 5075,
+      "MaxUiStallMs": 73,
+      "Detail": "children/parents/both laid out, 5 roots with select all, zoom 0.63-\u003E1.26, details card \u002B tables; themes: NavyBlue\u002BFancy live, Light\u002BModern preview, Dark\u002BCompact live"
+    },
+    {
+      "Name": "capture affected visuals",
+      "Passed": true,
+      "DurationMs": 2,
+      "MaxUiStallMs": 0,
+      "Detail": "skipped (no screenshot path or theme matrix run)"
+    }
+  ],
+  "unhandledExceptions": []
+}

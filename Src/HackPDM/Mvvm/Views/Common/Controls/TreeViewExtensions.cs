@@ -107,4 +107,30 @@ public static class TreeViewExtensions
 			node = node?.Children.FirstOrDefault( child => child.LinkedData.Name == part );
 		return node?.LinkedData;
 	}
+
+	/// <summary>Recomputes sibling/ancestor branch guide metadata across all nodes of <paramref name="view"/>.</summary>
+	public static void RefreshBranchMetadata( this TreeView view )
+	{
+		ArgumentNullException.ThrowIfNull( view );
+		int count = view.RootNodes.Count;
+		for( int i = 0; i < count; i++ )
+			view.RootNodes[ i ].LinkedData.SetBranchState( i == count - 1, [], recursive: true );
+	}
+
+	/// <summary>Expands or collapses every branch in <paramref name="view"/> and notifies each node's branch guide revision.</summary>
+	public static void SetAllExpanded( this TreeView view, bool expanded )
+	{
+		ArgumentNullException.ThrowIfNull( view );
+		foreach( TreeViewNode root in view.RootNodes )
+			SetSubtreeExpanded( root, expanded, keepRootOpen: !expanded );
+	}
+
+	private static void SetSubtreeExpanded( TreeViewNode node, bool expanded, bool keepRootOpen )
+	{
+		bool targetExpanded = keepRootOpen && node.Depth == 0 ? true : expanded;
+		if( node.Children.Count > 0 && node.IsExpanded != targetExpanded )
+			node.LinkedData.IsExpanded = targetExpanded;
+		foreach( TreeViewNode child in node.Children )
+			SetSubtreeExpanded( child, expanded, keepRootOpen: false );
+	}
 }

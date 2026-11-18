@@ -29,7 +29,53 @@ public interface IDialogService
 	/// <returns><see langword="true"/> for Yes or OK; <see langword="false"/> for No, Cancel or closing the box.</returns>
 	Task<bool> ConfirmAsync( string message, string caption, MessageBoxIcon icon = MessageBoxIcon.Question );
 
-	/// <summary>Opens the status/progress window that long-running PDM operations log into.</summary>
-	/// <remarks>There is only one status window: when it is already open it is brought to the front.</remarks>
+	/// <summary>Opens the status/progress log (docked inside the main window by default, or focuses its detached window).</summary>
 	void ShowStatusWindow();
+
+	/// <summary>Toggles the docked status log panel open/closed inside the main window, or focuses it when detached.</summary>
+	void ToggleStatusWindow() => ShowStatusWindow();
+
+	/// <summary>Closes the status panel whether docked in the main window or detached.</summary>
+	void CloseStatusWindow() { }
+
+	/// <summary>Detaches the status panel from the main window into a floating window.</summary>
+	void DetachStatusWindow() => ShowStatusWindow();
+
+	/// <summary>Moves the detached status window back into the main window's docked extension panel.</summary>
+	void DockStatusWindow() { }
+
+	/// <summary>Opens the Odoo search panel (docked inside the main window by default, or focuses its detached window).</summary>
+	void ShowSearchWindow() { }
+
+	/// <summary>Toggles the docked search panel open/closed inside the main window, or focuses it when detached.</summary>
+	void ToggleSearchWindow() => ShowSearchWindow();
+
+	/// <summary>Closes the search panel whether docked in the main window or detached.</summary>
+	void CloseSearchWindow() { }
+
+	/// <summary>Detaches the search panel into a floating window.</summary>
+	void DetachSearchWindow() => ShowSearchWindow();
+
+	/// <summary>Moves the detached search window back into the main window's docked extension panel.</summary>
+	void DockSearchWindow() { }
+
+	/// <summary>Switches the status panel between its full 3-pane log and its compact category bar.</summary>
+	void SetStatusMinimalMode( bool minimal ) { }
+
+	/// <summary>Switches the search panel between its full query/results view and its compact search bar + quick results list.</summary>
+	void SetSearchMinimalMode( bool minimal ) { }
+
+	/// <summary>Opens (or expands) the status dialog in its full version.</summary>
+	void ShowFullStatusWindow()
+	{
+		SetStatusMinimalMode( false );
+		ShowStatusWindow();
+	}
+
+	/// <summary>Opens (or expands) the search dialog in its full version.</summary>
+	void ShowFullSearchWindow()
+	{
+		SetSearchMinimalMode( false );
+		ShowSearchWindow();
+	}
 }

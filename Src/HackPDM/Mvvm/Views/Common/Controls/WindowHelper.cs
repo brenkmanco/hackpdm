@@ -100,7 +100,13 @@ public static partial class WindowHelper
     public static void CreateWindowAndPage<T>(out T page, out Window window, bool activated = true) where T : Page, new()
     {
         page = new T();
-        window = new Window();
+        window = CreateWindowForExistingPage(page, activated);
+    }
+
+    /// <summary>Opens a new window hosting an existing <paramref name="page"/>, sized by the preset named after <typeparamref name="T"/>.</summary>
+    public static Window CreateWindowForExistingPage<T>(T page, bool activated = true) where T : Page
+    {
+        Window window = new();
         if (activated) window.Activate();
 
         window.Content = new Frame { Content = page };
@@ -111,7 +117,11 @@ public static partial class WindowHelper
             SetWindowConfig(window, value);
         }
         PageWindows.AddOrUpdate(page, window);
+        return window;
     }
+
+    /// <summary>Removes <paramref name="page"/> from the window lookup when moving it back into an in-app dock host.</summary>
+    public static void UnregisterPageWindow(Page page) => PageWindows.Remove(page);
 
     private static CancellationTokenSource _animationCts = new();
 

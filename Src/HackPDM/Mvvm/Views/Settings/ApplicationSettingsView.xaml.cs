@@ -1,6 +1,9 @@
 using System;
 
+using HackPDM.Mvvm.Views.Common.Controls;
+
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Animation;
 
 namespace HackPDM.Mvvm.Views.Settings;
 
@@ -40,7 +43,15 @@ public sealed partial class ApplicationSettingsView : Page
 			return;
 		try
 		{
-			SectionFrame.Navigate( page );
+			bool firstLoad = SectionFrame.CurrentSourcePageType is null;
+			NavigationSlideAxis slide = firstLoad
+				? NavigationSlideAxis.None
+				: page == typeof( StatusSettingsView )
+					? NavigationSlideAxis.Left
+					: NavigationSlideAxis.Right;
+
+			SectionFrame.Navigate( page, null, new SuppressNavigationTransitionInfo() );
+			NavigationTransitions.Play( SectionFrame.Content, slide );
 		}
 		catch( Exception e )
 		{

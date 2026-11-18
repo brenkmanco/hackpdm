@@ -16,4 +16,8 @@ public interface IFilePickerService
 	/// <param name="suggestedName">The file name filled in at first.</param>
 	/// <returns>The chosen file's path; null when the user cancelled. Nothing is written.</returns>
 	Task<string?> PickSaveFileAsync( string typeLabel, string extension, string suggestedName );
+
+	/// <summary>Lets the user choose an existing directory.</summary>
+	/// <returns>The chosen folder's path; null when the user cancelled.</returns>
+	Task<string?> PickFolderAsync();
 }
