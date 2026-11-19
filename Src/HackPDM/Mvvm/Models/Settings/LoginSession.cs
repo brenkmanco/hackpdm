@@ -19,6 +19,12 @@ public sealed class LoginSession
 
 	public bool IsLoggedIn { get; set; }
 
+	/// <summary>Non-null when the server denied login due to a client version mismatch; locks all pages until updated.</summary>
+	public string? VersionMismatchMessage { get; set; }
+
+	/// <summary>True when access is currently blocked by a server/client version mismatch.</summary>
+	public bool IsVersionMismatch => !string.IsNullOrEmpty( VersionMismatchMessage );
+
 	/// <summary>Run-wide status messages (login, connection, configurations, settings); shown again when Profile Manager is reopened.</summary>
 	public IReadOnlyList<BasicStatusMessage> LastErrors
 	{

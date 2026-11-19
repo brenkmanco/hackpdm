@@ -19,9 +19,9 @@
     <data noupdate="1">
         <record id="hp_settings_client_version" model="hp.settings">
             <field name="name">client_version</field>
-            <field name="description">oldest HackPDM client version the server accepts</field>
+            <field name="description">required HackPDM client version or range (e.g. '1.1.0', '>=1.1.0', '&lt;=1.3.0', '>=1.1.0, &lt;2.0.0', or '1.1.0 - 1.3.0'); clients outside this range are denied access until updated</field>
             <field name="type">char</field>
-            <field name="char_value">1.0.0.27</field>
+            <field name="char_value">&gt;=1.1.0, &lt;2.0.0</field>
         </record>
         <record id="hp_settings_client_download_url" model="hp.settings">
             <field name="name">client_download_url</field>

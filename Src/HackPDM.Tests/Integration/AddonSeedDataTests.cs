@@ -127,11 +127,10 @@ public class AddonSeedDataTests
 		var row = await ReadAsync( "hp.settings", "hp_settings_client_version", "name", "description", "type", "char_value" );
 
 		Assert.Equal( "client_version", row[ "name" ] );
-		Assert.Equal( "oldest HackPDM client version the server accepts", row[ "description" ] );
 		Assert.Equal( "char", row[ "type" ] );
-		Assert.Equal( "1.0.0.27", row[ "char_value" ] );
-		// this client is new enough for the seeded server
-		Assert.False( HackPDM.Infrastructure.Operations.ClientUpdate.IsOutdated( HackPDM.Infrastructure.Operations.ClientUpdate.Current, row[ "char_value" ] as string ) );
+		Assert.Equal( ">=1.1.0, <2.0.0", row[ "char_value" ] );
+		// this client satisfies the seeded server version range
+		Assert.True( HackPDM.Infrastructure.Operations.ClientUpdate.CheckVersion( HackPDM.Infrastructure.Operations.ClientUpdate.Current, row[ "char_value" ] as string ).IsAllowed );
 	}
 
 	[OdooFact]

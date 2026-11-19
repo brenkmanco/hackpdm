@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -195,10 +195,10 @@ public class ConcurrentSet<T> : ISet<T>, IReadOnlyCollection<T>, IDisposable
 	/// <summary>Releases the backing dictionary; the set can't be used afterwards.</summary>
 	public void Dispose()
 	{
-		// Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
 		Dispose( disposing: true );
 		GC.SuppressFinalize( this );
 	}
+
 	protected virtual void Dispose( bool disposing )
 	{
 		if ( !_disposedValue )
@@ -208,17 +208,8 @@ public class ConcurrentSet<T> : ISet<T>, IReadOnlyCollection<T>, IDisposable
 				_fakeBag.Clear();
 			}
 
-			// TODO: free unmanaged resources (unmanaged objects) and override finalizer
-			// TODO: set large fields to null
-			_disposedValue= true;
+			_disposedValue = true;
 		}
-	}
-
-	// // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
-	~ConcurrentSet()
-	{
-		// Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-		Dispose( disposing: false );
 	}
 	#endregion
 }

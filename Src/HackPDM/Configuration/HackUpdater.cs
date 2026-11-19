@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 
 using HackPDM.Core;
+using HackPDM.Core.Logging;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Operations;
 using HackPDM.Shared.GlobalData;
@@ -22,24 +23,30 @@ internal static class HackUpdater
 	private static string? Setting( string name )
 		=> OdooDefaults.Instance?.HpSettings?.FirstOrDefault( s => s.name == name )?.char_value;
 
-	/// <summary>Whether this client is recent enough for the server; when not, optionally offers to update.</summary>
-	/// <param name="showOutdatedUpdater">When outdated, ask the user whether to download and install the published version.</param>
+	/// <summary>Returns the server's configured <c>client_version</c> requirement, if any.</summary>
+	public static string? RequiredVersionRequirement => Setting( OdooDefaultsConstants.ODOO_VERSION_KEY_NAME );
+
+	/// <summary>Whether this client satisfies the server's <c>client_version</c> requirement; when not, optionally offers to update.</summary>
+	/// <param name="showOutdatedUpdater">When mismatched, ask the user whether to download and install the published version.</param>
 	/// <returns>
-	/// <see langword="true"/> when this client's version is at least the server's <c>client_version</c> (or the server sets none);
-	/// <see langword="false"/> when it is older.
+	/// <see langword="true"/> when this client's version satisfies the server's <c>client_version</c> rule (or the server sets none);
+	/// <see langword="false"/> when it does not match.
 	/// </returns>
 	/// <remarks>Reads the cached <see cref="OdooDefaults.Instance"/> settings, so the lookup tables must have been loaded from the server.</remarks>
 	public static async Task<bool> EnsureUpdated( bool showOutdatedUpdater = false )
 	{
-		string? required = Setting( OdooDefaultsConstants.ODOO_VERSION_KEY_NAME );
-		if( !ClientUpdate.IsOutdated( ClientUpdate.Current, required ) )
+		string? required = RequiredVersionRequirement;
+		VersionCheckResult check = ClientUpdate.CheckVersion( ClientUpdate.Current, required );
+		if( check.IsAllowed )
 			return true;
 
+		HackLogger.Warn( "Updater", $"Client version check denied access: {check.Reason}" );
 		if( showOutdatedUpdater && await HackPDM.Shell.AppComposition.Dialogs.ShowMessageAsync(
-				$"This is HackPDM {ClientUpdate.CurrentText}; the server needs version {required} or newer.\n" +
-				"Download and install the new version now?",
-				"Update required",
-				MessageBoxButtons.YesNo, MessageBoxIcon.Information ) == DialogResult.Yes )
+				$"{check.Reason}\n" +
+				"Access is denied until you update HackPDM to a compatible version.\n\n" +
+				"Download and install the published version now?",
+				"Version Mismatch — Update Required",
+				MessageBoxButtons.YesNo, MessageBoxIcon.Warning ) == DialogResult.Yes )
 			await UpdaterProcessAsync();
 		return false;
 	}
@@ -49,25 +56,33 @@ internal static class HackUpdater
 	public static async Task UpdaterProcessAsync()
 	{
 		var dialogs = HackPDM.Shell.AppComposition.Dialogs;
+		string? url = Setting( OdooDefaultsConstants.CLIENT_DOWNLOAD_URL_NAME );
+		HackLogger.Info( "Updater", $"Starting client update download from '{url ?? "(unset)"}'" );
 		Result<string> installer = await ClientUpdate.DownloadInstallerAsync(
-			Setting( OdooDefaultsConstants.CLIENT_DOWNLOAD_URL_NAME ), Setting( OdooDefaultsConstants.CLIENT_DOWNLOAD_SHA256_NAME ) );
+			url, Setting( OdooDefaultsConstants.CLIENT_DOWNLOAD_SHA256_NAME ) );
 		if( !installer.Ok )
 		{
+			HackLogger.Error( "Updater", $"Client update aborted: {installer.Error}" );
 			await dialogs.ShowMessageAsync( $"The update was not installed: {installer.Error}", "Update", MessageBoxButtons.OK, MessageBoxIcon.Warning );
 			return;
 		}
+		HackLogger.Info( "Updater", $"Verified update package ready at '{installer.Value}'" );
 		// Windows runs the installer; elsewhere the folder with the checked package is opened
 		bool started = OperatingSystem.IsWindows()
 			? ShellLauncher.OpenFile( installer.Value! )
 			: ShellLauncher.OpenFolder( Path.GetDirectoryName( installer.Value! )! );
 		if( !started )
 		{
+			HackLogger.Warn( "Updater", $"Could not launch verified update at '{installer.Value}'" );
 			await dialogs.ShowMessageAsync( $"The update was downloaded to {installer.Value} but could not be opened; run it from there.",
 				"Update", MessageBoxButtons.OK, MessageBoxIcon.Warning );
 			return;
 		}
 		if( OperatingSystem.IsWindows() )
+		{
+			HackLogger.Info( "Updater", "Installer launched; exiting HackPDM for upgrade." );
 			HackApp.Current.Exit();
+		}
 		else
 			await dialogs.ShowMessageAsync( $"The checked update is in {installer.Value}. Close HackPDM and install it.", "Update",
 				MessageBoxButtons.OK, MessageBoxIcon.Information );

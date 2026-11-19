@@ -56,18 +56,22 @@ jobs:
         with:
           global-json-file: global.json
 
-      # vX.Y.Z tag -> X.Y.Z; otherwise the version in Directory.Build.props
+      # vX.Y.Z (or vX.Y.Z-rc1) tag -> X.Y.Z; otherwise the version in Directory.Build.props
       - name: Version
         shell: pwsh
         run: |
-          if ($env:GITHUB_REF -match '^refs/tags/v(\d+\.\d+\.\d+)$') {
+          if ($env:GITHUB_REF -match '^refs/tags/v(\d+\.\d+\.\d+)(?:-[0-9A-Za-z.-]+)?$') {
             $version = $Matches[1]
+            $tagName = $env:GITHUB_REF -replace '^refs/tags/', ''
+            $isPrerelease = $tagName.Contains('-')
           } elseif ((Get-Content Directory.Build.props -Raw) -match '<HackPdmVersion[^>]*>([^<]+)</HackPdmVersion>') {
             $version = $Matches[1].Trim()
+            $isPrerelease = $false
           }
           if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "could not work out the version (got '$version')" }
           "HACKPDM_VERSION=$version" >> $env:GITHUB_ENV
-          Write-Host "Building HackPDM $version"
+          "IS_PRERELEASE=$($isPrerelease.ToString().ToLower())" >> $env:GITHUB_ENV
+          Write-Host "Building HackPDM $version (prerelease=$isPrerelease)"
 
       # no Odoo here: the live-server tests skip themselves; they run in odoo-integration.yml
       - name: Unit tests (Windows)
@@ -90,7 +94,7 @@ jobs:
           $file = $exe.VersionInfo.FileVersion
           if ($file -ne "$env:HACKPDM_VERSION.0") { throw "HackPDM.exe is version $file, expected $env:HACKPDM_VERSION.0" }
 
-      - name: Sign the app
+      - name: Sign and verify the app
         if: env.HAS_CERT == 'true'
         env:
           CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
@@ -98,12 +102,17 @@ jobs:
         shell: pwsh
         run: |
           $pfx = Join-Path $env:RUNNER_TEMP cert.pfx
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT))
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
-          $files = Get-ChildItem publish/HackPDM -Include HackPDM.exe,HackPDM*.dll -Recurse
-          & $signtool.FullName sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f $pfx /p $env:CERT_PASSWORD $files.FullName
-          if ($LASTEXITCODE -ne 0) { throw "signing failed" }
-          Remove-Item $pfx
+          try {
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT))
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+            $files = Get-ChildItem publish/HackPDM -Include HackPDM.exe,HackPDM*.dll -Recurse
+            & $signtool.FullName sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f $pfx /p $env:CERT_PASSWORD $files.FullName
+            if ($LASTEXITCODE -ne 0) { throw "signing failed" }
+            & $signtool.FullName verify /pa /v publish/HackPDM/HackPDM.exe
+            if ($LASTEXITCODE -ne 0) { throw "signature verification failed for HackPDM.exe" }
+          } finally {
+            Remove-Item $pfx -ErrorAction SilentlyContinue
+          }
 
       - name: Build installer
         shell: pwsh
@@ -112,7 +121,7 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:HACKPDM_VERSION" "/DSourceDir=..\publish\HackPDM" "/DOutputDir=..\artifacts" installer\HackPDM.iss
           if ($LASTEXITCODE -ne 0) { throw "installer build failed" }
 
-      - name: Sign the installer
+      - name: Sign and verify the installer
         if: env.HAS_CERT == 'true'
         env:
           CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
@@ -120,11 +129,17 @@ jobs:
         shell: pwsh
         run: |
           $pfx = Join-Path $env:RUNNER_TEMP cert.pfx
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT))
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
-          & $signtool.FullName sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f $pfx /p $env:CERT_PASSWORD (Get-ChildItem artifacts\*-setup.exe).FullName
-          if ($LASTEXITCODE -ne 0) { throw "signing failed" }
-          Remove-Item $pfx
+          try {
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT))
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+            $setup = (Get-ChildItem artifacts\*-setup.exe).FullName
+            & $signtool.FullName sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f $pfx /p $env:CERT_PASSWORD $setup
+            if ($LASTEXITCODE -ne 0) { throw "signing failed" }
+            & $signtool.FullName verify /pa /v $setup
+            if ($LASTEXITCODE -ne 0) { throw "signature verification failed for installer" }
+          } finally {
+            Remove-Item $pfx -ErrorAction SilentlyContinue
+          }
 
       - name: Zip and checksums
         shell: pwsh

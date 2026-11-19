@@ -99,6 +99,11 @@ public sealed partial class HomeView : Page
 
 	private void Show( NavigatePageMenu page )
 	{
+		if( AppComposition.Session.IsVersionMismatch && page != NavigatePageMenu.ProfileManager )
+		{
+			Navigate( typeof( NotLoggedInView ), "NotLoggedIn", page, NavigationSlideAxis.Up );
+			return;
+		}
 		if( page is NavigatePageMenu.HackFileManager or NavigatePageMenu.DependencyGraph && !AppComposition.Session.IsLoggedIn )
 		{
 			Navigate( typeof( NotLoggedInView ), "NotLoggedIn", page, NavigationSlideAxis.Up );
@@ -303,6 +308,8 @@ public sealed partial class HomeView : Page
 		page.StoreWindowInstance( null );
 		page.SetHostMode( isDocked: true );
 		page.SetMinimalMode( UIStorage.WorkspaceLayout.SearchMinimalMode );
+		if( AppComposition.Session.IsVersionMismatch )
+			return;
 		if( !ReferenceEquals( DockedSearchHost.Content, page ) )
 			DockedSearchHost.Content = page;
 
@@ -519,8 +526,10 @@ public sealed partial class HomeView : Page
 		Canvas.SetTop( element, top );
 	}
 
-	internal void HideOverlay( Microsoft.UI.Xaml.FrameworkElement element )
+	internal void HideOverlay( Microsoft.UI.Xaml.FrameworkElement? element )
 	{
+		if( element is null )
+			return;
 		if( ReferenceEquals( _overlayElement, element ) )
 		{
 			element.SizeChanged -= OverlayElement_SizeChanged;

@@ -510,10 +510,18 @@ public partial class ProfileManagerViewModel : ObservableObject, IDisposable
 				LoginStatusText = "Checking client compatibility…";
 				if( await HackUpdater.EnsureUpdated( true ) )
 				{
+					_session.VersionMismatchMessage = null;
 					LogLookupSummary();
 					return true;
 				}
-				errors.Add( (ProfileStatusCategory.Login, $"This client ({ClientUpdate.CurrentText}) is older than the server requires; install the update.") );
+				// Deny access to everything: revoke the Odoo session id and flag the version mismatch
+				if( OdooDefaults.Instance is not null )
+					OdooDefaults.Instance.OdooId = 0;
+				_session.IsLoggedIn = false;
+				string required = HackUpdater.RequiredVersionRequirement ?? "(unspecified)";
+				string mismatchMsg = $"Access denied: HackPDM {ClientUpdate.CurrentText} does not satisfy the server's required version '{required}'. Update HackPDM to continue.";
+				_session.VersionMismatchMessage = mismatchMsg;
+				errors.Add( (ProfileStatusCategory.Login, mismatchMsg) );
 			}
 			else
 			{
