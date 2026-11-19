@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -29,7 +30,10 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 	private readonly Lock _gate = new();
 	private readonly Action _cancelOperation;
 	private readonly IDialogService _dialogs;
+	private readonly ConcurrentQueue<BasicStatusMessage> _pendingLogs = new();
 	private int _refreshQueued;
+	private int _logFlushQueued;
+	private const int MaxLogsPerUiTick = 200;
 	private bool _isInProcess;
 	private bool _autoClose;
 
@@ -153,36 +157,62 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 
 	/// <summary>Adds a log line to its list.</summary>
 	/// <param name="message">The line to add.</param>
-	/// <remarks>Safe from any thread: the list is changed later on the UI thread through <see cref="UiDispatcher.Post"/>.</remarks>
+	/// <remarks>Safe from any thread: messages are queued and flushed in coalesced batches on the UI thread so bulk operations cannot flood the dispatcher.</remarks>
 	public void AddLog( BasicStatusMessage message )
-		=> UiDispatcher.Post( () =>
+	{
+		_pendingLogs.Enqueue( message );
+		ScheduleLogFlush();
+	}
+
+	private void ScheduleLogFlush()
+	{
+		if( Interlocked.Exchange( ref _logFlushQueued, 1 ) == 1 )
+			return;
+		UiDispatcher.Post( FlushPendingLogs );
+	}
+
+	private void FlushPendingLogs()
+	{
+		Volatile.Write( ref _logFlushQueued, 0 );
+		int drained = 0;
+		while( drained < MaxLogsPerUiTick && _pendingLogs.TryDequeue( out BasicStatusMessage? message ) )
 		{
-			GetCollection( message.Status ).Add( message );
-			switch( message.Status )
-			{
-				case StatusMessage.WARNING:
-					OWarnings.Add( message );
-					break;
-				case StatusMessage.ERROR:
-					OErrorsOnly.Add( message );
-					break;
-				case StatusMessage.PROCESSING:
-					ProcessingCount++;
-					if( message.Message is { Length: > 0 } procMsg )
-						LatestProcessingMessage = procMsg;
-					break;
-				case StatusMessage.SUCCESS:
-					SuccessCount++;
-					if( message.Message is { Length: > 0 } succMsg )
-						LatestProcessingMessage = succMsg;
-					break;
-				default:
-					if( message.Message is { Length: > 0 } infoMsg )
-						LatestInfoMessage = infoMsg;
-					break;
-			}
+			ApplyLogMessageOnUiThread( message );
+			drained++;
+		}
+		if( drained > 0 )
 			NotifyCategoryCountsChanged();
-		} );
+		if( !_pendingLogs.IsEmpty )
+			ScheduleLogFlush();
+	}
+
+	private void ApplyLogMessageOnUiThread( BasicStatusMessage message )
+	{
+		GetCollection( message.Status ).Add( message );
+		switch( message.Status )
+		{
+			case StatusMessage.WARNING:
+				OWarnings.Add( message );
+				break;
+			case StatusMessage.ERROR:
+				OErrorsOnly.Add( message );
+				break;
+			case StatusMessage.PROCESSING:
+				ProcessingCount++;
+				if( message.Message is { Length: > 0 } procMsg )
+					LatestProcessingMessage = procMsg;
+				break;
+			case StatusMessage.SUCCESS:
+				SuccessCount++;
+				if( message.Message is { Length: > 0 } succMsg )
+					LatestProcessingMessage = succMsg;
+				break;
+			default:
+				if( message.Message is { Length: > 0 } infoMsg )
+					LatestInfoMessage = infoMsg;
+				break;
+		}
+	}
 
 	/// <summary>Cancels the running operation.</summary>
 	[RelayCommand( CanExecute = nameof( CanCancel ) )]
@@ -237,6 +267,7 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 		}
 		UiDispatcher.Post( () =>
 		{
+			while( _pendingLogs.TryDequeue( out _ ) ) { }
 			OStatus.Clear();
 			OInfo.Clear();
 			OError.Clear();

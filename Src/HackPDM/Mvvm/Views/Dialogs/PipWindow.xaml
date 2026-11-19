@@ -6,7 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="using:HackPDM.Mvvm.Views.Dialogs"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    Title="PipWindow"
+    Title="Preview"
     mc:Ignorable="d">
 
     <Window.SystemBackdrop>
@@ -14,10 +14,24 @@
     </Window.SystemBackdrop>
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <!--  1. The root slot that holds your active player/control component  -->
-        <Grid x:Name="PipContentRoot" />
+        <!--  1. Root preview host  -->
+        <Grid x:Name="PipContentRoot" Padding="8">
+            <TextBlock
+                x:Name="PipEmptyText"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="No preview available"
+                TextAlignment="Center" />
+            <Image
+                x:Name="PipImage"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Stretch="Uniform"
+                Visibility="Collapsed" />
+        </Grid>
 
-        <!--  2. Overlay controls layer (visible when hovering)  -->
+        <!--  2. Overlay return button  -->
         <Grid
             Margin="10"
             HorizontalAlignment="Right"
@@ -29,9 +43,8 @@
                 BorderThickness="0"
                 Click="OnExitPipClicked"
                 ToolTipService.ToolTip="Return to Main Window">
-                <!--  Segoe MDL2 Assets code for 'Back to Window' icon  -->
                 <FontIcon
-                    FontSize="16"
+                    FontSize="14"
                     Foreground="White"
                     Glyph="&#xE73F;" />
             </Button>

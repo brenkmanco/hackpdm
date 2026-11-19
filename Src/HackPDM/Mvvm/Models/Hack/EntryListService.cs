@@ -201,11 +201,24 @@ public sealed class EntryListService : IEntryListService
 	/// <inheritdoc/>
 	public async Task<EntryRow?> RefreshRowAsync( EntryRow? existing, string localPath, bool filterUnknownTypes )
 	{
-		// read and hashed off the UI thread; null when the file is gone
-		HackFile? local = await Task.Run( () => File.Exists( localPath ) && HackFile.GetFromPath( localPath ) is { Exists: true } hack ? hack : null );
+		// Read and hash off the UI thread; retry briefly if another app (CAD/Office/copy) holds a transient write lock
+		// so we don't falsely drop checksum to null and misclassify the file as Remote Only (Ro).
+		HackFile? local = await ReadLocalFileWithRetryAsync( localPath );
 		if( existing?.Remote is { } remote )
 			return CreateRemoteRow( remote, local );
 		return local is null ? null : CreateLocalRow( local, filterUnknownTypes );
+	}
+
+	private static async Task<HackFile?> ReadLocalFileWithRetryAsync( string localPath )
+	{
+		int[] delaysMs = [ 200, 400, 800 ];
+		for( int attempt = 0; ; attempt++ )
+		{
+			HackFile? local = await Task.Run( () => File.Exists( localPath ) && HackFile.GetFromPath( localPath ) is { Exists: true } hack ? hack : null );
+			if( local is null || local.Checksum is not null || attempt >= delaysMs.Length || !File.Exists( localPath ) )
+				return local;
+			await Task.Delay( delaysMs[ attempt ] );
+		}
 	}
 
 	private static EntryRow CreateRemoteRow( RemoteEntryDto entry, HackFile? local )

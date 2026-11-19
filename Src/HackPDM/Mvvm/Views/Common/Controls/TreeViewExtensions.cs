@@ -102,9 +102,11 @@ public static class TreeViewExtensions
 			return null;
 		// (this used to return the parent of the folder it found, and needed RootNodes to be a
 		// List<TreeViewNode>: a rebuilt tree reselected the wrong folder, or none)
-		TreeViewNode? node = view.RootNodes.FirstOrDefault( root => root.LinkedData.Name == parts[ 0 ] );
+		TreeViewNode? node = view.RootNodes.FirstOrDefault( root => string.Equals( root.LinkedData.Name, parts[ 0 ], StringComparison.OrdinalIgnoreCase ) );
+		if( node is null && view.RootNodes.Count == 1 && string.Equals( parts[ 0 ], HackPDM.Core.PwaPaths.Root, StringComparison.OrdinalIgnoreCase ) )
+			node = view.RootNodes[ 0 ];
 		foreach( string part in parts.AsSpan( 1 ) )
-			node = node?.Children.FirstOrDefault( child => child.LinkedData.Name == part );
+			node = node?.Children.FirstOrDefault( child => string.Equals( child.LinkedData.Name, part, StringComparison.OrdinalIgnoreCase ) );
 		return node?.LinkedData;
 	}
 

@@ -117,6 +117,7 @@ public partial class HackApp : Application
 
 	private void Window_Closed( object sender, WindowEventArgs args )
 	{
+		AppComposition.LocalFiles.Dispose();
         AppConfigStore.Save( UIStorage.GlobalData );
 	}
 

@@ -67,7 +67,9 @@ public sealed partial class DependencyGraphView : Page
 
 	// the file manager's detail tables, for the clicked file
 	public ObservableCollection<TreeData> BreadcrumbPath { get; } = [];
+	private TreeViewNode? _selectedFolderNode;
 	private TreeData? _selectedFolderData;
+	private TreeViewNode? CurrentSelectedFolderNode => _selectedFolderNode ?? FolderTree.SelectedNode;
 	public RangeObservableCollection<HistoryRow> HistoryRows { get; } = [];
 	public RangeObservableCollection<ParentRow> ParentRows { get; } = [];
 	public RangeObservableCollection<ChildrenRow> ChildRows { get; } = [];
@@ -82,20 +84,22 @@ public sealed partial class DependencyGraphView : Page
 		ApplyGraphPaneLayout();
 		AppComposition.Theme.ThemeChanged += OnThemeChanged;
 		Unloaded += ( _, _ ) => AppComposition.Theme.ThemeChanged -= OnThemeChanged;
-		FolderTree.SelectionChanged += ( _, _ ) =>
+		FolderTree.SelectionChanged += ( sender, args ) =>
 		{
-			SyncFolderSelection();
-			_ = LoadEntriesAsync();
+			if( SelectedNodeFromArgs( args ) is not { } node || ReferenceEquals( node, _selectedFolderNode ) )
+				return;
+			SyncFolderSelection( node );
+			_ = LoadEntriesAsync( node );
 		};
 		FolderTree.Expanding += ( _, e ) =>
 		{
 			e.Node?.LinkedData.NotifyBranchChanged();
-			TreeBranchGuides.RefreshTree( FolderTree, selectedNode: FolderTree.SelectedNode, updateSelection: true );
+			TreeBranchGuides.RefreshTree( FolderTree, selectedNode: CurrentSelectedFolderNode, updateSelection: true );
 		};
 		FolderTree.Collapsed += ( _, e ) =>
 		{
 			e.Node?.LinkedData.NotifyBranchChanged();
-			TreeBranchGuides.RefreshTree( FolderTree, selectedNode: FolderTree.SelectedNode, updateSelection: true );
+			TreeBranchGuides.RefreshTree( FolderTree, selectedNode: CurrentSelectedFolderNode, updateSelection: true );
 		};
 		FolderBreadcrumb.ItemClicked += FolderBreadcrumb_ItemClicked;
 		EntryList.SelectionChanged += ( _, _ ) => OnEntrySelectionChanged();
@@ -151,10 +155,10 @@ public sealed partial class DependencyGraphView : Page
 	/// <summary>Opens <paramref name="node"/>'s folder (the smoke tests).</summary>
 	internal Task OpenFolderAsync( TreeViewNode node )
 	{
+		SyncFolderSelection( node );
 		node.LinkedData.EnsureVisible( FolderTree );
 		FolderTree.SelectedNode = node;
-		SyncFolderSelection();
-		return PendingLoad = LoadEntriesAsync();
+		return PendingLoad = LoadEntriesAsync( node );
 	}
 
 	/// <summary>Selects the listed files named <paramref name="names"/> (the smoke tests).</summary>
@@ -231,11 +235,11 @@ public sealed partial class DependencyGraphView : Page
 			first.LinkedData.IsExpanded = true;
 			// start in the folder the file manager has open
 			string? path = AppComposition.FileManagerState.SelectedPath;
-			FolderTree.SelectedNode = ( path is null ? null : FolderTree.FindTreeNode( path )?.Node ) ?? first;
-			if( FolderTree.SelectedNode is { } node )
-				node.LinkedData.EnsureVisible( FolderTree );
-			SyncFolderSelection();
-			await LoadEntriesAsync();
+			TreeViewNode target = ( path is null ? null : FolderTree.FindTreeNode( path )?.Node ) ?? first;
+			SyncFolderSelection( target );
+			FolderTree.SelectedNode = target;
+			target.LinkedData.EnsureVisible( FolderTree );
+			await LoadEntriesAsync( target );
 		}
 		finally
 		{
@@ -244,11 +248,11 @@ public sealed partial class DependencyGraphView : Page
 		}
 	}
 
-	private async Task LoadEntriesAsync()
+	private async Task LoadEntriesAsync( TreeViewNode? node = null )
 	{
 		_entriesLoad?.Cancel();
 		CancellationTokenSource load = _entriesLoad = new();
-		int? directoryId = FolderTree.SelectedNode?.LinkedData.DirectoryId;
+		int? directoryId = ( node ?? CurrentSelectedFolderNode )?.LinkedData.DirectoryId;
 
 		_quietSelection = true;
 		_entries.Clear();
@@ -418,7 +422,7 @@ public sealed partial class DependencyGraphView : Page
 		bool show = AppComposition.Theme.ShowTreeBranchLines;
 		if( GraphBranchLinesToggle.IsChecked != show )
 			GraphBranchLinesToggle.IsChecked = show;
-		TreeBranchGuides.RefreshTree( FolderTree, showLines: show, selectedNode: FolderTree.SelectedNode, updateSelection: true );
+		TreeBranchGuides.RefreshTree( FolderTree, showLines: show, selectedNode: CurrentSelectedFolderNode, updateSelection: true );
 
 		GraphTheme theme = AppComposition.Theme.GraphTheme;
 		if( theme == Graph.Theme )
@@ -611,9 +615,18 @@ public sealed partial class DependencyGraphView : Page
 		return parts.Length < 2 ? Task.CompletedTask : AppComposition.LocateInFileManagerAsync( parts[ 1..^1 ], node.Name );
 	}
 
-	private void SyncFolderSelection()
+	private static TreeViewNode? SelectedNodeFromArgs( TreeViewSelectionChangedEventArgs args )
+		=> args.AddedItems.FirstOrDefault() switch
+		{
+			TreeViewNode node => node,
+			TreeData data => data.Node,
+			_ => null,
+		};
+
+	private void SyncFolderSelection( TreeViewNode? node = null )
 	{
-		TreeViewNode? node = FolderTree.SelectedNode;
+		node ??= CurrentSelectedFolderNode;
+		_selectedFolderNode = node;
 		if( _selectedFolderData is not null && !ReferenceEquals( _selectedFolderData.Node, node ) )
 			_selectedFolderData.IsSelectedInTree = false;
 		_selectedFolderData = node?.LinkedData;
@@ -627,28 +640,31 @@ public sealed partial class DependencyGraphView : Page
 	{
 		if( args.Item is not TreeData { Node: { } node } data )
 			return;
+		if( ReferenceEquals( node, _selectedFolderNode ) )
+			return;
+		SyncFolderSelection( node );
 		FolderTree.SelectedNode = node;
 		data.EnsureVisible( FolderTree );
-		SyncFolderSelection();
+		_ = LoadEntriesAsync( node );
 	}
 
 	private void BranchLinesToggle_Click( object sender, RoutedEventArgs e )
 	{
 		bool show = GraphBranchLinesToggle.IsChecked == true;
 		AppComposition.Theme.SetShowTreeBranchLines( show );
-		TreeBranchGuides.RefreshTree( FolderTree, showLines: show, selectedNode: FolderTree.SelectedNode, updateSelection: true );
+		TreeBranchGuides.RefreshTree( FolderTree, showLines: show, selectedNode: CurrentSelectedFolderNode, updateSelection: true );
 	}
 
 	private void ExpandAllFolders_Click( object sender, RoutedEventArgs e )
 	{
 		FolderTree.SetAllExpanded( true );
-		TreeBranchGuides.RefreshTree( FolderTree, selectedNode: FolderTree.SelectedNode, updateSelection: true );
+		TreeBranchGuides.RefreshTree( FolderTree, selectedNode: CurrentSelectedFolderNode, updateSelection: true );
 	}
 
 	private void CollapseAllFolders_Click( object sender, RoutedEventArgs e )
 	{
 		FolderTree.SetAllExpanded( false );
-		TreeBranchGuides.RefreshTree( FolderTree, selectedNode: FolderTree.SelectedNode, updateSelection: true );
+		TreeBranchGuides.RefreshTree( FolderTree, selectedNode: CurrentSelectedFolderNode, updateSelection: true );
 	}
 
 	private void ApplyGraphPaneLayout()

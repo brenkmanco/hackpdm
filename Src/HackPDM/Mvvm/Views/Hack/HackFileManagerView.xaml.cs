@@ -11,10 +11,12 @@ using HackPDM.Mvvm.ViewModels.Common;
 using HackPDM.Core;
 using HackPDM.Core.Hack;
 using HackPDM.Infrastructure.Odoo;
+using HackPDM.Mvvm.Models.Common;
 using HackPDM.Mvvm.Models.Hack;
 using HackPDM.Mvvm.Models.Settings;
 using HackPDM.Mvvm.Views.Dialogs;
 using HackPDM.Mvvm.Views.Common.Controls;
+using HackPDM.Mvvm.Views.Common.Converters;
 using HackPDM.Mvvm.Views.Common.Settings;
 using HackPDM.UI.Types;
 using HackPDM.Mvvm.Views.Common.Types;
@@ -96,6 +98,12 @@ public sealed partial class HackFileManagerView : Page
 	private string? _draggingPaneTag;
 	private bool _isDraggingGrip;
 	private string? _activeDropZone;
+
+	private readonly RangeObservableCollection<object> _groupedItems = [];
+	private List<EntryGroupHeader> _groups = [];
+	private readonly HashSet<string> _collapsedGroupKeys = new( StringComparer.Ordinal );
+	private bool _syncingGroupedSelection;
+	private bool IsUsingGroupedList => GroupedEntryContainer.Visibility == Visibility.Visible;
 
 	private static readonly SolidColorBrush SyncedDotBrush = new( Windows.UI.Color.FromArgb( 255, 0xC6, 0x97, 0x49 ) );
 	private static readonly SolidColorBrush LocalDotBrush = new( Windows.UI.Color.FromArgb( 255, 0x3F, 0xB9, 0x50 ) );
@@ -188,6 +196,18 @@ public sealed partial class HackFileManagerView : Page
 		OdooEntryList.SelectionChanged += OdooEntryList_SelectionChanged;
 		OdooEntryList.Sorting += OdooEntryList_Sorting;
 		OdooEntryList.DoubleTapped += ( _, _ ) => ViewModel.OpenSelectedCommand.Execute( null );
+		OdooEntryList.ContainerContentChanging += EntryTable_ContainerContentChanging;
+		HackChangesList.ContainerContentChanging += EntryTable_ContainerContentChanging;
+		OdooChangesList.ContainerContentChanging += EntryTable_ContainerContentChanging;
+		GroupedEntryList.ItemsSource = _groupedItems;
+		GroupedEntryList.SelectionChanged += GroupedEntryList_SelectionChanged;
+		GroupedEntryList.ItemClick += GroupedEntryList_ItemClick;
+		GroupedEntryList.DoubleTapped += ( _, _ ) =>
+		{
+			if( ViewModel.SelectedEntries.Count > 0 )
+				ViewModel.OpenSelectedCommand.Execute( null );
+		};
+		GroupedEntryList.RightTapped += GroupedEntryList_RightTapped;
 		HackChangesList.DoubleTapped += ( _, _ ) => FocusEntryFromChanges( HackChangesList.SelectedItem as EntryRow );
 		OdooChangesList.DoubleTapped += ( _, _ ) => FocusEntryFromChanges( OdooChangesList.SelectedItem as EntryRow );
 		OdooHistory.SelectionChanged += OdooHistory_SelectionChanged;
@@ -240,11 +260,21 @@ public sealed partial class HackFileManagerView : Page
 	private void ApplyColumnSettings()
 	{
 		var info = UIStorage.ColumnsInfo;
-		OdooEntryList.FontSize = info.FontSize;
-		OdooEntryList.RowHeight = info.RowHeight;
+		double fontSize = Math.Clamp( info.FontSize, 10, 14 );
+		double rowHeight = Math.Clamp( info.RowHeight, 24, 48 );
+		OdooEntryList.FontSize = fontSize;
+		OdooEntryList.RowMinHeight = rowHeight;
+		OdooEntryList.RowHeight = rowHeight;
+		OdooEntryList.HeaderRowMinHeight = 24;
+		OdooEntryList.HeaderRowHeight = 26;
 		OdooEntryList.RowDetailsVisibilityMode = info.GroupCollapsed
 			? TableViewRowDetailsVisibilityMode.VisibleWhenSelected
 			: TableViewRowDetailsVisibilityMode.Collapsed;
+#if WINDOWS
+		OdooEntryList.DefaultGroupState = info.GroupCollapsed
+			? TableViewGroupState.Collapsed
+			: TableViewGroupState.Expanded;
+#endif
 
 		var defaults = new OdooEntryColumns().Columns;
 		foreach( TableViewColumn column in OdooEntryList.Columns )
@@ -269,7 +299,10 @@ public sealed partial class HackFileManagerView : Page
 		}
 
 		foreach( string field in EntryRowKeys.Names )
+		{
 			EntryGroupBy.Items.Add( new MenuFlyoutItem { Text = field, Command = ViewModel.GroupByCommand, CommandParameter = field } );
+			GroupByToolbarFlyout.Items.Add( new MenuFlyoutItem { Text = field, Command = ViewModel.GroupByCommand, CommandParameter = field } );
+		}
 	}
 
 	#endregion
@@ -352,11 +385,201 @@ public sealed partial class HackFileManagerView : Page
 			return;
 
 		await LoadSelectedEntriesAsync();
-		if( OdooEntryList.SelectedItems is { Count: > 0 } items && items[ 0 ] is EntryRow entry )
+		if( IsUsingGroupedList )
+		{
+			if( GroupedEntryList.SelectedItems.OfType<EntryRow>().FirstOrDefault() is { } groupedEntry )
+				GroupedEntryList.ScrollIntoView( groupedEntry );
+		}
+		else if( OdooEntryList.SelectedItems is { Count: > 0 } items && items[ 0 ] is EntryRow entry )
 			OdooEntryList.ScrollIntoView( entry );
 	}
 
-	private void OnGroupingChanged() => EntryListGrouping.Apply( OdooEntryList, ViewModel.Entries, ViewModel.ActiveGroupKey );
+	private void OnGroupingChanged()
+	{
+		EntryListGrouping.Apply( OdooEntryList, ViewModel.Entries, ViewModel.ActiveGroupKey );
+#if !WINDOWS
+		bool showGrouped = ViewModel.ActiveGroupKey is not null;
+		OdooEntryList.Visibility = showGrouped ? Visibility.Collapsed : Visibility.Visible;
+		GroupedEntryContainer.Visibility = showGrouped ? Visibility.Visible : Visibility.Collapsed;
+		if( showGrouped )
+		{
+			GroupedByLabel.Text = $"Grouped by {ViewModel.ActiveGroupFieldName}";
+			RebuildGroupedList();
+		}
+#endif
+	}
+
+	private void RebuildGroupedList()
+	{
+		if( ViewModel.ActiveGroupKey is not { } groupKey )
+		{
+			_groups.Clear();
+			_groupedItems.Clear();
+			return;
+		}
+		_groups = EntryListGrouping.BuildGroups(
+			ViewModel.Entries,
+			groupKey,
+			_collapsedGroupKeys.Count > 0 ? _collapsedGroupKeys : null,
+			UIStorage.ColumnsInfo.GroupCollapsed );
+		RefreshGroupedFlatList();
+	}
+
+	private void RefreshGroupedFlatList()
+	{
+		HashSet<EntryRow> previousSelection = [ .. ViewModel.SelectedEntries ];
+		_syncingGroupedSelection = true;
+		try
+		{
+			_groupedItems.ReplaceAll( EntryListGrouping.FlattenVisible( _groups ) );
+			GroupedEntryList.SelectedItems.Clear();
+			if( previousSelection.Count > 0 )
+			{
+				foreach( object item in _groupedItems )
+				{
+					if( item is EntryRow row && previousSelection.Contains( row ) )
+						GroupedEntryList.SelectedItems.Add( row );
+				}
+			}
+		}
+		finally
+		{
+			_syncingGroupedSelection = false;
+		}
+	}
+
+	private void GroupedEntryList_ItemClick( object sender, ItemClickEventArgs e )
+	{
+		if( e.ClickedItem is not EntryGroupHeader header )
+			return;
+		header.IsExpanded = !header.IsExpanded;
+		if( header.IsExpanded )
+			_collapsedGroupKeys.Remove( header.DisplayKey );
+		else
+			_collapsedGroupKeys.Add( header.DisplayKey );
+		RefreshGroupedFlatList();
+	}
+
+	private void GroupedEntryList_SelectionChanged( object sender, SelectionChangedEventArgs e )
+	{
+		if( _syncingGroupedSelection )
+			return;
+		List<EntryGroupHeader> selectedHeaders = [ .. GroupedEntryList.SelectedItems.OfType<EntryGroupHeader>() ];
+		if( selectedHeaders.Count > 0 )
+		{
+			_syncingGroupedSelection = true;
+			try
+			{
+				foreach( EntryGroupHeader header in selectedHeaders )
+					GroupedEntryList.SelectedItems.Remove( header );
+			}
+			finally
+			{
+				_syncingGroupedSelection = false;
+			}
+		}
+		ViewModel.SelectedEntries = [ .. GroupedEntryList.SelectedItems.OfType<EntryRow>() ];
+		if( ViewModel.SelectedEntries is [ var entry ] )
+			_ = ViewModel.ShowEntryDetailsAsync( entry );
+	}
+
+	private void GroupedEntryList_RightTapped( object sender, RightTappedRoutedEventArgs e )
+	{
+		if( ( e.OriginalSource as FrameworkElement )?.DataContext is EntryRow row
+			&& !GroupedEntryList.SelectedItems.Contains( row ) )
+		{
+			GroupedEntryList.SelectedItems.Clear();
+			GroupedEntryList.SelectedItems.Add( row );
+		}
+		OdooEntryList.ContextFlyout?.ShowAt( GroupedEntryList, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions
+		{
+			Position = e.GetPosition( GroupedEntryList ),
+		} );
+	}
+
+	private void ExpandAllGroups_Click( object sender, RoutedEventArgs e )
+	{
+		_collapsedGroupKeys.Clear();
+		foreach( EntryGroupHeader group in _groups )
+			group.IsExpanded = true;
+		RefreshGroupedFlatList();
+	}
+
+	private void CollapseAllGroups_Click( object sender, RoutedEventArgs e )
+	{
+		foreach( EntryGroupHeader group in _groups )
+		{
+			group.IsExpanded = false;
+			_collapsedGroupKeys.Add( group.DisplayKey );
+		}
+		RefreshGroupedFlatList();
+	}
+
+	private void GroupedSortColumn_Click( object sender, RoutedEventArgs e )
+	{
+		if( sender is not FrameworkElement { Tag: string field } )
+			return;
+		bool descending = ViewModel.EntrySort is var (currentField, currentDesc)
+			&& string.Equals( currentField, field, StringComparison.Ordinal )
+			&& !currentDesc;
+		ViewModel.SortEntries( field, descending );
+	}
+
+	private void SelectEntryRows( IReadOnlyList<EntryRow> rows, bool focus = false, bool scroll = true )
+	{
+		if( rows.Count == 0 )
+			return;
+		if( IsUsingGroupedList )
+		{
+			bool expandedAny = false;
+			foreach( EntryGroupHeader group in _groups )
+			{
+				if( !group.IsExpanded && group.Items.Any( rows.Contains ) )
+				{
+					group.IsExpanded = true;
+					_collapsedGroupKeys.Remove( group.DisplayKey );
+					expandedAny = true;
+				}
+			}
+			if( expandedAny )
+				RefreshGroupedFlatList();
+
+			GroupedEntryList.SelectedItems.Clear();
+			foreach( EntryRow row in rows )
+				if( _groupedItems.Contains( row ) )
+					GroupedEntryList.SelectedItems.Add( row );
+			if( focus )
+				GroupedEntryList.Focus( FocusState.Programmatic );
+			if( scroll )
+				GroupedEntryList.ScrollIntoView( rows[ 0 ] );
+			return;
+		}
+		OdooEntryList.SelectedItems.Clear();
+		if( rows.Count == 1 )
+			OdooEntryList.SelectedItem = rows[ 0 ];
+		else
+			foreach( EntryRow row in rows )
+				OdooEntryList.SelectedItems.Add( row );
+		if( focus )
+			OdooEntryList.Focus( FocusState.Programmatic );
+		if( scroll )
+			OdooEntryList.ScrollIntoView( rows[ 0 ] );
+	}
+
+	private void EntryTable_ContainerContentChanging( ListViewBase sender, ContainerContentChangingEventArgs args )
+	{
+		if( args.ItemContainer is not Control container )
+			return;
+		if( args.InRecycleQueue )
+		{
+			container.ClearValue( Control.BackgroundProperty );
+			return;
+		}
+		if( args.Item is EntryRow entry && StatusBrushes.ForTableRow( entry.Status ) is { } brush )
+			container.Background = brush;
+		else
+			container.ClearValue( Control.BackgroundProperty );
+	}
 
 	private void OnViewModelPropertyChanged( object? sender, PropertyChangedEventArgs e )
 	{
@@ -386,18 +609,47 @@ public sealed partial class HackFileManagerView : Page
 		{
 			OdooEntryImage.Source = image;
 			NoPreviewPanel.Visibility = image is null ? Visibility.Visible : Visibility.Collapsed;
+			SyncPipPreview();
 		}
 	}
 
-	/// <summary>A row was rebuilt from its changed file: if it was selected, the new one is (which also refreshes the details and preview).</summary>
+	private void SyncPipPreview()
+	{
+		if( _pipWindow is null )
+			return;
+		string title = ViewModel.SelectedEntries is [ var single ] && !string.IsNullOrWhiteSpace( single.Name )
+			? $"Preview — {single.Name}"
+			: "Preview";
+		_pipWindow.SetPreview( OdooEntryImage.Source, ViewModel.PreviewStatusText, title );
+	}
+
+	/// <summary>A row was added, deleted, or rebuilt from its changed file: updates grouped view and keeps selection intact.</summary>
 	private void OnRowReplaced( EntryRow? old, EntryRow? row )
 	{
-		if( old is null || row is null || ViewModel.SelectedEntries is not { Count: > 0 } selected || !selected.Contains( old ) )
+		if( IsUsingGroupedList )
+			RebuildGroupedList();
+
+		if( old is null )
 			return;
-		if( selected.Count == 1 )
-			OdooEntryList.SelectedItem = row;
-		else
-			OdooEntryList.SelectedItems.Add( row );
+
+		var selected = ViewModel.SelectedEntries;
+		if( selected is not { Count: > 0 } || !selected.Contains( old ) )
+			return;
+
+		if( row is null )
+		{
+			// A selected file was removed: refresh selection from remaining rows
+			List<EntryRow> remaining = [ .. selected.Where( r => !ReferenceEquals( r, old ) && ViewModel.Entries.Contains( r ) ) ];
+			ViewModel.SelectedEntries = remaining;
+			if( remaining.Count == 0 )
+				_ = ViewModel.ShowEntryDetailsAsync( null );
+			else
+				SelectEntryRows( remaining, scroll: false );
+			return;
+		}
+
+		List<EntryRow> updated = [ .. selected.Select( r => ReferenceEquals( r, old ) ? row : r ).Where( ViewModel.Entries.Contains ) ];
+		SelectEntryRows( updated.Count > 0 ? updated : [ row ], scroll: false );
 	}
 
 	#endregion
@@ -457,18 +709,17 @@ public sealed partial class HackFileManagerView : Page
 	/// <summary>The node of <paramref name="treePath"/>, or of its nearest parent that is in the tree and not inside a collapsed folder.</summary>
 	private TreeViewNode? VisibleNodeFor( string treePath )
 	{
-		string[] parts = treePath.Split( PwaPaths.NameSeparator, StringSplitOptions.RemoveEmptyEntries );
-		TreeViewNode? node = null;
-		IEnumerable<TreeViewNode> level = OdooDirectoryTree.RootNodes;
+		if( OdooDirectoryTree.RootNodes.FirstOrDefault() is not { } node )
+			return null;
+		string[] parts = PwaPaths.Segments( treePath );
 		foreach( string part in parts )
 		{
-			TreeViewNode? next = level.FirstOrDefault( n => string.Equals( n.LinkedData.Name, part, StringComparison.OrdinalIgnoreCase ) );
+			if( !node.IsExpanded )
+				break; // its children are not shown
+			TreeViewNode? next = node.Children.FirstOrDefault( n => string.Equals( n.LinkedData.Name, part, StringComparison.OrdinalIgnoreCase ) );
 			if( next is null )
 				break;
 			node = next;
-			if( !node.IsExpanded )
-				break; // its children are not shown
-			level = node.Children;
 		}
 		return node;
 	}
@@ -686,12 +937,7 @@ public sealed partial class HackFileManagerView : Page
 		IReadOnlyList<EntryRow> rows = ViewModel.TakeSelectionToRestore();
 		if( rows.Count == 0 )
 			return;
-		if( rows.Count == 1 )
-			OdooEntryList.SelectedItem = rows[ 0 ];
-		else
-			foreach( EntryRow row in rows )
-				OdooEntryList.SelectedItems.Add( row );
-		OdooEntryList.ScrollIntoView( rows[ 0 ] );
+		SelectEntryRows( rows );
 	}
 
 	/// <summary>Shows the kept sort on its column header.</summary>
@@ -752,8 +998,11 @@ public sealed partial class HackFileManagerView : Page
 	private void VersionTabs_SelectionChanged( object sender, SelectionChangedEventArgs e )
 	{
 		ViewModel.SelectedDetailTab = ( VersionTabs.SelectedItem as TabViewItem )?.Name;
-		if( e.AddedItems.Count > 0 && OdooEntryList.SelectedItem is EntryRow entry )
-			_ = ViewModel.ShowEntryDetailsAsync( entry );
+		EntryRow? selected = IsUsingGroupedList
+			? GroupedEntryList.SelectedItems.OfType<EntryRow>().FirstOrDefault()
+			: OdooEntryList.SelectedItem as EntryRow;
+		if( e.AddedItems.Count > 0 && selected is not null )
+			_ = ViewModel.ShowEntryDetailsAsync( selected );
 	}
 
 	private void OdooEntryList_Sorting( object? sender, TableViewSortingEventArgs e )
@@ -822,9 +1071,7 @@ public sealed partial class HackFileManagerView : Page
 
 			EntryRow entry = ViewModel.Entries.FirstOrDefault( e => e.Name == fileName )
 				?? throw new ArgumentException( "entry doesn't exist", nameof( fileName ) );
-			OdooEntryList.SelectedItem = entry;
-			OdooEntryList.Focus( FocusState.Programmatic );
-			OdooEntryList.ScrollIntoView( entry );
+			SelectEntryRows( [ entry ], focus: true, scroll: true );
 		}
 		catch( Exception ex )
 		{
@@ -849,9 +1096,7 @@ public sealed partial class HackFileManagerView : Page
 		if( entry is null )
 			return;
 		ListTabs.SelectedItem = RootEntryList;
-		OdooEntryList.SelectedItem = entry;
-		OdooEntryList.Focus( FocusState.Programmatic );
-		OdooEntryList.ScrollIntoView( entry );
+		SelectEntryRows( [ entry ], focus: true, scroll: true );
 	}
 
 	private void HackFileManagerView_KeyDown( object sender, KeyRoutedEventArgs e )
@@ -902,12 +1147,20 @@ public sealed partial class HackFileManagerView : Page
 			return;
 		}
 
-		ImageSlot.Children.Remove( OdooEntryImage );
-		_pipWindow = new PipWindow();
-		_pipWindow.HostComponent( OdooEntryImage );
-		_pipWindow.ReturnRequested += ( _, _ ) => ReturnPreviewToPage();
-		_pipWindow.Closed += OnPipWindowClosed;
-		_pipWindow.Activate();
+		try
+		{
+			PipWindow pip = new();
+			pip.ReturnRequested += ( _, _ ) => ReturnPreviewToPage();
+			pip.Closed += OnPipWindowClosed;
+			_pipWindow = pip;
+			SyncPipPreview();
+			pip.Activate();
+		}
+		catch( Exception ex )
+		{
+			_pipWindow = null;
+			HackPDM.Core.Logging.HackLogger.Error( "FileManager", $"Opening PiP preview window failed: {ex.Message}", ex );
+		}
 	}
 
 	private void ReturnPreviewToPage()
@@ -915,27 +1168,28 @@ public sealed partial class HackFileManagerView : Page
 		if( _pipWindow is null )
 			return;
 
-		if( _pipWindow.ReleaseComponent() is { } component && !ImageSlot.Children.Contains( component ) )
-			ImageSlot.Children.Add( component );
-		_pipWindow.Closed -= OnPipWindowClosed;
-		_pipWindow.Close();
+		PipWindow pip = _pipWindow;
 		_pipWindow = null;
+		pip.Closed -= OnPipWindowClosed;
+		try
+		{
+			pip.Close();
+		}
+		catch
+		{
+			// Window may already be closing
+		}
 	}
 
 	private void OnPipWindowClosed( object sender, WindowEventArgs args )
 	{
-		_pipWindow?.Closed -= OnPipWindowClosed;
-		_pipWindow = null;
-
-		// put the preview back once the window is gone (on the UI thread, avoiding duplicates)
-		UiDispatcher.Post( () =>
+		if( _pipWindow is not null )
 		{
-			if( ImageSlot.Children.Contains( OdooEntryImage ) )
-				return;
-			if( OdooEntryImage.Parent is Panel parent )
-				parent.Children.Remove( OdooEntryImage );
-			ImageSlot.Children.Add( OdooEntryImage );
-		} );
+			_pipWindow.Closed -= OnPipWindowClosed;
+			_pipWindow = null;
+		}
+		if( _left )
+			return;
 	}
 
 	#endregion
@@ -1362,15 +1616,46 @@ public sealed partial class HackFileManagerView : Page
 
 	private void StartPaneDrag( string paneTag, UIElement grip, PointerRoutedEventArgs e )
 	{
+		if( !e.GetCurrentPoint( grip ).Properties.IsLeftButtonPressed )
+			return;
+
 		_draggingPaneTag = paneTag;
 		_isDraggingGrip = true;
 		_activeDropZone = null;
 		grip.CapturePointer( e.Pointer );
 
+		// Position zones into strictly disjoint cells for the pane being dragged
 		ZoneLeft.Visibility = paneTag == "Folders" ? Visibility.Visible : Visibility.Collapsed;
 		ZoneRight.Visibility = paneTag is "Folders" or "Details" ? Visibility.Visible : Visibility.Collapsed;
 		ZoneBottom.Visibility = paneTag == "Details" ? Visibility.Visible : Visibility.Collapsed;
-		ZoneSwapPreview.Visibility = paneTag is "Preview" or "Details" ? Visibility.Visible : Visibility.Collapsed;
+		ZoneSwapPreview.Visibility = paneTag == "Preview" ? Visibility.Visible : Visibility.Collapsed;
+
+		if( paneTag == "Details" )
+		{
+			// Disjoint: Bottom occupies Row 1 Col 0..1; Right occupies Row 0..1 Col 2
+			Grid.SetRow( ZoneBottom, 1 );
+			Grid.SetRowSpan( ZoneBottom, 1 );
+			Grid.SetColumn( ZoneBottom, 0 );
+			Grid.SetColumnSpan( ZoneBottom, 2 );
+		}
+		else if( paneTag == "Preview" )
+		{
+			// Position swap target where the inspector/details panel sits
+			if( LayoutSettings.DetailsDock == DetailsDockPosition.Right )
+			{
+				Grid.SetRow( ZoneSwapPreview, 0 );
+				Grid.SetRowSpan( ZoneSwapPreview, 2 );
+				Grid.SetColumn( ZoneSwapPreview, 2 );
+				Grid.SetColumnSpan( ZoneSwapPreview, 1 );
+			}
+			else
+			{
+				Grid.SetRow( ZoneSwapPreview, 1 );
+				Grid.SetRowSpan( ZoneSwapPreview, 1 );
+				Grid.SetColumn( ZoneSwapPreview, 0 );
+				Grid.SetColumnSpan( ZoneSwapPreview, 3 );
+			}
+		}
 
 		UpdateDropZoneHighlights( null );
 		DockDropOverlay.Visibility = Visibility.Visible;
@@ -1381,25 +1666,50 @@ public sealed partial class HackFileManagerView : Page
 	{
 		if( !_isDraggingGrip || _draggingPaneTag is null )
 			return;
-		var pos = e.GetCurrentPoint( WorkspaceGrid ).Position;
-		double w = Math.Max( 1, WorkspaceGrid.ActualWidth );
-		double h = Math.Max( 1, WorkspaceGrid.ActualHeight );
-		double nx = pos.X / w;
-		double ny = pos.Y / h;
 
-		string? zone = _draggingPaneTag switch
-		{
-			"Folders" => nx < 0.45 ? "Left" : "Right",
-			"Details" => nx > 0.65 && ny < 0.72 ? "Right" : ny > 0.55 ? "Bottom" : null,
-			"Preview" => ny > 0.35 ? "SwapPreview" : null,
-			_ => null,
-		};
+		var pos = e.GetCurrentPoint( DockDropOverlay ).Position;
+		string? zone = HitTestDropZone( pos );
 
 		if( zone != _activeDropZone )
 		{
 			_activeDropZone = zone;
 			UpdateDropZoneHighlights( zone );
 		}
+	}
+
+	private string? HitTestDropZone( Windows.Foundation.Point pos )
+	{
+		if( IsPointInZone( ZoneLeft, pos ) ) return "Left";
+		if( IsPointInZone( ZoneRight, pos ) ) return "Right";
+		if( IsPointInZone( ZoneBottom, pos ) ) return "Bottom";
+		if( IsPointInZone( ZoneSwapPreview, pos ) ) return "SwapPreview";
+		return null;
+	}
+
+	private bool IsPointInZone( Border zone, Windows.Foundation.Point pos )
+	{
+		if( zone.Visibility != Visibility.Visible || zone.ActualWidth <= 0 || zone.ActualHeight <= 0 )
+			return false;
+		try
+		{
+			var origin = zone.TransformToVisual( DockDropOverlay ).TransformPoint( new Windows.Foundation.Point( 0, 0 ) );
+			return pos.X >= origin.X && pos.X <= origin.X + zone.ActualWidth
+				&& pos.Y >= origin.Y && pos.Y <= origin.Y + zone.ActualHeight;
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	private void PaneGrip_PointerCaptureLost( object sender, PointerRoutedEventArgs e )
+	{
+		if( !_isDraggingGrip )
+			return;
+		_draggingPaneTag = null;
+		_isDraggingGrip = false;
+		_activeDropZone = null;
+		DockDropOverlay.Visibility = Visibility.Collapsed;
 	}
 
 	private void PaneGrip_PointerReleased( object sender, PointerRoutedEventArgs e )

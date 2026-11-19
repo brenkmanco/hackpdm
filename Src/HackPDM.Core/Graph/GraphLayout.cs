@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
 namespace HackPDM.Core.Graph;
 
 /// <summary>Spacing and node sizes for <see cref="GraphLayout"/>, in device-independent pixels.</summary>
@@ -26,8 +30,15 @@ public sealed record NodeBox( GraphNode Node, int Layer, double X, double Y, dou
 	public (double X, double Y) OutPort => (X + Width, Y + Height / 2);
 }
 
-/// <summary>A link drawn from a parent's output port to a child's input port.</summary>
-public sealed record EdgeRoute( GraphEdge Edge, double FromX, double FromY, double ToX, double ToY );
+/// <summary>
+/// A link drawn from a parent's output port to a child's input port, optionally passing through
+/// intermediate <see cref="BendPoints"/> that route multi-layer or cycle links around intervening boxes.
+/// </summary>
+public sealed record EdgeRoute( GraphEdge Edge, double FromX, double FromY, double ToX, double ToY )
+{
+	/// <summary>Optional intermediate waypoints (empty for direct adjacent-column links).</summary>
+	public IReadOnlyList<(double X, double Y)> BendPoints { get; init; } = [];
+}
 
 /// <summary>A laid-out graph: boxes, links and the size of the area they cover.</summary>
 public sealed record GraphLayoutResult( IReadOnlyList<NodeBox> Nodes, IReadOnlyList<EdgeRoute> Edges, double Width, double Height )
@@ -39,14 +50,22 @@ public sealed record GraphLayoutResult( IReadOnlyList<NodeBox> Nodes, IReadOnlyL
 }
 
 /// <summary>
-/// Lays a dependency graph out in columns, parents always left of their children: with
-/// <see cref="GraphDirection.Children"/> the selected files are the leftmost column, with
-/// <see cref="GraphDirection.Parents"/> the rightmost, with <see cref="GraphDirection.Both"/> in the middle.
-/// A file sits one column past the farthest file that links to it, so a part used both directly and
-/// through a sub-assembly lines up after the sub-assembly. Boxes grow with the file's size.
+/// Lays a dependency graph out in columns using a Sugiyama-style pipeline:
+/// <list type="number">
+/// <item>Deterministic DFS cycle breaking and longest-path layering (with dependent multi-root relaxation).</item>
+/// <item>Weakly connected component separation with a shared global column X grid.</item>
+/// <item>Dummy-node insertion for long-span edges so multi-column links route through clean corridors.</item>
+/// <item>DFS initial ordering + weighted median/barycenter + adjacent transpose crossing minimization.</item>
+/// <item>Variable-height 4-direction Brandes–Köpf vertical alignment with DAG block compaction and hub centering.</item>
+/// <item>Waypoint routing for multi-layer forward links and cycle back-edges.</item>
+/// </list>
 /// </summary>
 public static class GraphLayout
 {
+	private const int MaxDummyNodes = 10_000;
+	private const int MaxCrossingSweeps = 24;
+	private const int MaxNoImproveSweeps = 4;
+
 	/// <summary>How big a file's box is, from 0 (10 KB or less) to 1 (100 MB or more), on a log scale.</summary>
 	public static double SizeFactor( long bytes ) => Math.Clamp( ( Math.Log10( Math.Max( bytes, 1 ) ) - 4 ) / 4, 0, 1 );
 
@@ -70,141 +89,1329 @@ public static class GraphLayout
 		if( nodes.Count == 0 )
 			return GraphLayoutResult.Empty;
 
-		List<GraphEdge> edges = [ .. graph.Edges.Where( e => e.Parent != e.Child && nodes.ContainsKey( e.Parent ) && nodes.ContainsKey( e.Child ) ).Distinct() ];
+		List<GraphEdge> edges =
+		[
+			.. graph.Edges
+				.Where( e => e.Parent != e.Child && nodes.ContainsKey( e.Parent ) && nodes.ContainsKey( e.Child ) )
+				.Distinct()
+				.OrderBy( e => e.Parent )
+				.ThenBy( e => e.Child ),
+		];
 		ILookup<int, int> childrenOf = edges.ToLookup( e => e.Parent, e => e.Child );
 		ILookup<int, int> parentsOf = edges.ToLookup( e => e.Child, e => e.Parent );
 		List<int> roots = [ .. graph.Roots.Where( nodes.ContainsKey ).Distinct() ];
 		HashSet<int> rootSet = [ .. roots ];
+		Dictionary<int, int> rootOrder = roots.Select( ( id, idx ) => (id, idx) ).ToDictionary( p => p.id, p => p.idx );
 
-		Dictionary<int, int> layer = roots.ToDictionary( r => r, _ => 0 );
-		List<int> discovery = [ .. roots ];
-		HashSet<int> down = [];
-		if( direction != GraphDirection.Parents )
+		// Stage 1: Cycle-safe longest-path layer assignment
+		Dictionary<int, int> layer = AssignLayers( nodes, roots, rootSet, childrenOf, parentsOf, direction );
+
+		// Global column X grid shared across all components so Layer k aligns vertically
+		var sizes = nodes.ToDictionary( p => p.Key, p => BoxSize( p.Value.Size, options ) );
+		List<int> distinctLayers = [ .. layer.Values.Distinct().Order() ];
+		Dictionary<int, int> layerToCol = distinctLayers.Select( ( l, idx ) => (l, idx) ).ToDictionary( p => p.l, p => p.idx );
+		int globalColCount = distinctLayers.Count;
+
+		double[] colWidth = new double[ globalColCount ];
+		foreach( var (id, l) in layer )
 		{
-			down = Reach( roots, childrenOf, discovery );
-			Relax( down, rootSet, childrenOf, layer, +1, nodes.Count );
+			int c = layerToCol[ l ];
+			double w = sizes[ id ].Width;
+			if( w > colWidth[ c ] )
+				colWidth[ c ] = w;
 		}
-		if( direction != GraphDirection.Children )
+		double[] colLeft = new double[ globalColCount ];
+		double[] colRight = new double[ globalColCount ];
+		double curX = options.Margin;
+		for( int c = 0; c < globalColCount; c++ )
 		{
-			HashSet<int> up = Reach( roots, parentsOf, discovery );
-			up.ExceptWith( down.Except( rootSet ) );
-			Relax( up, rootSet, parentsOf, layer, -1, nodes.Count );
+			colLeft[ c ] = curX;
+			colRight[ c ] = curX + colWidth[ c ];
+			curX += colWidth[ c ] + options.ColumnGap;
 		}
-		// anything the server sent that is not linked to a selected file joins the selected column
-		foreach( int id in nodes.Keys.Except( layer.Keys ).Order() )
+		double baseWidth = curX - options.ColumnGap + options.Margin;
+
+		// Stage 2: Weakly connected components (multi-node components first, singletons grouped cleanly)
+		List<List<int>> components = PartitionComponents( nodes, edges, rootOrder );
+
+		List<NodeBox> allBoxes = [];
+		Dictionary<int, NodeBox> boxesById = new( nodes.Count );
+		List<EdgeRoute> allRoutes = new( edges.Count );
+
+		double cursorY = options.Margin;
+		double maxX = baseWidth;
+		double maxY = options.Margin;
+		double componentGap = Math.Max( options.RowGap * 2.0, 48.0 );
+		bool prevWasSingleton = false;
+
+		for( int compIndex = 0; compIndex < components.Count; compIndex++ )
 		{
-			layer[ id ] = 0;
-			discovery.Add( id );
+			List<int> compNodes = components[ compIndex ];
+			bool isSingleton = compNodes.Count == 1;
+			if( compIndex > 0 )
+				cursorY += ( isSingleton && prevWasSingleton ) ? options.RowGap : componentGap;
+			prevWasSingleton = isSingleton;
+
+			if( isSingleton )
+			{
+				int id = compNodes[ 0 ];
+				int c = layerToCol[ layer[ id ] ];
+				var (w, h) = sizes[ id ];
+				double x = colLeft[ c ] + ( colWidth[ c ] - w ) / 2.0;
+				NodeBox box = new( nodes[ id ], layer[ id ], x, cursorY, w, h, rootSet.Contains( id ) );
+				allBoxes.Add( box );
+				boxesById[ id ] = box;
+				cursorY += h;
+				if( box.X + box.Width + options.Margin > maxX ) maxX = box.X + box.Width + options.Margin;
+				if( box.Y + box.Height + options.Margin > maxY ) maxY = box.Y + box.Height + options.Margin;
+				continue;
+			}
+
+			HashSet<int> compSet = [ .. compNodes ];
+			List<GraphEdge> compEdges = [ .. edges.Where( e => compSet.Contains( e.Parent ) && compSet.Contains( e.Child ) ) ];
+
+			// Stages 3-6 for this component
+			var (compBoxes, compRoutes, compHeight, compMaxX, compMaxY) = LayoutComponent(
+				compNodes, compEdges, nodes, sizes, layer, layerToCol, colLeft, colRight, colWidth,
+				rootSet, rootOrder, direction, options, cursorY );
+
+			foreach( NodeBox box in compBoxes )
+			{
+				allBoxes.Add( box );
+				boxesById[ box.Node.Id ] = box;
+			}
+			allRoutes.AddRange( compRoutes );
+
+			cursorY += compHeight;
+			if( compMaxX + options.Margin > maxX ) maxX = compMaxX + options.Margin;
+			if( compMaxY + options.Margin > maxY ) maxY = compMaxY + options.Margin;
 		}
 
-		List<List<int>> columns = OrderColumns( layer, discovery, childrenOf, parentsOf );
-		return Place( columns, layer, nodes, rootSet, edges, options );
+		double finalHeight = Math.Max( cursorY + options.Margin, maxY );
+		return new GraphLayoutResult( allBoxes, allRoutes, maxX, finalHeight );
 	}
 
-	/// <summary>Everything reachable from <paramref name="roots"/> through <paramref name="next"/>, the roots included; new ids are appended to <paramref name="discovery"/>.</summary>
-	private static HashSet<int> Reach( List<int> roots, ILookup<int, int> next, List<int> discovery )
+	// ================================================================== Stage 1: Layer Assignment
+
+	private static Dictionary<int, int> AssignLayers(
+		Dictionary<int, GraphNode> nodes,
+		List<int> roots,
+		HashSet<int> rootSet,
+		ILookup<int, int> childrenOf,
+		ILookup<int, int> parentsOf,
+		GraphDirection direction )
+	{
+		Dictionary<int, int> layer = roots.ToDictionary( r => r, _ => 0 );
+		HashSet<int> down = [];
+
+		if( direction != GraphDirection.Parents )
+		{
+			down = Reach( roots, childrenOf );
+			HashSet<int> pinnedDownRoots = FindIndependentRoots( roots, down, parentsOf );
+			AssignDirectionLayers( down, pinnedDownRoots, roots, childrenOf, layer, step: +1 );
+		}
+
+		if( direction != GraphDirection.Children )
+		{
+			HashSet<int> up = Reach( roots, parentsOf );
+			// In Both mode, keep nodes strictly placed on the downstream side out of upstream layering
+			HashSet<int> downNonRoots = [ .. down.Where( id => !rootSet.Contains( id ) ) ];
+			up.ExceptWith( downNonRoots );
+			// Also keep roots that were pushed downstream (layer > 0) out of upstream re-pinning
+			HashSet<int> pushedRoots = [ .. roots.Where( r => layer.TryGetValue( r, out int l ) && l > 0 ) ];
+			up.ExceptWith( pushedRoots );
+
+			HashSet<int> pinnedUpRoots = FindIndependentRoots(
+				[ .. roots.Where( up.Contains ) ], up, childrenOf );
+			AssignDirectionLayers( up, pinnedUpRoots, [ .. roots.Where( up.Contains ) ], parentsOf, layer, step: -1 );
+		}
+
+		// Anything not linked to a selected file joins layer 0
+		foreach( int id in nodes.Keys.Order() )
+			layer.TryAdd( id, 0 );
+
+		return layer;
+	}
+
+	private static HashSet<int> Reach( List<int> roots, ILookup<int, int> next )
 	{
 		HashSet<int> seen = [ .. roots ];
 		Queue<int> queue = new( roots );
 		while( queue.TryDequeue( out int id ) )
 			foreach( int n in next[ id ] )
 				if( seen.Add( n ) )
-				{
 					queue.Enqueue( n );
-					if( !discovery.Contains( n ) )
-						discovery.Add( n );
-				}
 		return seen;
 	}
 
-	/// <summary>Longest-path layering: each file goes one step (<paramref name="step"/>) past the farthest file linking to it. Cycles stop growing after <paramref name="limit"/> passes.</summary>
-	private static void Relax( HashSet<int> set, HashSet<int> roots, ILookup<int, int> next, Dictionary<int, int> layer, int step, int limit )
+	/// <summary>
+	/// Roots that have no incoming edge from another node in <paramref name="subset"/> stay anchored at layer 0;
+	/// dependent roots (e.g. when selecting an assembly and its parts via "Select all") are allowed to relax
+	/// into downstream/upstream columns. If all roots form a cycle, anchor the earliest root(s).
+	/// </summary>
+	private static HashSet<int> FindIndependentRoots( List<int> roots, HashSet<int> subset, ILookup<int, int> incoming )
 	{
-		for( int pass = 0; pass < limit; pass++ )
+		HashSet<int> independent = [];
+		foreach( int r in roots )
 		{
-			bool changed = false;
-			foreach( int id in set )
+			if( !incoming[ r ].Any( p => subset.Contains( p ) && p != r ) )
+				independent.Add( r );
+		}
+		if( independent.Count == 0 && roots.Count > 0 )
+			independent.Add( roots[ 0 ] );
+		return independent;
+	}
+
+	/// <summary>
+	/// Deterministic DFS cycle breaking followed by Kahn topological longest-path layering in O(V + E).
+	/// </summary>
+	private static void AssignDirectionLayers(
+		HashSet<int> subset,
+		HashSet<int> pinnedRoots,
+		List<int> rootOrder,
+		ILookup<int, int> forward,
+		Dictionary<int, int> layer,
+		int step )
+	{
+		if( subset.Count == 0 )
+			return;
+
+		// Build deterministic DFS start order: pinned roots first, then remaining roots, then remaining subset
+		List<int> starts = [];
+		HashSet<int> added = [];
+		foreach( int r in rootOrder )
+			if( pinnedRoots.Contains( r ) && added.Add( r ) )
+				starts.Add( r );
+		foreach( int r in rootOrder )
+			if( subset.Contains( r ) && added.Add( r ) )
+				starts.Add( r );
+		foreach( int id in subset.Order() )
+			if( added.Add( id ) )
+				starts.Add( id );
+
+		// Iterative DFS to mark back-edges (breaks all cycles cleanly without stack overflow on deep chains)
+		Dictionary<int, int> state = new( subset.Count ); // 0 = unvisited, 1 = on stack, 2 = done
+		HashSet<(int From, int To)> backEdges = [];
+
+		foreach( int start in starts )
+		{
+			if( state.GetValueOrDefault( start ) != 0 )
+				continue;
+
+			Stack<(int Node, List<int> Neighbors, int Index)> stack = new();
+			state[ start ] = 1;
+			stack.Push( (start, [ .. forward[ start ].Where( subset.Contains ).Order() ], 0) );
+
+			while( stack.Count > 0 )
 			{
-				if( !layer.TryGetValue( id, out int at ) )
-					continue;
-				foreach( int n in next[ id ] )
+				var (u, neighbors, idx) = stack.Pop();
+				if( idx < neighbors.Count )
 				{
-					if( !set.Contains( n ) || roots.Contains( n ) )
-						continue;
-					int want = at + step;
-					if( Math.Abs( want ) > limit )
-						continue;
-					if( !layer.TryGetValue( n, out int current ) || ( step > 0 ? want > current : want < current ) )
+					stack.Push( (u, neighbors, idx + 1) );
+					int v = neighbors[ idx ];
+					int vState = state.GetValueOrDefault( v );
+					if( vState == 1 )
 					{
-						layer[ n ] = want;
-						changed = true;
+						backEdges.Add( (u, v) );
+					}
+					else if( vState == 0 )
+					{
+						state[ v ] = 1;
+						stack.Push( (v, [ .. forward[ v ].Where( subset.Contains ).Order() ], 0) );
 					}
 				}
+				else
+				{
+					state[ u ] = 2;
+				}
 			}
-			if( !changed )
-				break;
+		}
+
+		// Build DAG adjacency and in-degrees (excluding back-edges and edges targeting pinned roots)
+		Dictionary<int, List<int>> dag = new( subset.Count );
+		Dictionary<int, int> inDeg = new( subset.Count );
+		foreach( int u in subset )
+		{
+			dag[ u ] = [];
+			inDeg[ u ] = 0;
+		}
+		foreach( int u in subset )
+		{
+			foreach( int v in forward[ u ] )
+			{
+				if( !subset.Contains( v ) || pinnedRoots.Contains( v ) || backEdges.Contains( (u, v) ) )
+					continue;
+				dag[ u ].Add( v );
+				inDeg[ v ]++;
+			}
+		}
+
+		// Initialize anchored roots to 0 and run Kahn topological longest-path
+		Queue<int> queue = new();
+		foreach( int u in starts )
+		{
+			if( inDeg[ u ] == 0 )
+			{
+				layer[ u ] = 0;
+				queue.Enqueue( u );
+			}
+		}
+
+		while( queue.TryDequeue( out int u ) )
+		{
+			int at = layer.GetValueOrDefault( u, 0 );
+			foreach( int v in dag[ u ] )
+			{
+				int want = at + step;
+				if( !layer.TryGetValue( v, out int current ) || ( step > 0 ? want > current : want < current ) )
+					layer[ v ] = want;
+				if( --inDeg[ v ] == 0 )
+					queue.Enqueue( v );
+			}
 		}
 	}
 
-	/// <summary>The files of each column, top to bottom, ordered to cross fewer links (barycenter sweeps).</summary>
-	private static List<List<int>> OrderColumns( Dictionary<int, int> layer, List<int> discovery, ILookup<int, int> childrenOf, ILookup<int, int> parentsOf )
-	{
-		Dictionary<int, int> found = discovery.Select( ( id, i ) => (id, i) ).ToDictionary( p => p.id, p => p.i );
-		List<List<int>> columns = [ .. layer.GroupBy( p => p.Value ).OrderBy( g => g.Key )
-			.Select( g => g.Select( p => p.Key ).OrderBy( id => found.GetValueOrDefault( id, int.MaxValue ) ).ToList() ) ];
+	// ================================================================== Stage 2: Components
 
-		for( int sweep = 0; sweep < 4; sweep++ )
+	private static List<List<int>> PartitionComponents(
+		Dictionary<int, GraphNode> nodes,
+		List<GraphEdge> edges,
+		Dictionary<int, int> rootOrder )
+	{
+		Dictionary<int, List<int>> undirected = new( nodes.Count );
+		foreach( int id in nodes.Keys )
+			undirected[ id ] = [];
+		foreach( GraphEdge e in edges )
 		{
-			bool rightward = sweep % 2 == 0;
-			IEnumerable<int> order = rightward ? Enumerable.Range( 1, columns.Count - 1 ) : Enumerable.Range( 0, columns.Count - 1 ).Reverse();
-			foreach( int c in order )
+			undirected[ e.Parent ].Add( e.Child );
+			undirected[ e.Child ].Add( e.Parent );
+		}
+
+		HashSet<int> visited = new( nodes.Count );
+		List<List<int>> components = [];
+		foreach( int start in nodes.Keys.OrderBy( id => rootOrder.GetValueOrDefault( id, int.MaxValue ) ).ThenBy( id => id ) )
+		{
+			if( !visited.Add( start ) )
+				continue;
+			List<int> comp = [];
+			Queue<int> q = new();
+			q.Enqueue( start );
+			while( q.TryDequeue( out int u ) )
 			{
-				List<int> reference = columns[ rightward ? c - 1 : c + 1 ];
-				Dictionary<int, int> at = reference.Select( ( id, i ) => (id, i) ).ToDictionary( p => p.id, p => p.i );
-				List<int> column = columns[ c ];
-				Dictionary<int, double> weight = [];
-				for( int i = 0; i < column.Count; i++ )
+				comp.Add( u );
+				foreach( int v in undirected[ u ] )
+					if( visited.Add( v ) )
+						q.Enqueue( v );
+			}
+			components.Add( comp );
+		}
+
+		// Multi-node components first (by earliest root, then size desc, then min id), then singletons
+		return
+		[
+			.. components
+				.OrderBy( c => c.Count == 1 ? 1 : 0 )
+				.ThenBy( c => c.Min( id => rootOrder.GetValueOrDefault( id, int.MaxValue ) ) )
+				.ThenByDescending( c => c.Count )
+				.ThenBy( c => c.Min() ),
+		];
+	}
+
+	// ================================================================== Stages 3-6: Per-Component Layout
+
+	private sealed record EdgeChain( GraphEdge Edge, bool ReversedForOrdering, List<int> DummyIds, bool SameColumn );
+
+	private static (List<NodeBox> Boxes, List<EdgeRoute> Routes, double Height, double MaxX, double MaxY) LayoutComponent(
+		List<int> compNodes,
+		List<GraphEdge> compEdges,
+		Dictionary<int, GraphNode> allNodes,
+		Dictionary<int, (double Width, double Height)> sizes,
+		Dictionary<int, int> layer,
+		Dictionary<int, int> globalLayerToCol,
+		double[] globalColLeft,
+		double[] globalColRight,
+		double[] globalColWidth,
+		HashSet<int> rootSet,
+		Dictionary<int, int> rootOrder,
+		GraphDirection direction,
+		LayoutOptions o,
+		double offsetY )
+	{
+		// Local dense column index range spanned by this component
+		int minGlobalCol = compNodes.Min( id => globalLayerToCol[ layer[ id ] ] );
+		int maxGlobalCol = compNodes.Max( id => globalLayerToCol[ layer[ id ] ] );
+		int numCols = maxGlobalCol - minGlobalCol + 1;
+
+		// Vertex indexing: 0..realCount-1 are real nodes; realCount..totalVerts-1 are dummy nodes
+		List<int> realIds = [ .. compNodes ];
+		Dictionary<int, int> nodeIdToVert = new( realIds.Count );
+		List<int> vertCol = new( realIds.Count );
+		List<double> vertHeight = new( realIds.Count );
+		List<bool> isDummy = new( realIds.Count );
+
+		for( int i = 0; i < realIds.Count; i++ )
+		{
+			int id = realIds[ i ];
+			nodeIdToVert[ id ] = i;
+			vertCol.Add( globalLayerToCol[ layer[ id ] ] - minGlobalCol );
+			vertHeight.Add( sizes[ id ].Height );
+			isDummy.Add( false );
+		}
+
+		// Stage 3: Insert dummy nodes for multi-column edges
+		List<List<int>> rightAdj = new( realIds.Count );
+		List<List<int>> leftAdj = new( realIds.Count );
+		for( int i = 0; i < realIds.Count; i++ )
+		{
+			rightAdj.Add( [] );
+			leftAdj.Add( [] );
+		}
+
+		List<EdgeChain> chains = new( compEdges.Count );
+		int dummyBudget = MaxDummyNodes;
+
+		int AddDummy( int col )
+		{
+			int v = vertCol.Count;
+			vertCol.Add( col );
+			vertHeight.Add( 0.0 );
+			isDummy.Add( true );
+			rightAdj.Add( [] );
+			leftAdj.Add( [] );
+			return v;
+		}
+
+		void AddUnitEdge( int leftV, int rightV )
+		{
+			rightAdj[ leftV ].Add( rightV );
+			leftAdj[ rightV ].Add( leftV );
+		}
+
+		foreach( GraphEdge e in compEdges )
+		{
+			int u = nodeIdToVert[ e.Parent ];
+			int v = nodeIdToVert[ e.Child ];
+			int cu = vertCol[ u ];
+			int cv = vertCol[ v ];
+
+			if( cu == cv )
+			{
+				chains.Add( new EdgeChain( e, false, [], SameColumn: true ) );
+				continue;
+			}
+
+			bool reversed = cu > cv;
+			int startV = reversed ? v : u;
+			int endV = reversed ? u : v;
+			int startC = vertCol[ startV ];
+			int endC = vertCol[ endV ];
+			int span = endC - startC;
+
+			List<int> dummies = [];
+			if( span == 1 )
+			{
+				AddUnitEdge( startV, endV );
+			}
+			else if( span - 1 <= dummyBudget )
+			{
+				dummyBudget -= span - 1;
+				int prev = startV;
+				for( int c = startC + 1; c < endC; c++ )
 				{
-					int id = column[ i ];
-					// children view: compare with the column on the left through parents; on the right through children
-					List<int> linked = [ .. ( rightward ? parentsOf[ id ] : childrenOf[ id ] ).Where( at.ContainsKey ) ];
-					weight[ id ] = linked.Count > 0 ? linked.Average( n => at[ n ] ) : i;
+					int d = AddDummy( c );
+					dummies.Add( d );
+					AddUnitEdge( prev, d );
+					prev = d;
 				}
-				columns[ c ] = [ .. column.Select( ( id, i ) => (id, i) ).OrderBy( p => weight[ p.id ] ).ThenBy( p => p.i ).Select( p => p.id ) ];
+				AddUnitEdge( prev, endV );
+			}
+			chains.Add( new EdgeChain( e, reversed, dummies, SameColumn: false ) );
+		}
+
+		int vertCount = vertCol.Count;
+
+		// Stage 4: Crossing minimization (DFS initial order + median/barycenter + transpose)
+		List<int>[] columns = BuildInitialColumnOrder(
+			vertCount, numCols, realIds, vertCol, isDummy, rightAdj, leftAdj, allNodes, rootOrder, direction, minGlobalCol, globalLayerToCol );
+
+		MinimizeCrossings( columns, rightAdj, leftAdj, direction );
+
+		// Stage 5: Variable-height 4-direction Brandes–Köpf + safe hub centering
+		double[] centerY = AssignYCoordinates( columns, vertCount, vertHeight, isDummy, rightAdj, leftAdj, direction, o );
+
+		// Shift component so its minimum top edge sits at offsetY
+		double minTop = double.PositiveInfinity;
+		double maxBottom = double.NegativeInfinity;
+		for( int v = 0; v < vertCount; v++ )
+		{
+			double half = vertHeight[ v ] / 2.0;
+			double top = centerY[ v ] - half;
+			double bottom = centerY[ v ] + half;
+			if( top < minTop ) minTop = top;
+			if( bottom > maxBottom ) maxBottom = bottom;
+		}
+		if( double.IsInfinity( minTop ) )
+			minTop = 0;
+
+		double shiftY = offsetY - minTop;
+		for( int v = 0; v < vertCount; v++ )
+			centerY[ v ] += shiftY;
+
+		double compHeight = Math.Max( 0, maxBottom - minTop );
+
+		// Build real NodeBoxes
+		List<NodeBox> boxes = new( realIds.Count );
+		Dictionary<int, NodeBox> byId = new( realIds.Count );
+		double maxX = 0;
+		double maxY = offsetY + compHeight;
+
+		for( int v = 0; v < realIds.Count; v++ )
+		{
+			int id = realIds[ v ];
+			int gc = minGlobalCol + vertCol[ v ];
+			var (w, h) = sizes[ id ];
+			double x = globalColLeft[ gc ] + ( globalColWidth[ gc ] - w ) / 2.0;
+			double y = centerY[ v ] - h / 2.0;
+			NodeBox box = new( allNodes[ id ], layer[ id ], x, y, w, h, rootSet.Contains( id ) );
+			boxes.Add( box );
+			byId[ id ] = box;
+			if( x + w > maxX ) maxX = x + w;
+			if( y + h > maxY ) maxY = y + h;
+		}
+
+		// Stage 6: Build EdgeRoutes with BendPoints for multi-layer forward links and cycle back-edges
+		List<EdgeRoute> routes = new( chains.Count );
+		double backStub = Math.Min( 28.0, o.ColumnGap * 0.3 );
+
+		foreach( EdgeChain chain in chains )
+		{
+			NodeBox parentBox = byId[ chain.Edge.Parent ];
+			NodeBox childBox = byId[ chain.Edge.Child ];
+			var (fx, fy) = parentBox.OutPort;
+			var (tx, ty) = childBox.InPort;
+
+			if( chain.SameColumn )
+			{
+				// Same-column edge (cycle): loop out right, around clearance, and back into left port
+				double loopX = Math.Max( fx, tx ) + backStub;
+				double leftX = Math.Min( fx, tx ) - backStub;
+				double clearY = Math.Min( parentBox.Y, childBox.Y ) - Math.Max( 16.0, o.RowGap * 0.65 );
+				if( clearY < o.Margin * 0.5 )
+					clearY = Math.Max( parentBox.Y + parentBox.Height, childBox.Y + childBox.Height ) + Math.Max( 16.0, o.RowGap * 0.65 );
+
+				List<(double X, double Y)> bends =
+				[
+					(loopX, fy),
+					(loopX, clearY),
+					(leftX, clearY),
+					(leftX, ty),
+				];
+				UpdateBounds( bends, ref maxX, ref maxY );
+				routes.Add( new EdgeRoute( chain.Edge, fx, fy, tx, ty ) { BendPoints = bends } );
+			}
+			else if( !chain.ReversedForOrdering )
+			{
+				if( chain.DummyIds.Count == 0 )
+				{
+					routes.Add( new EdgeRoute( chain.Edge, fx, fy, tx, ty ) );
+				}
+				else
+				{
+					List<(double X, double Y)> bends = new( chain.DummyIds.Count * 2 );
+					foreach( int d in chain.DummyIds )
+					{
+						int gc = minGlobalCol + vertCol[ d ];
+						double dy = centerY[ d ];
+						bends.Add( (globalColLeft[ gc ], dy) );
+						bends.Add( (globalColRight[ gc ], dy) );
+					}
+					UpdateBounds( bends, ref maxX, ref maxY );
+					routes.Add( new EdgeRoute( chain.Edge, fx, fy, tx, ty ) { BendPoints = bends } );
+				}
+			}
+			else
+			{
+				// Back-edge (parent is right of child): exit right, loop cleanly over/under via corridor, enter left
+				double exitX = fx + backStub;
+				double enterX = tx - backStub;
+				List<(double X, double Y)> bends = [];
+				if( chain.DummyIds.Count > 0 )
+				{
+					// Dummies are ordered left-to-right (child -> parent), so traverse in reverse (parent -> child)
+					double firstY = centerY[ chain.DummyIds[ ^1 ] ];
+					bends.Add( (exitX, firstY) );
+					for( int i = chain.DummyIds.Count - 1; i >= 0; i-- )
+					{
+						int d = chain.DummyIds[ i ];
+						int gc = minGlobalCol + vertCol[ d ];
+						double dy = centerY[ d ];
+						bends.Add( (globalColRight[ gc ], dy) );
+						bends.Add( (globalColLeft[ gc ], dy) );
+					}
+					double lastY = centerY[ chain.DummyIds[ 0 ] ];
+					bends.Add( (enterX, lastY) );
+				}
+				else
+				{
+					double clearY = Math.Min( parentBox.Y, childBox.Y ) - Math.Max( 16.0, o.RowGap * 0.65 );
+					if( clearY < o.Margin * 0.5 )
+						clearY = Math.Max( parentBox.Y + parentBox.Height, childBox.Y + childBox.Height ) + Math.Max( 16.0, o.RowGap * 0.65 );
+					bends.Add( (exitX, fy) );
+					bends.Add( (exitX, clearY) );
+					bends.Add( (enterX, clearY) );
+					bends.Add( (enterX, ty) );
+				}
+				UpdateBounds( bends, ref maxX, ref maxY );
+				routes.Add( new EdgeRoute( chain.Edge, fx, fy, tx, ty ) { BendPoints = bends } );
 			}
 		}
+
+		return (boxes, routes, compHeight, maxX, maxY);
+	}
+
+	private static void UpdateBounds( List<(double X, double Y)> bends, ref double maxX, ref double maxY )
+	{
+		foreach( var (x, y) in bends )
+		{
+			if( x > maxX ) maxX = x;
+			if( y > maxY ) maxY = y;
+		}
+	}
+
+	// ================================================================== Stage 4: Crossing Minimization
+
+	private static List<int>[] BuildInitialColumnOrder(
+		int vertCount,
+		int numCols,
+		List<int> realIds,
+		List<int> vertCol,
+		List<bool> isDummy,
+		List<List<int>> rightAdj,
+		List<List<int>> leftAdj,
+		Dictionary<int, GraphNode> allNodes,
+		Dictionary<int, int> rootOrder,
+		GraphDirection direction,
+		int minGlobalCol,
+		Dictionary<int, int> globalLayerToCol )
+	{
+		string LabelOf( int v ) => isDummy[ v ] ? "" : allNodes[ realIds[ v ] ].Name;
+		int SortKeyId( int v ) => isDummy[ v ] ? int.MaxValue - v : realIds[ v ];
+
+		int CompareVerts( int a, int b )
+		{
+			bool da = isDummy[ a ];
+			bool db = isDummy[ b ];
+			if( da != db )
+				return da ? 1 : -1;
+			if( !da )
+			{
+				int ra = rootOrder.GetValueOrDefault( realIds[ a ], int.MaxValue );
+				int rb = rootOrder.GetValueOrDefault( realIds[ b ], int.MaxValue );
+				if( ra != rb )
+					return ra.CompareTo( rb );
+				int nameCmp = StringComparer.OrdinalIgnoreCase.Compare( LabelOf( a ), LabelOf( b ) );
+				if( nameCmp != 0 )
+					return nameCmp;
+			}
+			return SortKeyId( a ).CompareTo( SortKeyId( b ) );
+		}
+
+		// DFS pre-order starting from roots (gives 0 crossings immediately on trees and readable sibling order)
+		List<int> startOrder = [ .. Enumerable.Range( 0, vertCount ) ];
+		startOrder.Sort( ( a, b ) =>
+		{
+			int colA = direction == GraphDirection.Parents ? -vertCol[ a ] : vertCol[ a ];
+			int colB = direction == GraphDirection.Parents ? -vertCol[ b ] : vertCol[ b ];
+			if( direction == GraphDirection.Both && globalLayerToCol.TryGetValue( 0, out int zeroGlobal ) )
+			{
+				int zeroLocal = zeroGlobal - minGlobalCol;
+				colA = Math.Abs( vertCol[ a ] - zeroLocal );
+				colB = Math.Abs( vertCol[ b ] - zeroLocal );
+			}
+			int cmp = colA.CompareTo( colB );
+			return cmp != 0 ? cmp : CompareVerts( a, b );
+		} );
+
+		bool[] visited = new bool[ vertCount ];
+		List<int>[] columns = new List<int>[ numCols ];
+		for( int c = 0; c < numCols; c++ )
+			columns[ c ] = [];
+
+		foreach( int start in startOrder )
+		{
+			if( visited[ start ] )
+				continue;
+			Stack<int> stack = new();
+			stack.Push( start );
+			while( stack.Count > 0 )
+			{
+				int u = stack.Pop();
+				if( visited[ u ] )
+					continue;
+				visited[ u ] = true;
+				columns[ vertCol[ u ] ].Add( u );
+
+				List<int> next = direction switch
+				{
+					GraphDirection.Parents => [ .. leftAdj[ u ], .. rightAdj[ u ] ],
+					GraphDirection.Children => [ .. rightAdj[ u ], .. leftAdj[ u ] ],
+					_ => [ .. rightAdj[ u ], .. leftAdj[ u ] ],
+				};
+				next.Sort( CompareVerts );
+				for( int i = next.Count - 1; i >= 0; i-- )
+					if( !visited[ next[ i ] ] )
+						stack.Push( next[ i ] );
+			}
+		}
+
 		return columns;
 	}
 
-	private static GraphLayoutResult Place( List<List<int>> columns, Dictionary<int, int> layer, Dictionary<int, GraphNode> nodes,
-		HashSet<int> roots, List<GraphEdge> edges, LayoutOptions o )
+	private static void MinimizeCrossings(
+		List<int>[] columns,
+		List<List<int>> rightAdj,
+		List<List<int>> leftAdj,
+		GraphDirection direction )
 	{
-		var sizes = nodes.ToDictionary( p => p.Key, p => BoxSize( p.Value.Size, o ) );
-		double[] columnWidth = [ .. columns.Select( c => c.Max( id => sizes[ id ].Width ) ) ];
-		double[] columnHeight = [ .. columns.Select( c => c.Sum( id => sizes[ id ].Height ) + o.RowGap * ( c.Count - 1 ) ) ];
-		double tallest = columnHeight.Max();
+		if( columns.Length <= 1 )
+			return;
 
-		List<NodeBox> boxes = [];
-		double x = o.Margin;
-		for( int c = 0; c < columns.Count; c++ )
+		int vertCount = rightAdj.Count;
+		int[] pos = new int[ vertCount ];
+		SyncPositions( columns, pos );
+
+		long bestCrossings = CountAllCrossings( columns, rightAdj, pos );
+		if( bestCrossings == 0 )
+			return;
+
+		List<int>[] bestOrder = CloneColumns( columns );
+		bool startRightward = direction != GraphDirection.Parents;
+		int staleSweeps = 0;
+
+		for( int sweep = 0; sweep < MaxCrossingSweeps; sweep++ )
 		{
-			double y = o.Margin + ( tallest - columnHeight[ c ] ) / 2;
-			foreach( int id in columns[ c ] )
+			bool rightward = ( sweep % 2 == 0 ) == startRightward;
+			if( rightward )
 			{
-				var (w, h) = sizes[ id ];
-				boxes.Add( new NodeBox( nodes[ id ], layer[ id ], x + ( columnWidth[ c ] - w ) / 2, y, w, h, roots.Contains( id ) ) );
-				y += h + o.RowGap;
+				for( int c = 1; c < columns.Length; c++ )
+					ReorderColumnByMedian( columns[ c ], leftAdj, pos );
 			}
-			x += columnWidth[ c ] + o.ColumnGap;
+			else
+			{
+				for( int c = columns.Length - 2; c >= 0; c-- )
+					ReorderColumnByMedian( columns[ c ], rightAdj, pos );
+			}
+
+			TransposePass( columns, rightAdj, leftAdj, pos );
+
+			long crossings = CountAllCrossings( columns, rightAdj, pos );
+			if( crossings < bestCrossings )
+			{
+				bestCrossings = crossings;
+				bestOrder = CloneColumns( columns );
+				staleSweeps = 0;
+				if( bestCrossings == 0 )
+					break;
+			}
+			else if( ++staleSweeps >= MaxNoImproveSweeps )
+			{
+				break;
+			}
 		}
 
-		Dictionary<int, NodeBox> byId = boxes.ToDictionary( b => b.Node.Id );
-		List<EdgeRoute> routes = [ .. edges.Select( e =>
+		for( int c = 0; c < columns.Length; c++ )
+			columns[ c ] = bestOrder[ c ];
+	}
+
+	private static void ReorderColumnByMedian( List<int> column, List<List<int>> refAdj, int[] pos )
+	{
+		int n = column.Count;
+		if( n <= 1 )
+			return;
+
+		// Only reorder nodes that actually have neighbors in the reference column; unlinked nodes stay pinned in place
+		List<(int Vert, double Median, double Mean, int OrigIdx)> movable = [];
+		List<int> movableSlots = [];
+		List<int> neighborPositions = [];
+
+		for( int i = 0; i < n; i++ )
 		{
-			var (fx, fy) = byId[ e.Parent ].OutPort;
-			var (tx, ty) = byId[ e.Child ].InPort;
-			return new EdgeRoute( e, fx, fy, tx, ty );
-		} ) ];
-		return new GraphLayoutResult( boxes, routes, x - o.ColumnGap + o.Margin, tallest + 2 * o.Margin );
+			int v = column[ i ];
+			List<int> adj = refAdj[ v ];
+			if( adj.Count == 0 )
+				continue;
+
+			neighborPositions.Clear();
+			double sum = 0;
+			foreach( int u in adj )
+			{
+				int p = pos[ u ];
+				neighborPositions.Add( p );
+				sum += p;
+			}
+			neighborPositions.Sort();
+
+			double median = WeightedMedian( neighborPositions );
+			double mean = sum / neighborPositions.Count;
+			movable.Add( (v, median, mean, i) );
+			movableSlots.Add( i );
+		}
+
+		if( movable.Count <= 1 )
+			return;
+
+		movable.Sort( ( a, b ) =>
+		{
+			int cmp = a.Median.CompareTo( b.Median );
+			if( cmp != 0 ) return cmp;
+			cmp = a.Mean.CompareTo( b.Mean );
+			if( cmp != 0 ) return cmp;
+			return a.OrigIdx.CompareTo( b.OrigIdx );
+		} );
+
+		for( int k = 0; k < movable.Count; k++ )
+		{
+			int slot = movableSlots[ k ];
+			column[ slot ] = movable[ k ].Vert;
+			pos[ movable[ k ].Vert ] = slot;
+		}
+	}
+
+	/// <summary>Gansner et al. (1993) weighted median over sorted neighbor positions.</summary>
+	private static double WeightedMedian( List<int> sorted )
+	{
+		int k = sorted.Count;
+		int m = k / 2;
+		if( k == 1 ) return sorted[ 0 ];
+		if( k % 2 == 1 ) return sorted[ m ];
+		if( k == 2 ) return ( sorted[ 0 ] + sorted[ 1 ] ) / 2.0;
+
+		double left = sorted[ m - 1 ] - sorted[ 0 ];
+		double right = sorted[ k - 1 ] - sorted[ m ];
+		double denom = left + right;
+		return denom <= 0
+			? ( sorted[ m - 1 ] + sorted[ m ] ) / 2.0
+			: ( sorted[ m - 1 ] * right + sorted[ m ] * left ) / denom;
+	}
+
+	/// <summary>Local adjacent-swap refinement checking crossings against both adjacent columns simultaneously.</summary>
+	private static void TransposePass( List<int>[] columns, List<List<int>> rightAdj, List<List<int>> leftAdj, int[] pos )
+	{
+		bool improved = true;
+		int maxRounds = 4;
+		while( improved && maxRounds-- > 0 )
+		{
+			improved = false;
+			for( int c = 0; c < columns.Length; c++ )
+			{
+				List<int> col = columns[ c ];
+				for( int i = 0; i + 1 < col.Count; i++ )
+				{
+					int u = col[ i ];
+					int v = col[ i + 1 ];
+					long cur = PairCrossings( leftAdj[ u ], leftAdj[ v ], pos ) + PairCrossings( rightAdj[ u ], rightAdj[ v ], pos );
+					long swapped = PairCrossings( leftAdj[ v ], leftAdj[ u ], pos ) + PairCrossings( rightAdj[ v ], rightAdj[ u ], pos );
+					if( swapped < cur )
+					{
+						col[ i ] = v;
+						col[ i + 1 ] = u;
+						pos[ v ] = i;
+						pos[ u ] = i + 1;
+						improved = true;
+					}
+				}
+			}
+		}
+	}
+
+	private static long PairCrossings( List<int> upperAdj, List<int> lowerAdj, int[] pos )
+	{
+		if( upperAdj.Count == 0 || lowerAdj.Count == 0 )
+			return 0;
+		long count = 0;
+		foreach( int a in upperAdj )
+		{
+			int pa = pos[ a ];
+			foreach( int b in lowerAdj )
+				if( pa > pos[ b ] )
+					count++;
+		}
+		return count;
+	}
+
+	private static void SyncPositions( List<int>[] columns, int[] pos )
+	{
+		for( int c = 0; c < columns.Length; c++ )
+		{
+			List<int> col = columns[ c ];
+			for( int i = 0; i < col.Count; i++ )
+				pos[ col[ i ] ] = i;
+		}
+	}
+
+	private static List<int>[] CloneColumns( List<int>[] columns )
+	{
+		List<int>[] copy = new List<int>[ columns.Length ];
+		for( int c = 0; c < columns.Length; c++ )
+			copy[ c ] = [ .. columns[ c ] ];
+		return copy;
+	}
+
+	/// <summary>Exact bilayer crossing count across all column pairs via Fenwick tree (BIT) in O(E log V).</summary>
+	private static long CountAllCrossings( List<int>[] columns, List<List<int>> rightAdj, int[] pos )
+	{
+		long total = 0;
+		for( int c = 0; c + 1 < columns.Length; c++ )
+			total += CountBilayerCrossings( columns[ c ], columns[ c + 1 ].Count, rightAdj, pos );
+		return total;
+	}
+
+	private static long CountBilayerCrossings( List<int> leftCol, int rightCount, List<List<int>> rightAdj, int[] pos )
+	{
+		if( leftCol.Count <= 1 || rightCount <= 1 )
+			return 0;
+
+		int[] bit = new int[ rightCount + 1 ];
+		long crossings = 0;
+		int inserted = 0;
+		List<int> targets = [];
+
+		foreach( int u in leftCol )
+		{
+			List<int> adj = rightAdj[ u ];
+			if( adj.Count == 0 )
+				continue;
+			targets.Clear();
+			foreach( int v in adj )
+				targets.Add( pos[ v ] );
+			targets.Sort();
+
+			// Query in ascending target order so edges sharing left endpoint u don't count as crossing each other
+			foreach( int t in targets )
+			{
+				int leq = 0;
+				for( int idx = t + 1; idx > 0; idx -= idx & -idx )
+					leq += bit[ idx ];
+				crossings += inserted - leq;
+			}
+			foreach( int t in targets )
+			{
+				for( int idx = t + 1; idx <= rightCount; idx += idx & -idx )
+					bit[ idx ]++;
+				inserted++;
+			}
+		}
+
+		return crossings;
+	}
+
+	// ================================================================== Stage 5: Vertical (Y) Coordinates
+
+	private static double[] AssignYCoordinates(
+		List<int>[] columns,
+		int vertCount,
+		List<double> vertHeight,
+		List<bool> isDummy,
+		List<List<int>> rightAdj,
+		List<List<int>> leftAdj,
+		GraphDirection direction,
+		LayoutOptions o )
+	{
+		int[] pos = new int[ vertCount ];
+		SyncPositions( columns, pos );
+
+		// Sort adjacency lists by neighbor column position ascending (required for BK median selection)
+		for( int v = 0; v < vertCount; v++ )
+		{
+			if( leftAdj[ v ].Count > 1 ) leftAdj[ v ].Sort( ( a, b ) => pos[ a ].CompareTo( pos[ b ] ) );
+			if( rightAdj[ v ].Count > 1 ) rightAdj[ v ].Sort( ( a, b ) => pos[ a ].CompareTo( pos[ b ] ) );
+		}
+
+		double Gap( int u, int v ) => (isDummy[ u ], isDummy[ v ]) switch
+		{
+			(false, false ) => o.RowGap,
+			(true, true ) => Math.Max( 12.0, o.RowGap * 0.5 ),
+			_ => Math.Max( 16.0, o.RowGap * 0.65 ),
+		};
+
+		double Sep( int u, int v ) => vertHeight[ u ] / 2.0 + Gap( u, v ) + vertHeight[ v ] / 2.0;
+
+		// Mark Type-1 conflicts (non-inner segment crossing a dummy-to-dummy inner segment)
+		HashSet<(int Left, int Right)> type1Conflicts = MarkType1Conflicts( columns, isDummy, rightAdj, pos );
+
+		// Compute the 4 Brandes–Köpf directional layouts
+		double[][] layouts =
+		[
+			ComputeBkLayout( columns, vertCount, vertHeight, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: true, topToBottom: true ),
+			ComputeBkLayout( columns, vertCount, vertHeight, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: false, topToBottom: true ),
+			ComputeBkLayout( columns, vertCount, vertHeight, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: true, topToBottom: false ),
+			ComputeBkLayout( columns, vertCount, vertHeight, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: false, topToBottom: false ),
+		];
+
+		// Normalize each layout to start at top = 0 and find the tightest (minimum-height) one
+		double[] heights = new double[ 4 ];
+		int smallestIdx = 0;
+		for( int k = 0; k < 4; k++ )
+		{
+			double[] yk = layouts[ k ];
+			double minT = double.PositiveInfinity;
+			double maxB = double.NegativeInfinity;
+			for( int v = 0; v < vertCount; v++ )
+			{
+				double half = vertHeight[ v ] / 2.0;
+				if( yk[ v ] - half < minT ) minT = yk[ v ] - half;
+				if( yk[ v ] + half > maxB ) maxB = yk[ v ] + half;
+			}
+			for( int v = 0; v < vertCount; v++ )
+				yk[ v ] -= minT;
+			heights[ k ] = maxB - minT;
+			if( heights[ k ] < heights[ smallestIdx ] )
+				smallestIdx = k;
+		}
+
+		// Align UL/UR (bottom-up layouts) to the bottom of the tightest layout
+		double targetHeight = heights[ smallestIdx ];
+		for( int k = 2; k < 4; k++ )
+		{
+			double shift = targetHeight - heights[ k ];
+			double[] yk = layouts[ k ];
+			for( int v = 0; v < vertCount; v++ )
+				yk[ v ] += shift;
+		}
+
+		// Combine by average median: provably preserves y[i+1] - y[i] >= Sep(i, i+1) for variable heights
+		double[] y = new double[ vertCount ];
+		double[] vals = new double[ 4 ];
+		for( int v = 0; v < vertCount; v++ )
+		{
+			vals[ 0 ] = layouts[ 0 ][ v ];
+			vals[ 1 ] = layouts[ 1 ][ v ];
+			vals[ 2 ] = layouts[ 2 ][ v ];
+			vals[ 3 ] = layouts[ 3 ][ v ];
+			Array.Sort( vals );
+			y[ v ] = ( vals[ 1 ] + vals[ 2 ] ) / 2.0;
+		}
+
+		// 1-pass safe hub centering (fixes median bias on asymmetric 3+ child/parent fan-outs while preserving all separations)
+		CenterHubsSafely( columns, y, isDummy, leftAdj, rightAdj, direction, Sep );
+
+		return y;
+	}
+
+	private static HashSet<(int Left, int Right)> MarkType1Conflicts(
+		List<int>[] columns,
+		List<bool> isDummy,
+		List<List<int>> rightAdj,
+		int[] pos )
+	{
+		HashSet<(int Left, int Right)> conflicts = [];
+		for( int c = 1; c + 1 < columns.Length - 1; c++ )
+		{
+			List<int> col = columns[ c ];
+			List<(int LeftPos, int RightPos)> innerSegments = [];
+			foreach( int u in col )
+			{
+				if( !isDummy[ u ] )
+					continue;
+				foreach( int v in rightAdj[ u ] )
+					if( isDummy[ v ] )
+						innerSegments.Add( (pos[ u ], pos[ v ]) );
+			}
+			if( innerSegments.Count == 0 )
+				continue;
+
+			foreach( int a in col )
+			{
+				int pa = pos[ a ];
+				foreach( int b in rightAdj[ a ] )
+				{
+					if( isDummy[ a ] && isDummy[ b ] )
+						continue;
+					int pb = pos[ b ];
+					foreach( var (lu, rv) in innerSegments )
+					{
+						if( ( pa < lu && pb > rv ) || ( pa > lu && pb < rv ) )
+						{
+							conflicts.Add( (a, b) );
+							break;
+						}
+					}
+				}
+			}
+		}
+		return conflicts;
+	}
+
+	private static double[] ComputeBkLayout(
+		List<int>[] columns,
+		int vertCount,
+		List<double> vertHeight,
+		List<List<int>> leftAdj,
+		List<List<int>> rightAdj,
+		int[] pos,
+		HashSet<(int Left, int Right)> type1Conflicts,
+		Func<int, int, double> sep,
+		bool leftToRight,
+		bool topToBottom )
+	{
+		int[] root = new int[ vertCount ];
+		int[] align = new int[ vertCount ];
+		for( int v = 0; v < vertCount; v++ )
+		{
+			root[ v ] = v;
+			align[ v ] = v;
+		}
+
+		// Step A: Vertical alignment (forming horizontal chains / blocks)
+		int colStart = leftToRight ? 1 : columns.Length - 2;
+		int colEnd = leftToRight ? columns.Length : -1;
+		int colStep = leftToRight ? 1 : -1;
+
+		for( int c = colStart; c != colEnd; c += colStep )
+		{
+			List<int> col = columns[ c ];
+			int r = topToBottom ? -1 : int.MaxValue;
+			int iStart = topToBottom ? 0 : col.Count - 1;
+			int iEnd = topToBottom ? col.Count : -1;
+			int iStep = topToBottom ? 1 : -1;
+
+			for( int i = iStart; i != iEnd; i += iStep )
+			{
+				int v = col[ i ];
+				List<int> neighbors = leftToRight ? leftAdj[ v ] : rightAdj[ v ];
+				int d = neighbors.Count;
+				if( d == 0 )
+					continue;
+
+				int m1 = ( d - 1 ) / 2;
+				int m2 = d / 2;
+				int first = topToBottom ? m1 : m2;
+				int second = topToBottom ? m2 : m1;
+
+				for( int attempt = 0; attempt < 2; attempt++ )
+				{
+					int m = attempt == 0 ? first : second;
+					if( attempt == 1 && first == second )
+						break;
+					int u = neighbors[ m ];
+					var conflictEdge = leftToRight ? (u, v) : (v, u);
+					if( align[ v ] == v && !type1Conflicts.Contains( conflictEdge ) )
+					{
+						bool orderOk = topToBottom ? r < pos[ u ] : r > pos[ u ];
+						if( orderOk )
+						{
+							align[ u ] = v;
+							root[ v ] = root[ u ];
+							align[ v ] = root[ v ];
+							r = pos[ u ];
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		// Step B: 2-Pass DAG block compaction (provably acyclic and satisfies every separation constraint)
+		HashSet<int> blockSet = [];
+		for( int v = 0; v < vertCount; v++ )
+			blockSet.Add( root[ v ] );
+
+		Dictionary<int, Dictionary<int, double>> downEdges = new( blockSet.Count );
+		Dictionary<int, Dictionary<int, double>> upEdges = new( blockSet.Count );
+		foreach( int b in blockSet )
+		{
+			downEdges[ b ] = [];
+			upEdges[ b ] = [];
+		}
+
+		for( int c = 0; c < columns.Length; c++ )
+		{
+			List<int> col = columns[ c ];
+			for( int i = 0; i + 1 < col.Count; i++ )
+			{
+				int a = col[ i ];
+				int b = col[ i + 1 ];
+				int ba = root[ a ];
+				int bb = root[ b ];
+				if( ba == bb )
+					continue;
+				double s = sep( a, b );
+				if( !downEdges[ ba ].TryGetValue( bb, out double existing ) || s > existing )
+				{
+					downEdges[ ba ][ bb ] = s;
+					upEdges[ bb ][ ba ] = s;
+				}
+			}
+		}
+
+		// Solve longest-path on the block DAG in the requested vertical direction, then tighten hanging roots
+		Dictionary<int, double> blockY = new( blockSet.Count );
+		if( topToBottom )
+		{
+			List<int> topo = TopoSort( blockSet, downEdges );
+			foreach( int b in topo )
+				blockY[ b ] = 0.0;
+			foreach( int ba in topo )
+			{
+				double ya = blockY[ ba ];
+				foreach( var (bb, w) in downEdges[ ba ] )
+					if( ya + w > blockY[ bb ] )
+						blockY[ bb ] = ya + w;
+			}
+			// Reverse pass: pull hanging upper roots down to meet their closest successor
+			for( int i = topo.Count - 1; i >= 0; i-- )
+			{
+				int ba = topo[ i ];
+				if( downEdges[ ba ].Count == 0 )
+					continue;
+				double limit = double.PositiveInfinity;
+				foreach( var (bb, w) in downEdges[ ba ] )
+					if( blockY[ bb ] - w < limit )
+						limit = blockY[ bb ] - w;
+				if( limit > blockY[ ba ] )
+					blockY[ ba ] = limit;
+			}
+		}
+		else
+		{
+			List<int> topoUp = TopoSort( blockSet, upEdges );
+			foreach( int b in topoUp )
+				blockY[ b ] = 0.0;
+			foreach( int bb in topoUp )
+			{
+				double yb = blockY[ bb ];
+				foreach( var (ba, w) in upEdges[ bb ] )
+					if( yb + w > blockY[ ba ] )
+						blockY[ ba ] = yb + w;
+			}
+			// Reverse pass: pull hanging lower sinks up toward their closest predecessor
+			for( int i = topoUp.Count - 1; i >= 0; i-- )
+			{
+				int bb = topoUp[ i ];
+				if( upEdges[ bb ].Count == 0 )
+					continue;
+				double limit = double.PositiveInfinity;
+				foreach( var (ba, w) in upEdges[ bb ] )
+					if( blockY[ ba ] - w < limit )
+						limit = blockY[ ba ] - w;
+				if( limit > blockY[ bb ] )
+					blockY[ bb ] = limit;
+			}
+			foreach( int b in blockSet )
+				blockY[ b ] = -blockY[ b ];
+		}
+
+		double[] y = new double[ vertCount ];
+		for( int v = 0; v < vertCount; v++ )
+			y[ v ] = blockY[ root[ v ] ];
+		return y;
+	}
+
+	private static List<int> TopoSort( HashSet<int> nodes, Dictionary<int, Dictionary<int, double>> adj )
+	{
+		Dictionary<int, int> inDeg = new( nodes.Count );
+		foreach( int u in nodes )
+			inDeg[ u ] = 0;
+		foreach( var (_, outs) in adj )
+			foreach( int v in outs.Keys )
+				inDeg[ v ]++;
+
+		Queue<int> q = new();
+		foreach( int u in nodes.Order() )
+			if( inDeg[ u ] == 0 )
+				q.Enqueue( u );
+
+		List<int> order = new( nodes.Count );
+		while( q.TryDequeue( out int u ) )
+		{
+			order.Add( u );
+			foreach( int v in adj[ u ].Keys )
+				if( --inDeg[ v ] == 0 )
+					q.Enqueue( v );
+		}
+		// Safety fallback if any cycle ever appeared
+		if( order.Count < nodes.Count )
+			foreach( int u in nodes.Order() )
+				if( !order.Contains( u ) )
+					order.Add( u );
+		return order;
+	}
+
+	/// <summary>
+	/// Sweeps inward toward the roots and centers multi-branch real hubs between their extremal neighbors,
+	/// strictly clamped inside neighbor separation bounds so zero overlaps are guaranteed.
+	/// </summary>
+	private static void CenterHubsSafely(
+		List<int>[] columns,
+		double[] y,
+		List<bool> isDummy,
+		List<List<int>> leftAdj,
+		List<List<int>> rightAdj,
+		GraphDirection direction,
+		Func<int, int, double> sep )
+	{
+		if( columns.Length <= 1 )
+			return;
+
+		void CenterColumn( int c, bool useRight, bool useLeft )
+		{
+			List<int> col = columns[ c ];
+			for( int i = 0; i < col.Count; i++ )
+			{
+				int v = col[ i ];
+				if( isDummy[ v ] )
+					continue;
+
+				double? rightMid = useRight && rightAdj[ v ].Count > 0 ? ExtremalMidpoint( rightAdj[ v ], y ) : null;
+				double? leftMid = useLeft && leftAdj[ v ].Count > 0 ? ExtremalMidpoint( leftAdj[ v ], y ) : null;
+
+				double target;
+				if( rightMid is { } rm && leftMid is { } lm )
+					target = ( rm + lm ) / 2.0;
+				else if( rightMid is { } rOnly )
+					target = rOnly;
+				else if( leftMid is { } lOnly )
+					target = lOnly;
+				else
+					continue;
+
+				double lo = i > 0 ? y[ col[ i - 1 ] ] + sep( col[ i - 1 ], v ) : double.NegativeInfinity;
+				double hi = i + 1 < col.Count ? y[ col[ i + 1 ] ] - sep( v, col[ i + 1 ] ) : double.PositiveInfinity;
+				if( lo <= hi )
+					y[ v ] = Math.Clamp( target, lo, hi );
+			}
+		}
+
+		if( direction == GraphDirection.Parents )
+		{
+			for( int c = 1; c < columns.Length; c++ )
+				CenterColumn( c, useRight: false, useLeft: true );
+		}
+		else if( direction == GraphDirection.Children )
+		{
+			for( int c = columns.Length - 2; c >= 0; c-- )
+				CenterColumn( c, useRight: true, useLeft: false );
+		}
+		else
+		{
+			// Both: sweep inward from right and left toward middle
+			int mid = columns.Length / 2;
+			for( int c = columns.Length - 2; c >= mid; c-- )
+				CenterColumn( c, useRight: true, useLeft: c == mid );
+			for( int c = 1; c <= mid; c++ )
+				CenterColumn( c, useRight: c == mid, useLeft: true );
+		}
+	}
+
+	private static double ExtremalMidpoint( List<int> neighbors, double[] y )
+	{
+		double minY = double.PositiveInfinity;
+		double maxY = double.NegativeInfinity;
+		foreach( int n in neighbors )
+		{
+			if( y[ n ] < minY ) minY = y[ n ];
+			if( y[ n ] > maxY ) maxY = y[ n ];
+		}
+		return ( minY + maxY ) / 2.0;
 	}
 }

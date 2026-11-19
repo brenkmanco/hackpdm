@@ -3,19 +3,46 @@
 	x:Class="HackPDM.HackApp"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:appControls="using:HackPDM.Mvvm.Views.Common.Controls"
 	xmlns:controls="using:Microsoft.UI.Xaml.Controls"
-	xmlns:local="using:HackPDM">
+	xmlns:local="using:HackPDM"
+	xmlns:tv="using:WinUI.TableView">
 	<Application.Resources>
 		<ResourceDictionary>
 			<ResourceDictionary.MergedDictionaries>
 				<controls:XamlControlsResources />
 				<!--  Other merged dictionaries here  -->
 				<ResourceDictionary Source="ms-appx:///Microsoft.UI.Xaml/DensityStyles/Compact.xaml" />
+				<ResourceDictionary Source="ms-appx:///WinUI.TableView/Themes/TableView.xaml" />
+				<ResourceDictionary Source="ms-appx:///WinUI.TableView/Themes/TableViewColumnHeader.xaml" />
+				<ResourceDictionary Source="ms-appx:///WinUI.TableView/Themes/TableViewCell.xaml" />
 			</ResourceDictionary.MergedDictionaries>
 			<!--  the app's panels (folder tree, lists, graph frame): set from the theme presets at startup (ThemeService)  -->
 			<SolidColorBrush x:Key="HackPanelStrokeBrush" Color="DimGray" />
 			<CornerRadius x:Key="HackPanelCornerRadius">10</CornerRadius>
 			<Thickness x:Key="HackPanelBorderThickness">3</Thickness>
+			<!--  compact typography and heights for all TableView grids across the app  -->
+			<Style
+				x:Key="CompactTableViewColumnHeaderStyle"
+				BasedOn="{StaticResource DefaultTableViewColumnHeaderStyle}"
+				TargetType="tv:TableViewColumnHeader">
+				<Setter Property="FontSize" Value="11" />
+				<Setter Property="FontWeight" Value="SemiBold" />
+				<Setter Property="Padding" Value="6,0" />
+			</Style>
+			<Style
+				x:Key="CompactTableViewStyle"
+				BasedOn="{StaticResource DefaultTableViewStyle}"
+				TargetType="tv:TableView">
+				<Setter Property="FontSize" Value="11" />
+				<Setter Property="HeaderRowMinHeight" Value="24" />
+				<Setter Property="HeaderRowHeight" Value="26" />
+				<Setter Property="RowMinHeight" Value="24" />
+				<Setter Property="RowHeight" Value="26" />
+				<Setter Property="ColumnHeaderStyle" Value="{StaticResource CompactTableViewColumnHeaderStyle}" />
+			</Style>
+			<Style BasedOn="{StaticResource CompactTableViewStyle}" TargetType="tv:TableView" />
+			<Style BasedOn="{StaticResource CompactTableViewStyle}" TargetType="appControls:EntryTableView" />
 		</ResourceDictionary>
 	</Application.Resources>
 </Application>

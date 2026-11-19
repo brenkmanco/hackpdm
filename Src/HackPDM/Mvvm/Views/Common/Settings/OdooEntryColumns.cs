@@ -25,8 +25,8 @@ namespace HackPDM.Mvvm.Views.Common.Settings;
 
 public class OdooEntryColumns
 {
-	public double RowHeight { get; set; } = 18;
-	public double FontSize { get; set; } = 10;
+	public double RowHeight { get; set; } = 26;
+	public double FontSize { get; set; } = 11;
 	public bool GroupingEnabled { get; set; } = true;
 	public bool GroupCollapsed { get; set; } = false;
 	public GroupByField GroupBy { get; set; } = new()

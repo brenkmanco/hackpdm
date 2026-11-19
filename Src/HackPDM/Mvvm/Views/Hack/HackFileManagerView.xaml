@@ -7,6 +7,7 @@
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:conv="using:HackPDM.Mvvm.Views.Common.Converters"
 	xmlns:controls="using:HackPDM.Mvvm.Views.Common.Controls"
+	xmlns:local="using:HackPDM.Mvvm.Views.Hack"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	xmlns:model="using:HackPDM.Domain.Representation"
 	xmlns:sys="using:System"
@@ -24,24 +25,27 @@
 		<conv:TypeIconConverter x:Key="TypeIcon" />
 		<conv:StatusIconConverter x:Key="StatusIcon" />
 		<conv:FileStatusDescriptionConverter x:Key="StatusDescription" />
+		<conv:StatusRowBackgroundConverter x:Key="StatusRowBackground" />
+		<conv:StatusTextBrushConverter x:Key="StatusTextBrush" />
 		<!--  Icon Column Template  -->
 		<DataTemplate x:Key="IconCellTemplate">
 			<Canvas
-				Width="40"
-				Height="32"
-				Margin="0,0,8,0"
+				Width="28"
+				Height="22"
+				Margin="0,0,4,0"
+				VerticalAlignment="Center"
 				ToolTipService.ToolTip="{Binding Status, Converter={StaticResource StatusDescription}}">
 				<Image
 					Canvas.Left="0"
-					Canvas.Top="0"
-					Width="32"
-					Height="32"
+					Canvas.Top="1"
+					Width="20"
+					Height="20"
 					Source="{Binding Type, Converter={StaticResource TypeIcon}}" />
 				<Image
 					Canvas.Left="10"
 					Canvas.Top="0"
-					Width="24"
-					Height="24"
+					Width="14"
+					Height="14"
 					Source="{Binding Status, Converter={StaticResource StatusIcon}}"
 					Stretch="UniformToFill" />
 			</Canvas>
@@ -51,6 +55,8 @@
 			<TextBlock
 				Padding="4,0,4,0"
 				VerticalAlignment="Center"
+				FontWeight="SemiBold"
+				Foreground="{Binding Status, Converter={StaticResource StatusTextBrush}}"
 				Text="{Binding Status}"
 				ToolTipService.ToolTip="{Binding Status, Converter={StaticResource StatusDescription}}" />
 		</DataTemplate>
@@ -63,6 +69,128 @@
 				Text="{Binding Size, Converter={StaticResource FileSizeFormatter}}"
 				TextAlignment="Right" />
 		</DataTemplate>
+		<!--  Grouped Entry List Templates  -->
+		<DataTemplate x:Key="GroupHeaderTemplate">
+			<Border
+				Margin="0,4,0,2"
+				Padding="10,6"
+				Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+				BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+				BorderThickness="1"
+				CornerRadius="4">
+				<Grid ColumnSpacing="8">
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="Auto" />
+						<ColumnDefinition Width="*" />
+						<ColumnDefinition Width="Auto" />
+					</Grid.ColumnDefinitions>
+					<FontIcon
+						Grid.Column="0"
+						VerticalAlignment="Center"
+						FontSize="10"
+						Glyph="{Binding ChevronGlyph}" />
+					<TextBlock
+						Grid.Column="1"
+						VerticalAlignment="Center"
+						FontSize="12"
+						FontWeight="SemiBold"
+						Text="{Binding DisplayKey}"
+						TextTrimming="CharacterEllipsis" />
+					<Border
+						Grid.Column="2"
+						Padding="6,1"
+						VerticalAlignment="Center"
+						Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+						CornerRadius="8">
+						<TextBlock
+							FontSize="10"
+							Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+							Text="{Binding CountText}" />
+					</Border>
+				</Grid>
+			</Border>
+		</DataTemplate>
+		<DataTemplate x:Key="GroupedEntryRowTemplate">
+			<Grid
+				MinHeight="26"
+				Padding="14,1,6,1"
+				Background="{Binding Status, Converter={StaticResource StatusRowBackground}}"
+				ColumnSpacing="8">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="32" />
+					<ColumnDefinition Width="*" MinWidth="160" />
+					<ColumnDefinition Width="75" />
+					<ColumnDefinition Width="75" />
+					<ColumnDefinition Width="105" />
+					<ColumnDefinition Width="95" />
+					<ColumnDefinition Width="140" />
+					<ColumnDefinition Width="140" />
+				</Grid.ColumnDefinitions>
+				<Canvas
+					Grid.Column="0"
+					Width="28"
+					Height="22"
+					VerticalAlignment="Center"
+					ToolTipService.ToolTip="{Binding Status, Converter={StaticResource StatusDescription}}">
+					<Image
+						Canvas.Left="0"
+						Canvas.Top="1"
+						Width="20"
+						Height="20"
+						Source="{Binding Type, Converter={StaticResource TypeIcon}}" />
+					<Image
+						Canvas.Left="10"
+						Canvas.Top="0"
+						Width="14"
+						Height="14"
+						Source="{Binding Status, Converter={StaticResource StatusIcon}}"
+						Stretch="UniformToFill" />
+				</Canvas>
+				<TextBlock
+					Grid.Column="1"
+					VerticalAlignment="Center"
+					Text="{Binding Name}"
+					TextTrimming="CharacterEllipsis" />
+				<TextBlock
+					Grid.Column="2"
+					VerticalAlignment="Center"
+					Text="{Binding Type}"
+					TextTrimming="CharacterEllipsis" />
+				<TextBlock
+					Grid.Column="3"
+					HorizontalAlignment="Right"
+					VerticalAlignment="Center"
+					Text="{Binding Size, Converter={StaticResource FileSizeFormatter}}"
+					TextAlignment="Right" />
+				<TextBlock
+					Grid.Column="4"
+					VerticalAlignment="Center"
+					FontWeight="SemiBold"
+					Foreground="{Binding Status, Converter={StaticResource StatusTextBrush}}"
+					Text="{Binding Status}"
+					TextTrimming="CharacterEllipsis"
+					ToolTipService.ToolTip="{Binding Status, Converter={StaticResource StatusDescription}}" />
+				<TextBlock
+					Grid.Column="5"
+					VerticalAlignment="Center"
+					Text="{Binding Checkout}"
+					TextTrimming="CharacterEllipsis" />
+				<TextBlock
+					Grid.Column="6"
+					VerticalAlignment="Center"
+					Text="{Binding LocalDate, Converter={StaticResource LocalDateFormatter}}"
+					TextTrimming="CharacterEllipsis" />
+				<TextBlock
+					Grid.Column="7"
+					VerticalAlignment="Center"
+					Text="{Binding RemoteDate, Converter={StaticResource LocalDateFormatter}}"
+					TextTrimming="CharacterEllipsis" />
+			</Grid>
+		</DataTemplate>
+		<local:EntryGroupTemplateSelector
+			x:Key="EntryGroupTemplateSelector"
+			EntryRowTemplate="{StaticResource GroupedEntryRowTemplate}"
+			GroupHeaderTemplate="{StaticResource GroupHeaderTemplate}" />
 		<!--  Group Header Style  -->
 		<!-- <Style x:Key="GroupHeaderStyle" TargetType="tv:TableViewHeaderRow">
 			<Setter Property="FontSize" Value="14" />
@@ -316,6 +444,8 @@
 								Grid.Column="0"
 								Padding="2,2"
 								Background="Transparent"
+								PointerCanceled="PaneGrip_PointerCaptureLost"
+								PointerCaptureLost="PaneGrip_PointerCaptureLost"
 								PointerMoved="PaneGrip_PointerMoved"
 								PointerPressed="FoldersGrip_PointerPressed"
 								PointerReleased="PaneGrip_PointerReleased"
@@ -766,17 +896,19 @@
 							IsClosable="False">
 							<Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
 								<!--  headers and widths come from the saved column settings (ApplyColumnSettings), matched by SortMemberPath  -->
-								<tv:TableView
+								<controls:EntryTableView
 									x:Name="OdooEntryList"
 									VerticalAlignment="Stretch"
 									VerticalContentAlignment="Stretch"
 									AutoGenerateColumns="False"
 									CanSortColumns="True"
 									IsReadOnly="True"
-									SelectionMode="Extended">
+									SelectionMode="Extended"
+									SelectionUnit="Row"
+									ShowDragRectangle="False">
 									<tv:TableView.Columns>
 										<tv:TableViewTemplateColumn
-											Width="32"
+											Width="34"
 											CanReorder="True"
 											CanResize="True"
 											CellTemplate="{StaticResource IconCellTemplate}" />
@@ -816,7 +948,114 @@
 											</MenuFlyoutSubItem>
 										</MenuFlyout>
 									</tv:TableView.ContextFlyout>
-								</tv:TableView>
+								</controls:EntryTableView>
+
+								<!--  Grouped entry list (used on non-Windows targets where TableView.GroupDescriptions is unavailable)  -->
+								<Grid
+									x:Name="GroupedEntryContainer"
+									Visibility="Collapsed">
+									<Grid.RowDefinitions>
+										<RowDefinition Height="Auto" />
+										<RowDefinition Height="Auto" />
+										<RowDefinition Height="*" />
+									</Grid.RowDefinitions>
+									<Border
+										Grid.Row="0"
+										Padding="8,4"
+										Background="{ThemeResource SubtleFillColorTertiaryBrush}"
+										BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+										BorderThickness="0,0,0,1">
+										<Grid ColumnSpacing="8">
+											<Grid.ColumnDefinitions>
+												<ColumnDefinition Width="*" />
+												<ColumnDefinition Width="Auto" />
+											</Grid.ColumnDefinitions>
+											<StackPanel
+												Grid.Column="0"
+												VerticalAlignment="Center"
+												Orientation="Horizontal"
+												Spacing="6">
+												<FontIcon FontSize="11" Glyph="&#xE8FD;" />
+												<TextBlock
+													x:Name="GroupedByLabel"
+													VerticalAlignment="Center"
+													FontSize="11"
+													FontWeight="SemiBold"
+													Text="Grouped by Status" />
+											</StackPanel>
+											<StackPanel
+												Grid.Column="1"
+												VerticalAlignment="Center"
+												Orientation="Horizontal"
+												Spacing="4">
+												<Button
+													x:Name="GroupByMenuButton"
+													Padding="7,3"
+													ToolTipService.ToolTip="Choose field to group by">
+													<StackPanel Orientation="Horizontal" Spacing="4">
+														<TextBlock FontSize="11" Text="Group by" />
+														<FontIcon FontSize="9" Glyph="&#xE70D;" />
+													</StackPanel>
+													<Button.Flyout>
+														<MenuFlyout x:Name="GroupByToolbarFlyout" />
+													</Button.Flyout>
+												</Button>
+												<Button
+													Padding="6,3"
+													Click="ExpandAllGroups_Click"
+													ToolTipService.ToolTip="Expand all groups">
+													<FontIcon FontSize="10" Glyph="&#xE70D;" />
+												</Button>
+												<Button
+													Padding="6,3"
+													Click="CollapseAllGroups_Click"
+													ToolTipService.ToolTip="Collapse all groups">
+													<FontIcon FontSize="10" Glyph="&#xE70E;" />
+												</Button>
+											</StackPanel>
+										</Grid>
+									</Border>
+									<Border
+										Grid.Row="1"
+										Padding="14,3,6,3"
+										BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+										BorderThickness="0,0,0,1">
+										<Grid ColumnSpacing="8">
+											<Grid.ColumnDefinitions>
+												<ColumnDefinition Width="32" />
+												<ColumnDefinition Width="*" MinWidth="160" />
+												<ColumnDefinition Width="75" />
+												<ColumnDefinition Width="75" />
+												<ColumnDefinition Width="105" />
+												<ColumnDefinition Width="95" />
+												<ColumnDefinition Width="140" />
+												<ColumnDefinition Width="140" />
+											</Grid.ColumnDefinitions>
+											<Button Grid.Column="1" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Name" FontSize="11" FontWeight="SemiBold" Tag="Name" />
+											<Button Grid.Column="2" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Type" FontSize="11" FontWeight="SemiBold" Tag="Type" />
+											<Button Grid.Column="3" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Right" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Size" FontSize="11" FontWeight="SemiBold" Tag="Size" />
+											<Button Grid.Column="4" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Status" FontSize="11" FontWeight="SemiBold" Tag="Status" />
+											<Button Grid.Column="5" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Checkout" FontSize="11" FontWeight="SemiBold" Tag="Checkout" />
+											<Button Grid.Column="6" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Local Date" FontSize="11" FontWeight="SemiBold" Tag="LocalDate" />
+											<Button Grid.Column="7" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Remote Date" FontSize="11" FontWeight="SemiBold" Tag="RemoteDate" />
+										</Grid>
+									</Border>
+									<ListView
+										x:Name="GroupedEntryList"
+										Grid.Row="2"
+										HorizontalContentAlignment="Stretch"
+										IsItemClickEnabled="True"
+										ItemTemplateSelector="{StaticResource EntryGroupTemplateSelector}"
+										SelectionMode="Extended">
+										<ListView.ItemContainerStyle>
+											<Style TargetType="ListViewItem">
+												<Setter Property="HorizontalContentAlignment" Value="Stretch" />
+												<Setter Property="Padding" Value="4,0" />
+												<Setter Property="MinHeight" Value="0" />
+											</Style>
+										</ListView.ItemContainerStyle>
+									</ListView>
+								</Grid>
 
 								<!--  Top Progress Strip & Centered Entry Loading Card  -->
 								<ProgressBar
@@ -1048,6 +1287,8 @@
 									Grid.Column="0"
 									Padding="2,2"
 									Background="Transparent"
+									PointerCanceled="PaneGrip_PointerCaptureLost"
+									PointerCaptureLost="PaneGrip_PointerCaptureLost"
 									PointerMoved="PaneGrip_PointerMoved"
 									PointerPressed="DetailsGrip_PointerPressed"
 									PointerReleased="PaneGrip_PointerReleased"
@@ -1178,19 +1419,21 @@
 									</tv:TableView>
 								</TabViewItem>
 								<TabViewItem x:Name="ChildTab" Header="Dependents" IsClosable="False">
-									<tv:TableView
+									<controls:EntryTableView
 										x:Name="OdooChildren"
 										AutoGenerateColumns="False"
 										IsReadOnly="True"
 										ItemsSource="{x:Bind ViewModel.OChildren}"
 										RowDetailsVisibilityMode="Collapsed"
-										SelectionMode="Extended">
+										SelectionMode="Extended"
+										SelectionUnit="Row"
+										ShowDragRectangle="False">
 										<tv:TableView.Columns>
 											<tv:TableViewTextColumn Width="95" Binding="{Binding Version}" Header="Version" />
 											<tv:TableViewTextColumn Width="220" Binding="{Binding Name}" Header="Name" />
 											<tv:TableViewTextColumn Width="*" Binding="{Binding BasePath}" Header="Folder Path" />
 										</tv:TableView.Columns>
-									</tv:TableView>
+									</controls:EntryTableView>
 								</TabViewItem>
 								<TabViewItem x:Name="PropertiesTab" Header="Properties" IsClosable="False">
 									<tv:TableView
@@ -1277,6 +1520,8 @@
 									Grid.Column="0"
 									Padding="2,2"
 									Background="Transparent"
+									PointerCanceled="PaneGrip_PointerCaptureLost"
+									PointerCaptureLost="PaneGrip_PointerCaptureLost"
 									PointerMoved="PaneGrip_PointerMoved"
 									PointerPressed="PreviewGrip_PointerPressed"
 									PointerReleased="PaneGrip_PointerReleased"
@@ -1382,98 +1627,102 @@
 					</Grid>
 				</Border>
 			</Grid>
+		</Grid>
 
-			<!--  Interactive Drag-to-Dock Drop Zone Overlay  -->
-			<Grid
-				x:Name="DockDropOverlay"
-				IsHitTestVisible="False"
+		<!--  Interactive Drag-to-Dock Drop Zone Overlay (sibling of WorkspaceGrid so it always spans the full workspace)  -->
+		<Grid
+			x:Name="DockDropOverlay"
+			Grid.Row="1"
+			IsHitTestVisible="False"
+			Visibility="Collapsed">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="*" />
+			</Grid.ColumnDefinitions>
+			<Grid.RowDefinitions>
+				<RowDefinition Height="*" />
+				<RowDefinition Height="*" />
+			</Grid.RowDefinitions>
+
+			<Border
+				x:Name="ZoneLeft"
+				Grid.Row="0"
+				Grid.RowSpan="2"
+				Grid.Column="0"
+				Margin="8"
+				Background="#334CC2FF"
+				BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+				BorderThickness="2"
+				CornerRadius="8"
+				Opacity="0.25"
 				Visibility="Collapsed">
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="*" />
-				</Grid.ColumnDefinitions>
-				<Grid.RowDefinitions>
-					<RowDefinition Height="*" />
-					<RowDefinition Height="*" />
-				</Grid.RowDefinitions>
+				<TextBlock
+					HorizontalAlignment="Center"
+					VerticalAlignment="Center"
+					FontSize="14"
+					FontWeight="SemiBold"
+					Text="Dock Left" />
+			</Border>
 
-				<Border
-					x:Name="ZoneLeft"
-					Grid.RowSpan="2"
-					Grid.Column="0"
-					Margin="8"
-					Background="#334CC2FF"
-					BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
-					BorderThickness="2"
-					CornerRadius="8"
-					Opacity="0.25"
-					Visibility="Collapsed">
-					<TextBlock
-						HorizontalAlignment="Center"
-						VerticalAlignment="Center"
-						FontSize="14"
-						FontWeight="SemiBold"
-						Text="Dock Left" />
-				</Border>
+			<Border
+				x:Name="ZoneRight"
+				Grid.Row="0"
+				Grid.RowSpan="2"
+				Grid.Column="2"
+				Margin="8"
+				Background="#334CC2FF"
+				BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+				BorderThickness="2"
+				CornerRadius="8"
+				Opacity="0.25"
+				Visibility="Collapsed">
+				<TextBlock
+					HorizontalAlignment="Center"
+					VerticalAlignment="Center"
+					FontSize="14"
+					FontWeight="SemiBold"
+					Text="Dock Right" />
+			</Border>
 
-				<Border
-					x:Name="ZoneRight"
-					Grid.RowSpan="2"
-					Grid.Column="2"
-					Margin="8"
-					Background="#334CC2FF"
-					BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
-					BorderThickness="2"
-					CornerRadius="8"
-					Opacity="0.25"
-					Visibility="Collapsed">
-					<TextBlock
-						HorizontalAlignment="Center"
-						VerticalAlignment="Center"
-						FontSize="14"
-						FontWeight="SemiBold"
-						Text="Dock Right" />
-				</Border>
+			<Border
+				x:Name="ZoneBottom"
+				Grid.Row="1"
+				Grid.Column="0"
+				Grid.ColumnSpan="2"
+				Margin="8"
+				Background="#334CC2FF"
+				BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+				BorderThickness="2"
+				CornerRadius="8"
+				Opacity="0.25"
+				Visibility="Collapsed">
+				<TextBlock
+					HorizontalAlignment="Center"
+					VerticalAlignment="Center"
+					FontSize="14"
+					FontWeight="SemiBold"
+					Text="Dock Bottom" />
+			</Border>
 
-				<Border
-					x:Name="ZoneBottom"
-					Grid.Row="1"
-					Grid.ColumnSpan="3"
-					Margin="8"
-					Background="#334CC2FF"
-					BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
-					BorderThickness="2"
-					CornerRadius="8"
-					Opacity="0.25"
-					Visibility="Collapsed">
-					<TextBlock
-						HorizontalAlignment="Center"
-						VerticalAlignment="Center"
-						FontSize="14"
-						FontWeight="SemiBold"
-						Text="Dock Bottom" />
-				</Border>
-
-				<Border
-					x:Name="ZoneSwapPreview"
-					Grid.Row="1"
-					Grid.Column="1"
-					Margin="8"
-					Background="#334CC2FF"
-					BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
-					BorderThickness="2"
-					CornerRadius="8"
-					Opacity="0.25"
-					Visibility="Collapsed">
-					<TextBlock
-						HorizontalAlignment="Center"
-						VerticalAlignment="Center"
-						FontSize="14"
-						FontWeight="SemiBold"
-						Text="Swap Preview / Details" />
-				</Border>
-			</Grid>
+			<Border
+				x:Name="ZoneSwapPreview"
+				Grid.Row="1"
+				Grid.Column="1"
+				Margin="8"
+				Background="#334CC2FF"
+				BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+				BorderThickness="2"
+				CornerRadius="8"
+				Opacity="0.25"
+				Visibility="Collapsed">
+				<TextBlock
+					HorizontalAlignment="Center"
+					VerticalAlignment="Center"
+					FontSize="14"
+					FontWeight="SemiBold"
+					Text="Swap Preview / Details" />
+			</Border>
 		</Grid>
 	</Grid>
 

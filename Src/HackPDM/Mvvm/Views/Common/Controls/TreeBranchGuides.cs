@@ -417,7 +417,7 @@ public sealed partial class TreeBranchGuides : Canvas
 		return new SolidColorBrush( Color.FromArgb( 255, 76, 194, 255 ) );
 	}
 
-	private static T? FindAncestor<T>( DependencyObject? start ) where T : class, DependencyObject
+	private static T? FindAncestor<T>( DependencyObject? start ) where T : class
 	{
 		for( DependencyObject? cur = start; cur is not null; cur = VisualTreeHelper.GetParent( cur ) )
 		{

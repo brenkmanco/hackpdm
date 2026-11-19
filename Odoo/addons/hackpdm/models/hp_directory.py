@@ -362,20 +362,17 @@ class hp_directory(models.Model):
         Returns:
             list[int]: hp.entry ids; ``[]`` when the folder does not exist or anything fails (logged).
         """
-        entry_list = []
         try:
-            record = self.env["hp.directory"].search([('id', '=', value)])[0]
-            if record:
-                if withSubEntries:
-                    self._get_all_entry_ids(record, entry_list, withDeleted)
-                else:
-                    for entry in record.entry_ids:
-                        if withDeleted or not(entry.deleted):
-                            entry_list.append(entry.id)
-
+            record = self.env["hp.directory"].browse(value).exists()
+            if not record:
+                return []
+            domain = [("dir_id", "child_of" if withSubEntries else "=", record.id)]
+            if not withDeleted:
+                domain.append(("deleted", "=", False))
+            return self.env["hp.entry"].search(domain).ids
         except Exception as e:
             logging.error(e)
-        return entry_list
+            return []
 
     @api.model
     def _recurse_directories_finding(self, directory, paths:list[str], index:int, forClient:bool, directories:list):

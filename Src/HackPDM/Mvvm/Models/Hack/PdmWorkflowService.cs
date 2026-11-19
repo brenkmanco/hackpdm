@@ -168,7 +168,16 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 {
 	private static readonly string[] HeavyEntryFields = [ "type_id", "cat_id" ];
 	private static readonly string[] DeleteExcludedFields = [ "type_id", "cat_id", "checkout_node" ];
-	private static readonly string[] LatestVersionExcludedFields = [ "preview_image", "entry_id", "node_id", "file_modify_stamp", "attachment_id", "file_contents" ];
+	private static readonly string[] LatestVersionIncludedFields =
+	[
+		nameof( HpVersion.id ),
+		nameof( HpVersion.name ),
+		nameof( HpVersion.checksum ),
+		nameof( HpVersion.file_size ),
+		nameof( HpVersion.windows_complete_name ),
+		nameof( HpVersion.dir_id ),
+		nameof( HpVersion.checkout_user ),
+	];
 
 	private void Log( StatusMessage status, string message ) => reporter.Log( status, message );
 
@@ -198,16 +207,67 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		return ids.ValueOr( [] );
 	}
 
-	/// <summary>Adds every entry the given entries' latest versions depend on, without duplicates.</summary>
-	private async Task<IReadOnlyList<int>> ExpandWithDependenciesAsync( IReadOnlyList<int> entryIds )
-	{
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( entryIds, includedFields: [ nameof( HpEntry.latest_version_id ) ] );
-		Result<IReadOnlyList<int>> dependencies = await PdmDownloadOperations.GetAllEntriesAndDependenciesListAsync(
-			[ .. entries?.Select( e => e.latest_version_id?.id ?? 0 ) ?? [] ] );
-		if( !dependencies.Ok )
-			Log( StatusMessage.WARNING, $"Dependencies could not be listed: {dependencies.Error}" );
+	private const int RpcIdChunkSize = 500;
 
-		return [ .. dependencies.ValueOr( [] ).Concat( entryIds ).Distinct() ];
+	/// <summary>Adds every entry the given entries' latest versions depend on, without duplicates.</summary>
+	private async Task<IReadOnlyList<int>> ExpandWithDependenciesAsync( IReadOnlyList<int> entryIds, CancellationToken token = default )
+	{
+		HashSet<int> allIds = [ .. entryIds ];
+		bool useDirectEntryRpc = true;
+		List<int> fallbackEntryIds = [];
+
+		for( int offset = 0; offset < entryIds.Count; offset += RpcIdChunkSize )
+		{
+			token.ThrowIfCancellationRequested();
+			int count = Math.Min( RpcIdChunkSize, entryIds.Count - offset );
+			int[] chunk = [ .. entryIds.Skip( offset ).Take( count ) ];
+
+			if( useDirectEntryRpc )
+			{
+				Result<IReadOnlyList<int>> direct = await PdmDownloadOperations.GetAllEntriesAndDependenciesByEntriesAsync( chunk );
+				if( direct.Ok )
+				{
+					if( direct.Value is { Count: > 0 } depIds )
+						allIds.UnionWith( depIds );
+					continue;
+				}
+				// Older addon without get_recursive_dependency_entries_by_entries: fall back cleanly
+				useDirectEntryRpc = false;
+			}
+			fallbackEntryIds.AddRange( chunk );
+		}
+
+		if( fallbackEntryIds.Count == 0 )
+			return [ .. allIds ];
+
+		List<int> versionIds = [];
+		for( int offset = 0; offset < fallbackEntryIds.Count; offset += RpcIdChunkSize )
+		{
+			token.ThrowIfCancellationRequested();
+			int count = Math.Min( RpcIdChunkSize, fallbackEntryIds.Count - offset );
+			int[] chunk = [ .. fallbackEntryIds.Skip( offset ).Take( count ) ];
+			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( chunk, includedFields: [ nameof( HpEntry.latest_version_id ) ] );
+			if( entries is not null )
+			{
+				foreach( HpEntry e in entries )
+					if( e.latest_version_id?.id is int vid and > 0 )
+						versionIds.Add( vid );
+			}
+		}
+
+		for( int offset = 0; offset < versionIds.Count; offset += RpcIdChunkSize )
+		{
+			token.ThrowIfCancellationRequested();
+			int count = Math.Min( RpcIdChunkSize, versionIds.Count - offset );
+			int[] chunk = [ .. versionIds.Skip( offset ).Take( count ) ];
+			Result<IReadOnlyList<int>> dependencies = await PdmDownloadOperations.GetAllEntriesAndDependenciesListAsync( chunk );
+			if( !dependencies.Ok )
+				Log( StatusMessage.WARNING, $"Dependencies could not be listed: {dependencies.Error}" );
+			else if( dependencies.Value is { Count: > 0 } depIds )
+				allIds.UnionWith( depIds );
+		}
+
+		return [ .. allIds ];
 	}
 
 	#region Get latest
@@ -221,10 +281,14 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		CancellationTokenSource cancellation = reporter.BeginOperation();
 		try
 		{
-			Log( StatusMessage.INFO, "Finding Entry Dependencies..." );
-			IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
+			Log( StatusMessage.INFO, $"Finding Entry Dependencies for {entryIds.Count} entries..." );
+			IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds, cancellation.Token );
 
 			await AsyncHelper.AsyncRunner( () => DownloadLatestAsync( ids, cancellation.Token ), "Get Latest", cancellation );
+		}
+		catch( OperationCanceledException )
+		{
+			await reporter.NotifyAsync( "Cancelled Download" );
 		}
 		finally
 		{
@@ -237,9 +301,13 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		Log( StatusMessage.FOUND, $"{entryIds.Count} entries" );
 		Log( StatusMessage.PROCESSING, "Retrieving all latest versions associated with entries..." );
 
-		HpVersion[]? versions = await PdmDownloadOperations.GetLatestVersionsAsync( entryIds, LatestVersionExcludedFields );
-		// batches are limited by total file size as well as count (see PdmDownloadOperations.MaxBatchBytes)
-		List<List<HpVersion>>? batches = versions is null ? null : PdmDownloadOperations.BatchBySize( versions, OdooDefaults.Instance.DownloadBatchSize );
+		HpVersion[]? versions = await PdmDownloadOperations.GetLatestVersionsAsync(
+			entryIds, excludedFields: null, token: token, includedFields: LatestVersionIncludedFields );
+		// Batches adapt to available RAM as well as count so low-RAM machines avoid Gen2/LOH thrashing
+		long effectiveBatchBytes = PdmDownloadOperations.EffectiveBatchBytes();
+		List<List<HpVersion>>? batches = versions is null
+			? null
+			: PdmDownloadOperations.BatchBySize( versions, OdooDefaults.Instance.DownloadBatchSize, effectiveBatchBytes );
 		reporter.SetTotal( versions?.Length ?? 0 );
 
 		if( batches is not { Count: > 0 } || versions is null )

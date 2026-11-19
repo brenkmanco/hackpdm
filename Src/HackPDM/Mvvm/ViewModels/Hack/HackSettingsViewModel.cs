@@ -19,6 +19,7 @@ public partial class HackSettingsViewModel : ObservableObject
 	private readonly IDialogService _dialogs;
 	private readonly IFilePickerService? _pickers;
 	private readonly LoginSession? _session;
+	private readonly Action? _onVaultPathChanged;
 
 	[ObservableProperty] public partial string PwaPath { get; set; }
 	[ObservableProperty] public partial string TempFolderPath { get; set; }
@@ -30,11 +31,17 @@ public partial class HackSettingsViewModel : ObservableObject
 	/// <param name="dialogs">Shows validation errors and the saved confirmation.</param>
 	/// <param name="pickers">Optional folder picker service for the Browse buttons.</param>
 	/// <param name="session">Optional session status log shared with the Profile Manager.</param>
-	public HackSettingsViewModel( IDialogService dialogs, IFilePickerService? pickers = null, LoginSession? session = null )
+	/// <param name="onVaultPathChanged">Optional callback invoked when the vault folder path changes.</param>
+	public HackSettingsViewModel(
+		IDialogService dialogs,
+		IFilePickerService? pickers = null,
+		LoginSession? session = null,
+		Action? onVaultPathChanged = null )
 	{
 		_dialogs = dialogs;
 		_pickers = pickers;
 		_session = session;
+		_onVaultPathChanged = onVaultPathChanged;
 		PwaPath = HackDefaults.Instance?.PwaPathAbsolute is { Length: > 0 } pwa
 			? pwa
 			: Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.MyDocuments ), StorageBox.APP_NAME, "pwa" );
@@ -82,10 +89,13 @@ public partial class HackSettingsViewModel : ObservableObject
 			await _dialogs.ShowMessageAsync( string.Join( Environment.NewLine, errors ) );
 			return;
 		}
+		string? previousPwa = HackDefaults.Instance?.PwaPathAbsolute;
 		HackDefaults.Instance?.PwaPathAbsolute = PwaPath;
 		HackDefaults.Instance?.PwaPathRelative = new DirectoryInfo( PwaPath ).Name;
 		StorageBox.TemporaryPath = TempFolderPath;
 		HackDefaults.Instance?.SettingsProvider?.Set( "TemporaryPath", TempFolderPath );
+		if( !string.Equals( previousPwa, PwaPath, StringComparison.OrdinalIgnoreCase ) )
+			_onVaultPathChanged?.Invoke();
 		_session?.LogInfo( ProfileStatusCategory.Configuration, $"Saved local workspace folders: PWA '{PwaPath}', Temp '{TempFolderPath}'." );
 		// the page is usually shown inside the main window, where nothing else shows that it worked
 		await _dialogs.ShowMessageAsync( "Hack settings saved" );

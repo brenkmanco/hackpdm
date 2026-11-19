@@ -107,4 +107,30 @@ public class FileManagerStateTests
 		Assert.Empty( state.ExpandedPaths );
 		Assert.False( state.TryGetEntries( @"root\a", false, out _ ) );
 	}
+
+	[Fact]
+	public void DirectoryNode_EnsureLocalPath_AndMarkLocalDeleted_UpdateTreeInPlace()
+	{
+		DirectoryNode root = new( "root", 1 ) { ExistsLocally = true };
+		DirectoryNode remoteSub = new( "Projects", 2 ) { ExistsLocally = false };
+		root.Children.Add( remoteSub );
+
+		// Creating a local nested folder under a remote-only folder marks remote as local and adds local child
+		Assert.True( root.EnsureLocalPath( [ "Projects", "NewSub" ] ) );
+		Assert.True( remoteSub.ExistsLocally );
+		DirectoryNode? localSub = remoteSub.FindChild( "NewSub" );
+		Assert.NotNull( localSub );
+		Assert.False( localSub!.IsRemote );
+		Assert.True( localSub.ExistsLocally );
+
+		// Deleting the local-only folder removes it completely while keeping the remote parent
+		Assert.True( root.MarkLocalDeleted( [ "Projects", "NewSub" ] ) );
+		Assert.Null( remoteSub.FindChild( "NewSub" ) );
+		Assert.True( remoteSub.ExistsLocally );
+
+		// Deleting the local copy of the remote folder keeps the remote node but clears ExistsLocally
+		Assert.True( root.MarkLocalDeleted( [ "Projects" ] ) );
+		Assert.NotNull( root.FindChild( "Projects" ) );
+		Assert.False( remoteSub.ExistsLocally );
+	}
 }

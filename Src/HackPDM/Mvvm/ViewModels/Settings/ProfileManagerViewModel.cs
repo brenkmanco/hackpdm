@@ -386,7 +386,7 @@ public partial class ProfileManagerViewModel : ObservableObject, IDisposable
 			if( signedIn )
 			{
 				var odoo = OdooDefaults.Instance!;
-				if( _session.LoggedInAs( $"{odoo.OdooUrl}|{odoo.OdooDb}|{odoo.OdooUser}" ) )
+				if( _session.LoggedInAs( $"{odoo.OdooUrl}|{odoo.OdooDb}|{odoo.OdooUser}|{HackDefaults.Instance?.PwaPathAbsolute}" ) )
 				{
 					_accountChanged?.Invoke();
 					LogSession( StatusMessage.INFO, ProfileStatusCategory.Login, $"Switched active account to '{odoo.OdooUser}' on '{odoo.OdooDb}'; cached workspace cleared." );

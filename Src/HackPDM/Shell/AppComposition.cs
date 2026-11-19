@@ -102,10 +102,16 @@ public static class AppComposition
 	private static LocalFileWatcher CreateLocalFileWatcher()
 	{
 		LocalFileWatcher watcher = new();
-		watcher.Changed += batch => UiDispatcher.Post( () => FileManagerState.LocalFilesChanged(
-			[ .. batch.Select( change => PwaPaths.ToServerName( System.IO.Path.GetDirectoryName( change.FullPath ) ) ) ] ) );
-		watcher.Overflowed += () => UiDispatcher.Post( () => FileManagerState.LocalFilesChanged( null ) );
+		watcher.Changed += batch => UiDispatcher.Post( () => FileManagerState.LocalFilesChanged( batch ) );
+		watcher.Overflowed += () => UiDispatcher.Post( () => FileManagerState.LocalFilesChanged( (IReadOnlyList<LocalFileChange>?)null ) );
 		return watcher;
+	}
+
+	/// <summary>Restarts the local file watcher on the current vault folder and clears cached file-manager state.</summary>
+	public static void OnVaultPathChanged()
+	{
+		LocalFiles.Watch( PwaPaths.Vault );
+		FileManagerState.Reset();
 	}
 
 	/// <summary>Unsaved edits of the JSON editor, kept between visits of the page.</summary>
@@ -119,7 +125,7 @@ public static class AppComposition
 	/// <summary>The Profile Manager page's view model, made per visit. Logging in as another account forgets the file manager's context.</summary>
 	/// <returns>A new view model sharing the run-wide <see cref="Session"/>.</returns>
 	public static ProfileManagerViewModel CreateProfileManager()
-		=> new( Session, Dialogs, FilePickers, Navigation, () => FileManagerState.Reset(), InspectSettingsStatus );
+		=> new( Session, Dialogs, FilePickers, Navigation, OnVaultPathChanged, InspectSettingsStatus );
 
 	private static IReadOnlyList<(HackPDM.Shared.GlobalData.StatusMessage Status, string Category, string Message)> InspectSettingsStatus()
 	{
@@ -176,7 +182,7 @@ public static class AppComposition
 
 	/// <summary>The Hack settings page's view model, fresh each time the page is built (it loads the current values).</summary>
 	/// <returns>A new view model holding the current local folder settings.</returns>
-	public static HackSettingsViewModel CreateHackSettings() => new( Dialogs, FilePickers, Session );
+	public static HackSettingsViewModel CreateHackSettings() => new( Dialogs, FilePickers, Session, OnVaultPathChanged );
 
 	/// <summary>The Odoo settings page's view model, fresh each time the page is built (it loads the current values).</summary>
 	/// <returns>A new view model holding the current Odoo settings.</returns>

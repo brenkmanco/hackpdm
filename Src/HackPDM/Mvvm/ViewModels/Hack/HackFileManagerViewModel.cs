@@ -50,6 +50,8 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	private readonly IFilePickerService? _pickers;
 	/// <summary>One batch of local file changes at a time, in the order they came.</summary>
 	private readonly SemaphoreSlim _localChangesGate = new( 1, 1 );
+	/// <summary>Local file changes that arrived while entries were mid-load; replayed once the load completes.</summary>
+	private readonly List<LocalFileChange> _pendingChangesDuringLoad = [];
 	/// <summary>More changed files than this in the shown folder at once (a whole download) reload the list instead.</summary>
 	private const int MaxSingleRowUpdates = 25;
 	private bool _active;
@@ -205,60 +207,133 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		=> UiDispatcher.Post( () =>
 		{
 			if( !IsDisposed )
-				Refresh( FileManagerRefresh.Entries );
+				Refresh( FileManagerRefresh.All );
 		} );
 
 	/// <summary>
-	/// Updates just the rows of changed files in the listed folder; for other folders raises
-	/// <see cref="FolderChanged"/> once per folder ("updated" when its files changed in different ways).
+	/// Updates directory tree nodes for added/deleted/renamed local folders, updates rows of changed files
+	/// in the listed folder, and raises <see cref="FolderChanged"/> for other folders.
 	/// </summary>
 	/// <param name="batch">The changes reported by the local file watcher.</param>
-	/// <remarks>
-	/// Call on the UI thread. Batches are applied one at a time, in order. When more than 25 files of the listed folder
-	/// changed at once the whole list is reloaded instead. Updated rows become the kept rows in <see cref="FileManagerState"/>.
-	/// Errors are written to standard error rather than thrown.
-	/// </remarks>
 	public async Task ApplyLocalChangesAsync( IReadOnlyList<LocalFileChange> batch )
 	{
-		if( IsDisposed )
+		if( IsDisposed || batch.Count == 0 )
 			return;
 		await _localChangesGate.WaitAsync();
 		try
 		{
+			if( IsDisposed )
+				return;
+
 			string? listed = IsListLoaded ? LastSelectedNodePath : null;
+			string? activeFolder = LastSelectedNodePath;
+			bool entriesLoading = !IsListLoaded && activeFolder is not null;
+
 			List<LocalFileChange> here = [];
 			Dictionary<string, LocalChangeKind> elsewhere = new( StringComparer.OrdinalIgnoreCase );
+			bool treeChanged = false;
+			bool reloadCurrentEntries = false;
+
 			foreach( LocalFileChange change in batch )
 			{
-				if( PwaPaths.ToServerName( Path.GetDirectoryName( change.FullPath ) ) is not { } folder )
+				string? itemServerPath = PwaPaths.ToServerName( change.FullPath );
+				string? parentFolder = PwaPaths.ToServerName( Path.GetDirectoryName( change.FullPath ) );
+				if( itemServerPath is null && parentFolder is null )
 					continue;
-				if( listed is not null && string.Equals( folder, listed, StringComparison.OrdinalIgnoreCase ) )
+
+				string[] itemSegments = PwaPaths.Segments( itemServerPath );
+				bool isDirectory = change.IsDirectory
+					|| Directory.Exists( change.FullPath )
+					|| ( change.Kind == LocalChangeKind.Deleted && itemSegments.Length > 0 && _state.Tree?.FindBySegments( itemSegments ) is not null );
+
+				if( isDirectory )
 				{
-					// the list shows files only; a folder created here appears in the tree after a refresh
-					if( !Directory.Exists( change.FullPath ) )
-						here.Add( change );
+					if( itemSegments.Length > 0 && _state.Tree is { } tree )
+					{
+						if( change.Kind == LocalChangeKind.Created )
+							treeChanged |= tree.EnsureLocalPath( itemSegments );
+						else if( change.Kind == LocalChangeKind.Deleted )
+						{
+							treeChanged |= tree.MarkLocalDeleted( itemSegments );
+							if( activeFolder is not null && PwaPaths.IsSameOrAncestorTreePath( itemServerPath, activeFolder ) )
+								reloadCurrentEntries = true;
+						}
+					}
+					if( parentFolder is not null && ( listed is null || !PwaPaths.SameTreePath( parentFolder, listed ) ) )
+					{
+						elsewhere[ parentFolder ] = elsewhere.TryGetValue( parentFolder, out var prev ) && prev != change.Kind
+							? LocalChangeKind.Updated
+							: change.Kind;
+					}
+					continue;
+				}
+
+				if( parentFolder is null )
+					continue;
+
+				if( listed is not null && PwaPaths.SameTreePath( parentFolder, listed ) )
+				{
+					here.Add( change );
+				}
+				else if( entriesLoading && PwaPaths.SameTreePath( parentFolder, activeFolder ) )
+				{
+					// Buffer changes targeting the folder currently mid-load so they aren't lost
+					_pendingChangesDuringLoad.Add( change );
 				}
 				else
-					elsewhere[ folder ] = elsewhere.TryGetValue( folder, out var earlier ) && earlier != change.Kind
+				{
+					elsewhere[ parentFolder ] = elsewhere.TryGetValue( parentFolder, out var earlier ) && earlier != change.Kind
 						? LocalChangeKind.Updated
 						: change.Kind;
+				}
+			}
+
+			if( treeChanged && _state.Tree is { } updatedTree && !IsDisposed )
+			{
+				// If the currently selected folder was local-only and just got deleted, fall back to its nearest surviving ancestor
+				if( LastSelectedNodePath is { } selectedPath )
+				{
+					string[] selectedSegments = PwaPaths.Segments( selectedPath );
+					if( updatedTree.FindBySegments( selectedSegments ) is null )
+					{
+						int len = selectedSegments.Length - 1;
+						while( len > 0 && updatedTree.FindBySegments( selectedSegments.AsSpan( 0, len ) ) is null )
+							len--;
+						LastSelectedNodePath = len == 0
+							? updatedTree.Name
+							: string.Join( PwaPaths.NameSeparator, [ updatedTree.Name, .. selectedSegments[ ..len ] ] );
+						reloadCurrentEntries = true;
+					}
+				}
+				if( TreeLoaded is { } treeHandler )
+					await treeHandler( updatedTree );
 			}
 
 			foreach( var (folder, kind) in elsewhere )
 				FolderChanged?.Invoke( folder, kind );
+
+			if( reloadCurrentEntries )
+			{
+				Refresh( FileManagerRefresh.Entries );
+				return;
+			}
 
 			if( here.Count > MaxSingleRowUpdates )
 			{
 				Refresh( FileManagerRefresh.Entries );
 				return;
 			}
+
 			bool changed = false;
 			foreach( LocalFileChange change in here )
 				changed |= await RefreshRowAsync( change.FullPath, listed! );
 			if( changed && !IsDisposed )
 			{
+				if( _state.Sort is var (field, descending) && EntryRowKeys.TryGetSortKey( field, out var sortKey ) )
+					Entries.Sort( sortKey, descending );
 				KeepListedRows();
 				IsEmptyDirectory = IsListLoaded && SelectedDirectory is not null && Entries.Count == 0;
+				GroupingChanged?.Invoke();
 			}
 		}
 		catch( Exception e )
@@ -277,7 +352,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		string name = Path.GetFileName( localPath );
 		EntryRow? old = Entries.FirstOrDefault( r => string.Equals( r.Name, name, StringComparison.OrdinalIgnoreCase ) );
 		EntryRow? row = await _entryList.RefreshRowAsync( old, localPath, IsFiltered );
-		if( IsDisposed || !IsListLoaded || !string.Equals( LastSelectedNodePath, listedFolder, StringComparison.OrdinalIgnoreCase ) )
+		if( IsDisposed || !IsListLoaded || !PwaPaths.SameTreePath( LastSelectedNodePath, listedFolder ) )
 			return false;
 
 		// look again: the list may have changed while the file was read
@@ -402,6 +477,9 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 
 	/// <summary>Key the entry list is grouped by, or null when grouping is off.</summary>
 	public Func<EntryRow, IComparable?>? ActiveGroupKey => IsGroupingEnabled ? _groupKey : null;
+
+	/// <summary>Name of the field currently selected for grouping (defaults to <see cref="EntryRow.Status"/>).</summary>
+	public string ActiveGroupFieldName => _state.GroupField ?? nameof( EntryRow.Status );
 
 	public RangeObservableCollection<HistoryRow> OHistories { get; } = [];
 	public RangeObservableCollection<ParentRow> OParents { get; } = [];
@@ -619,7 +697,15 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 				IsEntriesLoading = false;
 			// RestartEntries, SearchOdoo and the smoke tests wait on this flag
 			if( !linked.IsCancellationRequested )
+			{
 				IsListLoaded = true;
+				if( _pendingChangesDuringLoad.Count > 0 && !IsDisposed )
+				{
+					List<LocalFileChange> replay = [ .. _pendingChangesDuringLoad ];
+					_pendingChangesDuringLoad.Clear();
+					_ = ApplyLocalChangesAsync( replay );
+				}
+			}
 		}
 	}
 
@@ -749,7 +835,11 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 			return;
 		_groupKey = key;
 		_state.GroupField = propertyName;
-		GroupingChanged?.Invoke();
+		OnPropertyChanged( nameof( ActiveGroupFieldName ) );
+		if( !IsGroupingEnabled )
+			IsGroupingEnabled = true;
+		else
+			GroupingChanged?.Invoke();
 	}
 
 	/// <summary>Sorts the entry list by a field and remembers the sort for later visits.</summary>
@@ -783,7 +873,13 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		await RunOperationAsync( async () =>
 		{
 			Reporter.Log( StatusMessage.PROCESSING, $"{what} all entries within directory ({directory.Name}, id: {SelectedDirectoryId})" );
-			await operation( await SelectedDirectoryEntryIdsAsync( withSubdirectories, withDeleted ) );
+			using( _localFiles.Suspend() )
+			{
+				await operation( await SelectedDirectoryEntryIdsAsync( withSubdirectories, withDeleted ) );
+			}
+			// One clean refresh after bulk folder writes instead of flooding the UI thread via FileSystemWatcher mid-download
+			if( !IsDisposed )
+				Refresh( FileManagerRefresh.All );
 		}, completedMessage );
 	}
 
@@ -853,7 +949,10 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 			return;
 
 		if( await Dialogs.ConfirmAsync( $"Are you sure you want to delete this directory and ({count}) files inside?", "Delete Directory", MessageBoxIcon.Warning ) )
+		{
 			_files.DeleteDirectory( directory );
+			await ApplyLocalChangesAsync( [ new LocalFileChange( directory, LocalChangeKind.Deleted, IsDirectory: true ) ] );
+		}
 	}
 
 	#endregion
