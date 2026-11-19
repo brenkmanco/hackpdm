@@ -425,5 +425,6 @@ Odoo/addons/queue_job
 LATER_USE_READ.md
 /Odoo/.venv
 /Odoo/config/odoo.conf
+/Odoo/deploy/.env
 
 /support_files/KitBot FRC 2026_SW2026

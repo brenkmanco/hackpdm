@@ -1,0 +1,38 @@
+# HackPDM Production Caddy Reverse Proxy Configuration
+# Set HACKPDM_DOMAIN in .env (e.g., pdm.example.com). Caddy handles HTTPS/TLS 1.2+/1.3 automatically.
+
+{$HACKPDM_DOMAIN:localhost} {
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	request_body {
+		max_size 160MB
+	}
+
+	# Block Odoo database manager endpoints at the edge
+	@db_manager path /web/database /web/database/*
+	respond @db_manager "Forbidden" 403
+
+	handle /websocket* {
+		reverse_proxy odoo:8072
+	}
+
+	handle {
+		reverse_proxy odoo:8069 {
+			header_up X-Forwarded-Proto https
+			header_up X-Real-IP {remote_host}
+			transport http {
+				dial_timeout 60s
+				read_timeout 1200s
+				write_timeout 1200s
+			}
+		}
+	}
+}
