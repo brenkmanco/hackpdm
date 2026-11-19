@@ -83,7 +83,7 @@ public sealed class EntryFileService : IEntryFileService
 
 	public void OpenContainingFolders( IEnumerable<EntryRow> entries )
 	{
-		HashSet<string> opened = [];
+		HashSet<string> opened = new( OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal );
 		foreach( EntryRow entry in entries )
 		{
 			try
@@ -94,8 +94,7 @@ public sealed class EntryFileService : IEntryFileService
 				if( path is null )
 					continue;
 
-				FileInfo file = new( path );
-				if( file.Exists && file.DirectoryName is { } dir && opened.Add( dir ) )
+				if( File.Exists( path ) && Path.GetDirectoryName( path ) is { Length: > 0 } dir && opened.Add( dir ) )
 					ShellLauncher.OpenFolder( dir );
 			}
 			catch
@@ -109,7 +108,16 @@ public sealed class EntryFileService : IEntryFileService
 	public bool OpenFile( string path ) => ShellLauncher.OpenFile( path );
 
 	public List<FileInfo> FindLocalFiles( string directory, IEnumerable<EntryRow> entries )
-		=> [ .. entries.Select( e => new FileInfo( Path.Combine( directory, e.Name ?? "" ) ) ).Where( f => f.Exists ) ];
+	{
+		List<FileInfo> result = entries is ICollection<EntryRow> col ? new( col.Count ) : [];
+		foreach( EntryRow entry in entries )
+		{
+			FileInfo file = new( Path.Combine( directory, entry.Name ?? "" ) );
+			if( file.Exists )
+				result.Add( file );
+		}
+		return result;
+	}
 
 	public void DeleteFiles( IEnumerable<FileInfo> files )
 	{
@@ -119,8 +127,12 @@ public sealed class EntryFileService : IEntryFileService
 
 	public int? CountFiles( string directory )
 	{
-		DirectoryInfo dir = new( directory );
-		return dir.Exists ? dir.EnumerateFiles().Count() : null;
+		if( !Directory.Exists( directory ) )
+			return null;
+		int count = 0;
+		foreach( string _ in Directory.EnumerateFiles( directory ) )
+			count++;
+		return count;
 	}
 
 	public void DeleteDirectory( string directory ) => Directory.Delete( directory, true );
@@ -181,8 +193,7 @@ public sealed class EntryFileService : IEntryFileService
 			if( !Directory.Exists( destinationDir ) && !Directory.CreateDirectory( destinationDir ).Exists )
 				return;
 			string target = Path.Combine( destinationDir, source.Name );
-			source.CopyTo( target, overwrite: true );
-			source.Delete();
+			File.Move( source.FullName, target, overwrite: true );
 		}
 		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or ArgumentException )
 		{

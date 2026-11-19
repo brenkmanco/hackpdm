@@ -67,7 +67,11 @@ public static partial class Assets
 public static class EntryIcons
 {
 	private const string GenericFile = "def_fi";
+	private const int StatusCount = (int)FileStatus.Unknown + 1;
 	private static readonly Dictionary<string, ImageSource?> Cache = new( StringComparer.OrdinalIgnoreCase );
+	private static readonly Dictionary<string, ImageSource?> TypeCache = new( StringComparer.OrdinalIgnoreCase );
+	private static readonly ImageSource?[] StatusCache = new ImageSource?[ StatusCount ];
+	private static readonly bool[] StatusCached = new bool[ StatusCount ];
 
 	public static ImageSource? Asset( string key )
 	{
@@ -85,20 +89,62 @@ public static class EntryIcons
 	{
 		if( string.IsNullOrWhiteSpace( extension ) )
 			return Asset( GenericFile );
+		if( TypeCache.TryGetValue( extension, out ImageSource? cached ) )
+			return cached;
+
 		string normalized = extension.Trim().TrimStart( '.' );
-		return normalized.Length == 0
-			? Asset( GenericFile )
-			: Asset( normalized ) ?? ServerTypeIcon( normalized ) ?? Asset( GenericFile );
+		if( normalized.Length == 0 )
+			return TypeCache[ extension ] = Asset( GenericFile );
+
+		ImageSource? resolved = Asset( normalized ) ?? ServerTypeIcon( normalized );
+		if( resolved is not null )
+			return TypeCache[ extension ] = resolved;
+
+		ImageSource? fallback = Asset( GenericFile );
+		if( OdooDefaults.Instance.ExtToType.Count > 0 )
+			TypeCache[ extension ] = fallback;
+		return fallback;
 	}
 
 	public static ImageSource? ForStatus( FileStatus status )
-		=> Asset( status.ToString().ToLowerInvariant() );
+	{
+		int idx = (int)status;
+		if( (uint)idx < StatusCount && StatusCached[ idx ] )
+			return StatusCache[ idx ];
+
+		string key = status switch
+		{
+			FileStatus.Lo => "lo",
+			FileStatus.Ro => "ro",
+			FileStatus.Ok => "ok",
+			FileStatus.Nv => "nv",
+			FileStatus.Lm => "lm",
+			FileStatus.Dt => "dt",
+			FileStatus.Ds => "ds",
+			FileStatus.If => "if",
+			FileStatus.Ft => "ft",
+			FileStatus.Cm => "cm",
+			FileStatus.Co => "co",
+			FileStatus.NoVersions => "noversions",
+			FileStatus.Unknown => "unknown",
+			_ => status.ToString().ToLowerInvariant(),
+		};
+		ImageSource? icon = Asset( key );
+		if( (uint)idx < StatusCount )
+		{
+			StatusCache[ idx ] = icon;
+			StatusCached[ idx ] = true;
+		}
+		return icon;
+	}
 
 	private static ImageSource? ServerTypeIcon( string extension )
 	{
 		string key = $"type:{extension}";
 		if( Cache.TryGetValue( key, out ImageSource? cached ) )
 			return cached;
+		if( OdooDefaults.Instance.ExtToType.Count == 0 )
+			return null;
 		if( !OdooDefaults.Instance.ExtToType.TryGetValue( $".{extension}", out HpType? type ) || type.icon is not { Length: > 0 } bytes )
 			return Cache[ key ] = null;
 

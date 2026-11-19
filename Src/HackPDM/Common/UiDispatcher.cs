@@ -18,12 +18,13 @@ public interface IUiDispatcher
 
 public static class UiDispatcher
 {
-	public static IUiDispatcher Current { get; set; } = new InlineUiDispatcher();
+	public static IUiDispatcher Current { get; set; } = InlineUiDispatcher.Instance;
 	public static bool Post( Action action ) => Current.Post( action );
 }
 
 public sealed class InlineUiDispatcher : IUiDispatcher
 {
+	public static readonly InlineUiDispatcher Instance = new();
 	public bool HasThreadAccess => true;
 
 	public bool Post( Action action )
@@ -72,7 +73,7 @@ public sealed class DispatcherQueueUiDispatcher( DispatcherQueue queue ) : IUiDi
 		if( token.IsCancellationRequested )
 			return Task.FromCanceled( token );
 		if( queue.HasThreadAccess )
-			return new InlineUiDispatcher().RunAsync( action, token );
+			return InlineUiDispatcher.Instance.RunAsync( action, token );
 
 		TaskCompletionSource tcs = new( TaskCreationOptions.RunContinuationsAsynchronously );
 		if( !queue.TryEnqueue( () =>
@@ -101,7 +102,7 @@ public sealed class DispatcherQueueUiDispatcher( DispatcherQueue queue ) : IUiDi
 	public Task RunAsync( Func<Task> action )
 	{
 		if( queue.HasThreadAccess )
-			return new InlineUiDispatcher().RunAsync( action );
+			return InlineUiDispatcher.Instance.RunAsync( action );
 
 		TaskCompletionSource tcs = new( TaskCreationOptions.RunContinuationsAsynchronously );
 		if( !queue.TryEnqueue( async () =>

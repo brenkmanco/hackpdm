@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -21,7 +20,17 @@ internal static class HackUpdater
 	private static bool _promptedRecommendedThisSession;
 
 	private static string? Setting( string name )
-		=> OdooDefaults.Instance?.HpSettings?.FirstOrDefault( s => s.name == name )?.char_value;
+	{
+		var settings = OdooDefaults.Instance?.HpSettings;
+		if( settings is null )
+			return null;
+		for( int i = 0; i < settings.Length; i++ )
+		{
+			if( settings[ i ].name == name )
+				return settings[ i ].char_value;
+		}
+		return null;
+	}
 
 	public static string? RequiredVersionRequirement => Setting( PdmConstants.ClientVersionKey );
 	public static string? LatestServerVersion => Setting( PdmConstants.ClientLatestVersionKey );
@@ -152,7 +161,7 @@ internal static class HackUpdater
 		{
 			if( path.EndsWith( ".exe", StringComparison.OrdinalIgnoreCase ) )
 			{
-				Process.Start( new ProcessStartInfo( path )
+				using Process? _ = Process.Start( new ProcessStartInfo( path )
 				{
 					Arguments = "/CLOSEAPPLICATIONS",
 					UseShellExecute = true,

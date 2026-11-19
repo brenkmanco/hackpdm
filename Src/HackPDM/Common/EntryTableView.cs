@@ -25,13 +25,19 @@ namespace HackPDM.Common;
 /// standard Extended/Single/Multiple selection directly from the clicked <see cref="TableViewRow"/> container.
 /// </para>
 /// </summary>
-public partial class EntryTableView : TableView
+public sealed partial class EntryTableView : TableView
 {
 	private int _anchorIndex = -1;
 	private bool _isUpdatingSelection;
 	private bool _clearJustAddedScheduled;
 	private readonly HashSet<object> _justAddedByTableView = [];
 	private List<object>? _expectedSelectionAfterRelease;
+
+	/// <summary>True while a batched programmatic or pointer selection change is mutating <see cref="ListViewBase.SelectedItems"/>.</summary>
+	public bool IsUpdatingSelection => _isUpdatingSelection;
+
+	/// <summary>Raised once after a batched selection update completes so listeners can sync once instead of once per row.</summary>
+	public event EventHandler? SelectionBatchCompleted;
 
 	public EntryTableView()
 	{
@@ -209,17 +215,41 @@ public partial class EntryTableView : TableView
 	private void ToggleItemSelection( object item, int index )
 	{
 		bool wasSelectedBeforePress = SelectedItems.Contains( item ) && !_justAddedByTableView.Contains( item );
-		List<object> target = [];
-		foreach( object existing in SelectedItems )
-		{
-			if( wasSelectedBeforePress && ReferenceEquals( existing, item ) )
-				continue;
-			target.Add( existing );
-		}
-		if( !wasSelectedBeforePress && !target.Contains( item ) )
-			target.Add( item );
+		_anchorIndex = index;
 
-		ApplySelection( target, anchorIndex: index, reconcileOnRelease: true );
+		if( SelectionMode == ListViewSelectionMode.Single )
+		{
+			ApplySelection( wasSelectedBeforePress ? [] : [ item ], anchorIndex: index, reconcileOnRelease: true );
+			return;
+		}
+
+		// Mutate SelectedItems in place — O(1) instead of clearing and re-adding every selected row
+		bool changed = false;
+		_isUpdatingSelection = true;
+		try
+		{
+			if( wasSelectedBeforePress )
+				changed = SelectedItems.Remove( item );
+			else if( !SelectedItems.Contains( item ) )
+			{
+				SelectedItems.Add( item );
+				changed = true;
+			}
+			_expectedSelectionAfterRelease = [ .. SelectedItems ];
+		}
+		finally
+		{
+			_isUpdatingSelection = false;
+		}
+		if( changed )
+			SelectionBatchCompleted?.Invoke( this, EventArgs.Empty );
+	}
+
+	/// <summary>Replaces <see cref="ListViewBase.SelectedItems"/> in a single guarded batch, firing <see cref="SelectionBatchCompleted"/> once.</summary>
+	public void SetSelectionBatch( IReadOnlyList<object> items )
+	{
+		List<object> target = items is List<object> list ? list : [ .. items ];
+		ApplySelection( target, anchorIndex: _anchorIndex, reconcileOnRelease: false );
 	}
 
 	private void ApplySelection( List<object> target, int anchorIndex, bool reconcileOnRelease )
@@ -237,17 +267,23 @@ public partial class EntryTableView : TableView
 			{
 				SelectedItem = target.Count > 0 ? target[ 0 ] : null;
 			}
+			else if( target.Count == 1 )
+			{
+				SelectedItems.Clear();
+				SelectedItem = target[ 0 ];
+			}
 			else
 			{
 				SelectedItems.Clear();
-				foreach( object item in target )
-					SelectedItems.Add( item );
+				for( int i = 0; i < target.Count; i++ )
+					SelectedItems.Add( target[ i ] );
 			}
 		}
 		finally
 		{
 			_isUpdatingSelection = false;
 		}
+		SelectionBatchCompleted?.Invoke( this, EventArgs.Empty );
 	}
 
 	private bool SelectionMatches( List<object> expected )
@@ -272,7 +308,7 @@ public partial class EntryTableView : TableView
 	{
 		if( ( e.KeyModifiers & modifierFlag ) != 0 )
 			return true;
-		return InputKeyboardSource.GetKeyStateForCurrentThread( key ).HasFlag( CoreVirtualKeyStates.Down );
+		return ( InputKeyboardSource.GetKeyStateForCurrentThread( key ) & CoreVirtualKeyStates.Down ) != 0;
 	}
 
 	private TableViewRow? FindAncestorRow( DependencyObject? source )

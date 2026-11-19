@@ -68,6 +68,8 @@ public sealed partial class SwFileReader : ISwDocumentReader
 	/// <item>Otherwise the component tree itself.</item>
 	/// </list>
 	/// </remarks>
+	private static readonly char[] PathSeparators = [ '\\', '/' ];
+
 	public static List<string> GetReferences( SwStreamStore store, string? ownFileName = null )
 	{
 		var paths = new List<string>();
@@ -80,18 +82,33 @@ public sealed partial class SwFileReader : ISwDocumentReader
 					paths.Add( path );
 		}
 
-		var tree = store.GetText( "swXmlContents/COMPINSTANCETREE" ) is { } xml ? TreePaths( xml ).ToList() : null;
 		if( store.Get( "SwDocContentMgr/SwDocContentMgrInfo" ) is { } contentMgr )
 		{
-			var found = Utf16Paths( contentMgr ).ToList();
-			if( found.Count > 0 )
-				seen.Add( found[ 0 ] );
-			AddAll( found );
+			bool first = true;
+			foreach( string path in Utf16Paths( contentMgr ) )
+			{
+				if( first )
+				{
+					first = false;
+					seen.Add( path );
+					continue;
+				}
+				if( !path.Contains( '^' ) && !IsSelf( path ) && seen.Add( path ) )
+					paths.Add( path );
+			}
+			return paths;
 		}
-		else if( store.Get( "Header2" ) is { } header )
+
+		// Only decompress & parse COMPINSTANCETREE when SwDocContentMgrInfo is absent (pre-2015 or fallback)
+		List<string>? tree = store.GetText( "swXmlContents/COMPINSTANCETREE" ) is { } xml ? TreePaths( xml ).ToList() : null;
+		if( store.Get( "Header2" ) is { } header )
 		{
-			var inTree = tree is null ? null : new HashSet<string>( tree, StringComparer.OrdinalIgnoreCase );
-			AddAll( Utf16Paths( header ).Where( p => inTree?.Contains( p ) ?? true ) );
+			HashSet<string>? inTree = tree is null ? null : new HashSet<string>( tree, StringComparer.OrdinalIgnoreCase );
+			foreach( string path in Utf16Paths( header ) )
+			{
+				if( ( inTree is null || inTree.Contains( path ) ) && !path.Contains( '^' ) && !IsSelf( path ) && seen.Add( path ) )
+					paths.Add( path );
+			}
 		}
 		else if( tree is not null )
 		{
@@ -106,10 +123,10 @@ public sealed partial class SwFileReader : ISwDocumentReader
 	/// <summary>UTF-16 strings ending in a SolidWorks extension, in order.</summary>
 	private static IEnumerable<string> Utf16Paths( byte[] stream )
 	{
-		// match on the bytes as Latin-1 so each byte is one char
+		// match on the bytes as Latin-1 so each byte is one char; decode UTF-16 directly from stream
 		string bytes = Encoding.Latin1.GetString( stream );
 		foreach( Match m in Utf16PathPattern().Matches( bytes ) )
-			yield return Encoding.Unicode.GetString( Encoding.Latin1.GetBytes( m.Value ) );
+			yield return Encoding.Unicode.GetString( stream, m.Index, m.Length );
 	}
 
 	private static IEnumerable<string> TreePaths( string xml )
@@ -123,7 +140,7 @@ public sealed partial class SwFileReader : ISwDocumentReader
 	}
 
 	private static string FileNameOf( string storedPath )
-		=> storedPath[ ( storedPath.LastIndexOfAny( [ '\\', '/' ] ) + 1 ).. ];
+		=> storedPath[ ( storedPath.LastIndexOfAny( PathSeparators ) + 1 ).. ];
 
 	#endregion
 
@@ -156,9 +173,13 @@ public sealed partial class SwFileReader : ISwDocumentReader
 	{
 		if( OpenStore( fileName, noInterrupt: false ) is not { } store )
 			return null;
-		var result = new List<Tuple<string, string, string, object>>();
-		foreach( var p in ReadProperties( store ) )
+		List<SwProperty> props = ReadProperties( store );
+		var result = new List<Tuple<string, string, string, object>>( props.Count );
+		for( int i = 0; i < props.Count; i++ )
+		{
+			SwProperty p = props[ i ];
 			result.Add( Tuple.Create( p.Configuration, p.Name, p.Type, p.Value ) );
+		}
 		return result;
 	}
 

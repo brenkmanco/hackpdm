@@ -15,7 +15,7 @@ namespace HackPDM.Settings;
 
 /// <summary>Configures status log retention, auto-close behavior, and log clearing.</summary>
 [Bindable]
-public partial class StatusSettingsViewModel : ObservableObject
+public sealed partial class StatusSettingsViewModel : ObservableObject
 {
 	private readonly StatusDialogViewModel _statusLog;
 	private readonly IDialogService _dialogs;

@@ -10,9 +10,38 @@ public sealed class HackFile
 		? StringComparer.OrdinalIgnoreCase
 		: StringComparer.Ordinal;
 
-	public string? Name { get; set; }
-	public string? FullPath { get; set; }
-	public string? DirectoryName { get; set; }
+	private string? _identityPath;
+	private bool _identityResolved;
+
+	public string? Name
+	{
+		get;
+		set
+		{
+			field = value;
+			_identityResolved = false;
+		}
+	}
+
+	public string? FullPath
+	{
+		get;
+		set
+		{
+			field = value;
+			_identityResolved = false;
+		}
+	}
+
+	public string? DirectoryName
+	{
+		get;
+		set
+		{
+			field = value;
+			_identityResolved = false;
+		}
+	}
 	public string? RelativePath
 	{
 		get => field ??= FullPath is null || string.IsNullOrEmpty( HackDefaults.Instance.PwaPathAbsolute )
@@ -269,15 +298,19 @@ public sealed class HackFile
 	{
 		get
 		{
+			if( _identityResolved )
+				return _identityPath;
+			_identityResolved = true;
+
 			string? path = FullPath is { Length: > 0 } full
 				? full
 				: DirectoryName is { Length: > 0 } dir && Name is { Length: > 0 } name
 					? Path.Combine( dir, name )
 					: null;
 			if( path is null )
-				return null;
-			try { return Path.GetFullPath( path ); }
-			catch { return path; }
+				return _identityPath = null;
+			try { return _identityPath = Path.GetFullPath( path ); }
+			catch { return _identityPath = path; }
 		}
 	}
 

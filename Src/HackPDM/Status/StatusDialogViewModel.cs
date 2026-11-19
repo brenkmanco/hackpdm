@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,16 +20,25 @@ namespace HackPDM.Status;
 
 /// <summary>Tracks operation log entries, transfer counters, and progress with coalesced UI-thread updates.</summary>
 [Bindable]
-public partial class StatusDialogViewModel : ObservableObject
+public sealed partial class StatusDialogViewModel : ObservableObject
 {
 	private const string HistoryLengthSettingKey = "StatusHistoryLength";
 	private const int DefaultHistoryLength = 1000;
 	private const int MaxLogsPerUiTick = 200;
 
+	private static int? _cachedHistoryLength;
+
 	private readonly Lock _gate = new();
 	private readonly Action _cancelOperation;
 	private readonly IDialogService _dialogs;
 	private readonly ConcurrentQueue<BasicStatusMessage> _pendingLogs = new();
+	private readonly List<BasicStatusMessage> _batchStatus = [];
+	private readonly List<BasicStatusMessage> _batchInfo = [];
+	private readonly List<BasicStatusMessage> _batchError = [];
+	private readonly List<BasicStatusMessage> _batchWarnings = [];
+	private readonly List<BasicStatusMessage> _batchErrorsOnly = [];
+	private readonly Action _runLogFlush;
+	private readonly Action _runProgressRefresh;
 	private int _refreshQueued;
 	private int _logFlushQueued;
 	private bool _isInProcess;
@@ -42,10 +51,19 @@ public partial class StatusDialogViewModel : ObservableObject
 	{
 		get
 		{
+			if( _cachedHistoryLength is int cached )
+				return cached;
 			int saved = HackDefaults.Instance.SettingsProvider?.Get( HistoryLengthSettingKey, DefaultHistoryLength ) ?? DefaultHistoryLength;
-			return Math.Clamp( saved, 10, 1_000_000 );
+			int clamped = Math.Clamp( saved, 10, 1_000_000 );
+			_cachedHistoryLength = clamped;
+			return clamped;
 		}
-		private set => HackDefaults.Instance.SettingsProvider?.Set( HistoryLengthSettingKey, Math.Clamp( value, 10, 1_000_000 ) );
+		private set
+		{
+			int clamped = Math.Clamp( value, 10, 1_000_000 );
+			_cachedHistoryLength = clamped;
+			HackDefaults.Instance.SettingsProvider?.Set( HistoryLengthSettingKey, clamped );
+		}
 	}
 
 	public StatusDialogViewModel( IDialogService dialogs, Action cancelOperation )
@@ -53,13 +71,15 @@ public partial class StatusDialogViewModel : ObservableObject
 		_dialogs = dialogs;
 		_cancelOperation = cancelOperation;
 		_autoClose = HackDefaults.Instance.SettingsProvider?.Get( "StatusAutoClose", false ) ?? false;
+		_runLogFlush = FlushPendingLogs;
+		_runProgressRefresh = RunProgressRefresh;
 	}
 
-	public ObservableCollection<BasicStatusMessage> OStatus { get; } = [];
-	public ObservableCollection<BasicStatusMessage> OInfo { get; } = [];
-	public ObservableCollection<BasicStatusMessage> OError { get; } = [];
-	public ObservableCollection<BasicStatusMessage> OWarnings { get; } = [];
-	public ObservableCollection<BasicStatusMessage> OErrorsOnly { get; } = [];
+	public RangeObservableCollection<BasicStatusMessage> OStatus { get; } = [];
+	public RangeObservableCollection<BasicStatusMessage> OInfo { get; } = [];
+	public RangeObservableCollection<BasicStatusMessage> OError { get; } = [];
+	public RangeObservableCollection<BasicStatusMessage> OWarnings { get; } = [];
+	public RangeObservableCollection<BasicStatusMessage> OErrorsOnly { get; } = [];
 
 	public bool IsInProcess
 	{
@@ -131,11 +151,11 @@ public partial class StatusDialogViewModel : ObservableObject
 		HistoryLength = clamped;
 		UiDispatcher.Post( () =>
 		{
-			TrimCollection( OStatus, clamped );
-			TrimCollection( OInfo, clamped );
-			TrimCollection( OError, clamped );
-			TrimCollection( OWarnings, clamped );
-			TrimCollection( OErrorsOnly, clamped );
+			OStatus.TrimStartTo( clamped );
+			OInfo.TrimStartTo( clamped );
+			OError.TrimStartTo( clamped );
+			OWarnings.TrimStartTo( clamped );
+			OErrorsOnly.TrimStartTo( clamped );
 			NotifySummaryChanged();
 		} );
 	}
@@ -150,7 +170,7 @@ public partial class StatusDialogViewModel : ObservableObject
 	{
 		if( Interlocked.Exchange( ref _logFlushQueued, 1 ) == 1 )
 			return;
-		UiDispatcher.Post( FlushPendingLogs );
+		UiDispatcher.Post( _runLogFlush );
 	}
 
 	private void FlushPendingLogs()
@@ -158,46 +178,51 @@ public partial class StatusDialogViewModel : ObservableObject
 		Volatile.Write( ref _logFlushQueued, 0 );
 		int limit = HistoryLength;
 		int drained = 0;
+		_batchStatus.Clear();
+		_batchInfo.Clear();
+		_batchError.Clear();
+		_batchWarnings.Clear();
+		_batchErrorsOnly.Clear();
+
 		while( drained < MaxLogsPerUiTick && _pendingLogs.TryDequeue( out BasicStatusMessage? message ) )
 		{
 			switch( message.Status )
 			{
 				case StatusMessage.PROCESSING or StatusMessage.SUCCESS:
-					AppendBounded( OStatus, message, limit );
+					_batchStatus.Add( message );
 					if( !string.IsNullOrWhiteSpace( message.Message ) )
 						_latestProcessingMessage = message.Message;
 					break;
 				case StatusMessage.WARNING:
-					AppendBounded( OError, message, limit );
-					AppendBounded( OWarnings, message, limit );
+					_batchError.Add( message );
+					_batchWarnings.Add( message );
 					break;
 				case StatusMessage.ERROR:
-					AppendBounded( OError, message, limit );
-					AppendBounded( OErrorsOnly, message, limit );
+					_batchError.Add( message );
+					_batchErrorsOnly.Add( message );
 					break;
 				default:
-					AppendBounded( OInfo, message, limit );
+					_batchInfo.Add( message );
 					break;
 			}
 			drained++;
 		}
 		if( drained > 0 )
+		{
+			OStatus.AddRangeBounded( _batchStatus, limit );
+			OInfo.AddRangeBounded( _batchInfo, limit );
+			OError.AddRangeBounded( _batchError, limit );
+			OWarnings.AddRangeBounded( _batchWarnings, limit );
+			OErrorsOnly.AddRangeBounded( _batchErrorsOnly, limit );
+			_batchStatus.Clear();
+			_batchInfo.Clear();
+			_batchError.Clear();
+			_batchWarnings.Clear();
+			_batchErrorsOnly.Clear();
 			NotifySummaryChanged();
+		}
 		if( !_pendingLogs.IsEmpty )
 			ScheduleLogFlush();
-	}
-
-	private static void AppendBounded( ObservableCollection<BasicStatusMessage> list, BasicStatusMessage item, int limit )
-	{
-		if( list.Count >= limit )
-			list.RemoveAt( 0 );
-		list.Add( item );
-	}
-
-	private static void TrimCollection( ObservableCollection<BasicStatusMessage> list, int limit )
-	{
-		while( list.Count > limit )
-			list.RemoveAt( 0 );
 	}
 
 	[RelayCommand( CanExecute = nameof( CanCancel ) )]
@@ -264,47 +289,61 @@ public partial class StatusDialogViewModel : ObservableObject
 		return close;
 	}
 
-	public void ResetProgress( int total ) => Update( () =>
+	public void ResetProgress( int total )
 	{
-		( MaxCount, ProcessCounter, SkipCounter, TotalProcessed ) = ( total, 0, 0, 0 );
-		DownloadedBytes = 0;
-		UploadedBytes = 0;
-	} );
+		lock( _gate )
+		{
+			( MaxCount, ProcessCounter, SkipCounter, TotalProcessed ) = ( total, 0, 0, 0 );
+			DownloadedBytes = 0;
+			UploadedBytes = 0;
+		}
+		QueueProgressRefresh();
+	}
 
 	public void AddDownloadedBytes( long bytes )
 	{
 		if( bytes <= 0 )
 			return;
-		Update( () =>
+		lock( _gate )
 		{
 			DownloadedBytes += bytes;
 			SessionDownloadedBytes += bytes;
-		} );
+		}
+		QueueProgressRefresh();
 	}
 
 	public void AddUploadedBytes( long bytes )
 	{
 		if( bytes <= 0 )
 			return;
-		Update( () =>
+		lock( _gate )
 		{
 			UploadedBytes += bytes;
 			SessionUploadedBytes += bytes;
-		} );
+		}
+		QueueProgressRefresh();
 	}
 
-	public void Advance( int processed, int skipped ) => Update( () =>
+	public void Advance( int processed, int skipped )
 	{
-		ProcessCounter += processed;
-		SkipCounter += skipped;
-		TotalProcessed = ProcessCounter + SkipCounter;
-	} );
+		lock( _gate )
+		{
+			ProcessCounter += processed;
+			SkipCounter += skipped;
+			TotalProcessed = ProcessCounter + SkipCounter;
+		}
+		QueueProgressRefresh();
+	}
 
-	public void SetProcessed( int processed ) => Update( () =>
+	public void SetProcessed( int processed )
 	{
-		ProcessCounter = processed;
-		TotalProcessed = ProcessCounter + SkipCounter;
-	} );
+		lock( _gate )
+		{
+			ProcessCounter = processed;
+			TotalProcessed = ProcessCounter + SkipCounter;
+		}
+		QueueProgressRefresh();
+	}
 
 	public void CompleteProgress()
 	{
@@ -353,17 +392,17 @@ public partial class StatusDialogViewModel : ObservableObject
 			odooDb: defaults.OdooDb );
 	}
 
-	private void Update( Action change )
+	private void QueueProgressRefresh()
 	{
-		lock( _gate )
-			change();
 		if( Interlocked.Exchange( ref _refreshQueued, 1 ) == 1 )
 			return;
-		UiDispatcher.Post( () =>
-		{
-			Volatile.Write( ref _refreshQueued, 0 );
-			NotifyProgressChanged();
-		} );
+		UiDispatcher.Post( _runProgressRefresh );
+	}
+
+	private void RunProgressRefresh()
+	{
+		Volatile.Write( ref _refreshQueued, 0 );
+		NotifyProgressChanged();
 	}
 
 	private void NotifyProgressChanged()

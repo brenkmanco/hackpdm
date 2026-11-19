@@ -17,7 +17,7 @@ using Microsoft.UI.Xaml.Data;
 namespace HackPDM.Search;
 
 [Bindable]
-public partial class SearchOdooViewModel(
+public sealed partial class SearchOdooViewModel(
 	IEntrySearchService search,
 	IPdmWorkflowService workflow,
 	IEntryFileService files,
@@ -105,7 +105,7 @@ public partial class SearchOdooViewModel(
 				DeletedRemotely,
 				LocalOnly,
 				maxResults,
-				LocalOnly ? [] : [ .. PropertiesActive ] );
+				LocalOnly ? Array.Empty<SearchPropertiesRow>() : new List<SearchPropertiesRow>( PropertiesActive ) );
 
 			List<SearchRow> rows = await search.SearchAsync( query );
 			SearchResultsList.ReplaceAll( rows );

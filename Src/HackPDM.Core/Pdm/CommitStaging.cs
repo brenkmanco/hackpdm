@@ -2,6 +2,7 @@ using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
 using HackPDM.Core.SolidWorks;
+using HackPDM.Core.SolidWorks.Format;
 
 namespace HackPDM.Core.Pdm;
 
@@ -49,16 +50,18 @@ public static class CommitStaging
 		return staged;
 	}
 
-	internal static HpVersion? PrepareVersion( HackFile hack, HpEntry entry, int commitId )
-		=> NewVersion( hack, entry.id, entry.dir_id, entry.windows_complete_name, (Many2One?)commitId );
+	internal static HpVersion? PrepareVersion( HackFile hack, HpEntry entry, int commitId, byte[]? preReadPreview = null, bool hasPreReadPreview = false )
+		=> NewVersion( hack, entry.id, entry.dir_id, entry.windows_complete_name, (Many2One?)commitId, preReadPreview, hasPreReadPreview );
 
-	internal static HpVersion? PrepareVersion( HackFile hack, HpRecordStaged stagedEntry )
+	internal static HpVersion? PrepareVersion( HackFile hack, HpRecordStaged stagedEntry, byte[]? preReadPreview = null, bool hasPreReadPreview = false )
 		=> NewVersion(
 			hack,
 			stagedEntry.id,
 			stagedEntry.payload?.GetValueOrDefault( "dir_id" ) as int?,
 			stagedEntry.payload?.GetValueOrDefault( "windows_complete_name" ) as string,
-			stagedEntry.commit_id );
+			stagedEntry.commit_id,
+			preReadPreview,
+			hasPreReadPreview );
 
 	public static Task<HpRecordStaged?> StageVersionAsync(
 		HackFile hack,
@@ -68,12 +71,31 @@ public static class CommitStaging
 		Action<long>? onBytesUploaded = null )
 		=> StageAsync( PrepareVersion( hack, entry, commitId ), existingEntry: true, reportError, onBytesUploaded );
 
+	internal static Task<HpRecordStaged?> StageVersionAsync(
+		HackFile hack,
+		HpEntry entry,
+		int commitId,
+		Action<string>? reportError,
+		Action<long>? onBytesUploaded,
+		byte[]? preReadPreview,
+		bool hasPreReadPreview )
+		=> StageAsync( PrepareVersion( hack, entry, commitId, preReadPreview, hasPreReadPreview ), existingEntry: true, reportError, onBytesUploaded );
+
 	public static Task<HpRecordStaged?> StageVersionAsync(
 		HackFile hack,
 		HpRecordStaged stagedEntry,
 		Action<string>? reportError = null,
 		Action<long>? onBytesUploaded = null )
 		=> StageAsync( PrepareVersion( hack, stagedEntry ), existingEntry: false, reportError, onBytesUploaded );
+
+	internal static Task<HpRecordStaged?> StageVersionAsync(
+		HackFile hack,
+		HpRecordStaged stagedEntry,
+		Action<string>? reportError,
+		Action<long>? onBytesUploaded,
+		byte[]? preReadPreview,
+		bool hasPreReadPreview )
+		=> StageAsync( PrepareVersion( hack, stagedEntry, preReadPreview, hasPreReadPreview ), existingEntry: false, reportError, onBytesUploaded );
 
 	private static async Task<HpRecordStaged?> StageAsync(
 		HpVersion? version,
@@ -100,14 +122,16 @@ public static class CommitStaging
 		}
 
 		HpRecordStaged? staged = version.PreStageRec();
+		int inlineBytes = version.file_contents?.Length ?? 0;
+		version.file_contents = null;
 		if( staged is null )
 			return null;
 		if( uploadId is { } id )
 			staged.payload![ "upload_id" ] = id;
 
-		int inlineBytes = version.file_contents?.Length ?? 0;
 		staged.CreateTimeoutMs = ContentTransfer.TimeoutMs( inlineBytes );
 		await staged.CreateAsync();
+		staged.payload?.Remove( "file_contents" );
 		version.LastError = staged.LastError;
 		if( staged.id is not null and not 0 )
 		{
@@ -119,7 +143,14 @@ public static class CommitStaging
 		return null;
 	}
 
-	private static HpVersion? NewVersion( HackFile hack, Many2One? entryId, Many2One? dirId, string? serverName, Many2One? commit )
+	private static HpVersion? NewVersion(
+		HackFile hack,
+		Many2One? entryId,
+		Many2One? dirId,
+		string? serverName,
+		Many2One? commit,
+		byte[]? preReadPreview = null,
+		bool hasPreReadPreview = false )
 	{
 		TypeOf( hack, out bool restricted );
 		if( restricted )
@@ -135,11 +166,11 @@ public static class CommitStaging
 			name = hack.Name,
 			dir_id = dirId,
 			entry_id = entryId,
-			file_ext = hack.TypeExt?[ 1.. ].ToLower(),
+			file_ext = hack.TypeExt?[ 1.. ].ToLowerInvariant(),
 			WinPathway = serverName,
 			node_id = OdooDefaults.Instance.MyNode?.id,
 			file_contents = contents,
-			preview_image = PreviewOf( hack ),
+			preview_image = hasPreReadPreview ? preReadPreview : PreviewOf( hack ),
 			commit_id = commit,
 			HashedValues = { [ "windows_complete_name" ] = serverName },
 		};
@@ -152,9 +183,10 @@ public static class CommitStaging
 	{
 		try
 		{
-			return hack.FullPath is { Length: > 0 } path
-				&& File.Exists( path )
-				&& ContentTransfer.IsLarge( new FileInfo( path ).Length );
+			if( hack.FullPath is not { Length: > 0 } path )
+				return false;
+			FileInfo info = new( path );
+			return info.Exists && ContentTransfer.IsLarge( info.Length );
 		}
 		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException )
 		{
@@ -192,7 +224,8 @@ public static class CommitStaging
 
 	private static HpType? TypeOf( HackFile hack, out bool restricted )
 	{
-		bool known = OdooDefaults.Instance.ExtToType.TryGetValue( hack.TypeExt?.ToLower() ?? "", out HpType? type );
+		HpType? type = null;
+		bool known = hack.TypeExt is { Length: > 0 } ext && OdooDefaults.Instance.ExtToType.TryGetValue( ext, out type );
 		restricted = OdooDefaults.Instance.RestrictTypes is true && !known;
 		return type;
 	}
@@ -207,18 +240,41 @@ public static class CommitStaging
 		return PwaPaths.ToAbsolute( serverName );
 	}
 
-	public static async Task<bool> StageRelationshipsAsync( params HpRecordStaged[] versions )
+	public static Task<bool> StageRelationshipsAsync( params HpRecordStaged[] versions )
+		=> StageRelationshipsInternalAsync( versions, preReadDependencies: null );
+
+	internal static Task<bool> StageRelationshipsAsync( HpRecordStaged version, List<string[]>? preReadDependencies )
+		=> StageRelationshipsInternalAsync( [ version ], preReadDependencies );
+
+	private static async Task<bool> StageRelationshipsInternalAsync( HpRecordStaged[] versions, List<string[]>? preReadDependencies )
 	{
 		try
 		{
 			SwReferenceResolver resolver = new( HackDefaults.Instance?.PwaPathAbsolute );
 			List<HpRecordStaged> staged = [];
-			foreach( HpRecordStaged version in versions )
+			for( int i = 0; i < versions.Length; i++ )
 			{
+				HpRecordStaged version = versions[ i ];
 				if( SolidWorksFileOf( version ) is not { } file )
 					continue;
-				foreach( string path in SwDependencies.Of( file, resolver ).Select( r => r.Local ?? r.Stored ) )
+				List<SwDependencies.Reference> references;
+				if( preReadDependencies is not null && versions.Length == 1 )
 				{
+					references = new List<SwDependencies.Reference>( preReadDependencies.Count );
+					for( int r = 0; r < preReadDependencies.Count; r++ )
+					{
+						string stored = preReadDependencies[ r ][ 1 ];
+						references.Add( new SwDependencies.Reference( stored, resolver.Resolve( stored, file ) ) );
+					}
+				}
+				else
+				{
+					references = SwDependencies.Of( file, resolver );
+				}
+
+				for( int r = 0; r < references.Count; r++ )
+				{
+					string path = references[ r ].Local ?? references[ r ].Stored;
 					staged.Add( new HpRecordStaged
 					{
 						commit_id = version.commit_id,
@@ -252,7 +308,13 @@ public static class CommitStaging
 		}
 	}
 
-	public static async Task<bool> StagePropertiesAsync( params HpRecordStaged[] versions )
+	public static Task<bool> StagePropertiesAsync( params HpRecordStaged[] versions )
+		=> StagePropertiesInternalAsync( versions, preOpenedStore: null );
+
+	internal static Task<bool> StagePropertiesAsync( HpRecordStaged version, SwStreamStore? preOpenedStore )
+		=> StagePropertiesInternalAsync( [ version ], preOpenedStore );
+
+	private static async Task<bool> StagePropertiesInternalAsync( HpRecordStaged[] versions, SwStreamStore? preOpenedStore )
 	{
 		List<HpVersionProperty> staged = [];
 		foreach( HpRecordStaged version in versions )
@@ -262,10 +324,21 @@ public static class CommitStaging
 				if( SolidWorksFileOf( version ) is not { } file )
 					continue;
 				int versionId = version.id is int id and not 0 ? id : throw new ArgumentException( "version id not defined" );
-				foreach( var (config, name, type, value) in SolidWorksUtil.DocMgr.GetProperties( file ) ?? [] )
+				if( preOpenedStore is not null && versions.Length == 1 )
 				{
-					if( HpVersionProperty.FromSwProperty( config, name, type, value, versionId, version.commit_id ) is { } property )
-						staged.Add( property );
+					foreach( SwFileReader.SwProperty p in SwFileReader.ReadProperties( preOpenedStore ) )
+					{
+						if( HpVersionProperty.FromSwProperty( p.Configuration, p.Name, p.Type, p.Value, versionId, version.commit_id ) is { } property )
+							staged.Add( property );
+					}
+				}
+				else
+				{
+					foreach( var (config, name, type, value) in SolidWorksUtil.DocMgr.GetProperties( file ) ?? [] )
+					{
+						if( HpVersionProperty.FromSwProperty( config, name, type, value, versionId, version.commit_id ) is { } property )
+							staged.Add( property );
+					}
 				}
 			}
 			catch( Exception e )

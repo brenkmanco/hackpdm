@@ -4,12 +4,28 @@ using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
 using HackPDM.Core.SolidWorks;
+using HackPDM.Core.SolidWorks.Format;
 
 namespace HackPDM.Core.Pdm;
 
 /// <summary>Filters commit candidates, ensures server directories exist, and stages records for commit.</summary>
 public static class CommitOperations
 {
+	private const int LookupChunkSize = 200;
+	private static readonly string[] EntryLookupFields =
+	[
+		nameof( HpEntry.id ),
+		nameof( HpEntry.name ),
+		nameof( HpEntry.dir_id ),
+		nameof( HpEntry.checkout_user ),
+		nameof( HpEntry.latest_version_id ),
+		nameof( HpEntry.windows_complete_name ),
+	];
+	private static readonly string[] ChecksumOnlyFields = [ nameof( HpVersion.checksum ) ];
+
+	private sealed record CachedFilterRegex( string[] Patterns, Regex? Regex );
+	private static CachedFilterRegex? _filterRegexCache;
+
 	public static async Task<HpDirectory?> CreateDirectoriesAsync( HackFile? hack )
 	{
 		if( hack is null )
@@ -28,32 +44,95 @@ public static class CommitOperations
 		IEnumerable<HackFile> hackFiles,
 		Action<StatusMessage, string>? log = null )
 	{
-		List<HackFile> localOnly = [];
-		List<HackFile> remoteExisting = [];
-		List<HpEntry> unchanged = [];
+		List<(HackFile Hack, string FilePath, string ServerName)> allowed = [];
+		OdooDefaults defaults = OdooDefaults.Instance;
+		bool restrictTypes = defaults.RestrictTypes is true;
 
 		foreach( HackFile hack in hackFiles )
 		{
-			string? ext = hack.TypeExt?.ToLower();
-			if( OdooDefaults.Instance.RestrictTypes is true && !OdooDefaults.Instance.ExtToType.ContainsKey( ext ?? "-=-=-" ) )
+			if( restrictTypes && ( hack.TypeExt is not { Length: > 0 } ext || !defaults.ExtToType.ContainsKey( ext ) ) )
 			{
 				log?.Invoke( StatusMessage.SKIP, $"not a file type the vault accepts, not committed: {hack.Name}" );
 				continue;
 			}
-
 			string filePath = PwaPaths.ToServerDirectory( hack.DirectoryName ) ?? hack.DirectoryName ?? "";
-			OdooDomain sameFile = OdooDomain.Where( "name", hack.Name )
-				.And( "windows_complete_name", ServerWindowsName( hack ) )
-				.And( "deleted", false );
+			allowed.Add( ( hack, filePath, ServerWindowsName( hack ) ) );
+		}
 
-			HpEntry? entry = ( await HpEntry.GetRecordsBySearchAsync(
-				searchFilter: sameFile,
-				includedFields: [ nameof( HpEntry.id ), nameof( HpEntry.name ), nameof( HpEntry.dir_id ), nameof( HpEntry.checkout_user ), nameof( HpEntry.latest_version_id ), nameof( HpEntry.windows_complete_name ) ] ) )?.FirstOrDefault();
+		if( allowed.Count == 0 )
+			return ( [], [], [] );
 
-			if( entry is { id: not null and not 0 } )
+		// Batch-query all remote entries by windows_complete_name instead of 1 RPC per file
+		Dictionary<string, HpEntry> entryByServerName = new( StringComparer.OrdinalIgnoreCase );
+		List<string> distinctServerNames = new( allowed.Count );
+		HashSet<string> seenNames = new( StringComparer.OrdinalIgnoreCase );
+		for( int i = 0; i < allowed.Count; i++ )
+		{
+			if( seenNames.Add( allowed[ i ].ServerName ) )
+				distinctServerNames.Add( allowed[ i ].ServerName );
+		}
+
+		for( int offset = 0; offset < distinctServerNames.Count; offset += LookupChunkSize )
+		{
+			int count = Math.Min( LookupChunkSize, distinctServerNames.Count - offset );
+			string[] chunk = new string[ count ];
+			for( int j = 0; j < count; j++ )
+				chunk[ j ] = distinctServerNames[ offset + j ];
+
+			OdooDomain filter = OdooDomain.Where( "windows_complete_name", "in", chunk ).And( "deleted", false );
+			HpEntry[]? batch = await HpEntry.GetRecordsBySearchAsync( searchFilter: filter, includedFields: EntryLookupFields );
+			if( batch is not { Length: > 0 } )
+				continue;
+			foreach( HpEntry found in batch )
 			{
-				bool mine = entry.checkout_user?.id == OdooDefaults.Instance.OdooId;
-				if( await LatestChecksumAsync( entry ) is { Length: > 0 } latest
+				if( found.id is not null and not 0 && found.windows_complete_name is { Length: > 0 } wcn )
+					entryByServerName.TryAdd( wcn, found );
+			}
+		}
+
+		// Batch-query latest version checksums for all matched remote entries in 1 RPC per chunk
+		Dictionary<int, string?> checksumByVersionId = [];
+		if( entryByServerName.Count > 0 )
+		{
+			HashSet<int> versionIds = [];
+			foreach( HpEntry found in entryByServerName.Values )
+			{
+				if( found.latest_version_id?.id is int vid and not 0 )
+					versionIds.Add( vid );
+			}
+			if( versionIds.Count > 0 )
+			{
+				int[] allVids = [ .. versionIds ];
+				for( int offset = 0; offset < allVids.Length; offset += LookupChunkSize )
+				{
+					int count = Math.Min( LookupChunkSize, allVids.Length - offset );
+					int[] chunk = new int[ count ];
+					Array.Copy( allVids, offset, chunk, 0, count );
+					HpVersion[]? versions = await HpVersion.GetRecordsByIdsAsync( chunk, includedFields: ChecksumOnlyFields );
+					foreach( HpVersion v in versions ?? [] )
+					{
+						if( v.id is int vid )
+							checksumByVersionId[ vid ] = v.checksum;
+					}
+				}
+			}
+		}
+
+		List<HackFile> localOnly = [];
+		List<HackFile> remoteExisting = [];
+		List<HpEntry> unchanged = [];
+		int myId = defaults.OdooId;
+
+		foreach( var (hack, filePath, serverName) in allowed )
+		{
+			if( entryByServerName.TryGetValue( serverName, out HpEntry? entry )
+				&& string.Equals( entry.name, hack.Name, StringComparison.OrdinalIgnoreCase ) )
+			{
+				bool mine = entry.checkout_user?.id == myId;
+				string? latest = entry.latest_version_id?.id is int vid and not 0
+					? checksumByVersionId.GetValueOrDefault( vid )
+					: null;
+				if( latest is { Length: > 0 }
 					&& string.Equals( latest, hack.GetChecksum(), StringComparison.OrdinalIgnoreCase ) )
 				{
 					log?.Invoke( StatusMessage.SKIP, mine
@@ -96,6 +175,29 @@ public static class CommitOperations
 			return false;
 		}
 
+		// When using the managed reader, open the SolidWorks container once for preview + references + properties
+		SwStreamStore? swStore = null;
+		bool isSw = SwDocumentTypes.IsSolidWorks( hack.FullPath );
+		byte[]? preReadPreview = null;
+		bool hasPreReadPreview = false;
+		if( isSw && SolidWorksUtil.DocMgr is SwFileReader )
+		{
+			try
+			{
+				SwStreamStore opened = SwStreamStore.Open( hack.FullPath );
+				if( opened.Format != SwStreamStore.ContainerFormat.Unknown )
+				{
+					swStore = opened;
+					preReadPreview = SwFileReader.GetPreviewPng( opened );
+					hasPreReadPreview = true;
+				}
+			}
+			catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or InvalidDataException )
+			{
+				HackLogger.Debug( "PdmCommit", $"Could not pre-open SolidWorks store for '{hack.FullPath}': {ex.Message}", ex );
+			}
+		}
+
 		HpDirectory? dir = await CreateDirectoriesAsync( hack );
 		HpEntry entry = CommitStaging.NewEntry( hack, dir?.id ?? 0, commit ) ?? new();
 		if( inOdoo )
@@ -107,14 +209,20 @@ public static class CommitOperations
 		{
 			log?.Invoke( StatusMessage.FOUND, "existing entry found..." );
 			log?.Invoke( StatusMessage.PROCESSING, "staging local version..." );
-			versionStaged = await CommitStaging.StageVersionAsync( hack, entry, commit.id ?? 0, e => stageError = e, onBytesUploaded );
+			versionStaged = await CommitStaging.StageVersionAsync(
+				hack, entry, commit.id ?? 0, e => stageError = e, onBytesUploaded,
+				hasPreReadPreview ? preReadPreview : null, hasPreReadPreview );
 		}
 		if( entry.returnType is EntryReturnType.Staged )
 		{
 			HpRecordStaged? entryStaged = await CommitStaging.StageEntryAsync( entry );
 			log?.Invoke( StatusMessage.PROCESSING, "staging local entry..." );
 			log?.Invoke( StatusMessage.PROCESSING, "staging local version..." );
-			versionStaged = entryStaged is null ? null : await CommitStaging.StageVersionAsync( hack, entryStaged, e => stageError = e, onBytesUploaded );
+			versionStaged = entryStaged is null
+				? null
+				: await CommitStaging.StageVersionAsync(
+					hack, entryStaged, e => stageError = e, onBytesUploaded,
+					hasPreReadPreview ? preReadPreview : null, hasPreReadPreview );
 		}
 		if( entry.returnType is EntryReturnType.Failed )
 		{
@@ -128,18 +236,18 @@ public static class CommitOperations
 			if( versionStaged is not { id: not 0 } )
 				throw new ArgumentException( $"Could not stage {hack.Name}: {stageError ?? "the version was not created"}" );
 
-			if( !CanReadReferences( hack, log ) )
+			if( !TryReadReferences( hack, swStore, log, out List<string[]>? preReadDeps ) )
 			{
 				onRecordStaged?.Invoke();
 				return true;
 			}
 
 			log?.Invoke( StatusMessage.PROCESSING, "staging local version relationships..." );
-			if( !await CommitStaging.StageRelationshipsAsync( versionStaged ) )
+			if( !await CommitStaging.StageRelationshipsAsync( versionStaged, preReadDeps ) )
 				throw new ArgumentException( $"Failed to stage version relationships for {versionStaged.payload?.GetValueOrDefault( "name" )}" );
 
 			log?.Invoke( StatusMessage.PROCESSING, "staging local version properties ..." );
-			if( !await CommitStaging.StagePropertiesAsync( versionStaged ) )
+			if( !await CommitStaging.StagePropertiesAsync( versionStaged, swStore ) )
 				throw new ArgumentException( $"Failed to stage version properties for {versionStaged.payload?.GetValueOrDefault( "name" )}" );
 
 			onRecordStaged?.Invoke();
@@ -154,13 +262,31 @@ public static class CommitOperations
 		return true;
 	}
 
-	private static bool CanReadReferences( HackFile hack, Action<StatusMessage, string>? log )
+	private static bool TryReadReferences(
+		HackFile hack,
+		SwStreamStore? swStore,
+		Action<StatusMessage, string>? log,
+		out List<string[]>? dependencies )
 	{
+		dependencies = null;
 		if( !SwDocumentTypes.IsSolidWorksExtension( hack.TypeExt ) || hack.FullPath is null )
 			return true;
 		try
 		{
-			SolidWorksUtil.DocMgr?.GetDependencies( hack.FullPath );
+			if( swStore is not null )
+			{
+				List<string> refs = SwFileReader.GetReferences( swStore, Path.GetFileName( hack.FullPath ) );
+				dependencies = new List<string[]>( refs.Count );
+				for( int i = 0; i < refs.Count; i++ )
+				{
+					string path = refs[ i ];
+					dependencies.Add( [ SwReferenceResolver.FileName( path ), path ] );
+				}
+			}
+			else
+			{
+				dependencies = SolidWorksUtil.DocMgr?.GetDependencies( hack.FullPath );
+			}
 			return true;
 		}
 		catch( Exception e )
@@ -170,17 +296,22 @@ public static class CommitOperations
 		}
 	}
 
-	private static async Task<string?> LatestChecksumAsync( HpEntry entry )
-	{
-		if( entry.latest_version_id?.id is not int versionId || versionId == 0 )
-			return null;
-		return ( await HpVersion.GetRecordsByIdsAsync( [ versionId ], includedFields: [ nameof( HpVersion.checksum ) ] ) )?.FirstOrDefault()?.checksum;
-	}
-
 	private static Regex? EntryFilter()
 	{
-		string[] patterns = [ .. ( OdooDefaults.Instance?.EntryFilterPatterns ?? [] ).Where( p => !string.IsNullOrEmpty( p ) ) ];
-		return patterns.Length == 0 ? null : new Regex( string.Join( "|", patterns ), RegexOptions.IgnoreCase );
+		OdooLookupCache? lookups = OdooDefaults.Instance?.Lookups;
+		if( lookups is null )
+			return null;
+		if( lookups.EntryFilterRegex is { } compiled )
+			return compiled;
+		string[] patterns = lookups.EntryFilterPatterns;
+		if( patterns.Length == 0 )
+			return null;
+		CachedFilterRegex? cached = _filterRegexCache;
+		if( cached is not null && ReferenceEquals( cached.Patterns, patterns ) )
+			return cached.Regex;
+		Regex? built = OdooLookupCache.BuildFilterRegex( patterns );
+		_filterRegexCache = new CachedFilterRegex( patterns, built );
+		return built;
 	}
 
 	public static bool IsFilteredName( string? name )
@@ -191,7 +322,12 @@ public static class CommitOperations
 		Action<StatusMessage, string>? log = null )
 	{
 		Regex? regex = EntryFilter();
-		List<HackFile> kept = [ .. hackFiles.Where( h => regex is null || !regex.IsMatch( h.Name ?? "" ) ) ];
+		List<HackFile> kept = [];
+		foreach( HackFile h in hackFiles )
+		{
+			if( regex is null || !regex.IsMatch( h.Name ?? "" ) )
+				kept.Add( h );
+		}
 		return FilesNotInOdooSegmentedAsync( kept, log );
 	}
 }

@@ -12,26 +12,109 @@ using HackPDM.Core.Services;
 
 namespace HackPDM.Common;
 
-/// <summary>ObservableCollection that swaps or sorts its items with a single Reset notification.</summary>
-public class RangeObservableCollection<T> : ObservableCollection<T>
+/// <summary>ObservableCollection that swaps, appends, trims, or sorts its items with a single Reset notification.</summary>
+public sealed class RangeObservableCollection<T> : ObservableCollection<T>
 {
+	private static readonly PropertyChangedEventArgs CountChangedArgs = new( nameof( Count ) );
+	private static readonly PropertyChangedEventArgs IndexerChangedArgs = new( "Item[]" );
+	private static readonly NotifyCollectionChangedEventArgs ResetChangedArgs = new( NotifyCollectionChangedAction.Reset );
+
+	public void ClearIfNonEmpty()
+	{
+		if( Items.Count > 0 )
+			Clear();
+	}
+
 	public void ReplaceAll( IEnumerable<T> items )
 	{
 		CheckReentrancy();
+		if( Items.Count == 0 && items is ICollection<T> { Count: 0 } )
+			return;
+
 		Items.Clear();
+		if( Items is List<T> list && items is ICollection<T> col && col.Count > 0 )
+			list.EnsureCapacity( col.Count );
 		foreach( T item in items )
 			Items.Add( item );
-		OnPropertyChanged( new PropertyChangedEventArgs( nameof( Count ) ) );
-		OnPropertyChanged( new PropertyChangedEventArgs( "Item[]" ) );
-		OnCollectionChanged( new NotifyCollectionChangedEventArgs( NotifyCollectionChangedAction.Reset ) );
+		NotifyReset();
+	}
+
+	public void ReplaceSorted( IEnumerable<T> items, Func<T, IComparable?> keySelector, bool descending )
+	{
+		List<T> sorted = SortToList( items, keySelector, descending );
+		ReplaceAll( sorted );
+	}
+
+	public void AddRangeBounded( IReadOnlyList<T> batch, int limit )
+	{
+		int batchCount = batch.Count;
+		if( batchCount == 0 )
+			return;
+		if( limit <= 0 )
+		{
+			ClearIfNonEmpty();
+			return;
+		}
+		if( batchCount == 1 && Items.Count < limit )
+		{
+			Add( batch[ 0 ] );
+			return;
+		}
+
+		CheckReentrancy();
+		if( batchCount >= limit )
+		{
+			Items.Clear();
+			int start = batchCount - limit;
+			if( Items is List<T> list )
+				list.EnsureCapacity( limit );
+			for( int i = start; i < batchCount; i++ )
+				Items.Add( batch[ i ] );
+		}
+		else
+		{
+			int excess = Items.Count + batchCount - limit;
+			if( excess > 0 )
+			{
+				if( Items is List<T> list )
+					list.RemoveRange( 0, excess );
+				else
+					for( int i = 0; i < excess; i++ )
+						Items.RemoveAt( 0 );
+			}
+			for( int i = 0; i < batchCount; i++ )
+				Items.Add( batch[ i ] );
+		}
+		NotifyReset();
+	}
+
+	public void TrimStartTo( int limit )
+	{
+		int excess = Items.Count - Math.Max( 0, limit );
+		if( excess <= 0 )
+			return;
+		CheckReentrancy();
+		if( Items is List<T> list )
+			list.RemoveRange( 0, excess );
+		else
+			for( int i = 0; i < excess; i++ )
+				Items.RemoveAt( 0 );
+		NotifyReset();
 	}
 
 	public void Sort( Func<T, IComparable?> keySelector, bool descending )
+		=> ReplaceAll( SortToList( Items, keySelector, descending ) );
+
+	private static List<T> SortToList( IEnumerable<T> items, Func<T, IComparable?> keySelector, bool descending )
+		=> descending
+			? [ .. items.OrderByDescending( keySelector, ComparableComparer.Instance ) ]
+			: [ .. items.OrderBy( keySelector, ComparableComparer.Instance ) ];
+
+	private void NotifyReset()
 	{
-		List<T> sorted = descending
-			? [ .. Items.OrderByDescending( keySelector, ComparableComparer.Instance ) ]
-			: [ .. Items.OrderBy( keySelector, ComparableComparer.Instance ) ];
-		ReplaceAll( sorted );
+		OnPropertyChanged( CountChangedArgs );
+		OnPropertyChanged( IndexerChangedArgs );
+		OnCollectionChanged( ResetChangedArgs );
 	}
 
 	private sealed class ComparableComparer : IComparer<IComparable?>

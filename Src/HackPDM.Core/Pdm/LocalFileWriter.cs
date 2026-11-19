@@ -5,6 +5,9 @@ namespace HackPDM.Core.Pdm;
 /// <summary>Safely writes downloaded file contents into the working folder.</summary>
 public static class LocalFileWriter
 {
+	private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
+		? StringComparison.OrdinalIgnoreCase
+		: StringComparison.Ordinal;
 	public static long? Write( HackFile file )
 	{
 		if( file.FileContents is null || file.DirectoryName is not { } dir || file.Name is not { } name )
@@ -64,8 +67,7 @@ public static class LocalFileWriter
 				return false;
 
 			Directory.CreateDirectory( Path.GetDirectoryName( targetPath )! );
-			if( File.Exists( targetPath ) && File.GetAttributes( targetPath ).HasFlag( FileAttributes.ReadOnly ) )
-				File.SetAttributes( targetPath, File.GetAttributes( targetPath ) & ~FileAttributes.ReadOnly );
+			ClearReadOnlyIfPresent( targetPath );
 
 			if( !await write( targetPath ) )
 				return false;
@@ -83,6 +85,19 @@ public static class LocalFileWriter
 		}
 	}
 
+	private static void ClearReadOnlyIfPresent( string path )
+	{
+		try
+		{
+			FileAttributes attributes = File.GetAttributes( path );
+			if( ( attributes & FileAttributes.ReadOnly ) != 0 )
+				File.SetAttributes( path, attributes & ~FileAttributes.ReadOnly );
+		}
+		catch( Exception e ) when( e is FileNotFoundException or DirectoryNotFoundException )
+		{
+		}
+	}
+
 	internal static string? LocalTargetPath( HackFile file )
 	{
 		if( string.IsNullOrEmpty( file.DirectoryName ) )
@@ -90,7 +105,7 @@ public static class LocalFileWriter
 
 		string relative = file.DirectoryName.Replace( '\\', Path.DirectorySeparatorChar ).TrimStart( Path.DirectorySeparatorChar );
 		if( file.Name is { Length: > 0 } name
-			&& !string.Equals( Path.GetFileName( relative ), name, StringComparison.OrdinalIgnoreCase ) )
+			&& !Path.GetFileName( relative.AsSpan() ).Equals( name.AsSpan(), StringComparison.OrdinalIgnoreCase ) )
 		{
 			relative = Path.Combine( relative, name );
 		}
@@ -98,8 +113,7 @@ public static class LocalFileWriter
 		string root = Path.GetFullPath( HackDefaults.Instance?.PwaPathAbsolute ?? "" );
 		string target = Path.GetFullPath( Path.Combine( root, relative ) );
 		string rootWithSeparator = root.EndsWith( Path.DirectorySeparatorChar ) ? root : root + Path.DirectorySeparatorChar;
-		StringComparison cmp = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-		return target.StartsWith( rootWithSeparator, cmp ) ? target : null;
+		return target.StartsWith( rootWithSeparator, PathComparison ) ? target : null;
 	}
 
 	private static async Task<bool> WriteBytesAtomicAsync( string path, byte[] bytes )
@@ -114,7 +128,6 @@ public static class LocalFileWriter
 			await using( FileStream stream = new( tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, useAsync: true ) )
 			{
 				await stream.WriteAsync( bytes );
-				await stream.FlushAsync();
 			}
 			File.Move( tempPath, path, overwrite: true );
 			return true;
@@ -131,8 +144,7 @@ public static class LocalFileWriter
 	{
 		try
 		{
-			if( File.Exists( tempPath ) )
-				File.Delete( tempPath );
+			File.Delete( tempPath );
 		}
 		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException )
 		{

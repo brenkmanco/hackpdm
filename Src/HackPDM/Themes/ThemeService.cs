@@ -26,7 +26,7 @@ public sealed class ThemeService
 	public const string SmokeThemeVariable = "HACKPDM_SMOKE_THEME";
 
 	private readonly List<WeakReference<FrameworkElement>> _roots = [];
-	private readonly ConditionalWeakTable<FrameworkElement, object> _ownedBackgrounds = [];
+	private readonly ConditionalWeakTable<FrameworkElement, SolidColorBrush> _ownedBackgrounds = [];
 	private readonly Dictionary<string, Color> _originals = [];
 
 	private readonly bool _runningDark = Application.Current.RequestedTheme == ApplicationTheme.Dark;
@@ -112,7 +112,11 @@ public sealed class ThemeService
 		_roots.Add( new( root ) );
 
 		if( GetBackground( root ) is null )
-			_ownedBackgrounds.AddOrUpdate( root, null! );
+		{
+			SolidColorBrush owned = new();
+			_ownedBackgrounds.AddOrUpdate( root, owned );
+			SetBackground( root, owned );
+		}
 		ApplyMode( root );
 	}
 
@@ -130,7 +134,7 @@ public sealed class ThemeService
 	{
 		if( _settings.Palette == palette )
 			return;
-		foreach( string key in _originals.Keys.ToList() )
+		foreach( string key in _originals.Keys )
 			Restore( key, toOriginal: true );
 		_settings.Palette = palette;
 		_settings.Mode = ThemePresets.Palette( palette ).IsDark ? AppThemeMode.Dark : AppThemeMode.Light;
@@ -177,8 +181,8 @@ public sealed class ThemeService
 			AppThemeMode.Light => ElementTheme.Light,
 			_ => ElementTheme.Default,
 		};
-		if( _ownedBackgrounds.TryGetValue( root, out _ ) )
-			SetBackground( root, new SolidColorBrush( PageBackgroundFor( root.ActualTheme ) ) );
+		if( _ownedBackgrounds.TryGetValue( root, out SolidColorBrush? owned ) )
+			owned.Color = PageBackgroundFor( root.ActualTheme );
 	}
 
 	private Color PageBackgroundFor( ElementTheme theme )
@@ -214,7 +218,7 @@ public sealed class ThemeService
 		if( NeedsRestart )
 			return;
 		var overrides = _settings.OverridesFor( _runningDark );
-		foreach( string key in overrides.Keys.ToList() )
+		foreach( string key in overrides.Keys )
 			Restore( key );
 		overrides.Clear();
 		RefreshOwnedBackgrounds();
@@ -223,7 +227,7 @@ public sealed class ThemeService
 
 	public void Revert()
 	{
-		foreach( string key in _originals.Keys.ToList() )
+		foreach( string key in _originals.Keys )
 			Restore( key, toOriginal: true );
 		UIStorage.Reload();
 		_settings = UIStorage.GlobalData.Theme;
@@ -276,8 +280,8 @@ public sealed class ThemeService
 	{
 		foreach( var root in LiveRoots() )
 		{
-			if( _ownedBackgrounds.TryGetValue( root, out _ ) )
-				SetBackground( root, new SolidColorBrush( PageBackgroundFor( root.ActualTheme ) ) );
+			if( _ownedBackgrounds.TryGetValue( root, out SolidColorBrush? owned ) )
+				owned.Color = PageBackgroundFor( root.ActualTheme );
 		}
 	}
 
@@ -286,10 +290,10 @@ public sealed class ThemeService
 
 	private IEnumerable<FrameworkElement> LiveRoots()
 	{
-		_roots.RemoveAll( r => !r.TryGetTarget( out _ ) );
-		foreach( var reference in _roots.ToList() )
+		_roots.RemoveAll( static r => !r.TryGetTarget( out _ ) );
+		for( int i = 0; i < _roots.Count; i++ )
 		{
-			if( reference.TryGetTarget( out var root ) )
+			if( _roots[ i ].TryGetTarget( out var root ) )
 				yield return root;
 		}
 	}

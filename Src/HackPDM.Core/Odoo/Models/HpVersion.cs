@@ -60,24 +60,31 @@ public sealed class HpVersion : HpRecord<HpVersion>, IOdooModel<HpVersion>
 		}
 	}
 
-	public override Dictionary<string, object?> ToOdoo() => new()
+	public override Dictionary<string, object?> ToOdoo() => ToOdoo( excludedFields: null );
+
+	protected override Dictionary<string, object?> ToOdoo( string[]? excludedFields )
 	{
-		[ "name" ] = name,
-		[ "file_ext" ] = file_ext,
-		[ "checksum" ] = checksum,
-		[ "windows_complete_name" ] = windows_complete_name,
-		[ "entry_id" ] = entry_id?.id,
-		[ "node_id" ] = node_id?.id,
-		[ "dir_id" ] = dir_id?.id,
-		[ "checkout_user" ] = checkout_user?.id,
-		[ "attachment_id" ] = attachment_id?.id,
-		[ "parent_ids" ] = OdooValues.OutX2Many( parent_ids ),
-		[ "child_ids" ] = OdooValues.OutX2Many( child_ids ),
-		[ "file_modify_stamp" ] = OdooValues.OutDateTime( file_modify_stamp ),
-		[ "file_size" ] = file_size,
-		[ "preview_image" ] = OdooValues.OutBytes( preview_image ),
-		[ "file_contents" ] = OdooValues.OutBytes( file_contents ),
-	};
+		bool skipPreview = excludedFields is not null && Array.IndexOf( excludedFields, "preview_image" ) >= 0;
+		bool skipContents = excludedFields is not null && Array.IndexOf( excludedFields, "file_contents" ) >= 0;
+		return new()
+		{
+			[ "name" ] = name,
+			[ "file_ext" ] = file_ext,
+			[ "checksum" ] = checksum,
+			[ "windows_complete_name" ] = windows_complete_name,
+			[ "entry_id" ] = entry_id?.id,
+			[ "node_id" ] = node_id?.id,
+			[ "dir_id" ] = dir_id?.id,
+			[ "checkout_user" ] = checkout_user?.id,
+			[ "attachment_id" ] = attachment_id?.id,
+			[ "parent_ids" ] = OdooValues.OutX2Many( parent_ids ),
+			[ "child_ids" ] = OdooValues.OutX2Many( child_ids ),
+			[ "file_modify_stamp" ] = OdooValues.OutDateTime( file_modify_stamp ),
+			[ "file_size" ] = file_size,
+			[ "preview_image" ] = skipPreview ? null : OdooValues.OutBytes( preview_image ),
+			[ "file_contents" ] = skipContents ? null : OdooValues.OutBytes( file_contents ),
+		};
+	}
 
 	public override void CompleteConstruction()
 	{
@@ -91,10 +98,53 @@ public sealed class HpVersion : HpRecord<HpVersion>, IOdooModel<HpVersion>
 	public static async Task<List<HpVersionProperty[]?>> GetAllVersionPropertiesAsync( IReadOnlyList<int> ids )
 	{
 		const string versionPropField = "version_property_ids";
-		Result<IReadOnlyList<OdooRow>> rows = await OdooRpc.ReadAsync( ModelName, ids, [ versionPropField ] );
-		List<HpVersionProperty[]?> versionProperties = [];
-		foreach( OdooRow row in rows.ValueOr( [] ) )
-			versionProperties.Add( await HpVersionProperty.GetRecordsByIdsAsync( row.RefIds( versionPropField ) ) );
+		Result<IReadOnlyList<OdooRow>> rowsResult = await OdooRpc.ReadAsync( ModelName, ids, [ versionPropField ] );
+		IReadOnlyList<OdooRow> rows = rowsResult.ValueOr( [] );
+		if( rows.Count == 0 )
+			return [];
+
+		List<IReadOnlyList<int>> perRowPropIds = new( rows.Count );
+		HashSet<int> uniquePropIds = [];
+		for( int i = 0; i < rows.Count; i++ )
+		{
+			IReadOnlyList<int> propIds = rows[ i ].RefIds( versionPropField );
+			perRowPropIds.Add( propIds );
+			for( int j = 0; j < propIds.Count; j++ )
+				uniquePropIds.Add( propIds[ j ] );
+		}
+
+		Dictionary<int, HpVersionProperty>? propById = null;
+		if( uniquePropIds.Count > 0 )
+		{
+			HpVersionProperty[]? fetched = await HpVersionProperty.GetRecordsByIdsAsync( [ .. uniquePropIds ] );
+			if( fetched is { Length: > 0 } )
+			{
+				propById = new Dictionary<int, HpVersionProperty>( fetched.Length );
+				foreach( HpVersionProperty p in fetched )
+				{
+					if( p.id is int pid and not 0 )
+						propById[ pid ] = p;
+				}
+			}
+		}
+
+		List<HpVersionProperty[]?> versionProperties = new( rows.Count );
+		for( int i = 0; i < perRowPropIds.Count; i++ )
+		{
+			IReadOnlyList<int> propIds = perRowPropIds[ i ];
+			if( propIds.Count == 0 || propById is null )
+			{
+				versionProperties.Add( null );
+				continue;
+			}
+			List<HpVersionProperty> list = new( propIds.Count );
+			for( int j = 0; j < propIds.Count; j++ )
+			{
+				if( propById.TryGetValue( propIds[ j ], out HpVersionProperty? prop ) )
+					list.Add( prop );
+			}
+			versionProperties.Add( list.Count > 0 ? [ .. list ] : null );
+		}
 		return versionProperties;
 	}
 

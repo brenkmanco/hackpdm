@@ -16,7 +16,7 @@ using Microsoft.UI.Xaml.Controls;
 namespace HackPDM;
 
 /// <summary>Application entry point, crash handlers, startup theme setup, and main window lifecycle.</summary>
-public partial class HackApp : Application
+public sealed partial class HackApp : Application
 {
 	public static HomeView? HomePage;
 	public static Window? Window;

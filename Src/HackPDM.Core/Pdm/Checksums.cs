@@ -22,21 +22,28 @@ public static class Checksums
 			return null;
 		try
 		{
-			if( !File.Exists( path ) )
-				return null;
 			using FileStream stream = new(
 				path,
 				FileMode.Open,
 				FileAccess.Read,
 				FileShare.ReadWrite,
-				131072,
+				4096,
 				FileOptions.SequentialScan );
 			if( stream.Length == 0 )
 				return "";
-			if( type == ChecksumType.Sha1 )
-				return Convert.ToHexStringLower( SHA1.HashData( stream ) );
-			using HashAlgorithm algorithm = Algorithm( type );
-			return Convert.ToHexStringLower( algorithm.ComputeHash( stream ) );
+			Span<byte> hash = stackalloc byte[ SHA512.HashSizeInBytes ];
+			int written = type switch
+			{
+				ChecksumType.Md5 => MD5.HashData( stream, hash ),
+				ChecksumType.Sha256 => SHA256.HashData( stream, hash ),
+				ChecksumType.Sha512 => SHA512.HashData( stream, hash ),
+				_ => SHA1.HashData( stream, hash ),
+			};
+			return Convert.ToHexStringLower( hash[ ..written ] );
+		}
+		catch( Exception e ) when( e is FileNotFoundException or DirectoryNotFoundException )
+		{
+			return null;
 		}
 		catch( Exception e )
 		{

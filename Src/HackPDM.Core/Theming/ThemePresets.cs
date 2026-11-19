@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace HackPDM.Core.Theming;
 
 /// <summary>The color presets: they color every window, page, dialog and the dependency graph.</summary>
@@ -49,9 +51,9 @@ public static class ThemePresets
 	/// <summary>Every palette, in menu order.</summary>
 	public static IReadOnlyList<AppPalette> Palettes { get; } =
 	[
-		new( PaletteName.Dark, "Dark", IsDark: true, new Dictionary<string, uint>(),
+		new( PaletteName.Dark, "Dark", IsDark: true, FrozenDictionary<string, uint>.Empty,
 			PanelStroke: 0xFF696969, FancyPanelStroke: 0xB060CDFF, PageBackground: FluentDarkPage, Text: FluentDarkText ),
-		new( PaletteName.Light, "Light", IsDark: false, new Dictionary<string, uint>(),
+		new( PaletteName.Light, "Light", IsDark: false, FrozenDictionary<string, uint>.Empty,
 			PanelStroke: 0xFFC4C9D0, FancyPanelStroke: 0xB0005FB8, PageBackground: FluentLightPage, Text: FluentLightText ),
 		new( PaletteName.NavyBlue, "Navy blue", IsDark: true, new Dictionary<string, uint>
 			{
@@ -81,7 +83,7 @@ public static class ThemePresets
 				[ "SystemControlHighlightAccentBrush" ] = 0xFFF2B134,
 				[ "SystemControlHighlightListAccentLowBrush" ] = 0xFFF2B134,
 				[ "SystemControlHighlightListAccentMediumBrush" ] = 0xFFF2B134,
-			},
+			}.ToFrozenDictionary(),
 			PanelStroke: 0xFF2A4570, FancyPanelStroke: 0xC0F2B134, PageBackground: 0xFF0B1A30, Text: 0xFFE6EDF7 ),
 	];
 
@@ -99,10 +101,32 @@ public static class ThemePresets
 	];
 
 	/// <summary>The palette named <paramref name="name"/>.</summary>
-	public static AppPalette Palette( PaletteName name ) => Palettes.First( p => p.Name == name );
+	public static AppPalette Palette( PaletteName name )
+	{
+		int idx = (int)name;
+		if( (uint)idx < (uint)Palettes.Count && Palettes[ idx ].Name == name )
+			return Palettes[ idx ];
+		for( int i = 0; i < Palettes.Count; i++ )
+		{
+			if( Palettes[ i ].Name == name )
+				return Palettes[ i ];
+		}
+		throw new InvalidOperationException( $"Unknown palette '{name}'." );
+	}
 
 	/// <summary>The form named <paramref name="name"/>.</summary>
-	public static AppForm Form( FormName name ) => Forms.First( f => f.Name == name );
+	public static AppForm Form( FormName name )
+	{
+		int idx = (int)name;
+		if( (uint)idx < (uint)Forms.Count && Forms[ idx ].Name == name )
+			return Forms[ idx ];
+		for( int i = 0; i < Forms.Count; i++ )
+		{
+			if( Forms[ i ].Name == name )
+				return Forms[ i ];
+		}
+		throw new InvalidOperationException( $"Unknown form '{name}'." );
+	}
 
 	/// <summary>The panel border color for a palette and form.</summary>
 	public static uint PanelStroke( AppPalette palette, AppForm form ) => form.AccentPanels ? palette.FancyPanelStroke : palette.PanelStroke;

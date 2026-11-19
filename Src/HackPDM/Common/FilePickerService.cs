@@ -16,7 +16,7 @@ public interface IFilePickerService
 
 public sealed class FilePickerService : IFilePickerService
 {
-	public Task<string?> PickOpenFileAsync( string extension ) => PickOpenFileAsync( [ extension ] );
+	public Task<string?> PickOpenFileAsync( string extension ) => PickOpenFileAsync( new[] { extension } );
 
 	public async Task<string?> PickOpenFileAsync( IReadOnlyList<string> extensions )
 	{

@@ -21,9 +21,12 @@ public sealed class SwStreamStore
 	/// <summary>The container layout of a SolidWorks file.</summary>
 	public enum ContainerFormat { Unknown, Ole, Modern }
 
+	private enum SourceKind : byte { Modern, OleRaw, OleZlb }
+	private readonly record struct StreamSource( SourceKind Kind, uint Start, int Length, uint UncompressedOrSize, uint Crc );
+
 	private readonly byte[] _data;
 	// candidate locations per stream name, in file order (the modern format can hold stale copies)
-	private readonly Dictionary<string, List<Func<byte[]?>>> _sources = new( StringComparer.Ordinal );
+	private readonly Dictionary<string, List<StreamSource>> _sources = new( StringComparer.Ordinal );
 	private readonly Dictionary<string, byte[]?> _decoded = new( StringComparer.Ordinal );
 
 	/// <summary>The detected container layout; <see cref="ContainerFormat.Unknown"/> means no streams were indexed.</summary>
@@ -77,11 +80,11 @@ public sealed class SwStreamStore
 		byte[]? result = null;
 		if( _sources.TryGetValue( name, out var candidates ) )
 		{
-			foreach( var candidate in candidates )
+			for( int i = 0; i < candidates.Count; i++ )
 			{
 				try
 				{
-					if( ( result = candidate() ) is not null )
+					if( ( result = ReadSource( candidates[ i ] ) ) is not null )
 						break;
 				}
 				catch( InvalidDataException ) { }
@@ -91,6 +94,14 @@ public sealed class SwStreamStore
 		_decoded[ name ] = result;
 		return result;
 	}
+
+	private byte[]? ReadSource( StreamSource src ) => src.Kind switch
+	{
+		SourceKind.Modern => InflateChecked( (int)src.Start, src.Length, src.UncompressedOrSize, src.Crc ),
+		SourceKind.OleRaw => ReadOleRaw( src.Start, src.UncompressedOrSize ),
+		SourceKind.OleZlb => ReadOleRaw( src.Start, src.UncompressedOrSize ) is { Length: > 24 } raw ? InflateZlb( raw ) : null,
+		_ => null,
+	};
 
 	/// <summary>Gets a stream's contents decoded as UTF-8 text (used for the XML streams of 2015+ files).</summary>
 	/// <param name="name">The stream name.</param>
@@ -110,7 +121,7 @@ public sealed class SwStreamStore
 		return ContainerFormat.Unknown;
 	}
 
-	private void Add( string name, Func<byte[]?> source )
+	private void Add( string name, StreamSource source )
 	{
 		if( !_sources.TryGetValue( name, out var list ) )
 			_sources[ name ] = list = [];
@@ -152,14 +163,13 @@ public sealed class SwStreamStore
 			if( DecodeName( data.Slice( (int)nameStart, (int)nameSize ), key ) is not { } name )
 				continue;
 
-			int start = (int)payloadStart, length = (int)compressed;
-			Add( name, () => InflateChecked( start, length, uncompressed, crc ) );
+			Add( name, new StreamSource( SourceKind.Modern, (uint)payloadStart, (int)compressed, uncompressed, crc ) );
 		}
 	}
 
 	private static string? DecodeName( ReadOnlySpan<byte> encoded, int key )
 	{
-		var chars = new char[ encoded.Length ];
+		Span<char> chars = stackalloc char[ encoded.Length ];
 		for( int i = 0; i < encoded.Length; i++ )
 		{
 			byte b = (byte)( ( encoded[ i ] << key ) | ( encoded[ i ] >> ( 8 - key ) ) );
@@ -229,14 +239,16 @@ public sealed class SwStreamStore
 				fatSectorIds.Add( BinaryPrimitives.ReadUInt32LittleEndian( sector[ ( i * 4 ).. ] ) );
 			difat = BinaryPrimitives.ReadUInt32LittleEndian( sector[ ( ( perSector - 1 ) * 4 ).. ] );
 		}
-		var fat = new List<uint>();
-		foreach( uint id in fatSectorIds.Take( (int)fatSectors ) )
+		int fatCount = (int)Math.Min( fatSectors, (uint)fatSectorIds.Count );
+		int entriesPerSector = _sectorSize / 4;
+		_fat = new uint[ fatCount * entriesPerSector ];
+		int fatIdx = 0;
+		for( int f = 0; f < fatCount; f++ )
 		{
-			var sector = Sector( id );
+			var sector = Sector( fatSectorIds[ f ] );
 			for( int i = 0; i + 4 <= sector.Length; i += 4 )
-				fat.Add( BinaryPrimitives.ReadUInt32LittleEndian( sector[ i.. ] ) );
+				_fat[ fatIdx++ ] = BinaryPrimitives.ReadUInt32LittleEndian( sector[ i.. ] );
 		}
-		_fat = [ .. fat ];
 
 		if( miniFatSectors > 0 )
 		{
@@ -247,7 +259,7 @@ public sealed class SwStreamStore
 		}
 
 		var directory = Chain( directoryStart );
-		var entries = new List<DirEntry>();
+		var entries = new List<DirEntry>( directory.Length / 128 );
 		for( int off = 0; off + 128 <= directory.Length; off += 128 )
 		{
 			var e = directory.AsSpan( off, 128 );
@@ -268,8 +280,7 @@ public sealed class SwStreamStore
 		var root = entries[ 0 ];
 		if( root.Start < EndOfChain )
 		{
-			var mini = Chain( root.Start );
-			_miniStream = mini.Length > root.Size ? mini[ ..(int)root.Size ] : mini;
+			_miniStream = Chain( root.Start, (int)root.Size ) ?? [];
 		}
 
 		// walk the red-black tree of each storage to build "Storage/Stream" paths
@@ -292,43 +303,46 @@ public sealed class SwStreamStore
 
 	private void AddOleStream( string path, DirEntry entry )
 	{
-		byte[]? Raw()
-		{
-			if( entry.Size < _miniCutoff )
-			{
-				var output = new byte[ entry.Size ];
-				int written = 0;
-				uint sector = entry.Start;
-				for( int guard = 0; sector < EndOfChain && written < output.Length && guard <= _miniFat.Length; guard++ )
-				{
-					int offset = (int)sector * _miniSectorSize;
-					int n = Math.Min( _miniSectorSize, output.Length - written );
-					if( offset + n > _miniStream.Length )
-						return null;
-					_miniStream.AsSpan( offset, n ).CopyTo( output.AsSpan( written ) );
-					written += n;
-					sector = sector < _miniFat.Length ? _miniFat[ sector ] : EndOfChain;
-				}
-				return written == output.Length ? output : null;
-			}
-			var chain = Chain( entry.Start );
-			return chain.Length >= entry.Size ? chain.AsSpan( 0, (int)entry.Size ).ToArray() : null;
-		}
-
 		const string zlb = "__ZLB";
 		if( path.EndsWith( zlb, StringComparison.Ordinal ) )
-			Add( path[ ..^zlb.Length ], () => Raw() is { Length: > 24 } raw ? InflateZlb( raw ) : null );
+			Add( path[ ..^zlb.Length ], new StreamSource( SourceKind.OleZlb, entry.Start, 0, entry.Size, 0 ) );
 		else
-			Add( path, Raw );
+			Add( path, new StreamSource( SourceKind.OleRaw, entry.Start, 0, entry.Size, 0 ) );
+	}
+
+	private byte[]? ReadOleRaw( uint start, uint size )
+	{
+		if( size < _miniCutoff )
+		{
+			var output = new byte[ size ];
+			int written = 0;
+			uint sector = start;
+			for( int guard = 0; sector < EndOfChain && written < output.Length && guard <= _miniFat.Length; guard++ )
+			{
+				int offset = (int)sector * _miniSectorSize;
+				int n = Math.Min( _miniSectorSize, output.Length - written );
+				if( offset + n > _miniStream.Length )
+					return null;
+				_miniStream.AsSpan( offset, n ).CopyTo( output.AsSpan( written ) );
+				written += n;
+				sector = sector < _miniFat.Length ? _miniFat[ sector ] : EndOfChain;
+			}
+			return written == output.Length ? output : null;
+		}
+		return ChainExact( start, (int)size );
 	}
 
 	private static byte[] InflateZlb( byte[] raw )
 	{
 		// 24-byte header (uncompressed size at 16, compressed size at 20), then a zlib stream
+		uint hinted = BinaryPrimitives.ReadUInt32LittleEndian( raw.AsSpan( 16 ) );
+		int capacity = hinted is > 0 and <= 64 * 1024 * 1024 ? (int)hinted : Math.Min( raw.Length * 2, 64 * 1024 );
 		using var input = new MemoryStream( raw, 24, raw.Length - 24, writable: false );
 		using var inflater = new ZLibStream( input, CompressionMode.Decompress );
-		using var output = new MemoryStream();
+		using var output = new MemoryStream( capacity );
 		inflater.CopyTo( output );
+		if( output.TryGetBuffer( out ArraySegment<byte> seg ) && seg.Offset == 0 && seg.Array is { } arr && seg.Count == arr.Length )
+			return arr;
 		return output.ToArray();
 	}
 
@@ -340,16 +354,43 @@ public sealed class SwStreamStore
 		return _data.AsSpan( (int)offset, _sectorSize );
 	}
 
-	private byte[] Chain( uint start )
+	private byte[] Chain( uint start, int maxBytes = -1 )
 	{
-		using var output = new MemoryStream();
+		using var output = new MemoryStream( maxBytes > 0 ? Math.Min( maxBytes, 16 * 1024 * 1024 ) : _sectorSize * 4 );
 		uint sector = start;
 		for( int guard = 0; sector < EndOfChain && sector != FreeSector && guard <= _fat.Length; guard++ )
 		{
-			output.Write( Sector( sector ) );
+			ReadOnlySpan<byte> bytes = Sector( sector );
+			if( maxBytes >= 0 )
+			{
+				int remaining = maxBytes - (int)output.Length;
+				if( remaining <= 0 )
+					break;
+				if( bytes.Length > remaining )
+					bytes = bytes[ ..remaining ];
+			}
+			output.Write( bytes );
 			sector = sector < _fat.Length ? _fat[ sector ] : EndOfChain;
 		}
+		if( output.TryGetBuffer( out ArraySegment<byte> seg ) && seg.Offset == 0 && seg.Array is { } arr && seg.Count == arr.Length )
+			return arr;
 		return output.ToArray();
+	}
+
+	private byte[]? ChainExact( uint start, int expectedSize )
+	{
+		byte[] output = new byte[ expectedSize ];
+		int written = 0;
+		uint sector = start;
+		for( int guard = 0; sector < EndOfChain && sector != FreeSector && written < expectedSize && guard <= _fat.Length; guard++ )
+		{
+			ReadOnlySpan<byte> bytes = Sector( sector );
+			int take = Math.Min( bytes.Length, expectedSize - written );
+			bytes[ ..take ].CopyTo( output.AsSpan( written ) );
+			written += take;
+			sector = sector < _fat.Length ? _fat[ sector ] : EndOfChain;
+		}
+		return written == expectedSize ? output : null;
 	}
 
 	private readonly record struct DirEntry( string Name, byte Type, uint Left, uint Right, uint Child, uint Start, uint Size );

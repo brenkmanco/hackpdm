@@ -7,6 +7,8 @@ namespace HackPDM.Core.Graph;
 /// <summary>Spacing and node sizes for <see cref="GraphLayout"/>, in device-independent pixels.</summary>
 public sealed record LayoutOptions
 {
+	public static LayoutOptions Default { get; } = new();
+
 	public double ColumnGap { get; init; } = 120;
 	public double RowGap { get; init; } = 28;
 	public double Margin { get; init; } = 40;
@@ -43,10 +45,41 @@ public sealed record EdgeRoute( GraphEdge Edge, double FromX, double FromY, doub
 /// <summary>A laid-out graph: boxes, links and the size of the area they cover.</summary>
 public sealed record GraphLayoutResult( IReadOnlyList<NodeBox> Nodes, IReadOnlyList<EdgeRoute> Edges, double Width, double Height )
 {
+	private Dictionary<int, NodeBox>? _byId;
+
+	internal GraphLayoutResult(
+		IReadOnlyList<NodeBox> nodes,
+		IReadOnlyList<EdgeRoute> edges,
+		double width,
+		double height,
+		Dictionary<int, NodeBox> byId )
+		: this( nodes, edges, width, height ) => _byId = byId;
+
 	public static GraphLayoutResult Empty { get; } = new( [], [], 0, 0 );
 
 	/// <summary>The box of file <paramref name="id"/>; null when it is not in the graph.</summary>
-	public NodeBox? Find( int id ) => Nodes.FirstOrDefault( n => n.Node.Id == id );
+	public NodeBox? Find( int id )
+	{
+		if( Nodes.Count == 0 )
+			return null;
+		if( _byId is null )
+		{
+			Dictionary<int, NodeBox> map = new( Nodes.Count );
+			for( int i = 0; i < Nodes.Count; i++ )
+				map.TryAdd( Nodes[ i ].Node.Id, Nodes[ i ] );
+			_byId = map;
+		}
+		return _byId.GetValueOrDefault( id );
+	}
+
+	public bool Equals( GraphLayoutResult? other )
+		=> other is not null
+			&& ReferenceEquals( Nodes, other.Nodes )
+			&& ReferenceEquals( Edges, other.Edges )
+			&& Width.Equals( other.Width )
+			&& Height.Equals( other.Height );
+
+	public override int GetHashCode() => HashCode.Combine( Nodes, Edges, Width, Height );
 }
 
 /// <summary>
@@ -72,7 +105,7 @@ public static class GraphLayout
 	/// <summary>The box size for a file of <paramref name="bytes"/>.</summary>
 	public static (double Width, double Height) BoxSize( long bytes, LayoutOptions? options = null )
 	{
-		options ??= new LayoutOptions();
+		options ??= LayoutOptions.Default;
 		double t = SizeFactor( bytes );
 		return (options.MinWidth + ( options.MaxWidth - options.MinWidth ) * t, options.MinHeight + ( options.MaxHeight - options.MinHeight ) * t);
 	}
@@ -84,7 +117,7 @@ public static class GraphLayout
 	/// <returns>The boxes and links; empty for an empty graph.</returns>
 	public static GraphLayoutResult Arrange( DependencyGraph graph, GraphDirection direction, LayoutOptions? options = null )
 	{
-		options ??= new LayoutOptions();
+		options ??= LayoutOptions.Default;
 		Dictionary<int, GraphNode> nodes = graph.Nodes.DistinctBy( n => n.Id ).ToDictionary( n => n.Id );
 		if( nodes.Count == 0 )
 			return GraphLayoutResult.Empty;
@@ -134,7 +167,23 @@ public static class GraphLayout
 		// Stage 2: Weakly connected components (multi-node components first, singletons grouped cleanly)
 		List<List<int>> components = PartitionComponents( nodes, edges, rootOrder );
 
-		List<NodeBox> allBoxes = [];
+		// Pre-bucket edges by component in O(V + E) instead of O(K * E)
+		Dictionary<int, int> nodeToComp = new( nodes.Count );
+		for( int compIndex = 0; compIndex < components.Count; compIndex++ )
+		{
+			List<int> comp = components[ compIndex ];
+			for( int i = 0; i < comp.Count; i++ )
+				nodeToComp[ comp[ i ] ] = compIndex;
+		}
+		List<GraphEdge>?[] compEdgeBuckets = new List<GraphEdge>?[ components.Count ];
+		for( int i = 0; i < edges.Count; i++ )
+		{
+			GraphEdge e = edges[ i ];
+			int ci = nodeToComp[ e.Parent ];
+			( compEdgeBuckets[ ci ] ??= [] ).Add( e );
+		}
+
+		List<NodeBox> allBoxes = new( nodes.Count );
 		Dictionary<int, NodeBox> boxesById = new( nodes.Count );
 		List<EdgeRoute> allRoutes = new( edges.Count );
 
@@ -167,16 +216,16 @@ public static class GraphLayout
 				continue;
 			}
 
-			HashSet<int> compSet = [ .. compNodes ];
-			List<GraphEdge> compEdges = [ .. edges.Where( e => compSet.Contains( e.Parent ) && compSet.Contains( e.Child ) ) ];
+			List<GraphEdge> compEdges = compEdgeBuckets[ compIndex ] ?? [];
 
 			// Stages 3-6 for this component
 			var (compBoxes, compRoutes, compHeight, compMaxX, compMaxY) = LayoutComponent(
 				compNodes, compEdges, nodes, sizes, layer, layerToCol, colLeft, colRight, colWidth,
 				rootSet, rootOrder, direction, options, cursorY );
 
-			foreach( NodeBox box in compBoxes )
+			for( int i = 0; i < compBoxes.Count; i++ )
 			{
+				NodeBox box = compBoxes[ i ];
 				allBoxes.Add( box );
 				boxesById[ box.Node.Id ] = box;
 			}
@@ -188,7 +237,7 @@ public static class GraphLayout
 		}
 
 		double finalHeight = Math.Max( cursorY + options.Margin, maxY );
-		return new GraphLayoutResult( allBoxes, allRoutes, maxX, finalHeight );
+		return new GraphLayoutResult( allBoxes, allRoutes, maxX, finalHeight, boxesById );
 	}
 
 	// ================================================================== Stage 1: Layer Assignment
@@ -692,14 +741,18 @@ public static class GraphLayout
 		}
 
 		// DFS pre-order starting from roots (gives 0 crossings immediately on trees and readable sibling order)
-		List<int> startOrder = [ .. Enumerable.Range( 0, vertCount ) ];
+		List<int> startOrder = new( vertCount );
+		for( int v = 0; v < vertCount; v++ )
+			startOrder.Add( v );
+		int zeroGlobal = 0;
+		bool hasZeroLayer = direction == GraphDirection.Both && globalLayerToCol.TryGetValue( 0, out zeroGlobal );
+		int zeroLocal = hasZeroLayer ? zeroGlobal - minGlobalCol : 0;
 		startOrder.Sort( ( a, b ) =>
 		{
 			int colA = direction == GraphDirection.Parents ? -vertCol[ a ] : vertCol[ a ];
 			int colB = direction == GraphDirection.Parents ? -vertCol[ b ] : vertCol[ b ];
-			if( direction == GraphDirection.Both && globalLayerToCol.TryGetValue( 0, out int zeroGlobal ) )
+			if( hasZeroLayer )
 			{
-				int zeroLocal = zeroGlobal - minGlobalCol;
 				colA = Math.Abs( vertCol[ a ] - zeroLocal );
 				colB = Math.Abs( vertCol[ b ] - zeroLocal );
 			}
@@ -712,11 +765,13 @@ public static class GraphLayout
 		for( int c = 0; c < numCols; c++ )
 			columns[ c ] = [];
 
-		foreach( int start in startOrder )
+		Stack<int> stack = new();
+		List<int> next = [];
+		for( int s = 0; s < startOrder.Count; s++ )
 		{
+			int start = startOrder[ s ];
 			if( visited[ start ] )
 				continue;
-			Stack<int> stack = new();
 			stack.Push( start );
 			while( stack.Count > 0 )
 			{
@@ -726,16 +781,23 @@ public static class GraphLayout
 				visited[ u ] = true;
 				columns[ vertCol[ u ] ].Add( u );
 
-				List<int> next = direction switch
+				next.Clear();
+				if( direction == GraphDirection.Parents )
 				{
-					GraphDirection.Parents => [ .. leftAdj[ u ], .. rightAdj[ u ] ],
-					GraphDirection.Children => [ .. rightAdj[ u ], .. leftAdj[ u ] ],
-					_ => [ .. rightAdj[ u ], .. leftAdj[ u ] ],
-				};
+					next.AddRange( leftAdj[ u ] );
+					next.AddRange( rightAdj[ u ] );
+				}
+				else
+				{
+					next.AddRange( rightAdj[ u ] );
+					next.AddRange( leftAdj[ u ] );
+				}
 				next.Sort( CompareVerts );
 				for( int i = next.Count - 1; i >= 0; i-- )
+				{
 					if( !visited[ next[ i ] ] )
 						stack.Push( next[ i ] );
+				}
 			}
 		}
 
@@ -755,7 +817,16 @@ public static class GraphLayout
 		int[] pos = new int[ vertCount ];
 		SyncPositions( columns, pos );
 
-		long bestCrossings = CountAllCrossings( columns, rightAdj, pos );
+		int maxColLen = 0;
+		for( int c = 0; c < columns.Length; c++ )
+		{
+			if( columns[ c ].Count > maxColLen )
+				maxColLen = columns[ c ].Count;
+		}
+		int[] bitScratch = new int[ maxColLen + 1 ];
+		List<int> targetsScratch = [];
+
+		long bestCrossings = CountAllCrossings( columns, rightAdj, pos, bitScratch, targetsScratch );
 		if( bestCrossings == 0 )
 			return;
 
@@ -763,27 +834,31 @@ public static class GraphLayout
 		bool startRightward = direction != GraphDirection.Parents;
 		int staleSweeps = 0;
 
+		List<(int Vert, double Median, double Mean, int OrigIdx)> movableScratch = new( maxColLen );
+		List<int> slotsScratch = new( maxColLen );
+		List<int> neighborScratch = [];
+
 		for( int sweep = 0; sweep < MaxCrossingSweeps; sweep++ )
 		{
 			bool rightward = ( sweep % 2 == 0 ) == startRightward;
 			if( rightward )
 			{
 				for( int c = 1; c < columns.Length; c++ )
-					ReorderColumnByMedian( columns[ c ], leftAdj, pos );
+					ReorderColumnByMedian( columns[ c ], leftAdj, pos, movableScratch, slotsScratch, neighborScratch );
 			}
 			else
 			{
 				for( int c = columns.Length - 2; c >= 0; c-- )
-					ReorderColumnByMedian( columns[ c ], rightAdj, pos );
+					ReorderColumnByMedian( columns[ c ], rightAdj, pos, movableScratch, slotsScratch, neighborScratch );
 			}
 
 			TransposePass( columns, rightAdj, leftAdj, pos );
 
-			long crossings = CountAllCrossings( columns, rightAdj, pos );
+			long crossings = CountAllCrossings( columns, rightAdj, pos, bitScratch, targetsScratch );
 			if( crossings < bestCrossings )
 			{
 				bestCrossings = crossings;
-				bestOrder = CloneColumns( columns );
+				CopyColumnsInto( columns, bestOrder );
 				staleSweeps = 0;
 				if( bestCrossings == 0 )
 					break;
@@ -798,16 +873,21 @@ public static class GraphLayout
 			columns[ c ] = bestOrder[ c ];
 	}
 
-	private static void ReorderColumnByMedian( List<int> column, List<List<int>> refAdj, int[] pos )
+	private static void ReorderColumnByMedian(
+		List<int> column,
+		List<List<int>> refAdj,
+		int[] pos,
+		List<(int Vert, double Median, double Mean, int OrigIdx)> movable,
+		List<int> movableSlots,
+		List<int> neighborPositions )
 	{
 		int n = column.Count;
 		if( n <= 1 )
 			return;
 
 		// Only reorder nodes that actually have neighbors in the reference column; unlinked nodes stay pinned in place
-		List<(int Vert, double Median, double Mean, int OrigIdx)> movable = [];
-		List<int> movableSlots = [];
-		List<int> neighborPositions = [];
+		movable.Clear();
+		movableSlots.Clear();
 
 		for( int i = 0; i < n; i++ )
 		{
@@ -818,9 +898,9 @@ public static class GraphLayout
 
 			neighborPositions.Clear();
 			double sum = 0;
-			foreach( int u in adj )
+			for( int j = 0; j < adj.Count; j++ )
 			{
-				int p = pos[ u ];
+				int p = pos[ adj[ j ] ];
 				neighborPositions.Add( p );
 				sum += p;
 			}
@@ -835,7 +915,7 @@ public static class GraphLayout
 		if( movable.Count <= 1 )
 			return;
 
-		movable.Sort( ( a, b ) =>
+		movable.Sort( static ( a, b ) =>
 		{
 			int cmp = a.Median.CompareTo( b.Median );
 			if( cmp != 0 ) return cmp;
@@ -847,8 +927,9 @@ public static class GraphLayout
 		for( int k = 0; k < movable.Count; k++ )
 		{
 			int slot = movableSlots[ k ];
-			column[ slot ] = movable[ k ].Vert;
-			pos[ movable[ k ].Vert ] = slot;
+			int vert = movable[ k ].Vert;
+			column[ slot ] = vert;
+			pos[ vert ] = slot;
 		}
 	}
 
@@ -884,9 +965,9 @@ public static class GraphLayout
 				{
 					int u = col[ i ];
 					int v = col[ i + 1 ];
-					long cur = PairCrossings( leftAdj[ u ], leftAdj[ v ], pos ) + PairCrossings( rightAdj[ u ], rightAdj[ v ], pos );
-					long swapped = PairCrossings( leftAdj[ v ], leftAdj[ u ], pos ) + PairCrossings( rightAdj[ v ], rightAdj[ u ], pos );
-					if( swapped < cur )
+					( long curL, long swapL ) = PairCrossingsBoth( leftAdj[ u ], leftAdj[ v ], pos );
+					( long curR, long swapR ) = PairCrossingsBoth( rightAdj[ u ], rightAdj[ v ], pos );
+					if( swapL + swapR < curL + curR )
 					{
 						col[ i ] = v;
 						col[ i + 1 ] = u;
@@ -899,19 +980,25 @@ public static class GraphLayout
 		}
 	}
 
-	private static long PairCrossings( List<int> upperAdj, List<int> lowerAdj, int[] pos )
+	private static (long Current, long Swapped) PairCrossingsBoth( List<int> upperAdj, List<int> lowerAdj, int[] pos )
 	{
 		if( upperAdj.Count == 0 || lowerAdj.Count == 0 )
-			return 0;
-		long count = 0;
-		foreach( int a in upperAdj )
+			return ( 0, 0 );
+		long cur = 0;
+		long swapped = 0;
+		for( int i = 0; i < upperAdj.Count; i++ )
 		{
-			int pa = pos[ a ];
-			foreach( int b in lowerAdj )
-				if( pa > pos[ b ] )
-					count++;
+			int pa = pos[ upperAdj[ i ] ];
+			for( int j = 0; j < lowerAdj.Count; j++ )
+			{
+				int pb = pos[ lowerAdj[ j ] ];
+				if( pa > pb )
+					cur++;
+				else if( pa < pb )
+					swapped++;
+			}
 		}
-		return count;
+		return ( cur, swapped );
 	}
 
 	private static void SyncPositions( List<int>[] columns, int[] pos )
@@ -932,46 +1019,54 @@ public static class GraphLayout
 		return copy;
 	}
 
+	private static void CopyColumnsInto( List<int>[] source, List<int>[] target )
+	{
+		for( int c = 0; c < source.Length; c++ )
+		{
+			target[ c ].Clear();
+			target[ c ].AddRange( source[ c ] );
+		}
+	}
+
 	/// <summary>Exact bilayer crossing count across all column pairs via Fenwick tree (BIT) in O(E log V).</summary>
-	private static long CountAllCrossings( List<int>[] columns, List<List<int>> rightAdj, int[] pos )
+	private static long CountAllCrossings( List<int>[] columns, List<List<int>> rightAdj, int[] pos, int[] bit, List<int> targets )
 	{
 		long total = 0;
 		for( int c = 0; c + 1 < columns.Length; c++ )
-			total += CountBilayerCrossings( columns[ c ], columns[ c + 1 ].Count, rightAdj, pos );
+			total += CountBilayerCrossings( columns[ c ], columns[ c + 1 ].Count, rightAdj, pos, bit, targets );
 		return total;
 	}
 
-	private static long CountBilayerCrossings( List<int> leftCol, int rightCount, List<List<int>> rightAdj, int[] pos )
+	private static long CountBilayerCrossings( List<int> leftCol, int rightCount, List<List<int>> rightAdj, int[] pos, int[] bit, List<int> targets )
 	{
 		if( leftCol.Count <= 1 || rightCount <= 1 )
 			return 0;
 
-		int[] bit = new int[ rightCount + 1 ];
+		Array.Clear( bit, 0, rightCount + 1 );
 		long crossings = 0;
 		int inserted = 0;
-		List<int> targets = [];
 
-		foreach( int u in leftCol )
+		for( int i = 0; i < leftCol.Count; i++ )
 		{
-			List<int> adj = rightAdj[ u ];
+			List<int> adj = rightAdj[ leftCol[ i ] ];
 			if( adj.Count == 0 )
 				continue;
 			targets.Clear();
-			foreach( int v in adj )
-				targets.Add( pos[ v ] );
+			for( int j = 0; j < adj.Count; j++ )
+				targets.Add( pos[ adj[ j ] ] );
 			targets.Sort();
 
 			// Query in ascending target order so edges sharing left endpoint u don't count as crossing each other
-			foreach( int t in targets )
+			for( int j = 0; j < targets.Count; j++ )
 			{
 				int leq = 0;
-				for( int idx = t + 1; idx > 0; idx -= idx & -idx )
+				for( int idx = targets[ j ] + 1; idx > 0; idx -= idx & -idx )
 					leq += bit[ idx ];
 				crossings += inserted - leq;
 			}
-			foreach( int t in targets )
+			for( int j = 0; j < targets.Count; j++ )
 			{
-				for( int idx = t + 1; idx <= rightCount; idx += idx & -idx )
+				for( int idx = targets[ j ] + 1; idx <= rightCount; idx += idx & -idx )
 					bit[ idx ]++;
 				inserted++;
 			}
@@ -1056,15 +1151,16 @@ public static class GraphLayout
 
 		// Combine by average median: provably preserves y[i+1] - y[i] >= Sep(i, i+1) for variable heights
 		double[] y = new double[ vertCount ];
-		double[] vals = new double[ 4 ];
+		double[] y0 = layouts[ 0 ], y1 = layouts[ 1 ], y2 = layouts[ 2 ], y3 = layouts[ 3 ];
 		for( int v = 0; v < vertCount; v++ )
 		{
-			vals[ 0 ] = layouts[ 0 ][ v ];
-			vals[ 1 ] = layouts[ 1 ][ v ];
-			vals[ 2 ] = layouts[ 2 ][ v ];
-			vals[ 3 ] = layouts[ 3 ][ v ];
-			Array.Sort( vals );
-			y[ v ] = ( vals[ 1 ] + vals[ 2 ] ) / 2.0;
+			// 4-element sorting network (5 comparisons) for zero-allocation median
+			double a = y0[ v ], b = y1[ v ], c = y2[ v ], d = y3[ v ];
+			if( a > b ) ( a, b ) = ( b, a );
+			if( c > d ) ( c, d ) = ( d, c );
+			if( a > c ) ( a, c ) = ( c, a );
+			if( b > d ) ( b, d ) = ( d, b );
+			y[ v ] = ( b + c ) / 2.0;
 		}
 
 		// 1-pass safe hub centering (fixes median bias on asymmetric 3+ child/parent fan-outs while preserving all separations)
@@ -1083,34 +1179,70 @@ public static class GraphLayout
 		for( int c = 1; c + 1 < columns.Length - 1; c++ )
 		{
 			List<int> col = columns[ c ];
-			List<(int LeftPos, int RightPos)> innerSegments = [];
-			foreach( int u in col )
-			{
-				if( !isDummy[ u ] )
-					continue;
-				foreach( int v in rightAdj[ u ] )
-					if( isDummy[ v ] )
-						innerSegments.Add( (pos[ u ], pos[ v ]) );
-			}
-			if( innerSegments.Count == 0 )
+			int n = col.Count;
+			if( n == 0 )
 				continue;
 
-			foreach( int a in col )
+			bool hasInner = false;
+			int[] minRvAt = new int[ n ];
+			int[] maxRvAt = new int[ n ];
+			Array.Fill( minRvAt, int.MaxValue );
+			Array.Fill( maxRvAt, -1 );
+
+			for( int i = 0; i < n; i++ )
 			{
-				int pa = pos[ a ];
-				foreach( int b in rightAdj[ a ] )
+				int u = col[ i ];
+				if( !isDummy[ u ] )
+					continue;
+				List<int> adj = rightAdj[ u ];
+				for( int j = 0; j < adj.Count; j++ )
 				{
-					if( isDummy[ a ] && isDummy[ b ] )
+					int v = adj[ j ];
+					if( !isDummy[ v ] )
+						continue;
+					int rv = pos[ v ];
+					if( rv < minRvAt[ i ] ) minRvAt[ i ] = rv;
+					if( rv > maxRvAt[ i ] ) maxRvAt[ i ] = rv;
+					hasInner = true;
+				}
+			}
+			if( !hasInner )
+				continue;
+
+			// Prefix max of inner rv for lu < pa; suffix min of inner rv for lu > pa -> O(1) conflict test per edge
+			int[] prefixMaxRv = new int[ n ];
+			int runningMax = -1;
+			for( int i = 0; i < n; i++ )
+			{
+				prefixMaxRv[ i ] = runningMax;
+				if( maxRvAt[ i ] > runningMax )
+					runningMax = maxRvAt[ i ];
+			}
+
+			int[] suffixMinRv = new int[ n ];
+			int runningMin = int.MaxValue;
+			for( int i = n - 1; i >= 0; i-- )
+			{
+				suffixMinRv[ i ] = runningMin;
+				if( minRvAt[ i ] < runningMin )
+					runningMin = minRvAt[ i ];
+			}
+
+			for( int i = 0; i < n; i++ )
+			{
+				int a = col[ i ];
+				List<int> adj = rightAdj[ a ];
+				bool aDummy = isDummy[ a ];
+				int pMax = prefixMaxRv[ i ];
+				int sMin = suffixMinRv[ i ];
+				for( int j = 0; j < adj.Count; j++ )
+				{
+					int b = adj[ j ];
+					if( aDummy && isDummy[ b ] )
 						continue;
 					int pb = pos[ b ];
-					foreach( var (lu, rv) in innerSegments )
-					{
-						if( ( pa < lu && pb > rv ) || ( pa > lu && pb < rv ) )
-						{
-							conflicts.Add( (a, b) );
-							break;
-						}
-					}
+					if( pb > sMin || pb < pMax )
+						conflicts.Add( ( a, b ) );
 				}
 			}
 		}
@@ -1186,18 +1318,28 @@ public static class GraphLayout
 			}
 		}
 
-		// Step B: 2-Pass DAG block compaction (provably acyclic and satisfies every separation constraint)
-		HashSet<int> blockSet = [];
+		// Step B: 2-Pass DAG block compaction using dense arrays indexed by block root (0..vertCount-1)
+		bool[] isBlock = new bool[ vertCount ];
+		int blockCount = 0;
 		for( int v = 0; v < vertCount; v++ )
-			blockSet.Add( root[ v ] );
-
-		Dictionary<int, Dictionary<int, double>> downEdges = new( blockSet.Count );
-		Dictionary<int, Dictionary<int, double>> upEdges = new( blockSet.Count );
-		foreach( int b in blockSet )
 		{
-			downEdges[ b ] = [];
-			upEdges[ b ] = [];
+			int rv = root[ v ];
+			if( !isBlock[ rv ] )
+			{
+				isBlock[ rv ] = true;
+				blockCount++;
+			}
 		}
+
+		List<int> blocks = new( blockCount );
+		for( int v = 0; v < vertCount; v++ )
+		{
+			if( isBlock[ v ] )
+				blocks.Add( v );
+		}
+
+		List<(int To, double Weight)>?[] blockEdges = new List<(int To, double Weight)>?[ vertCount ];
+		int[] inDeg = new int[ vertCount ];
 
 		for( int c = 0; c < columns.Length; c++ )
 		{
@@ -1211,43 +1353,75 @@ public static class GraphLayout
 				if( ba == bb )
 					continue;
 				double s = sep( a, b );
-				if( !downEdges[ ba ].TryGetValue( bb, out double existing ) || s > existing )
+				int from = topToBottom ? ba : bb;
+				int to = topToBottom ? bb : ba;
+
+				List<(int To, double Weight)>? outs = blockEdges[ from ];
+				if( outs is null )
 				{
-					downEdges[ ba ][ bb ] = s;
-					upEdges[ bb ][ ba ] = s;
+					blockEdges[ from ] = [ ( to, s ) ];
+					inDeg[ to ]++;
+				}
+				else
+				{
+					bool found = false;
+					for( int eIdx = 0; eIdx < outs.Count; eIdx++ )
+					{
+						if( outs[ eIdx ].To == to )
+						{
+							if( s > outs[ eIdx ].Weight )
+								outs[ eIdx ] = ( to, s );
+							found = true;
+							break;
+						}
+					}
+					if( !found )
+					{
+						outs.Add( ( to, s ) );
+						inDeg[ to ]++;
+					}
 				}
 			}
 		}
 
 		// Solve longest-path on the block DAG in the requested vertical direction, then tighten hanging roots/sinks
-		var edges = topToBottom ? downEdges : upEdges;
-		Dictionary<int, double> blockY = new( blockSet.Count );
-		List<int> topo = TopoSort( blockSet, edges );
-		foreach( int b in topo )
-			blockY[ b ] = 0.0;
-		foreach( int a in topo )
+		List<int> topo = TopoSortDense( blocks, blockEdges, inDeg, vertCount );
+		double[] blockY = new double[ vertCount ];
+
+		for( int i = 0; i < topo.Count; i++ )
 		{
+			int a = topo[ i ];
+			List<(int To, double Weight)>? outs = blockEdges[ a ];
+			if( outs is null )
+				continue;
 			double ya = blockY[ a ];
-			foreach( var (b, w) in edges[ a ] )
+			for( int j = 0; j < outs.Count; j++ )
+			{
+				var (b, w) = outs[ j ];
 				if( ya + w > blockY[ b ] )
 					blockY[ b ] = ya + w;
+			}
 		}
 		for( int i = topo.Count - 1; i >= 0; i-- )
 		{
 			int a = topo[ i ];
-			if( edges[ a ].Count == 0 )
+			List<(int To, double Weight)>? outs = blockEdges[ a ];
+			if( outs is null || outs.Count == 0 )
 				continue;
 			double limit = double.PositiveInfinity;
-			foreach( var (b, w) in edges[ a ] )
+			for( int j = 0; j < outs.Count; j++ )
+			{
+				var (b, w) = outs[ j ];
 				if( blockY[ b ] - w < limit )
 					limit = blockY[ b ] - w;
+			}
 			if( limit > blockY[ a ] )
 				blockY[ a ] = limit;
 		}
 		if( !topToBottom )
 		{
-			foreach( int b in blockSet )
-				blockY[ b ] = -blockY[ b ];
+			for( int i = 0; i < blocks.Count; i++ )
+				blockY[ blocks[ i ] ] = -blockY[ blocks[ i ] ];
 		}
 
 		double[] y = new double[ vertCount ];
@@ -1256,33 +1430,47 @@ public static class GraphLayout
 		return y;
 	}
 
-	private static List<int> TopoSort( HashSet<int> nodes, Dictionary<int, Dictionary<int, double>> adj )
+	private static List<int> TopoSortDense(
+		List<int> sortedBlocks,
+		List<(int To, double Weight)>?[] adj,
+		int[] inDeg,
+		int vertCount )
 	{
-		Dictionary<int, int> inDeg = new( nodes.Count );
-		foreach( int u in nodes )
-			inDeg[ u ] = 0;
-		foreach( var (_, outs) in adj )
-			foreach( int v in outs.Keys )
-				inDeg[ v ]++;
-
 		Queue<int> q = new();
-		foreach( int u in nodes.Order() )
+		for( int i = 0; i < sortedBlocks.Count; i++ )
+		{
+			int u = sortedBlocks[ i ];
 			if( inDeg[ u ] == 0 )
 				q.Enqueue( u );
+		}
 
-		List<int> order = new( nodes.Count );
+		List<int> order = new( sortedBlocks.Count );
+		bool[] placed = new bool[ vertCount ];
 		while( q.TryDequeue( out int u ) )
 		{
 			order.Add( u );
-			foreach( int v in adj[ u ].Keys )
+			placed[ u ] = true;
+			List<(int To, double Weight)>? outs = adj[ u ];
+			if( outs is null )
+				continue;
+			for( int j = 0; j < outs.Count; j++ )
+			{
+				int v = outs[ j ].To;
 				if( --inDeg[ v ] == 0 )
 					q.Enqueue( v );
+			}
 		}
+
 		// Safety fallback if any cycle ever appeared
-		if( order.Count < nodes.Count )
-			foreach( int u in nodes.Order() )
-				if( !order.Contains( u ) )
+		if( order.Count < sortedBlocks.Count )
+		{
+			for( int i = 0; i < sortedBlocks.Count; i++ )
+			{
+				int u = sortedBlocks[ i ];
+				if( !placed[ u ] )
 					order.Add( u );
+			}
+		}
 		return order;
 	}
 

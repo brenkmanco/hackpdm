@@ -1,4 +1,6 @@
+using System.Collections.Frozen;
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 using HackPDM.Core.Configuration;
@@ -17,14 +19,14 @@ public static class OdooRpc
 
 	private static OdooDefaults Settings => OdooDefaults.Instance;
 
-	private static readonly HashSet<string> IdempotentObjectMethods = new( StringComparer.Ordinal )
+	private static readonly FrozenSet<string> IdempotentObjectMethods = new HashSet<string>( StringComparer.Ordinal )
 	{
 		"search", "search_read", "read", "search_count", "smart_read", "related_browse",
 		"get_entries", "get_all_entry_ids", "get_children_directories_by_id",
 		"get_recursive_dependency_versions", "get_recursive_dependency_entries",
 		"get_recursive_dependency_entries_by_entries",
 		"read_contents", "upload_chunk", "has_group",
-	};
+	}.ToFrozenSet( StringComparer.Ordinal );
 
 	private static bool IsIdempotentCall( string service, string method, IReadOnlyList<object?> args )
 	{
@@ -53,13 +55,17 @@ public static class OdooRpc
 		if( OdooEndpoint.InsecureReason( Settings.OdooUrl, allowPlainHttp: !Settings.OdooUseHttps ) is { } insecure )
 			return Result<JsonElement>.Fail( insecure );
 
+		List<object?> rpcArgs = new( args.Count );
+		for( int i = 0; i < args.Count; i++ )
+			rpcArgs.Add( OdooValues.ToRpc( args[ i ] ) );
+
 		JsonRpcRequest request = new()
 		{
 			Params = new()
 			{
 				Service = service,
 				Method = method,
-				Args = [ .. args.Select( OdooValues.ToRpc ) ],
+				Args = rpcArgs,
 			},
 		};
 
@@ -76,7 +82,7 @@ public static class OdooRpc
 					return Result<JsonElement>.Fail( "no response from the server" );
 				if( response.Error is not null )
 					return Result<JsonElement>.Fail( response.Error.Describe() );
-				return Result<JsonElement>.Success( response.Result?.Clone() ?? default );
+				return Result<JsonElement>.Success( response.Result ?? default );
 			}
 			catch( OperationCanceledException ) when( token.IsCancellationRequested )
 			{
@@ -239,20 +245,43 @@ public static class OdooRpc
 	{
 		try
 		{
-			object? value = typeof( T ) switch
+			if( typeof( T ) == typeof( JsonElement ) )
+				return Result<T>.Success( Unsafe.As<JsonElement, T>( ref json ) );
+			if( typeof( T ) == typeof( bool ) )
 			{
-				var t when t == typeof( JsonElement ) => json,
-				var t when t == typeof( bool ) => json.ValueKind == JsonValueKind.True,
-				var t when t == typeof( int ) => json.ValueKind == JsonValueKind.Number ? json.GetInt32() : 0,
-				var t when t == typeof( IReadOnlyList<int> ) => OdooValues.Ids( OdooValues.FromJson( json ) ),
-				var t when t == typeof( IReadOnlyList<OdooRow> ) => Rows( json ),
-				var t when t == typeof( OdooRow ) => json.ValueKind == JsonValueKind.Object ? Row( json ) : null,
-				var t when t == typeof( object ) => OdooValues.FromJson( json ),
-				_ => json.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined or JsonValueKind.False
-					? null
-					: json.Deserialize<T>(),
-			};
-			return Result<T>.Success( (T)value! );
+				bool b = json.ValueKind == JsonValueKind.True;
+				return Result<T>.Success( Unsafe.As<bool, T>( ref b ) );
+			}
+			if( typeof( T ) == typeof( int ) )
+			{
+				int n = json.ValueKind == JsonValueKind.Number ? json.GetInt32() : 0;
+				return Result<T>.Success( Unsafe.As<int, T>( ref n ) );
+			}
+			if( typeof( T ) == typeof( IReadOnlyList<int> ) )
+			{
+				IReadOnlyList<int> ids = IntList( json );
+				return Result<T>.Success( Unsafe.As<IReadOnlyList<int>, T>( ref ids ) );
+			}
+			if( typeof( T ) == typeof( IReadOnlyList<OdooRow> ) )
+			{
+				IReadOnlyList<OdooRow> rows = Rows( json );
+				return Result<T>.Success( Unsafe.As<IReadOnlyList<OdooRow>, T>( ref rows ) );
+			}
+			if( typeof( T ) == typeof( OdooRow ) )
+			{
+				OdooRow? row = json.ValueKind == JsonValueKind.Object ? Row( json ) : null;
+				return Result<T>.Success( Unsafe.As<OdooRow?, T>( ref row )! );
+			}
+			if( typeof( T ) == typeof( object ) )
+			{
+				object? obj = OdooValues.FromJson( json );
+				return Result<T>.Success( (T)obj! );
+			}
+
+			T? deserialized = json.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined or JsonValueKind.False
+				? default
+				: json.Deserialize<T>();
+			return Result<T>.Success( deserialized! );
 		}
 		catch( Exception e ) when( e is JsonException or InvalidOperationException or FormatException or InvalidCastException )
 		{
@@ -260,10 +289,37 @@ public static class OdooRpc
 		}
 	}
 
+	private static IReadOnlyList<int> IntList( JsonElement json )
+	{
+		if( json.ValueKind != JsonValueKind.Array )
+			return [];
+		int count = json.GetArrayLength();
+		if( count == 0 )
+			return [];
+		List<int> ids = new( count );
+		foreach( JsonElement item in json.EnumerateArray() )
+		{
+			if( item.ValueKind == JsonValueKind.Number && item.TryGetInt32( out int id ) )
+				ids.Add( id );
+		}
+		return ids;
+	}
+
 	private static IReadOnlyList<OdooRow> Rows( JsonElement json )
-		=> json.ValueKind == JsonValueKind.Array
-			? [ .. json.EnumerateArray().Where( e => e.ValueKind == JsonValueKind.Object ).Select( Row ) ]
-			: [];
+	{
+		if( json.ValueKind != JsonValueKind.Array )
+			return [];
+		int count = json.GetArrayLength();
+		if( count == 0 )
+			return [];
+		List<OdooRow> rows = new( count );
+		foreach( JsonElement item in json.EnumerateArray() )
+		{
+			if( item.ValueKind == JsonValueKind.Object )
+				rows.Add( Row( item ) );
+		}
+		return rows;
+	}
 
 	private static OdooRow Row( JsonElement json )
 	{

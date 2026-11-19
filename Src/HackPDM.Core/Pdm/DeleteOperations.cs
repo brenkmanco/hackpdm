@@ -91,12 +91,34 @@ public static class DeleteOperations
 	{
 		if( entries is not { Length: > 0 } )
 			return false;
+
+		string stateLabel = deleted ? "InActive" : "Active";
+		List<int> ids = new( entries.Length );
 		foreach( HpEntry entry in entries )
 		{
-			log?.Invoke( StatusMessage.PROCESSING, $"Setting {( deleted ? "InActive" : "Active" )} {entry.name}: {entry.id}" );
+			log?.Invoke( StatusMessage.PROCESSING, $"Setting {stateLabel} {entry.name}: {entry.id}" );
 			entry.deleted = deleted;
-			if( !await entry.WriteChangedValuesAsync( "deleted" ) )
-				log?.Invoke( StatusMessage.ERROR, $"Could not mark {entry.name} {( deleted ? "deleted" : "restored" )}: {entry.LastError ?? "refused by the server"}" );
+			if( entry.id is int id and not 0 )
+				ids.Add( id );
+		}
+
+		if( ids.Count == 0 )
+			return true;
+
+		Result<bool> written = await OdooRpc.WriteAsync(
+			HpEntry.ModelName,
+			ids,
+			new Dictionary<string, object?> { [ "deleted" ] = OdooValues.OutBool( deleted ) },
+			DeleteTimeoutMs );
+
+		if( !written.ValueOr( false ) )
+		{
+			string error = written.Error ?? "refused by the server";
+			foreach( HpEntry entry in entries )
+			{
+				entry.LastError = written.Error;
+				log?.Invoke( StatusMessage.ERROR, $"Could not mark {entry.name} {( deleted ? "deleted" : "restored" )}: {error}" );
+			}
 		}
 		return true;
 	}

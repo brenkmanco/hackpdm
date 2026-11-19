@@ -3,16 +3,33 @@ namespace HackPDM.Core.Configuration;
 /// <summary>Process-wide local workspace (PWA) settings.</summary>
 public sealed class HackDefaults
 {
+	private ISettingsProvider? _settingsProvider;
+	private string? _cachedPwaAbsolute;
 	private string? _relativeFor;
 
 	public static HackDefaults Instance { get; set; } = new();
 
-	public ISettingsProvider? SettingsProvider { get; set; }
+	public ISettingsProvider? SettingsProvider
+	{
+		get => _settingsProvider;
+		set
+		{
+			if( !ReferenceEquals( _settingsProvider, value ) )
+			{
+				_settingsProvider = value;
+				_cachedPwaAbsolute = null;
+			}
+		}
+	}
 
 	public string PwaPathAbsolute
 	{
-		get => SettingsProvider?.Get<string>( "PWAPathAbsolute" ) ?? "";
-		set => SettingsProvider?.Set( "PWAPathAbsolute", value );
+		get => _cachedPwaAbsolute ??= _settingsProvider?.Get<string>( "PWAPathAbsolute" ) ?? "";
+		set
+		{
+			_cachedPwaAbsolute = value ?? "";
+			_settingsProvider?.Set( "PWAPathAbsolute", value );
+		}
 	}
 
 	public string PwaPathRelative

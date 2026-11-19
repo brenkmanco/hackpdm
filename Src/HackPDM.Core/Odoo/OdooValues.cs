@@ -39,8 +39,8 @@ public static class OdooValues
 	public static object? FromJson( JsonElement element )
 		=> element.ValueKind switch
 		{
-			JsonValueKind.Object => element.EnumerateObject().ToDictionary( p => p.Name, p => FromJson( p.Value ) ),
-			JsonValueKind.Array => element.EnumerateArray().Select( FromJson ).ToList(),
+			JsonValueKind.Object => FromJsonObject( element ),
+			JsonValueKind.Array => FromJsonArray( element ),
 			JsonValueKind.String => element.GetString(),
 			JsonValueKind.Number => element.TryGetInt32( out int i ) ? i : element.TryGetInt64( out long l ) ? (object)l : element.GetDouble(),
 			JsonValueKind.True => true,
@@ -49,16 +49,49 @@ public static class OdooValues
 			_ => element.GetRawText(),
 		};
 
+	private static Dictionary<string, object?> FromJsonObject( JsonElement element )
+	{
+		Dictionary<string, object?> dict = [];
+		foreach( JsonProperty p in element.EnumerateObject() )
+			dict[ p.Name ] = FromJson( p.Value );
+		return dict;
+	}
+
+	private static List<object?> FromJsonArray( JsonElement element )
+	{
+		List<object?> list = new( element.GetArrayLength() );
+		foreach( JsonElement item in element.EnumerateArray() )
+			list.Add( FromJson( item ) );
+		return list;
+	}
+
 	public static object? ToRpc( object? value )
 		=> value switch
 		{
 			OdooDomain domain => domain.ToRpc(),
 			DomainTerm term => term.ToRpc(),
-			string or null => value,
+			string or null or byte[] or int[] or List<int> or IReadOnlyList<int> or string[] or List<string> or IReadOnlyList<string> => value,
 			IDictionary => value,
-			IEnumerable items => items.Cast<object?>().Select( ToRpc ).ToList(),
+			ICollection items => ConvertCollectionToRpc( items ),
+			IEnumerable items => ConvertEnumerableToRpc( items ),
 			_ => value,
 		};
+
+	private static List<object?> ConvertCollectionToRpc( ICollection items )
+	{
+		List<object?> list = new( items.Count );
+		foreach( object? item in items )
+			list.Add( ToRpc( item ) );
+		return list;
+	}
+
+	private static List<object?> ConvertEnumerableToRpc( IEnumerable items )
+	{
+		List<object?> list = [];
+		foreach( object? item in items )
+			list.Add( ToRpc( item ) );
+		return list;
+	}
 
 	// Inbound typed readers (Odoo sends `false` for empty non-boolean fields)
 	public static string? ReadString( object? value )
@@ -130,7 +163,7 @@ public static class OdooValues
 			return dict;
 		if( value is IDictionary raw )
 		{
-			Dictionary<string, object?> copy = [];
+			Dictionary<string, object?> copy = new( raw.Count );
 			foreach( DictionaryEntry entry in raw )
 				copy[ entry.Key.ToString() ?? "" ] = entry.Value;
 			return copy;
@@ -164,9 +197,19 @@ public static class OdooValues
 		=> value is IList { Count: > 1 } list ? list[ 1 ] as string : null;
 
 	public static IReadOnlyList<int> Ids( object? value )
-		=> value is IEnumerable items and not string
-			? [ .. items.Cast<object?>().Select( AsInt ).OfType<int>() ]
-			: [];
+	{
+		if( value is IReadOnlyList<int> ints )
+			return ints;
+		if( value is not IEnumerable items || value is string )
+			return [];
+		List<int> result = items is ICollection col ? new( col.Count ) : [];
+		foreach( object? item in items )
+		{
+			if( AsInt( item ) is int id )
+				result.Add( id );
+		}
+		return result;
+	}
 
 	public static int? AsInt( object? value )
 		=> value switch

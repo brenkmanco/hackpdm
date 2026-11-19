@@ -66,8 +66,7 @@ public static class DownloadOperations
 		for( int offset = 0; offset < entryIDs.Count; offset += MetadataChunkSize )
 		{
 			token.ThrowIfCancellationRequested();
-			int count = Math.Min( MetadataChunkSize, entryIDs.Count - offset );
-			int[] chunk = [ .. entryIDs.Skip( offset ).Take( count ) ];
+			int[] chunk = SliceChunk( entryIDs, offset, MetadataChunkSize );
 			HpVersion[]? page = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
 				chunk,
 				nameof( HpEntry.latest_version_id ),
@@ -77,6 +76,20 @@ public static class DownloadOperations
 				all.AddRange( page );
 		}
 		return all.Count > 0 ? [ .. all ] : null;
+	}
+
+	internal static T[] SliceChunk<T>( IReadOnlyList<T> source, int offset, int maxCount )
+	{
+		int count = Math.Min( maxCount, source.Count - offset );
+		T[] chunk = new T[ count ];
+		if( source is T[] arr )
+		{
+			Array.Copy( arr, offset, chunk, 0, count );
+			return chunk;
+		}
+		for( int i = 0; i < count; i++ )
+			chunk[ i ] = source[ offset + i ];
+		return chunk;
 	}
 
 	private static bool TryReadMemoryPressure( out double loadRatio, out long freeBytes )
@@ -237,9 +250,7 @@ public static class DownloadOperations
 			}
 
 			string? localPath = ResolveLocalPath( version );
-			string? localChecksum = localPath is not null && File.Exists( localPath )
-				? Checksums.OfFile( localPath )
-				: null;
+			string? localChecksum = localPath is not null ? Checksums.OfFile( localPath ) : null;
 
 			if( localChecksum is { Length: > 0 } && localChecksum == version.checksum )
 			{
@@ -314,8 +325,7 @@ public static class DownloadOperations
 		for( int offset = 0; offset < paths.Length; offset += VaultChecksumLookupChunkSize )
 		{
 			cToken.ThrowIfCancellationRequested();
-			int count = Math.Min( VaultChecksumLookupChunkSize, paths.Length - offset );
-			string[] chunk = [ .. paths.Skip( offset ).Take( count ) ];
+			string[] chunk = SliceChunk( paths, offset, VaultChecksumLookupChunkSize );
 			Result<HpVersion[]> versions = await Repository<HpVersion>.SearchReadAsync(
 				OdooDomain.Where( "entry_id.windows_complete_name", Operators.In, chunk ),
 				FieldSelection.Only( nameof( HpVersion.checksum ), nameof( HpVersion.windows_complete_name ) ),
@@ -344,18 +354,33 @@ public static class DownloadOperations
 		Action<int, int>? onProgress,
 		Action<long>? onBytesDownloaded )
 	{
-		Dictionary<int, HpVersion> pending = versions.Where( v => v.id is > 0 ).DistinctBy( v => v.id ).ToDictionary( v => v.id!.Value );
+		Dictionary<int, HpVersion> pending = new( versions.Count );
+		for( int i = 0; i < versions.Count; i++ )
+		{
+			HpVersion v = versions[ i ];
+			if( v.id is int id and > 0 )
+				pending.TryAdd( id, v );
+		}
 		Dictionary<int, string> lastError = [];
 
-		foreach( HpVersion large in pending.Values.Where( v => ContentTransfer.IsLarge( v.file_size ) ).ToList() )
+		List<HpVersion>? largeVersions = null;
+		foreach( HpVersion v in pending.Values )
 		{
-			cToken.ThrowIfCancellationRequested();
-			pending.Remove( large.id!.Value );
-			if( await DownloadLargeAsync( large, cToken, onBytesDownloaded ) is { } error )
-				Fail( large, error );
-			else
-				summary.AddDownloaded();
-			onProgress?.Invoke( 1, 0 );
+			if( ContentTransfer.IsLarge( v.file_size ) )
+				( largeVersions ??= [] ).Add( v );
+		}
+		if( largeVersions is not null )
+		{
+			foreach( HpVersion large in largeVersions )
+			{
+				cToken.ThrowIfCancellationRequested();
+				pending.Remove( large.id!.Value );
+				if( await DownloadLargeAsync( large, cToken, onBytesDownloaded ) is { } error )
+					Fail( large, error );
+				else
+					summary.AddDownloaded();
+				onProgress?.Invoke( 1, 0 );
+			}
 		}
 
 		for( int attempt = 1; attempt <= MaxAttempts && pending.Count > 0; attempt++ )
@@ -366,15 +391,17 @@ public static class DownloadOperations
 
 			List<List<HpVersion>> groups = attempt == 1
 				? [ [ .. pending.Values ] ]
-				: [ .. pending.Values.Select( v => new List<HpVersion> { v } ) ];
+				: [ .. pending.Values.Select( static v => new List<HpVersion> { v } ) ];
 
 			foreach( List<HpVersion> group in groups )
 			{
 				cToken.ThrowIfCancellationRequested();
-				long bytes = group.Sum( v => (long)( v.file_size ?? 0 ) );
+				long bytes = 0;
+				for( int i = 0; i < group.Count; i++ )
+					bytes += group[ i ].file_size ?? 0;
 				int timeout = ContentsTimeoutMs( bytes, attempt );
 
-				Result<HpVersion[]> read = await Repository<HpVersion>.ReadAsync( group.Ids(), FieldSelection.Only( ContentFields ), timeout );
+				Result<HpVersion[]> read = await Repository<HpVersion>.ReadAsync( group.Ids(), FieldSelection.Only( ContentFields ), timeout, token: cToken );
 				string rpcError = read.Error ?? "no data returned";
 				Dictionary<int, HpVersion> byId = read.ValueOr( [] ).Where( v => v?.id is > 0 ).ToDictionary( v => v.id!.Value );
 
@@ -428,7 +455,7 @@ public static class DownloadOperations
 
 	private static async Task<string?> DownloadLargeAsync( HpVersion requested, CancellationToken cToken, Action<long>? onBytesDownloaded )
 	{
-		Result<HpVersion[]> read = await Repository<HpVersion>.ReadAsync( [ requested.id!.Value ], FieldSelection.Only( LargeFileFields ), OdooRpc.LongTimeout );
+		Result<HpVersion[]> read = await Repository<HpVersion>.ReadAsync( [ requested.id!.Value ], FieldSelection.Only( LargeFileFields ), OdooRpc.LongTimeout, token: cToken );
 		if( read.Value is not [ { } version, .. ] )
 			return read.Error ?? "the version could not be read";
 		Result<string> temp = await ContentTransfer.DownloadToTempFileAsync( version, cToken, onBytesDownloaded );

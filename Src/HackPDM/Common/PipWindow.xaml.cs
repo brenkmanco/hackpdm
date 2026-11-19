@@ -56,7 +56,6 @@ public sealed partial class PipWindow : Window
 		try
 		{
 			WindowHelper.ResizeWindow( this, DefaultWidth, DefaultHeight );
-			X11WindowSize.TryResize( this, DefaultWidth, DefaultHeight );
 		}
 		catch
 		{

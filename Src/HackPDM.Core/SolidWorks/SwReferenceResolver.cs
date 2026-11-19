@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 namespace HackPDM.Core.SolidWorks;
 
 /// <summary>
@@ -17,9 +19,13 @@ namespace HackPDM.Core.SolidWorks;
 /// <param name="vaultRoot">The local working folder (vault root); null or empty disables the vault-based steps 1 and 4.</param>
 public sealed class SwReferenceResolver( string? vaultRoot )
 {
-	private readonly string? _vaultRoot = string.IsNullOrEmpty( vaultRoot ) ? null : Path.TrimEndingDirectorySeparator( vaultRoot );
-	private Dictionary<string, List<string>>? _byName;
-
+	private static readonly char[] PathSeparators = [ '\\', '/' ];
+	private static readonly EnumerationOptions CaseInsensitiveSimple = new()
+	{
+		MatchCasing = MatchCasing.CaseInsensitive,
+		IgnoreInaccessible = true,
+		MatchType = MatchType.Simple,
+	};
 	private static readonly EnumerationOptions Recursive = new()
 	{
 		RecurseSubdirectories = true,
@@ -28,16 +34,27 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 		AttributesToSkip = FileAttributes.ReparsePoint,
 	};
 
+	private readonly string? _vaultRoot = string.IsNullOrEmpty( vaultRoot ) ? null : Path.TrimEndingDirectorySeparator( vaultRoot );
+	private readonly string? _vaultName = string.IsNullOrEmpty( vaultRoot ) ? null : Path.GetFileName( Path.TrimEndingDirectorySeparator( vaultRoot ) );
+	private Dictionary<string, List<string>>? _byName;
+
 	/// <summary>Splits a stored path on both separators: stored paths are Windows paths whatever the OS.</summary>
 	/// <param name="storedPath">The path as stored in a SolidWorks document.</param>
 	/// <returns>The non-empty path segments, drive (e.g. <c>C:</c>) included.</returns>
 	public static string[] Segments( string storedPath )
-		=> storedPath.Split( [ '\\', '/' ], StringSplitOptions.RemoveEmptyEntries );
+		=> storedPath.Split( PathSeparators, StringSplitOptions.RemoveEmptyEntries );
 
 	/// <summary>Gets the file name of a stored Windows path on any OS (where <see cref="Path.GetFileName(string)"/> wouldn't split on backslashes).</summary>
 	/// <param name="storedPath">The path as stored in a SolidWorks document.</param>
 	/// <returns>The last segment, or "" for an empty path.</returns>
-	public static string FileName( string storedPath ) => Segments( storedPath ) is [ .., var last ] ? last : "";
+	public static string FileName( string storedPath )
+	{
+		ReadOnlySpan<char> trimmed = storedPath.AsSpan().TrimEnd( PathSeparators );
+		if( trimmed.IsEmpty )
+			return "";
+		int sep = trimmed.LastIndexOfAny( '\\', '/' );
+		return sep < 0 ? trimmed.ToString() : trimmed[ ( sep + 1 ).. ].ToString();
+	}
 
 	/// <summary>Finds the local file for a stored reference, trying the steps listed on <see cref="SwReferenceResolver"/> in order.</summary>
 	/// <param name="storedPath">The path as stored in the referencing document.</param>
@@ -51,18 +68,18 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 			return null;
 		string name = segments[ ^1 ];
 
-		if( _vaultRoot is not null )
+		if( _vaultRoot is not null && _vaultName is not null )
 		{
-			string vaultName = Path.GetFileName( _vaultRoot );
 			for( int i = 0; i < segments.Length - 1; i++ )
 			{
-				if( segments[ i ].Equals( vaultName, StringComparison.OrdinalIgnoreCase )
-					&& Find( _vaultRoot, segments[ ( i + 1 ).. ] ) is { } inVault )
+				if( segments[ i ].Equals( _vaultName, StringComparison.OrdinalIgnoreCase )
+					&& Find( _vaultRoot, segments.AsSpan( i + 1 ) ) is { } inVault )
 					return inVault;
 			}
 		}
 
-		if( Path.GetDirectoryName( referencingFile ) is { Length: > 0 } siblingDir && Find( siblingDir, [ name ] ) is { } sibling )
+		if( Path.GetDirectoryName( referencingFile ) is { Length: > 0 } siblingDir
+			&& Find( siblingDir, MemoryMarshal.CreateReadOnlySpan( ref name, 1 ) ) is { } sibling )
 			return sibling;
 
 		if( Path.IsPathFullyQualified( storedPath ) && File.Exists( storedPath ) )
@@ -80,10 +97,14 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 			bool last = i == segments.Length - 1;
 			if( !Directory.Exists( current ) )
 				return null;
-			var options = new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, IgnoreInaccessible = true, MatchType = MatchType.Simple };
-			string? match = last
-				? Directory.EnumerateFiles( current, segments[ i ], options ).FirstOrDefault()
-				: Directory.EnumerateDirectories( current, segments[ i ], options ).FirstOrDefault();
+			string? match = null;
+			foreach( string entry in last
+				? Directory.EnumerateFiles( current, segments[ i ], CaseInsensitiveSimple )
+				: Directory.EnumerateDirectories( current, segments[ i ], CaseInsensitiveSimple ) )
+			{
+				match = entry;
+				break;
+			}
 			if( match is null )
 				return null;
 			current = match;
@@ -96,12 +117,24 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 		if( _vaultRoot is null || !Directory.Exists( _vaultRoot ) )
 			return null;
 		_byName ??= IndexVault( _vaultRoot );
-		if( !_byName.TryGetValue( name, out var candidates ) )
+		if( !_byName.TryGetValue( name, out var candidates ) || candidates.Count == 0 )
 			return null;
-		return candidates
-			.OrderByDescending( c => SharedParentFolders( Segments( c ), storedSegments ) )
-			.ThenBy( c => c, StringComparer.Ordinal )
-			.First();
+		if( candidates.Count == 1 )
+			return candidates[ 0 ];
+
+		string best = candidates[ 0 ];
+		int bestScore = SharedParentFolders( Segments( best ), storedSegments );
+		for( int i = 1; i < candidates.Count; i++ )
+		{
+			string candidate = candidates[ i ];
+			int score = SharedParentFolders( Segments( candidate ), storedSegments );
+			if( score > bestScore || ( score == bestScore && StringComparer.Ordinal.Compare( candidate, best ) < 0 ) )
+			{
+				best = candidate;
+				bestScore = score;
+			}
+		}
+		return best;
 	}
 
 	private static Dictionary<string, List<string>> IndexVault( string root )

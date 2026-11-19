@@ -59,11 +59,16 @@ public static class VersionFileService
 	{
 		if( !Directory.Exists( toPath ) && !Directory.CreateDirectory( toPath ).Exists )
 			return false;
-		version.file_contents ??= await version.DownloadContentsAsync();
-		if( version.file_contents is { Length: > 0 } contents )
+		byte[]? contents = version.file_contents ?? await version.DownloadContentsAsync();
+		if( contents is { Length: > 0 } )
+		{
 			LocalFileWriter.Write( new HackFile( version.name!, null ) { FileContents = contents, DirectoryName = toPath } );
+			version.file_contents = null;
+		}
 		else if( version.file_size is not ( null or 0 ) )
+		{
 			return false;
+		}
 		version.WinPathway = toPath;
 		return true;
 	}

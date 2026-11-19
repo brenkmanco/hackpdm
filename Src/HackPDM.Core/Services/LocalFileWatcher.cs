@@ -19,6 +19,7 @@ public sealed class LocalChangeBatcher( TimeSpan quiet )
 		: StringComparer.Ordinal;
 
 	private readonly Dictionary<string, (LocalChangeKind? Kind, DateTime Due, bool IsDirectory)> _pending = new( PathComparer );
+	private readonly List<string> _dueKeys = [];
 
 	public int PendingCount => _pending.Count;
 
@@ -50,14 +51,22 @@ public sealed class LocalChangeBatcher( TimeSpan quiet )
 
 	public List<LocalFileChange> TakeDue( DateTime now )
 	{
-		List<LocalFileChange> due = [];
-		foreach( var (path, (kind, _, isDir)) in _pending.Where( p => p.Value.Due <= now ).ToList() )
+		if( _pending.Count == 0 )
+			return [];
+		_dueKeys.Clear();
+		List<LocalFileChange>? due = null;
+		foreach( var (path, (kind, dueAt, isDir)) in _pending )
 		{
-			_pending.Remove( path );
+			if( dueAt > now )
+				continue;
+			_dueKeys.Add( path );
 			if( kind is { } k )
-				due.Add( new( path, k, isDir ) );
+				( due ??= [] ).Add( new( path, k, isDir ) );
 		}
-		return due;
+		for( int i = 0; i < _dueKeys.Count; i++ )
+			_pending.Remove( _dueKeys[ i ] );
+		_dueKeys.Clear();
+		return due ?? [];
 	}
 }
 
@@ -146,10 +155,11 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 
 	private void StartWatchingLocked( string folder )
 	{
+		FileSystemWatcher? watcher = null;
 		try
 		{
 			Directory.CreateDirectory( folder );
-			FileSystemWatcher watcher = new( folder )
+			watcher = new( folder )
 			{
 				IncludeSubdirectories = true,
 				NotifyFilter = NotifyFilters.FileName
@@ -188,6 +198,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 		}
 		catch( Exception e )
 		{
+			watcher?.Dispose();
 			HackLogger.Warn( "FileWatcher", $"File watcher could not watch '{folder}': {e.Message}", e );
 		}
 	}
@@ -231,11 +242,11 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 
 	public static bool IsNoise( string path )
 	{
-		string name = Path.GetFileName( path );
-		return name.Length == 0
+		ReadOnlySpan<char> name = Path.GetFileName( path.AsSpan() );
+		return name.IsEmpty
 			|| name.StartsWith( "~$", StringComparison.Ordinal )
 			|| name.StartsWith( ".~lock", StringComparison.Ordinal )
-			|| name.EndsWith( '~' )
+			|| name[ ^1 ] == '~'
 			|| name.EndsWith( ".tmp", StringComparison.OrdinalIgnoreCase )
 			|| name.EndsWith( ".swp", StringComparison.OrdinalIgnoreCase );
 	}
@@ -244,10 +255,16 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 	{
 		try
 		{
-			if( !Directory.Exists( path ) )
+			DirectoryInfo dir = new( path );
+			if( !dir.Exists )
 				return;
-			foreach( string entry in Directory.EnumerateFileSystemEntries( path, "*", SearchOption.AllDirectories ).Take( MaxScannedInNewFolder ) )
-				Add( entry, LocalChangeKind.Created, Directory.Exists( entry ) );
+			int scanned = 0;
+			foreach( FileSystemInfo entry in dir.EnumerateFileSystemInfos( "*", SearchOption.AllDirectories ) )
+			{
+				if( scanned++ >= MaxScannedInNewFolder )
+					break;
+				Add( entry.FullName, LocalChangeKind.Created, ( entry.Attributes & FileAttributes.Directory ) != 0 );
+			}
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{

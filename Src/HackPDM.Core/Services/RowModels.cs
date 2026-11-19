@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
 using HackPDM.Core.Pdm;
@@ -6,11 +8,21 @@ namespace HackPDM.Core.Services;
 
 public sealed class BasicStatusMessage
 {
+	private string? _timestampText;
+
 	public StatusMessage Status { get; set; } = StatusMessage.OTHER;
 	public string Category { get; set; } = string.Empty;
 	public string? Message { get; set; }
-	public DateTime Timestamp { get; set; } = DateTime.Now;
-	public string TimestampText => Timestamp.ToString( "HH:mm:ss" );
+	public DateTime Timestamp
+	{
+		get;
+		set
+		{
+			field = value;
+			_timestampText = null;
+		}
+	} = DateTime.Now;
+	public string TimestampText => _timestampText ??= Timestamp.ToString( "HH:mm:ss" );
 
 	public static implicit operator BasicStatusMessage( (StatusMessage status, string message) log )
 		=> new() { Message = log.message, Status = log.status };
@@ -37,18 +49,37 @@ public sealed class EntryRow : RowData
 	public HpCategory? Category { get; set; }
 	public DateTime? LocalDate { get; set; }
 	public DateTime? RemoteDate { get; set; }
-	public string? FullName { get; set; }
+	private bool _localFileChecked;
+
+	public string? FullName
+	{
+		get;
+		set
+		{
+			field = value;
+			_localFileChecked = false;
+		}
+	}
 	public int? LatestId { get; set; }
 	public int? LatestReleaseId { get; set; }
-	public EntryReprType? ReprType { get; set; }
+	public EntryReprType? ReprType
+	{
+		get;
+		set
+		{
+			field = value;
+			_localFileChecked = false;
+		}
+	}
 	public RemoteEntryDto? Remote { get; set; }
 
 	public FileInfo? LocalFile
 	{
 		get
 		{
-			if( field is not null )
+			if( _localFileChecked || field is not null )
 				return field;
+			_localFileChecked = true;
 
 			string? path = ReprType switch
 			{
@@ -61,7 +92,11 @@ public sealed class EntryRow : RowData
 			field = file?.Exists is true ? file : null;
 			return field;
 		}
-		set;
+		set
+		{
+			field = value;
+			_localFileChecked = true;
+		}
 	}
 
 	public bool? IsLocal => Id switch
@@ -85,26 +120,28 @@ public sealed class EntryRow : RowData
 /// <summary>Sort and group keys for the entry list, keyed by <see cref="EntryRow"/> property name.</summary>
 public static class EntryRowKeys
 {
-	private static readonly Dictionary<string, Func<EntryRow, IComparable?>> SortKeys = new()
-	{
-		[ nameof( EntryRow.Name ) ] = e => e.Name ?? "",
-		[ nameof( EntryRow.Id ) ] = e => e.Id ?? 0,
-		[ nameof( EntryRow.Checkout ) ] = e => e.Checkout?.name ?? "",
-		[ nameof( EntryRow.Size ) ] = e => e.Size,
-		[ nameof( EntryRow.Type ) ] = e => e.Type ?? "",
-		[ nameof( EntryRow.Status ) ] = e => Enum.GetName( e.Status ) ?? "",
-		[ nameof( EntryRow.LatestId ) ] = e => e.LatestId,
-		[ nameof( EntryRow.RemoteDate ) ] = e => e.RemoteDate,
-		[ nameof( EntryRow.LocalDate ) ] = e => e.LocalDate,
-		[ nameof( EntryRow.Category ) ] = e => e.Category?.name ?? "",
-		[ nameof( EntryRow.FullName ) ] = e => e.FullName ?? "",
-	};
+	private static readonly Func<EntryRow, IComparable?> NullKey = static _ => null;
 
-	private static readonly Dictionary<string, Func<EntryRow, IComparable?>> GroupKeys = new( SortKeys )
+	private static readonly FrozenDictionary<string, Func<EntryRow, IComparable?>> SortKeys = new Dictionary<string, Func<EntryRow, IComparable?>>
 	{
-		[ nameof( EntryRow.RemoteDate ) ] = e => e.RemoteDate?.Date,
-		[ nameof( EntryRow.LocalDate ) ] = e => e.LocalDate?.Date,
-	};
+		[ nameof( EntryRow.Name ) ] = static e => e.Name ?? "",
+		[ nameof( EntryRow.Id ) ] = static e => e.Id ?? 0,
+		[ nameof( EntryRow.Checkout ) ] = static e => e.Checkout?.name ?? "",
+		[ nameof( EntryRow.Size ) ] = static e => e.Size,
+		[ nameof( EntryRow.Type ) ] = static e => e.Type ?? "",
+		[ nameof( EntryRow.Status ) ] = static e => Enum.GetName( e.Status ) ?? "",
+		[ nameof( EntryRow.LatestId ) ] = static e => e.LatestId,
+		[ nameof( EntryRow.RemoteDate ) ] = static e => e.RemoteDate,
+		[ nameof( EntryRow.LocalDate ) ] = static e => e.LocalDate,
+		[ nameof( EntryRow.Category ) ] = static e => e.Category?.name ?? "",
+		[ nameof( EntryRow.FullName ) ] = static e => e.FullName ?? "",
+	}.ToFrozenDictionary();
+
+	private static readonly FrozenDictionary<string, Func<EntryRow, IComparable?>> GroupKeys = new Dictionary<string, Func<EntryRow, IComparable?>>( SortKeys )
+	{
+		[ nameof( EntryRow.RemoteDate ) ] = static e => e.RemoteDate?.Date,
+		[ nameof( EntryRow.LocalDate ) ] = static e => e.LocalDate?.Date,
+	}.ToFrozenDictionary();
 
 	public static IReadOnlyCollection<string> Names => SortKeys.Keys;
 
@@ -115,7 +152,7 @@ public static class EntryRowKeys
 		=> TryGet( GroupKeys, fieldName, out key );
 
 	private static bool TryGet(
-		Dictionary<string, Func<EntryRow, IComparable?>> keys,
+		FrozenDictionary<string, Func<EntryRow, IComparable?>> keys,
 		string? fieldName,
 		out Func<EntryRow, IComparable?> key )
 	{
@@ -124,7 +161,7 @@ public static class EntryRowKeys
 			key = found;
 			return true;
 		}
-		key = _ => null;
+		key = NullKey;
 		return false;
 	}
 }

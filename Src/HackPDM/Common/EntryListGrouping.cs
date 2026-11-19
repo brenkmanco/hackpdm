@@ -17,6 +17,9 @@ namespace HackPDM.Common;
 [Microsoft.UI.Xaml.Data.Bindable]
 public sealed class EntryGroupHeader( object? key, string displayKey, IReadOnlyList<EntryRow> items, bool isExpanded ) : INotifyPropertyChanged
 {
+	private static readonly PropertyChangedEventArgs IsExpandedChangedArgs = new( nameof( IsExpanded ) );
+	private static readonly PropertyChangedEventArgs ChevronGlyphChangedArgs = new( nameof( ChevronGlyph ) );
+
 	private bool _isExpanded = isExpanded;
 
 	public object? Key { get; } = key;
@@ -34,8 +37,8 @@ public sealed class EntryGroupHeader( object? key, string displayKey, IReadOnlyL
 			if( _isExpanded == value )
 				return;
 			_isExpanded = value;
-			PropertyChanged?.Invoke( this, new PropertyChangedEventArgs( nameof( IsExpanded ) ) );
-			PropertyChanged?.Invoke( this, new PropertyChangedEventArgs( nameof( ChevronGlyph ) ) );
+			PropertyChanged?.Invoke( this, IsExpandedChangedArgs );
+			PropertyChanged?.Invoke( this, ChevronGlyphChangedArgs );
 		}
 	}
 
@@ -104,22 +107,30 @@ internal static class EntryListGrouping
 			buckets[ index ].Items.Add( row );
 		}
 
-		buckets.Sort( ( a, b ) => GroupKeyComparer.Instance.Compare( a.Key, b.Key ) );
+		buckets.Sort( static ( a, b ) => GroupKeyComparer.Instance.Compare( a.Key, b.Key ) );
 
 		List<EntryGroupHeader> result = new( buckets.Count );
-		foreach( var (key, display, items) in buckets )
+		for( int i = 0; i < buckets.Count; i++ )
 		{
+			var (key, display, items) = buckets[ i ];
 			bool collapsed = collapsedKeys is not null ? collapsedKeys.Contains( display ) : defaultCollapsed;
 			result.Add( new EntryGroupHeader( key, display, items, isExpanded: !collapsed ) );
 		}
 		return result;
 	}
 
-	public static List<object> FlattenVisible( IEnumerable<EntryGroupHeader> groups )
+	public static List<object> FlattenVisible( IReadOnlyList<EntryGroupHeader> groups )
 	{
-		List<object> flat = [];
-		foreach( EntryGroupHeader group in groups )
+		int total = groups.Count;
+		for( int i = 0; i < groups.Count; i++ )
 		{
+			if( groups[ i ].IsExpanded )
+				total += groups[ i ].Items.Count;
+		}
+		List<object> flat = new( total );
+		for( int i = 0; i < groups.Count; i++ )
+		{
+			EntryGroupHeader group = groups[ i ];
 			flat.Add( group );
 			if( group.IsExpanded )
 				flat.AddRange( group.Items );

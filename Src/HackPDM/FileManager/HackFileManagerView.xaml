@@ -616,8 +616,7 @@
 										VerticalContentAlignment="Stretch"
 										IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
 										Loaded="TreeViewItem_Loaded"
-										ToolTipService.ToolTip="{x:Bind TooltipText, Mode=OneWay}"
-										Unloaded="TreeViewItem_Unloaded">
+										ToolTipService.ToolTip="{x:Bind TooltipText, Mode=OneWay}">
 										<StackPanel
 											VerticalAlignment="Stretch"
 											Orientation="Horizontal">

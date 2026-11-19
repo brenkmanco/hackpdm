@@ -27,6 +27,14 @@ public interface IEntryListService
 public sealed class EntryListService : IEntryListService
 {
 	private static readonly int HashConcurrency = Math.Clamp( Environment.ProcessorCount, 2, 8 );
+	private static readonly int[] RetryDelaysMs = [ 200, 400, 800 ];
+	private static readonly EnumerationOptions LocalFilesOptions = new()
+	{
+		RecurseSubdirectories = false,
+		IgnoreInaccessible = true,
+		ReturnSpecialDirectories = false,
+		AttributesToSkip = FileAttributes.None,
+	};
 	private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
 		? StringComparer.OrdinalIgnoreCase
 		: StringComparer.Ordinal;
@@ -64,12 +72,14 @@ public sealed class EntryListService : IEntryListService
 		List<EntryRow> rows = new( ( remote?.Count ?? 0 ) + localFilesByPath.Count );
 		HashSet<string> matchedLocalPaths = new( PathComparer );
 		HackFile?[]? resolvedLocals = null;
+		string? folderRelPath = remote is { Count: > 0 } || localFilesByPath.Count > 0
+			? BuildRelativeFolderPath( localFolder )
+			: null;
 
 		if( remote is { Count: > 0 } )
 		{
 			resolvedLocals = new HackFile?[ remote.Count ];
 			List<(int Index, FileInfo Info)> toHash = [];
-			string? remoteRelPath = BuildRelativeFolderPath( localFolder );
 
 			for( int i = 0; i < remote.Count; i++ )
 			{
@@ -86,7 +96,7 @@ public sealed class EntryListService : IEntryListService
 				if( needsChecksum )
 					toHash.Add( ( i, localInfo ) );
 				else
-					resolvedLocals[ i ] = CreateHackFileFromInfo( localInfo, remoteRelPath, computeChecksum: false );
+					resolvedLocals[ i ] = CreateHackFileFromInfo( localInfo, folderRelPath, computeChecksum: false );
 			}
 
 			if( toHash.Count > 0 )
@@ -101,7 +111,7 @@ public sealed class EntryListService : IEntryListService
 					( item, ct ) =>
 					{
 						ct.ThrowIfCancellationRequested();
-						resolvedLocals[ item.Index ] = CreateHackFileFromInfo( item.Info, remoteRelPath, computeChecksum: true );
+						resolvedLocals[ item.Index ] = CreateHackFileFromInfo( item.Info, folderRelPath, computeChecksum: true );
 						int current = Interlocked.Increment( ref done );
 						if( current == total || current % 16 == 0 )
 							progress?.Report( new EntryLoadProgress( $"Comparing local files ({current} / {total})…", current, total ) );
@@ -118,7 +128,6 @@ public sealed class EntryListService : IEntryListService
 		int localOnlyCount = 0;
 		if( localFilesByPath.Count > matchedLocalPaths.Count )
 		{
-			string? folderRelPath = BuildRelativeFolderPath( localFolder );
 			foreach( var (fullPath, fileInfo) in localFilesByPath )
 			{
 				if( matchedLocalPaths.Contains( fullPath ) )
@@ -146,15 +155,8 @@ public sealed class EntryListService : IEntryListService
 		if( string.IsNullOrEmpty( folderPath ) || !Directory.Exists( folderPath ) )
 			return files;
 
-		EnumerationOptions opts = new()
-		{
-			RecurseSubdirectories = false,
-			IgnoreInaccessible = true,
-			ReturnSpecialDirectories = false,
-			AttributesToSkip = FileAttributes.None,
-		};
 		DirectoryInfo dir = new( Path.GetFullPath( folderPath ) );
-		foreach( FileInfo file in dir.EnumerateFiles( "*", opts ) )
+		foreach( FileInfo file in dir.EnumerateFiles( "*", LocalFilesOptions ) )
 			files[ file.FullName ] = file;
 		return files;
 	}
@@ -175,27 +177,45 @@ public sealed class EntryListService : IEntryListService
 
 	private static async Task<HackFile?> ReadLocalFileWithRetryAsync( string localPath )
 	{
-		int[] delaysMs = [ 200, 400, 800 ];
 		for( int attempt = 0; ; attempt++ )
 		{
 			HackFile? local = await Task.Run( () => File.Exists( localPath ) && HackFile.GetFromPath( localPath ) is { Exists: true } hack ? hack : null );
-			if( local is null || local.Checksum is not null || attempt >= delaysMs.Length || !File.Exists( localPath ) )
+			if( local is null || local.Checksum is not null || attempt >= RetryDelaysMs.Length || !File.Exists( localPath ) )
 				return local;
-			await Task.Delay( delaysMs[ attempt ] );
+			await Task.Delay( RetryDelaysMs[ attempt ] );
 		}
 	}
 
 	private static EntryRow CreateRemoteRow( RemoteEntryDto entry, HackFile? local )
 	{
-		HpUser? checkout = entry.CheckoutUserId is int userId ? OdooDefaults.Instance.IdToUser.GetValueOrDefault( userId ) : null;
+		OdooDefaults defaults = OdooDefaults.Instance;
+		HpUser? checkout = entry.CheckoutUserId is int userId ? defaults.IdToUser.GetValueOrDefault( userId ) : null;
 		FileStatus status = EntryStatusResolver.ResolveRemote(
 			deleted: entry.Deleted,
 			checkoutUserId: checkout?.id,
-			myUserId: OdooDefaults.Instance.OdooId,
+			myUserId: defaults.OdooId,
 			latestChecksum: entry.LatestChecksum ?? (object)false,
 			localChecksum: local?.Checksum,
 			remoteDate: entry.LatestDate ?? default,
 			localModified: local?.ModifiedDate );
+
+		HpCategory? resolvedCategory = null;
+		if( entry.Category is string category )
+		{
+			if( !defaults.NameToCategory.TryGetValue( category, out resolvedCategory )
+				&& defaults.NameToCategory.Count == 0
+				&& defaults.HpCategories is { } cats )
+			{
+				for( int i = 0; i < cats.Length; i++ )
+				{
+					if( string.Equals( cats[ i ].name, category, StringComparison.Ordinal ) )
+					{
+						resolvedCategory = cats[ i ];
+						break;
+					}
+				}
+			}
+		}
 
 		return new EntryRow
 		{
@@ -210,9 +230,7 @@ public sealed class EntryListService : IEntryListService
 			RemoteDate = entry.LatestDate,
 			LocalDate = local?.ModifiedDate.Year is null or 1 ? null : local?.ModifiedDate,
 			Status = status,
-			Category = entry.Category is string category
-				? OdooDefaults.Instance.HpCategories?.FirstOrDefault( c => c.name?.Equals( category ) is true )
-				: null,
+			Category = resolvedCategory,
 			FullName = entry.FullName,
 			LocalFile = local?.Exists is true ? local.Info : null,
 			Remote = entry,
@@ -221,7 +239,7 @@ public sealed class EntryListService : IEntryListService
 
 	private static EntryRow CreateLocalRow( HackFile file, bool filterUnknownTypes )
 	{
-		string extension = file.TypeExt?.ToLower() ?? "";
+		string extension = file.TypeExt?.ToLowerInvariant() ?? "";
 		OdooDefaults defaults = OdooDefaults.Instance;
 		FileStatus status = EntryStatusResolver.ResolveLocal(
 			restrictTypes: defaults.RestrictTypes is true,

@@ -192,12 +192,13 @@ public static class CrossPlatformCredentialManager
 
 	// obscures the fallback file only: the key is derived from a constant, so anyone with the program can read it
 	internal static readonly byte[] Entropy = Encoding.UTF8.GetBytes( "HackPDM-Secure-Key-Entropy-v1" );
+	private static readonly byte[] AesKey = SHA256.HashData( Entropy );
 
 	internal static byte[] Encrypt( string plainText )
 	{
 		byte[] data = Encoding.UTF8.GetBytes( plainText );
 		using var aes = Aes.Create();
-		aes.Key = SHA256.HashData( Entropy );
+		aes.Key = AesKey;
 		aes.GenerateIV();
 		using var encryptor = aes.CreateEncryptor( aes.Key, aes.IV );
 		byte[] encryptedData = encryptor.TransformFinalBlock( data, 0, data.Length );
@@ -210,7 +211,7 @@ public static class CrossPlatformCredentialManager
 	internal static string Decrypt( byte[] encrypted )
 	{
 		using var aes = Aes.Create();
-		aes.Key = SHA256.HashData( Entropy );
+		aes.Key = AesKey;
 		byte[] iv = new byte[ aes.BlockSize / 8 ];
 		Buffer.BlockCopy( encrypted, 0, iv, 0, iv.Length );
 		aes.IV = iv;

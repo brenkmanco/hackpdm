@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 using HackPDM.Core.Theming;
 
 namespace HackPDM.Core.Graph;
@@ -112,7 +114,7 @@ public static class GraphThemes
 			{
 				[ NodeKind.Assembly ] = 0xFF2E7D46, [ NodeKind.Part ] = 0xFF285FAA, [ NodeKind.Drawing ] = 0xFF783C96,
 				[ NodeKind.Pdf ] = 0xFFAA4632, [ NodeKind.Other ] = 0xFF555F69, [ NodeKind.Deleted ] = 0xFF8C2828,
-			} ),
+			}.ToFrozenDictionary() ),
 		new( PaletteName.Light, "Light",
 			Backdrop: 0xFFF3F4F6, GridLine: 0xFFE3E5E9, Body: 0xFFFFFFFF, BodyBorder: 0xFFC9CED6,
 			Text: 0xFF1F2328, HeaderText: 0xFFFFFFFF, SubText: 0xFF59636E,
@@ -122,7 +124,7 @@ public static class GraphThemes
 			{
 				[ NodeKind.Assembly ] = 0xFF2D7A47, [ NodeKind.Part ] = 0xFF2563B8, [ NodeKind.Drawing ] = 0xFF7B4BA6,
 				[ NodeKind.Pdf ] = 0xFFB4462F, [ NodeKind.Other ] = 0xFF5B6470, [ NodeKind.Deleted ] = 0xFFA3302F,
-			} ),
+			}.ToFrozenDictionary() ),
 		new( PaletteName.NavyBlue, "Navy blue",
 			Backdrop: 0xFF0B1A30, GridLine: 0xFF14274A, Body: 0xFF13294B, BodyBorder: 0xFF07111F,
 			Text: 0xFFE6EDF7, HeaderText: 0xFFFFFFFF, SubText: 0xFF9FB3CF,
@@ -132,7 +134,7 @@ public static class GraphThemes
 			{
 				[ NodeKind.Assembly ] = 0xFF1C7A63, [ NodeKind.Part ] = 0xFF2F62C8, [ NodeKind.Drawing ] = 0xFF7D52BE,
 				[ NodeKind.Pdf ] = 0xFFB04E39, [ NodeKind.Other ] = 0xFF4B6584, [ NodeKind.Deleted ] = 0xFF9E2A2A,
-			} ),
+			}.ToFrozenDictionary() ),
 	];
 
 	/// <summary>Every form, in menu order.</summary>
@@ -161,10 +163,32 @@ public static class GraphThemes
 	];
 
 	/// <summary>The palette named <paramref name="name"/>.</summary>
-	public static GraphPalette Palette( PaletteName name ) => Palettes.First( p => p.Name == name );
+	public static GraphPalette Palette( PaletteName name )
+	{
+		int idx = (int)name;
+		if( (uint)idx < (uint)Palettes.Count && Palettes[ idx ].Name == name )
+			return Palettes[ idx ];
+		for( int i = 0; i < Palettes.Count; i++ )
+		{
+			if( Palettes[ i ].Name == name )
+				return Palettes[ i ];
+		}
+		throw new InvalidOperationException( $"Unknown palette '{name}'." );
+	}
 
 	/// <summary>The form named <paramref name="name"/>.</summary>
-	public static GraphForm Form( FormName name ) => Forms.First( f => f.Name == name );
+	public static GraphForm Form( FormName name )
+	{
+		int idx = (int)name;
+		if( (uint)idx < (uint)Forms.Count && Forms[ idx ].Name == name )
+			return Forms[ idx ];
+		for( int i = 0; i < Forms.Count; i++ )
+		{
+			if( Forms[ i ].Name == name )
+				return Forms[ i ];
+		}
+		throw new InvalidOperationException( $"Unknown form '{name}'." );
+	}
 
 	/// <summary>The theme for two saved names; an unknown or missing name falls back to Dark / Default.</summary>
 	public static GraphTheme From( string? palette, string? form ) => From( ThemePresets.ParsePalette( palette ), ThemePresets.ParseForm( form ) );

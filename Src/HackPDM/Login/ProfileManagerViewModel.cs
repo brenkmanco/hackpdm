@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -22,9 +22,26 @@ using Microsoft.UI.Xaml.Data;
 namespace HackPDM.Login;
 
 [Bindable]
-public partial class ProfileManagerViewModel : ObservableObject, IDisposable
+public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposable
 {
 	private const string ProfileExtension = ".json";
+
+	private static readonly string[] SharedCategoryFilterOptions =
+	[
+		"All Areas",
+		ProfileStatusCategory.Login,
+		ProfileStatusCategory.Connection,
+		ProfileStatusCategory.Configuration,
+		ProfileStatusCategory.Settings,
+	];
+
+	private static readonly string[] SharedLevelFilterOptions =
+	[
+		"All Levels",
+		"Errors & Warnings",
+		"Errors Only",
+		"Info & Success",
+	];
 
 	private readonly LoginSession _session;
 	private readonly IDialogService _dialogs;
@@ -33,6 +50,9 @@ public partial class ProfileManagerViewModel : ObservableObject, IDisposable
 	private readonly Action? _accountChanged;
 	private readonly Func<IReadOnlyList<(StatusMessage Status, string Category, string Message)>>? _inspectSettings;
 	private bool _attached;
+	private int _errorCount;
+	private int _warningCount;
+	private int _infoCount;
 
 	public ProfileManagerViewModel(
 		LoginSession session,
@@ -51,25 +71,11 @@ public partial class ProfileManagerViewModel : ObservableObject, IDisposable
 		Attach();
 	}
 
-	public ObservableCollection<BasicStatusMessage> OStatus { get; } = [];
-	public ObservableCollection<BasicStatusMessage> FilteredStatus { get; } = [];
+	public RangeObservableCollection<BasicStatusMessage> OStatus { get; } = [];
+	public RangeObservableCollection<BasicStatusMessage> FilteredStatus { get; } = [];
 
-	public string[] CategoryFilterOptions { get; } =
-	[
-		"All Areas",
-		ProfileStatusCategory.Login,
-		ProfileStatusCategory.Connection,
-		ProfileStatusCategory.Configuration,
-		ProfileStatusCategory.Settings,
-	];
-
-	public string[] LevelFilterOptions { get; } =
-	[
-		"All Levels",
-		"Errors & Warnings",
-		"Errors Only",
-		"Info & Success",
-	];
+	public string[] CategoryFilterOptions => SharedCategoryFilterOptions;
+	public string[] LevelFilterOptions => SharedLevelFilterOptions;
 
 	public bool IsLoggedIn
 	{
@@ -120,12 +126,11 @@ public partial class ProfileManagerViewModel : ObservableObject, IDisposable
 
 	public void Attach()
 	{
-		if( !_attached )
-		{
-			_session.MessageLogged += OnSessionMessageLogged;
-			_session.MessagesCleared += OnSessionMessagesCleared;
-			_attached = true;
-		}
+		if( _attached )
+			return;
+		_session.MessageLogged += OnSessionMessageLogged;
+		_session.MessagesCleared += OnSessionMessagesCleared;
+		_attached = true;
 		SyncFromSession();
 	}
 
@@ -454,20 +459,40 @@ public partial class ProfileManagerViewModel : ObservableObject, IDisposable
 		if( _inspectSettings?.Invoke() is { } settingsItems )
 			findings.AddRange( settingsItems );
 
-		string fingerprint = string.Join( "|", findings.Select( f => $"{(int)f.Status}:{f.Category}:{f.Message}" ) );
+		StringBuilder fp = new( findings.Count * 48 );
+		(StatusMessage Status, string Category, string Message)? firstError = null;
+		(StatusMessage Status, string Category, string Message)? firstWarning = null;
+		for( int i = 0; i < findings.Count; i++ )
+		{
+			var f = findings[ i ];
+			if( i > 0 )
+				fp.Append( '|' );
+			fp.Append( (int)f.Status ).Append( ':' ).Append( f.Category ).Append( ':' ).Append( f.Message );
+			if( firstError is null && f.Status == StatusMessage.ERROR && f.Message.Length > 0 )
+				firstError = f;
+			else if( firstWarning is null && f.Status == StatusMessage.WARNING && f.Message.Length > 0 )
+				firstWarning = f;
+		}
+		string fingerprint = fp.ToString();
 		if( forceLog || !string.Equals( _session.LastReadinessFingerprint, fingerprint, StringComparison.Ordinal ) )
 		{
 			_session.LastReadinessFingerprint = fingerprint;
-			foreach( var item in findings )
+			for( int i = 0; i < findings.Count; i++ )
+			{
+				var item = findings[ i ];
 				_session.AddStatus( item.Status, item.Category, item.Message );
+			}
 		}
 
-		if( findings.FirstOrDefault( f => f.Status == StatusMessage.ERROR ) is { Message.Length: > 0 } err )
+		if( firstError is { } err )
 			SetBanner( StatusMessage.ERROR, err.Category, err.Message );
-		else if( findings.FirstOrDefault( f => f.Status == StatusMessage.WARNING ) is { Message.Length: > 0 } warn )
+		else if( firstWarning is { } warn )
 			SetBanner( StatusMessage.WARNING, warn.Category, warn.Message );
-		else if( _session.LastErrors.LastOrDefault() is { } latest )
+		else if( _session.LastErrors is { Count: > 0 } lastErrors )
+		{
+			BasicStatusMessage latest = lastErrors[ lastErrors.Count - 1 ];
 			SetBanner( latest.Status, latest.Category, latest.Message ?? string.Empty );
+		}
 		else if( IsLoggedIn )
 			SetBanner( StatusMessage.SUCCESS, ProfileStatusCategory.Login, $"Connected as {ConnectionTargetText}." );
 	}
@@ -486,21 +511,20 @@ public partial class ProfileManagerViewModel : ObservableObject, IDisposable
 
 	private static string ClassifyErrorCategory( string message )
 	{
-		string lower = message.ToLowerInvariant();
-		if( lower.Contains( "must be set", StringComparison.Ordinal )
-			|| lower.Contains( "database", StringComparison.Ordinal )
-			|| lower.Contains( "address is not set", StringComparison.Ordinal )
-			|| lower.Contains( "not a valid server", StringComparison.Ordinal ) )
+		if( message.Contains( "must be set", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "database", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "address is not set", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "not a valid server", StringComparison.OrdinalIgnoreCase ) )
 			return ProfileStatusCategory.Configuration;
 
-		if( lower.Contains( "unencrypted", StringComparison.Ordinal )
-			|| lower.Contains( "timeout", StringComparison.Ordinal )
-			|| lower.Contains( "timed out", StringComparison.Ordinal )
-			|| lower.Contains( "refused", StringComparison.Ordinal )
-			|| lower.Contains( "unreachable", StringComparison.Ordinal )
-			|| lower.Contains( "ssl", StringComparison.Ordinal )
-			|| lower.Contains( "tls", StringComparison.Ordinal )
-			|| lower.Contains( "connect", StringComparison.Ordinal ) )
+		if( message.Contains( "unencrypted", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "timeout", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "timed out", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "refused", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "unreachable", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "ssl", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "tls", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "connect", StringComparison.OrdinalIgnoreCase ) )
 			return ProfileStatusCategory.Connection;
 
 		return ProfileStatusCategory.Login;
@@ -544,10 +568,21 @@ public partial class ProfileManagerViewModel : ObservableObject, IDisposable
 		HasBanner = true;
 	}
 
+	private void CountStatus( StatusMessage status )
+	{
+		switch( status )
+		{
+			case StatusMessage.ERROR: _errorCount++; break;
+			case StatusMessage.WARNING: _warningCount++; break;
+			default: _infoCount++; break;
+		}
+	}
+
 	private void OnSessionMessageLogged( BasicStatusMessage entry )
 		=> Dispatch( () =>
 		{
 			OStatus.Add( entry );
+			CountStatus( entry.Status );
 			if( MatchesFilters( entry ) )
 				FilteredStatus.Insert( 0, entry );
 			if( entry.Status is StatusMessage.ERROR or StatusMessage.WARNING or StatusMessage.SUCCESS )
@@ -558,27 +593,31 @@ public partial class ProfileManagerViewModel : ObservableObject, IDisposable
 	private void OnSessionMessagesCleared()
 		=> Dispatch( () =>
 		{
-			OStatus.Clear();
-			FilteredStatus.Clear();
+			OStatus.ClearIfNonEmpty();
+			FilteredStatus.ClearIfNonEmpty();
+			_errorCount = _warningCount = _infoCount = 0;
 			UpdateCountsAndHints();
 		} );
 
 	private void SyncFromSession()
 	{
-		OStatus.Clear();
-		foreach( BasicStatusMessage item in _session.LastErrors )
-			OStatus.Add( item );
+		IReadOnlyList<BasicStatusMessage> lastErrors = _session.LastErrors;
+		OStatus.ReplaceAll( lastErrors );
+		_errorCount = _warningCount = _infoCount = 0;
+		for( int i = 0; i < lastErrors.Count; i++ )
+			CountStatus( lastErrors[ i ].Status );
 		ApplyFilters();
 	}
 
 	private void ApplyFilters()
 	{
-		FilteredStatus.Clear();
+		List<BasicStatusMessage> matching = new( OStatus.Count );
 		for( int i = OStatus.Count - 1; i >= 0; i-- )
 		{
 			if( MatchesFilters( OStatus[ i ] ) )
-				FilteredStatus.Add( OStatus[ i ] );
+				matching.Add( OStatus[ i ] );
 		}
+		FilteredStatus.ReplaceAll( matching );
 		UpdateCountsAndHints();
 	}
 
@@ -601,17 +640,6 @@ public partial class ProfileManagerViewModel : ObservableObject, IDisposable
 
 	private void UpdateCountsAndHints()
 	{
-		int errors = 0, warnings = 0, infos = 0;
-		foreach( BasicStatusMessage item in OStatus )
-		{
-			switch( item.Status )
-			{
-				case StatusMessage.ERROR: errors++; break;
-				case StatusMessage.WARNING: warnings++; break;
-				default: infos++; break;
-			}
-		}
-
 		if( OStatus.Count == 0 )
 		{
 			StatusCountsText = "No status messages";
@@ -620,11 +648,20 @@ public partial class ProfileManagerViewModel : ObservableObject, IDisposable
 		}
 		else
 		{
-			List<string> parts = [];
-			if( errors > 0 ) parts.Add( errors == 1 ? "1 error" : $"{errors} errors" );
-			if( warnings > 0 ) parts.Add( warnings == 1 ? "1 warning" : $"{warnings} warnings" );
-			if( infos > 0 ) parts.Add( $"{infos} info" );
-			StatusCountsText = string.Join( " · ", parts );
+			StringBuilder sb = new( 32 );
+			if( _errorCount > 0 )
+				sb.Append( _errorCount ).Append( _errorCount == 1 ? " error" : " errors" );
+			if( _warningCount > 0 )
+			{
+				if( sb.Length > 0 ) sb.Append( " · " );
+				sb.Append( _warningCount ).Append( _warningCount == 1 ? " warning" : " warnings" );
+			}
+			if( _infoCount > 0 )
+			{
+				if( sb.Length > 0 ) sb.Append( " · " );
+				sb.Append( _infoCount ).Append( " info" );
+			}
+			StatusCountsText = sb.ToString();
 			EmptyHintTitle = FilteredStatus.Count == 0 ? "No matching status messages" : "Ready to connect";
 			EmptyHintSubtitle = FilteredStatus.Count == 0
 				? "Change the area or severity filter above to view other recorded messages."

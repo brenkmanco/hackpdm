@@ -52,7 +52,7 @@ public sealed class FileManagerState
 	{
 		result = _entries;
 		return _entries is not null
-			&& !Stale.HasFlag( FileManagerRefresh.Entries )
+			&& ( Stale & FileManagerRefresh.Entries ) == 0
 			&& _entriesIncludeDeleted == includeDeleted
 			&& string.Equals( _entriesPath, treePath, StringComparison.OrdinalIgnoreCase );
 	}
@@ -60,7 +60,7 @@ public sealed class FileManagerState
 	public void MarkStale( FileManagerRefresh what )
 	{
 		Stale |= what;
-		if( what.HasFlag( FileManagerRefresh.Entries ) )
+		if( ( what & FileManagerRefresh.Entries ) != 0 )
 			_entries = null;
 	}
 
@@ -97,25 +97,32 @@ public sealed class FileManagerState
 
 		bool treeStale = false;
 		bool entriesStale = false;
-		foreach( LocalFileChange change in changes )
+		for( int i = 0; i < changes.Count; i++ )
 		{
+			LocalFileChange change = changes[ i ];
 			string? itemPath = PwaPaths.ToServerName( change.FullPath );
-			string? parentPath = PwaPaths.ToServerName( Path.GetDirectoryName( change.FullPath ) );
-			string[] itemSegments = PwaPaths.Segments( itemPath );
 			bool isDir = change.IsDirectory
 				|| Directory.Exists( change.FullPath )
-				|| ( change.Kind == LocalChangeKind.Deleted && itemSegments.Length > 0 && Tree?.FindBySegments( itemSegments ) is not null );
+				|| ( change.Kind == LocalChangeKind.Deleted
+					&& Tree is not null
+					&& PwaPaths.Segments( itemPath ) is { Length: > 0 } itemSegments
+					&& Tree.FindBySegments( itemSegments ) is not null );
 
 			if( isDir )
 			{
 				treeStale = true;
-				if( _entriesPath is not null && PwaPaths.IsSameOrAncestorTreePath( itemPath, _entriesPath ) )
+				if( !entriesStale && _entriesPath is not null && PwaPaths.IsSameOrAncestorTreePath( itemPath, _entriesPath ) )
 					entriesStale = true;
 			}
-			else if( _entriesPath is not null && PwaPaths.SameTreePath( parentPath, _entriesPath ) )
+			else if( !entriesStale && _entriesPath is not null )
 			{
-				entriesStale = true;
+				string? parentPath = PwaPaths.ToServerName( Path.GetDirectoryName( change.FullPath ) );
+				if( PwaPaths.SameTreePath( parentPath, _entriesPath ) )
+					entriesStale = true;
 			}
+
+			if( treeStale && entriesStale )
+				break;
 		}
 
 		FileManagerRefresh what = ( treeStale ? FileManagerRefresh.Tree : FileManagerRefresh.None )

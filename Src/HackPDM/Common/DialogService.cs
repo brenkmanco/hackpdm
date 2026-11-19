@@ -240,6 +240,8 @@ public sealed class DialogService : IDialogService
 
 		private void OnClosed( object sender, WindowEventArgs args )
 		{
+			if( sender is Window win )
+				win.Closed -= OnClosed;
 			if( _reattaching )
 				return;
 			if( CurrentPage is not null )

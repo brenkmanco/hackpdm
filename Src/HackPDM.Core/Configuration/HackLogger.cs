@@ -40,7 +40,7 @@ public static partial class LogRedactor
 			return string.Empty;
 
 		string result = AuthHeaderRegex().Replace( input, "${prefix}[REDACTED]" );
-		result = SecretFieldRegex().Replace( result, m =>
+		result = SecretFieldRegex().Replace( result, static m =>
 		{
 			string prefix = m.Groups[ "prefix" ].Value;
 			if( m.Groups[ "qval" ].Success )
@@ -49,7 +49,9 @@ public static partial class LogRedactor
 				return $"{prefix}'[REDACTED]'";
 			return $"{prefix}[REDACTED]";
 		} );
-		return LargeBase64Regex().Replace( result, m => $"[REDACTED_BASE64:{m.Length}chars]" );
+		return result.Length >= Base64RedactionThreshold
+			? LargeBase64Regex().Replace( result, static m => $"[REDACTED_BASE64:{m.Length}chars]" )
+			: result;
 	}
 }
 
@@ -62,6 +64,10 @@ public static class HackLogger
 
 	private static readonly object Gate = new();
 	private static string? _logDirectoryOverride;
+	private static string? _cachedLogDir;
+	private static int _cachedDayKey;
+	private static string? _cachedBasePath;
+	private static long _cachedFileBytes;
 	private static long _maxFileBytes = DefaultMaxFileBytes;
 	private static int _maxRetainedFiles = DefaultMaxRetainedFiles;
 	private static int _recentErrorCount;
@@ -80,6 +86,10 @@ public static class HackLogger
 		lock( Gate )
 		{
 			_logDirectoryOverride = logDirectory;
+			_cachedLogDir = null;
+			_cachedDayKey = 0;
+			_cachedBasePath = null;
+			_cachedFileBytes = 0;
 			_maxFileBytes = Math.Max( 1024, maxFileBytes );
 			_maxRetainedFiles = Math.Max( 1, maxRetainedFiles );
 			_prunedOnStart = false;
@@ -93,6 +103,10 @@ public static class HackLogger
 		lock( Gate )
 		{
 			_logDirectoryOverride = null;
+			_cachedLogDir = null;
+			_cachedDayKey = 0;
+			_cachedBasePath = null;
+			_cachedFileBytes = 0;
 			_maxFileBytes = DefaultMaxFileBytes;
 			_maxRetainedFiles = DefaultMaxRetainedFiles;
 			_prunedOnStart = false;
@@ -131,8 +145,9 @@ public static class HackLogger
 		if( level < MinimumLevel || MinimumLevel == HackLogLevel.None )
 			return;
 
-		string line = FormatLine( DateTimeOffset.UtcNow, level, category, message, ex, correlationId );
-		AppendLineSafe( line );
+		DateTimeOffset now = DateTimeOffset.UtcNow;
+		string line = FormatLine( now, level, category, message, ex, correlationId );
+		AppendLineSafe( now, line );
 	}
 
 	public static string? WriteCrashDump(
@@ -234,30 +249,54 @@ public static class HackLogger
 		return sb.ToString();
 	}
 
-	private static void AppendLineSafe( string line )
+	private static void AppendLineSafe( DateTimeOffset nowUtc, string line )
 	{
 		lock( Gate )
 		{
 			try
 			{
 				string dir = LogDirectory;
-				Directory.CreateDirectory( dir );
+				bool dirChanged = !string.Equals( _cachedLogDir, dir, StringComparison.Ordinal );
+				if( dirChanged )
+				{
+					Directory.CreateDirectory( dir );
+					_cachedLogDir = dir;
+					_cachedDayKey = 0;
+					_cachedBasePath = null;
+					_cachedFileBytes = 0;
+				}
 				if( !_prunedOnStart )
 				{
 					_prunedOnStart = true;
 					PruneOldLogs( dir );
 				}
 
-				string basePath = Path.Combine( dir, $"hackpdm-{DateTimeOffset.UtcNow:yyyyMMdd}.log" );
-				if( File.Exists( basePath ) && new FileInfo( basePath ).Length >= _maxFileBytes )
+				int dayKey = ( nowUtc.Year * 10000 ) + ( nowUtc.Month * 100 ) + nowUtc.Day;
+				if( _cachedDayKey != dayKey || _cachedBasePath is null )
 				{
-					RotateLogFile( dir, basePath );
-					PruneOldLogs( dir );
+					_cachedDayKey = dayKey;
+					_cachedBasePath = Path.Combine( dir, $"hackpdm-{nowUtc:yyyyMMdd}.log" );
+					FileInfo info = new( _cachedBasePath );
+					_cachedFileBytes = info.Exists ? info.Length : 0;
 				}
-				File.AppendAllText( basePath, line + Environment.NewLine, Encoding.UTF8 );
+
+				if( _cachedFileBytes >= _maxFileBytes )
+				{
+					RotateLogFile( dir, _cachedBasePath );
+					PruneOldLogs( dir );
+					_cachedFileBytes = 0;
+				}
+
+				string payload = line + Environment.NewLine;
+				File.AppendAllText( _cachedBasePath, payload, Encoding.UTF8 );
+				_cachedFileBytes += Encoding.UTF8.GetByteCount( payload );
 			}
 			catch
 			{
+				_cachedLogDir = null;
+				_cachedDayKey = 0;
+				_cachedBasePath = null;
+				_cachedFileBytes = 0;
 			}
 		}
 	}

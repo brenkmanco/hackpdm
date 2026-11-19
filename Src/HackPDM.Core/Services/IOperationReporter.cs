@@ -32,12 +32,11 @@ public static class ShellLauncher
 	{
 		try
 		{
-			if( OperatingSystem.IsLinux() )
-				Process.Start( "xdg-open", target );
-			else if( OperatingSystem.IsMacOS() )
-				Process.Start( "open", target );
-			else
-				Process.Start( new ProcessStartInfo( target ) { UseShellExecute = true } );
+			using Process? _ = OperatingSystem.IsLinux()
+				? Process.Start( "xdg-open", target )
+				: OperatingSystem.IsMacOS()
+					? Process.Start( "open", target )
+					: Process.Start( new ProcessStartInfo( target ) { UseShellExecute = true } );
 			return true;
 		}
 		catch( Exception e )

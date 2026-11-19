@@ -23,6 +23,13 @@ public static partial class WindowHelper
 {
 	private static readonly ConditionalWeakTable<Page, Window> PageWindows = new();
 	private static readonly WindowSettingsData Defaults = new();
+	private static readonly string? AppIconPath = ResolveAppIconPath();
+
+	private static string? ResolveAppIconPath()
+	{
+		string iconPath = Path.Combine( AppContext.BaseDirectory, "Assets", "hackpdm-icon.ico" );
+		return File.Exists( iconPath ) ? iconPath : null;
+	}
 
 	public static WindowPreset Preset( string name )
 	{
@@ -52,13 +59,11 @@ public static partial class WindowHelper
 	/// <summary>Applies the bundled HackPDM icon to the window titlebar and taskbar when supported.</summary>
 	public static void ApplyAppIcon( Window window )
 	{
+		if( AppIconPath is null )
+			return;
 		try
 		{
-			if( window.AppWindow is null )
-				return;
-			string iconPath = Path.Combine( AppContext.BaseDirectory, "Assets", "hackpdm-icon.ico" );
-			if( File.Exists( iconPath ) )
-				window.AppWindow.SetIcon( iconPath );
+			window.AppWindow?.SetIcon( AppIconPath );
 		}
 		catch
 		{

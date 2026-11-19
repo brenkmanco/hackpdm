@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Frozen;
 using System.Globalization;
 
 namespace HackPDM.Core.Configuration;
@@ -65,6 +66,9 @@ public static class ColorNames
 		("WhiteSmoke", 0xFFF5F5F5), ("Yellow", 0xFFFFFF00), ("YellowGreen", 0xFF9ACD32),
 	];
 
+	private static readonly FrozenDictionary<string, uint> ByName =
+		StandardColors.ToFrozenDictionary( static c => c.Name, static c => c.Argb, StringComparer.OrdinalIgnoreCase );
+
 	public static (byte A, byte R, byte G, byte B) Unpack(uint argb) => (
 		(byte)((argb >> 24) & 0xFF),
 		(byte)((argb >> 16) & 0xFF),
@@ -76,10 +80,10 @@ public static class ColorNames
 		argb = 0;
 		if (string.IsNullOrWhiteSpace(text))
 			return false;
-		string s = text.Trim();
+		ReadOnlySpan<char> s = text.AsSpan().Trim();
 		if (s[0] == '#')
 		{
-			string hex = s.Substring(1);
+			ReadOnlySpan<char> hex = s[1..];
 			if (hex.Length == 3 && uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint rgb))
 			{
 				uint r = (rgb >> 8) & 0xF, g = (rgb >> 4) & 0xF, b = rgb & 0xF;
@@ -98,15 +102,7 @@ public static class ColorNames
 			}
 			return false;
 		}
-		foreach (var (name, value) in StandardColors)
-		{
-			if (string.Equals(name, s, StringComparison.OrdinalIgnoreCase))
-			{
-				argb = value;
-				return true;
-			}
-		}
-		return false;
+		return ByName.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(s, out argb);
 	}
 
 	public static string ToHex(uint argb) => $"#{argb:X8}";

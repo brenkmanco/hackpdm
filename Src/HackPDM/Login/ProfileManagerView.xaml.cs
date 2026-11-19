@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.ComponentModel;
 
 using HackPDM.Core.Pdm;
@@ -11,6 +12,7 @@ namespace HackPDM.Login;
 public sealed partial class ProfileManagerView : Page
 {
 	private Button? _bannerActionButton;
+	private bool _subscribed;
 
 	public ProfileManagerViewModel ViewModel { get; } = AppComposition.CreateProfileManager();
 
@@ -19,19 +21,36 @@ public sealed partial class ProfileManagerView : Page
 		InitializeComponent();
 		if( HackApp.Window is { } window )
 			window.Title = "Profile Manager - HackPDM";
-		ViewModel.FilteredStatus.CollectionChanged += ( _, _ ) => UpdateEmptyHint();
-		ViewModel.PropertyChanged += ViewModel_PropertyChanged;
 		Loaded += OnLoaded;
-		Unloaded += ( _, _ ) => ViewModel.Detach();
+		Unloaded += OnUnloaded;
 	}
 
 	private void OnLoaded( object sender, RoutedEventArgs e )
 	{
+		if( !_subscribed )
+		{
+			_subscribed = true;
+			ViewModel.FilteredStatus.CollectionChanged += OnFilteredStatusChanged;
+			ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+		}
 		ViewModel.Attach();
 		ViewModel.RefreshConnectionSummary();
 		UpdateEmptyHint();
 		UpdateBannerAppearance();
 	}
+
+	private void OnUnloaded( object sender, RoutedEventArgs e )
+	{
+		if( _subscribed )
+		{
+			_subscribed = false;
+			ViewModel.FilteredStatus.CollectionChanged -= OnFilteredStatusChanged;
+			ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+		}
+		ViewModel.Detach();
+	}
+
+	private void OnFilteredStatusChanged( object? sender, NotifyCollectionChangedEventArgs e ) => UpdateEmptyHint();
 
 	private void ViewModel_PropertyChanged( object? sender, PropertyChangedEventArgs e )
 	{
@@ -56,9 +75,10 @@ public sealed partial class ProfileManagerView : Page
 		if( ViewModel.ShowOpenConfigurationsAction )
 		{
 			_bannerActionButton ??= CreateConfigureActionButton();
-			StatusBannerBar.ActionButton = _bannerActionButton;
+			if( !ReferenceEquals( StatusBannerBar.ActionButton, _bannerActionButton ) )
+				StatusBannerBar.ActionButton = _bannerActionButton;
 		}
-		else
+		else if( StatusBannerBar.ActionButton is not null )
 		{
 			StatusBannerBar.ActionButton = null!;
 		}

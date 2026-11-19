@@ -28,8 +28,29 @@ public sealed partial class TreeBranchGuides : Canvas
 		public double? BaseChevronCenterX { get; set; }
 		public double? BaseContentOriginX { get; set; }
 		public double? DetectedIndent { get; set; }
-		public TreeViewNode? SelectedNode { get; set; }
+		public TreeViewNode? SelectedNode { get; private set; }
+		public TreeViewNode?[] SelectedAncestors { get; private set; } = [];
+		public Brush? PassiveBrush { get; set; }
+		public Brush? ActiveBrush { get; set; }
 		public readonly List<WeakReference<TreeBranchGuides>> ActiveControls = [];
+
+		public void SetSelectedNode( TreeViewNode? selected )
+		{
+			SelectedNode = selected;
+			if( selected is null || selected.Depth < 0 )
+			{
+				SelectedAncestors = [];
+				return;
+			}
+			int depth = selected.Depth;
+			TreeViewNode?[] chain = new TreeViewNode?[ depth + 1 ];
+			for( TreeViewNode? cur = selected; cur is not null && cur.Depth >= 0; cur = cur.Parent )
+			{
+				if( cur.Depth < chain.Length )
+					chain[ cur.Depth ] = cur;
+			}
+			SelectedAncestors = chain;
+		}
 	}
 
 	private static readonly ConditionalWeakTable<TreeView, TreeRenderState> TreeStates = new();
@@ -47,7 +68,10 @@ public sealed partial class TreeBranchGuides : Canvas
 		new PropertyMetadata( 18.0, OnBranchPropertyChanged ) );
 
 	private TreeData? _subscribed;
+	private bool _isSubscribed;
 	private TreeView? _registeredTree;
+	private TreeViewItem? _cachedItem;
+	private readonly List<Rectangle> _rectPool = [];
 	private bool _redrawQueued;
 
 	public TreeData? NodeData
@@ -77,10 +101,17 @@ public sealed partial class TreeBranchGuides : Canvas
 
 		Loaded += ( _, _ ) =>
 		{
+			_cachedItem = FindAncestor<TreeViewItem>( this );
+			SubscribeData();
 			RegisterInTreeState();
 			QueueRedraw();
 		};
-		Unloaded += ( _, _ ) => UnregisterFromTreeState();
+		Unloaded += ( _, _ ) =>
+		{
+			_cachedItem = null;
+			UnsubscribeData();
+			UnregisterFromTreeState();
+		};
 		SizeChanged += ( _, _ ) => QueueRedraw();
 	}
 
@@ -93,9 +124,11 @@ public sealed partial class TreeBranchGuides : Canvas
 		if( showLines is bool show )
 			state.ShowLines = show;
 		if( updateSelection )
-			state.SelectedNode = selectedNode;
+			state.SetSelectedNode( selectedNode );
+		state.PassiveBrush = ResolvePassiveBrush();
+		state.ActiveBrush = ResolveActiveBrush();
 
-		state.ActiveControls.RemoveAll( r =>
+		state.ActiveControls.RemoveAll( static r =>
 		{
 			if( !r.TryGetTarget( out var control ) )
 				return true;
@@ -107,13 +140,28 @@ public sealed partial class TreeBranchGuides : Canvas
 	private static void OnNodeDataChanged( DependencyObject d, DependencyPropertyChangedEventArgs e )
 	{
 		var guide = (TreeBranchGuides)d;
-		if( guide._subscribed is { } oldData )
-			oldData.PropertyChanged -= guide.OnNodePropertyChanged;
+		guide.UnsubscribeData();
 		guide._subscribed = e.NewValue as TreeData;
-		if( guide._subscribed is { } newData )
-			newData.PropertyChanged += guide.OnNodePropertyChanged;
+		if( guide.IsLoaded )
+			guide.SubscribeData();
 		guide.RegisterInTreeState();
 		guide.QueueRedraw();
+	}
+
+	private void SubscribeData()
+	{
+		if( _isSubscribed || _subscribed is null )
+			return;
+		_subscribed.PropertyChanged += OnNodePropertyChanged;
+		_isSubscribed = true;
+	}
+
+	private void UnsubscribeData()
+	{
+		if( !_isSubscribed || _subscribed is null )
+			return;
+		_subscribed.PropertyChanged -= OnNodePropertyChanged;
+		_isSubscribed = false;
 	}
 
 	private static void OnBranchPropertyChanged( DependencyObject d, DependencyPropertyChangedEventArgs e )
@@ -172,25 +220,45 @@ public sealed partial class TreeBranchGuides : Canvas
 		}
 	}
 
+	private void HideUnusedRects( int usedCount )
+	{
+		for( int i = usedCount; i < _rectPool.Count; i++ )
+		{
+			if( _rectPool[ i ].Visibility != Visibility.Collapsed )
+				_rectPool[ i ].Visibility = Visibility.Collapsed;
+		}
+	}
+
 	private void Redraw()
 	{
-		Children.Clear();
-
+		int usedRects = 0;
 		if( NodeData is not { Node: { } node, IsLinked: true } data )
+		{
+			HideUnusedRects( 0 );
 			return;
+		}
 
-		TreeViewItem? item = FindAncestor<TreeViewItem>( this );
-		TreeView? tree = data.ParentTree ?? FindAncestor<TreeView>( item ?? (DependencyObject)this );
+		TreeViewItem? item = _cachedItem ??= FindAncestor<TreeViewItem>( this );
+		TreeView? tree = data.ParentTree ?? _registeredTree ?? FindAncestor<TreeView>( item ?? (DependencyObject)this );
 		if( item is null || tree is null )
+		{
+			HideUnusedRects( 0 );
 			return;
+		}
 
 		var state = TreeStates.GetOrCreateValue( tree );
 		if( !state.ShowLines )
+		{
+			HideUnusedRects( 0 );
 			return;
+		}
 
 		double rowHeight = item.ActualHeight > 0 ? item.ActualHeight : ActualHeight;
 		if( rowHeight <= 0 )
+		{
+			HideUnusedRects( 0 );
 			return;
+		}
 
 		Point originInItem;
 		try
@@ -199,6 +267,7 @@ public sealed partial class TreeBranchGuides : Canvas
 		}
 		catch
 		{
+			HideUnusedRects( 0 );
 			return;
 		}
 
@@ -215,18 +284,16 @@ public sealed partial class TreeBranchGuides : Canvas
 				state.BaseContentOriginX = contentStartX;
 				geometryChanged = true;
 			}
-			if( data.HasSubfolders
+			if( state.BaseChevronCenterX is null
+				&& data.HasSubfolders
 				&& FindDescendantByName( item, "ExpandCollapseChevron" ) is { ActualWidth: > 0, Visibility: Visibility.Visible } chevron )
 			{
 				try
 				{
 					Point chevPos = chevron.TransformToVisual( item ).TransformPoint( new Point( 0, 0 ) );
 					double baseCenter = chevPos.X + chevron.ActualWidth / 2.0;
-					if( state.BaseChevronCenterX is null || Math.Abs( state.BaseChevronCenterX.Value - baseCenter ) > 0.5 )
-					{
-						state.BaseChevronCenterX = baseCenter;
-						geometryChanged = true;
-					}
+					state.BaseChevronCenterX = baseCenter;
+					geometryChanged = true;
 				}
 				catch { }
 			}
@@ -243,9 +310,9 @@ public sealed partial class TreeBranchGuides : Canvas
 
 		if( geometryChanged )
 		{
-			foreach( var weak in state.ActiveControls )
+			for( int i = 0; i < state.ActiveControls.Count; i++ )
 			{
-				if( weak.TryGetTarget( out var peer ) && !ReferenceEquals( peer, this ) )
+				if( state.ActiveControls[ i ].TryGetTarget( out var peer ) && !ReferenceEquals( peer, this ) )
 					peer.QueueRedraw();
 			}
 		}
@@ -254,9 +321,27 @@ public sealed partial class TreeBranchGuides : Canvas
 		double baseChevronCenterX = state.BaseChevronCenterX
 			?? Math.Max( 12.0, ( state.BaseContentOriginX ?? ( contentStartX - depth * indent ) ) - 20.0 );
 
-		Brush passiveBrush = ResolvePassiveBrush();
-		Brush activeBrush = ResolveActiveBrush();
+		Brush passiveBrush = state.PassiveBrush ??= ResolvePassiveBrush();
+		Brush activeBrush = state.ActiveBrush ??= ResolveActiveBrush();
 		TreeViewNode? selectedNode = state.SelectedNode ?? tree.SelectedNode;
+		if( selectedNode is not null && !ReferenceEquals( selectedNode, state.SelectedNode ) )
+			state.SetSelectedNode( selectedNode );
+		TreeViewNode?[] selectedAncestors = state.SelectedAncestors;
+
+		// Build row's ancestor chain once in O(depth) so all column checks are O(1)
+		TreeViewNode?[]? rowAncestors = null;
+		if( depth >= 1 && selectedAncestors.Length > 0 )
+		{
+			rowAncestors = new TreeViewNode?[ depth + 1 ];
+			for( TreeViewNode? cur = node; cur is not null && cur.Depth >= 0; cur = cur.Parent )
+			{
+				if( cur.Depth <= depth )
+					rowAncestors[ cur.Depth ] = cur;
+			}
+		}
+
+		bool isSelected = ReferenceEquals( node, selectedNode );
+		bool isSelectedAncestor = selectedAncestors.Length > depth + 1 && ReferenceEquals( selectedAncestors[ depth ], node );
 
 		double midY = Math.Floor( topOffsetY + rowHeight / 2.0 );
 		double bottomY = topOffsetY + rowHeight;
@@ -268,8 +353,8 @@ public sealed partial class TreeBranchGuides : Canvas
 			if( !continuations[ c ] )
 				continue;
 			double colX = Math.Round( baseChevronCenterX + c * indent );
-			bool active = IsTrunkActiveThroughNode( node, c, selectedNode );
-			AddRect( colX - contentStartX, topOffsetY, 1.0, rowHeight, active ? activeBrush : passiveBrush, active ? 0.72 : 0.42 );
+			bool active = IsTrunkActiveO1( rowAncestors, c, selectedAncestors );
+			PlaceRect( ref usedRects, colX - contentStartX, topOffsetY, 1.0, rowHeight, active ? activeBrush : passiveBrush, active ? 0.72 : 0.42 );
 		}
 
 		// 2. Own parent connector (depth >= 1) at column depth - 1
@@ -277,14 +362,14 @@ public sealed partial class TreeBranchGuides : Canvas
 		{
 			int col = depth - 1;
 			double colX = Math.Round( baseChevronCenterX + col * indent );
-			bool isSelected = ReferenceEquals( node, selectedNode );
-			bool isSelectedAncestor = IsAncestorOf( node, selectedNode );
-			bool activeTop = isSelected || isSelectedAncestor || IsTrunkActiveThroughNode( node, col, selectedNode );
+			bool trunkActive = IsTrunkActiveO1( rowAncestors, col, selectedAncestors );
+			bool activeTop = isSelected || isSelectedAncestor || trunkActive;
 			bool activeHorizontal = isSelected || isSelectedAncestor;
-			bool activeBottom = !data.IsLastSibling && IsTrunkActiveThroughNode( node, col, selectedNode );
+			bool activeBottom = !data.IsLastSibling && trunkActive;
 
 			// Top half vertical stem (0 -> midY)
-			AddRect(
+			PlaceRect(
+				ref usedRects,
 				colX - contentStartX,
 				topOffsetY,
 				1.0,
@@ -295,7 +380,8 @@ public sealed partial class TreeBranchGuides : Canvas
 			// Bottom half vertical stem (midY -> bottom) when not the last child
 			if( !data.IsLastSibling )
 			{
-				AddRect(
+				PlaceRect(
+					ref usedRects,
 					colX - contentStartX,
 					midY + 1,
 					1.0,
@@ -309,7 +395,8 @@ public sealed partial class TreeBranchGuides : Canvas
 				? baseChevronCenterX + depth * indent - 9.0
 				: contentStartX - 5.0;
 			double armWidth = Math.Max( 4.0, Math.Round( armEndX - colX ) );
-			AddRect(
+			PlaceRect(
+				ref usedRects,
 				colX - contentStartX,
 				midY,
 				armWidth,
@@ -326,76 +413,62 @@ public sealed partial class TreeBranchGuides : Canvas
 			double stubHeight = Math.Max( 0.0, bottomY - stubTop );
 			if( stubHeight > 0 )
 			{
-				bool activeStub = IsAncestorOf( node, selectedNode );
-				AddRect(
+				PlaceRect(
+					ref usedRects,
 					ownColX - contentStartX,
 					stubTop,
 					1.0,
 					stubHeight,
-					activeStub ? activeBrush : passiveBrush,
-					activeStub ? 0.85 : 0.42 );
+					isSelectedAncestor ? activeBrush : passiveBrush,
+					isSelectedAncestor ? 0.85 : 0.42 );
 			}
 		}
+
+		HideUnusedRects( usedRects );
 	}
 
-	private void AddRect( double left, double top, double width, double height, Brush brush, double opacity )
+	private void PlaceRect( ref int usedCount, double left, double top, double width, double height, Brush brush, double opacity )
 	{
 		if( width <= 0 || height <= 0 )
 			return;
-		var rect = new Rectangle
+		Rectangle rect;
+		if( usedCount < _rectPool.Count )
 		{
-			Width = width,
-			Height = height,
-			Fill = brush,
-			Opacity = opacity,
-			IsHitTestVisible = false,
-		};
+			rect = _rectPool[ usedCount ];
+			if( rect.Visibility != Visibility.Visible )
+				rect.Visibility = Visibility.Visible;
+		}
+		else
+		{
+			rect = new Rectangle { IsHitTestVisible = false };
+			_rectPool.Add( rect );
+			Children.Add( rect );
+		}
+		usedCount++;
+		rect.Width = width;
+		rect.Height = height;
+		rect.Fill = brush;
+		rect.Opacity = opacity;
 		SetLeft( rect, left );
 		SetTop( rect, top );
-		Children.Add( rect );
-	}
-
-	private static bool IsAncestorOf( TreeViewNode candidate, TreeViewNode? target )
-	{
-		for( TreeViewNode? cur = target?.Parent; cur is not null; cur = cur.Parent )
-		{
-			if( ReferenceEquals( cur, candidate ) )
-				return true;
-		}
-		return false;
 	}
 
 	/// <summary>
-	/// Returns true when the vertical line at <paramref name="colDepth"/> passing through <paramref name="rowNode"/>
-	/// is above the branch containing <paramref name="selectedNode"/> (so the accent trunk leads cleanly to it).
+	/// O(1) check whether the vertical line at <paramref name="colDepth"/> passing through the row
+	/// sits above the branch containing the selected node.
 	/// </summary>
-	private static bool IsTrunkActiveThroughNode( TreeViewNode rowNode, int colDepth, TreeViewNode? selectedNode )
+	private static bool IsTrunkActiveO1( TreeViewNode?[]? rowAncestors, int colDepth, TreeViewNode?[] selectedAncestors )
 	{
-		if( selectedNode is null || selectedNode.Depth < colDepth + 1 )
+		int targetDepth = colDepth + 1;
+		if( rowAncestors is null || targetDepth >= rowAncestors.Length || targetDepth >= selectedAncestors.Length )
 			return false;
-
-		int targetAncestorDepth = colDepth + 1;
-		TreeViewNode? rowAncestor = AncestorAtDepth( rowNode, targetAncestorDepth );
-		TreeViewNode? selAncestor = AncestorAtDepth( selectedNode, targetAncestorDepth );
-		if( rowAncestor is null || selAncestor is null || !ReferenceEquals( rowAncestor.Parent, selAncestor.Parent ) )
+		TreeViewNode? rowAncestor = rowAncestors[ targetDepth ];
+		TreeViewNode? selAncestor = selectedAncestors[ targetDepth ];
+		if( rowAncestor is null || selAncestor is null || ReferenceEquals( rowAncestor, selAncestor ) )
 			return false;
-		if( ReferenceEquals( rowAncestor, selAncestor ) )
+		if( !ReferenceEquals( rowAncestor.Parent, selAncestor.Parent ) )
 			return false;
-
-		TreeViewNode? sharedParent = rowAncestor.Parent;
-		if( sharedParent is null )
-			return false;
-		int rowIdx = sharedParent.Children.IndexOf( rowAncestor );
-		int selIdx = sharedParent.Children.IndexOf( selAncestor );
-		return rowIdx >= 0 && selIdx > rowIdx;
-	}
-
-	private static TreeViewNode? AncestorAtDepth( TreeViewNode? node, int targetDepth )
-	{
-		TreeViewNode? cur = node;
-		while( cur is not null && cur.Depth > targetDepth )
-			cur = cur.Parent;
-		return cur is not null && cur.Depth == targetDepth ? cur : null;
+		return selAncestor.LinkedData.SiblingIndex > rowAncestor.LinkedData.SiblingIndex;
 	}
 
 	private static readonly SolidColorBrush PassiveFallbackBrush = new( Color.FromArgb( 255, 140, 140, 140 ) );

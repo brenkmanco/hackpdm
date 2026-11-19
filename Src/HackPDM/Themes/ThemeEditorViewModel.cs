@@ -16,7 +16,7 @@ namespace HackPDM.Themes;
 
 /// <summary>One editable theme color in the editor list.</summary>
 [Bindable]
-public partial class ThemeColorItem( ThemeColorKey key, bool isGroupStart ) : ObservableObject
+public sealed partial class ThemeColorItem( ThemeColorKey key, bool isGroupStart ) : ObservableObject
 {
 	public ThemeColorKey Definition { get; } = key;
 	public string Key => Definition.Key;
@@ -39,8 +39,11 @@ public partial class ThemeColorItem( ThemeColorKey key, bool isGroupStart ) : Ob
 /// them to AppConfig.json, which is loaded automatically at startup.
 /// </summary>
 [Bindable]
-public partial class ThemeEditorViewModel : ObservableObject
+public sealed partial class ThemeEditorViewModel : ObservableObject
 {
+	private static readonly string[] SharedPaletteTitles = [ .. ThemePresets.Palettes.Select( static p => p.Title ) ];
+	private static readonly string[] SharedFormTitles = [ .. ThemePresets.Forms.Select( static f => f.Title ) ];
+
 	private readonly ThemeService _theme;
 	private readonly LoginSession? _session;
 
@@ -58,17 +61,32 @@ public partial class ThemeEditorViewModel : ObservableObject
 		SelectedFormIndex = FormIndex( _theme.Form );
 		ShowTreeBranchLines = _theme.ShowTreeBranchLines;
 		Refresh();
-		SelectedColor = Colors.FirstOrDefault();
+		SelectedColor = Colors.Count > 0 ? Colors[ 0 ] : null;
 	}
 
 	/// <summary>The color presets, in menu order.</summary>
-	public string[] PaletteTitles { get; } = [ .. ThemePresets.Palettes.Select( p => p.Title ) ];
+	public string[] PaletteTitles => SharedPaletteTitles;
 
 	/// <summary>The shape presets, in menu order.</summary>
-	public string[] FormTitles { get; } = [ .. ThemePresets.Forms.Select( f => f.Title ) ];
+	public string[] FormTitles => SharedFormTitles;
 
-	private static int PaletteIndex( PaletteName name ) => ThemePresets.Palettes.ToList().FindIndex( p => p.Name == name );
-	private static int FormIndex( FormName name ) => ThemePresets.Forms.ToList().FindIndex( f => f.Name == name );
+	private static int PaletteIndex( PaletteName name )
+	{
+		var palettes = ThemePresets.Palettes;
+		for( int i = 0; i < palettes.Count; i++ )
+			if( palettes[ i ].Name == name )
+				return i;
+		return -1;
+	}
+
+	private static int FormIndex( FormName name )
+	{
+		var forms = ThemePresets.Forms;
+		for( int i = 0; i < forms.Count; i++ )
+			if( forms[ i ].Name == name )
+				return i;
+		return -1;
+	}
 
 	public ObservableCollection<ThemeColorItem> Colors { get; } = [];
 
@@ -231,21 +249,38 @@ public partial class ThemeEditorViewModel : ObservableObject
 
 	private void Refresh( ThemeColorItem? only = null )
 	{
-		IEnumerable<ThemeColorItem> items = only is null ? Colors : [ only ];
-		foreach( var item in items )
+		if( only is not null )
 		{
-			item.Hex = _theme.GetColor( item.Key )?.ToString() ?? "";
-			item.IsOverridden = _theme.IsOverridden( item.Key );
+			only.Hex = _theme.GetColor( only.Key )?.ToString() ?? "";
+			only.IsOverridden = _theme.IsOverridden( only.Key );
+		}
+		else
+		{
+			for( int i = 0; i < Colors.Count; i++ )
+			{
+				ThemeColorItem item = Colors[ i ];
+				item.Hex = _theme.GetColor( item.Key )?.ToString() ?? "";
+				item.IsOverridden = _theme.IsOverridden( item.Key );
+			}
 		}
 		EditingThemeText = ThemePresets.Palette( _theme.Palette ).Title;
 		IsEditable = !_theme.NeedsRestart;
-		List<string> notices = [];
-		if( _theme.NeedsRestart )
-			notices.Add( $"Previewing {EditingThemeText}. Save, then restart HackPDM to finish the switch and edit its colors (menus and dialogs also follow it after the restart)." );
-		if( _theme.StyleNeedsRestart )
-			notices.Add( $"Panels and the dependency graph already show the {ThemePresets.Form( _theme.Form ).Title} style; save and restart HackPDM for buttons, lists and other controls to take its corners and spacing." );
-		RestartNotice = string.Join( " ", notices );
-		ShowRestartNotice = notices.Count > 0;
+		bool needsMode = _theme.NeedsRestart;
+		bool needsStyle = _theme.StyleNeedsRestart;
+		string? modeNotice = needsMode
+			? $"Previewing {EditingThemeText}. Save, then restart HackPDM to finish the switch and edit its colors (menus and dialogs also follow it after the restart)."
+			: null;
+		string? styleNotice = needsStyle
+			? $"Panels and the dependency graph already show the {ThemePresets.Form( _theme.Form ).Title} style; save and restart HackPDM for buttons, lists and other controls to take its corners and spacing."
+			: null;
+		RestartNotice = ( modeNotice, styleNotice ) switch
+		{
+			( not null, not null ) => $"{modeNotice} {styleNotice}",
+			( not null, null ) => modeNotice,
+			( null, not null ) => styleNotice,
+			_ => "",
+		};
+		ShowRestartNotice = needsMode || needsStyle;
 	}
 
 	private void PublishSelected()

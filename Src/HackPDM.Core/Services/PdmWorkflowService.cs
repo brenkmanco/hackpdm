@@ -77,8 +77,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		for( int offset = 0; offset < entryIds.Count; offset += RpcIdChunkSize )
 		{
 			token.ThrowIfCancellationRequested();
-			int count = Math.Min( RpcIdChunkSize, entryIds.Count - offset );
-			int[] chunk = [ .. entryIds.Skip( offset ).Take( count ) ];
+			int[] chunk = DownloadOperations.SliceChunk( entryIds, offset, RpcIdChunkSize );
 
 			if( useDirectEntryRpc )
 			{
@@ -100,8 +99,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		for( int offset = 0; offset < fallbackEntryIds.Count; offset += RpcIdChunkSize )
 		{
 			token.ThrowIfCancellationRequested();
-			int count = Math.Min( RpcIdChunkSize, fallbackEntryIds.Count - offset );
-			int[] chunk = [ .. fallbackEntryIds.Skip( offset ).Take( count ) ];
+			int[] chunk = DownloadOperations.SliceChunk( fallbackEntryIds, offset, RpcIdChunkSize );
 			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( chunk, includedFields: [ nameof( HpEntry.latest_version_id ) ] );
 			foreach( HpEntry e in entries ?? [] )
 			{
@@ -113,8 +111,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		for( int offset = 0; offset < versionIds.Count; offset += RpcIdChunkSize )
 		{
 			token.ThrowIfCancellationRequested();
-			int count = Math.Min( RpcIdChunkSize, versionIds.Count - offset );
-			int[] chunk = [ .. versionIds.Skip( offset ).Take( count ) ];
+			int[] chunk = DownloadOperations.SliceChunk( versionIds, offset, RpcIdChunkSize );
 			Result<IReadOnlyList<int>> dependencies = await DownloadOperations.GetAllEntriesAndDependenciesListAsync( chunk );
 			if( !dependencies.Ok )
 				Log( StatusMessage.WARNING, $"Dependencies could not be listed: {dependencies.Error}" );
@@ -125,21 +122,34 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		return [ .. allIds ];
 	}
 
-	public async Task GetLatestAsync( IReadOnlyList<int> entryIds )
+	public Task GetLatestAsync( IReadOnlyList<int> entryIds )
+		=> GetLatestCoreAsync( entryIds, preExpandedIds: null );
+
+	private async Task<IReadOnlyList<int>?> GetLatestCoreAsync( IReadOnlyList<int> entryIds, IReadOnlyList<int>? preExpandedIds )
 	{
 		if( entryIds is null or { Count: < 1 } )
-			return;
+			return null;
 
 		CancellationTokenSource cancellation = reporter.BeginOperation();
 		try
 		{
-			Log( StatusMessage.INFO, $"Finding Entry Dependencies for {entryIds.Count} entries..." );
-			IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds, cancellation.Token );
+			IReadOnlyList<int> ids;
+			if( preExpandedIds is not null )
+			{
+				ids = preExpandedIds;
+			}
+			else
+			{
+				Log( StatusMessage.INFO, $"Finding Entry Dependencies for {entryIds.Count} entries..." );
+				ids = await ExpandWithDependenciesAsync( entryIds, cancellation.Token );
+			}
 			await AsyncHelper.AsyncRunner( () => DownloadLatestAsync( ids, cancellation.Token ), "Get Latest", cancellation );
+			return ids;
 		}
 		catch( OperationCanceledException )
 		{
 			await reporter.NotifyAsync( "Cancelled Download" );
+			return null;
 		}
 		finally
 		{
@@ -210,16 +220,17 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 			"Get Latest" );
 	}
 
-	public Task CheckoutAsync( IReadOnlyList<int> entryIds ) => ChangeCheckoutAsync( entryIds, checkout: true );
-	public Task UnCheckoutAsync( IReadOnlyList<int> entryIds ) => ChangeCheckoutAsync( entryIds, checkout: false );
+	public Task CheckoutAsync( IReadOnlyList<int> entryIds ) => ChangeCheckoutAsync( entryIds, checkout: true, preExpandedIds: null );
+	public Task UnCheckoutAsync( IReadOnlyList<int> entryIds ) => ChangeCheckoutAsync( entryIds, checkout: false, preExpandedIds: null );
 
 	public async Task CheckoutLatestAsync( IReadOnlyList<int> entryIds )
 	{
-		await GetLatestAsync( entryIds );
-		await CheckoutAsync( entryIds );
+		IReadOnlyList<int>? expanded = await GetLatestCoreAsync( entryIds, preExpandedIds: null );
+		if( expanded is { Count: > 0 } )
+			await ChangeCheckoutAsync( entryIds, checkout: true, preExpandedIds: expanded );
 	}
 
-	private async Task ChangeCheckoutAsync( IReadOnlyList<int> entryIds, bool checkout )
+	private async Task ChangeCheckoutAsync( IReadOnlyList<int> entryIds, bool checkout, IReadOnlyList<int>? preExpandedIds )
 	{
 		if( entryIds is null or { Count: < 1 } )
 			return;
@@ -228,7 +239,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		try
 		{
 			int me = OdooDefaults.Instance.OdooId;
-			IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
+			IReadOnlyList<int> ids = preExpandedIds ?? await ExpandWithDependenciesAsync( entryIds );
 			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync(
 				ids,
 				checkout ? null : OdooDomain.Where( "checkout_user", Operators.Equal, me ),
@@ -416,8 +427,10 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 				IReadOnlyList<int> ids = await GetDirectoryEntryIdsAsync( directoryId, withSubdirectories: true, withDeleted: true );
 				if( ids.Count == 0 )
 					return;
-				HpEntry[]? allEntries = await HpEntry.GetRecordsByIdsAsync( ids, excludedFields: DeleteExcludedFields );
-				entries = allEntries?.Where( e => e.deleted == true ).ToArray();
+				entries = await HpEntry.GetRecordsByIdsAsync(
+					ids,
+					searchFilters: OdooDomain.Where( "deleted", true ),
+					excludedFields: DeleteExcludedFields );
 			}
 			else
 			{
@@ -469,7 +482,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		if( versionId is 0 )
 			return null;
 
-		HpVersion? version = ( await HpVersion.GetRecordsByIdsAsync( [ versionId ] ) )?.FirstOrDefault();
+		HpVersion? version = ( await HpVersion.GetRecordsByIdsAsync( [ versionId ], excludedFields: HpVersion.UsualExcludedFields ) )?.FirstOrDefault();
 		if( version is null )
 			return null;
 
@@ -484,7 +497,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 
 	public async Task<IReadOnlyList<int>> DownloadVersionsAsync( IReadOnlyList<int> versionIds )
 	{
-		HpVersion[] versions = await HpVersion.GetRecordsByIdsAsync( versionIds ) ?? [];
+		HpVersion[] versions = await HpVersion.GetRecordsByIdsAsync( versionIds, excludedFields: HpVersion.UsualExcludedFields ) ?? [];
 		return ( await versions.DownloadAllAsync() ).Ids();
 	}
 }

@@ -74,8 +74,8 @@ public sealed class EntryDetailsService : IEntryDetailsService
 		if( entry.Id is null )
 			return [];
 		return [ .. ( await GetRelatedVersionsAsync( entry, nameof( HpVersion.child_ids ) ) )
-			.Select( v => new ChildrenRow { Version = v.id ?? 0, Name = v.name, BasePath = Path.Combine( v.WinPathway ?? "" ) } )
-			.OrderByDescending( r => r.Version ) ];
+			.Select( static v => new ChildrenRow { Version = v.id ?? 0, Name = v.name, BasePath = v.WinPathway ?? "" } )
+			.OrderByDescending( static r => r.Version ) ];
 	}
 
 	public async Task<List<PropertiesRow>> GetPropertiesAsync( EntryRow entry )
@@ -149,11 +149,7 @@ public sealed class EntryDetailsService : IEntryDetailsService
 			return null;
 
 		HpVersion? version = ( await HpVersion.GetRecordsByIdsAsync( [ versionId.Value ], includedFields: [ "preview_image" ] ) )?.FirstOrDefault();
-		if( version is null )
-			return null;
-		if( version.preview_image is null && !await version.GetPreviewImage() )
-			return null;
-		return version.preview_image;
+		return version?.preview_image is { Length: > 0 } bytes ? bytes : null;
 	}
 
 	public Task<byte[]?> GetLocalPreviewImageAsync( string? filePath )

@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace HackPDM.Core.SolidWorks.Format;
 
@@ -10,14 +10,12 @@ namespace HackPDM.Core.SolidWorks.Format;
 /// Each record's optional fields depend on the document version (the N in "_MO_VERSION_N/…").
 /// Field order and version gates follow the MIT-licensed openswx project's cmgrhdr_reader.
 /// </summary>
-public static partial class ConfigHeaderReader
+public static class ConfigHeaderReader
 {
 	// minimum document versions at which each optional dmConfigHeader_c field was added
 	private const int VerField4 = 1341, VerParent = 2037, VerField7 = 2136, VerAltName = 2610,
 		VerField10 = 3928, VerField11 = 11142, VerField12 = 12155, VerField13 = 12216;
-
-	[GeneratedRegex( @"^_MO_VERSION_(\d+)/" )]
-	private static partial Regex VersionStream();
+	private const string VersionPrefix = "_MO_VERSION_";
 
 	/// <summary>Reads the document version from the name of its "_MO_VERSION_N/..." streams.</summary>
 	/// <param name="store">The document's streams.</param>
@@ -25,8 +23,14 @@ public static partial class ConfigHeaderReader
 	public static int? DocumentVersion( SwStreamStore store )
 	{
 		foreach( string name in store.Names )
-			if( VersionStream().Match( name ) is { Success: true } m && int.TryParse( m.Groups[ 1 ].Value, out int v ) )
+		{
+			if( !name.StartsWith( VersionPrefix, StringComparison.Ordinal ) )
+				continue;
+			int slash = name.IndexOf( '/', VersionPrefix.Length );
+			if( slash > VersionPrefix.Length
+				&& int.TryParse( name.AsSpan( VersionPrefix.Length, slash - VersionPrefix.Length ), NumberStyles.None, CultureInfo.InvariantCulture, out int v ) )
 				return v;
+		}
 		return null;
 	}
 
@@ -44,7 +48,8 @@ public static partial class ConfigHeaderReader
 			return names;
 		try
 		{
-			Parse( new Reader( stream ), version, names );
+			var reader = new Reader( stream );
+			Parse( ref reader, version, names );
 		}
 		catch( Exception e ) when( e is ArgumentOutOfRangeException or InvalidDataException )
 		{
@@ -53,7 +58,7 @@ public static partial class ConfigHeaderReader
 		return names;
 	}
 
-	private static void Parse( Reader r, int version, Dictionary<int, string> names )
+	private static void Parse( ref Reader r, int version, Dictionary<int, string> names )
 	{
 		r.ReadObjectTag();           // dmConfigMgrHeader_c
 		int count = r.ReadCount();
@@ -76,13 +81,14 @@ public static partial class ConfigHeaderReader
 		}
 	}
 
-	private sealed class Reader( byte[] data )
+	private ref struct Reader( ReadOnlySpan<byte> data )
 	{
+		private readonly ReadOnlySpan<byte> _data = data;
 		private int _pos;
 
-		public byte U8() => _pos < data.Length ? data[ _pos++ ] : throw new InvalidDataException( "unexpected end of stream" );
-		public ushort U16() { var v = BinaryPrimitives.ReadUInt16LittleEndian( data.AsSpan( _pos ) ); _pos += 2; return v; }
-		public uint U32() { var v = BinaryPrimitives.ReadUInt32LittleEndian( data.AsSpan( _pos ) ); _pos += 4; return v; }
+		public byte U8() => _pos < _data.Length ? _data[ _pos++ ] : throw new InvalidDataException( "unexpected end of stream" );
+		public ushort U16() { var v = BinaryPrimitives.ReadUInt16LittleEndian( _data[ _pos.. ] ); _pos += 2; return v; }
+		public uint U32() { var v = BinaryPrimitives.ReadUInt32LittleEndian( _data[ _pos.. ] ); _pos += 4; return v; }
 
 		/// <summary>MFC WriteObject tag: 0xFFFF + schema + class name for a new class, or a 0x8000|index class back-reference.</summary>
 		public void ReadObjectTag()
@@ -125,9 +131,10 @@ public static partial class ConfigHeaderReader
 					length = w == 0xFFFF ? (int)U32() : w;
 				}
 				int bytes = unicode ? length * 2 : length;
-				if( length < 0 || _pos + bytes > data.Length )
+				if( length < 0 || _pos + bytes > _data.Length )
 					throw new InvalidDataException( "string runs past the end of the stream" );
-				string s = unicode ? Encoding.Unicode.GetString( data, _pos, bytes ) : Encoding.Latin1.GetString( data, _pos, bytes );
+				ReadOnlySpan<byte> slice = _data.Slice( _pos, bytes );
+				string s = unicode ? Encoding.Unicode.GetString( slice ) : Encoding.Latin1.GetString( slice );
 				_pos += bytes;
 				return s;
 			}

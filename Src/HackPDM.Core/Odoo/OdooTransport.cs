@@ -31,7 +31,7 @@ public static class OdooTransport
 		=> HttpClients.GetOrAdd( ( proxy, pooled ), key => CreateHttpClient( key.Proxy, key.Pooled ) );
 
 	internal static bool ServerClosesConnections( string url )
-		=> ClosesConnections.ContainsKey( new Uri( url ).GetLeftPart( UriPartial.Authority ) );
+		=> !ClosesConnections.IsEmpty && ClosesConnections.ContainsKey( new Uri( url ).GetLeftPart( UriPartial.Authority ) );
 
 	private static void NoteConnectionReuse( string url, HttpResponseMessage response )
 	{
@@ -53,7 +53,9 @@ public static class OdooTransport
 		CancellationToken token = default )
 	{
 		using CancellationTokenSource cts = RequestTimeout( timeout );
-		using CancellationTokenRegistration link = token.Register( cts.Cancel );
+		using CancellationTokenRegistration link = token.CanBeCanceled
+			? token.UnsafeRegister( static state => ( (CancellationTokenSource)state! ).Cancel(), cts )
+			: default;
 		HttpClient httpClient = HttpClientFor( proxy, pooled: !ServerClosesConnections( url ) );
 
 		using HttpResponseMessage response = await httpClient.PostAsJsonAsync( url, request, cts.Token );

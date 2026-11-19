@@ -50,13 +50,22 @@ public sealed class Vector4IntJsonConverter : JsonConverter<Vector4<int>>
 			string? raw = reader.GetString();
 			if( !string.IsNullOrWhiteSpace( raw ) )
 			{
-				string[] parts = raw.Trim( '(', ')', '[', ']', ' ' ).Split( ',', StringSplitOptions.TrimEntries );
-				if( parts.Length == 4
-					&& int.TryParse( parts[ 0 ], NumberStyles.Integer, CultureInfo.InvariantCulture, out int x )
-					&& int.TryParse( parts[ 1 ], NumberStyles.Integer, CultureInfo.InvariantCulture, out int y )
-					&& int.TryParse( parts[ 2 ], NumberStyles.Integer, CultureInfo.InvariantCulture, out int z )
-					&& int.TryParse( parts[ 3 ], NumberStyles.Integer, CultureInfo.InvariantCulture, out int w ) )
-					return new( x, y, z, w );
+				ReadOnlySpan<char> span = raw.AsSpan().Trim( "()[] " );
+				Span<int> coords = stackalloc int[ 4 ];
+				int count = 0;
+				while( count < 4 )
+				{
+					int comma = span.IndexOf( ',' );
+					ReadOnlySpan<char> part = ( comma >= 0 ? span[ ..comma ] : span ).Trim();
+					if( !int.TryParse( part, NumberStyles.Integer, CultureInfo.InvariantCulture, out coords[ count ] ) )
+						break;
+					count++;
+					if( comma < 0 )
+						break;
+					span = span[ ( comma + 1 ).. ];
+				}
+				if( count == 4 && span.IndexOf( ',' ) < 0 )
+					return new( coords[ 0 ], coords[ 1 ], coords[ 2 ], coords[ 3 ] );
 			}
 			return default;
 		}

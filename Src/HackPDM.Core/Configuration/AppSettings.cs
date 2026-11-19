@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace HackPDM.Core.Configuration;
@@ -14,7 +15,7 @@ public interface ISettingsProvider
 /// <summary>Thread-safe JSON file settings store written atomically via a temp file.</summary>
 public sealed class JsonFileSettingsProvider : ISettingsProvider
 {
-	private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
+	private static readonly JsonWriterOptions IndentedWriterOptions = new() { Indented = true };
 
 	private readonly object _gate = new();
 	private readonly Dictionary<string, JsonElement> _values;
@@ -47,6 +48,46 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 		{
 			if( !_values.TryGetValue( key, out JsonElement value ) || value.ValueKind == JsonValueKind.Null )
 				return defaultValue;
+
+			if( typeof( T ) == typeof( string ) )
+			{
+				if( value.ValueKind != JsonValueKind.String )
+					return defaultValue;
+				string? s = value.GetString();
+				return Unsafe.As<string?, T?>( ref s );
+			}
+			if( typeof( T ) == typeof( bool ) )
+			{
+				if( value.ValueKind is not ( JsonValueKind.True or JsonValueKind.False ) )
+					return defaultValue;
+				bool b = value.ValueKind == JsonValueKind.True;
+				return Unsafe.As<bool, T>( ref b );
+			}
+			if( typeof( T ) == typeof( int ) )
+			{
+				if( value.ValueKind != JsonValueKind.Number || !value.TryGetInt32( out int i ) )
+					return defaultValue;
+				return Unsafe.As<int, T>( ref i );
+			}
+			if( typeof( T ) == typeof( long ) )
+			{
+				if( value.ValueKind != JsonValueKind.Number || !value.TryGetInt64( out long l ) )
+					return defaultValue;
+				return Unsafe.As<long, T>( ref l );
+			}
+			if( typeof( T ) == typeof( double ) )
+			{
+				if( value.ValueKind != JsonValueKind.Number || !value.TryGetDouble( out double d ) )
+					return defaultValue;
+				return Unsafe.As<double, T>( ref d );
+			}
+			if( typeof( T ) == typeof( decimal ) )
+			{
+				if( value.ValueKind != JsonValueKind.Number || !value.TryGetDecimal( out decimal m ) )
+					return defaultValue;
+				return Unsafe.As<decimal, T>( ref m );
+			}
+
 			try
 			{
 				return value.Deserialize<T>();
@@ -159,10 +200,21 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 			if( Path.GetDirectoryName( FilePath ) is { Length: > 0 } dir )
 				Directory.CreateDirectory( dir );
 			string temp = $"{FilePath}.tmp";
-			var sorted = _values
-				.OrderBy( v => v.Key, StringComparer.Ordinal )
-				.ToDictionary( v => v.Key, v => v.Value );
-			File.WriteAllText( temp, JsonSerializer.Serialize( sorted, WriteOptions ) );
+			string[] keys = new string[ _values.Count ];
+			_values.Keys.CopyTo( keys, 0 );
+			Array.Sort( keys, StringComparer.Ordinal );
+			using( FileStream stream = new( temp, FileMode.Create, FileAccess.Write, FileShare.None, 4096 ) )
+			using( Utf8JsonWriter writer = new( stream, IndentedWriterOptions ) )
+			{
+				writer.WriteStartObject();
+				for( int i = 0; i < keys.Length; i++ )
+				{
+					string k = keys[ i ];
+					writer.WritePropertyName( k );
+					_values[ k ].WriteTo( writer );
+				}
+				writer.WriteEndObject();
+			}
 			File.Move( temp, FilePath, overwrite: true );
 			return null;
 		}

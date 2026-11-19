@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 
 using HackPDM.Core.Odoo;
@@ -65,48 +66,56 @@ public static class ContentTransfer
 		CancellationToken token,
 		Action<long>? onBytes )
 	{
-		byte[] buffer = new byte[ (int)Math.Min( chunk, Math.Max( size, 1 ) ) ];
-		long offset = 0;
-		int failures = 0;
-		string? lastError = null;
-
-		while( offset < size )
+		int bufferSize = (int)Math.Min( chunk, Math.Max( size, 1 ) );
+		byte[] buffer = ArrayPool<byte>.Shared.Rent( bufferSize );
+		try
 		{
-			token.ThrowIfCancellationRequested();
-			if( failures >= MaxAttempts )
-				return Result<bool>.Fail( $"upload failed at byte {offset} of {size}: {lastError}" );
+			long offset = 0;
+			int failures = 0;
+			string? lastError = null;
 
-			stream.Position = offset;
-			int wanted = (int)Math.Min( buffer.Length, size - offset );
-			int read = await stream.ReadAtLeastAsync( buffer.AsMemory( 0, wanted ), wanted, throwOnEndOfStream: false, token );
-			if( read < wanted )
-				return Result<bool>.Fail( "the file got shorter while it was being sent" );
+			while( offset < size )
+			{
+				token.ThrowIfCancellationRequested();
+				if( failures >= MaxAttempts )
+					return Result<bool>.Fail( $"upload failed at byte {offset} of {size}: {lastError}" );
 
-			Result<int> reply = await OdooRpc.ExecuteAsync<int>(
-				UploadModel,
-				"upload_chunk",
-				[ id, offset, Convert.ToBase64String( buffer, 0, read ) ],
-				TimeoutMs( read, failures + 1 ),
-				token );
-			if( !reply.Ok )
-			{
-				failures++;
-				lastError = reply.Error;
-				continue;
+				stream.Position = offset;
+				int wanted = (int)Math.Min( bufferSize, size - offset );
+				int read = await stream.ReadAtLeastAsync( buffer.AsMemory( 0, wanted ), wanted, throwOnEndOfStream: false, token );
+				if( read < wanted )
+					return Result<bool>.Fail( "the file got shorter while it was being sent" );
+
+				Result<int> reply = await OdooRpc.ExecuteAsync<int>(
+					UploadModel,
+					"upload_chunk",
+					[ id, offset, Convert.ToBase64String( buffer, 0, read ) ],
+					TimeoutMs( read, failures + 1 ),
+					token );
+				if( !reply.Ok )
+				{
+					failures++;
+					lastError = reply.Error;
+					continue;
+				}
+				if( reply.Value > offset )
+					failures = 0;
+				else
+				{
+					failures++;
+					lastError = $"the server is at byte {reply.Value}";
+				}
+				long next = Math.Clamp( reply.Value, 0, size );
+				if( next > offset )
+					onBytes?.Invoke( next - offset );
+				offset = next;
 			}
-			if( reply.Value > offset )
-				failures = 0;
-			else
-			{
-				failures++;
-				lastError = $"the server is at byte {reply.Value}";
-			}
-			long next = Math.Clamp( reply.Value, 0, size );
-			if( next > offset )
-				onBytes?.Invoke( next - offset );
-			offset = next;
+			return Result<bool>.Success( true );
 		}
-		return Result<bool>.Success( true );
+		finally
+		{
+			ArrayPool<byte>.Shared.Return( buffer );
+		}
 	}
 
 	public static async Task<Result<string>> DownloadAsync(
@@ -117,45 +126,56 @@ public static class ContentTransfer
 		Action<long>? onBytes = null )
 	{
 		using IncrementalHash sha1 = IncrementalHash.CreateHash( HashAlgorithmName.SHA1 );
-		long offset = 0;
-		int failures = 0;
-
-		while( offset < size )
+		byte[]? decodeBuffer = null;
+		try
 		{
-			token.ThrowIfCancellationRequested();
-			int wanted = (int)Math.Min( ChunkBytes, size - offset );
-			Result<OdooRow> reply = await OdooRpc.ExecuteAsync<OdooRow>(
-				HpVersion.ModelName,
-				"read_contents",
-				[ versionId, offset, wanted ],
-				TimeoutMs( wanted, failures + 1 ),
-				token );
-			if( !reply.Ok )
-			{
-				if( ++failures >= MaxAttempts )
-					return Result<string>.Fail( $"download failed at byte {offset} of {size}: {reply.Error}" );
-				continue;
-			}
+			long offset = 0;
+			int failures = 0;
 
-			byte[] piece;
-			try
+			while( offset < size )
 			{
-				piece = Convert.FromBase64String( reply.Value?.Text( "data" ) ?? "" );
-			}
-			catch( FormatException )
-			{
-				return Result<string>.Fail( "the server sent data that is not base64" );
-			}
-			if( piece.Length == 0 )
-				return Result<string>.Fail( $"the server's file ended at byte {offset} of {size}" );
+				token.ThrowIfCancellationRequested();
+				int wanted = (int)Math.Min( ChunkBytes, size - offset );
+				Result<OdooRow> reply = await OdooRpc.ExecuteAsync<OdooRow>(
+					HpVersion.ModelName,
+					"read_contents",
+					[ versionId, offset, wanted ],
+					TimeoutMs( wanted, failures + 1 ),
+					token );
+				if( !reply.Ok )
+				{
+					if( ++failures >= MaxAttempts )
+						return Result<string>.Fail( $"download failed at byte {offset} of {size}: {reply.Error}" );
+					continue;
+				}
 
-			await destination.WriteAsync( piece, token );
-			sha1.AppendData( piece );
-			offset += piece.Length;
-			failures = 0;
-			onBytes?.Invoke( piece.Length );
+				string b64 = reply.Value?.Text( "data" ) ?? "";
+				int maxDecoded = ( ( b64.Length * 3 ) >> 2 ) + 4;
+				if( decodeBuffer is null || decodeBuffer.Length < maxDecoded )
+				{
+					if( decodeBuffer is not null )
+						ArrayPool<byte>.Shared.Return( decodeBuffer );
+					decodeBuffer = ArrayPool<byte>.Shared.Rent( Math.Max( maxDecoded, 4096 ) );
+				}
+
+				if( !Convert.TryFromBase64String( b64, decodeBuffer, out int written ) )
+					return Result<string>.Fail( "the server sent data that is not base64" );
+				if( written == 0 )
+					return Result<string>.Fail( $"the server's file ended at byte {offset} of {size}" );
+
+				await destination.WriteAsync( decodeBuffer.AsMemory( 0, written ), token );
+				sha1.AppendData( decodeBuffer.AsSpan( 0, written ) );
+				offset += written;
+				failures = 0;
+				onBytes?.Invoke( written );
+			}
+			return Result<string>.Success( Convert.ToHexStringLower( sha1.GetHashAndReset() ) );
 		}
-		return Result<string>.Success( Convert.ToHexStringLower( sha1.GetHashAndReset() ) );
+		finally
+		{
+			if( decodeBuffer is not null )
+				ArrayPool<byte>.Shared.Return( decodeBuffer );
+		}
 	}
 
 	public static async Task<Result<byte[]>> DownloadBytesAsync( HpVersion version, CancellationToken token = default, Action<long>? onBytes = null )
@@ -164,9 +184,11 @@ public static class ContentTransfer
 		Result<string> got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, memory, token, onBytes );
 		if( !got.Ok )
 			return Result<byte[]>.Fail( got.Error );
-		return Mismatch( version, got.Value ) is { } error
-			? Result<byte[]>.Fail( error )
-			: Result<byte[]>.Success( memory.ToArray() );
+		if( Mismatch( version, got.Value ) is { } error )
+			return Result<byte[]>.Fail( error );
+		if( memory.TryGetBuffer( out ArraySegment<byte> seg ) && seg.Offset == 0 && seg.Array is { } arr && seg.Count == arr.Length )
+			return Result<byte[]>.Success( arr );
+		return Result<byte[]>.Success( memory.ToArray() );
 	}
 
 	public static async Task<Result<string>> DownloadToTempFileAsync( HpVersion version, CancellationToken token = default, Action<long>? onBytes = null )

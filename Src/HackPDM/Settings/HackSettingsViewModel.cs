@@ -16,7 +16,7 @@ using Microsoft.UI.Xaml.Data;
 namespace HackPDM.Settings;
 
 [Bindable]
-public partial class HackSettingsViewModel : ObservableObject
+public sealed partial class HackSettingsViewModel : ObservableObject
 {
 	private readonly IDialogService _dialogs;
 	private readonly IFilePickerService? _pickers;

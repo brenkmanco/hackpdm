@@ -6,7 +6,7 @@ using Uno.UI.Hosting;
 
 namespace HackPDM;
 
-public class Program
+public sealed class Program
 {
     [STAThread]
     public static void Main(string[] args)

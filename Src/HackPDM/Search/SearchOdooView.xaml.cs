@@ -1,4 +1,4 @@
-using System.Linq;
+using System.Collections.Generic;
 
 using HackPDM.Core.Services;
 
@@ -16,16 +16,34 @@ public sealed partial class SearchOdooView : Page
 	private Window? _parentWindow;
 	private bool _isMinimal;
 	private bool _suppressComboNavigate;
+	private bool? _lastCompact;
+	private bool? _lastVeryNarrow;
 
 	public SearchOdooView()
 	{
 		InitializeComponent();
 		ViewModel.LoadLookups();
 
-		OdooSearchResults.SelectionChanged += ( _, _ )
-			=> ViewModel.SelectedResults = [ .. OdooSearchResults.SelectedItems.OfType<SearchRow>() ];
-		OdooSearchPropList.SelectionChanged += ( _, _ )
-			=> ViewModel.SelectedActiveProperties = [ .. OdooSearchPropList.SelectedItems.OfType<SearchPropertiesRow>() ];
+		OdooSearchResults.SelectionChanged += ( _, _ ) =>
+		{
+			List<SearchRow> selected = new( OdooSearchResults.SelectedItems.Count );
+			foreach( object item in OdooSearchResults.SelectedItems )
+			{
+				if( item is SearchRow row )
+					selected.Add( row );
+			}
+			ViewModel.SelectedResults = selected;
+		};
+		OdooSearchPropList.SelectionChanged += ( _, _ ) =>
+		{
+			List<SearchPropertiesRow> selected = new( OdooSearchPropList.SelectedItems.Count );
+			foreach( object item in OdooSearchPropList.SelectedItems )
+			{
+				if( item is SearchPropertiesRow row )
+					selected.Add( row );
+			}
+			ViewModel.SelectedActiveProperties = selected;
+		};
 		KeyDown += SearchOdooView_KeyDown;
 		SizeChanged += ( _, _ ) => UpdateResponsiveLayout();
 		Loaded += OnLoaded;
@@ -101,47 +119,64 @@ public sealed partial class SearchOdooView : Page
 		if( _isMinimal )
 			return;
 		bool compact = ActualWidth > 0 && ActualWidth < 860;
-		FullSearchRoot.Margin = compact ? new Thickness( 10 ) : new Thickness( 16 );
-		FullSearchRoot.RowSpacing = compact ? 8 : 12;
-		QueryBuilderCard.Padding = compact ? new Thickness( 10 ) : new Thickness( 14 );
-		OdooSearchPropList.Height = compact ? 84 : 110;
-		btnSearch.MinWidth = compact ? 110 : 200;
+		bool veryNarrow = compact && ActualWidth < 430;
+		if( _lastCompact == compact && _lastVeryNarrow == veryNarrow )
+			return;
+		bool compactChanged = _lastCompact != compact;
+		_lastCompact = compact;
+		_lastVeryNarrow = veryNarrow;
 
-		QueryLayoutGrid.ColumnDefinitions.Clear();
-		QueryLayoutGrid.RowDefinitions.Clear();
+		if( compactChanged )
+		{
+			FullSearchRoot.Margin = compact ? new Thickness( 10 ) : new Thickness( 16 );
+			FullSearchRoot.RowSpacing = compact ? 8 : 12;
+			QueryBuilderCard.Padding = compact ? new Thickness( 10 ) : new Thickness( 14 );
+			OdooSearchPropList.Height = compact ? 84 : 110;
+			btnSearch.MinWidth = compact ? 110 : 200;
+
+			QueryLayoutGrid.ColumnDefinitions.Clear();
+			QueryLayoutGrid.RowDefinitions.Clear();
+			if( compact )
+			{
+				QueryLayoutGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1, GridUnitType.Star ) } );
+				QueryLayoutGrid.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
+				QueryLayoutGrid.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
+				QueryLayoutGrid.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
+
+				Grid.SetRow( FilenameSection, 0 );
+				Grid.SetColumn( FilenameSection, 0 );
+				QueryDivider.Width = double.NaN;
+				QueryDivider.Height = 1;
+				Grid.SetRow( QueryDivider, 1 );
+				Grid.SetColumn( QueryDivider, 0 );
+				Grid.SetRow( PropertySection, 2 );
+				Grid.SetColumn( PropertySection, 0 );
+			}
+			else
+			{
+				QueryLayoutGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1, GridUnitType.Star ) } );
+				QueryLayoutGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = GridLength.Auto } );
+				QueryLayoutGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1.15, GridUnitType.Star ) } );
+				QueryLayoutGrid.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
+
+				Grid.SetRow( FilenameSection, 0 );
+				Grid.SetColumn( FilenameSection, 0 );
+				QueryDivider.Width = 1;
+				QueryDivider.Height = double.NaN;
+				Grid.SetRow( QueryDivider, 0 );
+				Grid.SetColumn( QueryDivider, 1 );
+				Grid.SetRow( PropertySection, 0 );
+				Grid.SetColumn( PropertySection, 2 );
+			}
+		}
+
 		if( compact )
 		{
-			QueryLayoutGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1, GridUnitType.Star ) } );
-			QueryLayoutGrid.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
-			QueryLayoutGrid.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
-			QueryLayoutGrid.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
-
-			Grid.SetRow( FilenameSection, 0 );
-			Grid.SetColumn( FilenameSection, 0 );
-			QueryDivider.Width = double.NaN;
-			QueryDivider.Height = 1;
-			Grid.SetRow( QueryDivider, 1 );
-			Grid.SetColumn( QueryDivider, 0 );
-			Grid.SetRow( PropertySection, 2 );
-			Grid.SetColumn( PropertySection, 0 );
-			CheckboxesPanel.Orientation = ActualWidth < 430 ? Orientation.Vertical : Orientation.Horizontal;
-			CheckboxesPanel.Spacing = ActualWidth < 430 ? 4 : 8;
+			CheckboxesPanel.Orientation = veryNarrow ? Orientation.Vertical : Orientation.Horizontal;
+			CheckboxesPanel.Spacing = veryNarrow ? 4 : 8;
 		}
 		else
 		{
-			QueryLayoutGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1, GridUnitType.Star ) } );
-			QueryLayoutGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = GridLength.Auto } );
-			QueryLayoutGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1.15, GridUnitType.Star ) } );
-			QueryLayoutGrid.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
-
-			Grid.SetRow( FilenameSection, 0 );
-			Grid.SetColumn( FilenameSection, 0 );
-			QueryDivider.Width = 1;
-			QueryDivider.Height = double.NaN;
-			Grid.SetRow( QueryDivider, 0 );
-			Grid.SetColumn( QueryDivider, 1 );
-			Grid.SetRow( PropertySection, 0 );
-			Grid.SetColumn( PropertySection, 2 );
 			CheckboxesPanel.Orientation = Orientation.Horizontal;
 			CheckboxesPanel.Spacing = 16;
 		}

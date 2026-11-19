@@ -29,16 +29,28 @@ public sealed class EntrySearchService : IEntrySearchService
 	public async Task<List<SearchRow>> SearchAsync( EntrySearchQuery query )
 	{
 		OdooDomain domain = await BuildDomainAsync( query );
-		Result<IReadOnlyList<OdooRow>> found = await OdooRpc.SearchReadAsync( HpEntry.ModelName, domain, ResultFields, timeoutMs: OdooRpc.LongTimeout );
+		bool needsLocalScan = query.LocalOnly || query.DeletedRemotely;
+		int? rpcLimit = !needsLocalScan && query.MaxResults > 0 ? query.MaxResults : null;
+		Result<IReadOnlyList<OdooRow>> found = await OdooRpc.SearchReadAsync(
+			HpEntry.ModelName, domain, ResultFields, limit: rpcLimit, timeoutMs: OdooRpc.LongTimeout );
 		if( !found.Ok )
 			HackLogger.Error( "EntrySearch", $"Entry search failed: {found.Error}" );
 		IReadOnlyList<OdooRow> results = found.ValueOr( [] );
 
-		List<SearchRow> rows = query.LocalOnly || query.DeletedRemotely
-			? await Task.Run( () => FindLocalFiles( results, query.FileName, query.MaxResults, matchRemote: !query.LocalOnly ) )
-			: [ .. results.Take( query.MaxResults ).Select( ToRow ) ];
+		List<SearchRow> rows;
+		if( needsLocalScan )
+		{
+			rows = await Task.Run( () => FindLocalFiles( results, query.FileName, query.MaxResults, matchRemote: !query.LocalOnly ) );
+		}
+		else
+		{
+			int count = Math.Min( results.Count, query.MaxResults );
+			rows = new List<SearchRow>( count );
+			for( int i = 0; i < count; i++ )
+				rows.Add( ToRow( results[ i ] ) );
+		}
 
-		rows.Sort( ( a, b ) => string.CompareOrdinal( a.Name, b.Name ) );
+		rows.Sort( static ( a, b ) => string.CompareOrdinal( a.Name, b.Name ) );
 		return rows;
 	}
 
@@ -86,15 +98,28 @@ public sealed class EntrySearchService : IEntrySearchService
 			Result<IReadOnlyList<OdooRow>> matches = await OdooRpc.SearchReadAsync(
 				HpVersionProperty.ModelName, filter, [ "entry_id" ], timeoutMs: OdooRpc.LongTimeout );
 
-			IEnumerable<int> entryIds = matches.ValueOr( [] )
-				.Select( m => m.RefId( "entry_id" ) )
-				.OfType<int>()
-				.Where( id => id != 0 );
-
+			IReadOnlyList<OdooRow> rows = matches.ValueOr( [] );
 			if( candidates is null )
-				candidates = [ .. entryIds ];
+			{
+				candidates = new HashSet<int>( rows.Count );
+				for( int i = 0; i < rows.Count; i++ )
+				{
+					if( rows[ i ].RefId( "entry_id" ) is int id and not 0 )
+						candidates.Add( id );
+				}
+			}
 			else
-				candidates.IntersectWith( entryIds );
+			{
+				HashSet<int> next = new( rows.Count );
+				for( int i = 0; i < rows.Count; i++ )
+				{
+					if( rows[ i ].RefId( "entry_id" ) is int id and not 0 && candidates.Contains( id ) )
+						next.Add( id );
+				}
+				candidates = next;
+			}
+			if( candidates.Count == 0 )
+				break;
 		}
 		return candidates ?? [];
 	}
@@ -112,14 +137,14 @@ public sealed class EntrySearchService : IEntrySearchService
 		if( !pwa.Exists )
 			return [];
 
-		Dictionary<string, List<string>> remotePathsByName = [];
-		foreach( OdooRow entry in remoteResults )
+		Dictionary<string, HashSet<string>> remotePathsByName = new( StringComparer.OrdinalIgnoreCase );
+		for( int i = 0; i < remoteResults.Count; i++ )
 		{
+			OdooRow entry = remoteResults[ i ];
 			if( entry.Text( "name" ) is not string name || entry.Text( "directory_complete_name" ) is not string path )
 				continue;
-			string key = name.ToLower();
-			if( !remotePathsByName.TryGetValue( key, out List<string>? paths ) )
-				remotePathsByName[ key ] = paths = [];
+			if( !remotePathsByName.TryGetValue( name, out HashSet<string>? paths ) )
+				remotePathsByName[ name ] = paths = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
 			paths.Add( path );
 		}
 
@@ -130,7 +155,7 @@ public sealed class EntrySearchService : IEntrySearchService
 				break;
 
 			string odooPath = PwaPaths.ToServerDirectory( file.DirectoryName ) ?? "";
-			bool isRemote = remotePathsByName.TryGetValue( file.Name.ToLower(), out List<string>? paths ) && paths.Contains( odooPath );
+			bool isRemote = remotePathsByName.TryGetValue( file.Name, out HashSet<string>? paths ) && paths.Contains( odooPath );
 			if( isRemote == matchRemote )
 				rows.Add( new SearchRow { Id = null, Name = file.Name, Directory = file.DirectoryName } );
 		}

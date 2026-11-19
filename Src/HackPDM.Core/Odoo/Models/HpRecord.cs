@@ -37,7 +37,12 @@ public abstract class MultiRecord : IList<HpModel?>
 
 	protected MultiRecord() { }
 	protected MultiRecord( IEnumerable<int> ids )
-		=> _items.AddRange( ids.Select( id => (HpModel?)new HpModel { id = id } ) );
+	{
+		if( ids is ICollection<int> col )
+			_items.EnsureCapacity( col.Count );
+		foreach( int id in ids )
+			_items.Add( new HpModel { id = id } );
+	}
 
 	public HpModel?[]? Ids
 	{
@@ -50,7 +55,21 @@ public abstract class MultiRecord : IList<HpModel?>
 		}
 	}
 
-	public int[] IdValues => [ .. _items.Select( m => m?.id ).OfType<int>() ];
+	public int[] IdValues
+	{
+		get
+		{
+			if( _items.Count == 0 )
+				return [];
+			List<int> ids = new( _items.Count );
+			for( int i = 0; i < _items.Count; i++ )
+			{
+				if( _items[ i ]?.id is int id )
+					ids.Add( id );
+			}
+			return [ .. ids ];
+		}
+	}
 	public static implicit operator int[]( MultiRecord? multi ) => multi?.IdValues ?? [];
 
 	public HpModel? this[ int index ] { get => _items[ index ]; set => _items[ index ] = value; }
@@ -103,6 +122,7 @@ public abstract class HpRecordBase
 	public abstract string HpModel { get; }
 	public abstract bool TrySetField( string field, object? value );
 	public abstract Dictionary<string, object?> ToOdoo();
+	protected virtual Dictionary<string, object?> ToOdoo( string[]? excludedFields ) => ToOdoo();
 	public virtual void CompleteConstruction() { }
 
 	public override string ToString() => $"{id}";
@@ -121,15 +141,18 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 		string[]? included = null,
 		string[]? insert = null )
 	{
-		HashSet<string>? excludedSet = excluded is null ? null : new HashSet<string>( excluded );
-		HashSet<string>? includedSet = included is null ? null : new HashSet<string>( included );
+		if( excluded is null && included is null && insert is null )
+			return T.AllFields;
+
+		HashSet<string>? excludedSet = excluded is { Length: > 4 } ? new HashSet<string>( excluded ) : null;
+		HashSet<string>? includedSet = included is { Length: > 4 } ? new HashSet<string>( included ) : null;
 
 		List<string> result = new( T.AllFields.Length + ( insert?.Length ?? 0 ) );
 		foreach( string field in T.AllFields )
 		{
-			if( excludedSet is not null && excludedSet.Contains( field ) )
+			if( excluded is not null && ( excludedSet is not null ? excludedSet.Contains( field ) : Array.IndexOf( excluded, field ) >= 0 ) )
 				continue;
-			if( includedSet is not null && !includedSet.Contains( field ) )
+			if( included is not null && ( includedSet is not null ? !includedSet.Contains( field ) : Array.IndexOf( included, field ) < 0 ) )
 				continue;
 			result.Add( field );
 		}
@@ -152,8 +175,8 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 		string[]? insertFields = null )
 	{
 		string[] fields = GetFields( excludedFields, includedFields, insertFields );
-		Dictionary<string, object?> outbound = ToOdoo();
-		Dictionary<string, object?> values = [];
+		Dictionary<string, object?> outbound = ToOdoo( excludedFields );
+		Dictionary<string, object?> values = new( fields.Length + 2 );
 
 		foreach( string field in fields )
 		{
@@ -162,7 +185,7 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 				if( includeEmpty || value is not null )
 					values[ field ] = value;
 			}
-			else if( insertFields is not null && insertFields.Contains( field ) )
+			else if( insertFields is not null && Array.IndexOf( insertFields, field ) >= 0 )
 			{
 				object? inserted = HashedValues.GetValueOrDefault( field );
 				if( includeEmpty || inserted is not null )
@@ -378,15 +401,37 @@ public static class Repository<T> where T : HpRecord<T>, IOdooModel<T>, new()
 	}
 
 	public static T[] Populate( IEnumerable<IReadOnlyDictionary<string, object?>> rows, string[]? excludedFields = null )
-		=> [ .. rows.Select( row =>
+	{
+		if( rows is IReadOnlyCollection<IReadOnlyDictionary<string, object?>> col )
+		{
+			if( col.Count == 0 )
+				return [];
+			T[] array = new T[ col.Count ];
+			int i = 0;
+			foreach( IReadOnlyDictionary<string, object?> row in col )
+			{
+				T record = new();
+				Assign( record, row );
+				record.IsRecord = true;
+				record.ExcludedFields = excludedFields;
+				record.CompleteConstruction();
+				array[ i++ ] = record;
+			}
+			return array;
+		}
+
+		List<T> list = [];
+		foreach( IReadOnlyDictionary<string, object?> row in rows )
 		{
 			T record = new();
 			Assign( record, row );
 			record.IsRecord = true;
 			record.ExcludedFields = excludedFields;
 			record.CompleteConstruction();
-			return record;
-		} ) ];
+			list.Add( record );
+		}
+		return [ .. list ];
+	}
 
 	public static void Assign( T record, IReadOnlyDictionary<string, object?> row )
 	{
@@ -394,6 +439,8 @@ public static class Repository<T> where T : HpRecord<T>, IOdooModel<T>, new()
 			record.id = id;
 		foreach( var (field, value) in row )
 		{
+			if( field == "id" )
+				continue;
 			if( !record.TrySetField( field, value ) )
 				record.HashedValues[ field ] = value;
 		}
@@ -430,9 +477,17 @@ public sealed record RemoteEntryDto(
 		Deleted: row.Bool( "deleted" ) );
 
 	internal static IReadOnlyList<RemoteEntryDto> ListFrom( IReadOnlyDictionary<string, object?>? map )
-		=> map is null
-			? []
-			: [ .. map.Select( p => p.Value is IReadOnlyDictionary<string, object?> row ? FromRow( p.Key, row ) : null ).OfType<RemoteEntryDto>() ];
+	{
+		if( map is null || map.Count == 0 )
+			return [];
+		List<RemoteEntryDto> list = new( map.Count );
+		foreach( var (key, value) in map )
+		{
+			if( value is IReadOnlyDictionary<string, object?> row )
+				list.Add( FromRow( key, row ) );
+		}
+		return list;
+	}
 }
 
 public sealed record SubdirectoryDto(
@@ -441,13 +496,30 @@ public sealed record SubdirectoryDto(
 	IReadOnlyList<SubdirectoryDto> Directories,
 	IReadOnlyList<RemoteEntryDto> Entries )
 {
-	internal static SubdirectoryDto FromRow( IReadOnlyDictionary<string, object?> row ) => new(
-		Id: row.Int( "id" ) ?? 0,
-		Name: row.Text( "name" ) ?? "",
-		Directories: [ .. ( row.Object( "directories" ) ?? new Dictionary<string, object?>() ).Values
-			.OfType<IReadOnlyDictionary<string, object?>>()
-			.Select( FromRow ) ],
-		Entries: RemoteEntryDto.ListFrom( row.Object( "entries" ) ) );
+	internal static SubdirectoryDto FromRow( IReadOnlyDictionary<string, object?> row )
+	{
+		IReadOnlyDictionary<string, object?>? dirsObj = row.Object( "directories" );
+		IReadOnlyList<SubdirectoryDto> dirs;
+		if( dirsObj is null || dirsObj.Count == 0 )
+		{
+			dirs = [];
+		}
+		else
+		{
+			List<SubdirectoryDto> list = new( dirsObj.Count );
+			foreach( object? value in dirsObj.Values )
+			{
+				if( value is IReadOnlyDictionary<string, object?> subRow )
+					list.Add( FromRow( subRow ) );
+			}
+			dirs = list;
+		}
+		return new(
+			Id: row.Int( "id" ) ?? 0,
+			Name: row.Text( "name" ) ?? "",
+			Directories: dirs,
+			Entries: RemoteEntryDto.ListFrom( row.Object( "entries" ) ) );
+	}
 }
 
 public readonly record struct LastAvailableDirectory( int Index, int DirectoryId );

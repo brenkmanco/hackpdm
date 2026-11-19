@@ -1,3 +1,6 @@
+using System.Collections.Frozen;
+using System.Text.RegularExpressions;
+
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Credentials;
 using HackPDM.Core.Odoo.Models;
@@ -76,7 +79,7 @@ public sealed class OdooConnectionSettings( ISettingsProvider? settings )
 
 	public string? OdooUrl
 	{
-		get => field ??= OdooEndpoint.BuildUrl( OdooAddress, Settings?.Get<string>( "OdooPort" ), OdooUseHttps );
+		get => field ??= OdooEndpoint.BuildUrl( OdooAddress, OdooPort, OdooUseHttps );
 		set;
 	}
 
@@ -127,12 +130,14 @@ public sealed record OdooLookupCache
 	public int ConcurrencySize => MaxConcurrency is > 0 and int count ? count : DefaultConcurrency;
 
 	public string[] EntryFilterPatterns { get; init; } = [];
+	public Regex? EntryFilterRegex { get; init; }
 	public Dictionary<string, HpType> ExtToType { get; init; } = [];
 	public Dictionary<string, HpCategory> ExtToCat { get; init; } = [];
 	public Dictionary<string, HpProperty> ExtToProp { get; init; } = [];
 	public Dictionary<string, HpEntryNameFilter> ExtToFilter { get; init; } = [];
 	public Dictionary<int, HpProperty> IdToProp { get; init; } = [];
 	public Dictionary<int, HpUser> IdToUser { get; init; } = [];
+	public FrozenDictionary<string, HpCategory> NameToCategory { get; init; } = FrozenDictionary<string, HpCategory>.Empty;
 
 	public static Task<OdooLookupCache> LoadAsync() => LoadAsync( progress: null );
 
@@ -175,6 +180,24 @@ public sealed record OdooLookupCache
 
 		HpSetting? Setting( string name ) => settings?.FirstOrDefault( s => s.name == name );
 		Dictionary<int, HpCategory> categoryById = MapBy( categories, c => c.id ?? 0 );
+		Dictionary<string, HpCategory> nameToCategory = MapBy( categories, c => c.name );
+
+		Dictionary<string, HpType> extToType = new( StringComparer.OrdinalIgnoreCase );
+		Dictionary<string, HpCategory> extToCat = new( StringComparer.OrdinalIgnoreCase );
+		if( types is not null )
+		{
+			foreach( HpType t in types )
+			{
+				if( Extension( t.file_ext ) is not { } ext )
+					continue;
+				extToType.TryAdd( ext, t );
+				if( t.cat_id?.id is int catId && categoryById.TryGetValue( catId, out HpCategory? cat ) )
+					extToCat.TryAdd( ext, cat );
+			}
+		}
+
+		string[] patterns = [ .. filters?.Select( f => f.name_regex ).OfType<string>() ?? [] ];
+		Regex? compiledFilter = BuildFilterRegex( patterns );
 
 		return new OdooLookupCache
 		{
@@ -192,15 +215,31 @@ public sealed record OdooLookupCache
 			SwApi = !settingsRead ? null : Setting( PdmConstants.SwKeyName )?.char_value ?? "",
 			MaxBatchSize = Setting( "max_batch_size" )?.int_value,
 			MaxConcurrency = Setting( "max_concurrency" )?.int_value,
-			EntryFilterPatterns = [ .. filters?.Select( f => f.name_regex ).OfType<string>() ?? [] ],
-			ExtToFilter = MapBy( filters, f => $"{f.name_proto}" ),
+			EntryFilterPatterns = patterns,
+			EntryFilterRegex = compiledFilter,
+			ExtToFilter = MapBy( filters, f => $"{f.name_proto}", StringComparer.OrdinalIgnoreCase ),
 			IdToUser = MapBy( users, u => u.id ?? 0 ),
 			ExtToProp = MapBy( properties, p => p.name ?? "" ),
 			IdToProp = MapBy( properties, p => p.id ?? 0 ),
-			ExtToType = MapBy( types, t => Extension( t.file_ext ), StringComparer.OrdinalIgnoreCase ),
-			ExtToCat = MapBy( types?.Where( t => t.cat_id?.id is int id && categoryById.ContainsKey( id ) ), t => Extension( t.file_ext ), StringComparer.OrdinalIgnoreCase )
-				.ToDictionary( pair => pair.Key, pair => categoryById[ pair.Value.cat_id!.id!.Value ], StringComparer.OrdinalIgnoreCase ),
+			ExtToType = extToType,
+			ExtToCat = extToCat,
+			NameToCategory = nameToCategory.ToFrozenDictionary( StringComparer.Ordinal ),
 		};
+	}
+
+	internal static Regex? BuildFilterRegex( string[]? patterns )
+	{
+		if( patterns is not { Length: > 0 } )
+			return null;
+		List<string>? nonEmpty = null;
+		for( int i = 0; i < patterns.Length; i++ )
+		{
+			if( !string.IsNullOrEmpty( patterns[ i ] ) )
+				( nonEmpty ??= new( patterns.Length ) ).Add( patterns[ i ] );
+		}
+		return nonEmpty is null
+			? null
+			: new Regex( string.Join( "|", nonEmpty ), RegexOptions.IgnoreCase | RegexOptions.Compiled );
 	}
 
 	private static async Task TryAsync( Func<Task> action )
@@ -300,6 +339,8 @@ public sealed class OdooDefaults
 	public HpNode? MyNode => Lookups.MyNode;
 	public HpDirectory? HpDirectoryRoot => Lookups.HpDirectoryRoot;
 	public string[] EntryFilterPatterns => Lookups.EntryFilterPatterns;
+	public Regex? EntryFilterRegex => Lookups.EntryFilterRegex;
+	public FrozenDictionary<string, HpCategory> NameToCategory => Lookups.NameToCategory;
 	public int DownloadBatchSize => Lookups.DownloadBatchSize;
 	public int ConcurrencySize => Lookups.ConcurrencySize;
 	public int? MaxConcurrency => Lookups.MaxConcurrency;

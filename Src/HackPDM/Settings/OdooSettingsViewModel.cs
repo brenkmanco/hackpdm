@@ -15,7 +15,7 @@ using Microsoft.UI.Xaml.Data;
 namespace HackPDM.Settings;
 
 [Bindable]
-public partial class OdooSettingsViewModel : ObservableObject
+public sealed partial class OdooSettingsViewModel : ObservableObject
 {
 	private readonly IDialogService _dialogs;
 	private readonly LoginSession? _session;

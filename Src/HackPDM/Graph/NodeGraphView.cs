@@ -34,8 +34,13 @@ public sealed partial class NodeGraphView : Grid
 	private readonly Canvas _canvas = new();
 	private readonly CompositeTransform _transform = new();
 	private readonly RectangleGeometry _clip = new();
-	private readonly Dictionary<int, Border> _boxes = [];
+	private readonly Dictionary<int, (Border Border, bool IsRoot)> _boxes = [];
 	private readonly List<(EdgeRoute Route, Path Line, Path? Glow)> _links = [];
+	private readonly Dictionary<int, List<int>> _incidentLinks = [];
+	private readonly List<int> _litLinks = [];
+	private readonly Dictionary<uint, SolidColorBrush> _brushCache = [];
+	private readonly Dictionary<uint, LinearGradientBrush> _gradientCache = [];
+	private int? _selectedId;
 	private GraphLayoutResult _layout = GraphLayoutResult.Empty;
 	private GraphTheme _theme = GraphTheme.Default;
 
@@ -100,29 +105,44 @@ public sealed partial class NodeGraphView : Grid
 		_canvas.Children.Clear();
 		_boxes.Clear();
 		_links.Clear();
+		_incidentLinks.Clear();
+		_litLinks.Clear();
+		_selectedId = null;
 		SelectedNode = null;
 		_canvas.Width = layout.Width;
 		_canvas.Height = layout.Height;
 
 		if( _theme.Form.ShowGrid && layout.Nodes.Count > 0 )
 			_canvas.Children.Add( GridLines( layout ) );
-		// links under the boxes
-		foreach( EdgeRoute route in layout.Edges )
+
+		// links under the boxes, building incident link indices and port sets in a single pass
+		HashSet<int> withInput = new( layout.Edges.Count );
+		HashSet<int> withOutput = new( layout.Edges.Count );
+		for( int i = 0; i < layout.Edges.Count; i++ )
 		{
+			EdgeRoute route = layout.Edges[ i ];
 			var (line, glow) = Link( route );
 			_links.Add( (route, line, glow) );
 			if( glow is not null )
 				_canvas.Children.Add( glow );
 			_canvas.Children.Add( line );
+
+			int parent = route.Edge.Parent;
+			int child = route.Edge.Child;
+			withOutput.Add( parent );
+			withInput.Add( child );
+			AddIncident( parent, i );
+			if( child != parent )
+				AddIncident( child, i );
 		}
-		HashSet<int> withInput = [ .. layout.Edges.Select( e => e.Edge.Child ) ];
-		HashSet<int> withOutput = [ .. layout.Edges.Select( e => e.Edge.Parent ) ];
-		foreach( NodeBox box in layout.Nodes )
+
+		for( int i = 0; i < layout.Nodes.Count; i++ )
 		{
+			NodeBox box = layout.Nodes[ i ];
 			if( _theme.Form.ShadowDepth > 0 )
 				_canvas.Children.Add( DropShadow( box ) );
 			Border border = Box( box );
-			_boxes[ box.Node.Id ] = border;
+			_boxes[ box.Node.Id ] = ( border, box.IsRoot );
 			_canvas.Children.Add( border );
 			if( withInput.Contains( box.Node.Id ) )
 				_canvas.Children.Add( Port( box.InPort ) );
@@ -130,6 +150,13 @@ public sealed partial class NodeGraphView : Grid
 				_canvas.Children.Add( Port( box.OutPort ) );
 		}
 		Fit();
+	}
+
+	private void AddIncident( int nodeId, int linkIndex )
+	{
+		if( !_incidentLinks.TryGetValue( nodeId, out List<int>? list ) )
+			_incidentLinks[ nodeId ] = list = [];
+		list.Add( linkIndex );
 	}
 
 	/// <summary>Zooms and moves the drawing so the whole graph is visible and centered (never above 100%).</summary>
@@ -258,20 +285,52 @@ public sealed partial class NodeGraphView : Grid
 
 	private void Select( GraphNode? node )
 	{
+		int? nextId = node?.Id;
 		SelectedNode = node;
-		GraphPalette p = _theme.Palette;
-		foreach( var (id, border) in _boxes )
+		if( nextId == _selectedId )
 		{
-			bool root = _layout.Find( id )?.IsRoot == true;
-			border.BorderBrush = Brush( node?.Id == id ? p.SelectedBorder : root ? p.RootBorder : p.BodyBorder );
+			NodeSelected?.Invoke( node );
+			return;
 		}
-		foreach( var (route, line, glow) in _links )
+
+		GraphPalette p = _theme.Palette;
+		double normalThickness = _theme.Form.LinkThickness;
+		SolidColorBrush normalLinkBrush = Brush( p.Link );
+		SolidColorBrush normalGlowBrush = Brush( WithAlpha( p.Link, 0x38u ) );
+
+		// Restore previous selection in O(degree)
+		if( _selectedId is int prevId && _boxes.TryGetValue( prevId, out var prevBox ) )
+			prevBox.Border.BorderBrush = Brush( prevBox.IsRoot ? p.RootBorder : p.BodyBorder );
+		for( int i = 0; i < _litLinks.Count; i++ )
 		{
-			bool lit = node is not null && ( route.Edge.Parent == node.Id || route.Edge.Child == node.Id );
-			uint color = lit ? p.LinkHighlight : p.Link;
-			line.Stroke = Brush( color );
-			line.StrokeThickness = _theme.Form.LinkThickness * ( lit ? 1.5 : 1 );
-			glow?.Stroke = Brush( WithAlpha( color, lit ? 0x70u : 0x38u ) );
+			var (_, line, glow) = _links[ _litLinks[ i ] ];
+			line.Stroke = normalLinkBrush;
+			line.StrokeThickness = normalThickness;
+			glow?.Stroke = normalGlowBrush;
+		}
+		_litLinks.Clear();
+
+		// Highlight new selection in O(degree)
+		_selectedId = nextId;
+		if( nextId is int id )
+		{
+			if( _boxes.TryGetValue( id, out var curBox ) )
+				curBox.Border.BorderBrush = Brush( p.SelectedBorder );
+			if( _incidentLinks.TryGetValue( id, out List<int>? incident ) )
+			{
+				SolidColorBrush litLinkBrush = Brush( p.LinkHighlight );
+				SolidColorBrush litGlowBrush = Brush( WithAlpha( p.LinkHighlight, 0x70u ) );
+				double litThickness = normalThickness * 1.5;
+				for( int i = 0; i < incident.Count; i++ )
+				{
+					int idx = incident[ i ];
+					var (_, line, glow) = _links[ idx ];
+					line.Stroke = litLinkBrush;
+					line.StrokeThickness = litThickness;
+					glow?.Stroke = litGlowBrush;
+					_litLinks.Add( idx );
+				}
+			}
 		}
 		NodeSelected?.Invoke( node );
 	}
@@ -282,7 +341,10 @@ public sealed partial class NodeGraphView : Grid
 		GraphForm form = _theme.Form;
 		GraphPalette p = _theme.Palette;
 		uint header = p.Header( GraphThemes.KindOf( node ) );
-		string folder = System.IO.Path.GetDirectoryName( node.Path.Replace( '\\', '/' ) )?.Replace( '/', '\\' ) ?? "";
+		int lastSep = node.Path.LastIndexOfAny( [ '\\', '/' ] );
+		string folder = lastSep > 0 ? node.Path[ ..lastSep ] : "";
+		if( folder.Contains( '/' ) )
+			folder = folder.Replace( '/', '\\' );
 		string size = ByteSize.Format( node.Size, " " );
 		string flags = ( node.CheckedOut ? "  ·  checked out" : "" ) + ( node.Deleted ? "  ·  deleted" : "" );
 		double scale = 1 + GraphLayout.SizeFactor( node.Size ) * 0.35;
@@ -381,18 +443,7 @@ public sealed partial class NodeGraphView : Grid
 			row.Children.Add( side );
 		}
 
-		Brush fill = form.Header == HeaderStyle.Gradient
-			? new LinearGradientBrush
-			{
-				StartPoint = new Point( 0, 0 ),
-				EndPoint = new Point( 1, 1 ),
-				GradientStops =
-				{
-					new GradientStop { Color = ToColor( Lighten( color, 0.12 ) ), Offset = 0 },
-					new GradientStop { Color = ToColor( Darken( color, 0.45 ) ), Offset = 1 },
-				},
-			}
-			: Brush( color );
+		Brush fill = form.Header == HeaderStyle.Gradient ? GradientBrush( color ) : Brush( color );
 		return new Border
 		{
 			Background = fill,
@@ -487,11 +538,11 @@ public sealed partial class NodeGraphView : Grid
 			return Geometry( figure );
 		}
 
-		List<(double X, double Y)> pts = [ (r.FromX, r.FromY), .. r.BendPoints, (r.ToX, r.ToY) ];
-		for( int i = 0; i + 1 < pts.Count; i++ )
+		double x0 = r.FromX, y0 = r.FromY;
+		int bendCount = r.BendPoints.Count;
+		for( int i = 0; i <= bendCount; i++ )
 		{
-			var (x0, y0) = pts[ i ];
-			var (x1, y1) = pts[ i + 1 ];
+			var (x1, y1) = i < bendCount ? r.BendPoints[ i ] : ( r.ToX, r.ToY );
 			double dx = x1 - x0;
 			double dy = y1 - y0;
 			if( Math.Abs( dy ) < 0.5 || Math.Abs( dx ) < 0.5 )
@@ -509,6 +560,8 @@ public sealed partial class NodeGraphView : Grid
 					Point3 = new Point( x1, y1 ),
 				} );
 			}
+			x0 = x1;
+			y0 = y1;
 		}
 		return Geometry( figure );
 	}
@@ -527,15 +580,17 @@ public sealed partial class NodeGraphView : Grid
 			return Geometry( figure );
 		}
 
-		List<(double X, double Y)> pts = [ (r.FromX, r.FromY), .. r.BendPoints, (r.ToX, r.ToY) ];
-		for( int i = 0; i + 1 < pts.Count; i++ )
+		double x0 = r.FromX, y0 = r.FromY;
+		int bendCount = r.BendPoints.Count;
+		for( int i = 0; i <= bendCount; i++ )
 		{
-			var (x0, y0) = pts[ i ];
-			var (x1, y1) = pts[ i + 1 ];
+			var (x1, y1) = i < bendCount ? r.BendPoints[ i ] : ( r.ToX, r.ToY );
 			if( Math.Abs( y1 - y0 ) < 0.5 || Math.Abs( x1 - x0 ) < 0.5 )
 				figure.Segments.Add( new LineSegment { Point = new Point( x1, y1 ) } );
 			else
 				AppendElbowSegment( figure, x0, y0, x1, y1, x0 + ( x1 - x0 ) / 2 );
+			x0 = x1;
+			y0 = y1;
 		}
 		return Geometry( figure );
 	}
@@ -590,7 +645,36 @@ public sealed partial class NodeGraphView : Grid
 
 	private static Color ToColor( uint argb ) => Color.FromArgb( (byte)( argb >> 24 ), (byte)( argb >> 16 ), (byte)( argb >> 8 ), (byte)argb );
 
-	private static SolidColorBrush Brush( uint argb ) => new( ToColor( argb ) );
+	private SolidColorBrush Brush( uint argb )
+	{
+		if( _brushCache.TryGetValue( argb, out SolidColorBrush? cached ) )
+			return cached;
+		if( _brushCache.Count >= 256 )
+			_brushCache.Clear();
+		SolidColorBrush created = new( ToColor( argb ) );
+		_brushCache[ argb ] = created;
+		return created;
+	}
+
+	private LinearGradientBrush GradientBrush( uint color )
+	{
+		if( _gradientCache.TryGetValue( color, out LinearGradientBrush? cached ) )
+			return cached;
+		if( _gradientCache.Count >= 64 )
+			_gradientCache.Clear();
+		LinearGradientBrush created = new()
+		{
+			StartPoint = new Point( 0, 0 ),
+			EndPoint = new Point( 1, 1 ),
+			GradientStops =
+			{
+				new GradientStop { Color = ToColor( Lighten( color, 0.12 ) ), Offset = 0 },
+				new GradientStop { Color = ToColor( Darken( color, 0.45 ) ), Offset = 1 },
+			},
+		};
+		_gradientCache[ color ] = created;
+		return created;
+	}
 
 	private static uint WithAlpha( uint argb, uint alpha ) => ( argb & 0x00FFFFFF ) | ( alpha << 24 );
 

@@ -21,10 +21,10 @@ namespace HackPDM.FileManager;
 
 /// <summary>View model for the Hack File Manager page: tree, entries, grouping, sorting, details, preview, and PDM commands.</summary>
 [Bindable]
-public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
+public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 {
 	private const int MaxSingleRowUpdates = 25;
-	private static readonly Func<EntryRow, IComparable?> GroupByStatus = row => row.Status;
+	private static readonly Func<EntryRow, IComparable?> GroupByStatus = static row => row.Status;
 
 	private readonly FileManagerState _state;
 	private readonly IPdmWorkflowService _workflow;
@@ -94,7 +94,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	public event Action<EntryRow?, EntryRow?>? RowReplaced;
 
 	public bool IsDisposed { get; private set; }
-	public bool HasKeptTree => _state.Tree is not null && !_state.Stale.HasFlag( FileManagerRefresh.Tree );
+	public bool HasKeptTree => _state.Tree is not null && ( _state.Stale & FileManagerRefresh.Tree ) == 0;
 	public bool IsTreeLoaded { get; set; }
 	public bool IsListLoaded { get; set; }
 	public bool IsFiltered { get; set; } = true;
@@ -168,7 +168,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 
 	public Func<EntryRow, IComparable?>? ActiveGroupKey => IsGroupingEnabled ? _groupKey : null;
 	public string ActiveGroupFieldName => _state.GroupField ?? nameof( EntryRow.Status );
-	public IReadOnlyCollection<string> ExpandedPaths => _state.ExpandedPaths;
+	public IReadOnlySet<string> ExpandedPaths => _state.ExpandedPaths;
 	public (string Field, bool Descending)? EntrySort => _state.Sort;
 	public HistoryRow? SelectedHistory { get; set; }
 
@@ -201,7 +201,15 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		{
 			field = value;
 			if( IsListLoaded && !IsDisposed )
-				_state.SelectedEntryNames = [ .. value.Select( r => r.Name ).OfType<string>() ];
+			{
+				List<string> names = new( value.Count );
+				for( int i = 0; i < value.Count; i++ )
+				{
+					if( value[ i ].Name is { } name )
+						names.Add( name );
+				}
+				_state.SelectedEntryNames = names;
+			}
 			UpdateSelectionLabel( value );
 		}
 	} = [];
@@ -242,8 +250,10 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 			_localFiles.Changed -= OnLocalFilesChanged;
 			_localFiles.Overflowed -= OnLocalChangesLost;
 		}
-		_pageCancellation.Cancel();
-		_detailsCancellation.Cancel();
+		try { _pageCancellation.Cancel(); }
+		finally { _pageCancellation.Dispose(); }
+		try { _detailsCancellation.Cancel(); }
+		finally { _detailsCancellation.Dispose(); }
 		GC.SuppressFinalize( this );
 	}
 
@@ -275,7 +285,14 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		_selectionToRestore = [];
 		if( names.Count == 0 || !string.Equals( LastSelectedNodePath, _selectionFolder, StringComparison.OrdinalIgnoreCase ) )
 			return [];
-		return [ .. Entries.Where( r => r.Name is { } name && names.Contains( name ) ) ];
+		HashSet<string> nameSet = new( names, StringComparer.Ordinal );
+		List<EntryRow> matched = new( Math.Min( names.Count, Entries.Count ) );
+		for( int i = 0; i < Entries.Count; i++ )
+		{
+			if( Entries[ i ].Name is { } name && nameSet.Contains( name ) )
+				matched.Add( Entries[ i ] );
+		}
+		return matched;
 	}
 
 	private void UpdateSelectionLabel( IReadOnlyList<EntryRow> selected )
@@ -285,7 +302,9 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 			SelectionLabel = string.Empty;
 			return;
 		}
-		long totalBytes = selected.Sum( r => r.Size ?? 0L );
+		long totalBytes = 0;
+		for( int i = 0; i < selected.Count; i++ )
+			totalBytes += selected[ i ].Size ?? 0L;
 		string sizeText = totalBytes > 0 ? $" ({ByteSize.Format( totalBytes, " " )})" : string.Empty;
 		SelectionLabel = selected.Count == 1
 			? $"1 selected · {selected[ 0 ].Name}{sizeText}"
@@ -338,13 +357,16 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		try
 		{
 			await AsyncHelper.WaitUntil( () => IsTreeLoaded, 100, -1, token );
-			Entries.Clear();
 			if( SelectedDirectory is not { } directory )
+			{
+				Entries.ClearIfNonEmpty();
 				return;
+			}
 
 			bool includeDeleted = ShowInactive;
 			if( !_state.TryGetEntries( directory.TreePath, includeDeleted, out EntryListResult? result ) )
 			{
+				Entries.ClearIfNonEmpty();
 				EntriesLoadingStatus = $"Fetching {directory.Name}…";
 				IsEntriesProgressIndeterminate = true;
 				IsEmptyDirectory = false;
@@ -365,9 +387,10 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 				_state.RememberEntries( directory.TreePath, includeDeleted, result );
 			}
 
-			Entries.ReplaceAll( result.Rows );
 			if( _state.Sort is var (field, descending) && EntryRowKeys.TryGetSortKey( field, out var sortKey ) )
-				Entries.Sort( sortKey, descending );
+				Entries.ReplaceSorted( result.Rows, sortKey, descending );
+			else
+				Entries.ReplaceAll( result.Rows );
 			UpdateEntryLabels( result );
 			IsEmptyDirectory = Entries.Count == 0;
 			GroupingChanged?.Invoke();
@@ -403,13 +426,32 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	{
 		int total = result.RemoteCount + result.LocalOnlyCount;
 		int remoteOnly = Math.Max( 0, result.RemoteCount - result.LocalAndRemoteCount );
-		List<EntryRow> localPending = [ .. result.Rows.Where( r => r.Status is FileStatus.Lo or FileStatus.Lm or FileStatus.Cm ) ];
-		List<EntryRow> remotePending = [ .. result.Rows.Where( r => r.Status is FileStatus.Ro or FileStatus.Nv or FileStatus.Co or FileStatus.Dt ) ];
+		List<EntryRow> localPending = [];
+		List<EntryRow> remotePending = [];
+		int modifiedCount = 0;
+
+		for( int i = 0; i < result.Rows.Count; i++ )
+		{
+			EntryRow r = result.Rows[ i ];
+			switch( r.Status )
+			{
+				case FileStatus.Lo:
+					localPending.Add( r );
+					break;
+				case FileStatus.Lm or FileStatus.Cm:
+					localPending.Add( r );
+					modifiedCount++;
+					break;
+				case FileStatus.Ro or FileStatus.Nv or FileStatus.Co or FileStatus.Dt:
+					remotePending.Add( r );
+					break;
+			}
+		}
 
 		EntriesLabel = $"Entries: {total}";
 		EntriesLabelLocal = $"Local Only: {result.LocalOnlyCount}";
 		EntriesLabelRemote = $"Remote Only: {remoteOnly}";
-		EntriesLabelModified = $"Modified / Checked Out: {localPending.Count( r => r.Status is FileStatus.Lm or FileStatus.Cm )}";
+		EntriesLabelModified = $"Modified / Checked Out: {modifiedCount}";
 
 		LocalChanges.ReplaceAll( localPending );
 		RemoteChanges.ReplaceAll( remotePending );
@@ -451,13 +493,17 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 				if( itemServerPath is null && parentFolder is null )
 					continue;
 
-				string[] itemSegments = PwaPaths.Segments( itemServerPath );
-				bool isDirectory = change.IsDirectory
-					|| Directory.Exists( change.FullPath )
-					|| ( change.Kind == LocalChangeKind.Deleted && itemSegments.Length > 0 && _state.Tree?.FindBySegments( itemSegments ) is not null );
+				string[]? itemSegments = null;
+				bool isDirectory = change.IsDirectory || Directory.Exists( change.FullPath );
+				if( !isDirectory && change.Kind == LocalChangeKind.Deleted && _state.Tree is not null )
+				{
+					itemSegments = PwaPaths.Segments( itemServerPath );
+					isDirectory = itemSegments.Length > 0 && _state.Tree.FindBySegments( itemSegments ) is not null;
+				}
 
 				if( isDirectory )
 				{
+					itemSegments ??= PwaPaths.Segments( itemServerPath );
 					if( itemSegments.Length > 0 && _state.Tree is { } tree )
 					{
 						if( change.Kind == LocalChangeKind.Created )
@@ -541,14 +587,14 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	private async Task<bool> RefreshRowAsync( string localPath, string listedFolder )
 	{
 		string name = Path.GetFileName( localPath );
-		EntryRow? old = Entries.FirstOrDefault( r => string.Equals( r.Name, name, StringComparison.OrdinalIgnoreCase ) );
+		EntryRow? old = FindEntryByName( name, out _ );
 		EntryRow? row = await _entryList.RefreshRowAsync( old, localPath, IsFiltered );
 		if( IsDisposed || !IsListLoaded || !PwaPaths.SameTreePath( LastSelectedNodePath, listedFolder ) )
 			return false;
 
 		int index = old is null ? -1 : Entries.IndexOf( old );
 		if( index < 0 )
-			index = Entries.ToList().FindIndex( r => string.Equals( r.Name, name, StringComparison.OrdinalIgnoreCase ) );
+			FindEntryByName( name, out index );
 		EntryRow? replaced = index >= 0 ? Entries[ index ] : null;
 		if( row is null )
 		{
@@ -568,32 +614,58 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		return true;
 	}
 
+	private EntryRow? FindEntryByName( string name, out int index )
+	{
+		for( int i = 0; i < Entries.Count; i++ )
+		{
+			if( string.Equals( Entries[ i ].Name, name, StringComparison.OrdinalIgnoreCase ) )
+			{
+				index = i;
+				return Entries[ i ];
+			}
+		}
+		index = -1;
+		return null;
+	}
+
 	private void KeepListedRows()
 	{
-		List<EntryRow> rows = [ .. Entries ];
-		EntryListResult result = new(
-			rows,
-			RemoteCount: rows.Count( r => r.Id is > 0 ),
-			LocalOnlyCount: rows.Count( r => r.ReprType == EntryReprType.Local ),
-			LocalAndRemoteCount: rows.Count( r => r.ReprType == EntryReprType.Both ) );
+		List<EntryRow> rows = new( Entries.Count );
+		int remoteCount = 0;
+		int localOnlyCount = 0;
+		int localAndRemoteCount = 0;
+		for( int i = 0; i < Entries.Count; i++ )
+		{
+			EntryRow r = Entries[ i ];
+			rows.Add( r );
+			if( r.Id is > 0 )
+				remoteCount++;
+			if( r.ReprType == EntryReprType.Local )
+				localOnlyCount++;
+			else if( r.ReprType == EntryReprType.Both )
+				localAndRemoteCount++;
+		}
+		EntryListResult result = new( rows, remoteCount, localOnlyCount, localAndRemoteCount );
 		_state.RememberEntries( LastSelectedNodePath, ShowInactive, result );
 		UpdateEntryLabels( result );
 	}
 
 	public void ClearDetails()
 	{
-		OHistories.Clear();
-		OParents.Clear();
-		OChildren.Clear();
-		OProperties.Clear();
-		OVersions.Clear();
+		OHistories.ClearIfNonEmpty();
+		OParents.ClearIfNonEmpty();
+		OChildren.ClearIfNonEmpty();
+		OProperties.ClearIfNonEmpty();
+		OVersions.ClearIfNonEmpty();
 	}
 
 	public async Task ShowEntryDetailsAsync( EntryRow? entry )
 	{
-		await _detailsCancellation.CancelAsync();
-		_detailsCancellation = new();
-		CancellationToken token = _detailsCancellation.Token;
+		CancellationTokenSource prevDetails = _detailsCancellation;
+		CancellationTokenSource nextDetails = _detailsCancellation = new();
+		CancellationToken token = nextDetails.Token;
+		try { await prevDetails.CancelAsync(); }
+		finally { prevDetails.Dispose(); }
 
 		ClearDetails();
 		Preview = null;
@@ -751,7 +823,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		if( await Dialogs.ConfirmAsync( $"Are you sure you want to delete this directory and ({count}) files inside?", "Delete Directory", MessageBoxIcon.Warning ) )
 		{
 			_files.DeleteDirectory( directory );
-			await ApplyLocalChangesAsync( [ new LocalFileChange( directory, LocalChangeKind.Deleted, IsDirectory: true ) ] );
+			await ApplyLocalChangesAsync( new LocalFileChange[] { new( directory, LocalChangeKind.Deleted, IsDirectory: true ) } );
 		}
 	}
 

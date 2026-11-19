@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 using HackPDM.Core.Odoo;
@@ -55,11 +56,23 @@ public sealed partial class OperatorConverter : IValueConverter
 		=> throw new NotSupportedException();
 }
 
-/// <summary>"#AARRGGBB" or "#RRGGBB" to a SolidColorBrush.</summary>
+/// <summary>"#AARRGGBB" or "#RRGGBB" to a cached SolidColorBrush.</summary>
 public sealed partial class HexToBrushConverter : IValueConverter
 {
+	private const int MaxCacheEntries = 256;
+	private static readonly Dictionary<uint, SolidColorBrush> BrushCache = new();
+
 	public object Convert( object value, Type targetType, object parameter, string language )
-		=> new SolidColorBrush( ToColor( value as string ) );
+	{
+		Color c = ToColor( value as string );
+		uint key = ( (uint)c.A << 24 ) | ( (uint)c.R << 16 ) | ( (uint)c.G << 8 ) | c.B;
+		if( BrushCache.TryGetValue( key, out SolidColorBrush? cached ) )
+			return cached;
+		SolidColorBrush brush = new( c );
+		if( BrushCache.Count < MaxCacheEntries )
+			BrushCache[ key ] = brush;
+		return brush;
+	}
 
 	public object ConvertBack( object value, Type targetType, object parameter, string language )
 		=> throw new NotSupportedException();

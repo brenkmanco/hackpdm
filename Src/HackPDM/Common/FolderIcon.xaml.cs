@@ -25,19 +25,21 @@ public sealed partial class FolderIcon : UserControl
 
 	public static readonly DependencyProperty OriginProperty = DependencyProperty.Register(
 		nameof( Origin ), typeof( FolderOriginKind ), typeof( FolderIcon ),
-		new PropertyMetadata( FolderOriginKind.Synced, OnVisualChanged ) );
+		new PropertyMetadata( FolderOriginKind.Synced, OnOriginChanged ) );
 
 	public static readonly DependencyProperty IsOpenProperty = DependencyProperty.Register(
 		nameof( IsOpen ), typeof( bool ), typeof( FolderIcon ),
-		new PropertyMetadata( false, OnVisualChanged ) );
+		new PropertyMetadata( false, OnIsOpenChanged ) );
 
 	public static readonly DependencyProperty IsRootProperty = DependencyProperty.Register(
 		nameof( IsRoot ), typeof( bool ), typeof( FolderIcon ),
-		new PropertyMetadata( false, OnVisualChanged ) );
+		new PropertyMetadata( false, OnIsRootChanged ) );
 
 	public static readonly DependencyProperty IconSizeProperty = DependencyProperty.Register(
 		nameof( IconSize ), typeof( double ), typeof( FolderIcon ),
 		new PropertyMetadata( 18.0, OnSizeChanged ) );
+
+	private FolderOriginKind? _appliedOrigin;
 
 	public FolderOriginKind Origin
 	{
@@ -66,11 +68,19 @@ public sealed partial class FolderIcon : UserControl
 	public FolderIcon()
 	{
 		InitializeComponent();
-		UpdateVisuals();
+		ApplyIsOpen( false );
+		ApplyIsRoot( false );
+		ApplyOrigin( FolderOriginKind.Synced );
 	}
 
-	private static void OnVisualChanged( DependencyObject d, DependencyPropertyChangedEventArgs e )
-		=> ( (FolderIcon)d ).UpdateVisuals();
+	private static void OnOriginChanged( DependencyObject d, DependencyPropertyChangedEventArgs e )
+		=> ( (FolderIcon)d ).ApplyOrigin( (FolderOriginKind)e.NewValue );
+
+	private static void OnIsOpenChanged( DependencyObject d, DependencyPropertyChangedEventArgs e )
+		=> ( (FolderIcon)d ).ApplyIsOpen( (bool)e.NewValue );
+
+	private static void OnIsRootChanged( DependencyObject d, DependencyPropertyChangedEventArgs e )
+		=> ( (FolderIcon)d ).ApplyIsRoot( (bool)e.NewValue );
 
 	private static void OnSizeChanged( DependencyObject d, DependencyPropertyChangedEventArgs e )
 	{
@@ -80,15 +90,25 @@ public sealed partial class FolderIcon : UserControl
 		control.IconBox.Height = size;
 	}
 
-	private void UpdateVisuals()
+	private void ApplyIsOpen( bool open )
 	{
-		ClosedGroup.Visibility = IsOpen ? Visibility.Collapsed : Visibility.Visible;
-		OpenGroup.Visibility = IsOpen ? Visibility.Visible : Visibility.Collapsed;
-		RootAccent.Visibility = IsRoot ? Visibility.Visible : Visibility.Collapsed;
-		LocalBadge.Visibility = Origin == FolderOriginKind.LocalOnly ? Visibility.Visible : Visibility.Collapsed;
-		RemoteBadge.Visibility = Origin == FolderOriginKind.RemoteOnly ? Visibility.Visible : Visibility.Collapsed;
+		ClosedGroup.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
+		OpenGroup.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+	}
 
-		var (closed, highlight, openBack, openFront) = Origin switch
+	private void ApplyIsRoot( bool root )
+		=> RootAccent.Visibility = root ? Visibility.Visible : Visibility.Collapsed;
+
+	private void ApplyOrigin( FolderOriginKind origin )
+	{
+		if( _appliedOrigin == origin )
+			return;
+		_appliedOrigin = origin;
+
+		LocalBadge.Visibility = origin == FolderOriginKind.LocalOnly ? Visibility.Visible : Visibility.Collapsed;
+		RemoteBadge.Visibility = origin == FolderOriginKind.RemoteOnly ? Visibility.Visible : Visibility.Collapsed;
+
+		var (closed, highlight, openBack, openFront) = origin switch
 		{
 			FolderOriginKind.RemoteOnly => ( RemoteClosedBrush, RemoteHighlightBrush, RemoteOpenBackBrush, RemoteOpenFrontBrush ),
 			FolderOriginKind.LocalOnly => ( LocalClosedBrush, LocalHighlightBrush, LocalOpenBackBrush, LocalOpenFrontBrush ),

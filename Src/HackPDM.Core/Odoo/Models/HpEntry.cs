@@ -21,7 +21,7 @@ public sealed class HpEntry : HpRecord<HpEntry>, IOdooModel<HpEntry>
 
 	private HpType? TypeStore
 		=> field ??= LocalFile?.TypeExt is { } ext
-			&& OdooDefaults.Instance.ExtToType.TryGetValue( ext.ToLower(), out HpType? found )
+			&& OdooDefaults.Instance.ExtToType.TryGetValue( ext, out HpType? found )
 				? found
 				: null;
 
@@ -95,9 +95,9 @@ public sealed class HpEntry : HpRecord<HpEntry>, IOdooModel<HpEntry>
 	public HackFile? GetLocalFile()
 	{
 		if( HashedValues.GetValueOrDefault( "windows_complete_name" ) is string path )
-			return new HackFile( PwaPaths.ToAbsolute( path ) );
+			return HackFile.GetFromPath( PwaPaths.ToAbsolute( path ), computeChecksum: false );
 		if( ( dir_id?.name ?? OdooValues.Many2OneName( HashedValues.GetValueOrDefault( nameof( dir_id ) ) ) ) is { Length: > 0 } dir )
-			return new HackFile( PwaPaths.ToAbsolute( dir ) );
+			return HackFile.GetFromPath( PwaPaths.ToAbsolute( dir ), computeChecksum: false );
 		return null;
 	}
 

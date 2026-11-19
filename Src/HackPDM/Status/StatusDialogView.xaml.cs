@@ -34,6 +34,10 @@ public sealed partial class StatusDialogView : Page
 	private bool _isClosing;
 	private bool _isDocked;
 	private bool _isMinimal;
+	private bool? _lastCompactDensity;
+	private bool? _lastNarrowFooter;
+	private bool? _lastWarningsActive;
+	private bool? _lastErrorsActive;
 	private Window? _settingsWindow;
 	private DispatcherQueueTimer? _hoverCloseTimer;
 	private StatusMessage? _activeHoverKind;
@@ -45,6 +49,8 @@ public sealed partial class StatusDialogView : Page
 	private ItemsControl? _hoverItems;
 	private TextBlock? _hoverEmptyText;
 	private TextBlock? _hoverOverflowText;
+	private readonly RangeObservableCollection<BasicStatusMessage> _hoverMessages = [];
+	private readonly List<BasicStatusMessage> _hoverScratch = new( 8 );
 
 	public StatusDialogViewModel ViewModel => AppComposition.StatusLog;
 
@@ -130,10 +136,17 @@ public sealed partial class StatusDialogView : Page
 		if( _isMinimal )
 			return;
 		bool compact = ActualHeight > 0 && ActualHeight < 340;
-		FullStatusRoot.Margin = compact ? new Thickness( 10, 6, 10, 8 ) : new Thickness( 12 );
-		FullStatusRoot.RowSpacing = compact ? 4 : 8;
+		if( _lastCompactDensity != compact )
+		{
+			_lastCompactDensity = compact;
+			FullStatusRoot.Margin = compact ? new Thickness( 10, 6, 10, 8 ) : new Thickness( 12 );
+			FullStatusRoot.RowSpacing = compact ? 4 : 8;
+		}
 
 		bool narrowFooter = ActualWidth > 0 && ActualWidth < 1250;
+		if( _lastNarrowFooter == narrowFooter )
+			return;
+		_lastNarrowFooter = narrowFooter;
 		StatusFooterGrid.ColumnDefinitions.Clear();
 		StatusFooterGrid.RowDefinitions.Clear();
 		if( narrowFooter )
@@ -216,8 +229,18 @@ public sealed partial class StatusDialogView : Page
 
 	private void UpdateCategoryPillAccents()
 	{
-		ApplyPillAccent( WarningsPill, WarningsPillIcon, ViewModel.WarningCount > 0, WarningAccentBrush, WarningTintBrush );
-		ApplyPillAccent( ErrorsPill, ErrorsPillIcon, ViewModel.ErrorCount > 0, ErrorAccentBrush, ErrorTintBrush );
+		bool warningsActive = ViewModel.WarningCount > 0;
+		if( _lastWarningsActive != warningsActive )
+		{
+			_lastWarningsActive = warningsActive;
+			ApplyPillAccent( WarningsPill, WarningsPillIcon, warningsActive, WarningAccentBrush, WarningTintBrush );
+		}
+		bool errorsActive = ViewModel.ErrorCount > 0;
+		if( _lastErrorsActive != errorsActive )
+		{
+			_lastErrorsActive = errorsActive;
+			ApplyPillAccent( ErrorsPill, ErrorsPillIcon, errorsActive, ErrorAccentBrush, ErrorTintBrush );
+		}
 	}
 
 	private static void ApplyPillAccent( Border pill, FontIcon icon, bool active, Brush accent, Brush tint )
@@ -283,6 +306,7 @@ public sealed partial class StatusDialogView : Page
 
 		_hoverItems = new ItemsControl
 		{
+			ItemsSource = _hoverMessages,
 			ItemTemplate = StatusRootGrid.Resources.TryGetValue( "HoverPopupItemTemplate", out object? template ) ? template as DataTemplate : null,
 		};
 		Brush? secondary = ThemeBrush( "TextFillColorSecondaryBrush" );
@@ -327,21 +351,21 @@ public sealed partial class StatusDialogView : Page
 		};
 
 		const int maxShown = 8;
-		List<BasicStatusMessage> recent = [];
-		for( int i = source.Count - 1; i >= 0 && recent.Count < maxShown; i-- )
-			recent.Add( source[ i ] );
+		_hoverScratch.Clear();
+		for( int i = source.Count - 1; i >= 0 && _hoverScratch.Count < maxShown; i-- )
+			_hoverScratch.Add( source[ i ] );
 
 		_hoverIcon!.Glyph = glyph;
 		_hoverIcon.Foreground = accentBrush;
 		card.BorderBrush = accentBrush;
 		_hoverTitle!.Text = $"{titlePrefix} ({source.Count})";
 
-		_hoverItems!.ItemsSource = recent;
-		_hoverItems.Visibility = recent.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+		_hoverMessages.ReplaceAll( _hoverScratch );
+		_hoverItems!.Visibility = _hoverScratch.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 		_hoverEmptyText!.Text = emptyMessage;
-		_hoverEmptyText.Visibility = recent.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+		_hoverEmptyText.Visibility = _hoverScratch.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-		int hidden = source.Count - recent.Count;
+		int hidden = source.Count - _hoverScratch.Count;
 		_hoverOverflowText!.Text = hidden > 0 ? $"+{hidden} more in full Status Log…" : string.Empty;
 		_hoverOverflowText.Visibility = hidden > 0 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -458,7 +482,14 @@ public sealed partial class StatusDialogView : Page
 		page.SelectSection( "Status" );
 		window.Title = "Status Settings";
 		_settingsWindow = window;
-		window.Closed += ( _, _ ) => _settingsWindow = null;
+		window.Closed += OnSettingsWindowClosed;
+	}
+
+	private void OnSettingsWindowClosed( object sender, WindowEventArgs args )
+	{
+		if( sender is Window win )
+			win.Closed -= OnSettingsWindowClosed;
+		_settingsWindow = null;
 	}
 
 	private async void AppWindow_Closing( AppWindow sender, AppWindowClosingEventArgs args )

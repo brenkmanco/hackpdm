@@ -48,7 +48,8 @@ public static class OlePropertySet
 		if( start + 8 > data.Length )
 			return;
 		uint count = BinaryPrimitives.ReadUInt32LittleEndian( data[ ( start + 4 ).. ] );
-		var offsets = new Dictionary<uint, int>();
+		int initialCap = (int)Math.Min( count, 4096 );
+		var offsets = new Dictionary<uint, int>( initialCap );
 		for( int i = 0; i < count && start + 8 + i * 8 + 8 <= data.Length; i++ )
 		{
 			uint pid = BinaryPrimitives.ReadUInt32LittleEndian( data[ ( start + 8 + i * 8 ).. ] );
@@ -63,8 +64,11 @@ public static class OlePropertySet
 
 		if( !offsets.TryGetValue( PidDictionary, out int dictAt ) )
 			return;
-		foreach( var (pid, name) in ReadDictionary( data, dictAt, codePage, encoding ) )
+		var dictEntries = ReadDictionary( data, dictAt, codePage, encoding );
+		result.EnsureCapacity( result.Count + dictEntries.Count );
+		for( int i = 0; i < dictEntries.Count; i++ )
 		{
+			var (pid, name) = dictEntries[ i ];
 			if( pid is PidDictionary or PidCodePage || !offsets.TryGetValue( pid, out int valueAt ) )
 				continue;
 			var (type, value) = ReadValue( data, valueAt, codePage, encoding );
@@ -74,10 +78,10 @@ public static class OlePropertySet
 
 	private static List<(uint Pid, string Name)> ReadDictionary( ReadOnlySpan<byte> data, int at, int codePage, Encoding encoding )
 	{
-		var names = new List<(uint, string)>();
 		if( at + 4 > data.Length )
-			return names;
+			return [];
 		uint count = BinaryPrimitives.ReadUInt32LittleEndian( data[ at.. ] );
+		var names = new List<(uint, string)>( (int)Math.Min( count, 4096 ) );
 		int pos = at + 4;
 		for( int i = 0; i < count && pos + 8 <= data.Length; i++ )
 		{

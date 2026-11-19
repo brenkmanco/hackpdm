@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Net.Http.Headers;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -23,6 +24,8 @@ public sealed record UpdateInfo(
 public static class ClientUpdate
 {
 	private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes( 30 ) };
+	private static readonly char[] ClauseSeparators = [ ',', ';' ];
+	private static readonly SearchValues<char> WhitespaceChars = SearchValues.Create( " \t\r\n" );
 
 	public static Version Current { get; } = typeof( ClientUpdate ).Assembly.GetName().Version ?? new Version( 0, 0 );
 
@@ -56,7 +59,7 @@ public static class ClientUpdate
 				: new( false, $"Client version {FormatVersion( current )} is outside the allowed server version range '{spec}'." );
 		}
 
-		string[] rawTokens = spec.Split( [ ',', ';' ], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries );
+		string[] rawTokens = spec.Split( ClauseSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries );
 		List<string> clauses = [];
 		foreach( string token in rawTokens )
 		{
@@ -125,7 +128,7 @@ public static class ClientUpdate
 		if( string.IsNullOrWhiteSpace( source ) )
 			return Result<string>.Fail( "the server does not say where to download the client (hp.settings client_download_url)" );
 		string expected = ( sha256 ?? "" ).Trim().ToLowerInvariant();
-		if( expected.Length != 64 || expected.Any( c => !Uri.IsHexDigit( c ) ) )
+		if( !IsValidSha256Hex( expected.AsSpan() ) )
 			return Result<string>.Fail( "the server gives no valid SHA-256 for the installer (hp.settings client_download_sha256), so it cannot be checked" );
 
 		source = source.Trim();
@@ -140,6 +143,8 @@ public static class ClientUpdate
 		try
 		{
 			Directory.CreateDirectory( targetDirectory );
+			string actual;
+			using( IncrementalHash hasher = IncrementalHash.CreateHash( HashAlgorithmName.SHA256 ) )
 			await using( FileStream output = new( partial, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true ) )
 			{
 				if( web )
@@ -147,18 +152,18 @@ public static class ClientUpdate
 					using HttpResponseMessage response = await Http.GetAsync( uri, HttpCompletionOption.ResponseHeadersRead, token );
 					response.EnsureSuccessStatusCode();
 					await using Stream input = await response.Content.ReadAsStreamAsync( token );
-					await input.CopyToAsync( output, token );
+					await CopyAndHashAsync( input, output, hasher, token );
 				}
 				else
 				{
 					await using FileStream input = new( uri is { IsFile: true } ? uri.LocalPath : source, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, useAsync: true );
-					await input.CopyToAsync( output, token );
+					await CopyAndHashAsync( input, output, hasher, token );
 				}
+				Span<byte> digest = stackalloc byte[ SHA256.HashSizeInBytes ];
+				hasher.GetHashAndReset( digest );
+				actual = Convert.ToHexStringLower( digest );
 			}
 
-			string actual;
-			await using( FileStream check = File.OpenRead( partial ) )
-				actual = Convert.ToHexStringLower( await SHA256.HashDataAsync( check, token ) );
 			if( actual != expected )
 			{
 				File.Delete( partial );
@@ -183,6 +188,36 @@ public static class ClientUpdate
 		}
 	}
 
+	private static async Task CopyAndHashAsync( Stream input, Stream output, IncrementalHash hasher, CancellationToken token )
+	{
+		byte[] buffer = ArrayPool<byte>.Shared.Rent( 64 * 1024 );
+		try
+		{
+			int read;
+			while( ( read = await input.ReadAsync( buffer.AsMemory( 0, buffer.Length ), token ) ) > 0 )
+			{
+				hasher.AppendData( buffer.AsSpan( 0, read ) );
+				await output.WriteAsync( buffer.AsMemory( 0, read ), token );
+			}
+		}
+		finally
+		{
+			ArrayPool<byte>.Shared.Return( buffer );
+		}
+	}
+
+	private static bool IsValidSha256Hex( ReadOnlySpan<char> hex )
+	{
+		if( hex.Length != 64 )
+			return false;
+		for( int i = 0; i < hex.Length; i++ )
+		{
+			if( !Uri.IsHexDigit( hex[ i ] ) )
+				return false;
+		}
+		return true;
+	}
+
 	private static void TryDelete( string path )
 	{
 		try { File.Delete( path ); }
@@ -193,9 +228,10 @@ public static class ClientUpdate
 	{
 		if( string.IsNullOrWhiteSpace( content ) )
 			return null;
-		string token = content.Trim().Split( [ ' ', '\t', '\r', '\n' ], StringSplitOptions.RemoveEmptyEntries ).FirstOrDefault() ?? "";
-		string normalized = token.Trim().ToLowerInvariant();
-		return normalized.Length == 64 && normalized.All( Uri.IsHexDigit ) ? normalized : null;
+		ReadOnlySpan<char> span = content.AsSpan().TrimStart();
+		int end = span.IndexOfAny( WhitespaceChars );
+		ReadOnlySpan<char> token = end >= 0 ? span[ ..end ] : span;
+		return IsValidSha256Hex( token ) ? token.ToString().ToLowerInvariant() : null;
 	}
 
 	public static string GetPlatformAssetSuffix()

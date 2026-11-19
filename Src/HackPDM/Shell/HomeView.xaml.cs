@@ -1,6 +1,6 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
-using System.Linq;
 
 using HackPDM.Common;
 using HackPDM.Core.Configuration;
@@ -31,14 +31,14 @@ namespace HackPDM.Shell;
 public sealed partial class HomeView : Page
 {
 	/// <summary>Each page and the window size, title, and menu order it uses.</summary>
-	private static readonly Dictionary<NavigatePageMenu, (Type Page, string Config, int Order)> Pages = new()
+	private static readonly FrozenDictionary<NavigatePageMenu, (Type Page, string Config, int Order)> Pages = new Dictionary<NavigatePageMenu, (Type Page, string Config, int Order)>
 	{
 		[ NavigatePageMenu.HackFileManager ] = ( typeof( HackFileManagerView ), "HackFileManager", 0 ),
 		[ NavigatePageMenu.DependencyGraph ] = ( typeof( DependencyGraphView ), "DependencyGraph", 1 ),
 		[ NavigatePageMenu.ProfileManager ] = ( typeof( ProfileManagerView ), "ProfileManager", 2 ),
 		[ NavigatePageMenu.Configuration ] = ( typeof( ConfigurationView ), "ConfigSettings", 3 ),
 		[ NavigatePageMenu.Settings ] = ( typeof( ApplicationSettingsView ), "AppSettings", 4 ),
-	};
+	}.ToFrozenDictionary();
 
 	private bool _syncingSelection;
 	private NavigatePageMenu _currentMenu = NavigatePageMenu.ProfileManager;
@@ -78,7 +78,23 @@ public sealed partial class HomeView : Page
 	}
 
 	private NavigationViewItem? ItemFor( NavigatePageMenu page )
-		=> HomeNavigator.MenuItems.OfType<NavigationViewItem>().FirstOrDefault( item => item.Tag as string == page.ToString() );
+	{
+		string name = page switch
+		{
+			NavigatePageMenu.HackFileManager => nameof( NavigatePageMenu.HackFileManager ),
+			NavigatePageMenu.DependencyGraph => nameof( NavigatePageMenu.DependencyGraph ),
+			NavigatePageMenu.ProfileManager => nameof( NavigatePageMenu.ProfileManager ),
+			NavigatePageMenu.Configuration => nameof( NavigatePageMenu.Configuration ),
+			NavigatePageMenu.Settings => nameof( NavigatePageMenu.Settings ),
+			_ => page.ToString(),
+		};
+		for( int i = 0; i < HomeNavigator.MenuItems.Count; i++ )
+		{
+			if( HomeNavigator.MenuItems[ i ] is NavigationViewItem item && string.Equals( item.Tag as string, name, StringComparison.Ordinal ) )
+				return item;
+		}
+		return null;
+	}
 
 	private void HomeNavigator_ItemInvoked( NavigationView sender, NavigationViewItemInvokedEventArgs args )
 	{
@@ -205,8 +221,8 @@ public sealed partial class HomeView : Page
 
 	private void HomeView_KeyDown( object sender, KeyRoutedEventArgs e )
 	{
-		bool ctrl = InputKeyboardSource.GetKeyStateForCurrentThread( VirtualKey.Control ).HasFlag( CoreVirtualKeyStates.Down );
-		bool alt = InputKeyboardSource.GetKeyStateForCurrentThread( VirtualKey.Menu ).HasFlag( CoreVirtualKeyStates.Down );
+		bool ctrl = ( InputKeyboardSource.GetKeyStateForCurrentThread( VirtualKey.Control ) & CoreVirtualKeyStates.Down ) != 0;
+		bool alt = ( InputKeyboardSource.GetKeyStateForCurrentThread( VirtualKey.Menu ) & CoreVirtualKeyStates.Down ) != 0;
 
 		if( alt && e.Key == VirtualKey.Left )
 		{
@@ -281,6 +297,7 @@ public sealed partial class HomeView : Page
 
 	internal void HideStatusPanelImmediate()
 	{
+		HideOverlay( _overlayElement );
 		ShellOverlayCanvas.Children.Clear();
 		DockedStatusDrawer.Visibility = StatusSplitter.Visibility = Visibility.Collapsed;
 		StatusDrawerRow.Height = new GridLength( 0 );
@@ -442,9 +459,11 @@ public sealed partial class HomeView : Page
 		_overlayFallbackHeight = height;
 
 		if( !ShellOverlayCanvas.Children.Contains( element ) )
+		{
 			ShellOverlayCanvas.Children.Add( element );
+			ShellOverlayCanvas.UpdateLayout();
+		}
 
-		ShellOverlayCanvas.UpdateLayout();
 		element.Measure( new Windows.Foundation.Size( width, 420 ) );
 		RepositionOverlay();
 	}

@@ -14,6 +14,13 @@ public interface IDirectoryTreeService
 
 public sealed class DirectoryTreeService : IDirectoryTreeService
 {
+	private static readonly EnumerationOptions RecursiveDirOptions = new()
+	{
+		RecurseSubdirectories = true,
+		IgnoreInaccessible = true,
+		ReturnSpecialDirectories = false,
+		AttributesToSkip = FileAttributes.None,
+	};
 	private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
 		? StringComparer.OrdinalIgnoreCase
 		: StringComparer.Ordinal;
@@ -28,7 +35,7 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 				return null;
 
 			string pwa = HackDefaults.Instance.PwaPathAbsolute;
-			Task<HashSet<string>> localScanTask = Task.Run( () => LocalTreePathSet( pwa ), token );
+			Task<(HashSet<string> Paths, bool RootExists)> localScanTask = Task.Run( () => LocalTreePathSet( pwa ), token );
 
 			progress?.Report( "Fetching folder structure from Odoo…" );
 			Result<SubdirectoryDto> tree = await remoteRoot.GetSubdirectoriesAsync( false );
@@ -40,11 +47,11 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 			}
 
 			progress?.Report( "Merging local workspace folders…" );
-			HashSet<string> localPaths = await localScanTask;
+			var (localPaths, rootExists) = await localScanTask;
 			return await Task.Run( () =>
 			{
 				HashSet<string> remotePaths = new( PathComparer );
-				DirectoryNode root = FromRemote( remote, parentPath: null, localPaths, remotePaths );
+				DirectoryNode root = FromRemote( remote, parentPath: null, rootExists, localPaths, remotePaths );
 				DirectoryTreeMerger.AddLocalDirectories( root, localPaths.Where( p => !remotePaths.Contains( p ) ) );
 				root.SortRecursive();
 				return root;
@@ -64,6 +71,7 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 	private static DirectoryNode FromRemote(
 		SubdirectoryDto directory,
 		string? parentPath,
+		bool rootExistsLocally,
 		HashSet<string> localPaths,
 		HashSet<string> remotePaths )
 	{
@@ -73,33 +81,33 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 
 		DirectoryNode node = new( name, directory.Id )
 		{
-			ExistsLocally = parentPath is null
-				? Directory.Exists( HackDefaults.Instance.PwaPathAbsolute )
-				: localPaths.Contains( treePath ),
+			ExistsLocally = parentPath is null ? rootExistsLocally : localPaths.Contains( treePath ),
 		};
-		foreach( SubdirectoryDto child in directory.Directories )
-			node.Children.Add( FromRemote( child, treePath, localPaths, remotePaths ) );
+		for( int i = 0; i < directory.Directories.Count; i++ )
+			node.Children.Add( FromRemote( directory.Directories[ i ], treePath, rootExistsLocally, localPaths, remotePaths ) );
 		return node;
 	}
 
-	private static HashSet<string> LocalTreePathSet( string pwa )
+	private static (HashSet<string> Paths, bool RootExists) LocalTreePathSet( string pwa )
 	{
 		HashSet<string> set = new( PathComparer );
 		if( string.IsNullOrEmpty( pwa ) || !Directory.Exists( pwa ) )
-			return set;
+			return ( set, false );
 
-		EnumerationOptions opts = new()
+		string normalizedPwa = Path.TrimEndingDirectorySeparator( Path.GetFullPath( pwa ) );
+		int prefixLen = normalizedPwa.Length;
+		foreach( string dir in Directory.EnumerateDirectories( normalizedPwa, "*", RecursiveDirOptions ) )
 		{
-			RecurseSubdirectories = true,
-			IgnoreInaccessible = true,
-			ReturnSpecialDirectories = false,
-			AttributesToSkip = FileAttributes.None,
-		};
-		foreach( string dir in Directory.EnumerateDirectories( pwa, "*", opts ) )
-		{
-			if( PwaPaths.ToServerName( dir ) is { } treePath )
-				set.Add( treePath );
+			if( dir.Length <= prefixLen )
+				continue;
+			ReadOnlySpan<char> tail = dir.AsSpan( prefixLen ).Trim( "\\/" );
+			if( tail.IsEmpty )
+				continue;
+			string treePath = tail.Contains( '/' )
+				? string.Concat( PwaPaths.Root, "\\", tail ).Replace( '/', '\\' )
+				: string.Concat( PwaPaths.Root, "\\", tail );
+			set.Add( treePath );
 		}
-		return set;
+		return ( set, true );
 	}
 }

@@ -9,6 +9,8 @@ public sealed class DirectoryNode( string name, int directoryId = 0 )
 	private static readonly StringComparison NameComparison = OperatingSystem.IsWindows()
 		? StringComparison.OrdinalIgnoreCase
 		: StringComparison.Ordinal;
+	private static readonly Comparison<DirectoryNode> ByNameIgnoreCase =
+		static ( a, b ) => StringComparer.OrdinalIgnoreCase.Compare( a.Name, b.Name );
 
 	public string Name { get; } = name;
 	public int DirectoryId { get; } = directoryId;
@@ -17,7 +19,14 @@ public sealed class DirectoryNode( string name, int directoryId = 0 )
 	public bool IsRemote => DirectoryId != 0;
 
 	public DirectoryNode? FindChild( string childName )
-		=> Children.FirstOrDefault( c => string.Equals( c.Name, childName, NameComparison ) );
+	{
+		for( int i = 0; i < Children.Count; i++ )
+		{
+			if( string.Equals( Children[ i ].Name, childName, NameComparison ) )
+				return Children[ i ];
+		}
+		return null;
+	}
 
 	public DirectoryNode? FindBySegments( ReadOnlySpan<string> segmentsBelowRoot )
 	{
@@ -47,8 +56,7 @@ public sealed class DirectoryNode( string name, int directoryId = 0 )
 			if( child is null )
 			{
 				child = new DirectoryNode( segment ) { ExistsLocally = true };
-				current.Children.Add( child );
-				current.Children.Sort( ( a, b ) => StringComparer.OrdinalIgnoreCase.Compare( a.Name, b.Name ) );
+				InsertSorted( current.Children, child );
 				changed = true;
 			}
 			else if( !child.ExistsLocally )
@@ -59,6 +67,20 @@ public sealed class DirectoryNode( string name, int directoryId = 0 )
 			current = child;
 		}
 		return changed;
+	}
+
+	private static void InsertSorted( List<DirectoryNode> list, DirectoryNode item )
+	{
+		int lo = 0, hi = list.Count;
+		while( lo < hi )
+		{
+			int mid = lo + ( ( hi - lo ) >> 1 );
+			if( StringComparer.OrdinalIgnoreCase.Compare( list[ mid ].Name, item.Name ) <= 0 )
+				lo = mid + 1;
+			else
+				hi = mid;
+		}
+		list.Insert( lo, item );
 	}
 
 	public bool MarkLocalDeleted( ReadOnlySpan<string> segmentsBelowRoot )
@@ -104,16 +126,16 @@ public sealed class DirectoryNode( string name, int directoryId = 0 )
 
 	public void SortRecursive()
 	{
-		Children.Sort( ( a, b ) => StringComparer.OrdinalIgnoreCase.Compare( a.Name, b.Name ) );
-		foreach( DirectoryNode child in Children )
-			child.SortRecursive();
+		Children.Sort( ByNameIgnoreCase );
+		for( int i = 0; i < Children.Count; i++ )
+			Children[ i ].SortRecursive();
 	}
 
 	public int CountRecursive()
 	{
 		int count = 1;
-		foreach( DirectoryNode child in Children )
-			count += child.CountRecursive();
+		for( int i = 0; i < Children.Count; i++ )
+			count += Children[ i ].CountRecursive();
 		return count;
 	}
 
@@ -125,21 +147,20 @@ public sealed class DirectoryNode( string name, int directoryId = 0 )
 
 	private static DirectoryNode? FilterNode( DirectoryNode node, string term, bool isRoot )
 	{
-		List<DirectoryNode> matchedChildren = [];
-		foreach( DirectoryNode child in node.Children )
+		List<DirectoryNode>? matchedChildren = null;
+		for( int i = 0; i < node.Children.Count; i++ )
 		{
-			if( FilterNode( child, term, isRoot: false ) is { } kept )
-				matchedChildren.Add( kept );
+			if( FilterNode( node.Children[ i ], term, isRoot: false ) is { } kept )
+				( matchedChildren ??= [] ).Add( kept );
 		}
 
-		bool selfMatches = node.Name.Contains( term, StringComparison.OrdinalIgnoreCase );
-		if( matchedChildren.Count > 0 )
+		if( matchedChildren is not null )
 		{
 			DirectoryNode copy = CloneShallow( node );
 			copy.Children.AddRange( matchedChildren );
 			return copy;
 		}
-		if( selfMatches && ( !isRoot || node.Children.Count == 0 ) )
+		if( ( !isRoot || node.Children.Count == 0 ) && node.Name.Contains( term, StringComparison.OrdinalIgnoreCase ) )
 			return CloneSubtree( node );
 		return null;
 	}
@@ -182,8 +203,10 @@ public static class DirectoryTreeMerger
 		foreach( string path in localTreePaths )
 		{
 			DirectoryNode node = root;
-			foreach( string segment in path.Split( Separators, StringSplitOptions.RemoveEmptyEntries ).Skip( 1 ) )
+			string[] segments = path.Split( Separators, StringSplitOptions.RemoveEmptyEntries );
+			for( int i = 1; i < segments.Length; i++ )
 			{
+				string segment = segments[ i ];
 				var map = ChildrenOf( node );
 				if( !map.TryGetValue( segment, out DirectoryNode? child ) )
 				{

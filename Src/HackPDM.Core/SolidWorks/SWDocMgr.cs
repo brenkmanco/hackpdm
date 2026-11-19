@@ -13,6 +13,7 @@ namespace HackPDM.Core.SolidWorks;
 public class SwDocMgr : ISwDocumentReader
 {
     private static SwDMApplication? _swDocMgr;
+    private static readonly SwFileReader PreviewReader = new();
     /// <summary>Returns the Document Manager application created by the last successful <see cref="SwDocMgr(string)"/> call.</summary>
     /// <returns>The shared application, or null when none could be created (wrong licence key, Document Manager not installed, not Windows).</returns>
     public static SwDMApplication? GetApplication() => _swDocMgr;
@@ -69,40 +70,42 @@ public class SwDocMgr : ISwDocumentReader
         // get the document
         SwDmDocumentOpenError nRetVal = 0;
         swDoc = (SwDMDocument19)Started.GetDocument(fileName, swDocType, true, out nRetVal);
-        if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
+        if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal || swDoc == null)
         {
             return !noInterrupt ? throw new Exception("Failed to open solidworks file: " + fileName) : null;
         }
 
-        // get arrays of dependency info (one-dimensional)
-        object oBrokenRefVar;
-        object oIsVirtual;
-        object oTimeStamp;
-        swSearchOpt = Started.GetSearchOptionObject();
-        string[] varDepends = (string[])swDoc.GetAllExternalReferences4(swSearchOpt, out oBrokenRefVar, out oIsVirtual, out oTimeStamp);
-        if (varDepends == null) return null;
-
-        Boolean[] blnIsVirtual = (Boolean[])oIsVirtual;
-        for (int i = 0; i < varDepends.Length; i++)
+        try
         {
+            // get arrays of dependency info (one-dimensional)
+            object oBrokenRefVar;
+            object oIsVirtual;
+            object oTimeStamp;
+            swSearchOpt = Started.GetSearchOptionObject();
+            string[] varDepends = (string[])swDoc.GetAllExternalReferences4(swSearchOpt, out oBrokenRefVar, out oIsVirtual, out oTimeStamp);
+            if (varDepends == null) return null;
 
-            // file name with absolute path
-            string strFullName = varDepends[i];
-
-            // short file name with extension
-            string strName = strFullName.Substring(strFullName.LastIndexOf("\\") + 1);
-
-            // only return non-virtual components
-            if ((bool)blnIsVirtual[i] != true)
+            Boolean[] blnIsVirtual = (Boolean[])oIsVirtual;
+            listDepends.EnsureCapacity(varDepends.Length);
+            for (int i = 0; i < varDepends.Length; i++)
             {
-                string[] strDepend = [strName, strFullName];
-                listDepends.Add(strDepend);
+                // only return non-virtual components
+                if (blnIsVirtual[i]) continue;
+
+                // file name with absolute path
+                string strFullName = varDepends[i];
+
+                // short file name with extension
+                string strName = strFullName[(strFullName.LastIndexOf('\\') + 1)..];
+                listDepends.Add([strName, strFullName]);
             }
 
+            return listDepends;
         }
-
-        swDoc.CloseDoc();
-        return listDepends;
+        finally
+        {
+            swDoc.CloseDoc();
+        }
 
     }
 
@@ -132,60 +135,61 @@ public class SwDocMgr : ISwDocumentReader
         // get the document
         SwDmDocumentOpenError nRetVal = 0;
         swDoc = (SwDMDocument)Started.GetDocument(fileName, swDocType, true, out nRetVal);
-        if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal)
+        if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal || swDoc == null)
         {
             throw new Exception("Failed to open solidworks file: " + fileName);
         }
 
-        // get document custom properties (file level properties)
-        string[] strDocPropNames = (string[])swDoc.GetCustomPropertyNames();
-        if (strDocPropNames != null)
+        try
         {
-            foreach (string strPropName in strDocPropNames)
+            // get document custom properties (file level properties)
+            string[] strDocPropNames = (string[])swDoc.GetCustomPropertyNames();
+            if (strDocPropNames != null)
             {
+                foreach (string strPropName in strDocPropNames)
+                {
+                    SwDmCustomInfoType nPropType = 0;
+                    object oPropValue = swDoc.GetCustomProperty(strPropName, out nPropType);
 
-                SwDmCustomInfoType nPropType = 0;
-                object oPropValue = swDoc.GetCustomProperty(strPropName, out nPropType);
-
-                var (strPropType, oValue) = ConvertProperty(nPropType, oPropValue);
-                lstProps.Add(Tuple.Create<string, string, string, object>("", strPropName, strPropType, oValue));
+                    var (strPropType, oValue) = ConvertProperty(nPropType, oPropValue);
+                    lstProps.Add(Tuple.Create<string, string, string, object>("", strPropName, strPropType, oValue));
+                }
             }
-        }
 
-        // drawings don't have configurations, so we can return here
-        if (swDocType == SwDmDocumentType.swDmDocumentDrawing)
-        {
+            // drawings don't have configurations, so we can return here
+            if (swDocType == SwDmDocumentType.swDmDocumentDrawing)
+            {
+                return lstProps;
+            }
+
+            // parts and assemblies have configurations
+            swCfgMgr = swDoc.ConfigurationManager;
+            string[]? cfgNames = (string[]?)swCfgMgr.GetConfigurationNames();
+            if (cfgNames != null)
+            {
+                foreach (string strConfigName in cfgNames)
+                {
+                    SwDMConfiguration swCfg = (SwDMConfiguration)swCfgMgr.GetConfigurationByName(strConfigName);
+                    string[] strCfgPropNames = (string[])swCfg.GetCustomPropertyNames();
+                    if (strCfgPropNames == null) continue;
+
+                    foreach (string strPropName in strCfgPropNames)
+                    {
+                        SwDmCustomInfoType nPropType = 0;
+                        object oPropValue = swCfg.GetCustomProperty(strPropName, out nPropType);
+
+                        var (strPropType, oValue) = ConvertProperty(nPropType, oPropValue);
+                        lstProps.Add(Tuple.Create<string, string, string, object>(strConfigName, strPropName, strPropType, oValue));
+                    }
+                }
+            }
+
             return lstProps;
         }
-
-        // parts and assemblies have configurations
-        // get a list of configs
-        List<string> lstConfigNames;
-        swCfgMgr = swDoc.ConfigurationManager;
-        lstConfigNames = new List<string>((string[])swCfgMgr.GetConfigurationNames());
-
-        // get properties
-        foreach (string strConfigName in lstConfigNames)
+        finally
         {
-
-            SwDMConfiguration swCfg = (SwDMConfiguration)swCfgMgr.GetConfigurationByName(strConfigName);
-            string[] strCfgPropNames = (string[])swCfg.GetCustomPropertyNames();
-            if (strCfgPropNames==null) continue;
-
-            foreach (string strPropName in strCfgPropNames)
-            {
-                SwDmCustomInfoType nPropType = 0;
-                object oPropValue = swCfg.GetCustomProperty(strPropName, out nPropType);
-
-                var (strPropType, oValue) = ConvertProperty(nPropType, oPropValue);
-                lstProps.Add(Tuple.Create<string, string, string, object>(strConfigName, strPropName, strPropType, oValue));
-
-            }
-
+            swDoc.CloseDoc();
         }
-
-        swDoc.CloseDoc();
-        return lstProps;
 
     }
 
@@ -202,7 +206,7 @@ public class SwDocMgr : ISwDocumentReader
     /// <summary>Reads the saved preview straight from the file through <see cref="SwFileReader"/>; needs no Document Manager call.</summary>
     /// <param name="fileName">Path of the SolidWorks file.</param>
     /// <returns>The preview as PNG bytes, or null when there is none or the file can't be read.</returns>
-    public byte[]? GetPreviewPng(string fileName) => new SwFileReader().GetPreviewPng(fileName);
+    public byte[]? GetPreviewPng(string fileName) => PreviewReader.GetPreviewPng(fileName);
 
 
 
