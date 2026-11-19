@@ -280,8 +280,8 @@ class hp_common_model(models.AbstractModel):
             if file_contents != b'':
                 try:
                     attachment = record._create_attachment(file_contents, "file_contents")
-                except:
-                    logging.warning(f"didn't create attachment {record.id}.{record.name}")
+                except (OSError, ValueError) as exc:
+                    logging.warning("didn't create attachment %s.%s: %s", record.id, record.name, exc)
                 if (attachment != None):
                     logging.info(f"attachment id {attachment.id} created for version record {attachment.res_id} named: {attachment.name}")
             else:

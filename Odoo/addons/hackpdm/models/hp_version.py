@@ -19,6 +19,21 @@ _logger = logging.getLogger(__name__)
 _IMMUTABLE_VERSION_FIELDS = frozenset(
     ("entry_id", "file_contents", "attachment_id", "node_id", "child_ids", "parent_ids", "version_property_ids"))
 _CHECKOUT_VERSION_FIELDS = frozenset(("checkout_user", "checkout_date", "checkout_node"))
+_MAX_PREVIEW_IMAGE_BYTES = 4 * 1024 * 1024  # 4 MiB cap for version preview thumbnails
+
+
+def _is_supported_preview_image(raw: bytes) -> bool:
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return True
+    if raw.startswith(b"\xff\xd8\xff"):
+        return True
+    if raw.startswith((b"GIF87a", b"GIF89a")):
+        return True
+    if raw.startswith(b"BM"):
+        return True
+    if len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return True
+    return False
 
 
 class hp_version(models.Model):
@@ -219,7 +234,35 @@ class hp_version(models.Model):
                     f"Committed versions cannot be changed ({', '.join(sorted(locked))}); commit a new version instead.")
             if _CHECKOUT_VERSION_FIELDS.intersection(vals):
                 self._check_checkout_write(vals)
+        if "preview_image" in vals:
+            self._check_preview_image_write(vals)
         return super().write(vals)
+
+    def _check_preview_image_write(self, vals):
+        """Restricts replacing preview_image to admins, the checkout holder, or the version creator,
+        and validates the uploaded image format and size."""
+        if not hp_guard.is_pdm_admin(self.env):
+            uid = self.env.uid
+            for rec in self:
+                is_creator = rec.create_uid.id == uid
+                is_checkout_holder = rec.entry_id.checkout_user.id == uid
+                if not (is_creator or is_checkout_holder):
+                    raise AccessError(
+                        "Only an administrator, the checkout holder, or the version creator can replace a preview image.")
+
+        payload = vals.get("preview_image")
+        if not payload:
+            return
+        try:
+            raw = base64.b64decode(payload, validate=True) if isinstance(payload, (str, bytes)) else None
+        except (ValueError, TypeError):
+            raw = None
+        if not raw:
+            raise ValidationError("Preview image must be valid base64 image data.")
+        if len(raw) > _MAX_PREVIEW_IMAGE_BYTES:
+            raise ValidationError("Preview image exceeds the 4 MiB maximum size.")
+        if not _is_supported_preview_image(raw):
+            raise ValidationError("Preview image must be a PNG, JPEG, BMP, GIF, or WebP image.")
 
     def _check_checkout_write(self, vals):
         """The checkout (now kept here) follows the entry's rules: a user checks out only in their own
@@ -606,8 +649,8 @@ class hp_version(models.Model):
             if file_contents != b'':
                 try:
                     attachment = record._create_attachment(file_contents, "file_contents")
-                except:
-                    logging.warning(f"didn't create attachment {record.id}.{record.name}")
+                except (OSError, ValueError) as exc:
+                    _logger.warning("didn't create attachment %s.%s: %s", record.id, record.name, exc)
                 if (attachment != None):
                     logging.info(f"attachment id {attachment.id} created for version record {attachment.res_id} named: {attachment.name}")
             else:

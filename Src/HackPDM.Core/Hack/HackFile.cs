@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -235,17 +235,19 @@ public class HackFile : HackBaseFile
 		
 		if (initFileInfo)
 		{
-			try
+			if (!string.IsNullOrEmpty(this.FullPath))
 			{
-				if (string.IsNullOrEmpty(this.FullPath))
+				try
 				{
-					throw new Exception();
+					this.Info = new(this.FullPath);
+					if (!this.Info.Exists) this.Info = null;
 				}
-
-				this.Info = new(this.FullPath);
-				if (!this.Info.Exists) this.Info = null;
+				catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+				{
+					HackPDM.Core.Logging.HackLogger.Warn("HackFile", $"Could not inspect local file metadata for '{this.FullPath}': {ex.Message}", ex);
+					this.Info = null;
+				}
 			}
-			catch { }
 		}
 		this.Name = this.Info?.Name ?? entry.Name;
 		this.DirectoryName = this.Info?.DirectoryName ?? Path.GetDirectoryName(FullPath);
@@ -267,7 +269,10 @@ public class HackFile : HackBaseFile
             {
                 Info?.LastWriteTime = OverwriteDate;
             }
-            catch { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                HackPDM.Core.Logging.HackLogger.Warn("HackFile", $"Could not set modified date on '{fullPath}': {ex.Message}", ex);
+            }
         }
     }
     internal void ApplyNonOwnerReadOnly()
@@ -280,7 +285,10 @@ public class HackFile : HackBaseFile
             {
                 Info?.Attributes |= FileAttributes.ReadOnly;
             }
-            catch { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                HackPDM.Core.Logging.HackLogger.Warn("HackFile", $"Could not set read-only attribute on '{FullPath}': {ex.Message}", ex);
+            }
         }
     }
     /// <summary>Sets the date to give the local file when it is written (see <see cref="OverwriteDate"/>).</summary>

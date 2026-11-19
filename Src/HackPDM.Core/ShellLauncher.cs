@@ -39,7 +39,7 @@ public static class ShellLauncher
 		}
 		catch( Exception e )
 		{
-			Debug.WriteLine( $"could not open {target}: {e.Message}" );
+			HackPDM.Core.Logging.HackLogger.Warn( "ShellLauncher", $"Could not open '{target}': {e.Message}", e );
 			return false;
 		}
 	}

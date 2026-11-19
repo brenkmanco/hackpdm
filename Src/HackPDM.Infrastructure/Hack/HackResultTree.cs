@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 
 using HackPDM.Infrastructure.SldWrks;
@@ -222,7 +222,7 @@ public class HackResultTree
 				{
 					// an unreadable file used to count as having no references, so an assembly
 					// could be committed without its parts; it now breaks the tree like a missing file
-					System.Diagnostics.Debug.WriteLine( $"references of {this.Value?.Hack?.FullPath} can't be read: {e}" );
+					HackPDM.Core.Logging.HackLogger.Warn( "Dependencies", $"References of '{this.Value?.Hack?.FullPath}' could not be read: {e.Message}", e );
 					this.Value?.MarkUnreadable();
 					IsProcessed = true;
 					return;

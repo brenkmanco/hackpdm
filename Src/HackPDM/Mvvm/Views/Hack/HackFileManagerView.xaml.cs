@@ -380,7 +380,7 @@ public sealed partial class HackFileManagerView : Page
 		}
 		catch( Exception ex )
 		{
-			Debug.WriteLine( $"preview failed to load: {ex.Message}" );
+			HackPDM.Core.Logging.HackLogger.Warn( "FileManager", $"Preview failed to load: {ex.Message}", ex );
 		}
 		if( request == _previewRequest )
 		{
@@ -828,7 +828,7 @@ public sealed partial class HackFileManagerView : Page
 		}
 		catch( Exception ex )
 		{
-			Debug.WriteLine( $"Unable to find search selection: {ex.Message}" );
+			HackPDM.Core.Logging.HackLogger.Warn( "FileManager", $"Unable to find search selection '{fileName}': {ex.Message}", ex );
 		}
 	}
 

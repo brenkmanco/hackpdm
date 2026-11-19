@@ -72,7 +72,7 @@ public sealed class PreviewImageLoader : IPreviewImageLoader
 		}
 		catch( Exception ex )
 		{
-			Debug.WriteLine( $"Failed to get icon: {ex.Message}" );
+			HackPDM.Core.Logging.HackLogger.Debug( "PreviewImageLoader", $"Failed to get file icon for '{filePath}': {ex.Message}", ex );
 			return null;
 		}
 #endif

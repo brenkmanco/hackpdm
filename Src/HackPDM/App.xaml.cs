@@ -11,14 +11,16 @@ using Microsoft.UI.Xaml.Controls;
 
 
 using HackPDM.Core.Hack;
+using HackPDM.Core.Logging;
 using HackPDM.Infrastructure.Odoo;
+using HackPDM.Infrastructure.Operations;
 using HackPDM.Domain.OdooModels;
 using HackPDM.Domain.Hack;
 using HackPDM.Mvvm.Models.Settings;
 using HackPDM.Mvvm.Views.Dialogs;
 using Microsoft.UI.Dispatching;
 using HackPDM.Mvvm.Views.Common.Settings;
-using System.Diagnostics;
+using System.Threading.Tasks;
 using HackPDM.Mvvm.Views.Hack;
 
 // To learn more about WinUI, the WinUI project structure,
@@ -42,6 +44,7 @@ public partial class HackApp : Application
 	public HackApp()
     {
 		InitializeComponent();
+		RegisterCrashHandlers();
 		// menus, flyouts and dialogs follow the application theme, and controls take their corners and
 		// density from the resources, all of which can only be set this early
 		var (palette, form) = HackPDM.Mvvm.Views.Common.Theming.ThemeService.ReadSavedTheme();
@@ -50,12 +53,41 @@ public partial class HackApp : Application
         Setup();
     }
 
+    private void RegisterCrashHandlers()
+    {
+        UnhandledException += (_, e) =>
+        {
+            string? dump = HackLogger.WriteCrashDump(
+                "App.UnhandledException",
+                e.Exception,
+                ClientUpdate.CurrentText,
+                context: $"ActivePage={HomePage?.GetType().Name ?? "none"}" );
+            HackLogger.Critical( "App", $"Fatal UI unhandled exception; crash dump: {dump ?? "(unavailable)"}" );
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            Exception? ex = e.ExceptionObject as Exception;
+            HackLogger.WriteCrashDump(
+                "AppDomain.UnhandledException",
+                ex,
+                ClientUpdate.CurrentText,
+                context: $"IsTerminating={e.IsTerminating}" );
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            HackLogger.Error( "TaskScheduler", "Unobserved task exception", e.Exception );
+            e.SetObserved();
+        };
+    }
+
     /// <summary>Loads the settings, then shows the home page in the main window.</summary>
     private static void ConfigureServices()
     {
         _ = AppComposition.Settings; // load the saved settings before the defaults
         AppComposition.InitializeDefaults();
-        Debug.WriteLine( $"Global data loaded from file: {UIStorage.GlobalData.IsLoadedFromFile}" );
+        HackLogger.Info( "App", $"HackPDM {ClientUpdate.CurrentText} started (UI config loaded={UIStorage.GlobalData.IsLoadedFromFile}, logs={HackLogger.LogDirectory})" );
         HomePage = new HomeView();
 
 		var rootFrame = new Frame();

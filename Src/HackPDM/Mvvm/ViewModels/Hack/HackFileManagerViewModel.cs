@@ -47,6 +47,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 	private readonly IDirectoryTreeService _directoryTree;
 	private readonly IEntryListService _entryList;
 	private readonly ILocalFileWatcher _localFiles;
+	private readonly IFilePickerService? _pickers;
 	/// <summary>One batch of local file changes at a time, in the order they came.</summary>
 	private readonly SemaphoreSlim _localChangesGate = new( 1, 1 );
 	/// <summary>More changed files than this in the shown folder at once (a whole download) reload the list instead.</summary>
@@ -85,10 +86,12 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		IOperationReporter reporter,
 		IDirectoryTreeService directoryTree,
 		IEntryListService entryList,
-		ILocalFileWatcher localFiles ) : base( dialogs, reporter )
+		ILocalFileWatcher localFiles,
+		IFilePickerService? pickers = null ) : base( dialogs, reporter )
 	{
 		_state = state;
 		_localFiles = localFiles;
+		_pickers = pickers;
 		_workflow = workflow;
 		_files = files;
 		_details = details;
@@ -260,7 +263,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		}
 		catch( Exception e )
 		{
-			Console.Error.WriteLine( $"live update failed: {e}" );
+			HackPDM.Core.Logging.HackLogger.Error( "FileManager", $"Live file update failed: {e.Message}", e );
 		}
 		finally
 		{
@@ -608,8 +611,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		catch( OperationCanceledException ) { }
 		catch( Exception e )
 		{
-			// stderr too: Debug output is invisible outside a debugger (e.g. the smoke-test log)
-			Console.Error.WriteLine( $"loading entries failed: {e}" );
+			HackPDM.Core.Logging.HackLogger.Error( "FileManager", $"Loading entries failed: {e.Message}", e );
 		}
 		finally
 		{
@@ -706,7 +708,7 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		catch( OperationCanceledException ) { }
 		catch( Exception e )
 		{
-			System.Diagnostics.Debug.WriteLine( $"loading {SelectedDetailTab} for {entry.Name} failed: {e}" );
+			HackPDM.Core.Logging.HackLogger.Warn( "FileManager", $"Loading {SelectedDetailTab} for '{entry.Name}' failed: {e.Message}", e );
 		}
 		finally
 		{
@@ -817,9 +819,13 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		Refresh( FileManagerRefresh.All );
 	}
 
-	/// <summary>Not implemented: tells the user so.</summary>
+	/// <summary>Restores the deleted entries in the selected folder and all of its subfolders, then reloads the page.</summary>
 	[RelayCommand]
-	private Task RestoreDirectoryRecursiveAsync() => Dialogs.ShowMessageAsync( "Not Implemented Yet" );
+	private async Task RestoreDirectoryRecursiveAsync()
+	{
+		await RunOperationAsync( () => _workflow.RestoreDeletedInDirectoryAsync( SelectedDirectoryId, withSubdirectories: true ), "Completed!" );
+		Refresh( FileManagerRefresh.All );
+	}
 
 	/// <summary>Commits every file directly in the selected local folder, with the files its SolidWorks documents reference.</summary>
 	[RelayCommand]
@@ -924,11 +930,16 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		Refresh( FileManagerRefresh.Entries );
 	}
 
-	/// <summary>Debug builds only: after confirmation, permanently deletes the selected entries and all their versions from the server.</summary>
+	/// <summary>PDM administrators only: after confirmation, permanently deletes the selected entries and all their versions from the server.</summary>
 	[RelayCommand]
 	private async Task PermanentDeleteSelectedAsync()
 	{
-#if DEBUG
+		if( !await _workflow.IsCurrentUserPdmAdminAsync() )
+		{
+			await Dialogs.ShowMessageAsync( "Permanent delete requires PDM Administrator permissions.", "Permission Denied", MessageBoxButtons.OK, MessageBoxIcon.Warning );
+			return;
+		}
+
 		IReadOnlyList<int> ids = RemoteIds( SelectedEntries );
 		if( ids.Count == 0 )
 		{
@@ -952,18 +963,65 @@ public partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 		}
 		await Dialogs.ShowMessageAsync( "Completed!" );
 		Refresh( FileManagerRefresh.All );
-#else
-		await Dialogs.ShowMessageAsync( "Permanent delete is only available in debug builds" );
-#endif
 	}
 
-	/// <summary>Not implemented: tells the user so when one eligible row is selected.</summary>
+	/// <summary>
+	/// Lets an admin, checkout holder, or version creator pick a local image and upload it as the
+	/// preview image for the selected committed entry's version.
+	/// </summary>
 	[RelayCommand]
-	private async Task UploadIconAsync()
+	private async Task UploadPreviewImageAsync()
 	{
-		if( SelectedEntries is not [ { FullName: not null } entry ] || !FileStatusPolicy.CanUploadIcon( entry.Status ) )
+		if( _pickers is null )
 			return;
-		await Dialogs.ShowMessageAsync( "Uploading icons is not implemented yet" );
+
+		EntryRow? entry = SelectedEntries is [ { } single ] ? single : null;
+		int? targetVersionId = SelectedHistory?.Version is int histId and > 0
+			? histId
+			: entry?.LatestId is int latestId and > 0
+				? latestId
+				: null;
+
+		if( targetVersionId is not int versionId )
+		{
+			await Dialogs.ShowMessageAsync(
+				"Select a single committed file (or a version in History) to upload a preview image.",
+				"Upload Preview Image", MessageBoxButtons.OK, MessageBoxIcon.Information );
+			return;
+		}
+
+		string? filePath = await _pickers.PickOpenFileAsync( PreviewImageValidator.SupportedExtensions );
+		if( string.IsNullOrEmpty( filePath ) )
+			return;
+
+		byte[] bytes;
+		try
+		{
+			bytes = await File.ReadAllBytesAsync( filePath );
+		}
+		catch( Exception ex )
+		{
+			await Dialogs.ShowMessageAsync( $"Could not read the selected image: {ex.Message}", "Upload Preview Image", MessageBoxButtons.OK, MessageBoxIcon.Error );
+			return;
+		}
+
+		if( PreviewImageValidator.Validate( bytes ) is { } validationError )
+		{
+			await Dialogs.ShowMessageAsync( validationError, "Invalid Image", MessageBoxButtons.OK, MessageBoxIcon.Warning );
+			return;
+		}
+
+		var result = await _details.UploadPreviewImageAsync( versionId, bytes );
+		if( !result.Ok || !result.Value )
+		{
+			await Dialogs.ShowMessageAsync(
+				result.Error ?? "Could not upload the preview image.",
+				"Upload Preview Image", MessageBoxButtons.OK, MessageBoxIcon.Error );
+			return;
+		}
+
+		Preview = new EntryPreview( bytes, null );
+		Reporter.Log( StatusMessage.SUCCESS, $"Updated preview image for {entry?.Name ?? $"version {versionId}"} (v{versionId})." );
 	}
 
 	#endregion

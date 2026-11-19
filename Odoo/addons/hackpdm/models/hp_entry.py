@@ -36,11 +36,13 @@ class hp_entry(models.Model):
     )
     windows_complete_name = fields.Char(
         compute='_compute_windows_path',
+        compute_sudo=True,
         store=True,
         string='windows directory path name',
     )
     windows_complete_path = fields.Char(
         compute='_compute_windows_path',
+        compute_sudo=True,
         string='windows directory path',
     )
 
@@ -222,7 +224,7 @@ class hp_entry(models.Model):
         """
         try:
             return next(x for x in self if key(x))
-        except:
+        except StopIteration:
             return False
 
     @api.depends('directory_complete_name', 'name')

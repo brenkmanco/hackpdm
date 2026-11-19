@@ -171,7 +171,8 @@ public static class AppComposition
 		Reporter,
 		new DirectoryTreeService(),
 		new EntryListService(),
-		LocalFiles );
+		LocalFiles,
+		FilePickers );
 
 	/// <summary>The Hack settings page's view model, fresh each time the page is built (it loads the current values).</summary>
 	/// <returns>A new view model holding the current local folder settings.</returns>

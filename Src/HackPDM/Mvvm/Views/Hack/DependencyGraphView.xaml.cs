@@ -544,7 +544,7 @@ public sealed partial class DependencyGraphView : Page
 		}
 		catch( Exception e )
 		{
-			System.Diagnostics.Debug.WriteLine( $"preview of {node.Name} failed: {e}" );
+			HackPDM.Core.Logging.HackLogger.Warn( "DependencyGraph", $"Preview of '{node.Name}' failed: {e.Message}", e );
 			if( _detailNode?.Id == node.Id )
 				InfoPreviewNone.Text = "no preview";
 		}
@@ -590,7 +590,7 @@ public sealed partial class DependencyGraphView : Page
 			}
 			catch( Exception e )
 			{
-				System.Diagnostics.Debug.WriteLine( $"{tab.Name} of {node.Name} failed: {e}" );
+				HackPDM.Core.Logging.HackLogger.Warn( "DependencyGraph", $"{tab.Name} of '{node.Name}' failed: {e.Message}", e );
 			}
 		}
 

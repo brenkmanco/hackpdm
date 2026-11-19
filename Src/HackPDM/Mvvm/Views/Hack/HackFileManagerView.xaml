@@ -807,7 +807,7 @@
 											<MenuFlyoutItem Text="Commit" Command="{x:Bind ViewModel.CommitSelectedCommand}" />
 											<MenuFlyoutSeparator />
 											<MenuFlyoutItem IsEnabled="False" Text="Restore (Soon)" />
-											<MenuFlyoutItem Text="Upload Icon" Command="{x:Bind ViewModel.UploadIconCommand}" />
+											<MenuFlyoutItem Text="Upload Preview Image" Command="{x:Bind ViewModel.UploadPreviewImageCommand}" />
 											<MenuFlyoutSeparator />
 											<MenuFlyoutSubItem x:Name="EntryDelete" Text="Delete">
 												<MenuFlyoutItem Text="Local" Command="{x:Bind ViewModel.LocalDeleteSelectedCommand}" />
@@ -1317,6 +1317,13 @@
 									VerticalAlignment="Center"
 									Orientation="Horizontal"
 									Spacing="2">
+									<Button
+										x:Name="UploadPreviewButton"
+										Padding="5,3"
+										Command="{x:Bind ViewModel.UploadPreviewImageCommand}"
+										ToolTipService.ToolTip="Upload custom preview image for selected committed file">
+										<FontIcon FontSize="11" Glyph="&#xE898;" />
+									</Button>
 									<Button
 										x:Name="EnterPipButton"
 										Padding="5,3"

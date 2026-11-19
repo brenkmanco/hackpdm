@@ -12,6 +12,7 @@ _STAGEABLE = frozenset((
 
 class hp_record_staged(models.TransientModel):
     _name = 'hp.record.staged'
+    _description = 'PDM staged record'
     _inherit = 'hp.common.model'
     # The maximum number of hours a staged record can be kept in the database before 
     # it is automatically deleted. This is to prevent the database from being filled with stale records.

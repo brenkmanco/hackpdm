@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using HackPDM.Core;
 using HackPDM.Core.General;
+using HackPDM.Core.Hack;
 using HackPDM.Domain.Representation;
 using HackPDM.Infrastructure.Odoo;
 using HackPDM.Infrastructure.Odoo.Models;
@@ -60,6 +62,12 @@ public interface IEntryDetailsService
 	/// available, or the file has no preview.</returns>
 	/// <remarks>The file is read on a thread-pool thread.</remarks>
 	Task<byte[]?> GetLocalPreviewImageAsync( string? filePath );
+
+	/// <summary>Uploads or replaces the preview image stored on the server for a committed version.</summary>
+	/// <param name="versionId">The Odoo <c>hp.version</c> id.</param>
+	/// <param name="imageBytes">Raw PNG, JPEG, BMP, GIF, or WebP image bytes.</param>
+	/// <returns>Success when written; failure with the validation or server error message otherwise.</returns>
+	Task<Result<bool>> UploadPreviewImageAsync( int versionId, byte[] imageBytes );
 }
 
 /// <inheritdoc cref="IEntryDetailsService"/>
@@ -215,5 +223,21 @@ public sealed class EntryDetailsService : IEntryDetailsService
 		if( filePath is null || !SwDocumentTypes.IsSolidWorks( filePath ) || SolidWorksUtil.DocMgr is not { } reader )
 			return Task.FromResult<byte[]?>( null );
 		return Task.Run( () => reader.GetPreviewPng( filePath ) );
+	}
+
+	/// <inheritdoc/>
+	public async Task<Result<bool>> UploadPreviewImageAsync( int versionId, byte[] imageBytes )
+	{
+		if( versionId <= 0 )
+			return Result<bool>.Fail( "Select a committed file version before uploading a preview image." );
+
+		if( PreviewImageValidator.Validate( imageBytes ) is { } validationError )
+			return Result<bool>.Fail( validationError );
+
+		Dictionary<string, object?> values = new()
+		{
+			[ "preview_image" ] = Convert.ToBase64String( imageBytes ),
+		};
+		return await OdooRpc.WriteAsync( "hp.version", [ versionId ], values );
 	}
 }

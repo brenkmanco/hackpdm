@@ -55,7 +55,7 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 			token.ThrowIfCancellationRequested();
 			if( tree.Value is not { } remote )
 			{
-				Debug.WriteLine( $"directory tree could not be read: {tree.Error}" );
+				HackPDM.Core.Logging.HackLogger.Error( "DirectoryTree", $"Directory tree could not be read: {tree.Error}" );
 				return null;
 			}
 
@@ -76,7 +76,7 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 		}
 		catch( Exception exception )
 		{
-			Debug.WriteLine( $"directory tree failed to load: {exception}" );
+			HackPDM.Core.Logging.HackLogger.Error( "DirectoryTree", $"Directory tree failed to load: {exception.Message}", exception );
 			return null;
 		}
 	}

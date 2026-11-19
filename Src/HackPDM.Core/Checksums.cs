@@ -49,7 +49,7 @@ public static class Checksums
 		}
 		catch( Exception e )
 		{
-			Debug.WriteLine( $"checksum of {path} failed: {e.Message}" );
+			HackPDM.Core.Logging.HackLogger.Warn( "Checksums", $"Checksum of '{path}' failed: {e.Message}", e );
 			return null;
 		}
 	}

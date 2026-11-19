@@ -196,7 +196,7 @@ public static class CommitStaging
 		}
 		catch( Exception ex )
 		{
-			Debug.WriteLine( ex );
+			HackPDM.Core.Logging.HackLogger.Error( "CommitStaging", $"Failed reading file contents for '{hack.FullPath}': {ex.Message}", ex );
 			return null;
 		}
 	}
@@ -212,7 +212,7 @@ public static class CommitStaging
 		}
 		catch( Exception ex )
 		{
-			Debug.WriteLine( $"no preview for {path}: {ex.Message}" );
+			HackPDM.Core.Logging.HackLogger.Debug( "CommitStaging", $"No preview extracted for '{path}': {ex.Message}", ex );
 			return null;
 		}
 	}
@@ -279,14 +279,14 @@ public static class CommitStaging
 			}
 			if( staged.Count > 0 && await HpRecordStaged.MultiCreateAsync( staged ) is { Ok: false } failed )
 			{
-				Debug.WriteLine( $"unable to stage relationships: {failed.Error}" );
+				HackPDM.Core.Logging.HackLogger.Error( "CommitStaging", $"Unable to stage relationships: {failed.Error}" );
 				return false;
 			}
 			return true;
 		}
 		catch( Exception e )
 		{
-			Debug.WriteLine( $"unable to create relationships: {e.Message}" );
+			HackPDM.Core.Logging.HackLogger.Error( "CommitStaging", $"Unable to create relationships: {e.Message}", e );
 			return false;
 		}
 	}
@@ -311,13 +311,13 @@ public static class CommitStaging
 			}
 			catch( Exception e )
 			{
-				Debug.WriteLine( $"unable to create properties for {version.id}\n{e}" );
+				HackPDM.Core.Logging.HackLogger.Error( "CommitStaging", $"Unable to create properties for staged version {version.id}: {e.Message}", e );
 				return false;
 			}
 		}
 		if( staged.Count > 0 && await HpVersionProperty.MultiStageAsync( staged ) is { Ok: false } failed )
 		{
-			Debug.WriteLine( $"unable to stage properties: {failed.Error}" );
+			HackPDM.Core.Logging.HackLogger.Error( "CommitStaging", $"Unable to stage properties: {failed.Error}" );
 			return false;
 		}
 		return true;

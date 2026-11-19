@@ -419,4 +419,20 @@ public sealed partial class StatusDialogView : Page
 		InfoLogCol.Width = new GridLength( left, GridUnitType.Star );
 		ErrorLogCol.Width = new GridLength( Math.Max( 160, totalW - left ), GridUnitType.Star );
 	}
+
+	private void CopyDiagnosticsBtn_Click( object sender, RoutedEventArgs e )
+	{
+		string summary = ViewModel.BuildDiagnosticSummary();
+		try
+		{
+			var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+			package.SetText( summary );
+			Windows.ApplicationModel.DataTransfer.Clipboard.SetContent( package );
+			ViewModel.Session.Log( StatusMessage.INFO, "Copied diagnostic summary to clipboard." );
+		}
+		catch( Exception ex )
+		{
+			HackPDM.Core.Logging.HackLogger.Warn( "StatusDialog", "Failed to copy diagnostic summary to clipboard", ex );
+		}
+	}
 }

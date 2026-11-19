@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
@@ -52,7 +52,7 @@ public class AsyncHelper
             catch (TaskCanceledException e)
             {
                 _wasCancelled = true;
-                Debug.WriteLine(e, "CANCEL");
+                HackPDM.Core.Logging.HackLogger.Debug( "AsyncHelper", "Polling wait cancelled", e );
                 break;
             }
 

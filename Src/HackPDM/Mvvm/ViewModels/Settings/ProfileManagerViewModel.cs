@@ -534,6 +534,7 @@ public partial class ProfileManagerViewModel : ObservableObject, IDisposable
 		}
 		catch( Exception ex )
 		{
+			HackPDM.Core.Logging.HackLogger.Error( "Login", $"Unexpected login error: {ex.Message}", ex );
 			LogSession( StatusMessage.ERROR, ProfileStatusCategory.Login, $"Unexpected login error: {ex.Message}", updateBanner: true );
 			return false;
 		}

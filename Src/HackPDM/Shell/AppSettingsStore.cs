@@ -41,11 +41,11 @@ public static class AppSettingsStore
 				.ToList();
 			int imported = settings.ImportMissing( values );
 			if( imported > 0 )
-				Console.Error.WriteLine( $"settings: brought {imported} value(s) over from the packaged app's settings to {settings.FilePath}" );
+				HackPDM.Core.Logging.HackLogger.Info( "Settings", $"Imported {imported} value(s) from packaged app settings to '{settings.FilePath}'" );
 		}
 		catch( Exception e )
 		{
-			System.Diagnostics.Debug.WriteLine( $"settings: no packaged settings to bring over ({e.Message})" );
+			HackPDM.Core.Logging.HackLogger.Debug( "Settings", $"No packaged settings to import: {e.Message}" );
 		}
 	}
 

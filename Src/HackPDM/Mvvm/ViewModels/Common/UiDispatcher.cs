@@ -62,7 +62,7 @@ public sealed class InlineUiDispatcher : IUiDispatcher
 		}
 		catch( Exception e )
 		{
-			System.Diagnostics.Debug.WriteLine( $"UI work item failed: {e}" );
+			HackPDM.Core.Logging.HackLogger.Error( "UiDispatcher", $"UI work item failed: {e.Message}", e );
 		}
 		return true;
 	}

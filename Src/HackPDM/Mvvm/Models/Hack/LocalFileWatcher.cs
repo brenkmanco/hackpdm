@@ -143,7 +143,8 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 				};
 				watcher.Error += ( _, e ) =>
 				{
-					System.Diagnostics.Debug.WriteLine( $"file watcher: {e.GetException().Message}" );
+					Exception ex = e.GetException();
+					HackPDM.Core.Logging.HackLogger.Warn( "FileWatcher", $"File watcher buffer error for '{folder}': {ex.Message}; triggering resync", ex );
 					Overflowed?.Invoke();
 				};
 				watcher.EnableRaisingEvents = true;
@@ -153,7 +154,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 			catch( Exception e )
 			{
 				// e.g. the inotify watch limit on Linux: the page still works, just without live updates
-				Console.Error.WriteLine( $"file watcher could not watch {folder}: {e.Message}" );
+				HackPDM.Core.Logging.HackLogger.Warn( "FileWatcher", $"File watcher could not watch '{folder}': {e.Message}", e );
 			}
 		}
 	}

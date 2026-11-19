@@ -16,6 +16,7 @@ def _like_literal(value):
 
 class hp_pdm_commit(models.Model):
     _name = 'hp.pdm.commit'
+    _description = 'PDM commit batch'
     _inherit = 'hp.common.model'
 
     name = fields.Char()
@@ -177,8 +178,12 @@ class hp_pdm_commit(models.Model):
                         "committed_at": fields.Datetime.now(),
                     })
                     record.run_commit_job()
+                logging.info(
+                    "PDM commit finalized: commit_id=%s uid=%s node_id=%s",
+                    record.id, self.env.uid, record.node_by.id or 0,
+                )
             except Exception as exc:
-                logging.exception("Commit failed for record %s", record.id)
+                logging.exception("Commit failed for record %s (uid=%s)", record.id, self.env.uid)
                 record.handle_commit_failure(exc)
 
         return records.read([

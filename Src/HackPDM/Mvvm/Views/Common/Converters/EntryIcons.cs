@@ -82,7 +82,7 @@ public static class EntryIcons
 		}
 		catch( Exception e )
 		{
-			System.Diagnostics.Debug.WriteLine( $"type icon failed to decode: {e.Message}" );
+			HackPDM.Core.Logging.HackLogger.Debug( "EntryIcons", $"Type icon failed to decode: {e.Message}", e );
 		}
 	}
 }

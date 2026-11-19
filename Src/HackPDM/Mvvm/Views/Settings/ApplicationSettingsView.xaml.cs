@@ -55,7 +55,7 @@ public sealed partial class ApplicationSettingsView : Page
 		}
 		catch( Exception e )
 		{
-			Console.Error.WriteLine( $"settings page {page.Name} failed to open: {e}" );
+			HackPDM.Core.Logging.HackLogger.Error( "Settings", $"Settings page {page.Name} failed to open: {e.Message}", e );
 			SectionFrame.Content = new TextBlock { Text = $"Could not open {item?.Text}: {e.Message}", Margin = new( 12 ) };
 		}
 	}

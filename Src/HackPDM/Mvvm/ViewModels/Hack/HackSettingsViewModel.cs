@@ -101,8 +101,9 @@ public partial class HackSettingsViewModel : ObservableObject
 			Directory.CreateDirectory( path );
 			return true;
 		}
-		catch
+		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException )
 		{
+			HackPDM.Core.Logging.HackLogger.Warn( "HackSettings", $"Invalid or inaccessible directory '{path}': {ex.Message}", ex );
 			return false;
 		}
 	}

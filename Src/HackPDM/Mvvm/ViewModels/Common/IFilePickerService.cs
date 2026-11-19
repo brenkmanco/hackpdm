@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HackPDM.Mvvm.ViewModels.Common;
@@ -9,6 +10,11 @@ public interface IFilePickerService
 	/// <param name="extension">The only file type offered, with its dot (".json").</param>
 	/// <returns>The chosen file's path; null when the user cancelled.</returns>
 	Task<string?> PickOpenFileAsync( string extension );
+
+	/// <summary>Lets the user choose an existing file matching any of the given extensions.</summary>
+	/// <param name="extensions">Allowed extensions with leading dots (e.g. ".png", ".jpg").</param>
+	/// <returns>The chosen file's path; null when the user cancelled.</returns>
+	Task<string?> PickOpenFileAsync( IReadOnlyList<string> extensions );
 
 	/// <summary>Lets the user choose where to save a file.</summary>
 	/// <param name="typeLabel">The name shown for the file type ("JSON file").</param>

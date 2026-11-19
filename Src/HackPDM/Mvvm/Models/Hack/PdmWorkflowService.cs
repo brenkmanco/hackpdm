@@ -125,10 +125,14 @@ public interface IPdmWorkflowService
 	/// </remarks>
 	Task LogicalDeleteAsync( IReadOnlyList<int> entryIds );
 
-	/// <summary>Restores every logically deleted entry directly in a directory.</summary>
-	/// <param name="directoryId">The Odoo id of the directory; subdirectories are not included.</param>
+	/// <summary>Restores every logically deleted entry in a directory, optionally including subdirectories.</summary>
+	/// <param name="directoryId">The Odoo id of the directory.</param>
+	/// <param name="withSubdirectories">When <see langword="true"/>, also restores deleted entries in all descendant directories.</param>
 	/// <remarks>Uses <see cref="HackPDM.Infrastructure.Operations.PdmDeleteOperations.SetDeletedAsync"/> and marks the status window's progress complete.</remarks>
-	Task RestoreDeletedInDirectoryAsync( int directoryId );
+	Task RestoreDeletedInDirectoryAsync( int directoryId, bool withSubdirectories = false );
+
+	/// <summary>Returns whether the logged-in Odoo user belongs to <c>hackpdm.group_pdm_admin</c>.</summary>
+	Task<bool> IsCurrentUserPdmAdminAsync();
 
 	/// <summary>Permanently removes entries from the server, with all their versions and attachments.</summary>
 	/// <param name="entryIds">The entries to remove.</param>
@@ -506,14 +510,29 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 	}
 
 	/// <inheritdoc/>
-	public async Task RestoreDeletedInDirectoryAsync( int directoryId )
+	public async Task RestoreDeletedInDirectoryAsync( int directoryId, bool withSubdirectories = false )
 	{
 		reporter.BeginOperation();
 		try
 		{
-			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( null,
-				searchFilters: OdooDomain.Where( "deleted", true ).And( "dir_id", directoryId ),
-				excludedFields: DeleteExcludedFields );
+			HpEntry[]? entries;
+			if( withSubdirectories )
+			{
+				IReadOnlyList<int> ids = await GetDirectoryEntryIdsAsync( directoryId, withSubdirectories: true, withDeleted: true );
+				if( ids.Count == 0 )
+					return;
+				HpEntry[]? allEntries = await HpEntry.GetRecordsByIdsAsync( ids, excludedFields: DeleteExcludedFields );
+				entries = allEntries?.Where( e => e.deleted == true ).ToArray();
+			}
+			else
+			{
+				entries = await HpEntry.GetRecordsByIdsAsync( null,
+					searchFilters: OdooDomain.Where( "deleted", true ).And( "dir_id", directoryId ),
+					excludedFields: DeleteExcludedFields );
+			}
+
+			if( entries is not { Length: > 0 } )
+				return;
 
 			await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, false, Log ), "Logically UnDelete Files" );
 		}
@@ -521,6 +540,13 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		{
 			reporter.Complete();
 		}
+	}
+
+	/// <inheritdoc/>
+	public async Task<bool> IsCurrentUserPdmAdminAsync()
+	{
+		Result<bool> result = await OdooRpc.ExecuteAsync<bool>( "res.users", "has_group", [ "hackpdm.group_pdm_admin" ] );
+		return result.ValueOr( false );
 	}
 
 	/// <inheritdoc/>

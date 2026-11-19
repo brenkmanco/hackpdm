@@ -250,6 +250,16 @@
                         ToolTipService.ToolTip="Dock Status Log into the main window"
                         Visibility="Collapsed" />
                     <Button
+                        x:Name="OpenLogsBtn"
+                        Command="{x:Bind ViewModel.OpenLogsFolderCommand}"
+                        Content="Logs Folder"
+                        ToolTipService.ToolTip="Open the HackPDM diagnostic logs folder" />
+                    <Button
+                        x:Name="CopyDiagnosticsBtn"
+                        Click="CopyDiagnosticsBtn_Click"
+                        Content="Copy Diagnostics"
+                        ToolTipService.ToolTip="Copy redacted client/server diagnostic summary to clipboard" />
+                    <Button
                         x:Name="StatusSettings"
                         Content="Configure Settings"
                         Click="StatusSettings_Click" />

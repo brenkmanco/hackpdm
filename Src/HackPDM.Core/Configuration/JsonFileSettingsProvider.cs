@@ -169,7 +169,7 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 			// unreadable: keep a copy for the user instead of overwriting it with the next change
 			string msg = $"Settings file '{filePath}' could not be read ({e.Message}); starting with defaults.";
 			errors.Add( msg );
-			Console.Error.WriteLine( msg );
+			HackPDM.Core.Logging.HackLogger.Warn( "Settings", msg, e );
 			TryBackUp( filePath );
 		}
 		return new( StringComparer.Ordinal );
@@ -203,7 +203,7 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 		{
 			string msg = $"Settings could not be saved to '{FilePath}': {e.Message}";
 			_errors.Add( msg );
-			Console.Error.WriteLine( msg );
+			HackPDM.Core.Logging.HackLogger.Error( "Settings", msg, e );
 			return msg;
 		}
 	}

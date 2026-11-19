@@ -130,8 +130,9 @@ public sealed class ThemeService : IThemeService
 			}
 			return StartupTheme( saved );
 		}
-		catch
+		catch( Exception ex )
 		{
+			HackPDM.Core.Logging.HackLogger.Warn( "ThemeService", $"Could not read saved theme; falling back to defaults: {ex.Message}", ex );
 			return StartupTheme( new ThemeSettings() );
 		}
 	}

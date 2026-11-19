@@ -78,7 +78,7 @@ public sealed class EntryListService : IEntryListService
 			Result<IReadOnlyList<RemoteEntryDto>> entries = await HpDirectory.GetEntriesAsync( id, includeDeleted );
 			token.ThrowIfCancellationRequested();
 			if( !entries.Ok )
-				System.Diagnostics.Debug.WriteLine( $"entries of directory {id} could not be read: {entries.Error}" );
+				HackPDM.Core.Logging.HackLogger.Error( "EntryList", $"Entries of directory {id} could not be read: {entries.Error}" );
 			remote = entries.Value;
 		}
 

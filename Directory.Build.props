@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <LangVersion>preview</LangVersion>
+    <LangVersion>14</LangVersion>
   </PropertyGroup>
 
   <!-- The one HackPDM version: the client's assembly, file and package versions all come from it.

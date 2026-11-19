@@ -226,7 +226,7 @@ public static class PdmCommitOperations
         catch (Exception e)
         {
             await commit.ServerClear();
-            Debug.WriteLine(e.Message);
+            HackPDM.Core.Logging.HackLogger.Error("PdmCommit", $"Staging failed for commit {commit.id}: {e.Message}", e);
             log?.Invoke(StatusMessage.ERROR, e.Message);
             return false;
         }

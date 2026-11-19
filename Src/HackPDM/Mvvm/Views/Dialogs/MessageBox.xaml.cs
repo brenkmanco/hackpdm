@@ -138,8 +138,9 @@ public sealed partial class MessageBox : Page
 				page.Show( message, buttons, window, result );
 			} );
 		}
-		catch( Exception )
+		catch( Exception ex )
 		{
+			HackPDM.Core.Logging.HackLogger.Warn( "MessageBox", $"XAML MessageBox failed; falling back to native dialog: {ex.Message}", ex );
 			result.TrySetResult( ShowNative( message, caption ?? "Information",
 				// bitmask for the native box: buttons | icon | default button | modality
 				(uint)buttons
@@ -156,7 +157,7 @@ public sealed partial class MessageBox : Page
 #if WINDOWS
 		return (DialogResult)MsgBox( HackApp.Window?.IntPtrHandle ?? 0, message, title, type );
 #else
-		Debug.WriteLine( $"[Native MessageBox Fallback] {title}: {message}" );
+		HackPDM.Core.Logging.HackLogger.Info( "MessageBox", $"[Native MessageBox Fallback] {title}: {message}" );
 		return DialogResult.OK;
 #endif
 	}

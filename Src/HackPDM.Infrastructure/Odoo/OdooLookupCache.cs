@@ -78,11 +78,12 @@ public sealed record OdooLookupCache
 		HpCategory[]? categories = null;
 		HpEntryNameFilter[]? filters = null;
 		HpSetting[]? settings = null;
+		bool nodesRead = false;
 		bool settingsRead = false;
 
 		progress?.Report( "Loading workspace metadata (nodes, users, types, settings)…" );
 		await Task.WhenAll(
-			TryHelper.TryAsync( async () => nodes = await HpNode.GetAllRecordsAsync() ),
+			TryHelper.TryAsync( async () => { nodes = await HpNode.GetAllRecordsAsync(); nodesRead = true; } ),
 			TryHelper.TryAsync( async () => root = await HpDirectory.GetRecordByIdAsync( 1 ) ),
 			TryHelper.TryAsync( async () => users = await HpUser.GetAllRecordsAsync() ),
 			TryHelper.TryAsync( async () => properties = await HpProperty.GetAllRecordsAsync() ),
@@ -94,7 +95,7 @@ public sealed record OdooLookupCache
 		);
 
 		myNode = nodes?.FirstOrDefault( node => node.name?.Equals( machine ) is true );
-		if( myNode is null && nodes is not null )
+		if( myNode is null && nodesRead )
 		{
 			progress?.Report( $"Registering workstation node '{machine}'…" );
 			await TryHelper.TryAsync( async () =>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -149,8 +149,9 @@ public static class ExtensionMethods
 				}
 				else return false;
 			}
-			catch
+			catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException )
 			{
+				HackPDM.Core.Logging.HackLogger.Warn( "FileExtensions", $"Failed to move file '{file.FullName}' to '{toPath}': {ex.Message}", ex );
 				return false;
 			}
 			return true;
@@ -194,7 +195,7 @@ public static class ExtensionMethods
 				}
 			}
 
-			Debug.WriteLine("Finished Sorting");
+			HackPDM.Core.Logging.HackLogger.Trace( "Collections", "Finished sorting ObservableCollection" );
 		}
 		private void SortInternal<TKey>(Func<T, TKey> keySelector, bool reverse = false)
 		{

@@ -7,8 +7,12 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 
 using HackPDM.Abstractions.Structures;
+using HackPDM.Core;
 using HackPDM.Core.Hack;
+using HackPDM.Core.Logging;
 using HackPDM.Domain.Representation;
+using HackPDM.Infrastructure.Odoo;
+using HackPDM.Infrastructure.Operations;
 using HackPDM.Mvvm.Models.Settings;
 using HackPDM.Mvvm.ViewModels.Common;
 using HackPDM.Shared.GlobalData;
@@ -349,6 +353,32 @@ public partial class StatusDialogViewModel : ObservableObject, IRecipient<BasicS
 				OperationCompleted?.Invoke();
 			}
 		} );
+	}
+
+	/// <summary>Opens the rolling log directory in the system file browser.</summary>
+	[RelayCommand]
+	private void OpenLogsFolder()
+	{
+		string dir = HackLogger.LogDirectory;
+		try
+		{
+			System.IO.Directory.CreateDirectory( dir );
+			ShellLauncher.OpenFolder( dir );
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "StatusDialog", $"Could not open logs folder '{dir}'", ex );
+		}
+	}
+
+	/// <summary>Builds a redacted diagnostic summary string for support/bug reports.</summary>
+	public string BuildDiagnosticSummary()
+	{
+		var defaults = OdooDefaults.Instance;
+		return HackLogger.BuildDiagnosticSummary(
+			clientVersion: ClientUpdate.CurrentText,
+			odooUrl: defaults?.OdooUrl,
+			odooDb: defaults?.OdooDb );
 	}
 
 	private void Update( Action change )

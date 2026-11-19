@@ -1,4 +1,4 @@
-﻿<Project Sdk="Uno.Sdk">
+<Project Sdk="Uno.Sdk">
   <PropertyGroup>
     <UnoSingleProject>true</UnoSingleProject>
     <UnoDisableResizetizer>true</UnoDisableResizetizer>
@@ -55,9 +55,9 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.5-beta1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.1" />
-    <PackageReference Include="System.Reactive" Version="7.0.0-preview.1" />
+    <PackageReference Include="System.Reactive" Version="7.0.0" />
     <PackageReference Include="WinUI.TableView" Version="1.5.1" />
   </ItemGroup>
 
@@ -248,8 +248,8 @@
   <PropertyGroup>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
-    <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
-    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+    <!-- IL trimming disabled: reflection-heavy Newtonsoft.Json / System.Text.Json / Odoo model deserialization and Uno XAML bindings -->
+    <PublishTrimmed>False</PublishTrimmed>
     <SupportedOSPlatformVersion Condition="$(TargetFramework.Contains('windows'))">10.0.17763.0</SupportedOSPlatformVersion>
     <ApplicationIcon>Assets\hackpdm-icon.ico</ApplicationIcon>
   </PropertyGroup>
