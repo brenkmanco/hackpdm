@@ -1,5 +1,3 @@
-using HackPDM.Core.Hack;
-using HackPDM.Shared.GlobalData;
 using Xunit;
 
 namespace HackPDM.Tests.Core;

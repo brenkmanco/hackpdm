@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=HackPDM
+GenericName=Product Data Management Client
+Comment=Open-source local-first Product Data Management (PDM) desktop client for CAD & Odoo
+Exec=HackPDM
+Icon=hackpdm
+Terminal=false
+Categories=Development;Engineering;Office;
+Keywords=PDM;CAD;Odoo;SolidWorks;Vault;
+StartupWMClass=HackPDM

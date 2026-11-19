@@ -4,8 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-using HackPDM.Core.Hack;
-using HackPDM.Mvvm.Models.Hack;
 using HackPDM.Tests.Characterization;
 
 using Xunit;

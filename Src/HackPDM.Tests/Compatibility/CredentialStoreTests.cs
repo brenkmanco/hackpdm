@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-using HackPDM.Infrastructure.Credentials;
-using HackPDM.Infrastructure.Odoo;
 using HackPDM.Tests.Characterization;
 
 using Xunit;

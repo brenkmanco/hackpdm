@@ -2,8 +2,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Infrastructure.RPC;
 
 namespace HackPDM.Tests.Operations;
 

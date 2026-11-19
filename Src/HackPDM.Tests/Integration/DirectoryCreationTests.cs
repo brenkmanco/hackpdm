@@ -1,8 +1,4 @@
 
-using HackPDM.Core.Hack;
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Infrastructure.Odoo.Models;
-using HackPDM.Infrastructure.Operations;
 using HackPDM.Tests.Characterization;
 
 namespace HackPDM.Tests.Integration;
@@ -49,7 +45,7 @@ public class CommitDirectorySegmentsTests
 	{
 		using var pwa = new PwaScope( create: true );
 		var hack = new HackFile( Path.Combine( pwa.Absolute, "Projects", "Parts", "bracket.txt" ) );
-		Assert.Equal( [ "Projects", "Parts" ], PdmCommitOperations.DirectorySegments( hack ).Cast<string>() );
+		Assert.Equal( [ "Projects", "Parts" ], CommitOperations.DirectorySegments( hack ).Cast<string>() );
 	}
 
 	[Fact]
@@ -57,7 +53,7 @@ public class CommitDirectorySegmentsTests
 	{
 		using var pwa = new PwaScope( create: true );
 		var hack = new HackFile( Path.Combine( pwa.Absolute, "readme.txt" ) );
-		Assert.Empty( PdmCommitOperations.DirectorySegments( hack ) );
+		Assert.Empty( CommitOperations.DirectorySegments( hack ) );
 	}
 
 	[Fact]
@@ -65,6 +61,6 @@ public class CommitDirectorySegmentsTests
 	{
 		using var pwa = new PwaScope( create: true );
 		var hack = new HackFile( Path.Combine( Path.GetTempPath(), "elsewhere", "x.txt" ) );
-		Assert.Empty( PdmCommitOperations.DirectorySegments( hack ) );
+		Assert.Empty( CommitOperations.DirectorySegments( hack ) );
 	}
 }

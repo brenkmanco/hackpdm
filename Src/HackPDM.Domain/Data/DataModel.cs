@@ -1,2 +1,0 @@
-﻿namespace HackPDM.Domain.Data;
-

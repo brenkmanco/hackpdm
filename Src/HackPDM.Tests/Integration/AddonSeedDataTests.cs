@@ -1,6 +1,5 @@
 using System.Xml.Linq;
 
-using HackPDM.Infrastructure.Odoo;
 
 namespace HackPDM.Tests.Integration;
 
@@ -130,7 +129,7 @@ public class AddonSeedDataTests
 		Assert.Equal( "char", row[ "type" ] );
 		Assert.Equal( ">=1.1.0, <2.0.0", row[ "char_value" ] );
 		// this client satisfies the seeded server version range
-		Assert.True( HackPDM.Infrastructure.Operations.ClientUpdate.CheckVersion( HackPDM.Infrastructure.Operations.ClientUpdate.Current, row[ "char_value" ] as string ).IsAllowed );
+		Assert.True( HackPDM.Core.Pdm.ClientUpdate.CheckVersion( HackPDM.Core.Pdm.ClientUpdate.Current, row[ "char_value" ] as string ).IsAllowed );
 	}
 
 	[OdooFact]

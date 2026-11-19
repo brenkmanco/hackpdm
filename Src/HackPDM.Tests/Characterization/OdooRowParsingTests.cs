@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Infrastructure.Odoo.Models;
 
 using Xunit;
 
@@ -113,6 +111,17 @@ public class OdooRowParsingTests
 
 		Assert.Equal( [ 3, 4 ], (int[])version.parent_ids! );
 		Assert.Empty( (int[])version.child_ids! );
+	}
+
+	[Fact]
+	public void Populate_HpVersion_SetsWinPathwayFromDirIdWhenWindowsCompleteNameMissing()
+	{
+		HpVersion version = Repository<HpVersion>.Populate(
+			Rows( """[{"id": 12, "name": "bracket.sldprt", "dir_id": [5, "root / Projects / Parts"]}]""" ) ).Single();
+
+		Assert.Equal( 5, version.dir_id?.id );
+		Assert.Equal( "root / Projects / Parts", version.dir_id?.name );
+		Assert.Equal( System.IO.Path.Combine( "Projects", "Parts" ), version.WinPathway );
 	}
 
 	[Fact]

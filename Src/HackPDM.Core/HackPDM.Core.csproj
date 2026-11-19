@@ -1,19 +1,29 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
-		<Nullable>enable</Nullable>
-		<ImplicitUsings>enable</ImplicitUsings>
-	</PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
 
-	<ItemGroup>
-		<ProjectReference Include="..\HackPDM.Domain\HackPDM.Domain.csproj" />
-	</ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>HackPDM</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>HackPDM.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 
-	<ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Meziantou.Framework.Win32.CredentialManager" Version="1.7.15" />
+  </ItemGroup>
 
-	  <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-	  <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.1" />
-	</ItemGroup>
+  <ItemGroup>
+    <Reference Include="SolidWorks.Interop.swdocumentmgr">
+      <HintPath>lib\SolidWorks.Interop.swdocumentmgr.dll</HintPath>
+    </Reference>
+  </ItemGroup>
 
 </Project>

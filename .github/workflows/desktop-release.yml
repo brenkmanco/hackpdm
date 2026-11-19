@@ -65,6 +65,14 @@ jobs:
           -p:HackPdmVersion=${{ env.HACKPDM_VERSION }}
           -o publish/HackPDM
 
+      - name: Add Linux desktop entry
+        if: matrix.rid == 'linux-x64'
+        shell: bash
+        run: |
+          cp packaging/linux/hackpdm.desktop publish/HackPDM/
+          cp packaging/linux/install-desktop-entry.sh publish/HackPDM/
+          chmod +x publish/HackPDM/install-desktop-entry.sh
+
       - name: Archive and SHA-256
         shell: bash
         run: |

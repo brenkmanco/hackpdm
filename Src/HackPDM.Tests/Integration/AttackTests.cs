@@ -1,11 +1,5 @@
 using System.Security.Cryptography;
 
-using HackPDM.Core.Hack;
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Infrastructure.Odoo.Models;
-using HackPDM.Infrastructure.Operations;
-using HackPDM.Mvvm.Models.Hack;
-using HackPDM.Shared.GlobalData;
 
 using Xunit.Abstractions;
 
@@ -26,7 +20,7 @@ public sealed class AttackTests : IAsyncLifetime
 	private readonly ITestOutputHelper _output;
 	private readonly string _root = Path.Combine( Path.GetTempPath(), $"hackpdm-atk-{Guid.NewGuid():N}" );
 	private readonly string _folder = $"AT{Guid.NewGuid():N}"[ ..14 ];
-	private readonly HackPDM.Abstractions.ISettingsProvider? _previousSettings = HackDefaults.Instance.SettingsProvider;
+	private readonly HackPDM.Core.Configuration.ISettingsProvider? _previousSettings = HackDefaults.Instance.SettingsProvider;
 	private readonly string _previousPwa = HackDefaults.Instance.PwaPathAbsolute;
 	private readonly RecordingReporter _reporter = new();
 	private readonly PdmWorkflowService _service;
@@ -160,7 +154,7 @@ public sealed class AttackTests : IAsyncLifetime
 	{
 		HpPDMCommit commit = new() { node_by = OdooDefaults.Instance.MyNode?.id };
 		await commit.CreateCommitAsync();
-		Assert.True( await PdmCommitOperations.CommitRecordAsync( Hack( path ), commit, inOdoo: existing ) );
+		Assert.True( await CommitOperations.CommitRecordAsync( Hack( path ), commit, inOdoo: existing ) );
 		return await commit.ServerCommit();
 	}
 

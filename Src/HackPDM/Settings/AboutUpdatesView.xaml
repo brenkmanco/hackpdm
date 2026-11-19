@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="HackPDM.Settings.AboutUpdatesView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer Padding="20,16">
+        <StackPanel MaxWidth="760" HorizontalAlignment="Left" Spacing="16">
+            <!--  App Identity Card  -->
+            <Border
+                Padding="18"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+                    <Image
+                        Grid.Column="0"
+                        Width="56"
+                        Height="56"
+                        VerticalAlignment="Top"
+                        Source="ms-appx:///Assets/Square150x150Logo.scale-200.png" />
+                    <StackPanel Grid.Column="1" Spacing="4">
+                        <TextBlock
+                            FontSize="20"
+                            FontWeight="SemiBold"
+                            Text="HackPDM" />
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Open-source local-first Product Data Management (PDM) desktop client for CAD &amp; Odoo."
+                            TextWrapping="Wrap" />
+                        <StackPanel Margin="0,6,0,0" Orientation="Horizontal" Spacing="16">
+                            <TextBlock x:Name="VersionText" FontSize="12" FontWeight="SemiBold" />
+                            <TextBlock x:Name="RuntimeText" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="License: GNU GPL-3.0  •  Repository: github.com/moonxbears/wyrmpdm" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!--  Updates Card  -->
+            <Border
+                Padding="18"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <StackPanel Spacing="10">
+                    <TextBlock FontSize="15" FontWeight="SemiBold" Text="Software Updates" />
+                    <TextBlock
+                        x:Name="ServerPolicyText"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        x:Name="UpdateStatusText"
+                        FontSize="13"
+                        Text="Click Check for Updates to query your Odoo server and GitHub Releases."
+                        TextWrapping="Wrap" />
+                    <StackPanel Margin="0,4,0,0" Orientation="Horizontal" Spacing="8">
+                        <Button
+                            x:Name="CheckUpdatesButton"
+                            Click="CheckUpdates_Click"
+                            Content="Check for Updates"
+                            Style="{ThemeResource AccentButtonStyle}" />
+                        <Button
+                            x:Name="InstallUpdateButton"
+                            Click="InstallUpdate_Click"
+                            Content="Download &amp; Install"
+                            Visibility="Collapsed" />
+                        <Button
+                            x:Name="ReleaseNotesButton"
+                            Click="ReleaseNotes_Click"
+                            Content="Release Notes" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!--  Support & Diagnostics Card  -->
+            <Border
+                Padding="18"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <StackPanel Spacing="10">
+                    <TextBlock FontSize="15" FontWeight="SemiBold" Text="Diagnostics &amp; Logs" />
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Client logs and crash dumps automatically redact passwords, API keys, and file payloads."
+                        TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Click="OpenLogs_Click" Content="Open Logs Folder" />
+                        <Button Click="OpenRepo_Click" Content="Project Documentation" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

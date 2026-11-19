@@ -583,6 +583,15 @@ public static class GraphLayout
 		List<EdgeRoute> routes = new( chains.Count );
 		double backStub = Math.Min( 28.0, o.ColumnGap * 0.3 );
 
+		double clearPad = Math.Max( 16.0, o.RowGap * 0.65 );
+		List<(double X, double Y)> WrapAroundBends( NodeBox a, NodeBox b, double exitX, double enterX, double fy, double ty )
+		{
+			double clearY = Math.Min( a.Y, b.Y ) - clearPad;
+			if( clearY < o.Margin * 0.5 )
+				clearY = Math.Max( a.Y + a.Height, b.Y + b.Height ) + clearPad;
+			return [ ( exitX, fy ), ( exitX, clearY ), ( enterX, clearY ), ( enterX, ty ) ];
+		}
+
 		foreach( EdgeChain chain in chains )
 		{
 			NodeBox parentBox = byId[ chain.Edge.Parent ];
@@ -590,80 +599,46 @@ public static class GraphLayout
 			var (fx, fy) = parentBox.OutPort;
 			var (tx, ty) = childBox.InPort;
 
+			List<(double X, double Y)>? bends = null;
 			if( chain.SameColumn )
 			{
-				// Same-column edge (cycle): loop out right, around clearance, and back into left port
-				double loopX = Math.Max( fx, tx ) + backStub;
-				double leftX = Math.Min( fx, tx ) - backStub;
-				double clearY = Math.Min( parentBox.Y, childBox.Y ) - Math.Max( 16.0, o.RowGap * 0.65 );
-				if( clearY < o.Margin * 0.5 )
-					clearY = Math.Max( parentBox.Y + parentBox.Height, childBox.Y + childBox.Height ) + Math.Max( 16.0, o.RowGap * 0.65 );
-
-				List<(double X, double Y)> bends =
-				[
-					(loopX, fy),
-					(loopX, clearY),
-					(leftX, clearY),
-					(leftX, ty),
-				];
-				UpdateBounds( bends, ref maxX, ref maxY );
-				routes.Add( new EdgeRoute( chain.Edge, fx, fy, tx, ty ) { BendPoints = bends } );
+				bends = WrapAroundBends( parentBox, childBox, Math.Max( fx, tx ) + backStub, Math.Min( fx, tx ) - backStub, fy, ty );
 			}
 			else if( !chain.ReversedForOrdering )
 			{
-				if( chain.DummyIds.Count == 0 )
+				if( chain.DummyIds.Count > 0 )
 				{
-					routes.Add( new EdgeRoute( chain.Edge, fx, fy, tx, ty ) );
-				}
-				else
-				{
-					List<(double X, double Y)> bends = new( chain.DummyIds.Count * 2 );
+					bends = new( chain.DummyIds.Count * 2 );
 					foreach( int d in chain.DummyIds )
 					{
 						int gc = minGlobalCol + vertCol[ d ];
-						double dy = centerY[ d ];
-						bends.Add( (globalColLeft[ gc ], dy) );
-						bends.Add( (globalColRight[ gc ], dy) );
+						bends.Add( ( globalColLeft[ gc ], centerY[ d ] ) );
+						bends.Add( ( globalColRight[ gc ], centerY[ d ] ) );
 					}
-					UpdateBounds( bends, ref maxX, ref maxY );
-					routes.Add( new EdgeRoute( chain.Edge, fx, fy, tx, ty ) { BendPoints = bends } );
 				}
+			}
+			else if( chain.DummyIds.Count > 0 )
+			{
+				bends = new( chain.DummyIds.Count * 2 + 2 ) { ( fx + backStub, centerY[ chain.DummyIds[ ^1 ] ] ) };
+				for( int i = chain.DummyIds.Count - 1; i >= 0; i-- )
+				{
+					int d = chain.DummyIds[ i ];
+					int gc = minGlobalCol + vertCol[ d ];
+					bends.Add( ( globalColRight[ gc ], centerY[ d ] ) );
+					bends.Add( ( globalColLeft[ gc ], centerY[ d ] ) );
+				}
+				bends.Add( ( tx - backStub, centerY[ chain.DummyIds[ 0 ] ] ) );
 			}
 			else
 			{
-				// Back-edge (parent is right of child): exit right, loop cleanly over/under via corridor, enter left
-				double exitX = fx + backStub;
-				double enterX = tx - backStub;
-				List<(double X, double Y)> bends = [];
-				if( chain.DummyIds.Count > 0 )
-				{
-					// Dummies are ordered left-to-right (child -> parent), so traverse in reverse (parent -> child)
-					double firstY = centerY[ chain.DummyIds[ ^1 ] ];
-					bends.Add( (exitX, firstY) );
-					for( int i = chain.DummyIds.Count - 1; i >= 0; i-- )
-					{
-						int d = chain.DummyIds[ i ];
-						int gc = minGlobalCol + vertCol[ d ];
-						double dy = centerY[ d ];
-						bends.Add( (globalColRight[ gc ], dy) );
-						bends.Add( (globalColLeft[ gc ], dy) );
-					}
-					double lastY = centerY[ chain.DummyIds[ 0 ] ];
-					bends.Add( (enterX, lastY) );
-				}
-				else
-				{
-					double clearY = Math.Min( parentBox.Y, childBox.Y ) - Math.Max( 16.0, o.RowGap * 0.65 );
-					if( clearY < o.Margin * 0.5 )
-						clearY = Math.Max( parentBox.Y + parentBox.Height, childBox.Y + childBox.Height ) + Math.Max( 16.0, o.RowGap * 0.65 );
-					bends.Add( (exitX, fy) );
-					bends.Add( (exitX, clearY) );
-					bends.Add( (enterX, clearY) );
-					bends.Add( (enterX, ty) );
-				}
-				UpdateBounds( bends, ref maxX, ref maxY );
-				routes.Add( new EdgeRoute( chain.Edge, fx, fy, tx, ty ) { BendPoints = bends } );
+				bends = WrapAroundBends( parentBox, childBox, fx + backStub, tx - backStub, fy, ty );
 			}
+
+			if( bends is not null )
+				UpdateBounds( bends, ref maxX, ref maxY );
+			routes.Add( bends is null
+				? new EdgeRoute( chain.Edge, fx, fy, tx, ty )
+				: new EdgeRoute( chain.Edge, fx, fy, tx, ty ) { BendPoints = bends } );
 		}
 
 		return (boxes, routes, compHeight, maxX, maxY);
@@ -1244,59 +1219,33 @@ public static class GraphLayout
 			}
 		}
 
-		// Solve longest-path on the block DAG in the requested vertical direction, then tighten hanging roots
+		// Solve longest-path on the block DAG in the requested vertical direction, then tighten hanging roots/sinks
+		var edges = topToBottom ? downEdges : upEdges;
 		Dictionary<int, double> blockY = new( blockSet.Count );
-		if( topToBottom )
+		List<int> topo = TopoSort( blockSet, edges );
+		foreach( int b in topo )
+			blockY[ b ] = 0.0;
+		foreach( int a in topo )
 		{
-			List<int> topo = TopoSort( blockSet, downEdges );
-			foreach( int b in topo )
-				blockY[ b ] = 0.0;
-			foreach( int ba in topo )
-			{
-				double ya = blockY[ ba ];
-				foreach( var (bb, w) in downEdges[ ba ] )
-					if( ya + w > blockY[ bb ] )
-						blockY[ bb ] = ya + w;
-			}
-			// Reverse pass: pull hanging upper roots down to meet their closest successor
-			for( int i = topo.Count - 1; i >= 0; i-- )
-			{
-				int ba = topo[ i ];
-				if( downEdges[ ba ].Count == 0 )
-					continue;
-				double limit = double.PositiveInfinity;
-				foreach( var (bb, w) in downEdges[ ba ] )
-					if( blockY[ bb ] - w < limit )
-						limit = blockY[ bb ] - w;
-				if( limit > blockY[ ba ] )
-					blockY[ ba ] = limit;
-			}
+			double ya = blockY[ a ];
+			foreach( var (b, w) in edges[ a ] )
+				if( ya + w > blockY[ b ] )
+					blockY[ b ] = ya + w;
 		}
-		else
+		for( int i = topo.Count - 1; i >= 0; i-- )
 		{
-			List<int> topoUp = TopoSort( blockSet, upEdges );
-			foreach( int b in topoUp )
-				blockY[ b ] = 0.0;
-			foreach( int bb in topoUp )
-			{
-				double yb = blockY[ bb ];
-				foreach( var (ba, w) in upEdges[ bb ] )
-					if( yb + w > blockY[ ba ] )
-						blockY[ ba ] = yb + w;
-			}
-			// Reverse pass: pull hanging lower sinks up toward their closest predecessor
-			for( int i = topoUp.Count - 1; i >= 0; i-- )
-			{
-				int bb = topoUp[ i ];
-				if( upEdges[ bb ].Count == 0 )
-					continue;
-				double limit = double.PositiveInfinity;
-				foreach( var (ba, w) in upEdges[ bb ] )
-					if( blockY[ ba ] - w < limit )
-						limit = blockY[ ba ] - w;
-				if( limit > blockY[ bb ] )
-					blockY[ bb ] = limit;
-			}
+			int a = topo[ i ];
+			if( edges[ a ].Count == 0 )
+				continue;
+			double limit = double.PositiveInfinity;
+			foreach( var (b, w) in edges[ a ] )
+				if( blockY[ b ] - w < limit )
+					limit = blockY[ b ] - w;
+			if( limit > blockY[ a ] )
+				blockY[ a ] = limit;
+		}
+		if( !topToBottom )
+		{
 			foreach( int b in blockSet )
 				blockY[ b ] = -blockY[ b ];
 		}

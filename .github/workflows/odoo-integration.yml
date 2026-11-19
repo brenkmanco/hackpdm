@@ -121,7 +121,7 @@ jobs:
       - name: Build desktop client
         id: client
         if: ${{ !cancelled() && steps.odoo.outcome == 'success' }}
-        run: dotnet build Src/HackPDM/HackPDM.csproj -f net10.0-desktop -p:Platform=x64 -c Debug
+        run: dotnet build Src/HackPDM/HackPDM.csproj -f net10.0-desktop -p:Platform=x64 -p:EnableSmokeTests=true -c Debug
 
       - name: Client smoke test (login -> file manager -> tree -> entries -> history)
         if: ${{ !cancelled() && steps.client.outcome == 'success' }}

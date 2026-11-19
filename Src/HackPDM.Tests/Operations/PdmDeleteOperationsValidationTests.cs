@@ -2,22 +2,19 @@ using System;
 using System.Collections;
 using System.Threading.Tasks;
 using Xunit;
-using HackPDM.Infrastructure.Operations;
-using HackPDM.Infrastructure.Odoo.Models;
-using HackPDM.Shared.GlobalData;
 using HackPDM.Tests.Mocks;
 
 namespace HackPDM.Tests.Operations;
 
-public class PdmDeleteOperationsValidationTests
+public class DeleteOperationsValidationTests
 {
     [Fact]
     public async Task PermanentDeleteVersionProperty_NullOrEmptyIds_ReturnsFalseImmediately()
     {
         var logger = new MockStatusLogger();
 
-        bool resultNull = await PdmDeleteOperations.PermanentDeleteVersionProperty(null!, logger);
-        bool resultEmpty = await PdmDeleteOperations.PermanentDeleteVersionProperty([], logger);
+        bool resultNull = await DeleteOperations.PermanentDeleteVersionProperty(null!, logger);
+        bool resultEmpty = await DeleteOperations.PermanentDeleteVersionProperty([], logger);
 
         Assert.False(resultNull);
         Assert.False(resultEmpty);
@@ -29,8 +26,8 @@ public class PdmDeleteOperationsValidationTests
     {
         var logger = new MockStatusLogger();
 
-        bool resultNull = await PdmDeleteOperations.PermanentDeleteVersionRelationships(null!, logger);
-        bool resultEmpty = await PdmDeleteOperations.PermanentDeleteVersionRelationships([], logger);
+        bool resultNull = await DeleteOperations.PermanentDeleteVersionRelationships(null!, logger);
+        bool resultEmpty = await DeleteOperations.PermanentDeleteVersionRelationships([], logger);
 
         Assert.False(resultNull);
         Assert.False(resultEmpty);
@@ -42,8 +39,8 @@ public class PdmDeleteOperationsValidationTests
     {
         var logger = new MockStatusLogger();
 
-        bool resultNull = await PdmDeleteOperations.PermanentDeleteVersions(null!, logger);
-        bool resultEmpty = await PdmDeleteOperations.PermanentDeleteVersions([], logger);
+        bool resultNull = await DeleteOperations.PermanentDeleteVersions(null!, logger);
+        bool resultEmpty = await DeleteOperations.PermanentDeleteVersions([], logger);
 
         Assert.False(resultNull);
         Assert.False(resultEmpty);
@@ -55,8 +52,8 @@ public class PdmDeleteOperationsValidationTests
     {
         var logger = new MockStatusLogger();
 
-        bool resultNull = await PdmDeleteOperations.PermanentDeleteEntry(null!, logger);
-        bool resultEmpty = await PdmDeleteOperations.PermanentDeleteEntry([], logger);
+        bool resultNull = await DeleteOperations.PermanentDeleteEntry(null!, logger);
+        bool resultEmpty = await DeleteOperations.PermanentDeleteEntry([], logger);
 
         Assert.False(resultNull);
         Assert.False(resultEmpty);
@@ -68,8 +65,8 @@ public class PdmDeleteOperationsValidationTests
     {
         var logger = new MockStatusLogger();
 
-        bool resultNull = await PdmDeleteOperations.SetDeletedAsync(null, true, logger);
-        bool resultEmpty = await PdmDeleteOperations.SetDeletedAsync([], true, logger);
+        bool resultNull = await DeleteOperations.SetDeletedAsync(null, true, logger);
+        bool resultEmpty = await DeleteOperations.SetDeletedAsync([], true, logger);
 
         Assert.False(resultNull);
         Assert.False(resultEmpty);
@@ -81,8 +78,8 @@ public class PdmDeleteOperationsValidationTests
     {
         var logger = new MockStatusLogger();
 
-        bool resultNull = await PdmDeleteOperations.SetDeletedAsync(null, false, logger);
-        bool resultEmpty = await PdmDeleteOperations.SetDeletedAsync([], false, logger);
+        bool resultNull = await DeleteOperations.SetDeletedAsync(null, false, logger);
+        bool resultEmpty = await DeleteOperations.SetDeletedAsync([], false, logger);
 
         Assert.False(resultNull);
         Assert.False(resultEmpty);

@@ -1,6 +1,5 @@
 using System.Text.Json;
 
-using HackPDM.Infrastructure.Odoo;
 
 namespace HackPDM.Tests.Integration;
 

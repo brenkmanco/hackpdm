@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+	x:Class="HackPDM.Settings.OdooSettingsView"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	mc:Ignorable="d">
+	<Grid Margin="12">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+		</Grid.RowDefinitions>
+		<Grid.ColumnDefinitions>
+			<ColumnDefinition Width="Auto" />
+			<ColumnDefinition Width="*" />
+		</Grid.ColumnDefinitions>
+
+		<TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center" Text="Odoo Address" />
+		<TextBox Grid.Row="0" Grid.Column="1" Margin="0,5" PlaceholderText="localhost or pdm.example.com" Text="{x:Bind ViewModel.OdooAddress, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+		<TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center" Text="Odoo Port" />
+		<TextBox Grid.Row="1" Grid.Column="1" Margin="0,5" PlaceholderText="8069 (or 443 for HTTPS)" Text="{x:Bind ViewModel.OdooPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+		<CheckBox Grid.Row="2" Grid.Column="1" Margin="0,5" Content="Use HTTPS (recommended)" IsChecked="{x:Bind ViewModel.OdooUseHttps, Mode=TwoWay}" />
+
+		<TextBlock Grid.Row="3" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center" Text="Odoo DB" />
+		<TextBox Grid.Row="3" Grid.Column="1" Margin="0,5" PlaceholderText="Database name (e.g. odoopdm)" Text="{x:Bind ViewModel.OdooDb, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+		<TextBlock Grid.Row="4" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center" Text="Odoo User" />
+		<TextBox Grid.Row="4" Grid.Column="1" Margin="0,5" PlaceholderText="Username or email" Text="{x:Bind ViewModel.OdooUser, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+		<TextBlock Grid.Row="5" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center" Text="Password or API key" />
+		<PasswordBox Grid.Row="5" Grid.Column="1" Margin="0,5" KeyDown="TxtOdooPass_KeyDown" Password="{x:Bind ViewModel.OdooPass, Mode=TwoWay}" PlaceholderText="Password or Odoo API key" />
+
+		<TextBlock Grid.Row="6" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center" Text="SW Key" />
+		<TextBox Grid.Row="6" Grid.Column="1" Margin="0,5" PlaceholderText="Optional SolidWorks Document Manager key" Text="{x:Bind ViewModel.OdooSwKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+		<TextBlock Grid.Row="7" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center" Text="Area Factor" />
+		<TextBox Grid.Row="7" Grid.Column="1" Margin="0,5" Text="{x:Bind ViewModel.OdooAreaFactor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+		<Button
+			Grid.Row="8"
+			Grid.Column="0"
+			Grid.ColumnSpan="2"
+			Margin="0,10,0,0"
+			HorizontalAlignment="Stretch"
+			VerticalAlignment="Bottom"
+			Command="{x:Bind ViewModel.SubmitCommand}"
+			Content="Save"
+			Style="{StaticResource AccentButtonStyle}" />
+	</Grid>
+</Page>

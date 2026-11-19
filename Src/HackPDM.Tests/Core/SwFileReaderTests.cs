@@ -2,8 +2,6 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 
-using HackPDM.Infrastructure.SldWrks;
-using HackPDM.Infrastructure.SldWrks.Format;
 
 namespace HackPDM.Tests.Core;
 
@@ -388,17 +386,17 @@ public class VersionPreviewStagingTests
 	[Fact]
 	public void PreparedVersion_OfASolidWorksFile_IncludesItsPreview()
 	{
-		var defaults = (HackPDM.Infrastructure.Odoo.OdooDefaults)HackPDM.Infrastructure.Odoo.OdooDefaults.Instance;
+		var defaults = (HackPDM.Core.Odoo.OdooDefaults)HackPDM.Core.Odoo.OdooDefaults.Instance;
 		var lookups = defaults.Lookups;
 		try
 		{
 			defaults.Lookups = lookups with { RestrictTypes = false };
-			var entry = new HackPDM.Infrastructure.Odoo.Models.HpEntry { id = 1, windows_complete_name = @"root\Projects" };
+			var entry = new HackPDM.Core.Odoo.Models.HpEntry { id = 1, windows_complete_name = @"root\Projects" };
 
-			var part = HackPDM.Infrastructure.Operations.CommitStaging.PrepareVersion( new HackPDM.Core.Hack.HackFile( SwSamples.Old( "old.SLDPRT" ) ), entry, 1 )!;
+			var part = HackPDM.Core.Pdm.CommitStaging.PrepareVersion( new HackPDM.Core.Pdm.HackFile( SwSamples.Old( "old.SLDPRT" ) ), entry, 1 )!;
 			Assert.Equal( new SwFileReader().GetPreviewPng( SwSamples.Old( "old.SLDPRT" ) ), part.preview_image );
 
-			var other = HackPDM.Infrastructure.Operations.CommitStaging.PrepareVersion( new HackPDM.Core.Hack.HackFile( SwSamples.Old( "asm.signature" ) ), entry, 1 )!;
+			var other = HackPDM.Core.Pdm.CommitStaging.PrepareVersion( new HackPDM.Core.Pdm.HackFile( SwSamples.Old( "asm.signature" ) ), entry, 1 )!;
 			Assert.Null( other.preview_image );
 		}
 		finally

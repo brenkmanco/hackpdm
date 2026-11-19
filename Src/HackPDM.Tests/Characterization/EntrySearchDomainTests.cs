@@ -1,6 +1,3 @@
-using HackPDM.Domain.Representation;
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Mvvm.Models.Odoo;
 
 using Xunit;
 

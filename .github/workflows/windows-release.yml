@@ -8,9 +8,15 @@ name: Windows build
 #   WINDOWS_CERT_PFX_BASE64  the code-signing certificate (.pfx), base64-encoded
 #   WINDOWS_CERT_PASSWORD    its password
 #
-# To roll a release out to clients: put the installer where clients can reach it and set the server's
-# hp.settings client_download_url (its URL or path), client_download_sha256 (the .sha256 file's hash)
-# and client_version (X.Y.Z, the oldest client allowed).
+# Automatic update rollout to Odoo runs on v* tags when these repository secrets are set:
+#   ODOO_URL                 e.g. https://pdm.example.com
+#   ODOO_DB                  Odoo database name
+#   ODOO_USER                Admin login
+#   ODOO_PASSWORD            Admin password or API key
+# Optional repository variable:
+#   CLIENT_VERSION_RULE      Required client_version range (defaults to ">=1.1.0, <2.0.0" for soft rollout,
+#                            or set to "exact" / "min" / custom range like ">=1.2.0, <2.0.0").
+# You can also roll out or roll back any release manually via .github/workflows/rollout-update.yml.
 
 on:
   push:
@@ -181,3 +187,70 @@ jobs:
         with:
           files: artifacts/*
           generate_release_notes: true
+
+  rollout-odoo:
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      ODOO_URL: ${{ secrets.ODOO_URL }}
+      ODOO_DB: ${{ secrets.ODOO_DB }}
+      ODOO_USER: ${{ secrets.ODOO_USER }}
+      ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD }}
+      CLIENT_VERSION_RULE: ${{ vars.CLIENT_VERSION_RULE }}
+    steps:
+      - name: Check Odoo rollout secrets
+        id: check
+        shell: bash
+        run: |
+          if [ -n "$ODOO_URL" ] && [ -n "$ODOO_DB" ] && [ -n "$ODOO_USER" ] && [ -n "$ODOO_PASSWORD" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping automatic Odoo rollout (ODOO_URL / ODOO_DB / ODOO_USER / ODOO_PASSWORD secrets not configured)."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.enabled == 'true'
+
+      - uses: actions/download-artifact@v4
+        if: steps.check.outputs.enabled == 'true'
+        with:
+          pattern: hackpdm-*-win-x64
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish release metadata to Odoo hp.settings
+        if: steps.check.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          SETUP_FILE="$(basename "$(ls artifacts/HackPDM-*-win-x64-setup.exe | head -n1)")"
+          SHA256="$(awk '{print $1}' "artifacts/${SETUP_FILE}.sha256" | tr -d '[:space:]')"
+          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${SETUP_FILE}"
+          MAJOR="${VERSION%%.*}"
+          NEXT_MAJOR=$((MAJOR + 1))
+
+          case "${CLIENT_VERSION_RULE}" in
+            ""|"soft")
+              VERSION_RULE=">=${MAJOR}.0.0, <${NEXT_MAJOR}.0.0"
+              ;;
+            "min")
+              VERSION_RULE=">=${VERSION}, <${NEXT_MAJOR}.0.0"
+              ;;
+            "exact")
+              VERSION_RULE="${VERSION}"
+              ;;
+            *)
+              VERSION_RULE="${CLIENT_VERSION_RULE}"
+              ;;
+          esac
+
+          python3 Odoo/deploy/publish_client_release.py \
+            "${VERSION_RULE}" \
+            "${DOWNLOAD_URL}" \
+            "${SHA256}" \
+            --latest-version "${VERSION}"

@@ -273,6 +273,19 @@ class TestServerFunctions(TransactionCase):
         self.assertEqual(set(Dir.get_all_entry_ids(self.folder.id, True)), {self.bracket.id, self.nested.id, self.gone.id})
         self.assertEqual(set(Dir.get_all_entry_ids(self.folder.id, False, False)), {self.bracket.id})
 
+    def test_get_all_entry_ids_survives_null_parent_path(self):
+        """Legacy-migrated directories can lack parent_path; get_all_entry_ids must still traverse parent_id."""
+        self.env.flush_all()
+        self.env.cr.execute(
+            "UPDATE hp_directory SET parent_path = NULL WHERE id = ANY(%s)",
+            ([self.folder.id, self.sub.id, self.deep.id],),
+        )
+        self.env.invalidate_all()
+        Dir = self.env["hp.directory"].with_user(self.alice)
+        self.assertEqual(set(Dir.get_all_entry_ids(self.folder.id)), {self.bracket.id, self.nested.id})
+        self.assertEqual(set(Dir.get_all_entry_ids(self.folder.id, True)), {self.bracket.id, self.nested.id, self.gone.id})
+        self.assertEqual(set(Dir.get_all_entry_ids(self.folder.id, False, False)), {self.bracket.id})
+
     def test_get_children_directories_by_id(self):
         tree = self.env["hp.directory"].with_user(self.alice).get_children_directories_by_id(self.folder.id, True)
         self.assertEqual(tree["id"], self.folder.id)
@@ -321,14 +334,18 @@ class TestServerFunctions(TransactionCase):
         Version = self.env["hp.version"].with_user(self.alice)
         self.assertEqual(set(Version.get_recursive_dependency_versions([versions[0].id])), {v.id for v in versions})
         self.assertEqual(set(Version.get_recursive_dependency_entries([versions[0].id])), {e.id for e in entries})
+        self.assertEqual(set(Version.get_recursive_dependency_entries_by_entries([entries[0].id])), {e.id for e in entries})
         self.assertEqual(Version.get_recursive_dependency_versions([]), [])
+        self.assertEqual(Version.get_recursive_dependency_entries_by_entries([]), [])
 
     def test_recursive_dependencies_skip_deleted_entries(self):
         entries, versions = self._chain()
         entries[1].write({"deleted": True})
         self._next_rpc()
-        found = set(self.env["hp.version"].with_user(self.alice).get_recursive_dependency_versions([versions[0].id]))
+        Version = self.env["hp.version"].with_user(self.alice)
+        found = set(Version.get_recursive_dependency_versions([versions[0].id]))
         self.assertEqual(found, {versions[0].id})
+        self.assertEqual(set(Version.get_recursive_dependency_entries_by_entries([entries[0].id])), {entries[0].id})
 
     def test_recursive_dependencies_see_links_made_in_the_same_transaction(self):
         Version = self.env["hp.version"]

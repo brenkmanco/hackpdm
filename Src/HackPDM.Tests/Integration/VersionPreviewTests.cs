@@ -1,8 +1,4 @@
 
-using HackPDM.Core;
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Infrastructure.Odoo.Models;
-using HackPDM.Infrastructure.SldWrks;
 using HackPDM.Tests.Core;
 
 namespace HackPDM.Tests.Integration;
@@ -26,13 +22,13 @@ public class VersionPreviewTests
 		int id = ids.Value![ 0 ];
 
 		var version = new HpVersion { preview_image = png };
-		var values = version.ComputeValues( false, includedFieldNames: [ "preview_image" ] );
+		var values = version.ComputeValues( false, includedFields: [ "preview_image" ] );
 		var written = await OdooRpc.WriteAsync( "hp.version", [ id ], values );
 		Assert.True( written.Value, written.Error );
 
 		var read = await OdooRpc.ReadAsync( "hp.version", [ id ], [ "preview_image" ] );
 		Assert.True( read.Value is [ _, .. ], read.Error );
-		Assert.Equal( png, FileOperations.ConvertFromBase64( read.Value![ 0 ].Text( "preview_image" ) ) );
+		Assert.Equal( png, Convert.FromBase64String( read.Value![ 0 ].Text( "preview_image" )! ) );
 
 		var loaded = ( await HpVersion.GetRecordsByIdsAsync( [ id ], includedFields: [ "preview_image" ] ) )?.FirstOrDefault();
 		Assert.Equal( png, loaded?.preview_image );

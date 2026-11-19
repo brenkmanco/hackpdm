@@ -1,8 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using HackPDM.Infrastructure.Odoo.Models;
-using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Tests.Mocks;
 

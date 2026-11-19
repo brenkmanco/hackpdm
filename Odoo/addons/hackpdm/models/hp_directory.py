@@ -363,13 +363,65 @@ class hp_directory(models.Model):
             list[int]: hp.entry ids; ``[]`` when the folder does not exist or anything fails (logged).
         """
         try:
-            record = self.env["hp.directory"].browse(value).exists()
+            self.env["hp.directory"].check_access_rights("read")
+            self.env["hp.entry"].check_access_rights("read")
+            dir_id = int(value) if value else 0
+            if dir_id <= 0:
+                return []
+            record = self.env["hp.directory"].browse(dir_id).exists()
             if not record:
                 return []
-            domain = [("dir_id", "child_of" if withSubEntries else "=", record.id)]
-            if not withDeleted:
-                domain.append(("deleted", "=", False))
-            return self.env["hp.entry"].search(domain).ids
+
+            # Walk parent_id recursively in SQL instead of relying on parent_path ("child_of"):
+            # legacy-migrated hp_directory rows can have NULL/stale parent_path, which makes
+            # child_of return [] and breaks recursive Get Latest.
+            self.env.flush_all()
+            if withSubEntries:
+                if withDeleted:
+                    self.env.cr.execute(
+                        """
+                        WITH RECURSIVE subdirs (id) AS (
+                            SELECT id FROM hp_directory WHERE id = %s
+                        UNION
+                            SELECT d.id
+                            FROM hp_directory d
+                            JOIN subdirs s ON d.parent_id = s.id
+                        )
+                        SELECT e.id
+                        FROM hp_entry e
+                        JOIN subdirs s ON e.dir_id = s.id
+                        """,
+                        (dir_id,),
+                    )
+                else:
+                    self.env.cr.execute(
+                        """
+                        WITH RECURSIVE subdirs (id) AS (
+                            SELECT id FROM hp_directory WHERE id = %s
+                        UNION
+                            SELECT d.id
+                            FROM hp_directory d
+                            JOIN subdirs s ON d.parent_id = s.id
+                        )
+                        SELECT e.id
+                        FROM hp_entry e
+                        JOIN subdirs s ON e.dir_id = s.id
+                        WHERE COALESCE(e.deleted, false) = false
+                        """,
+                        (dir_id,),
+                    )
+            else:
+                if withDeleted:
+                    self.env.cr.execute(
+                        "SELECT id FROM hp_entry WHERE dir_id = %s",
+                        (dir_id,),
+                    )
+                else:
+                    self.env.cr.execute(
+                        "SELECT id FROM hp_entry WHERE dir_id = %s AND COALESCE(deleted, false) = false",
+                        (dir_id,),
+                    )
+            return [row[0] for row in self.env.cr.fetchall()]
         except Exception as e:
             logging.error(e)
             return []

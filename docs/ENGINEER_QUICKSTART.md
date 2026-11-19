@@ -1,8 +1,13 @@
 # HackPDM Engineer Quick-Start Guide
 
-## 1. Installation (Windows)
-1. Download `HackPDM-<version>-win-x64-setup.exe` from your administrator's release link.
-2. Run the installer — it installs per-user under `%LOCALAPPDATA%\Programs\HackPDM` (no local Administrator rights required) and preserves existing settings and profiles on upgrades.
+## 1. Installation
+- **Windows:** Download `HackPDM-<version>-win-x64-setup.exe` from your administrator's release link (or GitHub Releases) and run it. It installs per-user under `%LOCALAPPDATA%\Programs\HackPDM` (no local Administrator rights required) and preserves existing settings and profiles on upgrades.
+- **Linux (`x64`):** Extract `HackPDM-<version>-linux-x64.tar.gz` and run `./install-desktop-entry.sh` to install the desktop launcher and icon.
+- **macOS (`arm64` / `x64`):** Extract `HackPDM-<version>-osx-<arch>.tar.gz` and run `HackPDM`.
+
+### Staying Up to Date
+- When your administrator publishes a new release, HackPDM automatically notifies you on login (and verifies the installer's SHA-256 checksum before running it).
+- You can also check for updates manually anytime under **Settings -> About & Updates -> Check for Updates**.
 
 ## 2. First-Time Setup
 1. **Configure Working Folder (PWA):**
