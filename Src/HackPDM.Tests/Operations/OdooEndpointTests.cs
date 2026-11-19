@@ -1,4 +1,3 @@
-using HackPDM.Infrastructure.Odoo;
 using Xunit;
 
 namespace HackPDM.Tests.Operations;

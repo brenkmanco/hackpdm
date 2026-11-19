@@ -1,7 +1,5 @@
 using System.Linq;
 
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Shared.GlobalData;
 
 using Xunit;
 

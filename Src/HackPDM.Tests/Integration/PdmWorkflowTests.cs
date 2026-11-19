@@ -1,13 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 
-using HackPDM.Core;
-using HackPDM.Core.Hack;
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Infrastructure.Operations;
-using HackPDM.Mvvm.Models.Common;
-using HackPDM.Mvvm.Models.Hack;
-using HackPDM.Shared.GlobalData;
 using HackPDM.Tests.Core;
 
 namespace HackPDM.Tests.Integration;
@@ -46,7 +39,7 @@ public class PdmWorkflowTests : IAsyncLifetime
 	private readonly string _vault = Path.Combine( Path.GetTempPath(), $"hackpdm-vault-{Guid.NewGuid():N}" );
 	private readonly string _otherVault = Path.Combine( Path.GetTempPath(), $"hackpdm-vault2-{Guid.NewGuid():N}" );
 	private readonly string _folder = $"WF{Guid.NewGuid():N}"[ ..14 ];
-	private readonly HackPDM.Abstractions.ISettingsProvider? _previousSettings = HackDefaults.Instance.SettingsProvider;
+	private readonly HackPDM.Core.Configuration.ISettingsProvider? _previousSettings = HackDefaults.Instance.SettingsProvider;
 	private readonly string _previousPwa = HackDefaults.Instance.PwaPathAbsolute;
 	private readonly RecordingReporter _reporter = new();
 	private readonly PdmWorkflowService _service;

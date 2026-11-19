@@ -1,6 +1,6 @@
 using System;
 using Xunit;
-using HackPDM.Domain.Representation;
+using HackPDM.Core.Configuration;
 
 namespace HackPDM.Tests.Domain;
 

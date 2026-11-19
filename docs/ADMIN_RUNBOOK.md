@@ -42,18 +42,23 @@ HackPDM defines three cumulative roles under **Settings -> Users -> HackPDM**:
 
 ---
 
-## 4. Publishing a New HackPDM Client Release
+## 4. Publishing & Rolling Out a New HackPDM Client Release
 1. Tag and push the release (`git tag v1.2.0 && git push origin v1.2.0`).
    - `.github/workflows/windows-release.yml` builds, signs (Authenticode), verifies (`signtool verify /pa`), packages `HackPDM-1.2.0-win-x64-setup.exe`, and publishes `.sha256` files.
-   - `.github/workflows/desktop-release.yml` publishes Linux/macOS archives and `.sha256` files.
-2. Update Odoo's `hp.settings` (`client_version`, `client_download_url`, `client_download_sha256`) using the helper script:
+   - `.github/workflows/desktop-release.yml` publishes Linux (with `.desktop` launcher) and macOS archives with `.sha256` files.
+   - If `ODOO_URL`, `ODOO_DB`, `ODOO_USER`, and `ODOO_PASSWORD` repository secrets are configured, the **`rollout-odoo`** job automatically updates Odoo's `hp.settings` (`client_version`, `client_latest_version`, `client_download_url`, `client_download_sha256`).
+2. **Manual rollout or staged enforcement:**
+   - Run **Actions -> Roll out client update to Odoo** (`.github/workflows/rollout-update.yml`) from GitHub, or run the CLI helper:
    ```bash
    ODOO_URL=https://pdm.example.com ODOO_DB=hackpdm_prod ODOO_USER=admin ODOO_PASSWORD=... \
      Odoo/deploy/publish_client_release.py ">=1.2.0, <2.0.0" \
      "https://github.com/<org>/<repo>/releases/download/v1.2.0/HackPDM-1.2.0-win-x64-setup.exe" \
-     "<64-char-lowercase-sha256>"
+     "<64-char-lowercase-sha256>" \
+     --latest-version "1.2.0"
    ```
-   - `client_version` accepts exact versions (`1.2.0`), lower/upper bounds (`>=1.2.0`, `<=1.3.0`), combined ranges (`>=1.2.0, <2.0.0`), or hyphen ranges (`1.2.0 - 1.3.0`). Clients outside the configured range are denied access until updated.
+   - `client_version` enforces compatibility (`1.2.0`, `>=1.2.0`, `<=1.3.0`, `>=1.2.0, <2.0.0`, or `1.2.0 - 1.3.0`); clients outside the range are denied access until updated.
+   - `client_latest_version` enables **soft rollouts**: compatible older clients can still log in and receive a non-blocking update prompt once per session.
+   - See [docs/RELEASING.md](RELEASING.md) for signing and CI rollout setup.
 
 ---
 

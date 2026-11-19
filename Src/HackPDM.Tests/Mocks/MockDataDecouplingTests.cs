@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using Xunit;
 using HackPDM.Tests.Mocks;
-using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Tests.Mocks;
 

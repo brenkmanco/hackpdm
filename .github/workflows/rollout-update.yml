@@ -1,0 +1,93 @@
+name: Roll out client update to Odoo
+
+# Manually push (or roll back) any published GitHub Release (tag vX.Y.Z) to your Odoo server's
+# hp.settings (client_version, client_latest_version, client_download_url, client_download_sha256).
+# Requires repository secrets: ODOO_URL, ODOO_DB, ODOO_USER, ODOO_PASSWORD.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "GitHub Release tag to roll out (e.g. v1.2.0)"
+        required: true
+        type: string
+      rollout_mode:
+        description: "Version policy: soft (prompt users, allow older), mandatory (>= tag), exact (only tag), or custom"
+        required: true
+        default: "soft"
+        type: choice
+        options:
+          - soft
+          - mandatory
+          - exact
+          - custom
+      custom_version_rule:
+        description: "Required only when rollout_mode is 'custom' (e.g. '>=1.1.0, <2.0.0')"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  rollout:
+    runs-on: ubuntu-latest
+    env:
+      ODOO_URL: ${{ secrets.ODOO_URL }}
+      ODOO_DB: ${{ secrets.ODOO_DB }}
+      ODOO_USER: ${{ secrets.ODOO_USER }}
+      ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate secrets and download release checksum
+        shell: bash
+        run: |
+          if [ -z "$ODOO_URL" ] || [ -z "$ODOO_DB" ] || [ -z "$ODOO_USER" ] || [ -z "$ODOO_PASSWORD" ]; then
+            echo "::error::Missing one or more required secrets: ODOO_URL, ODOO_DB, ODOO_USER, ODOO_PASSWORD."
+            exit 1
+          fi
+
+          TAG="${{ inputs.tag }}"
+          if [[ ! "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "::error::Tag must match vX.Y.Z (got '$TAG')."
+            exit 1
+          fi
+          VERSION="${BASH_REMATCH[1]}"
+          MAJOR="${VERSION%%.*}"
+          NEXT_MAJOR=$((MAJOR + 1))
+
+          SETUP_NAME="HackPDM-${VERSION}-win-x64-setup.exe"
+          SHA_NAME="${SETUP_NAME}.sha256"
+
+          gh release download "$TAG" --pattern "$SHA_NAME" --dir /tmp/rollout
+          SHA256="$(awk '{print $1}' "/tmp/rollout/${SHA_NAME}" | tr -d '[:space:]')"
+          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${SETUP_NAME}"
+
+          case "${{ inputs.rollout_mode }}" in
+            soft)
+              VERSION_RULE=">=${MAJOR}.0.0, <${NEXT_MAJOR}.0.0"
+              ;;
+            mandatory)
+              VERSION_RULE=">=${VERSION}, <${NEXT_MAJOR}.0.0"
+              ;;
+            exact)
+              VERSION_RULE="${VERSION}"
+              ;;
+            custom)
+              VERSION_RULE="${{ inputs.custom_version_rule }}"
+              if [ -z "$VERSION_RULE" ]; then
+                echo "::error::custom_version_rule is required when rollout_mode is 'custom'."
+                exit 1
+              fi
+              ;;
+          esac
+
+          echo "Rolling out HackPDM ${VERSION} (rule: '${VERSION_RULE}')"
+          python3 Odoo/deploy/publish_client_release.py \
+            "${VERSION_RULE}" \
+            "${DOWNLOAD_URL}" \
+            "${SHA256}" \
+            --latest-version "${VERSION}"

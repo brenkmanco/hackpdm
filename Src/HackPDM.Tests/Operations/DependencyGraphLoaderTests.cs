@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 
 using HackPDM.Core.Graph;
-using HackPDM.Infrastructure.Operations;
 
 using Xunit;
 

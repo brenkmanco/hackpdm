@@ -3,7 +3,6 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 
-using HackPDM.Infrastructure.Operations;
 
 using Xunit;
 
@@ -140,4 +139,12 @@ public class ClientUpdateTests : IDisposable
 		Assert.Contains( "could not download", got.Error );
 		Assert.Empty( Directory.EnumerateFileSystemEntries( target ) );
 	}
+
+	[Theory]
+	[InlineData( "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef  HackPDM-1.2.0-win-x64-setup.exe\n", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" )]
+	[InlineData( "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789", "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789" )]
+	[InlineData( "", null )]
+	[InlineData( "not-a-hash  file.exe", null )]
+	public void ParseSha256File_ExtractsValidDigest( string content, string? expected )
+		=> Assert.Equal( expected, ClientUpdate.ParseSha256File( content ) );
 }

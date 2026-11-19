@@ -1,7 +1,3 @@
-using HackPDM.Infrastructure.Hack;
-using HackPDM.Core.Hack;
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Infrastructure.SldWrks;
 
 namespace HackPDM.Tests.Core;
 
@@ -74,12 +70,12 @@ public class KitBotDependencyTreeTests
 		using var pwa = new HackPDM.Tests.Characterization.PwaScope( folder );
 		var top = new HackFile( Path.Combine( folder, "0_Kitbot2026withBumpers.SLDASM" ) );
 
-		var (success, files, broken) = await top.GetHackFileWithDependencies();
+		var (success, files, broken) = await DependencyScanner.GetFileWithDependenciesAsync( top );
 
-		Assert.True( success, $"broken references: {string.Join( ", ", broken.Select( b => $"{b.Value?.Result} {b.Value?.Hack?.FullPath ?? "(no file)"}" ) )}" );
+		Assert.True( success, $"broken references: {string.Join( ", ", broken.Select( b => $"{b.Reason} {b.FullPath ?? "(no file)"}" ) )}" );
 		Assert.All( files, f => Assert.True( File.Exists( f.FullPath ), f.FullPath ) );
 		// every file the stored component tree lists, plus the assembly itself
-		var store = HackPDM.Infrastructure.SldWrks.Format.SwStreamStore.Open( top.FullPath! );
+		var store = HackPDM.Core.SolidWorks.Format.SwStreamStore.Open( top.FullPath! );
 		int treeFiles = System.Text.RegularExpressions.Regex.Matches( store.GetText( "swXmlContents/COMPINSTANCETREE" )!, "<swFile " ).Count;
 		Assert.Equal( treeFiles, files.Select( f => f.FullPath ).Distinct().Count() );
 	}

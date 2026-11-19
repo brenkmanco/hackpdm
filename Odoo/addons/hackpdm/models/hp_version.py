@@ -169,6 +169,9 @@ class hp_version(models.Model):
 
     def init(self):
         """Ensures composite indexes on the version dependency join table for fast recursive traversals."""
+        self.env.cr.execute("SELECT to_regclass('hp_version_relationship')")
+        if not self.env.cr.fetchone()[0]:
+            return
         self.env.cr.execute(
             "CREATE INDEX IF NOT EXISTS hp_version_rel_parent_child_idx "
             "ON hp_version_relationship (parent_id, child_id)"
@@ -177,6 +180,14 @@ class hp_version(models.Model):
             "CREATE INDEX IF NOT EXISTS hp_version_rel_child_parent_idx "
             "ON hp_version_relationship (child_id, parent_id)"
         )
+
+    @staticmethod
+    def _clean_int_ids(ids):
+        if not ids:
+            return []
+        if isinstance(ids, int):
+            return [ids] if ids > 0 else []
+        return [int(x) for x in ids if x]
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -342,12 +353,9 @@ class hp_version(models.Model):
             set[int] | list: The starting ids plus all dependency version ids; ``[]`` when none were
             given or the query fails (the error is logged).
         """
+        version_ids = self._clean_int_ids(version_ids)
         if not version_ids:
             return []
-        if isinstance(version_ids, int):
-            version_ids = [version_ids]
-        elif not isinstance(version_ids, list):
-            version_ids = list(version_ids)
 
         # using raw sql for efficient recursive dependency traversal
         # this query finds all version IDs (initial + children + grandchildren, etc.)
@@ -359,7 +367,7 @@ class hp_version(models.Model):
                 FROM dependency_versions p, hp_version_relationship c
                 JOIN hp_version vc ON vc.id = c.child_id
                 JOIN hp_entry ec ON ec.id = vc.entry_id
-                WHERE c.parent_id = p.version_id AND ec.deleted = false -- Recursively find children of non-deleted entries
+                WHERE c.parent_id = p.version_id AND COALESCE(ec.deleted, false) = false -- Recursively find children of non-deleted entries
             )
             SELECT DISTINCT version_id FROM dependency_versions;
         """
@@ -420,12 +428,9 @@ class hp_version(models.Model):
             list[int]: Unique hp.entry ids; ``[]`` when nothing was found or anything failed (logged).
         """
         try:
+            version_ids = self._clean_int_ids(version_ids)
             if not version_ids:
                 return []
-            if isinstance(version_ids, int):
-                version_ids = [version_ids]
-            elif not isinstance(version_ids, list):
-                version_ids = list(version_ids)
 
             if not (update and node_id):
                 # Fast path: resolve recursive version dependencies AND distinct entry_ids in one SQL query
@@ -440,7 +445,7 @@ class hp_version(models.Model):
                         JOIN hp_version_relationship c ON c.parent_id = p.version_id
                         JOIN hp_version vc ON vc.id = c.child_id
                         JOIN hp_entry ec ON ec.id = vc.entry_id
-                        WHERE ec.deleted = false
+                        WHERE COALESCE(ec.deleted, false) = false
                     )
                     SELECT DISTINCT v.entry_id
                     FROM dependency_versions d
@@ -475,12 +480,9 @@ class hp_version(models.Model):
         passing those version ids back to :meth:`get_recursive_dependency_entries`.
         """
         try:
+            entry_ids = self._clean_int_ids(entry_ids)
             if not entry_ids:
                 return []
-            if isinstance(entry_ids, int):
-                entry_ids = [entry_ids]
-            elif not isinstance(entry_ids, list):
-                entry_ids = list(entry_ids)
 
             self.env.flush_all()
             query = """
@@ -498,7 +500,7 @@ class hp_version(models.Model):
                     JOIN hp_version_relationship c ON c.parent_id = p.version_id
                     JOIN hp_version vc ON vc.id = c.child_id
                     JOIN hp_entry ec ON ec.id = vc.entry_id
-                    WHERE ec.deleted = false
+                    WHERE COALESCE(ec.deleted, false) = false
                 )
                 SELECT DISTINCT v.entry_id
                 FROM dependency_versions d

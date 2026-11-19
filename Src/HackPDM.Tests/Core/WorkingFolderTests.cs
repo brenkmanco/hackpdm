@@ -1,8 +1,3 @@
-using HackPDM.Infrastructure.Hack;
-using HackPDM.Core;
-using HackPDM.Core.Hack;
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Shared.GlobalData;
 using HackPDM.Tests.Characterization;
 
 namespace HackPDM.Tests.Core;
@@ -46,10 +41,10 @@ public class WorkingFolderTests
 		string path = Path.Combine( scope.Absolute, "damaged.SLDASM" );
 		File.WriteAllText( path, "not a SolidWorks document" );
 
-		var (success, files, broken) = await new HackFile( path ).GetHackFileWithDependencies();
+		var (success, files, broken) = await DependencyScanner.GetFileWithDependenciesAsync( new HackFile( path ) );
 
 		Assert.False( success );
 		Assert.Empty( files );
-		Assert.Contains( broken, b => b.Value?.Result == HackResult.CorruptDepFile );
+		Assert.Contains( broken, b => b.Reason == HackResult.CorruptDepFile );
 	}
 }

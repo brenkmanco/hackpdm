@@ -9,7 +9,6 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
@@ -20,27 +19,18 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
-  </ItemGroup>
-
-  <!-- UI-free app models compiled in directly (the app itself targets Uno and can't be referenced) -->
-  <ItemGroup>
-    <Compile Include="..\HackPDM\Mvvm\Models\Odoo\EntrySearchService.cs" Link="Linked\EntrySearchService.cs" />
-    <Compile Include="..\HackPDM\Mvvm\Models\Hack\PdmWorkflowService.cs" Link="Linked\PdmWorkflowService.cs" />
-    <Compile Include="..\HackPDM\Mvvm\Models\Hack\EntryRow.cs" Link="Linked\EntryRow.cs" />
-    <Compile Include="..\HackPDM\Mvvm\Models\Hack\EntryListService.cs" Link="Linked\EntryListService.cs" />
-    <Compile Include="..\HackPDM\Mvvm\Models\Hack\EntryListResult.cs" Link="Linked\EntryListResult.cs" />
-    <Compile Include="..\HackPDM\Mvvm\Models\Hack\FileManagerState.cs" Link="Linked\FileManagerState.cs" />
-    <Compile Include="..\HackPDM\Mvvm\Models\Hack\LocalFileWatcher.cs" Link="Linked\LocalFileWatcher.cs" />
-    <Compile Include="..\HackPDM\Mvvm\Models\Common\IOperationReporter.cs" Link="Linked\IOperationReporter.cs" />
-    <Compile Include="..\HackPDM\Mvvm\Models\Settings\LoginSession.cs" Link="Linked\LoginSession.cs" />
+    <Using Include="HackPDM.Core.Configuration" />
+    <Using Include="HackPDM.Core.Credentials" />
+    <Using Include="HackPDM.Core.Odoo" />
+    <Using Include="HackPDM.Core.Odoo.Models" />
+    <Using Include="HackPDM.Core.Pdm" />
+    <Using Include="HackPDM.Core.Services" />
+    <Using Include="HackPDM.Core.SolidWorks" />
+    <Using Include="HackPDM.Core.SolidWorks.Format" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\HackPDM.Shared\HackPDM.Shared.csproj" />
-    <ProjectReference Include="..\HackPDM.Abstractions\HackPDM.Abstractions.csproj" />
     <ProjectReference Include="..\HackPDM.Core\HackPDM.Core.csproj" />
-    <ProjectReference Include="..\HackPDM.Domain\HackPDM.Domain.csproj" />
-    <ProjectReference Include="..\HackPDM.Infrastructure\HackPDM.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

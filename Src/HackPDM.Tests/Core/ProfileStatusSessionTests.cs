@@ -2,9 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using HackPDM.Domain.Representation;
-using HackPDM.Mvvm.Models.Settings;
-using HackPDM.Shared.GlobalData;
 
 using Xunit;
 

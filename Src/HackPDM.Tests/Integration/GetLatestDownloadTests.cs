@@ -1,15 +1,10 @@
 using System.Text;
 
-using HackPDM.Core.Hack;
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Infrastructure.Odoo.Models;
-using HackPDM.Infrastructure.Operations;
-using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Tests.Integration;
 
 /// <summary>
-/// "Get latest" downloads (PdmDownloadOperations). Large batches used to be read in one RPC
+/// "Get latest" downloads (DownloadOperations). Large batches used to be read in one RPC
 /// call with a fixed 90 s timeout; when that call failed the files in it were skipped without
 /// any error. Batches are now limited by size, failed files are retried one by one, and
 /// anything that still cannot be downloaded is reported.
@@ -22,7 +17,7 @@ public class DownloadBatchingTests
 	[Fact]
 	public void BatchBySize_RespectsFileCount()
 	{
-		var batches = PdmDownloadOperations.BatchBySize( Enumerable.Range( 1, 12 ).Select( i => V( i, 10 ) ), maxCount: 5, maxBytes: long.MaxValue );
+		var batches = DownloadOperations.BatchBySize( Enumerable.Range( 1, 12 ).Select( i => V( i, 10 ) ), maxCount: 5, maxBytes: long.MaxValue );
 		Assert.Equal( [ 5, 5, 2 ], batches.Select( b => b.Count ) );
 	}
 
@@ -32,7 +27,7 @@ public class DownloadBatchingTests
 		int[] sizesMb = [ 40, 30, 25, 20, 15, 10, 5, 3, 2, 1, 1, 2 ];
 		var versions = sizesMb.Select( ( mb, i ) => V( i + 1, mb * MB ) ).ToList();
 
-		var batches = PdmDownloadOperations.BatchBySize( versions, maxCount: 5, maxBytes: 16L * MB );
+		var batches = DownloadOperations.BatchBySize( versions, maxCount: 5, maxBytes: 16L * MB );
 
 		Assert.Equal( versions.Count, batches.Sum( b => b.Count ) );
 		Assert.All( batches, b => Assert.InRange( b.Count, 1, 5 ) );
@@ -47,25 +42,25 @@ public class DownloadBatchingTests
 	public void BatchBySize_NonPositiveCount_FallsBackToDefault( int maxCount )
 	{
 		// a max_batch_size setting of 0 used to reach Help.BatchArray and divide by zero
-		var batches = PdmDownloadOperations.BatchBySize( Enumerable.Range( 1, 7 ).Select( i => V( i, 1 ) ), maxCount, long.MaxValue );
+		var batches = DownloadOperations.BatchBySize( Enumerable.Range( 1, 7 ).Select( i => V( i, 1 ) ), maxCount, long.MaxValue );
 		Assert.Equal( [ 5, 2 ], batches.Select( b => b.Count ) );
 	}
 
 	[Fact]
 	public void BatchBySize_Empty()
 	{
-		Assert.Empty( PdmDownloadOperations.BatchBySize( [], 5 ) );
-		Assert.Empty( PdmDownloadOperations.BatchBySize( null, 5 ) );
+		Assert.Empty( DownloadOperations.BatchBySize( [], 5 ) );
+		Assert.Empty( DownloadOperations.BatchBySize( null, 5 ) );
 	}
 
 	[Fact]
 	public void ContentsTimeout_ScalesWithPayloadAndAttempt()
 	{
-		Assert.Equal( 90_000, PdmDownloadOperations.ContentsTimeoutMs( 1024 ) );           // never below the old 90 s
-		int forty = PdmDownloadOperations.ContentsTimeoutMs( 40L * MB );
+		Assert.Equal( 90_000, DownloadOperations.ContentsTimeoutMs( 1024 ) );           // never below the old 90 s
+		int forty = DownloadOperations.ContentsTimeoutMs( 40L * MB );
 		Assert.True( forty > 200_000, $"40 MB should allow well over 90 s, got {forty} ms" );
-		Assert.True( PdmDownloadOperations.ContentsTimeoutMs( 40L * MB, attempt: 2 ) > forty );
-		Assert.Equal( 30 * 60_000, PdmDownloadOperations.ContentsTimeoutMs( 10_000L * MB ) ); // capped
+		Assert.True( DownloadOperations.ContentsTimeoutMs( 40L * MB, attempt: 2 ) > forty );
+		Assert.Equal( 30 * 60_000, DownloadOperations.ContentsTimeoutMs( 10_000L * MB ) ); // capped
 	}
 }
 
@@ -77,7 +72,7 @@ public class GetLatestDownloadTests : IDisposable
 	private static readonly string[] LatestExcluded = [ "preview_image", "entry_id", "node_id", "file_modify_stamp", "attachment_id", "file_contents" ];
 
 	private readonly string _pwa = Path.Combine( Path.GetTempPath(), $"hackpdm-getlatest-{Guid.NewGuid():N}" );
-	private readonly HackPDM.Abstractions.ISettingsProvider? _previousSettings = HackDefaults.Instance.SettingsProvider;
+	private readonly HackPDM.Core.Configuration.ISettingsProvider? _previousSettings = HackDefaults.Instance.SettingsProvider;
 
 	public GetLatestDownloadTests()
 	{
@@ -98,7 +93,7 @@ public class GetLatestDownloadTests : IDisposable
 		await OdooTestServer.LoginAsync();
 		var ids = await OdooRpc.SearchAsync( "hp.entry", OdooDomain.Where( "name", "in", Seeded ) );
 		Assert.True( ids.Value?.Count == Seeded.Length, $"seed data missing (Odoo/ci/seed_smoke_data.py): {ids}" );
-		var versions = await PdmDownloadOperations.GetLatestVersionsAsync( ids.Value!, LatestExcluded );
+		var versions = await DownloadOperations.GetLatestVersionsAsync( ids.Value!, LatestExcluded );
 		Assert.Equal( Seeded.Length, versions?.Length );
 		return versions!;
 	}
@@ -112,11 +107,11 @@ public class GetLatestDownloadTests : IDisposable
 	{
 		var versions = await SeededLatestVersionsAsync();
 		// a tiny byte budget forces one file per batch, exercising batching end to end
-		var batches = PdmDownloadOperations.BatchBySize( versions, maxCount: 5, maxBytes: 1 );
+		var batches = DownloadOperations.BatchBySize( versions, maxCount: 5, maxBytes: 1 );
 		Assert.Equal( Seeded.Length, batches.Count );
 
 		var log = new List<string>();
-		var summary = await PdmDownloadOperations.ProcessDownloadsAsync( batches, CancellationToken.None, 2,
+		var summary = await DownloadOperations.ProcessDownloadsAsync( batches, CancellationToken.None, 2,
 			log: ( s, m ) => { lock( log ) log.Add( $"{s}: {m}" ); } );
 
 		Assert.True( summary.Failed.IsEmpty, string.Join( "; ", summary.Failed ) );
@@ -150,7 +145,7 @@ public class GetLatestDownloadTests : IDisposable
 		List<List<HpVersion>> batches = [ [ .. versions, ghost ] ];
 
 		var log = new List<string>();
-		var summary = await PdmDownloadOperations.ProcessDownloadsAsync( batches, CancellationToken.None, 1,
+		var summary = await DownloadOperations.ProcessDownloadsAsync( batches, CancellationToken.None, 1,
 			log: ( s, m ) => { lock( log ) log.Add( $"{s}: {m}" ); } );
 
 		Assert.Equal( Seeded.Length, summary.Downloaded );

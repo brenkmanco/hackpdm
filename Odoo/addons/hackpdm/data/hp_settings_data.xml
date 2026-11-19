@@ -23,6 +23,11 @@
             <field name="type">char</field>
             <field name="char_value">&gt;=1.1.0, &lt;2.0.0</field>
         </record>
+        <record id="hp_settings_client_latest_version" model="hp.settings">
+            <field name="name">client_latest_version</field>
+            <field name="description">latest published HackPDM client version (e.g. '1.2.0'); compatible older clients are prompted to update without blocking login</field>
+            <field name="type">char</field>
+        </record>
         <record id="hp_settings_client_download_url" model="hp.settings">
             <field name="name">client_download_url</field>
             <field name="description">where clients download the installer (https URL, or a file or network-share path)</field>

@@ -1,8 +1,6 @@
 using System;
 using System.IO;
 
-using HackPDM.Abstractions;
-using HackPDM.Core.Hack;
 using HackPDM.Tests.Integration;
 
 using Xunit;

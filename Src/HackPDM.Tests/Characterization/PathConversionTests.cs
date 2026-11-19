@@ -1,6 +1,5 @@
 using System.IO;
 
-using HackPDM.Core;
 
 using Xunit;
 

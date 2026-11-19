@@ -16,5 +16,16 @@
     <!-- Uno single project: the package (MSIX) manifest's version -->
     <ApplicationDisplayVersion>$(HackPdmVersion)</ApplicationDisplayVersion>
     <ApplicationVersion>1</ApplicationVersion>
+
+    <!-- Publishing & Windows Explorer File Properties metadata -->
+    <Product>HackPDM</Product>
+    <Company>HackPDM</Company>
+    <Authors>Justin Johnson and HackPDM Contributors</Authors>
+    <Description>Open-source local-first Product Data Management (PDM) desktop client for CAD &amp; Odoo.</Description>
+    <Copyright>Copyright (c) HackPDM Contributors (GPL-3.0)</Copyright>
+    <PackageProjectUrl>https://github.com/moonxbears/wyrmpdm</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/moonxbears/wyrmpdm</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
   </PropertyGroup>
 </Project>

@@ -1,8 +1,6 @@
 using System;
 using System.Linq;
 
-using HackPDM.Core.Hack;
-using HackPDM.Shared.GlobalData;
 
 using Xunit;
 

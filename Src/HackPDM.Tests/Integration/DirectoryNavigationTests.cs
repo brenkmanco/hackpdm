@@ -1,5 +1,3 @@
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Infrastructure.Odoo.Models;
 
 namespace HackPDM.Tests.Integration;
 
@@ -105,7 +103,7 @@ public class DirectoryNavigationTests
 	public async Task VersionFromLocal_ReturnsMetadataWithoutBlobs()
 	{
 		int latest = await LatestVersionIdAsync( "bracket.txt" );
-		var local = new HackPDM.Core.Hack.HackFile { Name = "bracket.txt", RelativePath = @"root\Projects\Parts" };
+		var local = new HackPDM.Core.Pdm.HackFile { Name = "bracket.txt", RelativePath = @"root\Projects\Parts" };
 
 		var (found, version) = await local.GetVersionFromLocal();
 

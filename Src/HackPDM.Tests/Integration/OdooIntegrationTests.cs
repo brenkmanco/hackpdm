@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 
-using HackPDM.Abstractions;
-using HackPDM.Infrastructure.Odoo;
 
 namespace HackPDM.Tests.Integration;
 

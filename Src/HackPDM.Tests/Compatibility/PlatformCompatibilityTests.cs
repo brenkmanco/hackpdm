@@ -2,11 +2,7 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using Xunit;
-using HackPDM.Core;
 
-using HackPDM.Domain.Representation;
-using HackPDM.Infrastructure.Odoo;
-using HackPDM.Infrastructure.SldWrks;
 
 namespace HackPDM.Tests.Compatibility;
 
@@ -188,18 +184,5 @@ public class PlatformCompatibilityTests
             // Either null or initialized instance, but call succeeded
             Assert.True(docMgr is null || docMgr is not null);
         }
-    }
-
-    [Fact]
-    public void CrossPlatformWindowConfig_Vector4PositionAndSize_IsPlatformIndependent()
-    {
-        // Window coordinates and sizes in HackPDM use Vector4<int> (x, y, width, height)
-        // to maintain 100% platform-independent geometry without dependency on native UI SDKs.
-        Vector4<int> posAndSize = (100, 150, 1024, 768);
-
-        Assert.Equal(100, posAndSize.x);
-        Assert.Equal(150, posAndSize.y);
-        Assert.Equal(1024, posAndSize.z);
-        Assert.Equal(768, posAndSize.w);
     }
 }
