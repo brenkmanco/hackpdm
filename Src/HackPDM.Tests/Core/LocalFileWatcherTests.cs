@@ -108,6 +108,40 @@ public class LocalFileWatcherTests
 		}
 	}
 
+	[Fact]
+	public async Task Watcher_ReportsCreatedRenamedAndDeletedFolders_AndFilesInsideRenamedFolder()
+	{
+		string root = Path.Combine( Path.GetTempPath(), $"hackpdm-watch-dir-{Guid.NewGuid():N}" );
+		ConcurrentQueue<LocalFileChange> seen = new();
+		using LocalFileWatcher watcher = new();
+		watcher.Changed += batch => { foreach( var change in batch ) seen.Enqueue( change ); };
+		try
+		{
+			watcher.Watch( root );
+			string originalDir = Path.Combine( root, "NewFolder" );
+			Directory.CreateDirectory( originalDir );
+			await WaitFor( seen, originalDir, LocalChangeKind.Created );
+
+			string fileBefore = Path.Combine( originalDir, "part.txt" );
+			await File.WriteAllTextAsync( fileBefore, "data" );
+			await WaitFor( seen, fileBefore, LocalChangeKind.Created );
+
+			string renamedDir = Path.Combine( root, "RenamedFolder" );
+			Directory.Move( originalDir, renamedDir );
+			await WaitFor( seen, originalDir, LocalChangeKind.Deleted );
+			await WaitFor( seen, renamedDir, LocalChangeKind.Created );
+			await WaitFor( seen, Path.Combine( renamedDir, "part.txt" ), LocalChangeKind.Created );
+
+			Directory.Delete( renamedDir, recursive: true );
+			await WaitFor( seen, renamedDir, LocalChangeKind.Deleted );
+		}
+		finally
+		{
+			if( Directory.Exists( root ) )
+				Directory.Delete( root, recursive: true );
+		}
+	}
+
 	private static async Task WaitFor( ConcurrentQueue<LocalFileChange> seen, string path, LocalChangeKind kind )
 	{
 		for( int i = 0; i < 50; i++ )

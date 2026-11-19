@@ -1,75 +1,86 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
+
+using HackPDM.Mvvm.Views.Common.Controls;
+using HackPDM.Shell;
 
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Data;
-using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Navigation;
-
-using Windows.Foundation;
-using Windows.Foundation.Collections;
-using Windows.UI;
-
-
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
 
 namespace HackPDM.Mvvm.Views.Dialogs;
+
 /// <summary>
-/// An empty window that can be used on its own or navigated to within a Frame.
+/// Compact always-on-top Picture-in-Picture window for the file manager's image preview.
+/// Uses <see cref="AppWindowPresenterKind.CompactOverlay"/> on Windows when available, and falls back
+/// to an always-on-top <see cref="OverlappedPresenter"/> on platforms (such as Uno Skia Desktop) where
+/// CompactOverlay is unsupported.
 /// </summary>
 public sealed partial class PipWindow : Window
 {
-	// The explicit callback event for MainWindow to listen to
+	private const int DefaultWidth = 420;
+	private const int DefaultHeight = 320;
+
 	public event EventHandler? ReturnRequested;
 
 	public PipWindow()
 	{
-		this.InitializeComponent();
-		ExtendsContentIntoTitleBar = true;
-		ConfigureCompactOverlay();
+		InitializeComponent();
+		ConfigureWindow();
 	}
 
-	private void ConfigureCompactOverlay()
+	private void ConfigureWindow()
 	{
-		this.AppWindow?.SetPresenter( AppWindowPresenterKind.CompactOverlay );
+		bool compactOverlay = false;
+#if WINDOWS
+		if( this.SetWindowType( AppWindowPresenterKind.CompactOverlay ) )
+		{
+			compactOverlay = true;
+			ExtendsContentIntoTitleBar = true;
+		}
+#endif
+		if( !compactOverlay )
+		{
+			try
+			{
+				this.SetWindowType( AppWindowPresenterKind.Overlapped );
+				if( AppWindow?.Presenter is OverlappedPresenter presenter )
+				{
+					presenter.IsAlwaysOnTop = true;
+					presenter.IsMaximizable = false;
+					presenter.IsMinimizable = false;
+				}
+			}
+			catch
+			{
+				// Some window managers restrict presenter flags; leave defaults intact
+			}
+		}
 
+		try
+		{
+			WindowHelper.ResizeWindow( this, DefaultWidth, DefaultHeight );
+			X11WindowSize.TryResize( this, DefaultWidth, DefaultHeight );
+		}
+		catch
+		{
+			// Non-fatal in headless/restricted environments
+		}
 
+		AppComposition.Theme.Attach( this );
+	}
 
+	/// <summary>Updates the preview image and fallback message displayed in the PiP window.</summary>
+	public void SetPreview( ImageSource? source, string? statusText = null, string? title = null )
+	{
+		if( !string.IsNullOrWhiteSpace( title ) )
+			Title = title;
+		PipImage.Source = source;
+		bool hasImage = source is not null;
+		PipImage.Visibility = hasImage ? Visibility.Visible : Visibility.Collapsed;
+		PipEmptyText.Visibility = hasImage ? Visibility.Collapsed : Visibility.Visible;
+		PipEmptyText.Text = string.IsNullOrWhiteSpace( statusText ) ? "No preview available" : statusText;
 	}
 
 	private void OnExitPipClicked( object sender, RoutedEventArgs e )
-	{
-		// Fire the event to notify MainWindow
-		ReturnRequested?.Invoke( this, EventArgs.Empty );
-	}
-
-	/// <summary>Shows an element in the window, replacing whatever it showed.</summary>
-	/// <param name="element">The element to host; it must not have another parent.</param>
-	public void HostComponent( UIElement element )
-	{
-		PipContentRoot.Children.Clear();
-		PipContentRoot.Children.Add( element );
-	}
-
-	/// <summary>Removes the hosted element so it can be put back elsewhere.</summary>
-	/// <returns>The element that was shown; null when the window was empty.</returns>
-	public UIElement? ReleaseComponent()
-	{
-		if( PipContentRoot.Children.Count > 0 )
-		{
-			var element = PipContentRoot.Children[0];
-			PipContentRoot.Children.Clear();
-			return element;
-		}
-		return null;
-	}
+		=> ReturnRequested?.Invoke( this, EventArgs.Empty );
 }

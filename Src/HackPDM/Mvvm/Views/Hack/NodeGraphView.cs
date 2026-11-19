@@ -471,39 +471,92 @@ public sealed partial class NodeGraphView : Grid
 		return (line, glow);
 	}
 
-	/// <summary>A cubic curve leaving the parent to the right and entering the child from the left.</summary>
+	/// <summary>A cubic curve leaving the parent to the right and entering the child from the left, routing through any bend points.</summary>
 	private static PathGeometry Curve( EdgeRoute r )
 	{
-		double bend = Math.Max( 50, Math.Abs( r.ToX - r.FromX ) / 2 );
 		PathFigure figure = new() { StartPoint = new Point( r.FromX, r.FromY ), IsClosed = false, IsFilled = false };
-		figure.Segments.Add( new BezierSegment
+		if( r.BendPoints.Count == 0 )
 		{
-			Point1 = new Point( r.FromX + bend, r.FromY ),
-			Point2 = new Point( r.ToX - bend, r.ToY ),
-			Point3 = new Point( r.ToX, r.ToY ),
-		} );
+			double bend = Math.Max( 50, Math.Abs( r.ToX - r.FromX ) / 2 );
+			figure.Segments.Add( new BezierSegment
+			{
+				Point1 = new Point( r.FromX + bend, r.FromY ),
+				Point2 = new Point( r.ToX - bend, r.ToY ),
+				Point3 = new Point( r.ToX, r.ToY ),
+			} );
+			return Geometry( figure );
+		}
+
+		List<(double X, double Y)> pts = [ (r.FromX, r.FromY), .. r.BendPoints, (r.ToX, r.ToY) ];
+		for( int i = 0; i + 1 < pts.Count; i++ )
+		{
+			var (x0, y0) = pts[ i ];
+			var (x1, y1) = pts[ i + 1 ];
+			double dx = x1 - x0;
+			double dy = y1 - y0;
+			if( Math.Abs( dy ) < 0.5 || Math.Abs( dx ) < 0.5 )
+			{
+				figure.Segments.Add( new LineSegment { Point = new Point( x1, y1 ) } );
+			}
+			else
+			{
+				double bend = Math.Max( 20, Math.Abs( dx ) * 0.5 );
+				double dir = Math.Sign( dx );
+				figure.Segments.Add( new BezierSegment
+				{
+					Point1 = new Point( x0 + dir * bend, y0 ),
+					Point2 = new Point( x1 - dir * bend, y1 ),
+					Point3 = new Point( x1, y1 ),
+				} );
+			}
+		}
 		return Geometry( figure );
 	}
 
-	/// <summary>Right, down (or up) halfway across, right again, with rounded bends.</summary>
+	/// <summary>Orthogonal routed link with rounded bends placed cleanly inside empty column gaps.</summary>
 	private static PathGeometry Elbow( EdgeRoute r )
 	{
 		PathFigure figure = new() { StartPoint = new Point( r.FromX, r.FromY ), IsClosed = false, IsFilled = false };
-		double mid = r.FromX + ( r.ToX - r.FromX ) / 2;
-		double dy = r.ToY - r.FromY;
-		double bend = Math.Min( 12, Math.Min( Math.Abs( dy ) / 2, Math.Abs( r.ToX - r.FromX ) / 4 ) );
-		if( bend < 0.5 )
+		if( r.BendPoints.Count == 0 )
 		{
-			figure.Segments.Add( new LineSegment { Point = new Point( r.ToX, r.ToY ) } );
+			double span = r.ToX - r.FromX;
+			double stagger = ( ( ( r.Edge.Parent * 31 + r.Edge.Child * 17 ) & 7 ) - 3.5 ) * 3.5;
+			double maxStagger = Math.Abs( span ) * 0.2;
+			double mid = r.FromX + span / 2 + Math.Clamp( stagger, -maxStagger, maxStagger );
+			AppendElbowSegment( figure, r.FromX, r.FromY, r.ToX, r.ToY, mid );
 			return Geometry( figure );
 		}
-		double sign = Math.Sign( dy );
-		figure.Segments.Add( new LineSegment { Point = new Point( mid - bend, r.FromY ) } );
-		figure.Segments.Add( new QuadraticBezierSegment { Point1 = new Point( mid, r.FromY ), Point2 = new Point( mid, r.FromY + sign * bend ) } );
-		figure.Segments.Add( new LineSegment { Point = new Point( mid, r.ToY - sign * bend ) } );
-		figure.Segments.Add( new QuadraticBezierSegment { Point1 = new Point( mid, r.ToY ), Point2 = new Point( mid + bend, r.ToY ) } );
-		figure.Segments.Add( new LineSegment { Point = new Point( r.ToX, r.ToY ) } );
+
+		List<(double X, double Y)> pts = [ (r.FromX, r.FromY), .. r.BendPoints, (r.ToX, r.ToY) ];
+		for( int i = 0; i + 1 < pts.Count; i++ )
+		{
+			var (x0, y0) = pts[ i ];
+			var (x1, y1) = pts[ i + 1 ];
+			if( Math.Abs( y1 - y0 ) < 0.5 || Math.Abs( x1 - x0 ) < 0.5 )
+				figure.Segments.Add( new LineSegment { Point = new Point( x1, y1 ) } );
+			else
+				AppendElbowSegment( figure, x0, y0, x1, y1, x0 + ( x1 - x0 ) / 2 );
+		}
 		return Geometry( figure );
+	}
+
+	private static void AppendElbowSegment( PathFigure figure, double x0, double y0, double x1, double y1, double mid )
+	{
+		double dx = x1 - x0;
+		double dy = y1 - y0;
+		double bend = Math.Min( 12, Math.Min( Math.Abs( dy ) / 2, Math.Abs( dx ) / 4 ) );
+		if( bend < 0.5 )
+		{
+			figure.Segments.Add( new LineSegment { Point = new Point( x1, y1 ) } );
+			return;
+		}
+		double signX = Math.Sign( dx );
+		double signY = Math.Sign( dy );
+		figure.Segments.Add( new LineSegment { Point = new Point( mid - signX * bend, y0 ) } );
+		figure.Segments.Add( new QuadraticBezierSegment { Point1 = new Point( mid, y0 ), Point2 = new Point( mid, y0 + signY * bend ) } );
+		figure.Segments.Add( new LineSegment { Point = new Point( mid, y1 - signY * bend ) } );
+		figure.Segments.Add( new QuadraticBezierSegment { Point1 = new Point( mid, y1 ), Point2 = new Point( mid + signX * bend, y1 ) } );
+		figure.Segments.Add( new LineSegment { Point = new Point( x1, y1 ) } );
 	}
 
 	/// <summary>Grid lines behind the graph, reaching well past it so panning does not run off the grid at once.</summary>

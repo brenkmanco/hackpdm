@@ -134,8 +134,9 @@ public static class VersionFileService
 			version.WinPathway = toPath;
 			return true;
 		}
-		catch
+		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or ArgumentException )
 		{
+			HackPDM.Core.Logging.HackLogger.Warn( "VersionFileService", $"Could not move '{version.name}' to '{toPath}': {ex.Message}", ex );
 			return false;
 		}
 	}

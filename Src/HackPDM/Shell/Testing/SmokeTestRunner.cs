@@ -312,7 +312,170 @@ internal static class SmokeTestRunner
 
 				return $"{edited.Name} rebuilt, {others.Count} other rows untouched, added + removed a row, badge shown";
 			} )
-			&& await Step( "dependency graph (children, parents, both, zoom)", DependencyGraphStepAsync );
+			&& await Step( "dependency graph (children, parents, both, zoom)", DependencyGraphStepAsync )
+			&& await Step( "capture affected visuals", CaptureAffectedVisualsAsync );
+	}
+
+	private static async Task<string> CaptureAffectedVisualsAsync()
+	{
+		if( Environment.GetEnvironmentVariable( "HACKPDM_SMOKE_SCREENSHOT" ) is not { Length: > 0 }
+			|| Environment.GetEnvironmentVariable( ThemeService.SmokeThemeVariable ) is { Length: > 0 } )
+			return "skipped (no screenshot path or theme matrix run)";
+
+		var frame = HackApp.HomePage!.ContentFrame;
+		List<string> saved = [];
+
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.HackFileManager );
+		await WaitUntil( () => frame.Content is HackFileManagerView { IsLoaded: true } fm && fm.ViewModel.IsListLoaded, "HackFileManager shown with entries" );
+		var fmPage = (HackFileManagerView)frame.Content;
+		await Task.Delay( 400 );
+		saved.Add( await SaveScreenshotAsync( (UIElement)HackApp.Window!.Content!, "shell-nav" ) );
+		saved.Add( await SaveScreenshotAsync( fmPage, "file-manager" ) );
+		fmPage.ApplyLayoutPresetForTest( HackPDM.Mvvm.Models.Settings.WorkspaceLayoutPreset.RightInspector );
+		await Task.Delay( 350 );
+		saved.Add( await SaveScreenshotAsync( fmPage, "file-manager-docked" ) );
+		fmPage.ApplyLayoutPresetForTest( HackPDM.Mvvm.Models.Settings.WorkspaceLayoutPreset.Balanced );
+		await Task.Delay( 250 );
+		fmPage.ShowTopTab( changes: true );
+		await Task.Delay( 400 );
+		saved.Add( await SaveScreenshotAsync( fmPage, "file-manager-changes" ) );
+		fmPage.ShowTopTab( changes: false );
+
+		// Capture File Manager active loading overlays (determinate hashing progress + tree overlay)
+		fmPage.ViewModel.TreeLoadingStatus = "Syncing local workspace folders…";
+		fmPage.ViewModel.IsTreeLoading = true;
+		fmPage.ViewModel.EntriesLoadingStatus = "Comparing local files (640 / 1,280)…";
+		fmPage.ViewModel.IsEntriesProgressIndeterminate = false;
+		fmPage.ViewModel.EntriesLoadingPercent = 50;
+		fmPage.ViewModel.IsEntriesLoading = true;
+		await Task.Delay( 300 );
+		saved.Add( await SaveScreenshotAsync( fmPage, "file-manager-loading" ) );
+		fmPage.ViewModel.IsEntriesLoading = false;
+		fmPage.ViewModel.IsTreeLoading = false;
+
+		WindowHelper.CreateWindowAndPage<HackPDM.Mvvm.Views.Odoo.OdooFileTypeManagerView>( out var typesPage, out var typesWindow );
+		typesPage.StoreWindowInstance( typesWindow );
+		await WaitUntil( () => typesPage.IsLoaded, "OdooFileTypeManagerView shown" );
+		await Task.Delay( 400 );
+		saved.Add( await SaveScreenshotAsync( typesPage, "file-types" ) );
+		typesWindow.Close();
+
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.ProfileManager );
+		await WaitUntil( () => frame.Content is ProfileManagerView { IsLoaded: true }, "ProfileManager shown" );
+		var pmPage = (ProfileManagerView)frame.Content;
+		pmPage.ViewModel.CheckStatusCommand.Execute( null );
+		await pmPage.ViewModel.TestConnectionCommand.ExecuteAsync( null );
+		if( !pmPage.ViewModel.OStatus.Any( m => m.Category == ProfileStatusCategory.Login )
+			|| !pmPage.ViewModel.OStatus.Any( m => m.Category == ProfileStatusCategory.Connection )
+			|| !pmPage.ViewModel.OStatus.Any( m => m.Category == ProfileStatusCategory.Configuration )
+			|| !pmPage.ViewModel.OStatus.Any( m => m.Category == ProfileStatusCategory.Settings ) )
+			throw new InvalidOperationException( "ProfileManager missing expected Login/Connection/Configuration/Settings status messages" );
+
+		// Exercise area filter round-trip and restore All Areas before capturing visual
+		pmPage.ViewModel.SelectedCategoryFilterIndex = 2;
+		await WaitUntil( () => pmPage.ViewModel.FilteredStatus.All( m => m.Category == ProfileStatusCategory.Connection ) && pmPage.ViewModel.FilteredStatus.Count > 0, "ProfileManager Connection filter applied" );
+		pmPage.ViewModel.SelectedCategoryFilterIndex = 0;
+
+		await Task.Delay( 400 );
+		saved.Add( await SaveScreenshotAsync( pmPage, "profile-manager" ) );
+
+		pmPage.ViewModel.LoginStatusText = "Loading workspace metadata (nodes, users, types, settings)…";
+		pmPage.ViewModel.IsLoggingIn = true;
+		await Task.Delay( 300 );
+		saved.Add( await SaveScreenshotAsync( pmPage, "profile-manager-loading" ) );
+		pmPage.ViewModel.IsLoggingIn = false;
+		pmPage.ViewModel.LoginStatusText = string.Empty;
+
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.Configuration );
+		await WaitUntil( () => frame.Content is ConfigurationView { IsLoaded: true }, "ConfigurationView shown" );
+		await Task.Delay( 400 );
+		saved.Add( await SaveScreenshotAsync( (UIElement)frame.Content, "configuration" ) );
+
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.Settings );
+		await WaitUntil( () => frame.Content is ApplicationSettingsView { IsLoaded: true }, "ApplicationSettingsView shown" );
+		( (ApplicationSettingsView)frame.Content ).SelectSection( "Status" );
+		await Task.Delay( 500 );
+		saved.Add( await SaveScreenshotAsync( (UIElement)frame.Content, "status-settings" ) );
+
+		// Populate representative statuses + metrics, navigate back to HackFileManager, and test docked + detached Status Log & Search Vault extensions
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.HackFileManager );
+		await WaitUntil( () => frame.Content is HackPDM.Mvvm.Views.Hack.HackFileManagerView { IsLoaded: true }, "HackFileManager active for docked extensions" );
+
+		var statusVm = AppComposition.StatusLog;
+		statusVm.AutoClose = false;
+		statusVm.ResetProgress( 5 );
+		statusVm.AddLog( new( ) { Status = StatusMessage.PROCESSING, Message = "Downloading latest version: Projects\\Parts\\bracket.txt" } );
+		statusVm.AddLog( new( ) { Status = StatusMessage.SUCCESS, Message = "Committed 2 file(s) to Projects\\Assembly" } );
+		statusVm.AddLog( new( ) { Status = StatusMessage.INFO, Message = "Found 5 entries in Projects\\Assembly" } );
+		statusVm.AddLog( new( ) { Status = StatusMessage.WARNING, Message = "Kept local changes to Projects\\Parts\\plate.txt" } );
+		statusVm.AddLog( new( ) { Status = StatusMessage.ERROR, Message = "Checksum mismatch downloading Projects\\Parts\\nut.sldprt" } );
+		statusVm.Advance( 3, 1 );
+		statusVm.AddDownloadedBytes( 1_572_864 );
+		statusVm.AddUploadedBytes( 524_288 );
+
+		var dialogs = (HackPDM.Mvvm.Views.Dialogs.DialogService)AppComposition.Dialogs;
+		dialogs.SetStatusMinimalMode( false );
+		dialogs.SetSearchMinimalMode( false );
+		dialogs.ShowStatusWindow();
+		dialogs.ShowSearchWindow();
+		await WaitUntil(
+			() => dialogs.CurrentStatusPage is { IsLoaded: true }
+				&& dialogs.CurrentSearchPage is { IsLoaded: true }
+				&& HackApp.HomePage is { IsStatusDrawerOpen: true, IsSearchDrawerOpen: true },
+			"Docked StatusDialogView and SearchOdooView shown in HomeView" );
+		var statusPage = dialogs.CurrentStatusPage!;
+		var searchPage = dialogs.CurrentSearchPage!;
+		await searchPage.ViewModel.SearchCommand.ExecuteAsync( null );
+		await Task.Delay( 500 );
+		saved.Add( await SaveScreenshotAsync( (UIElement)HackApp.Window!.Content!, "shell-docked-extensions" ) );
+
+		// Switch both extensions to Minimal mode, verify category counts + Error hover popup, and capture visual
+		dialogs.SetSearchMinimalMode( true );
+		dialogs.SetStatusMinimalMode( true );
+		await WaitUntil(
+			() => statusPage.IsMinimalMode
+				&& searchPage.IsMinimalMode
+				&& statusVm.ProcessingCount >= 1
+				&& statusVm.InfoCount >= 1
+				&& statusVm.WarningCount >= 1
+				&& statusVm.ErrorCount >= 1,
+			"Minimal Search and Status categories shown" );
+		await Task.Delay( 300 );
+		statusPage.OpenHoverPopupForTest( StatusMessage.ERROR );
+		await Task.Delay( 250 );
+		saved.Add( await SaveScreenshotAsync( (UIElement)HackApp.Window!.Content!, "shell-minimal-extensions" ) );
+
+		// Clicking the hover popup opens the full Status Dialog; opening full Search restores full Search view
+		statusPage.ClickHoverPopupForTest();
+		dialogs.ShowFullSearchWindow();
+		await WaitUntil( () => !statusPage.IsMinimalMode && !searchPage.IsMinimalMode, "Full Status and Search restored from minimal mode" );
+
+		// Detach Status Log into its own window, capture screenshot, re-dock back into HomeView, then close
+		dialogs.DetachStatusWindow();
+		await WaitUntil( () => statusPage.ParentWindow is not null && statusPage.IsLoaded, "StatusDialogView detached" );
+		await Task.Delay( 400 );
+		saved.Add( await SaveScreenshotAsync( statusPage, "status-dialog" ) );
+		dialogs.DockStatusWindow();
+		await WaitUntil( () => HackApp.HomePage is { IsStatusDrawerOpen: true } && statusPage.IsLoaded, "StatusDialogView re-docked" );
+		dialogs.CloseStatusWindow();
+		await WaitUntil( () => HackApp.HomePage is { IsStatusDrawerOpen: false }, "StatusDialogView closed" );
+
+		// Detach Search Vault into its own window, capture screenshot, re-dock back into HomeView, then close
+		dialogs.DetachSearchWindow();
+		await WaitUntil( () => dialogs.CurrentSearchPage is { IsLoaded: true }, "SearchOdooView detached" );
+		await Task.Delay( 400 );
+		saved.Add( await SaveScreenshotAsync( searchPage, "search" ) );
+		dialogs.DockSearchWindow();
+		await WaitUntil( () => HackApp.HomePage is { IsSearchDrawerOpen: true } && searchPage.IsLoaded, "SearchOdooView re-docked" );
+		dialogs.CloseSearchWindow();
+		await WaitUntil( () => HackApp.HomePage is { IsSearchDrawerOpen: false }, "SearchOdooView closed" );
+
+		AppComposition.Session.IsLoggedIn = false;
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.HackFileManager );
+		await WaitUntil( () => frame.Content is NotLoggedInView { IsLoaded: true }, "NotLoggedInView shown" );
+		saved.Add( await SaveScreenshotAsync( (UIElement)frame.Content, "not-logged-in" ) );
+
+		return string.Join( "", saved );
 	}
 
 	/// <summary>

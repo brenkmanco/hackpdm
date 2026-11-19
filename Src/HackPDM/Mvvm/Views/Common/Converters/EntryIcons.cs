@@ -82,7 +82,7 @@ public static class EntryIcons
 		}
 		catch( Exception e )
 		{
-			System.Diagnostics.Debug.WriteLine( $"type icon failed to decode: {e.Message}" );
+			HackPDM.Core.Logging.HackLogger.Debug( "EntryIcons", $"Type icon failed to decode: {e.Message}", e );
 		}
 	}
 }
@@ -99,4 +99,31 @@ public partial class StatusIconConverter : IValueConverter
 {
 	public object? Convert( object value, Type targetType, object parameter, string language ) => value is FileStatus status ? EntryIcons.ForStatus( status ) : null;
 	public object ConvertBack( object value, Type targetType, object parameter, string language ) => throw new NotSupportedException();
+}
+
+/// <summary><see cref="FileStatus"/> → human-readable description for tooltips and change summaries.</summary>
+public sealed partial class FileStatusDescriptionConverter : IValueConverter
+{
+	public static string Describe( FileStatus status ) => status switch
+	{
+		FileStatus.Lo => "Lo — Local Only",
+		FileStatus.Ro => "Ro — Remote Only",
+		FileStatus.Ok => "Ok — Latest (In Sync)",
+		FileStatus.Nv => "Nv — Newer on Server",
+		FileStatus.Lm => "Lm — Modified Locally",
+		FileStatus.Dt => "Dt — Deleted on Server",
+		FileStatus.Ds => "Ds — Destroyed",
+		FileStatus.If => "If — Ignored by Filter",
+		FileStatus.Ft => "Ft — Unregistered Type",
+		FileStatus.Cm => "Cm — Checked Out (Me)",
+		FileStatus.Co => "Co — Checked Out (Other)",
+		FileStatus.NoVersions => "No Versions",
+		_ => status.ToString(),
+	};
+
+	public object Convert( object? value, Type targetType, object? parameter, string language )
+		=> value is FileStatus status ? Describe( status ) : string.Empty;
+
+	public object ConvertBack( object? value, Type targetType, object? parameter, string language )
+		=> throw new NotSupportedException();
 }

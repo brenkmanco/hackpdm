@@ -55,6 +55,36 @@ public static class OdooRpc
 	/// </returns>
 	/// <remarks>Posts to <see cref="OdooDefaults.OdooUrl"/> + <see cref="JsonRpcEndpoint"/> through <see cref="OdooTransport.SendJsonAsync"/>.</remarks>
 	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled. This is the only exception rethrown.</exception>
+	private static readonly HashSet<string> IdempotentObjectMethods = new( StringComparer.Ordinal )
+	{
+		"search", "search_read", "read", "search_count", "smart_read", "related_browse",
+		"get_entries", "get_all_entry_ids", "get_children_directories_by_id",
+		"get_recursive_dependency_versions", "get_recursive_dependency_entries",
+		"read_contents", "upload_chunk", "has_group",
+	};
+
+	private static bool IsIdempotentCall( string service, string method, IReadOnlyList<object?> args )
+	{
+		if( service == "common" && method == "version" )
+			return true;
+		if( service == "object" && method == "execute" && args.Count >= 5 && args[ 4 ] is string modelMethod )
+			return IdempotentObjectMethods.Contains( modelMethod );
+		return false;
+	}
+
+	private static bool IsTransientTransportError( Exception e )
+	{
+		if( e is HttpRequestException http )
+		{
+			return http.StatusCode is null
+				or System.Net.HttpStatusCode.BadGateway
+				or System.Net.HttpStatusCode.ServiceUnavailable
+				or System.Net.HttpStatusCode.GatewayTimeout
+				or System.Net.HttpStatusCode.RequestTimeout;
+		}
+		return false;
+	}
+
 	public static async Task<Result<JsonElement>> CallAsync( string service, string method, IReadOnlyList<object?> args, int? timeoutMs = null, CancellationToken token = default )
 	{
 		// every request carries the password: never send it unencrypted to another computer unless the user chose to
@@ -69,23 +99,37 @@ public static class OdooRpc
 				Args = [ .. args.Select( OdooValues.ToRpc ) ],
 			},
 		};
-		try
+
+		int maxAttempts = IsIdempotentCall( service, method, args ) ? 3 : 1;
+		for( int attempt = 1; attempt <= maxAttempts; attempt++ )
 		{
-			var response = await request.SendJsonAsync( Settings.OdooUrl + JsonRpcEndpoint, timeoutMs ?? ObjectTimeout, token: token );
-			if( response is null )
-				return Result<JsonElement>.Fail( "no response from the server" );
-			if( response.Error is not null )
-				return Result<JsonElement>.Fail( response.Error.Describe() );
-			return Result<JsonElement>.Success( response.Result?.Clone() ?? default );
+			try
+			{
+				var response = await request.SendJsonAsync( Settings.OdooUrl + JsonRpcEndpoint, timeoutMs ?? ObjectTimeout, token: token );
+				if( response is null )
+					return Result<JsonElement>.Fail( "no response from the server" );
+				if( response.Error is not null )
+					return Result<JsonElement>.Fail( response.Error.Describe() );
+				return Result<JsonElement>.Success( response.Result?.Clone() ?? default );
+			}
+			catch( OperationCanceledException ) when( token.IsCancellationRequested )
+			{
+				throw;
+			}
+			catch( Exception e ) when( attempt < maxAttempts && IsTransientTransportError( e ) )
+			{
+				int delayMs = attempt == 1 ? 250 : 750;
+				HackPDM.Core.Logging.HackLogger.Warn( "OdooRpc", $"Transient RPC error on {service}.{method} (attempt {attempt}/{maxAttempts}), retrying in {delayMs}ms: {Describe( e )}" );
+				await Task.Delay( delayMs, token );
+			}
+			catch( Exception e )
+			{
+				string detail = Describe( e );
+				HackPDM.Core.Logging.HackLogger.Error( "OdooRpc", $"RPC transport error on {service}.{method}: {detail}", e );
+				return Result<JsonElement>.Fail( detail );
+			}
 		}
-		catch( OperationCanceledException ) when( token.IsCancellationRequested )
-		{
-			throw;
-		}
-		catch( Exception e )
-		{
-			return Result<JsonElement>.Fail( Describe( e ) );
-		}
+		return Result<JsonElement>.Fail( "no response from the server" );
 	}
 
 	/// <summary>Calls a model method (<c>object.execute</c>) with the logged-in user and converts the result.</summary>

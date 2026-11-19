@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using HackPDM.Mvvm.ViewModels.Common;
@@ -11,11 +12,16 @@ namespace HackPDM.Mvvm.Views.Common.Controls;
 public sealed class FilePickerService : IFilePickerService
 {
 	/// <inheritdoc/>
-	public async Task<string?> PickOpenFileAsync( string extension )
+	public Task<string?> PickOpenFileAsync( string extension )
+		=> PickOpenFileAsync( [ extension ] );
+
+	/// <inheritdoc/>
+	public async Task<string?> PickOpenFileAsync( IReadOnlyList<string> extensions )
 	{
 		FileOpenPicker picker = new() { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
 		AttachToWindow( picker );
-		picker.FileTypeFilter.Add( extension );
+		foreach( string ext in extensions )
+			picker.FileTypeFilter.Add( ext );
 		var file = await picker.PickSingleFileAsync().AsTask();
 		return string.IsNullOrEmpty( file?.Path ) ? null : file.Path;
 	}
@@ -33,6 +39,16 @@ public sealed class FilePickerService : IFilePickerService
 		picker.FileTypeChoices.Add( typeLabel, [ extension ] );
 		var file = await picker.PickSaveFileAsync().AsTask();
 		return string.IsNullOrEmpty( file?.Path ) ? null : file.Path;
+	}
+
+	/// <inheritdoc/>
+	public async Task<string?> PickFolderAsync()
+	{
+		FolderPicker picker = new() { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+		AttachToWindow( picker );
+		picker.FileTypeFilter.Add( "*" );
+		var folder = await picker.PickSingleFolderAsync().AsTask();
+		return string.IsNullOrEmpty( folder?.Path ) ? null : folder.Path;
 	}
 
 	private static void AttachToWindow( object picker )

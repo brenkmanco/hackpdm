@@ -36,6 +36,12 @@ public interface IOperationReporter
 	/// <summary>Sets the processed counter to an absolute value.</summary>
 	/// <param name="processed">The total number of items processed so far.</param>
 	void SetProcessed( int processed );
+	/// <summary>Adds transferred bytes to the current operation and session download counters.</summary>
+	/// <param name="bytes">The number of bytes downloaded.</param>
+	void AddDownloadedBytes( long bytes );
+	/// <summary>Adds transferred bytes to the current operation and session upload counters.</summary>
+	/// <param name="bytes">The number of bytes uploaded.</param>
+	void AddUploadedBytes( long bytes );
 	/// <summary>Fills the progress bar and marks the window idle.</summary>
 	void Complete();
 

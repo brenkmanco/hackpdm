@@ -1,5 +1,6 @@
 using HackPDM.Mvvm.Views.Hack;
 using HackPDM.Mvvm.Views.Odoo;
+
 using Microsoft.UI.Xaml.Controls;
 
 namespace HackPDM.Mvvm.Views.Settings;
@@ -9,13 +10,8 @@ public sealed partial class ConfigurationView : Page
 {
 	public ConfigurationView()
 	{
-		Frame odooFrame = new();
-		Frame hackFrame = new();
-		StackPanel stack = new();
-		stack.Children.Add( odooFrame );
-		stack.Children.Add( hackFrame );
-		Content = new ScrollView { Content = stack };
-		odooFrame.Navigate( typeof( OdooSettingsView ) );
-		hackFrame.Navigate( typeof( HackSettingsView ) );
+		InitializeComponent();
+		OdooFrame.Navigate( typeof( OdooSettingsView ) );
+		HackFrame.Navigate( typeof( HackSettingsView ) );
 	}
 }

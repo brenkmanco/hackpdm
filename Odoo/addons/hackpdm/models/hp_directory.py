@@ -262,7 +262,6 @@ class hp_directory(models.Model):
         record = self._get_record_for_filepath(value)
         if record:
             dict_ids = self._recurse_directories(record, True)
-            #print(dict_ids)
             return dict_ids
         else:
             return None
@@ -289,7 +288,6 @@ class hp_directory(models.Model):
         directory_dict = {}
         if record:
             directory_dict = self._recurse_directories(record, withEntries)
-            #print(dict_ids)
 
         return directory_dict
 
@@ -338,9 +336,8 @@ class hp_directory(models.Model):
 
             if record:
                 entry_dict = self._get_entry_dict(record, True, showInactive)
-                #print(dict_ids)
-        except Exception as e:
-            logging.error(e)
+        except Exception:
+            logging.exception("get_entries failed for directory %s", value)
         return entry_dict
 
     def _get_all_entry_ids(self, directory, root_entry_list, withDeleted=False):
@@ -365,20 +362,17 @@ class hp_directory(models.Model):
         Returns:
             list[int]: hp.entry ids; ``[]`` when the folder does not exist or anything fails (logged).
         """
-        entry_list = []
         try:
-            record = self.env["hp.directory"].search([('id', '=', value)])[0]
-            if record:
-                if withSubEntries:
-                    self._get_all_entry_ids(record, entry_list, withDeleted)
-                else:
-                    for entry in record.entry_ids:
-                        if withDeleted or not(entry.deleted):
-                            entry_list.append(entry.id)
-
+            record = self.env["hp.directory"].browse(value).exists()
+            if not record:
+                return []
+            domain = [("dir_id", "child_of" if withSubEntries else "=", record.id)]
+            if not withDeleted:
+                domain.append(("deleted", "=", False))
+            return self.env["hp.entry"].search(domain).ids
         except Exception as e:
             logging.error(e)
-        return entry_list
+            return []
 
     @api.model
     def _recurse_directories_finding(self, directory, paths:list[str], index:int, forClient:bool, directories:list):

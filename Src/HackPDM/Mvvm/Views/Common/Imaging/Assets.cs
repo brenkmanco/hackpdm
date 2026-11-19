@@ -64,7 +64,7 @@ public static partial class Assets
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{
-			System.Diagnostics.Debug.WriteLine( $"local image assets not loaded: {e.Message}" );
+			HackPDM.Core.Logging.HackLogger.Warn( "Assets", $"Local image assets not loaded: {e.Message}", e );
 		}
 	}
 }

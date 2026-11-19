@@ -5,7 +5,7 @@ import hashlib
 import importlib.util
 import os
 
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -371,3 +371,141 @@ class TestServerFunctions(TransactionCase):
         self.assertFalse(target.exists())
         self.assertFalse(versions[0].child_ids)
         self.assertFalse(versions[2].parent_ids)
+
+    # ------------------------------------------------------------ release review
+
+    def _create_release_review(self):
+        return self.env["hp.release.review"].with_user(self.alice).create({
+            "review_release_version_id": self.bracket_v1.id,
+            "review_user_id": self.alice.id,
+            "review_deadline": "2030-01-01 00:00:00",
+            "release_note": "Ready for production",
+        })
+
+    def test_release_review_admin_approve_persists_and_creates_release(self):
+        review = self._create_release_review()
+        self._next_rpc()
+
+        result = self.env["hp.release.review"].reviewer_decision(review.id, True, "Approved by admin")
+        self._next_rpc()
+
+        self.assertEqual(result["review_id"], review.id)
+        self.assertTrue(result["reviewed"])
+        self.assertTrue(result["accepted"])
+        self.assertTrue(result["release_id"])
+
+        self.assertTrue(review.reviewed)
+        self.assertTrue(review.accepted)
+        self.assertEqual(review.review_note, "Approved by admin")
+        self.assertTrue(review.release_reviewed)
+        self.assertFalse(review.review_deadline)
+        self.assertEqual(review.release_id.id, result["release_id"])
+        self.assertEqual(review.release_id.release_version_id, self.bracket_v1)
+        self.assertEqual(review.release_id.release_user_id, self.alice)
+        self.assertEqual(review.release_id.reviewer_user_id, self.env.user)
+
+    def test_release_review_admin_reject_persists_without_release(self):
+        review = self._create_release_review()
+        self._next_rpc()
+
+        result = self.env["hp.release.review"].reviewer_decision(review.id, False, "Missing drawing")
+        self._next_rpc()
+
+        self.assertEqual(result["review_id"], review.id)
+        self.assertTrue(result["reviewed"])
+        self.assertFalse(result["accepted"])
+        self.assertFalse(result["release_id"])
+
+        self.assertTrue(review.reviewed)
+        self.assertFalse(review.accepted)
+        self.assertEqual(review.review_note, "Missing drawing")
+        self.assertTrue(review.release_reviewed)
+        self.assertFalse(review.review_deadline)
+        self.assertFalse(review.release_id)
+        self.assertFalse(self.env["hp.release"].search([("release_review_id", "=", review.id)]))
+
+    def test_release_review_denies_engineer_and_viewer(self):
+        review = self._create_release_review()
+        group_viewer = self.env.ref("hackpdm.group_pdm_viewer")
+        viewer = self.env["res.users"].with_context(no_reset_password=True).create({
+            "name": "Viewer Review",
+            "login": "hp_fn_viewer_rev",
+            "groups_id": [(6, 0, group_viewer.ids)],
+        })
+        self._next_rpc()
+
+        with self.assertRaises(AccessError):
+            self.env["hp.release.review"].with_user(self.alice).reviewer_decision(review.id, True)
+        with self.assertRaises(AccessError):
+            self.env["hp.release.review"].with_user(viewer).reviewer_decision(review.id, True)
+
+    def test_release_review_rejects_invalid_missing_or_already_reviewed(self):
+        review = self._create_release_review()
+        self._next_rpc()
+
+        with self.assertRaises(ValidationError):
+            self.env["hp.release.review"].reviewer_decision(review.id, None)
+        with self.assertRaises(UserError):
+            self.env["hp.release.review"].reviewer_decision(987654321, True)
+
+        self.env["hp.release.review"].reviewer_decision(review.id, True, "First approval")
+        self._next_rpc()
+        with self.assertRaises(UserError):
+            self.env["hp.release.review"].reviewer_decision(review.id, True, "Duplicate approval")
+
+    # ------------------------------------------------------------ preview image replacement
+
+    def test_preview_image_replacement_permissions_and_validation(self):
+        # Minimal valid 1x1 PNG
+        tiny_png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2f8AAAAASUVORK5CYII=")
+        tiny_png_b64 = b64(tiny_png)
+
+        group_user = self.env.ref("hackpdm.group_pdm_user")
+        bob = self.env["res.users"].with_context(no_reset_password=True).create({
+            "name": "Bob Preview",
+            "login": "hp_fn_bob_preview",
+            "groups_id": [(6, 0, group_user.ids)],
+        })
+
+        # Alice creates a new entry + version via commit so create_uid == alice
+        commit = self._commit(self.alice)
+        entry_row = self._stage(self.alice, commit, "hp.entry", {
+            "name": "custom_preview.txt", "deleted": False, "dir_id": self.folder.id, "commit_id": commit.id})
+        self._stage(self.alice, commit, "hp.version", {
+            "name": "custom_preview.txt", "dir_id": self.folder.id, "entry_id": entry_row.id,
+            "file_ext": "txt", "node_id": self.node.id, "file_contents": b64(b"hello"), "commit_id": commit.id})
+        self._next_rpc()
+        self.env["hp.pdm.commit"].with_user(self.alice).start_commit([commit.id])
+        self._next_rpc()
+
+        entry = self.env["hp.entry"].search([("name", "=", "custom_preview.txt"), ("dir_id", "=", self.folder.id)], limit=1)
+        version = entry.latest_version_id
+        self.assertEqual(version.create_uid, self.alice)
+
+        # 1. Version creator (alice) can replace preview_image
+        version.with_user(self.alice).write({"preview_image": tiny_png_b64})
+        self._next_rpc()
+        self.assertTrue(version.preview_image)
+
+        # 2. Unrelated engineer (bob) cannot replace preview_image without checkout
+        with self.assertRaises(AccessError):
+            version.with_user(bob).write({"preview_image": tiny_png_b64})
+
+        # 3. Once bob checks out the entry, checkout holder (bob) can replace preview_image
+        self._checkout(bob, version)
+        version.with_user(bob).write({"preview_image": tiny_png_b64})
+        self._next_rpc()
+        self.assertTrue(version.preview_image)
+
+        # 4. Admin can replace preview_image even while bob holds checkout
+        version.with_user(self.env.user).write({"preview_image": tiny_png_b64})
+        self._next_rpc()
+        self.assertTrue(version.preview_image)
+
+        # 5. Non-image payload and oversized payload are rejected
+        with self.assertRaises(ValidationError):
+            version.with_user(self.alice).write({"preview_image": b64(b"not an image payload")})
+        with self.assertRaises(ValidationError):
+            oversized = b"\x89PNG\r\n\x1a\n" + (b"\x00" * (4 * 1024 * 1024))
+            version.with_user(self.alice).write({"preview_image": b64(oversized)})

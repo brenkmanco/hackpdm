@@ -20,6 +20,12 @@ public interface IThemeService
 	/// <summary>The dependency graph's colors and shapes for the current presets.</summary>
 	HackPDM.Core.Graph.GraphTheme GraphTheme { get; }
 
+	/// <summary>Whether folder trees draw branching visual guide lines.</summary>
+	bool ShowTreeBranchLines { get; }
+
+	/// <summary>Shows or hides branching visual guide lines in folder trees and raises <see cref="ThemeChanged"/>.</summary>
+	void SetShowTreeBranchLines( bool show );
+
 	/// <summary>Switches the color preset: live when it builds on the running light/dark theme, else previewed until a restart (<see cref="NeedsRestart"/>). Not saved until <see cref="Save"/>.</summary>
 	void SetPalette( HackPDM.Core.Theming.PaletteName palette );
 

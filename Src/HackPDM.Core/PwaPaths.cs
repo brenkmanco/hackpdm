@@ -53,7 +53,39 @@ public static class PwaPaths
 	}
 
 	private static bool IsRootName( string segment )
-		=> segment == Root || segment == HackDefaults.Instance.PwaPathRelative;
+		=> string.Equals( segment, Root, StringComparison.OrdinalIgnoreCase )
+			|| ( HackDefaults.Instance?.PwaPathRelative is { Length: > 0 } rel
+				&& string.Equals( segment, rel, StringComparison.OrdinalIgnoreCase ) );
+
+	/// <summary>Returns whether two tree/server paths refer to the same folder (comparing segments below root, ignoring case).</summary>
+	public static bool SameTreePath( string? a, string? b )
+	{
+		if( a is null || b is null )
+			return false;
+		string[] sa = Segments( a );
+		string[] sb = Segments( b );
+		if( sa.Length != sb.Length )
+			return false;
+		for( int i = 0; i < sa.Length; i++ )
+			if( !string.Equals( sa[ i ], sb[ i ], StringComparison.OrdinalIgnoreCase ) )
+				return false;
+		return true;
+	}
+
+	/// <summary>Returns whether <paramref name="ancestor"/> is the same folder as or an ancestor of <paramref name="descendant"/>.</summary>
+	public static bool IsSameOrAncestorTreePath( string? ancestor, string? descendant )
+	{
+		if( ancestor is null || descendant is null )
+			return false;
+		string[] sa = Segments( ancestor );
+		string[] sd = Segments( descendant );
+		if( sa.Length > sd.Length )
+			return false;
+		for( int i = 0; i < sa.Length; i++ )
+			if( !string.Equals( sa[ i ], sd[ i ], StringComparison.OrdinalIgnoreCase ) )
+				return false;
+		return true;
+	}
 
 	/// <summary>Converts a server path to a path relative to the working folder.</summary>
 	/// <param name="serverPath">A server path in any form (see <see cref="Segments"/>).</param>
@@ -85,9 +117,21 @@ public static class PwaPaths
 	public static string[]? LocalSegments( string? localPath )
 	{
 		string vault = Vault;
-		if( string.IsNullOrEmpty( localPath ) || string.IsNullOrEmpty( vault ) || !Path.IsPathFullyQualified( localPath ) )
+		if( string.IsNullOrWhiteSpace( localPath ) || string.IsNullOrWhiteSpace( vault )
+			|| !Path.IsPathFullyQualified( localPath ) || !Path.IsPathFullyQualified( vault ) )
 			return null;
-		string relative = Path.GetRelativePath( vault, localPath );
+		string normalizedVault;
+		string normalizedPath;
+		try
+		{
+			normalizedVault = Path.GetFullPath( vault );
+			normalizedPath = Path.GetFullPath( localPath );
+		}
+		catch
+		{
+			return null;
+		}
+		string relative = Path.GetRelativePath( normalizedVault, normalizedPath );
 		if( relative == "." )
 			return [];
 		if( relative == ".." || relative.StartsWith( ".." + Path.DirectorySeparatorChar ) || Path.IsPathRooted( relative ) )

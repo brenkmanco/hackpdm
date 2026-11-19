@@ -102,9 +102,37 @@ public static class TreeViewExtensions
 			return null;
 		// (this used to return the parent of the folder it found, and needed RootNodes to be a
 		// List<TreeViewNode>: a rebuilt tree reselected the wrong folder, or none)
-		TreeViewNode? node = view.RootNodes.FirstOrDefault( root => root.LinkedData.Name == parts[ 0 ] );
+		TreeViewNode? node = view.RootNodes.FirstOrDefault( root => string.Equals( root.LinkedData.Name, parts[ 0 ], StringComparison.OrdinalIgnoreCase ) );
+		if( node is null && view.RootNodes.Count == 1 && string.Equals( parts[ 0 ], HackPDM.Core.PwaPaths.Root, StringComparison.OrdinalIgnoreCase ) )
+			node = view.RootNodes[ 0 ];
 		foreach( string part in parts.AsSpan( 1 ) )
-			node = node?.Children.FirstOrDefault( child => child.LinkedData.Name == part );
+			node = node?.Children.FirstOrDefault( child => string.Equals( child.LinkedData.Name, part, StringComparison.OrdinalIgnoreCase ) );
 		return node?.LinkedData;
+	}
+
+	/// <summary>Recomputes sibling/ancestor branch guide metadata across all nodes of <paramref name="view"/>.</summary>
+	public static void RefreshBranchMetadata( this TreeView view )
+	{
+		ArgumentNullException.ThrowIfNull( view );
+		int count = view.RootNodes.Count;
+		for( int i = 0; i < count; i++ )
+			view.RootNodes[ i ].LinkedData.SetBranchState( i == count - 1, [], recursive: true );
+	}
+
+	/// <summary>Expands or collapses every branch in <paramref name="view"/> and notifies each node's branch guide revision.</summary>
+	public static void SetAllExpanded( this TreeView view, bool expanded )
+	{
+		ArgumentNullException.ThrowIfNull( view );
+		foreach( TreeViewNode root in view.RootNodes )
+			SetSubtreeExpanded( root, expanded, keepRootOpen: !expanded );
+	}
+
+	private static void SetSubtreeExpanded( TreeViewNode node, bool expanded, bool keepRootOpen )
+	{
+		bool targetExpanded = keepRootOpen && node.Depth == 0 ? true : expanded;
+		if( node.Children.Count > 0 && node.IsExpanded != targetExpanded )
+			node.LinkedData.IsExpanded = targetExpanded;
+		foreach( TreeViewNode child in node.Children )
+			SetSubtreeExpanded( child, expanded, keepRootOpen: false );
 	}
 }

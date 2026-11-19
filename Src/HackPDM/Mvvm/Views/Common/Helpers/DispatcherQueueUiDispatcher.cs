@@ -20,7 +20,7 @@ public sealed class DispatcherQueueUiDispatcher( DispatcherQueue queue ) : IUiDi
 	{
 		if( queue.TryEnqueue( () => Run( action ) ) )
 			return true;
-		Debug.WriteLine( "UI dispatcher rejected the work item; it was not run" );
+		HackPDM.Core.Logging.HackLogger.Warn( "UiDispatcher", "UI dispatcher rejected the work item; it was not run" );
 		return false;
 	}
 
@@ -86,7 +86,7 @@ public sealed class DispatcherQueueUiDispatcher( DispatcherQueue queue ) : IUiDi
 		}
 		catch( Exception e )
 		{
-			Debug.WriteLine( $"UI work item failed: {e}" );
+			HackPDM.Core.Logging.HackLogger.Error( "UiDispatcher", $"UI work item failed: {e.Message}", e );
 		}
 	}
 }

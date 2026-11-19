@@ -19,6 +19,21 @@ _logger = logging.getLogger(__name__)
 _IMMUTABLE_VERSION_FIELDS = frozenset(
     ("entry_id", "file_contents", "attachment_id", "node_id", "child_ids", "parent_ids", "version_property_ids"))
 _CHECKOUT_VERSION_FIELDS = frozenset(("checkout_user", "checkout_date", "checkout_node"))
+_MAX_PREVIEW_IMAGE_BYTES = 4 * 1024 * 1024  # 4 MiB cap for version preview thumbnails
+
+
+def _is_supported_preview_image(raw: bytes) -> bool:
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return True
+    if raw.startswith(b"\xff\xd8\xff"):
+        return True
+    if raw.startswith((b"GIF87a", b"GIF89a")):
+        return True
+    if raw.startswith(b"BM"):
+        return True
+    if len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return True
+    return False
 
 
 class hp_version(models.Model):
@@ -95,6 +110,7 @@ class hp_version(models.Model):
     )
     entry_id = fields.Many2one(
         comodel_name='hp.entry',
+        index=True,
         string='entry'
     )
     node_id = fields.Many2one(
@@ -150,6 +166,17 @@ class hp_version(models.Model):
     node_latest_ids = fields.Many2many(
         comodel_name='hp.node',
     )
+
+    def init(self):
+        """Ensures composite indexes on the version dependency join table for fast recursive traversals."""
+        self.env.cr.execute(
+            "CREATE INDEX IF NOT EXISTS hp_version_rel_parent_child_idx "
+            "ON hp_version_relationship (parent_id, child_id)"
+        )
+        self.env.cr.execute(
+            "CREATE INDEX IF NOT EXISTS hp_version_rel_child_parent_idx "
+            "ON hp_version_relationship (child_id, parent_id)"
+        )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -219,7 +246,35 @@ class hp_version(models.Model):
                     f"Committed versions cannot be changed ({', '.join(sorted(locked))}); commit a new version instead.")
             if _CHECKOUT_VERSION_FIELDS.intersection(vals):
                 self._check_checkout_write(vals)
+        if "preview_image" in vals:
+            self._check_preview_image_write(vals)
         return super().write(vals)
+
+    def _check_preview_image_write(self, vals):
+        """Restricts replacing preview_image to admins, the checkout holder, or the version creator,
+        and validates the uploaded image format and size."""
+        if not hp_guard.is_pdm_admin(self.env):
+            uid = self.env.uid
+            for rec in self:
+                is_creator = rec.create_uid.id == uid
+                is_checkout_holder = rec.entry_id.checkout_user.id == uid
+                if not (is_creator or is_checkout_holder):
+                    raise AccessError(
+                        "Only an administrator, the checkout holder, or the version creator can replace a preview image.")
+
+        payload = vals.get("preview_image")
+        if not payload:
+            return
+        try:
+            raw = base64.b64decode(payload, validate=True) if isinstance(payload, (str, bytes)) else None
+        except (ValueError, TypeError):
+            raw = None
+        if not raw:
+            raise ValidationError("Preview image must be valid base64 image data.")
+        if len(raw) > _MAX_PREVIEW_IMAGE_BYTES:
+            raise ValidationError("Preview image exceeds the 4 MiB maximum size.")
+        if not _is_supported_preview_image(raw):
+            raise ValidationError("Preview image must be a PNG, JPEG, BMP, GIF, or WebP image.")
 
     def _check_checkout_write(self, vals):
         """The checkout (now kept here) follows the entry's rules: a user checks out only in their own
@@ -365,21 +420,97 @@ class hp_version(models.Model):
             list[int]: Unique hp.entry ids; ``[]`` when nothing was found or anything failed (logged).
         """
         try:
+            if not version_ids:
+                return []
+            if isinstance(version_ids, int):
+                version_ids = [version_ids]
+            elif not isinstance(version_ids, list):
+                version_ids = list(version_ids)
+
+            if not (update and node_id):
+                # Fast path: resolve recursive version dependencies AND distinct entry_ids in one SQL query
+                # without instantiating thousands of ORM records via browse().mapped('entry_id').
+                self.env.flush_all()
+                query_entries = """
+                    WITH RECURSIVE dependency_versions (version_id) AS (
+                        SELECT id FROM hp_version WHERE id = ANY(%s)
+                    UNION
+                        SELECT c.child_id
+                        FROM dependency_versions p
+                        JOIN hp_version_relationship c ON c.parent_id = p.version_id
+                        JOIN hp_version vc ON vc.id = c.child_id
+                        JOIN hp_entry ec ON ec.id = vc.entry_id
+                        WHERE ec.deleted = false
+                    )
+                    SELECT DISTINCT v.entry_id
+                    FROM dependency_versions d
+                    JOIN hp_version v ON v.id = d.version_id
+                    WHERE v.entry_id IS NOT NULL;
+                """
+                self.env.cr.execute(query_entries, (version_ids,))
+                return [row[0] for row in self.env.cr.fetchall()]
+
             complete_version_ids = self.get_recursive_dependency_versions(version_ids)
             if len(complete_version_ids) < 1:
                 return []
 
-            if update and node_id:
-                v_ids = list(complete_version_ids) + version_ids
-                node = self.env["hp.node"].browse([node_id])
-                node.write({"node_latest_ids": [(Command.SET, 0, v_ids)]})
-            # '.ids' gives a list of unique IDs
-            # Now get unique entry_ids for these versions using the ORM for simplicity
-            versions = self.env['hp.version'].browse(list(complete_version_ids))
-            entry_ids = versions.mapped('entry_id').ids
-            return entry_ids
+            v_ids = list(complete_version_ids) + version_ids
+            node = self.env["hp.node"].browse([node_id])
+            node.write({"node_latest_ids": [(Command.SET, 0, v_ids)]})
+
+            self.env.cr.execute(
+                "SELECT DISTINCT entry_id FROM hp_version WHERE id = ANY(%s) AND entry_id IS NOT NULL",
+                (complete_version_ids,),
+            )
+            return [row[0] for row in self.env.cr.fetchall()]
         except Exception as e:
             _logger.error(f"Error fetching recursive dependencies for versions {version_ids}: {e}")
+            return []
+
+    @api.model
+    def get_recursive_dependency_entries_by_entries(self, entry_ids):
+        """Returns the given entry ids plus every entry their latest versions depend on, in one SQL query.
+
+        Avoids the client round-trip of first resolving each entry's latest_version_id and then
+        passing those version ids back to :meth:`get_recursive_dependency_entries`.
+        """
+        try:
+            if not entry_ids:
+                return []
+            if isinstance(entry_ids, int):
+                entry_ids = [entry_ids]
+            elif not isinstance(entry_ids, list):
+                entry_ids = list(entry_ids)
+
+            self.env.flush_all()
+            query = """
+                WITH RECURSIVE latest_versions AS (
+                    SELECT MAX(id) AS version_id
+                    FROM hp_version
+                    WHERE entry_id = ANY(%s)
+                    GROUP BY entry_id
+                ),
+                dependency_versions (version_id) AS (
+                    SELECT version_id FROM latest_versions
+                UNION
+                    SELECT c.child_id
+                    FROM dependency_versions p
+                    JOIN hp_version_relationship c ON c.parent_id = p.version_id
+                    JOIN hp_version vc ON vc.id = c.child_id
+                    JOIN hp_entry ec ON ec.id = vc.entry_id
+                    WHERE ec.deleted = false
+                )
+                SELECT DISTINCT v.entry_id
+                FROM dependency_versions d
+                JOIN hp_version v ON v.id = d.version_id
+                WHERE v.entry_id IS NOT NULL;
+            """
+            self.env.cr.execute(query, (entry_ids,))
+            found = {row[0] for row in self.env.cr.fetchall()}
+            found.update(entry_ids)
+            return list(found)
+        except Exception as e:
+            _logger.error(f"Error fetching recursive dependencies for entries {entry_ids}: {e}")
             return []
 
     @api.model
@@ -606,8 +737,8 @@ class hp_version(models.Model):
             if file_contents != b'':
                 try:
                     attachment = record._create_attachment(file_contents, "file_contents")
-                except:
-                    logging.warning(f"didn't create attachment {record.id}.{record.name}")
+                except (OSError, ValueError) as exc:
+                    _logger.warning("didn't create attachment %s.%s: %s", record.id, record.name, exc)
                 if (attachment != None):
                     logging.info(f"attachment id {attachment.id} created for version record {attachment.res_id} named: {attachment.name}")
             else:

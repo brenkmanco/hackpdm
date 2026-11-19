@@ -14,6 +14,15 @@ public enum StatusMessage
     OTHER,
 }
 
+/// <summary>Logical area for status entries shown in the Profile Manager.</summary>
+public static class ProfileStatusCategory
+{
+    public const string Login = "Login";
+    public const string Connection = "Connection";
+    public const string Configuration = "Configuration";
+    public const string Settings = "Settings";
+}
+
 public enum TaskProgress
 {
     InProgress,

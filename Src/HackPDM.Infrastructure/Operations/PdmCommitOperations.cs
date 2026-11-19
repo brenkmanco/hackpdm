@@ -160,7 +160,8 @@ public static class PdmCommitOperations
         HpPDMCommit commit,
         bool inOdoo = false,
         Action<StatusMessage, string>? log = null,
-        Action? onRecordStaged = null)
+        Action? onRecordStaged = null,
+        Action<long>? onBytesUploaded = null)
     {
         if (hack is null)
             return false;
@@ -185,14 +186,14 @@ public static class PdmCommitOperations
         {
             log?.Invoke(StatusMessage.FOUND, "existing entry found...");
             log?.Invoke(StatusMessage.PROCESSING, "staging local version...");
-            versionStaged = await CommitStaging.StageVersionAsync(hack, entry, commit.id ?? 0, e => stageError = e);
+            versionStaged = await CommitStaging.StageVersionAsync(hack, entry, commit.id ?? 0, e => stageError = e, onBytesUploaded);
         }
         if (entry.returnType is EntryReturnType.Staged)
         {
             HpRecordStaged? entryStaged = await CommitStaging.StageEntryAsync(entry);
             log?.Invoke(StatusMessage.PROCESSING, "staging local entry...");
             log?.Invoke(StatusMessage.PROCESSING, "staging local version...");
-            versionStaged = entryStaged is null ? null : await CommitStaging.StageVersionAsync(hack, entryStaged, e => stageError = e);
+            versionStaged = entryStaged is null ? null : await CommitStaging.StageVersionAsync(hack, entryStaged, e => stageError = e, onBytesUploaded);
         }
         if (entry.returnType is EntryReturnType.Failed)
         {
@@ -225,7 +226,7 @@ public static class PdmCommitOperations
         catch (Exception e)
         {
             await commit.ServerClear();
-            Debug.WriteLine(e.Message);
+            HackPDM.Core.Logging.HackLogger.Error("PdmCommit", $"Staging failed for commit {commit.id}: {e.Message}", e);
             log?.Invoke(StatusMessage.ERROR, e.Message);
             return false;
         }

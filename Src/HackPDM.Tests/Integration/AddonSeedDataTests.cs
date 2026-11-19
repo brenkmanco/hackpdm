@@ -61,14 +61,6 @@ public class AddonSeedDataTests
 		return rows.Value![ 0 ];
 	}
 
-	/// <summary>Many2one values come back as [id, display_name]; false when empty.</summary>
-	private static int? Many2OneId( object? value ) => OdooValues.Many2OneId( value );
-
-	private static int[] Ids( object? value ) => [ .. OdooValues.Ids( value ).Order() ];
-
-	private static void AssertDouble( double expected, object? actual )
-		=> Assert.Equal( expected, Convert.ToDouble( actual ), precision: 6 );
-
 	// ---------------------------------------------------------------- coverage of the whole file
 
 	public static TheoryData<string, string> AllXmlRecords()
@@ -80,11 +72,12 @@ public class AddonSeedDataTests
 	}
 
 	[Fact]
-	public void DataFile_DeclaresRecords()
+	public void DataFile_DeclaresOnlyProductionSettingsRecords()
 	{
 		var records = XmlRecords();
 		Assert.NotEmpty( records );
 		Assert.Equal( records.Count, records.Select( r => r.Id ).Distinct().Count() );
+		Assert.All( records, r => Assert.Equal( "hp.settings", r.Model ) );
 	}
 
 	[OdooTheory]
@@ -134,11 +127,10 @@ public class AddonSeedDataTests
 		var row = await ReadAsync( "hp.settings", "hp_settings_client_version", "name", "description", "type", "char_value" );
 
 		Assert.Equal( "client_version", row[ "name" ] );
-		Assert.Equal( "oldest HackPDM client version the server accepts", row[ "description" ] );
 		Assert.Equal( "char", row[ "type" ] );
-		Assert.Equal( "1.0.0.27", row[ "char_value" ] );
-		// this client is new enough for the seeded server
-		Assert.False( HackPDM.Infrastructure.Operations.ClientUpdate.IsOutdated( HackPDM.Infrastructure.Operations.ClientUpdate.Current, row[ "char_value" ] as string ) );
+		Assert.Equal( ">=1.1.0, <2.0.0", row[ "char_value" ] );
+		// this client satisfies the seeded server version range
+		Assert.True( HackPDM.Infrastructure.Operations.ClientUpdate.CheckVersion( HackPDM.Infrastructure.Operations.ClientUpdate.Current, row[ "char_value" ] as string ).IsAllowed );
 	}
 
 	[OdooFact]
@@ -155,81 +147,18 @@ public class AddonSeedDataTests
 		}
 	}
 
-	// ---------------------------------------------------------------- hp.test records
+	// ---------------------------------------------------------------- production hygiene (hp.test isolated in hackpdm_test)
 
 	[OdooFact]
-	public async Task TestRecordOne_AllScalarFieldTypes()
+	public async Task ProductionInstall_ExcludesHpTestModel()
 	{
 		await OdooTestServer.LoginAsync();
-		var row = await ReadAsync( "hp.test", "hp_test_data_one",
-			"boolean", "character", "dates", "datetimes", "floats", "html", "integer",
-			"json", "monetary", "currency_id", "selection", "text", "manytoone" );
+		var testModule = await OdooRpc.SearchCountAsync( "ir.module.module",
+			OdooDomain.Where( "name", "hackpdm_test" ).And( "state", "installed" ) );
+		if( testModule.Value > 0 )
+			return;
 
-		Assert.Equal( true, row[ "boolean" ] );
-		Assert.Equal( "Test Character Field", row[ "character" ] );
-		Assert.Equal( "2024-01-01", row[ "dates" ] );
-		Assert.Equal( "2024-01-01 12:34:56", row[ "datetimes" ] );
-		AssertDouble( 123.456, row[ "floats" ] );
-		Assert.Contains( "<strong>Test HTML</strong> content for hp.test.", row[ "html" ] as string );
-		Assert.Equal( 42, row[ "integer" ] );
-
-		var json = Assert.IsType<Dictionary<string, object?>>( row[ "json" ] );
-		Assert.Equal( "value", json[ "key" ] );
-		Assert.Equal( 123, json[ "number" ] );
-		Assert.Equal( true, json[ "flag" ] );
-
-		AssertDouble( 19.99, row[ "monetary" ] );
-		Assert.NotNull( Many2OneId( row[ "currency_id" ] ) ); // required, defaults to the company currency
-		Assert.Equal( "option_a", row[ "selection" ] );
-		Assert.Equal( "This is a long text field used for testing.", row[ "text" ] );
-		Assert.Null( Many2OneId( row[ "manytoone" ] ) ); // root of the hp.test tree
-	}
-
-	[OdooFact]
-	public async Task TestRecordTwo_RelationalFields()
-	{
-		await OdooTestServer.LoginAsync();
-		int one = await IdOf( "hp_test_data_one" );
-		int two = await IdOf( "hp_test_data_two" );
-		var row = await ReadAsync( "hp.test", "hp_test_data_two",
-			"character", "monetary", "manytoone", "onetomany", "manytomany", "parent_path" );
-
-		Assert.Equal( "Record Two", row[ "character" ] );
-		AssertDouble( 21.99, row[ "monetary" ] );
-		Assert.Equal( one, Many2OneId( row[ "manytoone" ] ) );
-		Assert.Equal( [ one ], Ids( row[ "manytomany" ] ) );
-		Assert.Single( Ids( row[ "onetomany" ] ) );
-		Assert.Equal( $"{one}/{two}/", row[ "parent_path" ] );
-	}
-
-	[OdooFact]
-	public async Task TestRecordTwo_InlineChild_IsCreatedUnderRecordTwo()
-	{
-		await OdooTestServer.LoginAsync();
-		int one = await IdOf( "hp_test_data_one" );
-		int two = await IdOf( "hp_test_data_two" );
-
-		var parent = await ReadAsync( "hp.test", "hp_test_data_two", "onetomany" );
-		int childId = Assert.Single( Ids( parent[ "onetomany" ] ) );
-
-		var rows = await OdooRpc.ReadAsync( "hp.test", [ childId ], [ "character", "manytoone", "parent_path" ] );
-		OdooRow child = Assert.Single( rows.Value! );
-
-		Assert.Equal( "Child 1", child[ "character" ] );
-		// The XML sets manytoone=ref('hp_test_data_one') on the child, but a (0, 0, {...}) command
-		// inside record two's one2many always makes record two the parent.
-		Assert.Equal( two, Many2OneId( child[ "manytoone" ] ) );
-		Assert.Equal( $"{one}/{two}/{childId}/", child[ "parent_path" ] );
-	}
-
-	[OdooFact]
-	public async Task TestRecordOne_ChildrenAreRecordTwo()
-	{
-		await OdooTestServer.LoginAsync();
-		int two = await IdOf( "hp_test_data_two" );
-		var row = await ReadAsync( "hp.test", "hp_test_data_one", "onetomany", "manytomany" );
-
-		Assert.Equal( [ two ], Ids( row[ "onetomany" ] ) );
-		Assert.Empty( Ids( row[ "manytomany" ] ) ); // many2many is not symmetric
+		var hpTestModel = await OdooRpc.SearchCountAsync( "ir.model", OdooDomain.Where( "model", "hp.test" ) );
+		Assert.Equal( 0, hpTestModel.Value );
 	}
 }

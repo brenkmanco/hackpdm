@@ -25,8 +25,8 @@ namespace HackPDM.Mvvm.Views.Common.Settings;
 
 public class OdooEntryColumns
 {
-	public double RowHeight { get; set; } = 18;
-	public double FontSize { get; set; } = 10;
+	public double RowHeight { get; set; } = 26;
+	public double FontSize { get; set; } = 11;
 	public bool GroupingEnabled { get; set; } = true;
 	public bool GroupCollapsed { get; set; } = false;
 	public GroupByField GroupBy { get; set; } = new()
@@ -37,14 +37,14 @@ public class OdooEntryColumns
 	/// <summary>The entry list's columns by <see cref="EntryRow"/> property; saved, so the user's widths and order survive.</summary>
 	public Dictionary<string, OdooEntryColumnID?> Columns { get; set; } = new()
 	{
-		[ nameof( EntryRow.Name ) ] = Column( nameof( EntryRow.Name ), 0, "Name", 350 ),
-		[ nameof( EntryRow.Type ) ] = Column( nameof( EntryRow.Type ), 1, "Type" ),
-		[ nameof( EntryRow.Size ) ] = Column( nameof( EntryRow.Size ), 2, "Size" ),
-		[ nameof( EntryRow.Status ) ] = Column( nameof( EntryRow.Status ), 3, "Status" ),
-		[ nameof( EntryRow.Checkout ) ] = Column( nameof( EntryRow.Checkout ), 4, "Checkout" ),
-		[ nameof( EntryRow.LocalDate ) ] = Column( nameof( EntryRow.LocalDate ), 5, "Local Date" ),
-		[ nameof( EntryRow.RemoteDate ) ] = Column( nameof( EntryRow.RemoteDate ), 6, "Remote Date" ),
-		[ nameof( EntryRow.FullName ) ] = Column( nameof( EntryRow.FullName ), 7, "Full Name", 200, autoSize: true ),
+		[ nameof( EntryRow.Name ) ] = Column( nameof( EntryRow.Name ), 0, "Name", 200 ),
+		[ nameof( EntryRow.Type ) ] = Column( nameof( EntryRow.Type ), 1, "Type", 70 ),
+		[ nameof( EntryRow.Size ) ] = Column( nameof( EntryRow.Size ), 2, "Size", 85 ),
+		[ nameof( EntryRow.Status ) ] = Column( nameof( EntryRow.Status ), 3, "Status", 75 ),
+		[ nameof( EntryRow.Checkout ) ] = Column( nameof( EntryRow.Checkout ), 4, "Checkout", 105 ),
+		[ nameof( EntryRow.LocalDate ) ] = Column( nameof( EntryRow.LocalDate ), 5, "Local Date", 150 ),
+		[ nameof( EntryRow.RemoteDate ) ] = Column( nameof( EntryRow.RemoteDate ), 6, "Remote Date", 150 ),
+		[ nameof( EntryRow.FullName ) ] = Column( nameof( EntryRow.FullName ), 7, "Full Name", 240, autoSize: true ),
 	};
 
 	private static OdooEntryColumnID Column( string path, int index, string header, double width = 100, bool autoSize = false )

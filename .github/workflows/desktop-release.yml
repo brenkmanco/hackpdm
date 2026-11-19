@@ -1,0 +1,105 @@
+name: Desktop release (Linux & macOS)
+
+# Builds self-contained Release packages of the cross-platform Uno desktop head (net10.0-desktop)
+# for linux-x64, osx-arm64, and osx-x64 with SHA-256 checksums, and attaches them to GitHub Releases
+# on v* tags alongside the Windows installer produced by windows-release.yml.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-14
+            rid: osx-arm64
+          - os: macos-13
+            rid: osx-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+          else
+            VERSION="$(sed -n 's/.*<HackPdmVersion[^>]*>\([^<]*\)<\/HackPdmVersion>.*/\1/p' Directory.Build.props | head -n1 | tr -d '[:space:]')"
+          fi
+          echo "HACKPDM_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Building HackPDM $VERSION for ${{ matrix.rid }}"
+
+      - name: Unit tests
+        run: >-
+          dotnet test Src/HackPDM.Tests/HackPDM.Tests.csproj -c Release
+          -p:HackPdmVersion=${{ env.HACKPDM_VERSION }}
+          --logger "console;verbosity=minimal"
+
+      - name: Publish (Release, self-contained ${{ matrix.rid }})
+        run: >-
+          dotnet publish Src/HackPDM/HackPDM.csproj -c Release -f net10.0-desktop
+          -p:Platform=x64 -r ${{ matrix.rid }} --self-contained true
+          -p:HackPdmVersion=${{ env.HACKPDM_VERSION }}
+          -o publish/HackPDM
+
+      - name: Archive and SHA-256
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          ARCHIVE="HackPDM-${HACKPDM_VERSION}-${{ matrix.rid }}.tar.gz"
+          tar -C publish -czf "artifacts/${ARCHIVE}" HackPDM
+          (
+            cd artifacts
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
+            else
+              shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256"
+            fi
+            cat "${ARCHIVE}.sha256"
+          )
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hackpdm-${{ env.HACKPDM_VERSION }}-${{ matrix.rid }}
+          path: artifacts
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hackpdm-*-*
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true

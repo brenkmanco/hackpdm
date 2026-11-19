@@ -209,17 +209,18 @@ public sealed class FolderActionsTests : IAsyncLifetime
 		await ExpectAsync( false, TopParts, FileStatus.Ok );
 		Assert.True( new FileInfo( asm ).IsReadOnly );
 
-		Step( "6. delete the folder tree (logically), then restore" );
+		Step( "6. delete the folder tree (logically), then restore top-only and recursively" );
 		await OnFolderAsync( withSubdirectories: true, _service.LogicalDeleteAsync );
 		await ExpectTopAsync( FileStatus.Dt );
 		await ExpectSubAsync( FileStatus.Dt );
 		int top = await DirectoryIdAsync( _folder ) ?? 0;
-		await _service.RestoreDeletedInDirectoryAsync( top );
-		Note( "restore works on the folder's own entries; the recursive restore is not implemented in the file manager" );
+		await _service.RestoreDeletedInDirectoryAsync( top, withSubdirectories: false );
 		await ExpectAsync( false, [ TopAssembly ], FileStatus.Lm );
 		await ExpectAsync( false, TopParts, FileStatus.Ok );
 		await ExpectSubAsync( FileStatus.Dt );
-		await _service.RestoreDeletedInDirectoryAsync( await SubDirectoryIdAsync() ?? 0 );
+		await _service.RestoreDeletedInDirectoryAsync( top, withSubdirectories: true );
+		await ExpectAsync( false, [ TopAssembly ], FileStatus.Lm );
+		await ExpectAsync( false, TopParts, FileStatus.Ok );
 		await ExpectSubAsync( FileStatus.Ok );
 	}
 }

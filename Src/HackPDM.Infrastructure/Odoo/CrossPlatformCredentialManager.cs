@@ -97,7 +97,7 @@ public static class CrossPlatformCredentialManager
 			return;
 		}
 		if( store is not null )
-			Console.Error.WriteLine( $"credentials: {store.Name} unavailable, saving the login to {customFilePath ?? FallbackFile} instead" );
+			HackPDM.Core.Logging.HackLogger.Warn( "Credentials", $"{store.Name} unavailable, saving login to fallback store '{customFilePath ?? FallbackFile}'" );
 		WriteFallback( target, username, password, customFilePath );
 	}
 
@@ -174,7 +174,7 @@ public static class CrossPlatformCredentialManager
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{
-			Console.Error.WriteLine( $"credentials: could not write {filePath}: {e.Message}" );
+			HackPDM.Core.Logging.HackLogger.Error( "Credentials", $"Could not write fallback credential store '{filePath}': {e.Message}", e );
 		}
 	}
 

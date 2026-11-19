@@ -331,10 +331,11 @@ class TestAttacks(TransactionCase):
         with self.assertRaises(AccessError):
             self.env["hp.entry"].with_user(viewer).create({"name": "v.txt", "dir_id": self.folder.id})
 
-    def test_regular_user_cannot_run_admin_jobs_or_touch_hp_test(self):
+    def test_regular_user_cannot_modify_settings_and_test_model_excluded(self):
         self.assertFalse(self.alice.has_group("hackpdm.group_pdm_admin"))
+        self.assertNotIn("hp.test", self.env)
         with self.assertRaises(AccessError):
-            self.env["hp.test"].with_user(self.alice).search([])
+            self.env["hp.settings"].with_user(self.alice).create({"name": "rogue", "type": "char"})
 
     def test_settings_administrators_are_pdm_administrators(self):
         self.assertTrue(self.env.ref("base.user_admin").has_group("hackpdm.group_pdm_admin"))

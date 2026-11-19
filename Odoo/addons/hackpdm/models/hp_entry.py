@@ -36,11 +36,13 @@ class hp_entry(models.Model):
     )
     windows_complete_name = fields.Char(
         compute='_compute_windows_path',
+        compute_sudo=True,
         store=True,
         string='windows directory path name',
     )
     windows_complete_path = fields.Char(
         compute='_compute_windows_path',
+        compute_sudo=True,
         string='windows directory path',
     )
 
@@ -88,6 +90,7 @@ class hp_entry(models.Model):
     )
     dir_id = fields.Many2one(
         comodel_name='hp.directory',
+        index=True,
         string='directory id',
     )
     type_id = fields.Many2one(
@@ -222,7 +225,7 @@ class hp_entry(models.Model):
         """
         try:
             return next(x for x in self if key(x))
-        except:
+        except StopIteration:
             return False
 
     @api.depends('directory_complete_name', 'name')
@@ -273,11 +276,23 @@ class hp_entry(models.Model):
     # it, so a commit that reads them before adding a version would otherwise keep seeing the old latest
     @api.depends('version_ids')
     def _compute_latest_version(self):
+        real_ids = [rec.id for rec in self if isinstance(rec.id, int)]
+        latest_by_entry = {}
+        if real_ids:
+            self.env['hp.version'].flush_model(['entry_id'])
+            self.env.cr.execute(
+                "SELECT entry_id, MAX(id) FROM hp_version WHERE entry_id = ANY(%s) GROUP BY entry_id",
+                (real_ids,),
+            )
+            latest_by_entry = dict(self.env.cr.fetchall())
         for record in self:
-            if record.version_ids:
+            if isinstance(record.id, int):
+                latest_id = latest_by_entry.get(record.id)
+                record.latest_version_id = latest_id if latest_id else False
+            elif record.version_ids:
                 record.latest_version_id = record.version_ids.sorted(
                     key=lambda x: x.id, reverse=True
-                    )[0]
+                )[0]
             else:
                 record.latest_version_id = False
 

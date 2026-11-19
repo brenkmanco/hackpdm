@@ -6,6 +6,8 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 using HackPDM.Mvvm.ViewModels.Tools;
+using HackPDM.Shared.GlobalData;
+using HackPDM.Shell;
 
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -54,7 +56,17 @@ public sealed partial class JsonEditorView : Page
 		};
 		switch( await dialog.ShowAsync() ) {
 			case ContentDialogResult.Primary:
-			ViewModel.Save( exportedJson );
+			try
+			{
+				ViewModel.Save( exportedJson );
+				AppComposition.Session.LogInfo( ProfileStatusCategory.Settings, "Saved AppConfig.json from JSON Editor." );
+			}
+			catch( Exception ex )
+			{
+				AppComposition.Session.LogError( ProfileStatusCategory.Settings, $"Failed to save AppConfig.json: {ex.Message}" );
+				JsonParseInfoBar.Message = $"Save Failed: {ex.Message}";
+				JsonParseInfoBar.IsOpen = true;
+			}
 			break;
 			case ContentDialogResult.Secondary:
 			case ContentDialogResult.None:

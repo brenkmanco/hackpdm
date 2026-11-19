@@ -66,7 +66,7 @@ public sealed class EntrySearchService : IEntrySearchService
 		OdooDomain domain = await BuildDomainAsync( query );
 		Result<IReadOnlyList<OdooRow>> found = await OdooRpc.SearchReadAsync( HpEntry.GetHpModel()!, domain, ResultFields, timeoutMs: OdooRpc.LongTimeout );
 		if( !found.Ok )
-			System.Diagnostics.Debug.WriteLine( $"entry search failed: {found.Error}" );
+			HackPDM.Core.Logging.HackLogger.Error( "EntrySearch", $"Entry search failed: {found.Error}" );
 		IReadOnlyList<OdooRow> results = found.ValueOr( [] );
 
 		List<SearchRow> rows = query.LocalOnly || query.DeletedRemotely

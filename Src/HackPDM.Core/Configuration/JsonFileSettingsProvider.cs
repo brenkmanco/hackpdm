@@ -20,6 +20,7 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 
 	private readonly object _gate = new();
 	private readonly Dictionary<string, JsonElement> _values;
+	private readonly List<string> _errors = [];
 
 	/// <summary>Opens the settings file, loading its values.</summary>
 	/// <param name="filePath">The JSON file; it need not exist yet and is created on the first change.</param>
@@ -31,13 +32,26 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 	{
 		FilePath = filePath;
 		Existed = File.Exists( filePath );
-		_values = Load( filePath );
+		_values = Load( filePath, _errors );
 	}
 
 	public string FilePath { get; }
 
 	/// <summary>The file was there when this provider was made (false on the first run).</summary>
 	public bool Existed { get; }
+
+	/// <summary>Any file load or save errors captured during this session.</summary>
+	public IReadOnlyList<string> Errors
+	{
+		get
+		{
+			lock( _gate )
+				return [ .. _errors ];
+		}
+	}
+
+	/// <summary>Raised when saving settings fails.</summary>
+	public event Action<string>? ErrorOccurred;
 
 	/// <summary>Reads a setting.</summary>
 	/// <typeparam name="T">The type to deserialize the stored JSON value to.</typeparam>
@@ -75,11 +89,14 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 			Remove( key );
 			return;
 		}
+		string? error;
 		lock( _gate )
 		{
 			_values[ key ] = JsonSerializer.SerializeToElement( value );
-			Save();
+			error = Save();
 		}
+		if( error is not null )
+			ErrorOccurred?.Invoke( error );
 	}
 
 	/// <summary>Tells whether a setting is stored.</summary>
@@ -95,11 +112,14 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 	/// <param name="key">The setting name (case-sensitive).</param>
 	public void Remove( string key )
 	{
+		string? error = null;
 		lock( _gate )
 		{
 			if( _values.Remove( key ) )
-				Save();
+				error = Save();
 		}
+		if( error is not null )
+			ErrorOccurred?.Invoke( error );
 	}
 
 	/// <summary>Adds the values whose keys are not set yet (bringing settings over from an older store).</summary>
@@ -107,9 +127,10 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 	/// <returns>How many values were added; the file is saved once when any were.</returns>
 	public int ImportMissing( IEnumerable<KeyValuePair<string, object?>> values )
 	{
+		int added = 0;
+		string? error = null;
 		lock( _gate )
 		{
-			int added = 0;
 			foreach( var (key, value) in values )
 			{
 				if( value is null || _values.ContainsKey( key ) )
@@ -125,12 +146,14 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 				}
 			}
 			if( added > 0 )
-				Save();
-			return added;
+				error = Save();
 		}
+		if( error is not null )
+			ErrorOccurred?.Invoke( error );
+		return added;
 	}
 
-	private static Dictionary<string, JsonElement> Load( string filePath )
+	private static Dictionary<string, JsonElement> Load( string filePath, List<string> errors )
 	{
 		try
 		{
@@ -144,7 +167,9 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 		catch( Exception e ) when( e is JsonException or IOException or UnauthorizedAccessException )
 		{
 			// unreadable: keep a copy for the user instead of overwriting it with the next change
-			Console.Error.WriteLine( $"settings file {filePath} could not be read ({e.Message}); starting with defaults" );
+			string msg = $"Settings file '{filePath}' could not be read ({e.Message}); starting with defaults.";
+			errors.Add( msg );
+			HackPDM.Core.Logging.HackLogger.Warn( "Settings", msg, e );
 			TryBackUp( filePath );
 		}
 		return new( StringComparer.Ordinal );
@@ -162,7 +187,7 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 	}
 
 	// under _gate
-	private void Save()
+	private string? Save()
 	{
 		try
 		{
@@ -172,10 +197,14 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 			var sorted = _values.OrderBy( v => v.Key, StringComparer.Ordinal ).ToDictionary( v => v.Key, v => v.Value );
 			File.WriteAllText( temp, JsonSerializer.Serialize( sorted, WriteOptions ) );
 			File.Move( temp, FilePath, overwrite: true );
+			return null;
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{
-			Console.Error.WriteLine( $"settings could not be saved to {FilePath}: {e.Message}" );
+			string msg = $"Settings could not be saved to '{FilePath}': {e.Message}";
+			_errors.Add( msg );
+			HackPDM.Core.Logging.HackLogger.Error( "Settings", msg, e );
+			return msg;
 		}
 	}
 }

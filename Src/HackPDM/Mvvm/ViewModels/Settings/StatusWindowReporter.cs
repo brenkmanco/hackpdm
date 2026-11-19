@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using HackPDM.Shared.GlobalData;
 using HackPDM.Mvvm.Models.Settings;
 using HackPDM.Mvvm.ViewModels.Common;
-using HackPDM.Mvvm.ViewModels.Settings;
 using HackPDM.Mvvm.Models.Common;
 
 namespace HackPDM.Mvvm.ViewModels.Settings;
@@ -17,6 +16,7 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 {
 	private readonly object _gate = new();
 	private CancellationTokenSource _cancellation = new();
+	private bool _cancelRegistered;
 
 	/// <inheritdoc/>
 	public void Log( StatusMessage statusMessage, string message ) => status()?.Session.Log( statusMessage, message );
@@ -33,10 +33,14 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 			{
 				_cancellation.Dispose();
 				_cancellation = new();
+				_cancelRegistered = false;
 			}
-			if( status() is { } window )
-				window.IsInProcess = true;
-			_cancellation.Token.Register( OnCancelled );
+			if( !_cancelRegistered )
+			{
+				_cancellation.Token.Register( OnCancelled );
+				_cancelRegistered = true;
+			}
+			status()?.SetInProcess( true );
 			return _cancellation;
 		}
 	}
@@ -45,14 +49,20 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 	public void Cancel()
 	{
 		lock( _gate )
-			_cancellation.Cancel();
+		{
+			if( !_cancellation.IsCancellationRequested )
+				_cancellation.Cancel();
+		}
 	}
 
 	private void OnCancelled()
 	{
-		if( status() is { } window )
-			window.IsInProcess = false;
-		_ = dialogs.ShowMessageAsync( "Cancelled Operation" );
+		Log( StatusMessage.WARNING, "Operation cancelled" );
+		UiDispatcher.Post( () =>
+		{
+			status()?.SetInProcess( false );
+			_ = dialogs.ShowMessageAsync( "Cancelled Operation" );
+		} );
 	}
 
 	/// <inheritdoc/>
@@ -63,6 +73,12 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 
 	/// <inheritdoc/>
 	public void SetProcessed( int processed ) => status()?.SetProcessed( processed );
+
+	/// <inheritdoc/>
+	public void AddDownloadedBytes( long bytes ) => status()?.AddDownloadedBytes( bytes );
+
+	/// <inheritdoc/>
+	public void AddUploadedBytes( long bytes ) => status()?.AddUploadedBytes( bytes );
 
 	/// <inheritdoc/>
 	public void Complete() => status()?.CompleteProgress();

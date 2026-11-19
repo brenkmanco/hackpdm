@@ -89,6 +89,7 @@ public sealed class JsonFileSettingsProviderTests : IDisposable
 
 		JsonFileSettingsProvider settings = new( FilePath );
 		Assert.Null( settings.Get<string>( "OdooAddress" ) );
+		Assert.Single( settings.Errors );
 		Assert.Single( Directory.GetFiles( Path.GetDirectoryName( FilePath )!, "settings.json.unreadable-*" ) );
 
 		settings.Set( "OdooAddress", "host" );

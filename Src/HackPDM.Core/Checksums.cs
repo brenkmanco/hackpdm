@@ -39,15 +39,17 @@ public static class Checksums
 			FileInfo file = new( path );
 			if( !file.Exists )
 				return null;
-			using FileStream stream = file.OpenRead();
+			using FileStream stream = new( path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 131072, FileOptions.SequentialScan );
 			if( stream.Length == 0 )
 				return "";
+			if( type == ChecksumType.Sha1 )
+				return Convert.ToHexStringLower( SHA1.HashData( stream ) );
 			using HashAlgorithm algorithm = Algorithm( type );
 			return Convert.ToHexStringLower( algorithm.ComputeHash( stream ) );
 		}
 		catch( Exception e )
 		{
-			Debug.WriteLine( $"checksum of {path} failed: {e.Message}" );
+			HackPDM.Core.Logging.HackLogger.Warn( "Checksums", $"Checksum of '{path}' failed: {e.Message}", e );
 			return null;
 		}
 	}

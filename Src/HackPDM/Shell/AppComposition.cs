@@ -18,6 +18,7 @@ using HackPDM.Mvvm.Views.Common.Controls;
 using HackPDM.Mvvm.Views.Common.Settings;
 using HackPDM.Mvvm.Views.Common.Theming;
 using HackPDM.Mvvm.Views.Dialogs;
+using HackPDM.Shared.GlobalData;
 
 namespace HackPDM.Shell;
 
@@ -45,6 +46,8 @@ public static class AppComposition
 	{
 		_ = new HackDefaults( Settings );
 		_ = new OdooDefaults( Settings );
+		if( Settings.Get<string>( "TemporaryPath" ) is { Length: > 0 } tempPath )
+			HackPDM.Shared.GlobalData.StorageBox.TemporaryPath = tempPath;
 	}
 
 	/// <summary>Dialogs and windows shown on behalf of view models.</summary>
@@ -73,7 +76,19 @@ public static class AppComposition
 	// ---------------------------------------------------------------- models kept for the whole run
 
 	/// <summary>Whether the user is logged in (the Profile Manager page's model).</summary>
-	public static LoginSession Session => field ??= new();
+	public static LoginSession Session => field ??= CreateSession();
+
+	private static LoginSession CreateSession()
+	{
+		LoginSession session = new();
+		if( Settings.Provider is JsonFileSettingsProvider provider )
+		{
+			foreach( string error in provider.Errors )
+				session.LogError( ProfileStatusCategory.Settings, error );
+			provider.ErrorOccurred += error => session.LogError( ProfileStatusCategory.Settings, error );
+		}
+		return session;
+	}
 
 	/// <summary>The file manager's tree, selection and rows, kept between visits of the page.</summary>
 	public static FileManagerState FileManagerState => field ??= new();
@@ -87,10 +102,16 @@ public static class AppComposition
 	private static LocalFileWatcher CreateLocalFileWatcher()
 	{
 		LocalFileWatcher watcher = new();
-		watcher.Changed += batch => UiDispatcher.Post( () => FileManagerState.LocalFilesChanged(
-			[ .. batch.Select( change => PwaPaths.ToServerName( System.IO.Path.GetDirectoryName( change.FullPath ) ) ) ] ) );
-		watcher.Overflowed += () => UiDispatcher.Post( () => FileManagerState.LocalFilesChanged( null ) );
+		watcher.Changed += batch => UiDispatcher.Post( () => FileManagerState.LocalFilesChanged( batch ) );
+		watcher.Overflowed += () => UiDispatcher.Post( () => FileManagerState.LocalFilesChanged( (IReadOnlyList<LocalFileChange>?)null ) );
 		return watcher;
+	}
+
+	/// <summary>Restarts the local file watcher on the current vault folder and clears cached file-manager state.</summary>
+	public static void OnVaultPathChanged()
+	{
+		LocalFiles.Watch( PwaPaths.Vault );
+		FileManagerState.Reset();
 	}
 
 	/// <summary>Unsaved edits of the JSON editor, kept between visits of the page.</summary>
@@ -104,7 +125,46 @@ public static class AppComposition
 	/// <summary>The Profile Manager page's view model, made per visit. Logging in as another account forgets the file manager's context.</summary>
 	/// <returns>A new view model sharing the run-wide <see cref="Session"/>.</returns>
 	public static ProfileManagerViewModel CreateProfileManager()
-		=> new( Session, Dialogs, FilePickers, Navigation, () => FileManagerState.Reset() );
+		=> new( Session, Dialogs, FilePickers, Navigation, OnVaultPathChanged, InspectSettingsStatus );
+
+	private static IReadOnlyList<(HackPDM.Shared.GlobalData.StatusMessage Status, string Category, string Message)> InspectSettingsStatus()
+	{
+		List<(StatusMessage, string, string)> items = [];
+		if( Settings.Provider is JsonFileSettingsProvider provider )
+		{
+			if( provider.Errors.Count > 0 )
+			{
+				foreach( string err in provider.Errors )
+					items.Add( (StatusMessage.ERROR, ProfileStatusCategory.Settings, err) );
+			}
+			else
+			{
+				string source = provider.Existed ? AppSettingsStore.FilePath : "defaults (not yet saved)";
+				items.Add( (StatusMessage.INFO, ProfileStatusCategory.Settings, $"App settings active from {source}.") );
+			}
+		}
+
+		try
+		{
+			bool configExists = System.IO.File.Exists( AppConfigStore.FilePath );
+			bool loaded = UIStorage.GlobalData.IsLoadedFromFile;
+			if( configExists && loaded )
+				items.Add( (StatusMessage.INFO, ProfileStatusCategory.Settings, $"UI configuration loaded from {AppConfigStore.FilePath}.") );
+			else if( configExists )
+				items.Add( (StatusMessage.WARNING, ProfileStatusCategory.Settings, $"UI configuration at {AppConfigStore.FilePath} fell back to defaults.") );
+			else
+				items.Add( (StatusMessage.INFO, ProfileStatusCategory.Settings, $"UI configuration using defaults ({AppConfigStore.FilePath} not yet created).") );
+		}
+		catch( System.Exception ex )
+		{
+			items.Add( (StatusMessage.ERROR, ProfileStatusCategory.Settings, $"Failed reading UI configuration '{AppConfigStore.FilePath}': {ex.Message}") );
+		}
+
+		if( Theme.NeedsRestart || Theme.StyleNeedsRestart )
+			items.Add( (StatusMessage.WARNING, ProfileStatusCategory.Settings, "Theme or corner-style changes are pending a restart to finish applying.") );
+
+		return items;
+	}
 
 	/// <summary>The file manager page's view model, made per visit from <see cref="FileManagerState"/>.</summary>
 	/// <returns>A new view model; the caller disposes it when the page is left.</returns>
@@ -117,19 +177,24 @@ public static class AppComposition
 		Reporter,
 		new DirectoryTreeService(),
 		new EntryListService(),
-		LocalFiles );
+		LocalFiles,
+		FilePickers );
 
 	/// <summary>The Hack settings page's view model, fresh each time the page is built (it loads the current values).</summary>
 	/// <returns>A new view model holding the current local folder settings.</returns>
-	public static HackSettingsViewModel CreateHackSettings() => new( Dialogs );
+	public static HackSettingsViewModel CreateHackSettings() => new( Dialogs, FilePickers, Session, OnVaultPathChanged );
 
 	/// <summary>The Odoo settings page's view model, fresh each time the page is built (it loads the current values).</summary>
 	/// <returns>A new view model holding the current Odoo settings.</returns>
-	public static OdooSettingsViewModel CreateOdooSettings() => new( Dialogs );
+	public static OdooSettingsViewModel CreateOdooSettings() => new( Dialogs, Session );
 
 	/// <summary>The theme editor page's view model, made per visit.</summary>
 	/// <returns>A new view model editing the run-wide <see cref="Theme"/>.</returns>
-	public static ThemeEditorViewModel CreateThemeEditor() => new( Theme );
+	public static ThemeEditorViewModel CreateThemeEditor() => new( Theme, Session );
+
+	/// <summary>The status settings page's view model, made per visit.</summary>
+	/// <returns>A new view model editing the run-wide <see cref="StatusLog"/> settings.</returns>
+	public static StatusSettingsViewModel CreateStatusSettings() => new( StatusLog, Dialogs, Session );
 
 	/// <summary>The search window's state, kept for the whole run; locating a result switches to the file manager.</summary>
 	public static SearchOdooViewModel SearchOdoo => field ??= new(

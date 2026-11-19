@@ -13,7 +13,7 @@ namespace HackPDM.Mvvm.Models.Hack;
 /// One row of the file manager's entry list: a remote entry, a local-only file, or both. Resolves its
 /// local file from the vault path.
 /// </summary>
-public class EntryRow : HackPDM.Domain.Representation.EntryRow
+public partial class EntryRow : HackPDM.Domain.Representation.EntryRow
 {
 	/// <summary>The local file for this row.</summary>
 	/// <value>Resolved on first read from <c>FullName</c> (a server path for remote rows, an absolute path for local rows)

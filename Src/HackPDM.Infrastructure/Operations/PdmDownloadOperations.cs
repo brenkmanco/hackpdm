@@ -23,11 +23,17 @@ public static class PdmDownloadOperations
     private const int DependencyTimeoutMs = 1000000;
 
     /// <summary>Asks the server for the given entries plus every entry they depend on, recursively, each once.</summary>
-    /// <param name="entryIds">The hp.entry ids to start from.</param>
+    /// <param name="entryIds">The hp.version ids to start from.</param>
     /// <returns>The entry ids, or a failed result with the server's or the transport's error.</returns>
     /// <remarks>Calls <c>hp.version.get_recursive_dependency_entries</c> with a timeout of about 17 minutes, since large assemblies take long.</remarks>
     public static Task<Result<IReadOnlyList<int>>> GetAllEntriesAndDependenciesListAsync(IReadOnlyList<int> entryIds)
         => OdooRpc.ExecuteAsync<IReadOnlyList<int>>(HpVersion.GetHpModel()!, "get_recursive_dependency_entries", [entryIds], DependencyTimeoutMs);
+
+    /// <summary>
+    /// Asks the server for the given entry ids plus every entry their latest versions depend on, recursively, in one SQL call.
+    /// </summary>
+    public static Task<Result<IReadOnlyList<int>>> GetAllEntriesAndDependenciesByEntriesAsync(IReadOnlyList<int> entryIds)
+        => OdooRpc.ExecuteAsync<IReadOnlyList<int>>(HpVersion.GetHpModel()!, "get_recursive_dependency_entries_by_entries", [entryIds], DependencyTimeoutMs);
 
     /// <summary>Asks the server for the given versions plus every version they depend on, recursively.</summary>
     /// <param name="versionIds">The hp.version ids to start from.</param>
@@ -36,23 +42,49 @@ public static class PdmDownloadOperations
     public static Task<Result<IReadOnlyList<int>>> GetVersionListAsync(params int[] versionIds)
         => OdooRpc.ExecuteAsync<IReadOnlyList<int>>(HpVersion.GetHpModel()!, "get_recursive_dependency_versions", [versionIds], DependencyTimeoutMs);
 
+    private const int MetadataChunkSize = 500;
+
     /// <summary>Reads the latest version of each entry (following <c>latest_version_id</c>), without the file contents by default.</summary>
     /// <param name="entryIDs">The hp.entry ids.</param>
-    /// <param name="excludedFields">Version fields not to read; <c>preview_image</c> and <c>file_contents</c> when null. Pass an empty array to read everything.</param>
+    /// <param name="excludedFields">Version fields not to read; ignored when <paramref name="includedFields"/> is specified.</param>
+    /// <param name="token">Cancels between metadata chunks.</param>
+    /// <param name="includedFields">When non-null, reads only these fields (much faster than excluding heavy relational fields).</param>
     /// <returns>The versions, or null when there are none or the read failed.</returns>
-    /// <remarks>Uses the addon's <c>related_browse</c> with a 60 second timeout.</remarks>
-    public static async Task<HpVersion[]?> GetLatestVersionsAsync(IReadOnlyList<int> entryIDs, string[]? excludedFields = null)
+    /// <remarks>Uses the addon's <c>related_browse</c> in bounded chunks so large directories don't time out or spike memory.</remarks>
+    public static async Task<HpVersion[]?> GetLatestVersionsAsync(
+        IReadOnlyList<int> entryIDs,
+        string[]? excludedFields = null,
+        CancellationToken token = default,
+        string[]? includedFields = null)
     {
         excludedFields ??= ["preview_image", "file_contents"];
-        return await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(entryIDs, nameof(HpEntry.latest_version_id), excludedFields);
+        if (entryIDs.Count <= MetadataChunkSize)
+            return await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
+                entryIDs, nameof(HpEntry.latest_version_id),
+                includedFields is null ? excludedFields : null,
+                includedFields: includedFields);
+
+        List<HpVersion> all = new(entryIDs.Count);
+        for (int offset = 0; offset < entryIDs.Count; offset += MetadataChunkSize)
+        {
+            token.ThrowIfCancellationRequested();
+            int count = Math.Min(MetadataChunkSize, entryIDs.Count - offset);
+            int[] chunk = [.. entryIDs.Skip(offset).Take(count)];
+            HpVersion[]? page = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
+                chunk, nameof(HpEntry.latest_version_id),
+                includedFields is null ? excludedFields : null,
+                includedFields: includedFields);
+            if (page is { Length: > 0 })
+                all.AddRange(page);
+        }
+        return all.Count > 0 ? [.. all] : null;
     }
 
-    // ---- download tuning -------------------------------------------------------------
+    // ---- download tuning & memory-aware throttling -----------------------------------
     // A batch used to be "N files" regardless of size, read in one RPC call with a fixed 90 s
-    // timeout. A batch of large CAD files could not finish in time on a slower link; the read
-    // failed, OdooClient turned the error into "no result", and those files were silently
-    // skipped. Batches are now limited by bytes as well as count, the timeout scales with the
-    // payload, and anything that does not arrive is retried one file at a time and reported.
+    // timeout. Batches are now limited by bytes (scaled down automatically under RAM pressure)
+    // as well as count, concurrency scales down when memory load is high, payloads are released
+    // immediately after writing, and anything that does not arrive is retried one file at a time.
 
     /// <summary>Most file bytes requested in one RPC call (a larger file gets a call of its own).</summary>
     public static long MaxBatchBytes { get; set; } = 16L * 1024 * 1024;
@@ -62,6 +94,68 @@ public static class PdmDownloadOperations
 
     /// <summary>Attempts per file: the first as part of its batch, the rest on its own.</summary>
     public static int MaxAttempts { get; set; } = 3;
+
+    private const long OneGiB = 1024L * 1024 * 1024;
+    private const long HalfGiB = 512L * 1024 * 1024;
+
+    /// <summary>
+    /// Computes a safe per-batch byte budget based on current system memory availability.
+    /// Base64 + JSON/XML-RPC deserialization amplifies raw file bytes by ~4–6x in managed memory,
+    /// so smaller batches prevent LOH thrashing on low-RAM machines.
+    /// </summary>
+    public static long EffectiveBatchBytes(long? requestedMaxBytes = null)
+    {
+        long cap = requestedMaxBytes ?? MaxBatchBytes;
+        GCMemoryInfo mem = GC.GetGCMemoryInfo();
+        long total = mem.TotalAvailableMemoryBytes;
+        if (total <= 0)
+            return cap;
+
+        long free = Math.Max(0, total - mem.MemoryLoadBytes);
+        double loadRatio = (double)mem.MemoryLoadBytes / total;
+
+        long ramCap = (loadRatio, free) switch
+        {
+            ( >= 0.88, _ ) or ( _, < HalfGiB ) => 2L * 1024 * 1024,
+            ( >= 0.80, _ ) or ( _, < OneGiB ) => 4L * 1024 * 1024,
+            ( >= 0.70, _ ) or ( _, < 2 * OneGiB ) => 8L * 1024 * 1024,
+            _ => cap,
+        };
+        return Math.Min(cap, ramCap);
+    }
+
+    /// <summary>
+    /// Computes an effective batch concurrency capped by both <paramref name="requestedConcurrency"/>
+    /// and current system memory pressure.
+    /// </summary>
+    public static int EffectiveConcurrency(int requestedConcurrency)
+    {
+        int capped = Math.Max(1, requestedConcurrency);
+        GCMemoryInfo mem = GC.GetGCMemoryInfo();
+        long total = mem.TotalAvailableMemoryBytes;
+        if (total <= 0)
+            return capped;
+
+        long free = Math.Max(0, total - mem.MemoryLoadBytes);
+        double loadRatio = (double)mem.MemoryLoadBytes / total;
+
+        if (loadRatio >= 0.85 || free < HalfGiB)
+            return 1;
+        if (loadRatio >= 0.75 || free < OneGiB)
+            return Math.Min(capped, 2);
+        return capped;
+    }
+
+    private static bool IsMemoryPressureHigh()
+    {
+        GCMemoryInfo mem = GC.GetGCMemoryInfo();
+        long total = mem.TotalAvailableMemoryBytes;
+        if (total <= 0)
+            return false;
+        long free = Math.Max(0, total - mem.MemoryLoadBytes);
+        double loadRatio = (double)mem.MemoryLoadBytes / total;
+        return loadRatio >= 0.86 || free < HalfGiB;
+    }
 
     private const int DefaultBatchCount = 5;
     private const int MinTimeoutMs = 90_000;
@@ -164,32 +258,40 @@ public static class PdmDownloadOperations
         CancellationToken cToken,
         int maxConcurrency = 2,
         Action<StatusMessage, string>? log = null,
-        Action<int, int>? onProgress = null)
+        Action<int, int>? onProgress = null,
+        Action<long>? onBytesDownloaded = null)
     {
         DownloadSummary summary = new();
-        using SemaphoreSlim throttler = new(Math.Max(1, maxConcurrency));
-        List<Task> allTasks = [];
+        int effectiveConcurrency = EffectiveConcurrency(maxConcurrency);
+        if (effectiveConcurrency < Math.Max(1, maxConcurrency))
+            log?.Invoke(StatusMessage.INFO, $"Memory pressure detected; throttling concurrent download batches from {maxConcurrency} to {effectiveConcurrency}.");
 
-        foreach (var batch in versionBatches ?? [])
-        {
-            Task task = Task.Run(async () =>
+        // Serialize RPC payload reads when live RAM pressure spikes so concurrent base64/LOH buffers never exhaust RAM
+        using SemaphoreSlim highMemoryGate = new(1, 1);
+
+        await Parallel.ForEachAsync(
+            versionBatches ?? [],
+            new ParallelOptions { MaxDegreeOfParallelism = effectiveConcurrency, CancellationToken = cToken },
+            async (batch, ct) =>
             {
-                await throttler.WaitAsync(cToken);
+                ct.ThrowIfCancellationRequested();
+                bool serialized = false;
+                if (IsMemoryPressureHigh())
+                {
+                    await highMemoryGate.WaitAsync(ct);
+                    serialized = true;
+                }
                 try
                 {
-                    cToken.ThrowIfCancellationRequested();
-                    await ProcessVersionBatchAsync(batch, cToken, log, onProgress, summary);
+                    await ProcessVersionBatchAsync(batch, ct, log, onProgress, summary, onBytesDownloaded);
                 }
                 finally
                 {
-                    throttler.Release();
+                    if (serialized)
+                        highMemoryGate.Release();
                 }
-            }, cToken);
+            });
 
-            allTasks.Add(task);
-        }
-
-        await Task.WhenAll(allTasks);
         return summary;
     }
 
@@ -217,13 +319,16 @@ public static class PdmDownloadOperations
         CancellationToken cToken,
         Action<StatusMessage, string>? log = null,
         Action<int, int>? onProgress = null,
-        DownloadSummary? summary = null)
+        DownloadSummary? summary = null,
+        Action<long>? onBytesDownloaded = null)
     {
         summary ??= new();
         List<HpVersion> processVersions = [];
+        List<(HpVersion Version, string LocalChecksum)> changedLocalCandidates = [];
 
         foreach (HpVersion version in batchVersions)
         {
+            cToken.ThrowIfCancellationRequested();
             if (string.IsNullOrEmpty(version.checksum) || version.checksum == "False")
             {
                 log?.Invoke(StatusMessage.ERROR, $"Checksum not found for version: {version.name}");
@@ -231,7 +336,14 @@ public static class PdmDownloadOperations
                 onProgress?.Invoke(0, 1); // increments: the UI adds these to its counters
                 continue;
             }
-            if (Checksums.MatchesLocalCopy(version))
+
+            // Compute local checksum at most once (fast-path: missing file needs no hashing or history lookup)
+            string? localPath = PwaPaths.ToAbsolute(version.windows_complete_name);
+            string? localChecksum = localPath is not null && File.Exists(localPath)
+                ? Checksums.OfFile(localPath)
+                : null;
+
+            if (localChecksum is { Length: > 0 } && localChecksum == version.checksum)
             {
                 log?.Invoke(StatusMessage.FOUND, $"Skipping version download: {version.name}");
                 summary.AddSkipped();
@@ -239,45 +351,68 @@ public static class PdmDownloadOperations
                 continue;
             }
 
-            if (await HasLocalChangesAsync(version))
+            if (localChecksum is not null)
             {
-                string shown = Path.Combine(version.WinPathway ?? "", version.name ?? "");
-                log?.Invoke(StatusMessage.WARNING,
-                    $"Kept local changes to {shown}: the local file is not a version from the vault, so it was not overwritten (commit it, or delete the local copy to get the vault's)");
-                summary.KeptLocalChanges.Enqueue(shown);
-                summary.AddSkipped();
-                onProgress?.Invoke(0, 1);
+                changedLocalCandidates.Add((version, localChecksum));
                 continue;
             }
 
             log?.Invoke(StatusMessage.PROCESSING, $"Downloading latest version: {Path.Combine(version.WinPathway ?? "", version.name ?? "")}");
             processVersions.Add(version);
-            onProgress?.Invoke(1, 0);
+        }
+
+        // Batch-check all locally differing files in one RPC call instead of one SearchReadAsync per file
+        if (changedLocalCandidates.Count > 0)
+        {
+            HashSet<string> knownChecksumsByPath = await FetchVaultChecksumsAsync(changedLocalCandidates);
+            foreach (var (version, localChecksum) in changedLocalCandidates)
+            {
+                string key = $"{version.windows_complete_name}\0{localChecksum}";
+                if (!knownChecksumsByPath.Contains(key))
+                {
+                    string shown = Path.Combine(version.WinPathway ?? "", version.name ?? "");
+                    log?.Invoke(StatusMessage.WARNING,
+                        $"Kept local changes to {shown}: the local file is not a version from the vault, so it was not overwritten (commit it, or delete the local copy to get the vault's)");
+                    summary.KeptLocalChanges.Enqueue(shown);
+                    summary.AddSkipped();
+                    onProgress?.Invoke(0, 1);
+                    continue;
+                }
+
+                log?.Invoke(StatusMessage.PROCESSING, $"Downloading latest version: {Path.Combine(version.WinPathway ?? "", version.name ?? "")}");
+                processVersions.Add(version);
+            }
         }
 
         if (processVersions.Count > 0)
-            await DownloadAndWriteAsync(processVersions, cToken, log, summary);
+            await DownloadAndWriteAsync(processVersions, cToken, log, summary, onProgress, onBytesDownloaded);
     }
 
     /// <summary>
-    /// Whether the local copy of <paramref name="version"/>'s file holds work that is in no version of
-    /// that file in the vault (it was edited, checked out or not): overwriting it would lose that work.
-    /// A copy of any earlier version is just out of date and may be replaced. A missing or unreadable
-    /// file has nothing to lose.
+    /// Batch-reads all known vault checksums for the given candidate files in a single RPC call so
+    /// we can tell whether a differing local copy is an older vault version (safe to overwrite)
+    /// or contains uncommitted local edits (must be kept).
     /// </summary>
-    private static async Task<bool> HasLocalChangesAsync(HpVersion version)
+    private static async Task<HashSet<string>> FetchVaultChecksumsAsync(List<(HpVersion Version, string LocalChecksum)> candidates)
     {
-        string? path = PwaPaths.ToAbsolute(version.windows_complete_name);
-        if (path is null || !File.Exists(path) || Checksums.OfFile(path) is not { } local)
-            return false;
-        // the checksums are read, not searched: checksum is related to the stored file's ir.attachment,
-        // and attachments of a field are invisible to searches, so a search on it never matches
+        HashSet<string> known = new(StringComparer.OrdinalIgnoreCase);
+        string[] paths = [.. candidates.Select(c => c.Version.windows_complete_name).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase)];
+        if (paths.Length == 0)
+            return known;
+
+        // Read checksum + windows_complete_name in one call; if the vault can't be asked, returns empty (safely keeping local files)
         Result<HpVersion[]> versions = await Repository<HpVersion>.SearchReadAsync(
-            OdooDomain.Where("entry_id.windows_complete_name", version.windows_complete_name),
-            FieldSelection.Only([nameof(HpVersion.checksum)]));
-        // when the vault can't be asked, keep the file: a skipped download can be repeated, lost work can't
-        return !versions.Ok
-            || !versions.Value!.Any(v => string.Equals(v.checksum, local, StringComparison.OrdinalIgnoreCase));
+            OdooDomain.Where("entry_id.windows_complete_name", Operators.In, paths),
+            FieldSelection.Only([nameof(HpVersion.checksum), nameof(HpVersion.windows_complete_name)]));
+        if (!versions.Ok || versions.Value is null)
+            return known;
+
+        foreach (HpVersion v in versions.Value)
+        {
+            if (v.windows_complete_name is { Length: > 0 } path && v.checksum is { Length: > 0 } checksum)
+                known.Add($"{path}\0{checksum}");
+        }
+        return known;
     }
 
     /// <summary>
@@ -286,7 +421,12 @@ public static class PdmDownloadOperations
     /// Files still missing after <see cref="MaxAttempts"/> are logged and added to the summary.
     /// </summary>
     private static async Task DownloadAndWriteAsync(
-        List<HpVersion> versions, CancellationToken cToken, Action<StatusMessage, string>? log, DownloadSummary summary)
+        List<HpVersion> versions,
+        CancellationToken cToken,
+        Action<StatusMessage, string>? log,
+        DownloadSummary summary,
+        Action<int, int>? onProgress,
+        Action<long>? onBytesDownloaded)
     {
         Dictionary<int, HpVersion> pending = versions.Where(v => v.id is > 0).DistinctBy(v => v.id).ToDictionary(v => v.id!.Value);
         Dictionary<int, string> lastError = [];
@@ -296,10 +436,11 @@ public static class PdmDownloadOperations
         {
             cToken.ThrowIfCancellationRequested();
             pending.Remove(large.id!.Value);
-            if (await DownloadLargeAsync(large, cToken) is { } error)
+            if (await DownloadLargeAsync(large, cToken, onBytesDownloaded) is { } error)
                 Fail(large, error);
             else
                 summary.AddDownloaded();
+            onProgress?.Invoke(1, 0);
         }
 
         for (int attempt = 1; attempt <= MaxAttempts && pending.Count > 0; attempt++)
@@ -333,22 +474,35 @@ public static class PdmDownloadOperations
                         continue;
                     }
 
-                    if (got.file_contents is { Length: > 0 } && !await LocalFileWriter.WriteAsync(got.ToHackFile()))
+                    long downloadedSize = got.file_contents?.Length ?? (got.file_size ?? 0);
+                    if (downloadedSize > 0)
+                        onBytesDownloaded?.Invoke(downloadedSize);
+
+                    bool wroteOk = got.file_contents is not { Length: > 0 } || await LocalFileWriter.WriteAsync(got.ToHackFile());
+                    // Release the downloaded byte[] immediately so LOH buffers can be reclaimed before the rest of the batch finishes
+                    got.file_contents = null;
+
+                    if (!wroteOk)
                     {
                         // a local write problem will not be fixed by downloading again
                         pending.Remove(id);
                         Fail(requested, "could not write the file locally");
+                        onProgress?.Invoke(1, 0);
                         continue;
                     }
 
                     pending.Remove(id);
                     summary.AddDownloaded();
+                    onProgress?.Invoke(1, 0);
                 }
             }
         }
 
         foreach (HpVersion version in pending.Values)
+        {
             Fail(version, lastError.GetValueOrDefault(version.id ?? 0, "unknown error"));
+            onProgress?.Invoke(1, 0);
+        }
 
         void Fail(HpVersion version, string reason)
         {
@@ -362,12 +516,12 @@ public static class PdmDownloadOperations
 
     /// <summary>Downloads one large file in pieces to a temporary file, checks it, and moves it into the working folder.</summary>
     /// <returns>Null when the file is in place; otherwise why not.</returns>
-    private static async Task<string?> DownloadLargeAsync(HpVersion requested, CancellationToken cToken)
+    private static async Task<string?> DownloadLargeAsync(HpVersion requested, CancellationToken cToken, Action<long>? onBytesDownloaded)
     {
         Result<HpVersion[]> read = await Repository<HpVersion>.ReadAsync([requested.id!.Value], FieldSelection.Only(LargeFileFields), OdooRpc.LongTimeout);
         if (read.Value is not [{ } version, ..])
             return read.Error ?? "the version could not be read";
-        Result<string> temp = await ContentTransfer.DownloadToTempFileAsync(version, cToken);
+        Result<string> temp = await ContentTransfer.DownloadToTempFileAsync(version, cToken, onBytesDownloaded);
         if (!temp.Ok)
             return temp.Error;
         if (await LocalFileWriter.WriteFromFileAsync(version.ToHackFile(contentsInFile: true), temp.Value!))

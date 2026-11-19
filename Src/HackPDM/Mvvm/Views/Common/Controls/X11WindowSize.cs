@@ -64,6 +64,45 @@ internal static partial class X11WindowSize
 #endif
 	}
 
+	/// <summary>Gets the X11 screen dimensions when running on X11.</summary>
+	public static bool TryGetScreenSize( out int width, out int height )
+	{
+		width = 0;
+		height = 0;
+#if HAS_UNO
+		if( !OperatingSystem.IsLinux() )
+			return false;
+		lock( Gate )
+		{
+			try
+			{
+				if( _unavailable )
+					return false;
+				if( _display == IntPtr.Zero )
+				{
+					_display = XOpenDisplay( null );
+					if( _display == IntPtr.Zero )
+					{
+						_unavailable = true;
+						return false;
+					}
+				}
+				int screen = XDefaultScreen( _display );
+				width = XDisplayWidth( _display, screen );
+				height = XDisplayHeight( _display, screen );
+				return width > 0 && height > 0;
+			}
+			catch( Exception e ) when( e is DllNotFoundException or EntryPointNotFoundException )
+			{
+				_unavailable = true;
+				return false;
+			}
+		}
+#else
+		return false;
+#endif
+	}
+
 	[LibraryImport( "libX11.so.6", StringMarshalling = StringMarshalling.Utf8 )]
 	private static partial IntPtr XOpenDisplay( string? name );
 
@@ -72,4 +111,13 @@ internal static partial class X11WindowSize
 
 	[LibraryImport( "libX11.so.6" )]
 	private static partial int XFlush( IntPtr display );
+
+	[LibraryImport( "libX11.so.6" )]
+	private static partial int XDefaultScreen( IntPtr display );
+
+	[LibraryImport( "libX11.so.6" )]
+	private static partial int XDisplayWidth( IntPtr display, int screenNumber );
+
+	[LibraryImport( "libX11.so.6" )]
+	private static partial int XDisplayHeight( IntPtr display, int screenNumber );
 }

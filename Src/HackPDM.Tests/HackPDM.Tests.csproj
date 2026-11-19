@@ -1,8 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -33,6 +32,7 @@
     <Compile Include="..\HackPDM\Mvvm\Models\Hack\FileManagerState.cs" Link="Linked\FileManagerState.cs" />
     <Compile Include="..\HackPDM\Mvvm\Models\Hack\LocalFileWatcher.cs" Link="Linked\LocalFileWatcher.cs" />
     <Compile Include="..\HackPDM\Mvvm\Models\Common\IOperationReporter.cs" Link="Linked\IOperationReporter.cs" />
+    <Compile Include="..\HackPDM\Mvvm\Models\Settings\LoginSession.cs" Link="Linked\LoginSession.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -4,7 +4,6 @@ class hp_release(models.Model):
     _name = 'hp.release'
     _description = 'hp release'
     _inherit = 'hp.common.model'
-    _inherit = 'hp.common.model'
 
     release_note = fields.Char(
         related='release_review_id.release_note',

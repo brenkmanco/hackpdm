@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading.Tasks;
 
 using HackPDM.Core.Hack;
+using HackPDM.Core.Logging;
 
 namespace HackPDM.Core;
 
@@ -24,12 +25,12 @@ public static class LocalFileWriter
     {
         if (file.FileContents == null)
         {
-            Console.WriteLine($"{file.Name} file contents empty");
+            HackLogger.Warn("LocalFileWriter", $"{file.Name} file contents empty");
             return null;
         }
         if (file.DirectoryName is not { } combinedPath || file.Name is not { } name)
         {
-            Console.WriteLine($"{file.Name} has no folder or name to write to");
+            HackLogger.Warn("LocalFileWriter", $"{file.Name} has no folder or name to write to");
             return null;
         }
         try
@@ -40,15 +41,35 @@ public static class LocalFileWriter
             }
             combinedPath = Path.Combine(combinedPath, name);
 
-            File.WriteAllBytes(combinedPath, file.FileContents);
+            string tempPath = $"{combinedPath}.{Guid.NewGuid():N}.tmp";
+            try
+            {
+                File.WriteAllBytes(tempPath, file.FileContents);
+                File.Move(tempPath, combinedPath, overwrite: true);
+            }
+            catch
+            {
+                TryDeleteTemp(tempPath);
+                throw;
+            }
 
-            Console.WriteLine($"{file.Name} created in {combinedPath}");
+            HackLogger.Debug("LocalFileWriter", $"{file.Name} created in {combinedPath}");
             file.ApplyModifiedDateToLocal();
             return file.FileSize ?? 0;
         }
+        catch (UnauthorizedAccessException e)
+        {
+            HackLogger.Error("LocalFileWriter", $"Access denied writing '{file.Name}': {e.Message}", e);
+            return null;
+        }
+        catch (IOException e)
+        {
+            HackLogger.Error("LocalFileWriter", $"I/O error writing '{file.Name}' (file may be locked or disk full): {e.Message}", e);
+            return null;
+        }
         catch (Exception e)
         {
-            Console.WriteLine(e.Message);
+            HackLogger.Error("LocalFileWriter", $"Unexpected error writing '{file.Name}': {e.Message}", e);
             return null;
         }
     }
@@ -73,11 +94,11 @@ public static class LocalFileWriter
     {
         if (file.FileContents == null)
         {
-            Console.WriteLine($"{file.Name} file contents empty");
+            HackLogger.Warn("LocalFileWriter", $"{file.Name} file contents empty");
             return false;
         }
         byte[] contents = file.FileContents;
-        return await PlaceAsync(file, target => WriteBytes(target, contents));
+        return await PlaceAsync(file, target => WriteBytesAtomicAsync(target, contents));
     }
 
     /// <summary>
@@ -116,9 +137,19 @@ public static class LocalFileWriter
             return true;
 
         }
+        catch (UnauthorizedAccessException e)
+        {
+            HackLogger.Error("LocalFileWriter", $"Access denied placing '{file.Name}': {e.Message}", e);
+            return false;
+        }
+        catch (IOException e)
+        {
+            HackLogger.Error("LocalFileWriter", $"I/O error placing '{file.Name}' (file may be locked by another application or disk full): {e.Message}", e);
+            return false;
+        }
         catch (Exception e)
         {
-            Console.WriteLine(e.Message);
+            HackLogger.Error("LocalFileWriter", $"Unexpected error placing '{file.Name}': {e.Message}", e);
             return false;
         }
     }
@@ -144,27 +175,60 @@ public static class LocalFileWriter
             ? target
             : null;
     }
-    private async static Task<bool> WriteBytes(string path, byte[] bytes)
+    private async static Task<bool> WriteBytesAtomicAsync(string path, byte[] bytes)
+    {
+        if (string.IsNullOrEmpty(path))
+            throw new ArgumentException("Invalid Argument: Empty path", nameof(path));
+        ArgumentNullException.ThrowIfNull(bytes);
+
+        string tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            await using (FileStream fileStream = new(
+                path: tempPath,
+                mode: FileMode.CreateNew,
+                access: FileAccess.Write,
+                share: FileShare.None,
+                bufferSize: 65536,
+                useAsync: true))
+            {
+                await fileStream.WriteAsync(bytes);
+                await fileStream.FlushAsync();
+            }
+
+            File.Move(tempPath, path, overwrite: true);
+            return true;
+        }
+        catch (UnauthorizedAccessException e)
+        {
+            TryDeleteTemp(tempPath);
+            HackLogger.Error("LocalFileWriter", $"Access denied writing '{path}': {e.Message}", e);
+            return false;
+        }
+        catch (IOException e)
+        {
+            TryDeleteTemp(tempPath);
+            HackLogger.Error("LocalFileWriter", $"I/O error writing '{path}' (file may be locked or disk full): {e.Message}", e);
+            return false;
+        }
+        catch (Exception e)
+        {
+            TryDeleteTemp(tempPath);
+            HackLogger.Error("LocalFileWriter", $"Failed writing '{path}': {e.Message}", e);
+            return false;
+        }
+    }
+
+    private static void TryDeleteTemp(string tempPath)
     {
         try
         {
-            if (path == null) throw new ArgumentNullException("path");
-            if (path.Length == 0) throw new ArgumentException("Invalid Argument: Empty path");
-            if (bytes == null) throw new ArgumentNullException("bytes");
-
-            using FileStream fileStream = new(
-                path: path,
-                mode: FileMode.Create,
-                access: FileAccess.Write,
-                share: FileShare.Read,
-                bufferSize: 4096,
-                useAsync: true);
-            await fileStream.WriteAsync(bytes, 0, bytes.Length);
-            return true;
+            if (File.Exists(tempPath))
+                File.Delete(tempPath);
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return false;
+            HackLogger.Debug("LocalFileWriter", $"Could not delete temporary file '{tempPath}': {ex.Message}");
         }
     }
 }

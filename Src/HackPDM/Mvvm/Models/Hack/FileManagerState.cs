@@ -134,14 +134,63 @@ public sealed class FileManagerState
 	/// <summary>
 	/// Files changed on disk while the page was not shown: the kept rows of a folder they touched are stale.
 	/// </summary>
-	/// <param name="treeFolders">The tree paths of the changed files' folders; null when changes were lost, which marks the kept rows stale.</param>
+	/// <param name="treeFolders">The tree paths of the changed files' folders; null when changes were lost, which marks the kept state stale.</param>
 	/// <remarks>Does nothing while <see cref="LivePages"/> is above zero, since a shown page applies the changes itself.</remarks>
 	public void LocalFilesChanged( IEnumerable<string?>? treeFolders )
 	{
-		if( LivePages > 0 || _entriesPath is not { } kept )
+		if( LivePages > 0 )
 			return;
-		if( treeFolders is null || treeFolders.Any( folder => string.Equals( folder, kept, StringComparison.OrdinalIgnoreCase ) ) )
+		if( treeFolders is null )
+		{
+			MarkStale( FileManagerRefresh.All );
+			return;
+		}
+		if( _entriesPath is not { } kept )
+			return;
+		if( treeFolders.Any( folder => HackPDM.Core.PwaPaths.SameTreePath( folder, kept ) ) )
 			MarkStale( FileManagerRefresh.Entries );
+	}
+
+	/// <summary>
+	/// Files or folders changed on disk while the page was not shown: marks the directory tree and/or kept entries stale.
+	/// </summary>
+	public void LocalFilesChanged( IReadOnlyList<LocalFileChange>? changes )
+	{
+		if( LivePages > 0 )
+			return;
+		if( changes is null )
+		{
+			MarkStale( FileManagerRefresh.All );
+			return;
+		}
+
+		bool treeStale = false;
+		bool entriesStale = false;
+		foreach( LocalFileChange change in changes )
+		{
+			string? itemPath = HackPDM.Core.PwaPaths.ToServerName( change.FullPath );
+			string? parentPath = HackPDM.Core.PwaPaths.ToServerName( System.IO.Path.GetDirectoryName( change.FullPath ) );
+			string[] itemSegments = HackPDM.Core.PwaPaths.Segments( itemPath );
+			bool isDir = change.IsDirectory
+				|| System.IO.Directory.Exists( change.FullPath )
+				|| ( change.Kind == LocalChangeKind.Deleted && itemSegments.Length > 0 && Tree?.FindBySegments( itemSegments ) is not null );
+
+			if( isDir )
+			{
+				treeStale = true;
+				if( _entriesPath is not null && HackPDM.Core.PwaPaths.IsSameOrAncestorTreePath( itemPath, _entriesPath ) )
+					entriesStale = true;
+			}
+			else if( _entriesPath is not null && HackPDM.Core.PwaPaths.SameTreePath( parentPath, _entriesPath ) )
+			{
+				entriesStale = true;
+			}
+		}
+
+		FileManagerRefresh what = ( treeStale ? FileManagerRefresh.Tree : FileManagerRefresh.None )
+			| ( entriesStale ? FileManagerRefresh.Entries : FileManagerRefresh.None );
+		if( what != FileManagerRefresh.None )
+			MarkStale( what );
 	}
 
 	/// <summary>Forgets everything (another server or user logged in).</summary>

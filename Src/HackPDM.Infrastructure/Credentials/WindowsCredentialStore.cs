@@ -60,5 +60,5 @@ internal sealed class WindowsCredentialStore : ICredentialStore
 internal static class CredentialLog
 {
 	public static void Warn( string store, string action, string message )
-		=> Console.Error.WriteLine( $"credentials: {store} could not {action}: {message}" );
+		=> HackPDM.Core.Logging.HackLogger.Warn( "Credentials", $"{store} could not {action}: {message}" );
 }

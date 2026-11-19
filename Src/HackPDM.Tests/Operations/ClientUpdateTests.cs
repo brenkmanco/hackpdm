@@ -34,6 +34,49 @@ public class ClientUpdateTests : IDisposable
 	public void IsOutdated_ComparesWithTheServersMinimum( string current, string? required, bool outdated )
 		=> Assert.Equal( outdated, ClientUpdate.IsOutdated( Version.Parse( current ), required ) );
 
+	[Theory]
+	// Exact version match
+	[InlineData( "1.1.0.0", "1.1.0", true )]
+	[InlineData( "1.1.0.0", "1.1", true )]
+	[InlineData( "1.1.0.0", "==1.1.0", true )]
+	[InlineData( "1.1.0.0", "1.0.0.27", false )]
+	[InlineData( "1.1.0.0", "1.2.0", false )]
+	// Lower bound only (above)
+	[InlineData( "1.1.0.0", ">=1.1.0", true )]
+	[InlineData( "1.1.0.0", ">= 1.0.0", true )]
+	[InlineData( "1.1.0.0", ">1.1.0", false )]
+	[InlineData( "1.2.0.0", ">1.1.0", true )]
+	// Upper bound only (below)
+	[InlineData( "1.1.0.0", "<=1.1.0", true )]
+	[InlineData( "1.1.0.0", "<=1.3.0", true )]
+	[InlineData( "1.1.0.0", "<1.1.0", false )]
+	[InlineData( "2.0.0.0", "<2.0.0", false )]
+	// Combined range (above AND below)
+	[InlineData( "1.1.0.0", ">=1.1.0, <2.0.0", true )]
+	[InlineData( "1.9.5.0", ">=1.1.0, <2.0.0", true )]
+	[InlineData( "1.0.9.0", ">=1.1.0, <2.0.0", false )]
+	[InlineData( "2.0.0.0", ">=1.1.0, <2.0.0", false )]
+	[InlineData( "1.2.0.0", ">=1.1.0 <=1.3.0", true )]
+	[InlineData( "1.4.0.0", ">=1.1.0 <=1.3.0", false )]
+	// Inclusive hyphen range
+	[InlineData( "1.1.0.0", "1.1.0 - 1.3.0", true )]
+	[InlineData( "1.3.0.0", "1.1.0 - 1.3.0", true )]
+	[InlineData( "1.0.9.0", "1.1.0 - 1.3.0", false )]
+	[InlineData( "1.3.1.0", "1.1.0 - 1.3.0", false )]
+	// Empty allows; malformed fails closed
+	[InlineData( "1.1.0.0", "", true )]
+	[InlineData( "1.1.0.0", null, true )]
+	[InlineData( "1.1.0.0", "not-a-version", false )]
+	[InlineData( "1.1.0.0", "2.0.0 - 1.0.0", false )]
+	public void CheckVersion_SupportsExactAndWorkableRanges( string current, string? requirement, bool expectedAllowed )
+	{
+		VersionCheckResult result = ClientUpdate.CheckVersion( Version.Parse( current ), requirement );
+		Assert.Equal( expectedAllowed, result.IsAllowed );
+		Assert.Equal( !expectedAllowed, ClientUpdate.IsVersionMismatch( Version.Parse( current ), requirement ) );
+		if( !expectedAllowed )
+			Assert.False( string.IsNullOrWhiteSpace( result.Reason ) );
+	}
+
 	[Fact]
 	public void Current_IsTheBuildVersion()
 	{

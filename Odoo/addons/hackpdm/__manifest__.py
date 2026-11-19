@@ -5,6 +5,7 @@
     'summary': 'product data management',
     'description': 'engineering product data management system',
     'author': 'Justin Johnson',
+    'license': 'LGPL-3',
     'depends': [
         'base'
     ],

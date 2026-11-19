@@ -11,7 +11,13 @@ namespace HackPDM.Mvvm.Views.Common.Converters
     {
         public object Convert(object value, Type targetType, object parameter, string language)
         {
-            return value is long bytesize ? ByteSize.Format(bytesize, "   ") : value;
+            return value switch
+            {
+                long bytesize => ByteSize.Format(bytesize, " "),
+                int bytesize => ByteSize.Format(bytesize, " "),
+                null => string.Empty,
+                _ => value,
+            };
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, string language)

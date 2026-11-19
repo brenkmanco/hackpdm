@@ -1,0 +1,113 @@
+# HackPDM Production Docker Compose Stack
+# Starts PostgreSQL 15 + Odoo 16.0 (production hackpdm addon only) + Caddy TLS reverse proxy.
+#
+# Usage:
+#   cp .env.example .env   # fill in strong random passwords and domain
+#   chmod 600 .env
+#   docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: hackpdm-prod-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-odoo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-512MB}
+      - -c
+      - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-1536MB}
+      - -c
+      - work_mem=${PG_WORK_MEM:-16MB}
+      - -c
+      - max_connections=${PG_MAX_CONNECTIONS:-200}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-odoo} -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  odoo:
+    build:
+      context: ../ci
+      dockerfile: Dockerfile
+    image: hackpdm-odoo-prod:16.0
+    container_name: hackpdm-prod-odoo
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HOST: postgres
+      PORT: "5432"
+      USER: ${POSTGRES_USER:-odoo}
+      PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    command:
+      - odoo
+      - --db_host=postgres
+      - --db_port=5432
+      - --db_user=${POSTGRES_USER:-odoo}
+      - --db_password=${POSTGRES_PASSWORD}
+      - --database=${ODOO_DB:?set ODOO_DB in .env}
+      - --db-filter=^${ODOO_DB}$
+      - --without-demo=all
+      - --no-database-list
+      - --proxy-mode
+      - --workers=${ODOO_WORKERS:-5}
+      - --max-cron-threads=1
+      - --limit-request=8192
+      - --limit-time-cpu=600
+      - --limit-time-real=1200
+      - --limit-memory-soft=2147483648
+      - --limit-memory-hard=2684354560
+      - --log-level=info
+      - --addons-path=/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons
+    volumes:
+      - odoo_data:/var/lib/odoo
+      # Mount ONLY the production hackpdm addon (never hackpdm_test)
+      - ../addons/hackpdm:/mnt/extra-addons/hackpdm:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8069/web/health | grep -q pass"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: hackpdm-prod-caddy
+    restart: unless-stopped
+    depends_on:
+      odoo:
+        condition: service_healthy
+    environment:
+      HACKPDM_DOMAIN: ${HACKPDM_DOMAIN:?set HACKPDM_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - internal
+
+volumes:
+  pg_data:
+  odoo_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    driver: bridge

@@ -125,10 +125,14 @@ public interface IPdmWorkflowService
 	/// </remarks>
 	Task LogicalDeleteAsync( IReadOnlyList<int> entryIds );
 
-	/// <summary>Restores every logically deleted entry directly in a directory.</summary>
-	/// <param name="directoryId">The Odoo id of the directory; subdirectories are not included.</param>
+	/// <summary>Restores every logically deleted entry in a directory, optionally including subdirectories.</summary>
+	/// <param name="directoryId">The Odoo id of the directory.</param>
+	/// <param name="withSubdirectories">When <see langword="true"/>, also restores deleted entries in all descendant directories.</param>
 	/// <remarks>Uses <see cref="HackPDM.Infrastructure.Operations.PdmDeleteOperations.SetDeletedAsync"/> and marks the status window's progress complete.</remarks>
-	Task RestoreDeletedInDirectoryAsync( int directoryId );
+	Task RestoreDeletedInDirectoryAsync( int directoryId, bool withSubdirectories = false );
+
+	/// <summary>Returns whether the logged-in Odoo user belongs to <c>hackpdm.group_pdm_admin</c>.</summary>
+	Task<bool> IsCurrentUserPdmAdminAsync();
 
 	/// <summary>Permanently removes entries from the server, with all their versions and attachments.</summary>
 	/// <param name="entryIds">The entries to remove.</param>
@@ -164,7 +168,16 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 {
 	private static readonly string[] HeavyEntryFields = [ "type_id", "cat_id" ];
 	private static readonly string[] DeleteExcludedFields = [ "type_id", "cat_id", "checkout_node" ];
-	private static readonly string[] LatestVersionExcludedFields = [ "preview_image", "entry_id", "node_id", "file_modify_stamp", "attachment_id", "file_contents" ];
+	private static readonly string[] LatestVersionIncludedFields =
+	[
+		nameof( HpVersion.id ),
+		nameof( HpVersion.name ),
+		nameof( HpVersion.checksum ),
+		nameof( HpVersion.file_size ),
+		nameof( HpVersion.windows_complete_name ),
+		nameof( HpVersion.dir_id ),
+		nameof( HpVersion.checkout_user ),
+	];
 
 	private void Log( StatusMessage status, string message ) => reporter.Log( status, message );
 
@@ -194,16 +207,67 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		return ids.ValueOr( [] );
 	}
 
-	/// <summary>Adds every entry the given entries' latest versions depend on, without duplicates.</summary>
-	private async Task<IReadOnlyList<int>> ExpandWithDependenciesAsync( IReadOnlyList<int> entryIds )
-	{
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( entryIds, includedFields: [ nameof( HpEntry.latest_version_id ) ] );
-		Result<IReadOnlyList<int>> dependencies = await PdmDownloadOperations.GetAllEntriesAndDependenciesListAsync(
-			[ .. entries?.Select( e => e.latest_version_id?.id ?? 0 ) ?? [] ] );
-		if( !dependencies.Ok )
-			Log( StatusMessage.WARNING, $"Dependencies could not be listed: {dependencies.Error}" );
+	private const int RpcIdChunkSize = 500;
 
-		return [ .. dependencies.ValueOr( [] ).Concat( entryIds ).Distinct() ];
+	/// <summary>Adds every entry the given entries' latest versions depend on, without duplicates.</summary>
+	private async Task<IReadOnlyList<int>> ExpandWithDependenciesAsync( IReadOnlyList<int> entryIds, CancellationToken token = default )
+	{
+		HashSet<int> allIds = [ .. entryIds ];
+		bool useDirectEntryRpc = true;
+		List<int> fallbackEntryIds = [];
+
+		for( int offset = 0; offset < entryIds.Count; offset += RpcIdChunkSize )
+		{
+			token.ThrowIfCancellationRequested();
+			int count = Math.Min( RpcIdChunkSize, entryIds.Count - offset );
+			int[] chunk = [ .. entryIds.Skip( offset ).Take( count ) ];
+
+			if( useDirectEntryRpc )
+			{
+				Result<IReadOnlyList<int>> direct = await PdmDownloadOperations.GetAllEntriesAndDependenciesByEntriesAsync( chunk );
+				if( direct.Ok )
+				{
+					if( direct.Value is { Count: > 0 } depIds )
+						allIds.UnionWith( depIds );
+					continue;
+				}
+				// Older addon without get_recursive_dependency_entries_by_entries: fall back cleanly
+				useDirectEntryRpc = false;
+			}
+			fallbackEntryIds.AddRange( chunk );
+		}
+
+		if( fallbackEntryIds.Count == 0 )
+			return [ .. allIds ];
+
+		List<int> versionIds = [];
+		for( int offset = 0; offset < fallbackEntryIds.Count; offset += RpcIdChunkSize )
+		{
+			token.ThrowIfCancellationRequested();
+			int count = Math.Min( RpcIdChunkSize, fallbackEntryIds.Count - offset );
+			int[] chunk = [ .. fallbackEntryIds.Skip( offset ).Take( count ) ];
+			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( chunk, includedFields: [ nameof( HpEntry.latest_version_id ) ] );
+			if( entries is not null )
+			{
+				foreach( HpEntry e in entries )
+					if( e.latest_version_id?.id is int vid and > 0 )
+						versionIds.Add( vid );
+			}
+		}
+
+		for( int offset = 0; offset < versionIds.Count; offset += RpcIdChunkSize )
+		{
+			token.ThrowIfCancellationRequested();
+			int count = Math.Min( RpcIdChunkSize, versionIds.Count - offset );
+			int[] chunk = [ .. versionIds.Skip( offset ).Take( count ) ];
+			Result<IReadOnlyList<int>> dependencies = await PdmDownloadOperations.GetAllEntriesAndDependenciesListAsync( chunk );
+			if( !dependencies.Ok )
+				Log( StatusMessage.WARNING, $"Dependencies could not be listed: {dependencies.Error}" );
+			else if( dependencies.Value is { Count: > 0 } depIds )
+				allIds.UnionWith( depIds );
+		}
+
+		return [ .. allIds ];
 	}
 
 	#region Get latest
@@ -215,10 +279,21 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 			return;
 
 		CancellationTokenSource cancellation = reporter.BeginOperation();
-		Log( StatusMessage.INFO, "Finding Entry Dependencies..." );
-		IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
+		try
+		{
+			Log( StatusMessage.INFO, $"Finding Entry Dependencies for {entryIds.Count} entries..." );
+			IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds, cancellation.Token );
 
-		await AsyncHelper.AsyncRunner( () => DownloadLatestAsync( ids, cancellation.Token ), "Get Latest", cancellation );
+			await AsyncHelper.AsyncRunner( () => DownloadLatestAsync( ids, cancellation.Token ), "Get Latest", cancellation );
+		}
+		catch( OperationCanceledException )
+		{
+			await reporter.NotifyAsync( "Cancelled Download" );
+		}
+		finally
+		{
+			reporter.Complete();
+		}
 	}
 
 	private async Task DownloadLatestAsync( IReadOnlyList<int> entryIds, CancellationToken token )
@@ -226,9 +301,13 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		Log( StatusMessage.FOUND, $"{entryIds.Count} entries" );
 		Log( StatusMessage.PROCESSING, "Retrieving all latest versions associated with entries..." );
 
-		HpVersion[]? versions = await PdmDownloadOperations.GetLatestVersionsAsync( entryIds, LatestVersionExcludedFields );
-		// batches are limited by total file size as well as count (see PdmDownloadOperations.MaxBatchBytes)
-		List<List<HpVersion>>? batches = versions is null ? null : PdmDownloadOperations.BatchBySize( versions, OdooDefaults.Instance.DownloadBatchSize );
+		HpVersion[]? versions = await PdmDownloadOperations.GetLatestVersionsAsync(
+			entryIds, excludedFields: null, token: token, includedFields: LatestVersionIncludedFields );
+		// Batches adapt to available RAM as well as count so low-RAM machines avoid Gen2/LOH thrashing
+		long effectiveBatchBytes = PdmDownloadOperations.EffectiveBatchBytes();
+		List<List<HpVersion>>? batches = versions is null
+			? null
+			: PdmDownloadOperations.BatchBySize( versions, OdooDefaults.Instance.DownloadBatchSize, effectiveBatchBytes );
 		reporter.SetTotal( versions?.Length ?? 0 );
 
 		if( batches is not { Count: > 0 } || versions is null )
@@ -246,7 +325,8 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 				token,
 				OdooDefaults.Instance.ConcurrencySize,
 				log: Log,
-				onProgress: ( processed, skipped ) => reporter.Advance( processed, skipped ) );
+				onProgress: ( processed, skipped ) => reporter.Advance( processed, skipped ),
+				onBytesDownloaded: bytes => reporter.AddDownloadedBytes( bytes ) );
 		}
 		catch( OperationCanceledException )
 		{
@@ -301,33 +381,41 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		if( entryIds is null or { Count: < 1 } )
 			return;
 
-		int me = OdooDefaults.Instance.OdooId;
-		IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
-		// only entries checked out to this user are released
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids,
-			checkout ? null : OdooDomain.Where( "checkout_user", Operators.Equal, me ), excludedFields: HeavyEntryFields );
-		if( !checkout )
+		reporter.BeginOperation();
+		try
 		{
-			// the selected files someone else holds are left alone; say so rather than a bare "Completed!"
-			HpEntry[]? others = await HpEntry.GetRecordsByIdsAsync( entryIds,
-				OdooDomain.Where( "checkout_user", Operators.NotEqual, me ).And( "checkout_user", Operators.NotEqual, false ),
-				includedFields: [ nameof( HpEntry.id ), nameof( HpEntry.name ), nameof( HpEntry.checkout_user ) ] );
-			foreach( HpEntry other in others ?? [] )
-				Log( StatusMessage.ERROR, $"Cannot undo the check out of {other.name}: it is checked out to {other.checkout_user?.name ?? "another user"}" );
-		}
-		if( entries is null or { Length: < 1 } )
-			return;
+			int me = OdooDefaults.Instance.OdooId;
+			IReadOnlyList<int> ids = await ExpandWithDependenciesAsync( entryIds );
+			// only entries checked out to this user are released
+			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( ids,
+				checkout ? null : OdooDomain.Where( "checkout_user", Operators.Equal, me ), excludedFields: HeavyEntryFields );
+			if( !checkout )
+			{
+				// the selected files someone else holds are left alone; say so rather than a bare "Completed!"
+				HpEntry[]? others = await HpEntry.GetRecordsByIdsAsync( entryIds,
+					OdooDomain.Where( "checkout_user", Operators.NotEqual, me ).And( "checkout_user", Operators.NotEqual, false ),
+					includedFields: [ nameof( HpEntry.id ), nameof( HpEntry.name ), nameof( HpEntry.checkout_user ) ] );
+				foreach( HpEntry other in others ?? [] )
+					Log( StatusMessage.ERROR, $"Cannot undo the check out of {other.name}: it is checked out to {other.checkout_user?.name ?? "another user"}" );
+			}
+			if( entries is null or { Length: < 1 } )
+				return;
 
-		await AsyncHelper.AsyncRunner( async () =>
+			await AsyncHelper.AsyncRunner( async () =>
+			{
+				reporter.SetTotal( entries.Length );
+				if( checkout )
+					await PdmCheckoutOperations.CheckOutEntriesAsync( entries, Log, OnCheckoutProgress );
+				else
+					await PdmCheckoutOperations.UnCheckOutEntriesAsync( entries, me, Log, OnCheckoutProgress );
+				reporter.Complete();
+				await reporter.NotifyAsync( "Completed!" );
+			}, checkout ? "Checkout Files" : "UnCheckout Files" );
+		}
+		finally
 		{
-			reporter.SetTotal( entries.Length );
-			if( checkout )
-				await PdmCheckoutOperations.CheckOutEntriesAsync( entries, Log, OnCheckoutProgress );
-			else
-				await PdmCheckoutOperations.UnCheckOutEntriesAsync( entries, me, Log, OnCheckoutProgress );
 			reporter.Complete();
-			await reporter.NotifyAsync( "Completed!" );
-		}, checkout ? "Checkout Files" : "UnCheckout Files" );
+		}
 	}
 
 	private void OnCheckoutProgress( int processed, int total )
@@ -365,39 +453,48 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 			return;
 		}
 
-		HpPDMCommit commit = new() { node_by = OdooDefaults.Instance?.MyNode?.id };
-		await commit.CreateCommitAsync();
-
 		reporter.BeginOperation();
-		reporter.SetTotal( ( localOnly?.Length ?? 0 ) + ( remoteExisting?.Length ?? 0 ) );
-		Log( StatusMessage.PROCESSING, "--- Preparing to stage records ---" );
-
-		// new files first, then new versions of files Odoo already knows
-		var staged = ( localOnly ?? [] ).Select( f => (file: f, inOdoo: false) )
-			.Concat( ( remoteExisting ?? [] ).Select( f => (file: f, inOdoo: true) ) );
-		foreach( var (file, inOdoo) in staged )
+		try
 		{
-			if( !await PdmCommitOperations.CommitRecordAsync( file, commit, inOdoo, Log, () => reporter.Advance( 1 ) ) )
+			HpPDMCommit commit = new() { node_by = OdooDefaults.Instance?.MyNode?.id };
+			await commit.CreateCommitAsync();
+
+			reporter.SetTotal( ( localOnly?.Length ?? 0 ) + ( remoteExisting?.Length ?? 0 ) );
+			Log( StatusMessage.PROCESSING, "--- Preparing to stage records ---" );
+
+			// new files first, then new versions of files Odoo already knows
+			var staged = ( localOnly ?? [] ).Select( f => (file: f, inOdoo: false) )
+				.Concat( ( remoteExisting ?? [] ).Select( f => (file: f, inOdoo: true) ) );
+			foreach( var (file, inOdoo) in staged )
 			{
-				reporter.Complete();
+				if( !await PdmCommitOperations.CommitRecordAsync(
+					file,
+					commit,
+					inOdoo,
+					Log,
+					() => reporter.Advance( 1 ),
+					bytes => reporter.AddUploadedBytes( bytes ) ) )
+					return;
+			}
+
+			var (committed, error) = await commit.ServerCommit();
+			if( !committed )
+			{
+				// nothing was created on the server; never report a failed commit as done
+				Log( StatusMessage.ERROR, $"Commit failed on the server: {error}" );
+				await reporter.NotifyAsync( $"Commit failed: {error}", "Commit Files" );
 				return;
 			}
+			// the committed entries are checked in by the server; the unchanged ones that came along
+			// (e.g. the parts of a checked-out assembly) are released here
+			await CheckInUnchangedAsync( unchanged );
+			reporter.Complete();
+			await reporter.NotifyAsync( "Completed!" );
 		}
-
-		var (committed, error) = await commit.ServerCommit();
-		if( !committed )
+		finally
 		{
 			reporter.Complete();
-			// nothing was created on the server; never report a failed commit as done
-			Log( StatusMessage.ERROR, $"Commit failed on the server: {error}" );
-			await reporter.NotifyAsync( $"Commit failed: {error}", "Commit Files" );
-			return;
 		}
-		// the committed entries are checked in by the server; the unchanged ones that came along
-		// (e.g. the parts of a checked-out assembly) are released here
-		await CheckInUnchangedAsync( unchanged );
-		reporter.Complete();
-		await reporter.NotifyAsync( "Completed!" );
 	}
 
 	/// <summary>Releases the checkout of entries that were committed without changes (no new version).</summary>
@@ -466,35 +563,80 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		if( entryIds is null or { Count: < 1 } )
 			return;
 
-		// only the selected entries: what they depend on (an assembly's parts) is often used by other
-		// entries too, and deleting an assembly must not take its parts with it
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( entryIds, excludedFields: DeleteExcludedFields );
-		await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, true, Log ), "Logically Delete Files" );
+		reporter.BeginOperation();
+		try
+		{
+			// only the selected entries: what they depend on (an assembly's parts) is often used by other
+			// entries too, and deleting an assembly must not take its parts with it
+			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( entryIds, excludedFields: DeleteExcludedFields );
+			await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, true, Log ), "Logically Delete Files" );
+		}
+		finally
+		{
+			reporter.Complete();
+		}
 	}
 
 	/// <inheritdoc/>
-	public async Task RestoreDeletedInDirectoryAsync( int directoryId )
+	public async Task RestoreDeletedInDirectoryAsync( int directoryId, bool withSubdirectories = false )
 	{
-		HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( null,
-			searchFilters: OdooDomain.Where( "deleted", true ).And( "dir_id", directoryId ),
-			excludedFields: DeleteExcludedFields );
+		reporter.BeginOperation();
+		try
+		{
+			HpEntry[]? entries;
+			if( withSubdirectories )
+			{
+				IReadOnlyList<int> ids = await GetDirectoryEntryIdsAsync( directoryId, withSubdirectories: true, withDeleted: true );
+				if( ids.Count == 0 )
+					return;
+				HpEntry[]? allEntries = await HpEntry.GetRecordsByIdsAsync( ids, excludedFields: DeleteExcludedFields );
+				entries = allEntries?.Where( e => e.deleted == true ).ToArray();
+			}
+			else
+			{
+				entries = await HpEntry.GetRecordsByIdsAsync( null,
+					searchFilters: OdooDomain.Where( "deleted", true ).And( "dir_id", directoryId ),
+					excludedFields: DeleteExcludedFields );
+			}
 
-		await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, false, Log ), "Logically UnDelete Files" );
-		reporter.Complete();
+			if( entries is not { Length: > 0 } )
+				return;
+
+			await AsyncHelper.AsyncRunner( () => PdmDeleteOperations.SetDeletedAsync( entries, false, Log ), "Logically UnDelete Files" );
+		}
+		finally
+		{
+			reporter.Complete();
+		}
+	}
+
+	/// <inheritdoc/>
+	public async Task<bool> IsCurrentUserPdmAdminAsync()
+	{
+		Result<bool> result = await OdooRpc.ExecuteAsync<bool>( "res.users", "has_group", [ "hackpdm.group_pdm_admin" ] );
+		return result.ValueOr( false );
 	}
 
 	/// <inheritdoc/>
 	public async Task<bool> PermanentDeleteAsync( IReadOnlyList<int> entryIds )
 	{
 		bool deleted = false;
-		await AsyncHelper.AsyncRunner( async () =>
+		reporter.BeginOperation();
+		try
 		{
-			// DeleteEntry also removes versions, version properties, version relationships and attachments
-			deleted = await PdmDeleteOperations.PermanentDeleteEntry( entryIds, Log );
-			if( deleted )
-				Log( StatusMessage.SUCCESS, "Completed permanent delete" );
-		}, "Permanently Delete Files" );
-		return deleted;
+			await AsyncHelper.AsyncRunner( async () =>
+			{
+				// DeleteEntry also removes versions, version properties, version relationships and attachments
+				deleted = await PdmDeleteOperations.PermanentDeleteEntry( entryIds, Log );
+				if( deleted )
+					Log( StatusMessage.SUCCESS, "Completed permanent delete" );
+			}, "Permanently Delete Files" );
+			return deleted;
+		}
+		finally
+		{
+			reporter.Complete();
+		}
 	}
 
 	#endregion
