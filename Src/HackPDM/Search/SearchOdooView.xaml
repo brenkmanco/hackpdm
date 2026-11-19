@@ -8,7 +8,6 @@
     xmlns:common="using:HackPDM.Common"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:rep="using:HackPDM.Core.Services"
-    xmlns:x1="using:System"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     mc:Ignorable="d">
 
@@ -99,7 +98,7 @@
                             <CheckBox
                                 x:Name="OdooDeletedIsLocal"
                                 MinWidth="0"
-                                Content="Deleted Locally"
+                                Content="Deleted on Server"
                                 IsChecked="{x:Bind ViewModel.DeletedRemotely, Mode=TwoWay}"
                                 IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}" />
                         </StackPanel>
@@ -216,7 +215,7 @@
 
                         <tv:TableViewTextColumn
                             Width="1*"
-                            Binding="{Binding Comparer}"
+                            Binding="{Binding Comparer, Converter={StaticResource OperationConverter}}"
                             Header="Comparer" />
 
                         <tv:TableViewTextColumn
@@ -234,14 +233,16 @@
                 BorderBrush="{StaticResource HackPanelStrokeBrush}"
                 BorderThickness="{StaticResource HackPanelBorderThickness}"
                 CornerRadius="{StaticResource HackPanelCornerRadius}">
-                <tv:TableView
+                <common:EntryTableView
                     x:Name="OdooSearchResults"
                     AutoGenerateColumns="False"
                     BorderThickness="0"
                     IsReadOnly="True"
                     DoubleTapped="OdooSearchResults_DoubleTapped"
                     ItemsSource="{x:Bind ViewModel.SearchResultsList, Mode=OneWay}"
-                    SelectionMode="Extended">
+                    SelectionMode="Extended"
+                    SelectionUnit="Row"
+                    ShowDragRectangle="False">
 
                     <tv:TableView.Columns>
                         <tv:TableViewTextColumn
@@ -280,7 +281,7 @@
                                 Text="Open" />
                         </MenuFlyout>
                     </tv:TableView.ContextFlyout>
-                </tv:TableView>
+                </common:EntryTableView>
             </Border>
 
             <Grid Grid.Row="3" Margin="0,4,0,0" ColumnSpacing="12">
@@ -411,7 +412,7 @@
                                     IsEnabled="{x:Bind ViewModel.IsLocalOnlyEnabled, Mode=OneWay}" />
                                 <CheckBox
                                     MinWidth="0"
-                                    Content="Deleted Locally"
+                                    Content="Deleted on Server"
                                     IsChecked="{x:Bind ViewModel.DeletedRemotely, Mode=TwoWay}"
                                     IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}" />
                                 <Button

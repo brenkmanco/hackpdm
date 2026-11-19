@@ -6,9 +6,6 @@ public sealed record DirectoryRef( string Name, int DirectoryId, string TreePath
 /// <summary>One folder in the merged remote + local directory tree.</summary>
 public sealed class DirectoryNode( string name, int directoryId = 0 )
 {
-	private static readonly StringComparison NameComparison = OperatingSystem.IsWindows()
-		? StringComparison.OrdinalIgnoreCase
-		: StringComparison.Ordinal;
 	private static readonly Comparison<DirectoryNode> ByNameIgnoreCase =
 		static ( a, b ) => StringComparer.OrdinalIgnoreCase.Compare( a.Name, b.Name );
 
@@ -22,7 +19,7 @@ public sealed class DirectoryNode( string name, int directoryId = 0 )
 	{
 		for( int i = 0; i < Children.Count; i++ )
 		{
-			if( string.Equals( Children[ i ].Name, childName, NameComparison ) )
+			if( string.Equals( Children[ i ].Name, childName, PwaPaths.PathComparison ) )
 				return Children[ i ];
 		}
 		return null;
@@ -181,9 +178,6 @@ public sealed class DirectoryNode( string name, int directoryId = 0 )
 public static class DirectoryTreeMerger
 {
 	private static readonly char[] Separators = [ '\\', '/' ];
-	private static readonly StringComparer SegmentComparer = OperatingSystem.IsWindows()
-		? StringComparer.OrdinalIgnoreCase
-		: StringComparer.Ordinal;
 
 	public static void AddLocalDirectories( DirectoryNode root, IEnumerable<string> localTreePaths )
 	{
@@ -193,7 +187,7 @@ public static class DirectoryTreeMerger
 		{
 			if( childMaps.TryGetValue( parent, out var map ) )
 				return map;
-			map = new Dictionary<string, DirectoryNode>( parent.Children.Count, SegmentComparer );
+			map = new Dictionary<string, DirectoryNode>( parent.Children.Count, PwaPaths.PathComparer );
 			foreach( DirectoryNode existing in parent.Children )
 				map.TryAdd( existing.Name, existing );
 			childMaps[ parent ] = map;

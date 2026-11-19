@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
+using HackPDM.Common;
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Pdm;
@@ -112,13 +113,13 @@ internal static class HackUpdater
 			IsMandatory: isMandatory );
 	}
 
-	public static Task UpdaterProcessAsync()
+	public static Task<bool> UpdaterProcessAsync()
 		=> DownloadAndLaunchAsync( Setting( PdmConstants.ClientDownloadUrlKey ), Setting( PdmConstants.ClientDownloadSha256Key ) );
 
-	public static Task InstallUpdateAsync( UpdateInfo update )
+	public static Task<bool> InstallUpdateAsync( UpdateInfo update )
 		=> DownloadAndLaunchAsync( update.DownloadUrl, update.Sha256 );
 
-	private static async Task DownloadAndLaunchAsync( string? url, string? sha256 )
+	private static async Task<bool> DownloadAndLaunchAsync( string? url, string? sha256 )
 	{
 		var dialogs = AppComposition.Dialogs;
 		HackLogger.Info( "Updater", $"Starting client update download from '{url ?? "(unset)"}'" );
@@ -127,7 +128,7 @@ internal static class HackUpdater
 		{
 			HackLogger.Error( "Updater", $"Client update aborted: {installer.Error}" );
 			await dialogs.ShowMessageAsync( $"The update was not installed: {installer.Error}", "Update", MessageBoxButtons.OK, MessageBoxIcon.Warning );
-			return;
+			return false;
 		}
 		HackLogger.Info( "Updater", $"Verified update package ready at '{installer.Value}'" );
 
@@ -140,12 +141,13 @@ internal static class HackUpdater
 			HackLogger.Warn( "Updater", $"Could not launch verified update at '{installer.Value}'" );
 			await dialogs.ShowMessageAsync( $"The update was downloaded to {installer.Value} but could not be opened; run it from there.",
 				"Update", MessageBoxButtons.OK, MessageBoxIcon.Warning );
-			return;
+			return false;
 		}
 		if( OperatingSystem.IsWindows() )
 		{
 			HackLogger.Info( "Updater", "Installer launched; exiting HackPDM for upgrade." );
-			try { AppComposition.LocalFiles.Dispose(); } catch { }
+			UIStorage.SaveSafe();
+			try { AppComposition.DisposeLocalFilesIfCreated(); } catch { }
 			Environment.Exit( 0 );
 		}
 		else
@@ -153,6 +155,7 @@ internal static class HackUpdater
 			await dialogs.ShowMessageAsync( $"The checked update is in {installer.Value}. Close HackPDM and install it.", "Update",
 				MessageBoxButtons.OK, MessageBoxIcon.Information );
 		}
+		return true;
 	}
 
 	private static bool LaunchWindowsInstaller( string path )

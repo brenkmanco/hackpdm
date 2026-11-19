@@ -20,7 +20,6 @@ public sealed partial class HackApp : Application
 {
 	public static HomeView? HomePage;
 	public static Window? Window;
-	public static Frame? RootFrame;
 
 	public HackApp()
 	{
@@ -29,8 +28,6 @@ public sealed partial class HackApp : Application
 		var (palette, form) = ThemeService.ReadSavedTheme();
 		RequestedTheme = ThemePresets.Palette( palette ).IsDark ? ApplicationTheme.Dark : ApplicationTheme.Light;
 		ThemeService.ApplyStartupResources( Resources, palette, form );
-		if( !string.IsNullOrEmpty( PdmConstants.TemporaryPath ) )
-			Directory.CreateDirectory( PdmConstants.TemporaryPath );
 	}
 
 	private void RegisterCrashHandlers()
@@ -43,10 +40,14 @@ public sealed partial class HackApp : Application
 					"App.UnhandledException",
 					e.Exception,
 					ClientUpdate.CurrentText,
-					context: $"ActivePage={HomePage?.GetType().Name ?? "none"}" );
+					context: $"ActivePage={HomePage?.ContentFrame.CurrentSourcePageType?.Name ?? "none"}" );
 				HackLogger.Critical( "App", $"Fatal UI unhandled exception; crash dump: {dump ?? "(unavailable)"}" );
 			}
 			catch { }
+#if SMOKE_TESTS
+			if( HackPDM.SmokeTests.SmokeTestRunner.IsEnabled )
+				return;
+#endif
 			TerminateOnCrash();
 		};
 
@@ -61,6 +62,10 @@ public sealed partial class HackApp : Application
 					context: $"IsTerminating={e.IsTerminating}" );
 			}
 			catch { }
+#if SMOKE_TESTS
+			if( HackPDM.SmokeTests.SmokeTestRunner.IsEnabled )
+				return;
+#endif
 			TerminateOnCrash();
 		};
 
@@ -73,7 +78,7 @@ public sealed partial class HackApp : Application
 
 	private static void TerminateOnCrash()
 	{
-		try { AppComposition.LocalFiles.Dispose(); } catch { }
+		try { AppComposition.DisposeLocalFilesIfCreated(); } catch { }
 		Environment.Exit( 1 );
 	}
 
@@ -87,11 +92,15 @@ public sealed partial class HackApp : Application
 		AppComposition.Initialize( Window.DispatcherQueue );
 		_ = AppComposition.Settings;
 		AppComposition.InitializeDefaults();
+		if( !string.IsNullOrEmpty( PdmConstants.TemporaryPath ) )
+		{
+			try { Directory.CreateDirectory( PdmConstants.TemporaryPath ); }
+			catch( Exception ex ) { HackLogger.Warn( "App", $"Could not create temporary directory '{PdmConstants.TemporaryPath}': {ex.Message}", ex ); }
+		}
 		HackLogger.Info( "App", $"HackPDM {ClientUpdate.CurrentText} started (UI config loaded={UIStorage.GlobalData.IsLoadedFromFile}, logs={HackLogger.LogDirectory})" );
 
 		HomePage = new HomeView();
-		RootFrame = new Frame { Content = HomePage };
-		Window.Content = RootFrame;
+		Window.Content = new Frame { Content = HomePage };
 		AppComposition.Theme.Attach( Window );
 
 #if SMOKE_TESTS
@@ -102,7 +111,7 @@ public sealed partial class HackApp : Application
 
 	private void Window_Closed( object sender, WindowEventArgs args )
 	{
-		try { AppComposition.LocalFiles.Dispose(); } catch { }
+		try { AppComposition.DisposeLocalFilesIfCreated(); } catch { }
 		try { UIStorage.Save(); } catch { }
 #if SMOKE_TESTS
 		if( HackPDM.SmokeTests.SmokeTestRunner.IsEnabled )

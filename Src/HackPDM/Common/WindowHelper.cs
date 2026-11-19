@@ -9,7 +9,6 @@ using HackPDM.Core.Configuration;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 
 namespace HackPDM.Common;
 
@@ -199,19 +198,6 @@ public static class WindowExtensions
 		Grid.SetColumn( element, column );
 		Grid.SetRowSpan( element, rowspan );
 		Grid.SetColumnSpan( element, columnspan );
-	}
-
-	public static ScrollViewer? GetScrollViewer( DependencyObject parent )
-	{
-		for( int i = 0; i < VisualTreeHelper.GetChildrenCount( parent ); i++ )
-		{
-			DependencyObject child = VisualTreeHelper.GetChild( parent, i );
-			if( child is ScrollViewer sv )
-				return sv;
-			if( GetScrollViewer( child ) is { } found )
-				return found;
-		}
-		return null;
 	}
 }
 

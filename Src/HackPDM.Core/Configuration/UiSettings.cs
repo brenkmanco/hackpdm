@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using HackPDM.Core.Pdm;
 using HackPDM.Core.Services;
 using HackPDM.Core.Theming;
 
@@ -53,6 +54,7 @@ public sealed class Vector4IntJsonConverter : JsonConverter<Vector4<int>>
 				ReadOnlySpan<char> span = raw.AsSpan().Trim( "()[] " );
 				Span<int> coords = stackalloc int[ 4 ];
 				int count = 0;
+				bool complete = false;
 				while( count < 4 )
 				{
 					int comma = span.IndexOf( ',' );
@@ -61,10 +63,13 @@ public sealed class Vector4IntJsonConverter : JsonConverter<Vector4<int>>
 						break;
 					count++;
 					if( comma < 0 )
+					{
+						complete = count == 4;
 						break;
+					}
 					span = span[ ( comma + 1 ).. ];
 				}
-				if( count == 4 && span.IndexOf( ',' ) < 0 )
+				if( complete )
 					return new( coords[ 0 ], coords[ 1 ], coords[ 2 ], coords[ 3 ] );
 			}
 			return default;
@@ -78,8 +83,13 @@ public sealed class Vector4IntJsonConverter : JsonConverter<Vector4<int>>
 				if( reader.TokenType != JsonTokenType.PropertyName )
 					continue;
 				string? prop = reader.GetString();
-				reader.Read();
-				int val = reader.TokenType == JsonTokenType.Number ? reader.GetInt32() : 0;
+				if( !reader.Read() )
+					break;
+				int val = 0;
+				if( reader.TokenType == JsonTokenType.Number )
+					reader.TryGetInt32( out val );
+				else
+					reader.Skip();
 				switch( prop?.ToLowerInvariant() )
 				{
 					case "x": x = val; break;
@@ -110,10 +120,7 @@ public sealed class ArgbColorJsonConverter : JsonConverter<ArgbColor>
 			if( ArgbColor.TryParse( raw, out ArgbColor parsed ) )
 				return parsed;
 			if( ColorNames.TryParse( raw, out uint argb ) )
-			{
-				var (a, r, g, b) = ColorNames.Unpack( argb );
-				return new( a, r, g, b );
-			}
+				return ArgbColor.FromPacked( argb );
 			return default;
 		}
 
@@ -125,8 +132,13 @@ public sealed class ArgbColorJsonConverter : JsonConverter<ArgbColor>
 				if( reader.TokenType != JsonTokenType.PropertyName )
 					continue;
 				string? prop = reader.GetString();
-				reader.Read();
-				byte val = reader.TokenType == JsonTokenType.Number ? reader.GetByte() : (byte)0;
+				if( !reader.Read() )
+					break;
+				byte val = 0;
+				if( reader.TokenType == JsonTokenType.Number )
+					reader.TryGetByte( out val );
+				else
+					reader.Skip();
 				switch( prop )
 				{
 					case "A" or "a": a = val; break;
@@ -197,7 +209,7 @@ public sealed class OdooEntryColumns
 	public double FontSize { get; set; } = 11;
 	public bool GroupingEnabled { get; set; } = true;
 	public bool GroupCollapsed { get; set; }
-	public GroupByField GroupBy { get; set; } = new() { FieldName = "Status", SortDirection = EntrySortDirection.Ascending };
+	public GroupByField GroupBy { get; set; } = new() { FieldName = nameof( EntryRow.Status ), SortDirection = EntrySortDirection.Ascending };
 
 	public Dictionary<string, OdooEntryColumnID?> Columns { get; set; } = new()
 	{
@@ -226,14 +238,8 @@ public sealed class ColorSettingsData
 	public ArgbColor DarkRed { get; set; } = new( 255, 139, 0, 0 );
 	public ArgbColor DarkBlue { get; set; } = new( 255, 0, 0, 139 );
 	public ArgbColor DarkOliveGreen { get; set; } = new( 255, 85, 107, 47 );
-	public ArgbColor OrangeEntry { get; set; } = FromPacked( ColorNames.OrangeBlast );
-	public ArgbColor BlueEntry { get; set; } = FromPacked( ColorNames.BluishWater );
-
-	private static ArgbColor FromPacked( uint packed )
-	{
-		var (a, r, g, b) = ColorNames.Unpack( packed );
-		return new( a, r, g, b );
-	}
+	public ArgbColor OrangeEntry { get; set; } = ArgbColor.FromPacked( ColorNames.OrangeBlast );
+	public ArgbColor BlueEntry { get; set; } = ArgbColor.FromPacked( ColorNames.BluishWater );
 }
 
 public sealed class WindowConfigData
@@ -248,12 +254,12 @@ public sealed class WindowSettingsData
 	[JsonPropertyName( "Windows" )]
 	public Dictionary<string, WindowConfigData> PresetWindowConfig { get; set; } = new()
 	{
-		[ "ProfileManager" ] = new() { Title = "Profile Manager", PositionAndSize = ( 0, 0, 820, 580 ) },
+		[ nameof( NavigatePageMenu.ProfileManager ) ] = new() { Title = "Profile Manager", PositionAndSize = ( 0, 0, 820, 580 ) },
 		[ "OdooSettings" ] = new() { Title = "Odoo Settings", PositionAndSize = ( 0, 0, 620, 520 ) },
 		[ "HackSettings" ] = new() { Title = "Hack Settings", PositionAndSize = ( 0, 0, 560, 320 ) },
 		[ "ConfigSettings" ] = new() { Title = "Configuration Settings", PositionAndSize = ( 0, 0, 820, 780 ) },
-		[ "HackFileManager" ] = new() { Title = "Hack File Manager", PositionAndSize = ( 0, 0, 1480, 880 ) },
-		[ "DependencyGraph" ] = new() { Title = "Dependency Graph", PositionAndSize = ( 0, 0, 1480, 880 ) },
+		[ nameof( NavigatePageMenu.HackFileManager ) ] = new() { Title = "Hack File Manager", PositionAndSize = ( 0, 0, 1480, 880 ) },
+		[ nameof( NavigatePageMenu.DependencyGraph ) ] = new() { Title = "Dependency Graph", PositionAndSize = ( 0, 0, 1480, 880 ) },
 		[ "NotLoggedIn" ] = new() { Title = "Not Logged In", PositionAndSize = ( 0, 0, 900, 560 ) },
 		[ "MessageBox" ] = new() { Title = "Info", PositionAndSize = ( 0, 0, 450, 240 ), WindowKind = WindowKind.CompactOverlay },
 		[ "StatusDialogView" ] = new() { Title = "Status", PositionAndSize = ( 0, 0, 1180, 700 ) },
@@ -343,9 +349,9 @@ public sealed class AppUiConfig
 	[JsonPropertyName( "ColumnSettings" )]
 	public OdooEntryColumns ColumnsSettings { get; set; } = new();
 
-	[JsonPropertyName( "Theme" )]
+	[JsonPropertyName( nameof( Theme ) )]
 	public ThemeSettings Theme { get; set; } = new();
 
-	[JsonPropertyName( "WorkspaceLayout" )]
+	[JsonPropertyName( nameof( WorkspaceLayout ) )]
 	public WorkspaceLayoutSettings WorkspaceLayout { get; set; } = new();
 }

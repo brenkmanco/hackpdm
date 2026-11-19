@@ -1,8 +1,42 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 
 namespace HackPDM.Core.Theming;
+
+/// <summary>Contract for presets keyed by an enum value so lookup and parsing share one zero-reflection generic helper.</summary>
+public interface INamedPreset<out TEnum> where TEnum : struct, Enum
+{
+	TEnum Name { get; }
+}
+
+/// <summary>Shared O(1) enum-indexed preset lookup and strict enum name parsing.</summary>
+public static class EnumPresets
+{
+	/// <summary>Looks up a preset by its enum key in O(1) when ordered by enum value, falling back to a linear scan.</summary>
+	public static TItem Find<TEnum, TItem>( IReadOnlyList<TItem> items, TEnum key, string kind )
+		where TEnum : struct, Enum
+		where TItem : INamedPreset<TEnum>
+	{
+		int idx = Unsafe.SizeOf<TEnum>() == sizeof( int ) ? Unsafe.As<TEnum, int>( ref key ) : -1;
+		if( (uint)idx < (uint)items.Count && EqualityComparer<TEnum>.Default.Equals( items[ idx ].Name, key ) )
+			return items[ idx ];
+		for( int i = 0; i < items.Count; i++ )
+		{
+			if( EqualityComparer<TEnum>.Default.Equals( items[ i ].Name, key ) )
+				return items[ i ];
+		}
+		throw new InvalidOperationException( $"Unknown {kind} '{key}'." );
+	}
+
+	/// <summary>Parses a saved enum name strictly (rejecting numeric values); unknown or missing names give <paramref name="fallback"/>.</summary>
+	public static TEnum Parse<TEnum>( string? text, TEnum fallback )
+		where TEnum : struct, Enum
+		=> Enum.TryParse( text, out TEnum value ) && Enum.IsDefined( value ) && !int.TryParse( text, out _ )
+			? value
+			: fallback;
+}
 
 /// <summary>Which base theme the app uses.</summary>
 [JsonConverter( typeof( JsonStringEnumConverter<AppThemeMode> ) )]
@@ -53,9 +87,14 @@ public sealed class ThemeSettings
 /// <summary>An ARGB color without any UI dependency, with "#AARRGGBB" / "#RRGGBB" parsing.</summary>
 public readonly record struct ArgbColor( byte A, byte R, byte G, byte B )
 {
+	public static ArgbColor FromPacked( uint argb )
+		=> new( (byte)( argb >> 24 ), (byte)( argb >> 16 ), (byte)( argb >> 8 ), (byte)argb );
+
+	public uint ToPacked() => ( (uint)A << 24 ) | ( (uint)R << 16 ) | ( (uint)G << 8 ) | B;
+
 	public override string ToString() => $"#{A:X2}{R:X2}{G:X2}{B:X2}";
 
-	/// <summary>Parses a hex color such as "#AARRGGBB" or "#RRGGBB"; the leading "#" and surrounding spaces are optional.</summary>
+	/// <summary>Parses a hex color such as "#AARRGGBB" or "#RRGGBB"; one leading "#" and surrounding spaces are optional.</summary>
 	/// <param name="text">The text to parse.</param>
 	/// <param name="color">The parsed color, fully opaque when no alpha was given; <see langword="default"/> when parsing fails.</param>
 	/// <returns><see langword="true"/> when <paramref name="text"/> held 6 or 8 hex digits.</returns>
@@ -64,12 +103,14 @@ public readonly record struct ArgbColor( byte A, byte R, byte G, byte B )
 		color = default;
 		if( string.IsNullOrWhiteSpace( text ) )
 			return false;
-		ReadOnlySpan<char> hex = text.AsSpan().Trim().TrimStart( '#' );
+		ReadOnlySpan<char> hex = text.AsSpan().Trim();
+		if( hex.Length > 0 && hex[ 0 ] == '#' )
+			hex = hex[ 1.. ];
 		if( hex.Length is not ( 6 or 8 ) || !uint.TryParse( hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint value ) )
 			return false;
 		if( hex.Length == 6 )
 			value |= 0xFF000000;
-		color = new( (byte)( value >> 24 ), (byte)( value >> 16 ), (byte)( value >> 8 ), (byte)value );
+		color = FromPacked( value );
 		return true;
 	}
 }

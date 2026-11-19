@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Net.Mime;
-using HackPDM.Core.Configuration;
-using HackPDM.Core.Pdm;
-using SolidWorks.Interop.swdocumentmgr;
+using System.Globalization;
 
+using HackPDM.Core.Configuration;
+
+using SolidWorks.Interop.swdocumentmgr;
 
 namespace HackPDM.Core.SolidWorks;
 
@@ -33,11 +32,9 @@ public class SwDocMgr : ISwDocumentReader
             var swClassFact = new SwDMClassFactory();
             _swDocMgr = swClassFact.GetApplication(strLicenseKey);
         }
-        catch( Exception ) {
-            // DialogResult dr = MessageBox.Show("Failed to get an instance of the SolidWorks Document Manager API: " + ex.Message,
-            //     "Loading SW",
-            //     buttons: MessageBoxButtons.OK,
-            //     icon: MessageBoxIcon.Error);
+        catch( Exception ex )
+        {
+            HackLogger.Debug( nameof( SwDocMgr ), $"Could not initialize SolidWorks Document Manager: {ex.Message}", ex );
         }
     
     }
@@ -85,18 +82,18 @@ public class SwDocMgr : ISwDocumentReader
             string[] varDepends = (string[])swDoc.GetAllExternalReferences4(swSearchOpt, out oBrokenRefVar, out oIsVirtual, out oTimeStamp);
             if (varDepends == null) return null;
 
-            Boolean[] blnIsVirtual = (Boolean[])oIsVirtual;
+            bool[]? blnIsVirtual = oIsVirtual as bool[];
             listDepends.EnsureCapacity(varDepends.Length);
             for (int i = 0; i < varDepends.Length; i++)
             {
                 // only return non-virtual components
-                if (blnIsVirtual[i]) continue;
+                if (blnIsVirtual is not null && i < blnIsVirtual.Length && blnIsVirtual[i]) continue;
 
                 // file name with absolute path
                 string strFullName = varDepends[i];
 
                 // short file name with extension
-                string strName = strFullName[(strFullName.LastIndexOf('\\') + 1)..];
+                string strName = SwReferenceResolver.FileName(strFullName);
                 listDepends.Add([strName, strFullName]);
             }
 
@@ -194,14 +191,25 @@ public class SwDocMgr : ISwDocumentReader
     }
 
     /// <summary>A Document Manager property's HackPDM type name and its value converted to match.</summary>
-    private static (string Type, object Value) ConvertProperty(SwDmCustomInfoType type, object value) => type switch
+    private static (string Type, object Value) ConvertProperty(SwDmCustomInfoType type, object? value)
     {
-        SwDmCustomInfoType.swDmCustomInfoDate => ("date", Convert.ToDateTime(value)),
-        SwDmCustomInfoType.swDmCustomInfoNumber => ("number", Convert.ToDecimal(value)),
-        SwDmCustomInfoType.swDmCustomInfoText => ("text", Convert.ToString(value) ?? ""),
-        SwDmCustomInfoType.swDmCustomInfoYesOrNo => ("yesno", value.Equals("Yes")),
-        _ => ("", value),
-    };
+        if (value is null)
+            return ("", "");
+        return type switch
+        {
+            SwDmCustomInfoType.swDmCustomInfoDate => value is DateTime dt
+                ? ("date", dt)
+                : DateTime.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsed)
+                    ? ("date", parsed)
+                    : ("", value),
+            SwDmCustomInfoType.swDmCustomInfoNumber => decimal.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out decimal dec)
+                ? ("number", dec)
+                : ("", value),
+            SwDmCustomInfoType.swDmCustomInfoText => ("text", Convert.ToString(value, CultureInfo.InvariantCulture) ?? ""),
+            SwDmCustomInfoType.swDmCustomInfoYesOrNo => ("yesno", value is bool b ? b : string.Equals(Convert.ToString(value, CultureInfo.InvariantCulture), "Yes", StringComparison.OrdinalIgnoreCase)),
+            _ => ("", value),
+        };
+    }
 
     /// <summary>Reads the saved preview straight from the file through <see cref="SwFileReader"/>; needs no Document Manager call.</summary>
     /// <param name="fileName">Path of the SolidWorks file.</param>

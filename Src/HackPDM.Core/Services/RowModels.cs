@@ -23,9 +23,6 @@ public sealed class BasicStatusMessage
 		}
 	} = DateTime.Now;
 	public string TimestampText => _timestampText ??= Timestamp.ToString( "HH:mm:ss" );
-
-	public static implicit operator BasicStatusMessage( (StatusMessage status, string message) log )
-		=> new() { Message = log.message, Status = log.status };
 }
 
 public class RowData
@@ -49,6 +46,7 @@ public sealed class EntryRow : RowData
 	public HpCategory? Category { get; set; }
 	public DateTime? LocalDate { get; set; }
 	public DateTime? RemoteDate { get; set; }
+	private FileInfo? _localFile;
 	private bool _localFileChecked;
 
 	public string? FullName
@@ -57,6 +55,7 @@ public sealed class EntryRow : RowData
 		set
 		{
 			field = value;
+			_localFile = null;
 			_localFileChecked = false;
 		}
 	}
@@ -68,6 +67,7 @@ public sealed class EntryRow : RowData
 		set
 		{
 			field = value;
+			_localFile = null;
 			_localFileChecked = false;
 		}
 	}
@@ -77,8 +77,8 @@ public sealed class EntryRow : RowData
 	{
 		get
 		{
-			if( _localFileChecked || field is not null )
-				return field;
+			if( _localFileChecked || _localFile is not null )
+				return _localFile;
 			_localFileChecked = true;
 
 			string? path = ReprType switch
@@ -89,32 +89,15 @@ public sealed class EntryRow : RowData
 			};
 
 			FileInfo? file = string.IsNullOrEmpty( path ) ? null : new( path );
-			field = file?.Exists is true ? file : null;
-			return field;
+			_localFile = file?.Exists is true ? file : null;
+			return _localFile;
 		}
 		set
 		{
-			field = value;
+			_localFile = value;
 			_localFileChecked = true;
 		}
 	}
-
-	public bool? IsLocal => Id switch
-	{
-		null => null,
-		0 => true,
-		_ => LocalFile?.Exists ?? false,
-	};
-
-	public bool? IsRemote => Id switch
-	{
-		null => null,
-		not 0 => true,
-		_ => false,
-	};
-
-	public bool? IsOnlyLocal => IsRemote is false && IsLocal is true;
-	public bool? IsOnlyRemote => IsRemote is true && IsLocal is false;
 }
 
 /// <summary>Sort and group keys for the entry list, keyed by <see cref="EntryRow"/> property name.</summary>

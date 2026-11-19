@@ -7,10 +7,7 @@
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:conv="using:HackPDM.Common"
 	xmlns:controls="using:HackPDM.Common"
-	xmlns:local="using:HackPDM.FileManager"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-	xmlns:model="using:HackPDM.Core.Services"
-	xmlns:sys="using:System"
 	xmlns:types="using:HackPDM.Common"
 	Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
 	mc:Ignorable="d">
@@ -557,7 +554,6 @@
 							Padding="4,4"
 							VerticalAlignment="Stretch"
 							BorderThickness="0"
-							CanDrag="True"
 							CanDragItems="False"
 							ScrollViewer.HorizontalScrollBarVisibility="Auto"
 							ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -1010,7 +1006,7 @@
 										BorderThickness="0,0,0,1">
 										<Grid ColumnSpacing="8">
 											<Grid.ColumnDefinitions>
-												<ColumnDefinition Width="32" />
+												<ColumnDefinition Width="36" />
 												<ColumnDefinition Width="*" MinWidth="160" />
 												<ColumnDefinition Width="75" />
 												<ColumnDefinition Width="75" />

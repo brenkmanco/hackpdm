@@ -90,6 +90,8 @@ public sealed partial class PaneSplitter : UserControl
 
 	private void OnPointerPressed( object sender, PointerRoutedEventArgs e )
 	{
+		if( !e.GetCurrentPoint( this ).Properties.IsLeftButtonPressed )
+			return;
 		_dragging = true;
 		_lastPoint = e.GetCurrentPoint( null ).Position;
 		CapturePointer( e.Pointer );
@@ -103,9 +105,11 @@ public sealed partial class PaneSplitter : UserControl
 			return;
 		Point current = e.GetCurrentPoint( null ).Position;
 		double delta = Orientation == Orientation.Vertical ? current.X - _lastPoint.X : current.Y - _lastPoint.Y;
-		_lastPoint = current;
 		if( Math.Abs( delta ) >= 0.5 )
+		{
+			_lastPoint = current;
 			DragDelta?.Invoke( delta );
+		}
 		e.Handled = true;
 	}
 
@@ -121,7 +125,5 @@ public sealed partial class PaneSplitter : UserControl
 	}
 
 	private static Brush ResolveAccentBrush()
-		=> Application.Current.Resources.TryGetValue( "AccentFillColorDefaultBrush", out object? val ) && val is Brush b
-			? b
-			: HoverThumbBrush;
+		=> ThemeResources.GetBrush( "AccentFillColorDefaultBrush", HoverThumbBrush );
 }

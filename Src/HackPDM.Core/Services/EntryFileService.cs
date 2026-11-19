@@ -73,17 +73,17 @@ public sealed class EntryFileService : IEntryFileService
 	public async Task OpenLatestRemoteAsync( int entryId )
 	{
 		HpVersion? version = ( await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
-			[ entryId ], nameof( HpEntry.latest_version_id ), excludedFields: [ "preview_image" ] ) )?.FirstOrDefault();
+			[ entryId ], nameof( HpEntry.latest_version_id ), excludedFields: HpVersion.UsualExcludedFields ) )?.FirstOrDefault();
 		if( version is null )
 			return;
 
-		await version.DownloadFileAsync( Path.GetTempPath() );
-		OpenFile( Path.Combine( version.WinPathway ?? "", version.name ?? "" ) );
+		if( await version.DownloadFileAsync( Path.GetTempPath() ) )
+			OpenFile( Path.Combine( version.WinPathway ?? "", version.name ?? "" ) );
 	}
 
 	public void OpenContainingFolders( IEnumerable<EntryRow> entries )
 	{
-		HashSet<string> opened = new( OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal );
+		HashSet<string> opened = new( PwaPaths.PathComparer );
 		foreach( EntryRow entry in entries )
 		{
 			try
@@ -122,7 +122,10 @@ public sealed class EntryFileService : IEntryFileService
 	public void DeleteFiles( IEnumerable<FileInfo> files )
 	{
 		foreach( FileInfo file in files )
+		{
+			FileOps.ClearReadOnlyIfPresent( file.FullName );
 			file.Delete();
+		}
 	}
 
 	public int? CountFiles( string directory )
@@ -135,7 +138,11 @@ public sealed class EntryFileService : IEntryFileService
 		return count;
 	}
 
-	public void DeleteDirectory( string directory ) => Directory.Delete( directory, true );
+	public void DeleteDirectory( string directory )
+	{
+		FileOps.ClearReadOnlyRecursive( directory );
+		Directory.Delete( directory, true );
+	}
 
 	public async Task<HpVersion?> GetVersionAsync( int versionId )
 	{
@@ -164,7 +171,7 @@ public sealed class EntryFileService : IEntryFileService
 			return version.WinPathway ?? "";
 		}
 
-		string relative = PwaPaths.ToRelative( OdooValues.Many2OneName( version.HashedValues.GetValueOrDefault( "dir_id" ) ) );
+		string relative = PwaPaths.ToRelative( version.dir_id?.name );
 		string tempPath = Path.Combine( PdmConstants.TemporaryPath, relative );
 		await version.DownloadFileAsync( tempPath );
 		return tempPath;
@@ -193,11 +200,12 @@ public sealed class EntryFileService : IEntryFileService
 			if( !Directory.Exists( destinationDir ) && !Directory.CreateDirectory( destinationDir ).Exists )
 				return;
 			string target = Path.Combine( destinationDir, source.Name );
+			FileOps.ClearReadOnlyIfPresent( target );
 			File.Move( source.FullName, target, overwrite: true );
 		}
 		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or ArgumentException )
 		{
-			HackLogger.Warn( "EntryFileService", $"Could not move '{source.FullName}' to '{destinationDir}': {ex.Message}", ex );
+			HackLogger.Warn( nameof( EntryFileService ), $"Could not move '{source.FullName}' to '{destinationDir}': {ex.Message}", ex );
 		}
 	}
 }

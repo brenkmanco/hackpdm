@@ -107,7 +107,7 @@ internal static class EntryListGrouping
 			buckets[ index ].Items.Add( row );
 		}
 
-		buckets.Sort( static ( a, b ) => GroupKeyComparer.Instance.Compare( a.Key, b.Key ) );
+		buckets.Sort( static ( a, b ) => SafeComparableComparer.Instance.Compare( a.Key, b.Key ) );
 
 		List<EntryGroupHeader> result = new( buckets.Count );
 		for( int i = 0; i < buckets.Count; i++ )
@@ -142,33 +142,17 @@ internal static class EntryListGrouping
 	{
 		null => "(None)",
 		string s when string.IsNullOrWhiteSpace( s ) => "(None)",
-		DateTime dt => dt.ToLocalTime().ToString( "yyyy-MM-dd", CultureInfo.InvariantCulture ),
+		DateTime dt when dt.Year <= 1 => "(None)",
+		DateTime dt => ( dt.Kind == DateTimeKind.Local ? dt : DateTime.SpecifyKind( dt, DateTimeKind.Utc ).ToLocalTime() )
+			.ToString( "yyyy-MM-dd", CultureInfo.InvariantCulture ),
 		_ => value.ToString() is { Length: > 0 } text ? text : "(None)",
 	};
 
 #if WINDOWS
 	private sealed class SelectorGroupDescription( object selector, Func<object?, object?> valueDelegate )
-		: GroupDescription( null, SortDirection.Ascending, GroupKeyComparer.Instance, valueDelegate )
+		: GroupDescription( null, SortDirection.Ascending, SafeComparableComparer.Instance, valueDelegate )
 	{
 		public object Selector { get; } = selector;
 	}
 #endif
-
-	internal sealed class GroupKeyComparer : IComparer
-	{
-		public static readonly GroupKeyComparer Instance = new();
-
-		public int Compare( object? x, object? y )
-		{
-			if( ReferenceEquals( x, y ) )
-				return 0;
-			if( x is null )
-				return -1;
-			if( y is null )
-				return 1;
-			if( x.GetType() == y.GetType() && x is IComparable cx )
-				return cx.CompareTo( y );
-			return string.CompareOrdinal( x.ToString(), y.ToString() );
-		}
-	}
 }

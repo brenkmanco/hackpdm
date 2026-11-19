@@ -89,7 +89,11 @@ public sealed partial class OdooSettingsViewModel : ObservableObject
 			|| !string.Equals( defaults.OdooUser, user, StringComparison.Ordinal )
 			|| !string.Equals( defaults.OdooPass, OdooPass, StringComparison.Ordinal );
 		if( changed )
+		{
 			defaults.OdooId = 0;
+			if( _session is not null )
+				_session.IsLoggedIn = false;
+		}
 
 		defaults.OdooUseHttps = OdooUseHttps;
 		defaults.OdooAddress = address;

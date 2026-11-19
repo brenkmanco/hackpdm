@@ -44,6 +44,15 @@ public static class CommitOperations
 		IEnumerable<HackFile> hackFiles,
 		Action<StatusMessage, string>? log = null )
 	{
+		var (localOnly, remoteExisting, unchanged, _) = await SegmentCommitFilesAsync( hackFiles, log );
+		return ( localOnly, remoteExisting, unchanged );
+	}
+
+	internal static async Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting, HpEntry[] UnchangedCheckedOut, Dictionary<string, HpEntry> RemoteByServerName)> SegmentCommitFilesAsync(
+		IEnumerable<HackFile> hackFiles,
+		Action<StatusMessage, string>? log = null,
+		CancellationToken token = default )
+	{
 		List<(HackFile Hack, string FilePath, string ServerName)> allowed = [];
 		OdooDefaults defaults = OdooDefaults.Instance;
 		bool restrictTypes = defaults.RestrictTypes is true;
@@ -60,7 +69,7 @@ public static class CommitOperations
 		}
 
 		if( allowed.Count == 0 )
-			return ( [], [], [] );
+			return ( [], [], [], new( StringComparer.OrdinalIgnoreCase ) );
 
 		// Batch-query all remote entries by windows_complete_name instead of 1 RPC per file
 		Dictionary<string, HpEntry> entryByServerName = new( StringComparer.OrdinalIgnoreCase );
@@ -74,12 +83,9 @@ public static class CommitOperations
 
 		for( int offset = 0; offset < distinctServerNames.Count; offset += LookupChunkSize )
 		{
-			int count = Math.Min( LookupChunkSize, distinctServerNames.Count - offset );
-			string[] chunk = new string[ count ];
-			for( int j = 0; j < count; j++ )
-				chunk[ j ] = distinctServerNames[ offset + j ];
-
-			OdooDomain filter = OdooDomain.Where( "windows_complete_name", "in", chunk ).And( "deleted", false );
+			token.ThrowIfCancellationRequested();
+			string[] chunk = OdooRpc.SliceChunk( distinctServerNames, offset, LookupChunkSize );
+			OdooDomain filter = OdooDomain.Where( nameof( HpEntry.windows_complete_name ), "in", chunk ).And( nameof( HpEntry.deleted ), false );
 			HpEntry[]? batch = await HpEntry.GetRecordsBySearchAsync( searchFilter: filter, includedFields: EntryLookupFields );
 			if( batch is not { Length: > 0 } )
 				continue;
@@ -105,9 +111,8 @@ public static class CommitOperations
 				int[] allVids = [ .. versionIds ];
 				for( int offset = 0; offset < allVids.Length; offset += LookupChunkSize )
 				{
-					int count = Math.Min( LookupChunkSize, allVids.Length - offset );
-					int[] chunk = new int[ count ];
-					Array.Copy( allVids, offset, chunk, 0, count );
+					token.ThrowIfCancellationRequested();
+					int[] chunk = OdooRpc.SliceChunk( allVids, offset, LookupChunkSize );
 					HpVersion[]? versions = await HpVersion.GetRecordsByIdsAsync( chunk, includedFields: ChecksumOnlyFields );
 					foreach( HpVersion v in versions ?? [] )
 					{
@@ -152,10 +157,10 @@ public static class CommitOperations
 				continue;
 			}
 
-			log?.Invoke( StatusMessage.INFO, $"Queued commit for {hack.Name} (Checksum: {hack.Checksum}) for: {filePath}" );
+			log?.Invoke( StatusMessage.INFO, $"Queued commit for {hack.Name} (Checksum: {hack.GetChecksum()}) for: {filePath}" );
 			localOnly.Add( hack );
 		}
-		return ( [ .. localOnly ], [ .. remoteExisting ], [ .. unchanged ] );
+		return ( [ .. localOnly ], [ .. remoteExisting ], [ .. unchanged ], entryByServerName );
 	}
 
 	public static async Task<bool> CommitRecordAsync(
@@ -164,7 +169,10 @@ public static class CommitOperations
 		bool inOdoo = false,
 		Action<StatusMessage, string>? log = null,
 		Action? onRecordStaged = null,
-		Action<long>? onBytesUploaded = null )
+		Action<long>? onBytesUploaded = null,
+		Dictionary<string, HpDirectory>? directoryCache = null,
+		IReadOnlyDictionary<string, HpEntry>? remoteEntryCache = null,
+		CancellationToken token = default )
 	{
 		if( hack is null )
 			return false;
@@ -198,41 +206,65 @@ public static class CommitOperations
 			}
 		}
 
-		HpDirectory? dir = await CreateDirectoriesAsync( hack );
-		HpEntry entry = CommitStaging.NewEntry( hack, dir?.id ?? 0, commit ) ?? new();
-		if( inOdoo )
-			entry = await CommitStaging.FindRemoteEntryAsync( entry ) ?? entry;
-
-		HpRecordStaged? versionStaged = null;
-		string? stageError = null;
-		if( entry.returnType is EntryReturnType.GotExisting )
-		{
-			log?.Invoke( StatusMessage.FOUND, "existing entry found..." );
-			log?.Invoke( StatusMessage.PROCESSING, "staging local version..." );
-			versionStaged = await CommitStaging.StageVersionAsync(
-				hack, entry, commit.id ?? 0, e => stageError = e, onBytesUploaded,
-				hasPreReadPreview ? preReadPreview : null, hasPreReadPreview );
-		}
-		if( entry.returnType is EntryReturnType.Staged )
-		{
-			HpRecordStaged? entryStaged = await CommitStaging.StageEntryAsync( entry );
-			log?.Invoke( StatusMessage.PROCESSING, "staging local entry..." );
-			log?.Invoke( StatusMessage.PROCESSING, "staging local version..." );
-			versionStaged = entryStaged is null
-				? null
-				: await CommitStaging.StageVersionAsync(
-					hack, entryStaged, e => stageError = e, onBytesUploaded,
-					hasPreReadPreview ? preReadPreview : null, hasPreReadPreview );
-		}
-		if( entry.returnType is EntryReturnType.Failed )
-		{
-			await commit.ServerClear();
-			log?.Invoke( StatusMessage.ERROR, $"Error creating entry {entry.name}. Rolling back records..." );
-			return false;
-		}
-
 		try
 		{
+			token.ThrowIfCancellationRequested();
+
+			HpEntry? entry;
+			if( inOdoo )
+			{
+				string serverName = ServerWindowsName( hack );
+				if( remoteEntryCache is not null && remoteEntryCache.TryGetValue( serverName, out HpEntry? cached ) && cached.id is not null and not 0 )
+				{
+					cached.returnType = EntryReturnType.GotExisting;
+					cached.commit_id = new Many2One { id = commit.id };
+					cached.LocalFile = hack;
+					entry = cached;
+				}
+				else
+				{
+					HpDirectory? dir = await ResolveDirectoryCachedAsync( hack, directoryCache );
+					HpEntry probe = CommitStaging.NewEntry( hack, dir?.id ?? 0, commit ) ?? new();
+					entry = await CommitStaging.FindRemoteEntryAsync( probe );
+				}
+				if( entry is null )
+					throw new InvalidOperationException( $"Could not find existing remote entry for {hack.Name}; aborting commit to prevent duplicate records." );
+			}
+			else
+			{
+				HpDirectory? dir = await ResolveDirectoryCachedAsync( hack, directoryCache );
+				entry = CommitStaging.NewEntry( hack, dir?.id ?? 0, commit )
+					?? throw new InvalidOperationException( $"Could not create entry metadata for {hack.Name} (restricted file type)." );
+			}
+
+			HpRecordStaged? versionStaged = null;
+			string? stageError = null;
+			if( entry.returnType is EntryReturnType.GotExisting )
+			{
+				log?.Invoke( StatusMessage.FOUND, "existing entry found..." );
+				log?.Invoke( StatusMessage.PROCESSING, "staging local version..." );
+				versionStaged = await CommitStaging.StageVersionAsync(
+					hack, entry, commit.id ?? 0, e => stageError = e, onBytesUploaded,
+					hasPreReadPreview ? preReadPreview : null, hasPreReadPreview, token );
+			}
+			else if( entry.returnType is EntryReturnType.Staged )
+			{
+				HpRecordStaged? entryStaged = await CommitStaging.StageEntryAsync( entry );
+				log?.Invoke( StatusMessage.PROCESSING, "staging local entry..." );
+				log?.Invoke( StatusMessage.PROCESSING, "staging local version..." );
+				versionStaged = entryStaged is null
+					? null
+					: await CommitStaging.StageVersionAsync(
+						hack, entryStaged, e => stageError = e, onBytesUploaded,
+						hasPreReadPreview ? preReadPreview : null, hasPreReadPreview, token );
+			}
+			if( entry.returnType is EntryReturnType.Failed )
+			{
+				await commit.ServerClear();
+				log?.Invoke( StatusMessage.ERROR, $"Error creating entry {entry.name}. Rolling back records..." );
+				return false;
+			}
+
 			if( versionStaged is not { id: not 0 } )
 				throw new ArgumentException( $"Could not stage {hack.Name}: {stageError ?? "the version was not created"}" );
 
@@ -244,22 +276,37 @@ public static class CommitOperations
 
 			log?.Invoke( StatusMessage.PROCESSING, "staging local version relationships..." );
 			if( !await CommitStaging.StageRelationshipsAsync( versionStaged, preReadDeps ) )
-				throw new ArgumentException( $"Failed to stage version relationships for {versionStaged.payload?.GetValueOrDefault( "name" )}" );
+				throw new ArgumentException( $"Failed to stage version relationships for {versionStaged.payload?.GetValueOrDefault( nameof( HpVersion.name ) )}" );
 
 			log?.Invoke( StatusMessage.PROCESSING, "staging local version properties ..." );
 			if( !await CommitStaging.StagePropertiesAsync( versionStaged, swStore ) )
-				throw new ArgumentException( $"Failed to stage version properties for {versionStaged.payload?.GetValueOrDefault( "name" )}" );
+				throw new ArgumentException( $"Failed to stage version properties for {versionStaged.payload?.GetValueOrDefault( nameof( HpVersion.name ) )}" );
 
 			onRecordStaged?.Invoke();
 		}
 		catch( Exception e )
 		{
 			await commit.ServerClear();
+			if( e is OperationCanceledException )
+				throw;
 			HackLogger.Error( "PdmCommit", $"Staging failed for commit {commit.id}: {e.Message}", e );
 			log?.Invoke( StatusMessage.ERROR, e.Message );
 			return false;
 		}
 		return true;
+	}
+
+	private static async Task<HpDirectory?> ResolveDirectoryCachedAsync( HackFile hack, Dictionary<string, HpDirectory>? cache )
+	{
+		if( cache is null )
+			return await CreateDirectoriesAsync( hack );
+		string key = string.Join( PwaPaths.NameSeparator, DirectorySegments( hack ) );
+		if( cache.TryGetValue( key, out HpDirectory? existing ) )
+			return existing;
+		HpDirectory? created = await CreateDirectoriesAsync( hack );
+		if( created is not null )
+			cache[ key ] = created;
+		return created;
 	}
 
 	private static bool TryReadReferences(
@@ -320,6 +367,15 @@ public static class CommitOperations
 	public static Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting, HpEntry[] UnchangedCheckedOut)> FilterCommitHackFilesAsync(
 		IEnumerable<HackFile> hackFiles,
 		Action<StatusMessage, string>? log = null )
+		=> FilesNotInOdooSegmentedAsync( FilterByName( hackFiles ), log );
+
+	internal static Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting, HpEntry[] UnchangedCheckedOut, Dictionary<string, HpEntry> RemoteByServerName)> FilterAndSegmentCommitFilesAsync(
+		IEnumerable<HackFile> hackFiles,
+		Action<StatusMessage, string>? log = null,
+		CancellationToken token = default )
+		=> SegmentCommitFilesAsync( FilterByName( hackFiles ), log, token );
+
+	private static List<HackFile> FilterByName( IEnumerable<HackFile> hackFiles )
 	{
 		Regex? regex = EntryFilter();
 		List<HackFile> kept = [];
@@ -328,6 +384,6 @@ public static class CommitOperations
 			if( regex is null || !regex.IsMatch( h.Name ?? "" ) )
 				kept.Add( h );
 		}
-		return FilesNotInOdooSegmentedAsync( kept, log );
+		return kept;
 	}
 }

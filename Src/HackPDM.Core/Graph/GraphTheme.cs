@@ -54,7 +54,7 @@ public sealed record GraphPalette(
 	uint RootBorder,
 	uint SelectedBorder,
 	uint Shadow,
-	IReadOnlyDictionary<NodeKind, uint> Headers )
+	IReadOnlyDictionary<NodeKind, uint> Headers ) : INamedPreset<PaletteName>
 {
 	/// <summary>The header color of a file of <paramref name="kind"/>.</summary>
 	public uint Header( NodeKind kind ) => Headers[ kind ];
@@ -90,7 +90,7 @@ public sealed record GraphForm(
 	bool HollowPorts,
 	double LinkThickness,
 	double ShadowDepth,
-	bool ShowGrid );
+	bool ShowGrid ) : INamedPreset<FormName>;
 
 /// <summary>A palette and a form: chosen separately, so any colors go with any shapes.</summary>
 public sealed record GraphTheme( GraphPalette Palette, GraphForm Form )
@@ -105,7 +105,7 @@ public static class GraphThemes
 	/// <summary>Every palette, in menu order.</summary>
 	public static IReadOnlyList<GraphPalette> Palettes { get; } =
 	[
-		new( PaletteName.Dark, "Dark",
+		new( PaletteName.Dark, nameof( PaletteName.Dark ),
 			Backdrop: 0xFF1E1E20, GridLine: 0xFF2A2A2E, Body: 0xFF2E2E32, BodyBorder: 0xFF141416,
 			Text: 0xFFDCDCE1, HeaderText: 0xFFFFFFFF, SubText: 0xFF96969E,
 			Link: 0xC8C8C8CD, LinkHighlight: 0xFFFFAA3C, Port: 0xFFF08C1E,
@@ -115,7 +115,7 @@ public static class GraphThemes
 				[ NodeKind.Assembly ] = 0xFF2E7D46, [ NodeKind.Part ] = 0xFF285FAA, [ NodeKind.Drawing ] = 0xFF783C96,
 				[ NodeKind.Pdf ] = 0xFFAA4632, [ NodeKind.Other ] = 0xFF555F69, [ NodeKind.Deleted ] = 0xFF8C2828,
 			}.ToFrozenDictionary() ),
-		new( PaletteName.Light, "Light",
+		new( PaletteName.Light, nameof( PaletteName.Light ),
 			Backdrop: 0xFFF3F4F6, GridLine: 0xFFE3E5E9, Body: 0xFFFFFFFF, BodyBorder: 0xFFC9CED6,
 			Text: 0xFF1F2328, HeaderText: 0xFFFFFFFF, SubText: 0xFF59636E,
 			Link: 0xFF737C87, LinkHighlight: 0xFFC2570A, Port: 0xFFE07B12,
@@ -140,22 +140,22 @@ public static class GraphThemes
 	/// <summary>Every form, in menu order.</summary>
 	public static IReadOnlyList<GraphForm> Forms { get; } =
 	[
-		new( FormName.Compact, "Compact",
+		new( FormName.Compact, nameof( FormName.Compact ),
 			new LayoutOptions { ColumnGap = 70, RowGap = 12, Margin = 24, MinWidth = 130, MinHeight = 30, MaxWidth = 200, MaxHeight = 52 },
 			HeaderStyle.Band, LinkStyle.Curve, HeaderHeight: 30, CornerRadius: 3, BorderThickness: 1, RootBorderThickness: 2,
 			TitleSize: 11, ShowFolder: false, ShowSizeLine: false, PortSize: 7, HollowPorts: false, LinkThickness: 1.5,
 			ShadowDepth: 0, ShowGrid: false ),
-		new( FormName.Default, "Default",
+		new( FormName.Default, nameof( FormName.Default ),
 			new LayoutOptions(),
 			HeaderStyle.Band, LinkStyle.Curve, HeaderHeight: 26, CornerRadius: 6, BorderThickness: 1.5, RootBorderThickness: 2.5,
 			TitleSize: 12.5, ShowFolder: true, ShowSizeLine: true, PortSize: 11, HollowPorts: false, LinkThickness: 2,
 			ShadowDepth: 0, ShowGrid: false ),
-		new( FormName.Modern, "Modern",
+		new( FormName.Modern, nameof( FormName.Modern ),
 			new LayoutOptions { ColumnGap = 140, RowGap = 32, Margin = 48, MinWidth = 180, MinHeight = 64, MaxWidth = 300, MaxHeight = 128 },
 			HeaderStyle.Strip, LinkStyle.Elbow, HeaderHeight: 5, CornerRadius: 12, BorderThickness: 1, RootBorderThickness: 2,
 			TitleSize: 13, ShowFolder: true, ShowSizeLine: true, PortSize: 10, HollowPorts: true, LinkThickness: 1.6,
 			ShadowDepth: 3, ShowGrid: true ),
-		new( FormName.Fancy, "Fancy",
+		new( FormName.Fancy, nameof( FormName.Fancy ),
 			new LayoutOptions { ColumnGap = 150, RowGap = 36, Margin = 56, MinWidth = 190, MinHeight = 72, MaxWidth = 310, MaxHeight = 140 },
 			HeaderStyle.Gradient, LinkStyle.GlowCurve, HeaderHeight: 30, CornerRadius: 9, BorderThickness: 1.5, RootBorderThickness: 3,
 			TitleSize: 13, ShowFolder: true, ShowSizeLine: true, PortSize: 13, HollowPorts: false, LinkThickness: 2.4,
@@ -163,32 +163,10 @@ public static class GraphThemes
 	];
 
 	/// <summary>The palette named <paramref name="name"/>.</summary>
-	public static GraphPalette Palette( PaletteName name )
-	{
-		int idx = (int)name;
-		if( (uint)idx < (uint)Palettes.Count && Palettes[ idx ].Name == name )
-			return Palettes[ idx ];
-		for( int i = 0; i < Palettes.Count; i++ )
-		{
-			if( Palettes[ i ].Name == name )
-				return Palettes[ i ];
-		}
-		throw new InvalidOperationException( $"Unknown palette '{name}'." );
-	}
+	public static GraphPalette Palette( PaletteName name ) => EnumPresets.Find( Palettes, name, "palette" );
 
 	/// <summary>The form named <paramref name="name"/>.</summary>
-	public static GraphForm Form( FormName name )
-	{
-		int idx = (int)name;
-		if( (uint)idx < (uint)Forms.Count && Forms[ idx ].Name == name )
-			return Forms[ idx ];
-		for( int i = 0; i < Forms.Count; i++ )
-		{
-			if( Forms[ i ].Name == name )
-				return Forms[ i ];
-		}
-		throw new InvalidOperationException( $"Unknown form '{name}'." );
-	}
+	public static GraphForm Form( FormName name ) => EnumPresets.Find( Forms, name, "form" );
 
 	/// <summary>The theme for two saved names; an unknown or missing name falls back to Dark / Default.</summary>
 	public static GraphTheme From( string? palette, string? form ) => From( ThemePresets.ParsePalette( palette ), ThemePresets.ParseForm( form ) );

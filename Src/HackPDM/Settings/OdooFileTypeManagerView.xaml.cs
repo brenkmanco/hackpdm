@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using HackPDM.Common;
+using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Services;
 
@@ -36,9 +37,12 @@ public sealed partial class OdooFileTypeManagerView : Page
 	private void LoadFromCache()
 	{
 		var defaults = OdooDefaults.Instance;
-		var categoryById = ( defaults.HpCategories ?? [] )
-			.Where( c => c.id is int )
-			.ToDictionary( c => c.id!.Value, c => c.name ?? string.Empty );
+		Dictionary<int, string> categoryById = [];
+		foreach( var c in defaults.HpCategories ?? [] )
+		{
+			if( c.id is int cid )
+				categoryById[ cid ] = c.name ?? string.Empty;
+		}
 
 		_allTypes =
 		[
@@ -122,6 +126,11 @@ public sealed partial class OdooFileTypeManagerView : Page
 		{
 			concrete.Lookups = await OdooLookupCache.LoadAsync();
 			LoadFromCache();
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "FileTypes", $"Refreshing file types failed: {ex.Message}", ex );
+			PolicySummaryText.Text = $"Could not refresh server rules: {ex.Message}";
 		}
 		finally
 		{

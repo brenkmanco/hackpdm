@@ -68,7 +68,8 @@ public sealed class OdooDomain : IReadOnlyList<object>
 	public static OdooDomain Where( string field, string op, object? value ) => All.And( field, op, value );
 	public static OdooDomain Where( string field, Operators op, object? value ) => All.And( field, op, value );
 	public static OdooDomain Where( string field, object? value ) => All.And( field, "=", value );
-	public static OdooDomain IdIn( IEnumerable<int> ids ) => Where( "id", "in", ids.ToArray() );
+	public static OdooDomain IdIn( IEnumerable<int> ids )
+		=> Where( nameof( Models.HpRecordBase.id ), "in", ids is IReadOnlyList<int> list ? list : ids.ToArray() );
 
 	public OdooDomain And( string field, string op, object? value ) => new( [ .. _items, new DomainTerm( field, op, value ) ] );
 	public OdooDomain And( string field, Operators op, object? value ) => And( field, op.ToOdoo(), value );
@@ -85,7 +86,6 @@ public sealed class OdooDomain : IReadOnlyList<object>
 		=> a.IsEmpty ? a : new( [ NotOp, .. a.AsExpression() ] );
 
 	public bool IsEmpty => _items.Length == 0;
-	public IEnumerable<DomainTerm> Terms => _items.OfType<DomainTerm>();
 
 	private object[] AsExpression()
 	{

@@ -121,6 +121,11 @@ internal sealed unsafe partial class SecretServiceStore : ICredentialStore
 	{
 		if( _schema != IntPtr.Zero )
 			return true;
+		if( IntPtr.Size != 8 )
+		{
+			_unavailable = true;
+			return false;
+		}
 		try
 		{
 			if( !NativeLibrary.TryLoad( LibSecret, out _ ) || !NativeLibrary.TryLoad( LibGLib, out IntPtr glib ) )

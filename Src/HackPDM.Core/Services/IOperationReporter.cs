@@ -41,7 +41,7 @@ public static class ShellLauncher
 		}
 		catch( Exception e )
 		{
-			HackLogger.Warn( "ShellLauncher", $"Could not open '{target}': {e.Message}", e );
+			HackLogger.Warn( nameof( ShellLauncher ), $"Could not open '{target}': {e.Message}", e );
 			return false;
 		}
 	}
@@ -52,9 +52,6 @@ public static class AsyncHelper
 {
 	public static Task<bool> WaitUntil( Func<bool> eval, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default )
 		=> WaitInternal( eval, wantTrue: true, msTimeout, pollingMs, token );
-
-	public static Task<bool> WaitWhile( Func<bool> eval, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default )
-		=> WaitInternal( eval, wantTrue: false, msTimeout, pollingMs, token );
 
 	public static async Task<bool> AsyncRunner( Func<Task> function, string statusHeader = "Status", CancellationTokenSource? tokenSource = null )
 	{
@@ -73,6 +70,9 @@ public static class AsyncHelper
 	private static async Task<bool> WaitInternal( Func<bool> eval, bool wantTrue, int msTimeout, int pollingMs, CancellationToken token )
 	{
 		ArgumentNullException.ThrowIfNull( eval );
+		if( eval() == wantTrue )
+			return true;
+
 		int stepMs = Math.Max( 1, pollingMs );
 		bool indefinite = msTimeout <= 0;
 		long deadline = indefinite ? 0 : Environment.TickCount64 + msTimeout;

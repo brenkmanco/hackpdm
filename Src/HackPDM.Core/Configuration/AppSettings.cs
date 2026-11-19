@@ -87,6 +87,13 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 					return defaultValue;
 				return Unsafe.As<decimal, T>( ref m );
 			}
+			if( typeof( T ) == typeof( decimal? ) )
+			{
+				if( value.ValueKind != JsonValueKind.Number || !value.TryGetDecimal( out decimal m ) )
+					return defaultValue;
+				decimal? nm = m;
+				return Unsafe.As<decimal?, T?>( ref nm );
+			}
 
 			try
 			{

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices.WindowsRuntime;
 
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
@@ -11,8 +10,6 @@ using HackPDM.Core.Pdm;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-
-using Windows.Storage.Streams;
 
 namespace HackPDM.Common;
 
@@ -58,7 +55,7 @@ public static partial class Assets
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{
-			HackLogger.Warn( "Assets", $"Local image assets not loaded: {e.Message}", e );
+			HackLogger.Warn( nameof( Assets ), $"Local image assets not loaded: {e.Message}", e );
 		}
 	}
 }
@@ -138,6 +135,22 @@ public static class EntryIcons
 		return icon;
 	}
 
+	public static void ClearServerCache()
+	{
+		TypeCache.Clear();
+		List<string>? serverKeys = null;
+		foreach( string key in Cache.Keys )
+		{
+			if( key.StartsWith( "type:", StringComparison.Ordinal ) )
+				( serverKeys ??= [] ).Add( key );
+		}
+		if( serverKeys is not null )
+		{
+			for( int i = 0; i < serverKeys.Count; i++ )
+				Cache.Remove( serverKeys[ i ] );
+		}
+	}
+
 	private static ImageSource? ServerTypeIcon( string extension )
 	{
 		string key = $"type:{extension}";
@@ -157,14 +170,11 @@ public static class EntryIcons
 	{
 		try
 		{
-			using InMemoryRandomAccessStream stream = new();
-			await stream.WriteAsync( bytes.AsBuffer() );
-			stream.Seek( 0 );
-			await image.SetSourceAsync( stream );
+			await BitmapImageLoader.LoadFromBytesAsync( image, bytes );
 		}
 		catch( Exception e )
 		{
-			HackLogger.Debug( "EntryIcons", $"Type icon failed to decode: {e.Message}", e );
+			HackLogger.Debug( nameof( EntryIcons ), $"Type icon failed to decode: {e.Message}", e );
 		}
 	}
 }

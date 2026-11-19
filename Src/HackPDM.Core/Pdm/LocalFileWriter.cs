@@ -2,23 +2,75 @@ using HackPDM.Core.Configuration;
 
 namespace HackPDM.Core.Pdm;
 
+/// <summary>Shared safe file-system and stream helpers.</summary>
+public static class FileOps
+{
+	public static void TryDelete( string? path )
+	{
+		if( string.IsNullOrEmpty( path ) )
+			return;
+		try
+		{
+			ClearReadOnlyIfPresent( path );
+			File.Delete( path );
+		}
+		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
+		{
+		}
+	}
+
+	public static void ClearReadOnlyIfPresent( string path )
+	{
+		if( string.IsNullOrEmpty( path ) || !Path.Exists( path ) )
+			return;
+		try
+		{
+			FileAttributes attributes = File.GetAttributes( path );
+			if( ( attributes & FileAttributes.ReadOnly ) != 0 )
+				File.SetAttributes( path, attributes & ~FileAttributes.ReadOnly );
+		}
+		catch( Exception e ) when( e is FileNotFoundException or DirectoryNotFoundException or IOException or UnauthorizedAccessException )
+		{
+		}
+	}
+
+	public static void ClearReadOnlyRecursive( string directory )
+	{
+		try
+		{
+			if( !Directory.Exists( directory ) )
+				return;
+			ClearReadOnlyIfPresent( directory );
+			EnumerationOptions opts = new() { RecurseSubdirectories = true, IgnoreInaccessible = true };
+			foreach( string entry in Directory.EnumerateFileSystemEntries( directory, "*", opts ) )
+				ClearReadOnlyIfPresent( entry );
+		}
+		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
+		{
+		}
+	}
+
+	public static byte[] ToByteArrayZeroCopy( this MemoryStream stream )
+		=> stream.TryGetBuffer( out ArraySegment<byte> seg ) && seg.Offset == 0 && seg.Array is { } arr && seg.Count == arr.Length
+			? arr
+			: stream.ToArray();
+}
+
 /// <summary>Safely writes downloaded file contents into the working folder.</summary>
 public static class LocalFileWriter
 {
-	private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
-		? StringComparison.OrdinalIgnoreCase
-		: StringComparison.Ordinal;
 	public static long? Write( HackFile file )
 	{
-		if( file.FileContents is null || file.DirectoryName is not { } dir || file.Name is not { } name )
+		if( file.FileContents is null || file.DirectoryName is not { } dir || file.Name is not { Length: > 0 } name )
 		{
-			HackLogger.Warn( "LocalFileWriter", $"{file.Name} missing contents, folder, or name" );
+			HackLogger.Warn( nameof( LocalFileWriter ), $"{file.Name} missing contents, folder, or name" );
 			return null;
 		}
 		try
 		{
 			Directory.CreateDirectory( dir );
 			string target = Path.Combine( dir, name );
+			FileOps.ClearReadOnlyIfPresent( target );
 			string tempPath = $"{target}.{Guid.NewGuid():N}.tmp";
 			try
 			{
@@ -27,16 +79,19 @@ public static class LocalFileWriter
 			}
 			catch
 			{
-				TryDeleteTemp( tempPath );
+				FileOps.TryDelete( tempPath );
 				throw;
 			}
 
+			file.FullPath = target;
+			file.Info = null;
 			file.ApplyModifiedDateToLocal();
-			return file.FileSize ?? 0;
+			file.ApplyNonOwnerReadOnly();
+			return file.FileSize ?? file.FileContents.Length;
 		}
-		catch( Exception e ) when( e is UnauthorizedAccessException or IOException )
+		catch( Exception e ) when( e is UnauthorizedAccessException or IOException or ArgumentException )
 		{
-			HackLogger.Error( "LocalFileWriter", $"Failed writing '{file.Name}': {e.Message}", e );
+			HackLogger.Error( nameof( LocalFileWriter ), $"Failed writing '{file.Name}': {e.Message}", e );
 			return null;
 		}
 	}
@@ -45,7 +100,7 @@ public static class LocalFileWriter
 	{
 		if( file.FileContents is null )
 		{
-			HackLogger.Warn( "LocalFileWriter", $"{file.Name} file contents empty" );
+			HackLogger.Warn( nameof( LocalFileWriter ), $"{file.Name} file contents empty" );
 			return Task.FromResult( false );
 		}
 		byte[] contents = file.FileContents;
@@ -53,11 +108,11 @@ public static class LocalFileWriter
 	}
 
 	public static Task<bool> WriteFromFileAsync( HackFile file, string sourcePath )
-		=> PlaceAsync( file, target =>
+		=> PlaceAsync( file, target => Task.Run( () =>
 		{
 			File.Move( sourcePath, target, overwrite: true );
-			return Task.FromResult( true );
-		} );
+			return true;
+		} ) );
 
 	private static async Task<bool> PlaceAsync( HackFile file, Func<string, Task<bool>> write )
 	{
@@ -67,7 +122,7 @@ public static class LocalFileWriter
 				return false;
 
 			Directory.CreateDirectory( Path.GetDirectoryName( targetPath )! );
-			ClearReadOnlyIfPresent( targetPath );
+			FileOps.ClearReadOnlyIfPresent( targetPath );
 
 			if( !await write( targetPath ) )
 				return false;
@@ -78,42 +133,37 @@ public static class LocalFileWriter
 			file.ApplyNonOwnerReadOnly();
 			return true;
 		}
-		catch( Exception e ) when( e is UnauthorizedAccessException or IOException )
+		catch( Exception e ) when( e is UnauthorizedAccessException or IOException or ArgumentException )
 		{
-			HackLogger.Error( "LocalFileWriter", $"Failed placing '{file.Name}': {e.Message}", e );
+			HackLogger.Error( nameof( LocalFileWriter ), $"Failed placing '{file.Name}': {e.Message}", e );
 			return false;
-		}
-	}
-
-	private static void ClearReadOnlyIfPresent( string path )
-	{
-		try
-		{
-			FileAttributes attributes = File.GetAttributes( path );
-			if( ( attributes & FileAttributes.ReadOnly ) != 0 )
-				File.SetAttributes( path, attributes & ~FileAttributes.ReadOnly );
-		}
-		catch( Exception e ) when( e is FileNotFoundException or DirectoryNotFoundException )
-		{
 		}
 	}
 
 	internal static string? LocalTargetPath( HackFile file )
 	{
-		if( string.IsNullOrEmpty( file.DirectoryName ) )
+		if( file.DirectoryName is null )
+			return null;
+		string rawRoot = HackDefaults.Instance?.PwaPathAbsolute ?? "";
+		if( string.IsNullOrWhiteSpace( rawRoot ) )
 			return null;
 
-		string relative = file.DirectoryName.Replace( '\\', Path.DirectorySeparatorChar ).TrimStart( Path.DirectorySeparatorChar );
+		string relative = file.DirectoryName
+			.Replace( '\\', Path.DirectorySeparatorChar )
+			.Replace( '/', Path.DirectorySeparatorChar )
+			.TrimStart( Path.DirectorySeparatorChar );
 		if( file.Name is { Length: > 0 } name
 			&& !Path.GetFileName( relative.AsSpan() ).Equals( name.AsSpan(), StringComparison.OrdinalIgnoreCase ) )
 		{
-			relative = Path.Combine( relative, name );
+			relative = relative.Length == 0 ? name : Path.Combine( relative, name );
 		}
+		if( relative.Length == 0 )
+			return null;
 
-		string root = Path.GetFullPath( HackDefaults.Instance?.PwaPathAbsolute ?? "" );
+		string root = Path.GetFullPath( rawRoot );
 		string target = Path.GetFullPath( Path.Combine( root, relative ) );
 		string rootWithSeparator = root.EndsWith( Path.DirectorySeparatorChar ) ? root : root + Path.DirectorySeparatorChar;
-		return target.StartsWith( rootWithSeparator, PathComparison ) ? target : null;
+		return target.StartsWith( rootWithSeparator, PwaPaths.PathComparison ) ? target : null;
 	}
 
 	private static async Task<bool> WriteBytesAtomicAsync( string path, byte[] bytes )
@@ -134,20 +184,9 @@ public static class LocalFileWriter
 		}
 		catch( Exception e ) when( e is UnauthorizedAccessException or IOException )
 		{
-			TryDeleteTemp( tempPath );
-			HackLogger.Error( "LocalFileWriter", $"Failed writing '{path}': {e.Message}", e );
+			FileOps.TryDelete( tempPath );
+			HackLogger.Error( nameof( LocalFileWriter ), $"Failed writing '{path}': {e.Message}", e );
 			return false;
-		}
-	}
-
-	private static void TryDeleteTemp( string tempPath )
-	{
-		try
-		{
-			File.Delete( tempPath );
-		}
-		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException )
-		{
 		}
 	}
 }

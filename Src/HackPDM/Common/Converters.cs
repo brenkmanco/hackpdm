@@ -78,7 +78,7 @@ public sealed partial class HexToBrushConverter : IValueConverter
 		=> throw new NotSupportedException();
 
 	public static Color ToColor( string? hex )
-		=> ArgbColor.TryParse( hex, out ArgbColor c ) ? Color.FromArgb( c.A, c.R, c.G, c.B ) : default;
+		=> ArgbColor.TryParse( hex, out ArgbColor c ) ? c.ToUiColor() : default;
 }
 
 /// <summary>true -> Visible; pass "Invert" as ConverterParameter for the opposite.</summary>
@@ -167,11 +167,11 @@ public static class StatusBrushes
 		var colors = UIStorage.ColorData;
 		(Color Base, byte StartAlpha, byte MidAlpha)? spec = status switch
 		{
-			FileStatus.Lo => ( UIStorage.ToColor( colors.OrangeEntry ), doublePainted ? (byte)28 : (byte)52, doublePainted ? (byte)8 : (byte)14 ),
-			FileStatus.Ro => ( UIStorage.ToColor( colors.BlueEntry ), doublePainted ? (byte)28 : (byte)52, doublePainted ? (byte)8 : (byte)14 ),
-			FileStatus.Dt or FileStatus.Ds => ( UIStorage.ToColor( colors.DarkRed ), doublePainted ? (byte)42 : (byte)76, doublePainted ? (byte)12 : (byte)22 ),
-			FileStatus.Cm or FileStatus.Co => ( UIStorage.ToColor( colors.DarkOliveGreen ), doublePainted ? (byte)38 : (byte)68, doublePainted ? (byte)10 : (byte)18 ),
-			FileStatus.Lm => ( UIStorage.ToColor( colors.MustardYellow ), doublePainted ? (byte)26 : (byte)46, doublePainted ? (byte)7 : (byte)12 ),
+			FileStatus.Lo => ( colors.OrangeEntry.ToUiColor(), doublePainted ? (byte)28 : (byte)52, doublePainted ? (byte)8 : (byte)14 ),
+			FileStatus.Ro => ( colors.BlueEntry.ToUiColor(), doublePainted ? (byte)28 : (byte)52, doublePainted ? (byte)8 : (byte)14 ),
+			FileStatus.Dt or FileStatus.Ds => ( colors.DarkRed.ToUiColor(), doublePainted ? (byte)42 : (byte)76, doublePainted ? (byte)12 : (byte)22 ),
+			FileStatus.Cm or FileStatus.Co => ( colors.DarkOliveGreen.ToUiColor(), doublePainted ? (byte)38 : (byte)68, doublePainted ? (byte)10 : (byte)18 ),
+			FileStatus.Lm => ( colors.MustardYellow.ToUiColor(), doublePainted ? (byte)26 : (byte)46, doublePainted ? (byte)7 : (byte)12 ),
 			FileStatus.Nv => ( Color.FromArgb( 255, 0x7A, 0x5A, 0xD6 ), doublePainted ? (byte)26 : (byte)46, doublePainted ? (byte)7 : (byte)12 ),
 			_ => null,
 		};

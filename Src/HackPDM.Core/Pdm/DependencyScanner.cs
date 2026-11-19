@@ -10,10 +10,6 @@ public sealed record BrokenDependency( string? FullPath, HackResult Reason );
 /// <summary>Recursively collects local files and all SolidWorks references needed for a commit.</summary>
 public static class DependencyScanner
 {
-	private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
-		? StringComparer.OrdinalIgnoreCase
-		: StringComparer.Ordinal;
-
 	public static Task<(bool Success, List<HackFile> Files, List<BrokenDependency> Broken)> GetFileWithDependenciesAsync( EntryRow entry )
 		=> GetFileWithDependenciesAsync( new HackFile( entry ) );
 
@@ -28,10 +24,10 @@ public static class DependencyScanner
 		HashSet<HackFile> files = [];
 		List<BrokenDependency> broken = [];
 		SwReferenceResolver resolver = new( HackDefaults.Instance.PwaPathAbsolute );
-		Dictionary<string, (List<SwDependencies.Reference>? Refs, Exception? Error)> depCache = new( PathComparer );
-		Dictionary<string, HackFile> fileCache = new( PathComparer );
-		HashSet<string> activeBranch = new( PathComparer );
-		HashSet<string> visited = new( PathComparer );
+		Dictionary<string, (List<SwDependencies.Reference>? Refs, Exception? Error)> depCache = new( PwaPaths.PathComparer );
+		Dictionary<string, HackFile> fileCache = new( PwaPaths.PathComparer );
+		HashSet<string> activeBranch = new( PwaPaths.PathComparer );
+		HashSet<string> visited = new( PwaPaths.PathComparer );
 
 		foreach( string path in Directory.EnumerateFiles( folderPath, "*", SearchOption.TopDirectoryOnly ) )
 		{
@@ -74,8 +70,8 @@ public static class DependencyScanner
 		SwReferenceResolver resolver = new( HackDefaults.Instance.PwaPathAbsolute );
 		List<HackFile> collected = [];
 		List<BrokenDependency> broken = [];
-		HashSet<string> activeBranch = new( PathComparer );
-		HashSet<string> visited = new( PathComparer );
+		HashSet<string> activeBranch = new( PwaPaths.PathComparer );
+		HashSet<string> visited = new( PwaPaths.PathComparer );
 
 		Walk( root, resolver, collected, broken, activeBranch, visited, depCache: null, fileCache: null );
 		return broken.Count > 0 ? ( false, [], broken ) : ( true, collected, [] );
@@ -141,7 +137,7 @@ public static class DependencyScanner
 			{
 				string refPath = local ?? UnresolvedPath( stored, canonical );
 				string refKey = TryFullPath( refPath );
-				if( activeBranch.Contains( refKey ) )
+				if( activeBranch.Contains( refKey ) || visited.Contains( refKey ) )
 					continue;
 				HackFile child;
 				if( fileCache is not null )

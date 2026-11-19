@@ -60,10 +60,12 @@ public sealed partial class HackSettingsViewModel : ObservableObject
 
 	public List<string> Validate()
 	{
+		PwaPath = PwaPath?.Trim() ?? string.Empty;
+		TempFolderPath = TempFolderPath?.Trim() ?? string.Empty;
 		List<string> errors = [];
-		if( !TryCreateDirectory( PwaPath ) )
+		if( !IsValidDirectoryPath( PwaPath ) )
 			errors.Add( "invalid pwa directory path" );
-		if( !TryCreateDirectory( TempFolderPath ) )
+		if( !IsValidDirectoryPath( TempFolderPath ) )
 			errors.Add( "invalid temporary directory path" );
 		return errors;
 	}
@@ -72,6 +74,13 @@ public sealed partial class HackSettingsViewModel : ObservableObject
 	private async Task SubmitAsync()
 	{
 		List<string> errors = Validate();
+		if( errors.Count == 0 )
+		{
+			if( !TryCreateDirectory( PwaPath ) )
+				errors.Add( "invalid pwa directory path" );
+			if( !TryCreateDirectory( TempFolderPath ) )
+				errors.Add( "invalid temporary directory path" );
+		}
 		if( errors.Count > 0 )
 		{
 			_session?.LogError( ProfileStatusCategory.Configuration, $"Local folder configuration error: {string.Join( "; ", errors )}; changes were not saved." );
@@ -84,7 +93,7 @@ public sealed partial class HackSettingsViewModel : ObservableObject
 		HackDefaults.Instance.PwaPathAbsolute = PwaPath;
 		HackDefaults.Instance.PwaPathRelative = new DirectoryInfo( PwaPath ).Name;
 		PdmConstants.TemporaryPath = TempFolderPath;
-		HackDefaults.Instance.SettingsProvider?.Set( "TemporaryPath", TempFolderPath );
+		HackDefaults.Instance.SettingsProvider?.Set( nameof( PdmConstants.TemporaryPath ), TempFolderPath );
 
 		if( !string.Equals( previousPwa, PwaPath, StringComparison.OrdinalIgnoreCase ) )
 			_onVaultPathChanged?.Invoke();
@@ -94,9 +103,24 @@ public sealed partial class HackSettingsViewModel : ObservableObject
 		Saved?.Invoke();
 	}
 
+	private static bool IsValidDirectoryPath( string path )
+	{
+		if( string.IsNullOrWhiteSpace( path ) || !Path.IsPathFullyQualified( path ) )
+			return false;
+		try
+		{
+			_ = Path.GetFullPath( path );
+			return true;
+		}
+		catch( Exception ex ) when( ex is ArgumentException or NotSupportedException or PathTooLongException )
+		{
+			return false;
+		}
+	}
+
 	private static bool TryCreateDirectory( string path )
 	{
-		if( string.IsNullOrWhiteSpace( path ) )
+		if( !IsValidDirectoryPath( path ) )
 			return false;
 		try
 		{

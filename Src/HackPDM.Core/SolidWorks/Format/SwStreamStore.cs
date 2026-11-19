@@ -2,6 +2,8 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 
+using HackPDM.Core.Pdm;
+
 namespace HackPDM.Core.SolidWorks.Format;
 
 /// <summary>
@@ -60,11 +62,6 @@ public sealed class SwStreamStore
 
 	/// <summary>The names of all indexed streams, such as "Header2" or "docProps/custom.xml" (OLE storages joined with "/", "__ZLB" suffixes removed).</summary>
 	public IEnumerable<string> Names => _sources.Keys;
-
-	/// <summary>Checks whether a stream exists and has an intact copy. This decompresses (and caches) the stream.</summary>
-	/// <param name="name">The stream name, as in <see cref="Names"/>.</param>
-	/// <returns>True when <see cref="Get"/> would return data.</returns>
-	public bool Contains( string name ) => Get( name ) is not null;
 
 	/// <summary>Gets a stream's decompressed contents, decompressing it on first use and caching the result.</summary>
 	/// <param name="name">The stream name, as in <see cref="Names"/> (case-sensitive).</param>
@@ -136,6 +133,8 @@ public sealed class SwStreamStore
 
 	private void IndexModern()
 	{
+		if( _data.Length < 8 )
+			return;
 		// stream names are bit-rotated left by the key stored in byte 7 (4 in every file seen so far)
 		int key = _data[ 7 ] & 7;
 		var data = _data.AsSpan();
@@ -164,6 +163,7 @@ public sealed class SwStreamStore
 				continue;
 
 			Add( name, new StreamSource( SourceKind.Modern, (uint)payloadStart, (int)compressed, uncompressed, crc ) );
+			pos = (int)( payloadStart + compressed );
 		}
 	}
 
@@ -216,8 +216,12 @@ public sealed class SwStreamStore
 	private void IndexOle()
 	{
 		var header = _data.AsSpan( 0, 512 );
-		_sectorSize = 1 << BinaryPrimitives.ReadUInt16LittleEndian( header[ 0x1E.. ] );
-		_miniSectorSize = 1 << BinaryPrimitives.ReadUInt16LittleEndian( header[ 0x20.. ] );
+		ushort sectorShift = BinaryPrimitives.ReadUInt16LittleEndian( header[ 0x1E.. ] );
+		ushort miniShift = BinaryPrimitives.ReadUInt16LittleEndian( header[ 0x20.. ] );
+		if( sectorShift is < 7 or > 16 || miniShift is < 3 or > 16 || miniShift > sectorShift )
+			throw new InvalidDataException( $"invalid OLE sector shift ({sectorShift}/{miniShift})" );
+		_sectorSize = 1 << sectorShift;
+		_miniSectorSize = 1 << miniShift;
 		uint fatSectors = BinaryPrimitives.ReadUInt32LittleEndian( header[ 0x2C.. ] );
 		uint directoryStart = BinaryPrimitives.ReadUInt32LittleEndian( header[ 0x30.. ] );
 		_miniCutoff = BinaryPrimitives.ReadUInt32LittleEndian( header[ 0x38.. ] );
@@ -341,9 +345,7 @@ public sealed class SwStreamStore
 		using var inflater = new ZLibStream( input, CompressionMode.Decompress );
 		using var output = new MemoryStream( capacity );
 		inflater.CopyTo( output );
-		if( output.TryGetBuffer( out ArraySegment<byte> seg ) && seg.Offset == 0 && seg.Array is { } arr && seg.Count == arr.Length )
-			return arr;
-		return output.ToArray();
+		return output.ToByteArrayZeroCopy();
 	}
 
 	private ReadOnlySpan<byte> Sector( uint id )
@@ -372,9 +374,7 @@ public sealed class SwStreamStore
 			output.Write( bytes );
 			sector = sector < _fat.Length ? _fat[ sector ] : EndOfChain;
 		}
-		if( output.TryGetBuffer( out ArraySegment<byte> seg ) && seg.Offset == 0 && seg.Array is { } arr && seg.Count == arr.Length )
-			return arr;
-		return output.ToArray();
+		return output.ToByteArrayZeroCopy();
 	}
 
 	private byte[]? ChainExact( uint start, int expectedSize )

@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 
 using HackPDM.Core.Configuration;
@@ -10,7 +9,6 @@ using Microsoft.UI.Xaml.Media.Imaging;
 
 using Windows.Storage;
 using Windows.Storage.FileProperties;
-using Windows.Storage.Streams;
 
 namespace HackPDM.Common;
 
@@ -29,12 +27,8 @@ public sealed class PreviewImageLoader : IPreviewImageLoader
 		if( bytes is not { Length: > 0 } )
 			return null;
 
-		using InMemoryRandomAccessStream stream = new();
-		await stream.WriteAsync( bytes.AsBuffer() );
-		stream.Seek( 0 );
-
 		BitmapImage image = new();
-		await image.SetSourceAsync( stream );
+		await BitmapImageLoader.LoadFromBytesAsync( image, bytes );
 		return image;
 	}
 
@@ -60,7 +54,7 @@ public sealed class PreviewImageLoader : IPreviewImageLoader
 		}
 		catch( Exception ex )
 		{
-			HackLogger.Debug( "PreviewImageLoader", $"Failed to get file icon for '{filePath}': {ex.Message}", ex );
+			HackLogger.Debug( nameof( PreviewImageLoader ), $"Failed to get file icon for '{filePath}': {ex.Message}", ex );
 			return null;
 		}
 #endif

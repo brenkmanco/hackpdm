@@ -12,6 +12,14 @@ public static class PwaPaths
 	public const char NameSeparator = '\\';
 	public const string DirectorySeparator = " / ";
 
+	public static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+		? StringComparer.OrdinalIgnoreCase
+		: StringComparer.Ordinal;
+
+	public static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
+		? StringComparison.OrdinalIgnoreCase
+		: StringComparison.Ordinal;
+
 	private static readonly char[] AnySeparator = [ '\\', '/' ];
 	private static VaultFullCache? _vaultFullCache;
 

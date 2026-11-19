@@ -49,11 +49,12 @@ public sealed partial class DependencyGraphView : Page
 	private CancellationTokenSource? _graphLoad;
 	private bool _quietSelection;
 	private bool _themeSubscribed;
+	private bool _left;
 	private DependencyGraph _graph = DependencyGraph.Empty;
 	/// <summary>The files the graph is drawn around: the list's selection, or a file double-clicked in the graph.</summary>
 	private IReadOnlyList<int> _roots = [];
 
-	private readonly IEntryDetailsService _details = new EntryDetailsService();
+	private readonly IEntryDetailsService _details = AppComposition.EntryDetails;
 	private readonly IPreviewImageLoader _previews = new PreviewImageLoader();
 	private CancellationTokenSource? _detailLoad;
 	private CancellationTokenSource? _previewLoad;
@@ -62,7 +63,7 @@ public sealed partial class DependencyGraphView : Page
 	private const double DetailPanelSpace = 336;
 
 	// the file manager's detail tables, for the clicked file
-	public ObservableCollection<TreeData> BreadcrumbPath { get; } = [];
+	public RangeObservableCollection<TreeData> BreadcrumbPath { get; } = [];
 	private TreeViewNode? _selectedFolderNode;
 	private TreeData? _selectedFolderData;
 	private TreeViewNode? CurrentSelectedFolderNode => _selectedFolderNode ?? FolderTree.SelectedNode;
@@ -182,6 +183,7 @@ public sealed partial class DependencyGraphView : Page
 	protected override void OnNavigatedTo( NavigationEventArgs e )
 	{
 		base.OnNavigatedTo( e );
+		_left = false;
 		SubscribeTheme();
 		Loaded += OnLoaded;
 	}
@@ -202,30 +204,6 @@ public sealed partial class DependencyGraphView : Page
 		AppComposition.Theme.ThemeChanged -= OnThemeChanged;
 	}
 
-	private static CancellationTokenSource ReplaceCts( ref CancellationTokenSource? field )
-	{
-		CancellationTokenSource? prev = field;
-		CancellationTokenSource next = new();
-		field = next;
-		if( prev is not null )
-		{
-			try { prev.Cancel(); }
-			finally { prev.Dispose(); }
-		}
-		return next;
-	}
-
-	private static void CancelAndDispose( ref CancellationTokenSource? field )
-	{
-		CancellationTokenSource? prev = field;
-		field = null;
-		if( prev is not null )
-		{
-			try { prev.Cancel(); }
-			finally { prev.Dispose(); }
-		}
-	}
-
 	private void OnLoaded( object sender, RoutedEventArgs e )
 	{
 		Loaded -= OnLoaded;
@@ -241,16 +219,19 @@ public sealed partial class DependencyGraphView : Page
 		TreeLoadingOverlay.Visibility = Visibility.Visible;
 		TreeBusyRing.IsActive = true;
 		await Task.Delay( AppComposition.FileManagerState.Tree is null ? 30 : 16 );
+		if( _left )
+			return;
 		await LoadTreeAsync();
 	}
 
 	protected override void OnNavigatedFrom( NavigationEventArgs e )
 	{
+		_left = true;
 		UnsubscribeTheme();
-		CancelAndDispose( ref _detailLoad );
-		CancelAndDispose( ref _previewLoad );
-		CancelAndDispose( ref _entriesLoad );
-		CancelAndDispose( ref _graphLoad );
+		CtsHelper.CancelAndDispose( ref _detailLoad );
+		CtsHelper.CancelAndDispose( ref _previewLoad );
+		CtsHelper.CancelAndDispose( ref _entriesLoad );
+		CtsHelper.CancelAndDispose( ref _graphLoad );
 		base.OnNavigatedFrom( e );
 	}
 
@@ -258,11 +239,15 @@ public sealed partial class DependencyGraphView : Page
 
 	private async Task LoadTreeAsync()
 	{
+		if( _left )
+			return;
 		try
 		{
 			TreeLoadingOverlay.Visibility = Visibility.Visible;
 			TreeBusyRing.IsActive = true;
 			DirectoryNode? root = AppComposition.FileManagerState.Tree ?? await new DirectoryTreeService().LoadAsync();
+			if( _left )
+				return;
 			if( root is null )
 			{
 				Status.Text = "The folder tree could not be read from the server.";
@@ -270,6 +255,8 @@ public sealed partial class DependencyGraphView : Page
 			}
 			AppComposition.FileManagerState.Tree ??= root;
 			DirectoryTreeBuilder.Build( FolderTree, root );
+			if( FolderTree.RootNodes.Count == 0 )
+				return;
 			TreeViewNode first = FolderTree.RootNodes[ 0 ];
 			first.LinkedData.IsExpanded = true;
 			// start in the folder the file manager has open
@@ -280,16 +267,27 @@ public sealed partial class DependencyGraphView : Page
 			target.LinkedData.EnsureVisible( FolderTree );
 			await LoadEntriesAsync( target );
 		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( nameof( NavigatePageMenu.DependencyGraph ), $"Loading folder tree failed: {ex.Message}", ex );
+			if( !_left )
+				Status.Text = $"The folder tree could not be read: {ex.Message}";
+		}
 		finally
 		{
-			TreeBusyRing.IsActive = false;
-			TreeLoadingOverlay.Visibility = Visibility.Collapsed;
+			if( !_left )
+			{
+				TreeBusyRing.IsActive = false;
+				TreeLoadingOverlay.Visibility = Visibility.Collapsed;
+			}
 		}
 	}
 
 	private async Task LoadEntriesAsync( TreeViewNode? node = null )
 	{
-		CancellationTokenSource load = ReplaceCts( ref _entriesLoad );
+		if( _left )
+			return;
+		CancellationTokenSource load = CtsHelper.Replace( ref _entriesLoad );
 		CancellationToken token = load.Token;
 		int? directoryId = ( node ?? CurrentSelectedFolderNode )?.LinkedData.DirectoryId;
 
@@ -312,7 +310,7 @@ public sealed partial class DependencyGraphView : Page
 		try
 		{
 			Result<IReadOnlyList<RemoteEntryDto>> rows = await HpDirectory.GetEntriesAsync( id );
-			if( token.IsCancellationRequested )
+			if( _left || token.IsCancellationRequested )
 				return;
 			if( !rows.Ok )
 			{
@@ -326,7 +324,7 @@ public sealed partial class DependencyGraphView : Page
 		}
 		finally
 		{
-			if( ReferenceEquals( _entriesLoad, load ) )
+			if( !_left && ReferenceEquals( _entriesLoad, load ) )
 			{
 				Busy.IsActive = false;
 				EntryBusyRing.IsActive = false;
@@ -354,7 +352,10 @@ public sealed partial class DependencyGraphView : Page
 	{
 		if( _quietSelection )
 			return;
-		List<int> ids = [ .. EntryList.SelectedItems.OfType<GraphEntryItem>().Select( i => i.Id ) ];
+		List<GraphEntryItem> selected = EntryList.SelectedItems.ExtractSelected<GraphEntryItem>();
+		List<int> ids = new( selected.Count );
+		for( int i = 0; i < selected.Count; i++ )
+			ids.Add( selected[ i ].Id );
 		_quietSelection = true;
 		SelectAll.IsChecked = ids.Count > 0 && ids.Count == _entries.Count;
 		_quietSelection = false;
@@ -394,7 +395,9 @@ public sealed partial class DependencyGraphView : Page
 
 	private async Task LoadGraphAsync( bool debounce = false )
 	{
-		CancellationTokenSource load = ReplaceCts( ref _graphLoad );
+		if( _left )
+			return;
+		CancellationTokenSource load = CtsHelper.Replace( ref _graphLoad );
 		CancellationToken token = load.Token;
 		IReadOnlyList<int> roots = _roots;
 		GraphDirection direction = Direction;
@@ -403,11 +406,13 @@ public sealed partial class DependencyGraphView : Page
 			// clicking through the list or shift-selecting fires several changes in a row
 			if( debounce )
 				await Task.Delay( 150, token );
+			if( _left )
+				return;
 			Busy.IsActive = true;
-			GraphBusyOverlay.Visibility = roots.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+			GraphBusyOverlay.Visibility = ( roots.Count > 0 ).ToVisibility();
 			GraphBusyRing.IsActive = roots.Count > 0;
 			Result<DependencyGraph> graph = await DependencyGraphLoader.LoadAsync( roots, direction, token );
-			if( token.IsCancellationRequested )
+			if( _left || token.IsCancellationRequested )
 				return;
 			if( !graph.Ok )
 			{
@@ -420,7 +425,7 @@ public sealed partial class DependencyGraphView : Page
 				_nodesById[ _graph.Nodes[ i ].Id ] = _graph.Nodes[ i ];
 			GraphForm form = Graph.Theme.Form;
 			GraphLayoutResult arranged = await Task.Run( () => GraphLayout.Arrange( _graph, direction, form.Layout ), token );
-			if( token.IsCancellationRequested )
+			if( _left || token.IsCancellationRequested )
 				return;
 			Graph.Show( arranged );
 			// the open details stay open when their file is still in the graph
@@ -428,7 +433,7 @@ public sealed partial class DependencyGraphView : Page
 				Graph.EnsureVisible( open.Id, DetailPanelSpace );
 			else
 				CloseDetails();
-			Hint.Visibility = _graph.Nodes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+			Hint.Visibility = ( _graph.Nodes.Count == 0 ).ToVisibility();
 			ZoomText.Text = $"{Graph.Zoom * 100:0}%";
 			ShowStatus();
 		}
@@ -437,7 +442,7 @@ public sealed partial class DependencyGraphView : Page
 		}
 		finally
 		{
-			if( ReferenceEquals( _graphLoad, load ) )
+			if( !_left && ReferenceEquals( _graphLoad, load ) )
 			{
 				Busy.IsActive = false;
 				GraphBusyRing.IsActive = false;
@@ -473,39 +478,48 @@ public sealed partial class DependencyGraphView : Page
 	/// <summary>The app's theme changed (Settings → Theme): redraw the graph in its colors and shapes, no server call.</summary>
 	private async void OnThemeChanged()
 	{
-		bool show = AppComposition.Theme.ShowTreeBranchLines;
-		if( GraphBranchLinesToggle.IsChecked != show )
-			GraphBranchLinesToggle.IsChecked = show;
-		TreeBranchGuides.RefreshTree( FolderTree, showLines: show, selectedNode: CurrentSelectedFolderNode, updateSelection: true );
-
-		GraphTheme theme = AppComposition.Theme.GraphTheme;
-		GraphTheme prev = Graph.Theme;
-		if( theme == prev )
-			return;
-		Graph.Theme = theme;
-		if( _detailNode is { } shown )
-			_infoHeaderBrush.Color = Graph.HeaderColor( shown );
-		if( _graph.Nodes.Count == 0 )
-			return;
-
-		// Palette-only changes keep identical box coordinates — skip layout completely
-		GraphLayoutResult arranged;
-		if( theme.Form.Layout == prev.Form.Layout && Graph.Layout.Nodes.Count > 0 )
+		try
 		{
-			arranged = Graph.Layout;
-		}
-		else
-		{
-			DependencyGraph snapshot = _graph;
-			GraphDirection dir = Direction;
-			arranged = await Task.Run( () => GraphLayout.Arrange( snapshot, dir, theme.Form.Layout ) );
-			if( !ReferenceEquals( _graph, snapshot ) || Graph.Theme != theme )
+			if( _left )
 				return;
+			bool show = AppComposition.Theme.ShowTreeBranchLines;
+			if( GraphBranchLinesToggle.IsChecked != show )
+				GraphBranchLinesToggle.IsChecked = show;
+			TreeBranchGuides.RefreshTree( FolderTree, showLines: show, selectedNode: CurrentSelectedFolderNode, updateSelection: true );
+
+			GraphTheme theme = AppComposition.Theme.GraphTheme;
+			GraphTheme prev = Graph.Theme;
+			if( theme == prev )
+				return;
+			Graph.Theme = theme;
+			if( _detailNode is { } shown )
+				_infoHeaderBrush.Color = Graph.HeaderColor( shown );
+			if( _graph.Nodes.Count == 0 )
+				return;
+
+			// Palette-only changes keep identical box coordinates — skip layout completely
+			GraphLayoutResult arranged;
+			if( theme.Form.Layout == prev.Form.Layout && Graph.Layout.Nodes.Count > 0 )
+			{
+				arranged = Graph.Layout;
+			}
+			else
+			{
+				DependencyGraph snapshot = _graph;
+				GraphDirection dir = Direction;
+				arranged = await Task.Run( () => GraphLayout.Arrange( snapshot, dir, theme.Form.Layout ) );
+				if( _left || !ReferenceEquals( _graph, snapshot ) || Graph.Theme != theme )
+					return;
+			}
+			Graph.Show( arranged );
+			// the open details stay on their file
+			if( _detailNode is { } open && Graph.SelectNode( open.Id ) )
+				Graph.EnsureVisible( open.Id, DetailPanelSpace );
 		}
-		Graph.Show( arranged );
-		// the open details stay on their file
-		if( _detailNode is { } open && Graph.SelectNode( open.Id ) )
-			Graph.EnsureVisible( open.Id, DetailPanelSpace );
+		catch( Exception ex )
+		{
+			HackLogger.Warn( nameof( NavigatePageMenu.DependencyGraph ), $"Refreshing graph theme failed: {ex.Message}", ex );
+		}
 	}
 
 	// ------------------------------------------------------------------ details of the clicked file
@@ -548,8 +562,8 @@ public sealed partial class DependencyGraphView : Page
 
 	private void CloseDetails()
 	{
-		CancelAndDispose( ref _detailLoad );
-		CancelAndDispose( ref _previewLoad );
+		CtsHelper.CancelAndDispose( ref _detailLoad );
+		CtsHelper.CancelAndDispose( ref _previewLoad );
 		_detailNode = null;
 		DetailPanel.Visibility = Visibility.Collapsed;
 	}
@@ -607,25 +621,25 @@ public sealed partial class DependencyGraphView : Page
 
 	private async Task LoadDetailsAsync( GraphNode node )
 	{
-		CancellationTokenSource preview = ReplaceCts( ref _previewLoad );
+		CancellationTokenSource preview = CtsHelper.Replace( ref _previewLoad );
 		CancellationToken token = preview.Token;
 		await LoadDetailTabAsync();
 		try
 		{
 			byte[]? bytes = node.VersionId > 0 ? await _details.GetPreviewImageAsync( node.VersionId ) : null;
-			if( token.IsCancellationRequested || _detailNode?.Id != node.Id )
+			if( _left || token.IsCancellationRequested || _detailNode?.Id != node.Id )
 				return;
 			ImageSource? image = await _previews.FromBytesAsync( bytes );
-			if( token.IsCancellationRequested || _detailNode?.Id != node.Id )
+			if( _left || token.IsCancellationRequested || _detailNode?.Id != node.Id )
 				return;
 			InfoPreview.Source = image;
 			InfoPreviewNone.Text = "no preview";
-			InfoPreviewNone.Visibility = image is null ? Visibility.Visible : Visibility.Collapsed;
+			InfoPreviewNone.Visibility = ( image is null ).ToVisibility();
 		}
 		catch( Exception e )
 		{
-			HackLogger.Warn( "DependencyGraph", $"Preview of '{node.Name}' failed: {e.Message}", e );
-			if( _detailNode?.Id == node.Id )
+			HackLogger.Warn( nameof( NavigatePageMenu.DependencyGraph ), $"Preview of '{node.Name}' failed: {e.Message}", e );
+			if( !_left && _detailNode?.Id == node.Id )
 				InfoPreviewNone.Text = "no preview";
 		}
 	}
@@ -633,7 +647,7 @@ public sealed partial class DependencyGraphView : Page
 	/// <summary>Fills the visible detail table for the open file (one server call or two, like the file manager).</summary>
 	private Task LoadDetailTabAsync()
 	{
-		CancellationTokenSource load = ReplaceCts( ref _detailLoad );
+		CancellationTokenSource load = CtsHelper.Replace( ref _detailLoad );
 		CancellationToken token = load.Token;
 		HistoryRows.ClearIfNonEmpty();
 		ParentRows.ClearIfNonEmpty();
@@ -670,7 +684,7 @@ public sealed partial class DependencyGraphView : Page
 			}
 			catch( Exception e )
 			{
-				HackLogger.Warn( "DependencyGraph", $"{tab.Name} of '{node.Name}' failed: {e.Message}", e );
+				HackLogger.Warn( nameof( NavigatePageMenu.DependencyGraph ), $"{tab.Name} of '{node.Name}' failed: {e.Message}", e );
 			}
 		}
 
@@ -728,6 +742,7 @@ public sealed partial class DependencyGraphView : Page
 	{
 		bool show = GraphBranchLinesToggle.IsChecked == true;
 		AppComposition.Theme.SetShowTreeBranchLines( show );
+		UIStorage.SaveSafe();
 		TreeBranchGuides.RefreshTree( FolderTree, showLines: show, selectedNode: CurrentSelectedFolderNode, updateSelection: true );
 	}
 
@@ -749,12 +764,10 @@ public sealed partial class DependencyGraphView : Page
 		bool showFolders = ToggleFoldersPaneBtn.IsChecked == true;
 		bool showFiles = ToggleFilesPaneBtn.IsChecked == true;
 
-		GraphFoldersCard.Visibility = showFolders ? Visibility.Visible : Visibility.Collapsed;
-		GraphFoldersSplitter.Visibility = showFolders ? Visibility.Visible : Visibility.Collapsed;
+		GraphFoldersCard.Visibility = GraphFoldersSplitter.Visibility = showFolders.ToVisibility();
 		GraphFoldersCol.Width = showFolders ? new GridLength( Math.Clamp( layout.GraphFoldersWidth, 180, 480 ) ) : new GridLength( 0 );
 
-		GraphFilesCard.Visibility = showFiles ? Visibility.Visible : Visibility.Collapsed;
-		GraphFilesSplitter.Visibility = showFiles ? Visibility.Visible : Visibility.Collapsed;
+		GraphFilesCard.Visibility = GraphFilesSplitter.Visibility = showFiles.ToVisibility();
 		GraphFilesCol.Width = showFiles ? new GridLength( Math.Clamp( layout.GraphFilesWidth, 180, 480 ) ) : new GridLength( 0 );
 	}
 
@@ -775,12 +788,5 @@ public sealed partial class DependencyGraphView : Page
 		UIStorage.WorkspaceLayout.GraphFilesWidth = next;
 	}
 
-	private void GraphSplitter_DragCompleted()
-	{
-		try
-		{
-			UIStorage.Save();
-		}
-		catch { }
-	}
+	private void GraphSplitter_DragCompleted() => UIStorage.SaveSafe();
 }

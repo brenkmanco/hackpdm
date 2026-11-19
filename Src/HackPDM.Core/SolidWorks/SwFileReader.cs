@@ -24,7 +24,7 @@ public sealed partial class SwFileReader : ISwDocumentReader
 				throw new InvalidDataException( $"not a recognised SolidWorks file format: {fileName}" );
 			return store;
 		}
-		catch( Exception e ) when( noInterrupt && e is IOException or UnauthorizedAccessException or InvalidDataException )
+		catch( Exception e ) when( noInterrupt && e is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentOutOfRangeException )
 		{
 			return null;
 		}
@@ -47,7 +47,7 @@ public sealed partial class SwFileReader : ISwDocumentReader
 	{
 		if( OpenStore( fileName, noInterrupt ) is not { } store )
 			return null;
-		return [ .. GetReferences( store, Path.GetFileName( fileName ) ).Select( path => new[] { FileNameOf( path ), path } ) ];
+		return [ .. GetReferences( store, Path.GetFileName( fileName ) ).Select( path => new[] { SwReferenceResolver.FileName( path ), path } ) ];
 	}
 
 	/// <summary>
@@ -68,13 +68,11 @@ public sealed partial class SwFileReader : ISwDocumentReader
 	/// <item>Otherwise the component tree itself.</item>
 	/// </list>
 	/// </remarks>
-	private static readonly char[] PathSeparators = [ '\\', '/' ];
-
 	public static List<string> GetReferences( SwStreamStore store, string? ownFileName = null )
 	{
 		var paths = new List<string>();
 		var seen = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
-		bool IsSelf( string path ) => ownFileName is not null && FileNameOf( path ).Equals( ownFileName, StringComparison.OrdinalIgnoreCase );
+		bool IsSelf( string path ) => ownFileName is not null && SwReferenceResolver.FileName( path ).Equals( ownFileName, StringComparison.OrdinalIgnoreCase );
 		void AddAll( IEnumerable<string> found )
 		{
 			foreach( string path in found )
@@ -117,7 +115,7 @@ public sealed partial class SwFileReader : ISwDocumentReader
 		return paths;
 	}
 
-	[GeneratedRegex( @"(?:[\x20-\x7E]\x00)+?\.\x00[sS]\x00[lL]\x00[dD]\x00(?:[pP]\x00[rR]\x00[tT]|[aA]\x00[sS]\x00[mM]|[dD]\x00[rR]\x00[wW])\x00" )]
+	[GeneratedRegex( @"(?:[\x20-\x7E\xA0-\xFF]\x00)+?\.\x00[sS]\x00[lL]\x00[dD]\x00(?:[pP]\x00[rR]\x00[tT]|[aA]\x00[sS]\x00[mM]|[dD]\x00[rR]\x00[wW])\x00" )]
 	private static partial Regex Utf16PathPattern();
 
 	/// <summary>UTF-16 strings ending in a SolidWorks extension, in order.</summary>
@@ -138,9 +136,6 @@ public sealed partial class SwFileReader : ISwDocumentReader
 			if( file.Attribute( "swPath" )?.Value is { Length: > 0 } path )
 				yield return path;
 	}
-
-	private static string FileNameOf( string storedPath )
-		=> storedPath[ ( storedPath.LastIndexOfAny( PathSeparators ) + 1 ).. ];
 
 	#endregion
 
@@ -219,10 +214,10 @@ public sealed partial class SwFileReader : ISwDocumentReader
 		var configStreams = new SortedDictionary<int, (string Name, bool Xml)>();
 		foreach( string name in store.Names )
 		{
-			if( ConfigXmlStream().Match( name ) is { Success: true } x )
-				configStreams[ int.Parse( x.Groups[ 1 ].Value, CultureInfo.InvariantCulture ) ] = ( name, true );
-			else if( ConfigOleStream().Match( name ) is { Success: true } o )
-				configStreams.TryAdd( int.Parse( o.Groups[ 1 ].Value, CultureInfo.InvariantCulture ), ( name, false ) );
+			if( ConfigXmlStream().Match( name ) is { Success: true } x && int.TryParse( x.Groups[ 1 ].Value, CultureInfo.InvariantCulture, out int xIdx ) )
+				configStreams[ xIdx ] = ( name, true );
+			else if( ConfigOleStream().Match( name ) is { Success: true } o && int.TryParse( o.Groups[ 1 ].Value, CultureInfo.InvariantCulture, out int oIdx ) )
+				configStreams.TryAdd( oIdx, ( name, false ) );
 		}
 		if( configStreams.Count == 0 )
 			return result;
@@ -337,10 +332,29 @@ public sealed partial class SwFileReader : ISwDocumentReader
 				OlePropertySet.VarType.I2 or OlePropertySet.VarType.I4 or OlePropertySet.VarType.Int
 					or OlePropertySet.VarType.UI4 or OlePropertySet.VarType.UInt or OlePropertySet.VarType.I8
 					or OlePropertySet.VarType.R4 or OlePropertySet.VarType.R8
-					=> ( "number", (object)System.Convert.ToDecimal( value, CultureInfo.InvariantCulture ) ),
+					=> TryToDecimal( value, out decimal num ) ? ( "number", (object)num ) : ( "", value ),
 				_ => ( "", value ),
 			};
 			yield return new( configuration, name, type, converted );
+		}
+	}
+
+	private static bool TryToDecimal( object value, out decimal result )
+	{
+		if( value is double d && !double.IsFinite( d ) || value is float f && !float.IsFinite( f ) )
+		{
+			result = 0;
+			return false;
+		}
+		try
+		{
+			result = System.Convert.ToDecimal( value, CultureInfo.InvariantCulture );
+			return true;
+		}
+		catch( Exception e ) when( e is OverflowException or FormatException or InvalidCastException )
+		{
+			result = 0;
+			return false;
 		}
 	}
 

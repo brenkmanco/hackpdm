@@ -21,6 +21,8 @@ namespace HackPDM;
 /// <summary>Composition root wiring concrete core services, theme service, session state, and view models.</summary>
 public static class AppComposition
 {
+	private static LocalFileWatcher? _localFiles;
+
 	public static JsonFileSettingsProvider Settings => field ??= AppSettingsStore.Open();
 	public static IDialogService Dialogs => field ??= new DialogService();
 	public static IFilePickerService FilePickers => field ??= new FilePickerService();
@@ -28,18 +30,28 @@ public static class AppComposition
 	public static ThemeService Theme => field ??= new();
 	public static StatusWindowReporter Reporter => field ??= new( Dialogs, () => StatusLog );
 	public static IPdmWorkflowService Workflow => field ??= new PdmWorkflowService( Reporter );
+	public static IEntryFileService EntryFiles => field ??= new EntryFileService();
+	public static IEntryDetailsService EntryDetails => field ??= new EntryDetailsService();
 	public static LoginSession Session => field ??= CreateSession();
 	public static FileManagerState FileManagerState => field ??= new();
-	public static LocalFileWatcher LocalFiles => field ??= CreateLocalFileWatcher();
-	public static StatusDialogViewModel StatusLog => field ??= new( Dialogs, () => Reporter.Cancel() );
+	public static LocalFileWatcher LocalFiles => _localFiles ??= CreateLocalFileWatcher();
+	public static StatusDialogViewModel StatusLog => field ??= new( Dialogs, () => Reporter.Cancel(), () => Reporter.CancelSilent() );
 
 	public static SearchOdooViewModel SearchOdoo => field ??= new(
 		new EntrySearchService(),
 		Workflow,
-		new EntryFileService(),
+		EntryFiles,
 		Dialogs,
 		Reporter,
 		LocateInFileManagerAsync );
+
+	public static void DisposeLocalFilesIfCreated()
+	{
+		if( _localFiles is not { } watcher )
+			return;
+		_localFiles = null;
+		watcher.Dispose();
+	}
 
 	public static void Initialize( DispatcherQueue queue )
 		=> UiDispatcher.Current = new DispatcherQueueUiDispatcher( queue );
@@ -48,12 +60,13 @@ public static class AppComposition
 	{
 		_ = new HackDefaults( Settings );
 		_ = new OdooDefaults( Settings );
-		if( Settings.Get<string>( "TemporaryPath" ) is { Length: > 0 } tempPath )
+		if( Settings.Get<string>( nameof( PdmConstants.TemporaryPath ) ) is { Length: > 0 } tempPath )
 			PdmConstants.TemporaryPath = tempPath;
 	}
 
 	public static void OnVaultPathChanged()
 	{
+		EntryIcons.ClearServerCache();
 		LocalFiles.Watch( PwaPaths.Vault );
 		FileManagerState.Reset();
 	}
@@ -64,8 +77,8 @@ public static class AppComposition
 	public static HackFileManagerViewModel CreateFileManager() => new(
 		FileManagerState,
 		Workflow,
-		new EntryFileService(),
-		new EntryDetailsService(),
+		EntryFiles,
+		EntryDetails,
 		Dialogs,
 		Reporter,
 		new DirectoryTreeService(),

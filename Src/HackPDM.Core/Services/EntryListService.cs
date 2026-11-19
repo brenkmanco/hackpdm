@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
@@ -26,6 +28,7 @@ public interface IEntryListService
 
 public sealed class EntryListService : IEntryListService
 {
+	private const int MaxCachedChecksums = 10_000;
 	private static readonly int HashConcurrency = Math.Clamp( Environment.ProcessorCount, 2, 8 );
 	private static readonly int[] RetryDelaysMs = [ 200, 400, 800 ];
 	private static readonly EnumerationOptions LocalFilesOptions = new()
@@ -35,9 +38,9 @@ public sealed class EntryListService : IEntryListService
 		ReturnSpecialDirectories = false,
 		AttributesToSkip = FileAttributes.None,
 	};
-	private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
-		? StringComparer.OrdinalIgnoreCase
-		: StringComparer.Ordinal;
+
+	private readonly record struct CachedChecksum( long Length, long LastWriteUtcTicks, string Sha1 );
+	private readonly ConcurrentDictionary<string, CachedChecksum> _checksumCache = new( PwaPaths.PathComparer );
 
 	public Task<EntryListResult> LoadAsync( int? directoryId, string? treePath, bool includeDeleted, bool filterUnknownTypes, CancellationToken token )
 		=> LoadAsync( directoryId, treePath, includeDeleted, filterUnknownTypes, progress: null, token );
@@ -53,7 +56,7 @@ public sealed class EntryListService : IEntryListService
 		string localFolder = PwaPaths.ToAbsolute( treePath ) ?? PwaPaths.Vault;
 		Task<Dictionary<string, FileInfo>> localScanTask = treePath is not null
 			? Task.Run( () => ScanLocalDirectory( localFolder ), token )
-			: Task.FromResult( new Dictionary<string, FileInfo>( PathComparer ) );
+			: Task.FromResult( new Dictionary<string, FileInfo>( PwaPaths.PathComparer ) );
 
 		IReadOnlyList<RemoteEntryDto>? remote = null;
 		if( directoryId is int id and not 0 )
@@ -70,7 +73,7 @@ public sealed class EntryListService : IEntryListService
 		token.ThrowIfCancellationRequested();
 
 		List<EntryRow> rows = new( ( remote?.Count ?? 0 ) + localFilesByPath.Count );
-		HashSet<string> matchedLocalPaths = new( PathComparer );
+		HashSet<string> matchedLocalPaths = new( PwaPaths.PathComparer );
 		HackFile?[]? resolvedLocals = null;
 		string? folderRelPath = remote is { Count: > 0 } || localFilesByPath.Count > 0
 			? BuildRelativeFolderPath( localFolder )
@@ -151,7 +154,7 @@ public sealed class EntryListService : IEntryListService
 
 	private static Dictionary<string, FileInfo> ScanLocalDirectory( string folderPath )
 	{
-		Dictionary<string, FileInfo> files = new( PathComparer );
+		Dictionary<string, FileInfo> files = new( PwaPaths.PathComparer );
 		if( string.IsNullOrEmpty( folderPath ) || !Directory.Exists( folderPath ) )
 			return files;
 
@@ -167,11 +170,38 @@ public sealed class EntryListService : IEntryListService
 		catch { return null; }
 	}
 
-	private static HackFile CreateHackFileFromInfo( FileInfo fileInfo, string? relativeFolder, bool computeChecksum )
+	private HackFile CreateHackFileFromInfo( FileInfo fileInfo, string? relativeFolder, bool computeChecksum )
 	{
-		HackFile hack = new( fileInfo, computeChecksum );
+		if( !computeChecksum || !fileInfo.Exists )
+		{
+			HackFile unhashed = new( fileInfo, computeChecksum: false );
+			if( relativeFolder is not null )
+				unhashed.RelativePath = relativeFolder;
+			return unhashed;
+		}
+
+		long length = fileInfo.Length;
+		long ticks = fileInfo.LastWriteTimeUtc.Ticks;
+		string path = fileInfo.FullName;
+		if( _checksumCache.TryGetValue( path, out CachedChecksum cached )
+			&& cached.Length == length
+			&& cached.LastWriteUtcTicks == ticks )
+		{
+			HackFile reused = new( fileInfo, computeChecksum: false ) { Checksum = cached.Sha1 };
+			if( relativeFolder is not null )
+				reused.RelativePath = relativeFolder;
+			return reused;
+		}
+
+		HackFile hack = new( fileInfo, computeChecksum: true );
 		if( relativeFolder is not null )
 			hack.RelativePath = relativeFolder;
+		if( hack.Checksum is { } sha1 )
+		{
+			if( _checksumCache.Count >= MaxCachedChecksums )
+				_checksumCache.Clear();
+			_checksumCache[ path ] = new CachedChecksum( length, ticks, sha1 );
+		}
 		return hack;
 	}
 
@@ -192,7 +222,7 @@ public sealed class EntryListService : IEntryListService
 		HpUser? checkout = entry.CheckoutUserId is int userId ? defaults.IdToUser.GetValueOrDefault( userId ) : null;
 		FileStatus status = EntryStatusResolver.ResolveRemote(
 			deleted: entry.Deleted,
-			checkoutUserId: checkout?.id,
+			checkoutUserId: entry.CheckoutUserId,
 			myUserId: defaults.OdooId,
 			latestChecksum: entry.LatestChecksum ?? (object)false,
 			localChecksum: local?.Checksum,
@@ -245,7 +275,7 @@ public sealed class EntryListService : IEntryListService
 			restrictTypes: defaults.RestrictTypes is true,
 			filtered: filterUnknownTypes,
 			knownType: defaults.ExtToType.ContainsKey( extension ),
-			ignored: defaults.ExtToFilter.ContainsKey( extension ) );
+			ignored: CommitOperations.IsFilteredName( file.Name ) );
 
 		return new EntryRow
 		{

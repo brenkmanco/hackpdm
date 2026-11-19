@@ -7,41 +7,40 @@ namespace HackPDM.Core.Pdm;
 /// <summary>Single-version downloads, previews, local lookup, and file moves.</summary>
 public static class VersionFileService
 {
-	private const string FileContents = "file_contents";
-	private const string PreviewImage = "preview_image";
+	private const string FileContents = nameof( HpVersion.file_contents );
+	private const string PreviewImage = nameof( HpVersion.preview_image );
 
 	public static async Task<(bool, HpVersion?)> GetVersionFromLocal( this HackFile hackFile )
 	{
 		string folder = hackFile.RelativePath is { Length: > 0 } relative
 			? string.Join( PwaPaths.DirectorySeparator, [ PwaPaths.Root, .. PwaPaths.Segments( relative ) ] )
 			: PwaPaths.ToServerDirectory( hackFile.DirectoryName ?? Path.GetDirectoryName( hackFile.FullPath ) ) ?? PwaPaths.Root;
-		OdooDomain sameFile = OdooDomain.Where( "name", hackFile.Name ).And( "directory_complete_name", folder );
+		OdooDomain sameFile = OdooDomain.Where( nameof( HpVersion.name ), hackFile.Name ).And( "directory_complete_name", folder );
 		HpVersion? version = ( await HpVersion.GetRecordsBySearchAsync( sameFile, excludedFields: [ FileContents, PreviewImage ] ) )?[ 0 ];
 		return ( version is not null, version );
 	}
 
-	public static async Task<bool> GetPreviewImage( this HpVersion version )
-	{
-		if( version.preview_image is not { Length: > 0 } && version.id is int id and not 0 )
-		{
-			Result<IReadOnlyList<OdooRow>> rows = await OdooRpc.ReadAsync( HpVersion.ModelName, [ id ], [ PreviewImage ] );
-			if( rows.Value is [ var row, .. ] && row.Text( PreviewImage ) is { Length: > 0 } b64 )
-				version.preview_image = Convert.FromBase64String( b64 );
-		}
-		return version.preview_image is { Length: > 0 };
-	}
-
 	public static async Task<byte[]?> DownloadContentsAsync( this HpVersion version )
 	{
-		if( version.file_size == 0 || version.id is not int id || id == 0 )
+		if( version.id is not int id || id == 0 )
 			return null;
+		if( version.file_size == 0 )
+			return [];
 		if( ContentTransfer.IsLarge( version.file_size ) )
 			return ( await ContentTransfer.DownloadBytesAsync( version ) ).Value;
 
 		Result<IReadOnlyList<OdooRow>> rows = await OdooRpc.ReadAsync( HpVersion.ModelName, [ id ], [ FileContents ] );
-		return rows.Value is [ var row, .. ] && row.Text( FileContents ) is { Length: > 0 } b64
-			? Convert.FromBase64String( b64 )
-			: null;
+		if( rows.Value is not [ var row, .. ] || row.Text( FileContents ) is not { Length: > 0 } b64 )
+			return null;
+		try
+		{
+			return Convert.FromBase64String( b64 );
+		}
+		catch( FormatException ex )
+		{
+			HackLogger.Warn( nameof( VersionFileService ), $"Invalid base64 payload for version {id}: {ex.Message}", ex );
+			return null;
+		}
 	}
 
 	public static string LocalDirectory( this HpVersion version )
@@ -57,18 +56,24 @@ public static class VersionFileService
 
 	public static async Task<bool> DownloadFileAsync( this HpVersion version, string toPath )
 	{
+		if( string.IsNullOrEmpty( version.name ) )
+			return false;
 		if( !Directory.Exists( toPath ) && !Directory.CreateDirectory( toPath ).Exists )
 			return false;
-		byte[]? contents = version.file_contents ?? await version.DownloadContentsAsync();
-		if( contents is { Length: > 0 } )
-		{
-			LocalFileWriter.Write( new HackFile( version.name!, null ) { FileContents = contents, DirectoryName = toPath } );
-			version.file_contents = null;
-		}
-		else if( version.file_size is not ( null or 0 ) )
-		{
+		byte[]? contents = version.file_contents ?? ( version.file_size == 0 ? [] : await version.DownloadContentsAsync() );
+		if( contents is null )
 			return false;
-		}
+		HackFile hack = new( version.name, null )
+		{
+			FileContents = contents,
+			DirectoryName = toPath,
+			Owner = version.checkout_user?.id is not null ? OdooDefaults.Instance?.OdooId == version.checkout_user.id : null,
+		};
+		hack.SetModifiedDate( version.file_modify_stamp ?? default );
+		bool wrote = LocalFileWriter.Write( hack ) is not null;
+		version.file_contents = null;
+		if( !wrote )
+			return false;
 		version.WinPathway = toPath;
 		return true;
 	}
@@ -84,35 +89,15 @@ public static class VersionFileService
 		return failed;
 	}
 
-	public static bool MoveFile( this HpVersion version, string toPath )
-	{
-		try
-		{
-			if( !Directory.Exists( toPath ) && !Directory.CreateDirectory( toPath ).Exists )
-				return false;
-			FileInfo file = new( Path.Combine( version.WinPathway!, version.name! ) );
-			if( !file.Exists )
-				return false;
-			file.MoveTo( Path.Combine( toPath, version.name! ) );
-			version.WinPathway = toPath;
-			return true;
-		}
-		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or ArgumentException )
-		{
-			HackLogger.Warn( "VersionFileService", $"Could not move '{version.name}' to '{toPath}': {ex.Message}", ex );
-			return false;
-		}
-	}
-
 	public static HackFile ToHackFile( this HpVersion version, bool contentsInFile = false )
 	{
 		HackFile hack = new( version.name!, null )
 		{
 			Owner = version.checkout_user?.id is not null ? OdooDefaults.Instance?.OdooId == version.checkout_user.id : null,
 		};
-		if( version.file_contents is not { Length: > 0 } && !contentsInFile )
+		if( version.file_contents is not { Length: > 0 } && !contentsInFile && version.file_size != 0 )
 			return hack;
-		hack.FileContents = version.file_contents;
+		hack.FileContents = version.file_contents ?? ( contentsInFile ? null : [] );
 		hack.DirectoryName = version.WinPathway;
 		hack.SetModifiedDate( version.file_modify_stamp ?? default );
 		hack.FileSize = version.file_size;

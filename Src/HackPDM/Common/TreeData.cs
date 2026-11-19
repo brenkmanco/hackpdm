@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
 
 using HackPDM.Core.Pdm;
@@ -12,7 +10,6 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
-using Microsoft.UI.Xaml.Media;
 
 using Windows.UI.Text;
 
@@ -48,7 +45,6 @@ public sealed partial class TreeData( string? name ) : INotifyPropertyChanged
 	public TreeView? ParentTree { get; internal set; }
 	public TreeViewNode? Node { get; internal set; }
 	public TreeData? Parent => Node?.Depth <= 0 ? null : Node?.Parent?.LinkedData;
-	public ImageSource? Icon { get; set; }
 	public int? DirectoryId { get; set; }
 	public FolderOriginKind Origin { get; internal set; }
 
@@ -128,23 +124,6 @@ public sealed partial class TreeData( string? name ) : INotifyPropertyChanged
 		}
 	}
 
-	public bool? IsRemote => Node is null ? null : DirectoryId is not null and not 0;
-
-	public bool? IsLocal
-	{
-		get
-		{
-			if( Node is null )
-				return null;
-			if( DirectoryId is null or 0 )
-				return true;
-			return PwaPaths.ToAbsolute( FullPath ) is { } path && Directory.Exists( path );
-		}
-	}
-
-	public bool? IsLocalOnly => Node is null ? null : IsLocal is true && IsRemote is false;
-	public bool? IsRemoteOnly => Node is null ? null : IsRemote is true && IsLocal is false;
-
 	internal void SetBranchState( bool isLastSibling, bool[] ancestorContinuations, bool recursive = false, int siblingIndex = 0, string? parentFullPath = null )
 	{
 		SiblingIndex = siblingIndex;
@@ -207,10 +186,7 @@ public static class TreeViewExtensions
 				TreeData? content = node.Content as TreeData;
 				LinkedNodeData.TryGetValue( node, out TreeData? linked );
 				if( linked is not null && content is not null && linked != content )
-				{
 					linked.Name ??= content.Name;
-					linked.Icon ??= content.Icon;
-				}
 				linked ??= content ?? new( "" );
 				LinkedNodeData.AddOrUpdate( node, linked );
 				linked.Node = node;
@@ -224,14 +200,31 @@ public static class TreeViewExtensions
 	{
 		public void UpdateBreadCrumbCollection( ObservableCollection<TreeData>? collection )
 		{
-			collection?.Clear();
-			if( node is null || collection is null )
+			if( collection is null )
 				return;
-			foreach( TreeViewNode step in node.GetNodePath() )
-				collection.Add( step.LinkedData );
+			if( node is null )
+			{
+				if( collection is RangeObservableCollection<TreeData> range )
+					range.ClearIfNonEmpty();
+				else
+					collection.Clear();
+				return;
+			}
+			List<TreeViewNode> steps = node.GetNodePath();
+			if( collection is RangeObservableCollection<TreeData> rangeCol )
+			{
+				List<TreeData> items = new( steps.Count );
+				for( int i = 0; i < steps.Count; i++ )
+					items.Add( steps[ i ].LinkedData );
+				rangeCol.ReplaceAll( items );
+				return;
+			}
+			collection.Clear();
+			for( int i = 0; i < steps.Count; i++ )
+				collection.Add( steps[ i ].LinkedData );
 		}
 
-		public IEnumerable<TreeViewNode> GetNodePath()
+		public List<TreeViewNode> GetNodePath()
 		{
 			List<TreeViewNode> path = [];
 			for( TreeViewNode? current = node; current is { Depth: >= 0 }; current = current.Parent )
@@ -312,12 +305,8 @@ internal static class DirectoryTreeBuilder
 {
 	public static void Build( TreeView tree, DirectoryNode root, IReadOnlySet<string>? expandedPaths = null, bool expandAll = false )
 	{
-		ImageSource? localIcon = EntryIcons.Asset( "fo_loc" );
-		ImageSource? bothIcon = EntryIcons.Asset( "def_fo" );
-		ImageSource? serverIcon = EntryIcons.Asset( "fo_serv" );
-
 		tree.RootNodes.Clear();
-		TreeViewNode rootNode = CreateNode( tree, root, parentPath: null, localIcon, bothIcon, serverIcon, expandedPaths, expandAll );
+		TreeViewNode rootNode = CreateNode( tree, root, parentPath: null, expandedPaths, expandAll );
 		tree.RootNodes.Add( rootNode );
 		rootNode.LinkedData.SetBranchState( isLastSibling: true, [], recursive: true );
 	}
@@ -326,9 +315,6 @@ internal static class DirectoryTreeBuilder
 		TreeView tree,
 		DirectoryNode directory,
 		string? parentPath,
-		ImageSource? localIcon,
-		ImageSource? bothIcon,
-		ImageSource? serverIcon,
 		IReadOnlySet<string>? expandedPaths,
 		bool expandAll )
 	{
@@ -343,17 +329,11 @@ internal static class DirectoryTreeBuilder
 			: directory.ExistsLocally
 				? FolderOriginKind.Synced
 				: FolderOriginKind.RemoteOnly;
-		data.Icon = data.Origin switch
-		{
-			FolderOriginKind.LocalOnly => localIcon,
-			FolderOriginKind.RemoteOnly => serverIcon,
-			_ => bothIcon,
-		};
 
 		if( directory.Children.Count > 0 )
 		{
 			for( int i = 0; i < directory.Children.Count; i++ )
-				node.Children.Add( CreateNode( tree, directory.Children[ i ], fullPath, localIcon, bothIcon, serverIcon, expandedPaths, expandAll ) );
+				node.Children.Add( CreateNode( tree, directory.Children[ i ], fullPath, expandedPaths, expandAll ) );
 			if( expandAll || ( expandedPaths is not null && expandedPaths.Contains( fullPath ) ) )
 				node.IsExpanded = true;
 		}

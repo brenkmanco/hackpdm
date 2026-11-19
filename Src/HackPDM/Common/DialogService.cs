@@ -53,9 +53,6 @@ public sealed class DialogService : IDialogService
 			createPage: () => new StatusDialogView(),
 			getMinimal: () => UIStorage.WorkspaceLayout.StatusMinimalMode,
 			setMinimal: v => UIStorage.WorkspaceLayout.StatusMinimalMode = v,
-			setWindow: ( p, w ) => p.ParentWindow = w,
-			setHostMode: ( p, docked ) => p.SetHostMode( docked ),
-			setPageMinimal: ( p, minimal ) => p.SetMinimalMode( minimal ),
 			isDrawerOpen: h => h.IsStatusDrawerOpen,
 			showDocked: ( h, p ) => h.ShowStatusPanel( p ),
 			hideDocked: h => h.HideStatusPanelImmediate(),
@@ -68,9 +65,6 @@ public sealed class DialogService : IDialogService
 			createPage: () => new SearchOdooView(),
 			getMinimal: () => UIStorage.WorkspaceLayout.SearchMinimalMode,
 			setMinimal: v => UIStorage.WorkspaceLayout.SearchMinimalMode = v,
-			setWindow: ( p, w ) => p.StoreWindowInstance( w ),
-			setHostMode: ( p, docked ) => p.SetHostMode( docked ),
-			setPageMinimal: ( p, minimal ) => p.SetMinimalMode( minimal ),
 			isDrawerOpen: h => h.IsSearchDrawerOpen,
 			showDocked: ( h, p ) => h.ShowSearchPanel( p ),
 			hideDocked: h => h.HideSearchPanelImmediate(),
@@ -114,18 +108,14 @@ public sealed class DialogService : IDialogService
 		Func<TPage> createPage,
 		Func<bool> getMinimal,
 		Action<bool> setMinimal,
-		Action<TPage, Window?> setWindow,
-		Action<TPage, bool> setHostMode,
-		Action<TPage, bool> setPageMinimal,
 		Func<HomeView, bool> isDrawerOpen,
 		Action<HomeView, TPage> showDocked,
 		Action<HomeView> hideDocked,
 		Func<HomeView, TPage?> takeForDetach,
 		Action<HomeView> refreshDocked,
-		Func<bool>? canOpen = null ) where TPage : Page
+		Func<bool>? canOpen = null ) where TPage : Page, IDockablePanel
 	{
 		private Window? _window;
-		private bool _reattaching;
 
 		public TPage? CurrentPage { get; private set; }
 
@@ -185,10 +175,10 @@ public sealed class DialogService : IDialogService
 			TPage page = ( HackApp.HomePage is { } home ? takeForDetach( home ) : null ) ?? CurrentPage ?? createPage();
 			CurrentPage = page;
 			Window window = WindowHelper.CreateWindowForExistingPage( page );
-			setWindow( page, window );
-			setHostMode( page, false );
+			page.HostWindow = window;
+			page.SetHostMode( isDocked: false );
 			bool minimal = getMinimal();
-			setPageMinimal( page, minimal );
+			page.SetMinimalMode( minimal );
 			if( minimal )
 				ApplyMinimalSize( window );
 			_window = window;
@@ -199,8 +189,7 @@ public sealed class DialogService : IDialogService
 		{
 			setMinimal( minimal );
 			UIStorage.SaveSafe();
-			if( CurrentPage is { } page )
-				setPageMinimal( page, minimal );
+			CurrentPage?.SetMinimalMode( minimal );
 			if( _window is { } win )
 			{
 				if( minimal )
@@ -224,7 +213,6 @@ public sealed class DialogService : IDialogService
 			if( HackApp.HomePage is not { } home )
 				return;
 
-			_reattaching = true;
 			win.Closed -= OnClosed;
 			if( win.Content is Frame frame )
 				frame.Content = null;
@@ -232,7 +220,6 @@ public sealed class DialogService : IDialogService
 			WindowHelper.UnregisterPageWindow( page );
 			_window = null;
 			win.Close();
-			_reattaching = false;
 
 			showDocked( home, page );
 			HackApp.Window?.Activate();
@@ -242,10 +229,8 @@ public sealed class DialogService : IDialogService
 		{
 			if( sender is Window win )
 				win.Closed -= OnClosed;
-			if( _reattaching )
-				return;
 			if( CurrentPage is not null )
-				setWindow( CurrentPage, null );
+				CurrentPage.HostWindow = null;
 			CurrentPage = null;
 			_window = null;
 		}

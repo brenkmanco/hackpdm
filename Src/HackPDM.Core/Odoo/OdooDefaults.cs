@@ -11,32 +11,61 @@ namespace HackPDM.Core.Odoo;
 /// <summary>Connection settings backed by local JSON settings and the OS credential store.</summary>
 public sealed class OdooConnectionSettings( ISettingsProvider? settings )
 {
+	private ISettingsProvider? _settings = settings;
+	private string? _user;
+	private string? _pass;
+	private string? _address;
+	private string? _port;
+	private string? _db;
 	private bool? _useHttps;
+	private string? _url;
+	private string? _swKey;
+	private decimal? _areaFactor;
+	private string? _credentialTarget;
 
-	public ISettingsProvider? Settings { get; set; } = settings;
+	public ISettingsProvider? Settings
+	{
+		get => _settings;
+		set
+		{
+			if( ReferenceEquals( _settings, value ) )
+				return;
+			_settings = value;
+			_user = null;
+			_pass = null;
+			_address = null;
+			_port = null;
+			_db = null;
+			_useHttps = null;
+			_url = null;
+			_swKey = null;
+			_areaFactor = null;
+			_credentialTarget = null;
+		}
+	}
 
 	public string? OdooUser
 	{
 		get
 		{
-			if( !string.IsNullOrEmpty( field ) )
-				return field;
+			if( !string.IsNullOrEmpty( _user ) )
+				return _user;
 			var cm = CrossPlatformCredentialManager.ReadCredential( OdooCredentialTarget ?? PdmConstants.DefaultOdooCredentials );
-			return field = cm?.UserName;
+			return _user = cm?.UserName;
 		}
-		set;
+		set => _user = value;
 	}
 
 	public string? OdooPass
 	{
 		get
 		{
-			if( field is not null )
-				return field;
+			if( _pass is not null )
+				return _pass;
 			var cm = CrossPlatformCredentialManager.ReadCredential( OdooCredentialTarget ?? PdmConstants.DefaultOdooCredentials );
-			return field = cm?.Password;
+			return _pass = cm?.Password;
 		}
-		set;
+		set => _pass = value;
 	}
 
 	public bool SaveCredentials()
@@ -55,50 +84,74 @@ public sealed class OdooConnectionSettings( ISettingsProvider? settings )
 
 	public string? OdooAddress
 	{
-		get => field ??= Settings?.Get<string>( "OdooAddress" );
-		set => Settings?.Set( "OdooAddress", field = value );
+		get => _address ??= _settings?.Get<string>( nameof( OdooAddress ) );
+		set
+		{
+			_address = value;
+			_url = null;
+			_settings?.Set( nameof( OdooAddress ), value );
+		}
 	}
 
 	public string? OdooPort
 	{
-		get => field ??= Settings?.Get<string>( "OdooPort" );
-		set => Settings?.Set( "OdooPort", field = value );
+		get => _port ??= _settings?.Get<string>( nameof( OdooPort ) );
+		set
+		{
+			_port = value;
+			_url = null;
+			_settings?.Set( nameof( OdooPort ), value );
+		}
 	}
 
 	public string? OdooDb
 	{
-		get => field ??= Settings?.Get<string>( "OdooDb" );
-		set => Settings?.Set( "OdooDb", field = value );
+		get => _db ??= _settings?.Get<string>( nameof( OdooDb ) );
+		set => _settings?.Set( nameof( OdooDb ), _db = value );
 	}
 
 	public bool OdooUseHttps
 	{
-		get => _useHttps ??= Settings?.Get( "OdooUseHttps", true ) ?? true;
-		set => Settings?.Set( "OdooUseHttps", ( _useHttps = value ).Value );
+		get => _useHttps ??= _settings?.Get( nameof( OdooUseHttps ), true ) ?? true;
+		set
+		{
+			_useHttps = value;
+			_url = null;
+			_settings?.Set( nameof( OdooUseHttps ), value );
+		}
 	}
 
 	public string? OdooUrl
 	{
-		get => field ??= OdooEndpoint.BuildUrl( OdooAddress, OdooPort, OdooUseHttps );
-		set;
+		get => _url ??= OdooEndpoint.BuildUrl( OdooAddress, OdooPort, OdooUseHttps );
+		set => _url = value;
 	}
 
 	public string? OdooSwKey
 	{
-		get => field ??= Settings?.Get<string>( "SwLicenseKey" );
-		set => Settings?.Set( "SwLicenseKey", field = value );
+		get => _swKey ??= _settings?.Get<string>( "SwLicenseKey" );
+		set => _settings?.Set( "SwLicenseKey", _swKey = value );
 	}
 
 	public decimal? OdooAreaFactor
 	{
-		get => field ??= Settings?.Get<decimal>( "AreaFactor" );
-		set => Settings?.Set( "AreaFactor", field = value );
+		get => _areaFactor ??= _settings?.Get<decimal?>( "AreaFactor" );
+		set => _settings?.Set( "AreaFactor", _areaFactor = value );
 	}
 
 	public string? OdooCredentialTarget
 	{
-		get => field ??= Settings?.Get( "OdooCredentialTarget", PdmConstants.DefaultOdooCredentials );
-		set => Settings?.Set( "OdooCredentialTarget", field = value );
+		get => _credentialTarget ??= _settings?.Get( nameof( OdooCredentialTarget ), PdmConstants.DefaultOdooCredentials );
+		set
+		{
+			if( !string.Equals( _credentialTarget, value, StringComparison.Ordinal ) )
+			{
+				_user = null;
+				_pass = null;
+			}
+			_credentialTarget = value;
+			_settings?.Set( nameof( OdooCredentialTarget ), value );
+		}
 	}
 }
 
@@ -143,7 +196,7 @@ public sealed record OdooLookupCache
 
 	public static async Task<OdooLookupCache> LoadAsync( IProgress<string>? progress )
 	{
-		string machine = Environment.MachineName.ToLower();
+		string machine = Environment.MachineName.ToLowerInvariant();
 		HpNode[]? nodes = null;
 		HpNode? myNode = null;
 		HpDirectory? root = null;
@@ -167,7 +220,7 @@ public sealed record OdooLookupCache
 			TryAsync( async () => filters = await HpEntryNameFilter.GetAllRecordsAsync() ),
 			TryAsync( async () => { settings = await HpSetting.GetAllRecordsAsync(); settingsRead = true; } ) );
 
-		myNode = nodes?.FirstOrDefault( node => node.name?.Equals( machine ) is true );
+		myNode = nodes?.FirstOrDefault( node => string.Equals( node.name, machine, StringComparison.OrdinalIgnoreCase ) );
 		if( myNode is null && nodesRead )
 		{
 			progress?.Report( $"Registering workstation node '{machine}'…" );
@@ -231,15 +284,25 @@ public sealed record OdooLookupCache
 	{
 		if( patterns is not { Length: > 0 } )
 			return null;
-		List<string>? nonEmpty = null;
+		List<string>? valid = null;
 		for( int i = 0; i < patterns.Length; i++ )
 		{
-			if( !string.IsNullOrEmpty( patterns[ i ] ) )
-				( nonEmpty ??= new( patterns.Length ) ).Add( patterns[ i ] );
+			string pattern = patterns[ i ];
+			if( string.IsNullOrEmpty( pattern ) )
+				continue;
+			try
+			{
+				_ = new Regex( pattern, RegexOptions.IgnoreCase );
+				( valid ??= new( patterns.Length ) ).Add( $"(?:{pattern})" );
+			}
+			catch( ArgumentException ex )
+			{
+				HackLogger.Warn( "OdooLookup", $"Ignoring invalid entry filter regex '{pattern}': {ex.Message}" );
+			}
 		}
-		return nonEmpty is null
+		return valid is null
 			? null
-			: new Regex( string.Join( "|", nonEmpty ), RegexOptions.IgnoreCase | RegexOptions.Compiled );
+			: new Regex( string.Join( "|", valid ), RegexOptions.IgnoreCase | RegexOptions.Compiled );
 	}
 
 	private static async Task TryAsync( Func<Task> action )
@@ -343,8 +406,6 @@ public sealed class OdooDefaults
 	public FrozenDictionary<string, HpCategory> NameToCategory => Lookups.NameToCategory;
 	public int DownloadBatchSize => Lookups.DownloadBatchSize;
 	public int ConcurrencySize => Lookups.ConcurrencySize;
-	public int? MaxConcurrency => Lookups.MaxConcurrency;
-	public int? MaxBatchSize => Lookups.MaxBatchSize;
 	public HpSetting[]? HpSettings => Lookups.HpSettings;
 	public string? SwApi => Lookups.SwApi;
 	public bool? RestrictProperties => Lookups.RestrictProperties;

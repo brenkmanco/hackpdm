@@ -24,7 +24,7 @@ public static class OdooRpc
 		"search", "search_read", "read", "search_count", "smart_read", "related_browse",
 		"get_entries", "get_all_entry_ids", "get_children_directories_by_id",
 		"get_recursive_dependency_versions", "get_recursive_dependency_entries",
-		"get_recursive_dependency_entries_by_entries",
+		"get_recursive_dependency_entries_by_entries", "dependency_graph",
 		"read_contents", "upload_chunk", "has_group",
 	}.ToFrozenSet( StringComparer.Ordinal );
 
@@ -37,13 +37,14 @@ public static class OdooRpc
 		return false;
 	}
 
-	private static bool IsTransientTransportError( Exception e )
-		=> e is HttpRequestException http
-			&& http.StatusCode is null
-				or HttpStatusCode.BadGateway
-				or HttpStatusCode.ServiceUnavailable
-				or HttpStatusCode.GatewayTimeout
-				or HttpStatusCode.RequestTimeout;
+	private static bool IsTransientTransportError( Exception e, CancellationToken callerToken )
+		=> ( e is TaskCanceledException && !callerToken.IsCancellationRequested )
+			|| ( e is HttpRequestException http
+				&& http.StatusCode is null
+					or HttpStatusCode.BadGateway
+					or HttpStatusCode.ServiceUnavailable
+					or HttpStatusCode.GatewayTimeout
+					or HttpStatusCode.RequestTimeout );
 
 	public static async Task<Result<JsonElement>> CallAsync(
 		string service,
@@ -88,16 +89,16 @@ public static class OdooRpc
 			{
 				throw;
 			}
-			catch( Exception e ) when( attempt < maxAttempts && IsTransientTransportError( e ) )
+			catch( Exception e ) when( attempt < maxAttempts && IsTransientTransportError( e, token ) )
 			{
 				int delayMs = attempt == 1 ? 250 : 750;
-				HackLogger.Warn( "OdooRpc", $"Transient RPC error on {service}.{method} (attempt {attempt}/{maxAttempts}), retrying in {delayMs}ms: {Describe( e )}" );
+				HackLogger.Warn( nameof( OdooRpc ), $"Transient RPC error on {service}.{method} (attempt {attempt}/{maxAttempts}), retrying in {delayMs}ms: {Describe( e )}" );
 				await Task.Delay( delayMs, token );
 			}
 			catch( Exception e )
 			{
 				string detail = Describe( e );
-				HackLogger.Error( "OdooRpc", $"RPC transport error on {service}.{method}: {detail}", e );
+				HackLogger.Error( nameof( OdooRpc ), $"RPC transport error on {service}.{method}: {detail}", e );
 				return Result<JsonElement>.Fail( detail );
 			}
 		}
@@ -180,13 +181,24 @@ public static class OdooRpc
 		CancellationToken token = default )
 		=> ExecuteAsync<int>( model, "search_count", [ domain ?? OdooDomain.All ], timeoutMs, token );
 
+	public static T[] SliceChunk<T>( IReadOnlyList<T> source, int offset, int maxSize )
+	{
+		int count = Math.Min( maxSize, source.Count - offset );
+		T[] chunk = new T[ count ];
+		for( int i = 0; i < count; i++ )
+			chunk[ i ] = source[ offset + i ];
+		return chunk;
+	}
+
 	public static Task<Result<IReadOnlyList<OdooRow>>> ReadAsync(
 		string model,
 		IReadOnlyList<int> ids,
 		IReadOnlyList<string>? fields = null,
 		int? timeoutMs = null,
 		CancellationToken token = default )
-		=> ExecuteAsync<IReadOnlyList<OdooRow>>( model, "read", [ ids, fields ?? [] ], timeoutMs, token );
+		=> ids.Count == 0
+			? Task.FromResult( Result<IReadOnlyList<OdooRow>>.Success( [] ) )
+			: ExecuteAsync<IReadOnlyList<OdooRow>>( model, "read", [ ids, fields ?? [] ], timeoutMs, token );
 
 	public static Task<Result<IReadOnlyList<OdooRow>>> SearchReadAsync(
 		string model,
@@ -238,7 +250,7 @@ public static class OdooRpc
 	public static Task<Result<int>> CreateCommitAsync( int? timeoutMs = null )
 		=> CreateAsync(
 			HpPDMCommit.ModelName,
-			new Dictionary<string, object?> { [ "node_by" ] = Settings.MyNode?.id ?? 0 },
+			new Dictionary<string, object?> { [ nameof( HpPDMCommit.node_by ) ] = Settings.MyNode?.id ?? 0 },
 			timeoutMs );
 
 	internal static Result<T> Convert<T>( JsonElement json )

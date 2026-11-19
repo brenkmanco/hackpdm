@@ -34,17 +34,18 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	private readonly IEntryListService _entryList;
 	private readonly ILocalFileWatcher _localFiles;
 	private readonly IFilePickerService? _pickers;
-	private readonly Dictionary<string, Func<EntryRow, Task>> _detailTabs;
+	private readonly Dictionary<string, Func<EntryRow, CancellationToken, Task>> _detailTabs;
 	private readonly SemaphoreSlim _localChangesGate = new( 1, 1 );
 	private readonly List<LocalFileChange> _pendingChangesDuringLoad = [];
 	private readonly CancellationTokenSource _pageCancellation = new();
 	private readonly bool _restoring;
 	private readonly string? _selectionFolder;
 
-	private CancellationTokenSource _detailsCancellation = new();
+	private CancellationTokenSource? _detailsCancellation;
 	private IReadOnlyList<string> _selectionToRestore;
 	private Func<EntryRow, IComparable?> _groupKey = GroupByStatus;
 	private int _entriesLoadGeneration;
+	private int _previewVersionGeneration;
 	private bool _active;
 
 	public HackFileManagerViewModel(
@@ -69,11 +70,36 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		_pickers = pickers;
 		_detailTabs = new()
 		{
-			[ PdmConstants.HistoryTab ] = async entry => OHistories.ReplaceAll( await _details.GetHistoryAsync( entry ) ),
-			[ PdmConstants.ParentTab ] = async entry => OParents.ReplaceAll( await _details.GetParentsAsync( entry ) ),
-			[ PdmConstants.ChildTab ] = async entry => OChildren.ReplaceAll( await _details.GetChildrenAsync( entry ) ),
-			[ PdmConstants.PropertiesTab ] = async entry => OProperties.ReplaceAll( await _details.GetPropertiesAsync( entry ) ),
-			[ PdmConstants.InfoTab ] = async entry => OVersions.ReplaceAll( await _details.GetVersionInfoAsync( entry ) ),
+			[ PdmConstants.HistoryTab ] = async ( entry, ct ) =>
+			{
+				var rows = await _details.GetHistoryAsync( entry );
+				ct.ThrowIfCancellationRequested();
+				OHistories.ReplaceAll( rows );
+			},
+			[ PdmConstants.ParentTab ] = async ( entry, ct ) =>
+			{
+				var rows = await _details.GetParentsAsync( entry );
+				ct.ThrowIfCancellationRequested();
+				OParents.ReplaceAll( rows );
+			},
+			[ PdmConstants.ChildTab ] = async ( entry, ct ) =>
+			{
+				var rows = await _details.GetChildrenAsync( entry );
+				ct.ThrowIfCancellationRequested();
+				OChildren.ReplaceAll( rows );
+			},
+			[ PdmConstants.PropertiesTab ] = async ( entry, ct ) =>
+			{
+				var rows = await _details.GetPropertiesAsync( entry );
+				ct.ThrowIfCancellationRequested();
+				OProperties.ReplaceAll( rows );
+			},
+			[ PdmConstants.InfoTab ] = async ( entry, ct ) =>
+			{
+				var rows = await _details.GetVersionInfoAsync( entry );
+				ct.ThrowIfCancellationRequested();
+				OVersions.ReplaceAll( rows );
+			},
 		};
 
 		_restoring = true;
@@ -252,8 +278,8 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		}
 		try { _pageCancellation.Cancel(); }
 		finally { _pageCancellation.Dispose(); }
-		try { _detailsCancellation.Cancel(); }
-		finally { _detailsCancellation.Dispose(); }
+		CtsHelper.CancelAndDispose( ref _detailsCancellation );
+		_localChangesGate.Dispose();
 		GC.SuppressFinalize( this );
 	}
 
@@ -313,6 +339,8 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 	public async Task LoadDirectoryTreeAsync( bool fromServer = false )
 	{
+		if( IsDisposed )
+			return;
 		IsTreeLoaded = false;
 		IsTreeLoading = true;
 		TreeLoadingStatus = !fromServer && HasKeptTree ? "Restoring folder tree…" : "Fetching folder structure from Odoo…";
@@ -331,18 +359,34 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			if( root is not null && !IsDisposed && TreeLoaded is { } handler )
 				await handler( root );
 		}
+		catch( OperationCanceledException ) { }
+		catch( ObjectDisposedException ) { }
 		finally
 		{
-			IsTreeLoading = false;
-			IsTreeLoaded = true;
+			if( !IsDisposed )
+			{
+				IsTreeLoading = false;
+				IsTreeLoaded = true;
+			}
 		}
 	}
 
 	public async Task LoadEntriesAsync( CancellationToken token = default )
 	{
+		if( IsDisposed )
+			return;
 		IsListLoaded = false;
 		int generation = Interlocked.Increment( ref _entriesLoadGeneration );
-		using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource( token, _pageCancellation.Token );
+		CancellationTokenSource linked;
+		try
+		{
+			linked = CancellationTokenSource.CreateLinkedTokenSource( token, _pageCancellation.Token );
+		}
+		catch( ObjectDisposedException )
+		{
+			return;
+		}
+		using CancellationTokenSource linkedGuard = linked;
 		token = linked.Token;
 
 		if( SelectedDirectory is { } target && !_state.TryGetEntries( target.TreePath, ShowInactive, out _ ) )
@@ -396,30 +440,29 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			GroupingChanged?.Invoke();
 		}
 		catch( OperationCanceledException ) { }
+		catch( ObjectDisposedException ) { }
 		catch( Exception e )
 		{
 			HackLogger.Error( "FileManager", $"Loading entries failed: {e.Message}", e );
 		}
 		finally
 		{
-			if( generation == Volatile.Read( ref _entriesLoadGeneration ) )
-				IsEntriesLoading = false;
-			if( !linked.IsCancellationRequested )
+			if( !IsDisposed )
 			{
-				IsListLoaded = true;
-				if( _pendingChangesDuringLoad.Count > 0 && !IsDisposed )
+				if( generation == Volatile.Read( ref _entriesLoadGeneration ) )
+					IsEntriesLoading = false;
+				if( !linked.IsCancellationRequested )
 				{
-					List<LocalFileChange> replay = [ .. _pendingChangesDuringLoad ];
-					_pendingChangesDuringLoad.Clear();
-					_ = ApplyLocalChangesAsync( replay );
+					IsListLoaded = true;
+					if( _pendingChangesDuringLoad.Count > 0 )
+					{
+						List<LocalFileChange> replay = [ .. _pendingChangesDuringLoad ];
+						_pendingChangesDuringLoad.Clear();
+						_ = ApplyLocalChangesAsync( replay );
+					}
 				}
 			}
 		}
-	}
-
-	private sealed class UiThreadProgress<T>( Action<T> handler ) : IProgress<T>
-	{
-		public void Report( T value ) => UiDispatcher.Post( () => handler( value ) );
 	}
 
 	private void UpdateEntryLabels( EntryListResult result )
@@ -471,9 +514,11 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	{
 		if( IsDisposed || batch.Count == 0 )
 			return;
-		await _localChangesGate.WaitAsync();
+		bool entered = false;
 		try
 		{
+			await _localChangesGate.WaitAsync( _pageCancellation.Token );
+			entered = true;
 			if( IsDisposed )
 				return;
 
@@ -571,13 +616,19 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 				GroupingChanged?.Invoke();
 			}
 		}
+		catch( OperationCanceledException ) { }
+		catch( ObjectDisposedException ) { }
 		catch( Exception e )
 		{
 			HackLogger.Error( "FileManager", $"Live file update failed: {e.Message}", e );
 		}
 		finally
 		{
-			_localChangesGate.Release();
+			if( entered )
+			{
+				try { _localChangesGate.Release(); }
+				catch( ObjectDisposedException ) { }
+			}
 		}
 	}
 
@@ -661,11 +712,21 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 	public async Task ShowEntryDetailsAsync( EntryRow? entry )
 	{
-		CancellationTokenSource prevDetails = _detailsCancellation;
-		CancellationTokenSource nextDetails = _detailsCancellation = new();
-		CancellationToken token = nextDetails.Token;
-		try { await prevDetails.CancelAsync(); }
-		finally { prevDetails.Dispose(); }
+		if( IsDisposed )
+			return;
+		CancellationTokenSource nextDetails = CtsHelper.Replace( ref _detailsCancellation );
+		CancellationTokenSource linked;
+		try
+		{
+			linked = CancellationTokenSource.CreateLinkedTokenSource( nextDetails.Token, _pageCancellation.Token );
+		}
+		catch( ObjectDisposedException )
+		{
+			return;
+		}
+		using CancellationTokenSource linkedGuard = linked;
+		CancellationToken token = linked.Token;
+		Interlocked.Increment( ref _previewVersionGeneration );
 
 		ClearDetails();
 		Preview = null;
@@ -678,25 +739,17 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 		IsDetailsLoading = true;
 		IsPreviewLoading = true;
+		await Task.WhenAll(
+			LoadDetailTabAsync( entry, token ),
+			LoadEntryPreviewAsync( entry, token ) );
+	}
+
+	private async Task LoadDetailTabAsync( EntryRow entry, CancellationToken token )
+	{
 		try
 		{
 			if( SelectedDetailTab is { } tab && _detailTabs.TryGetValue( tab, out var fill ) )
-				await fill( entry );
-			token.ThrowIfCancellationRequested();
-			IsDetailsLoading = false;
-
-			byte[]? image = entry.LatestId is int versionId ? await _details.GetPreviewImageAsync( versionId ) : null;
-			string? localPath = entry.LocalFile is { Exists: true } local ? local.FullName : null;
-			if( image is not { Length: > 0 } && localPath is not null )
-				image = await _details.GetLocalPreviewImageAsync( localPath );
-
-			EntryPreview? preview = image is { Length: > 0 }
-				? new EntryPreview( image, null )
-				: entry.Status is FileStatus.Lo
-					? new EntryPreview( null, localPath )
-					: null;
-			if( !token.IsCancellationRequested && preview is not null )
-				Preview = preview;
+				await fill( entry, token );
 		}
 		catch( OperationCanceledException ) { }
 		catch( Exception e )
@@ -705,20 +758,62 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		}
 		finally
 		{
-			if( !token.IsCancellationRequested )
-			{
+			if( !token.IsCancellationRequested && !IsDisposed )
 				IsDetailsLoading = false;
-				IsPreviewLoading = false;
+		}
+	}
+
+	private async Task LoadEntryPreviewAsync( EntryRow entry, CancellationToken token )
+	{
+		try
+		{
+			byte[]? image = entry.LatestId is int versionId ? await _details.GetPreviewImageAsync( versionId ) : null;
+			token.ThrowIfCancellationRequested();
+			string? localPath = entry.LocalFile is { Exists: true } local ? local.FullName : null;
+			if( image is not { Length: > 0 } && localPath is not null )
+			{
+				image = await _details.GetLocalPreviewImageAsync( localPath );
+				token.ThrowIfCancellationRequested();
 			}
+
+			EntryPreview? preview = image is { Length: > 0 }
+				? new EntryPreview( image, null )
+				: entry.Status is FileStatus.Lo
+					? new EntryPreview( null, localPath )
+					: null;
+			if( !token.IsCancellationRequested && !IsDisposed && preview is not null )
+				Preview = preview;
+		}
+		catch( OperationCanceledException ) { }
+		catch( Exception e )
+		{
+			HackLogger.Warn( "FileManager", $"Loading preview for '{entry.Name}' failed: {e.Message}", e );
+		}
+		finally
+		{
+			if( !token.IsCancellationRequested && !IsDisposed )
+				IsPreviewLoading = false;
 		}
 	}
 
 	public async Task PreviewVersionAsync( int? versionId )
 	{
-		if( versionId is null or 0 )
+		if( IsDisposed || versionId is null or 0 )
 			return;
-		if( await _details.GetPreviewImageAsync( versionId ) is { Length: > 0 } bytes )
-			Preview = new EntryPreview( bytes, null );
+		int generation = Interlocked.Increment( ref _previewVersionGeneration );
+		try
+		{
+			if( await _details.GetPreviewImageAsync( versionId ) is { Length: > 0 } bytes
+				&& !IsDisposed
+				&& generation == Volatile.Read( ref _previewVersionGeneration ) )
+			{
+				Preview = new EntryPreview( bytes, null );
+			}
+		}
+		catch( Exception e )
+		{
+			HackLogger.Warn( "FileManager", $"Loading preview for version {versionId} failed: {e.Message}", e );
+		}
 	}
 
 	[RelayCommand]
@@ -778,26 +873,25 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	[RelayCommand] private Task GetLatestDirectoryTopAsync() => RunOnDirectoryAsync( "Getting the latest of", false, ShowInactive, _workflow.GetLatestAsync );
 	[RelayCommand] private Task CheckoutDirectoryAsync() => RunOnDirectoryAsync( "Checking out", true, false, _workflow.CheckoutLatestAsync );
 	[RelayCommand] private Task UndoCheckoutDirectoryAsync() => RunOnDirectoryAsync( "Undoing the check out of", true, false, _workflow.UnCheckoutAsync );
+	[RelayCommand] private Task LogicalDeleteDirectoryAsync() => RunOnDirectoryAsync( "Deleting", true, false, _workflow.LogicalDeleteAsync, "Completed!" );
 
-	[RelayCommand]
-	private async Task LogicalDeleteDirectoryAsync()
-	{
-		await RunOnDirectoryAsync( "Deleting", true, false, _workflow.LogicalDeleteAsync, "Completed!" );
-		Refresh( FileManagerRefresh.All );
-	}
+	[RelayCommand] private Task RestoreDirectoryAsync() => RestoreDirectoryCoreAsync( withSubdirectories: false );
+	[RelayCommand] private Task RestoreDirectoryRecursiveAsync() => RestoreDirectoryCoreAsync( withSubdirectories: true );
 
-	[RelayCommand]
-	private async Task RestoreDirectoryAsync()
+	private async Task RestoreDirectoryCoreAsync( bool withSubdirectories )
 	{
-		await RunOperationAsync( () => _workflow.RestoreDeletedInDirectoryAsync( SelectedDirectoryId ), "Completed!" );
-		Refresh( FileManagerRefresh.All );
-	}
-
-	[RelayCommand]
-	private async Task RestoreDirectoryRecursiveAsync()
-	{
-		await RunOperationAsync( () => _workflow.RestoreDeletedInDirectoryAsync( SelectedDirectoryId, withSubdirectories: true ), "Completed!" );
-		Refresh( FileManagerRefresh.All );
+		if( SelectedDirectory is null )
+		{
+			await Dialogs.ShowMessageAsync( "Current directory doesn't exist remotely." );
+			return;
+		}
+		await RunOperationAsync( async () =>
+		{
+			using( _localFiles.Suspend() )
+				await _workflow.RestoreDeletedInDirectoryAsync( SelectedDirectoryId, withSubdirectories );
+			if( !IsDisposed )
+				Refresh( FileManagerRefresh.All );
+		}, "Completed!" );
 	}
 
 	[RelayCommand]
@@ -807,8 +901,17 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			return;
 		await RunOperationAsync( async () =>
 		{
-			if( await _workflow.CollectFolderCommitFilesAsync( SelectedLocalDirectory ) is { Count: > 0 } files )
-				await _workflow.CommitAsync( files );
+			bool committed = false;
+			using( _localFiles.Suspend() )
+			{
+				if( await _workflow.CollectFolderCommitFilesAsync( SelectedLocalDirectory ) is { Count: > 0 } files )
+				{
+					await _workflow.CommitAsync( files );
+					committed = true;
+				}
+			}
+			if( committed && !IsDisposed )
+				Refresh( FileManagerRefresh.All );
 		} );
 	}
 
@@ -818,32 +921,50 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	private async Task LocalDeleteDirectoryAsync()
 	{
 		string directory = SelectedLocalDirectory;
-		if( _files.CountFiles( directory ) is not int count )
+		if( await Task.Run( () => _files.CountFiles( directory ) ) is not int count )
 			return;
 		if( await Dialogs.ConfirmAsync( $"Are you sure you want to delete this directory and ({count}) files inside?", "Delete Directory", MessageBoxIcon.Warning ) )
 		{
-			_files.DeleteDirectory( directory );
+			await Task.Run( () => _files.DeleteDirectory( directory ) );
 			await ApplyLocalChangesAsync( new LocalFileChange[] { new( directory, LocalChangeKind.Deleted, IsDirectory: true ) } );
 		}
 	}
 
-	[RelayCommand] private Task GetLatestSelectedAsync() => RunOnIdsAsync( RemoteIds( SelectedEntries ), _workflow.GetLatestAsync );
-	[RelayCommand] private Task CheckoutSelectedAsync() => RunOnIdsAsync( RemoteIds( SelectedEntries.Where( e => e.Checkout is null ) ), _workflow.CheckoutLatestAsync );
-	[RelayCommand] private Task UndoCheckoutSelectedAsync() => RunOnIdsAsync( RemoteIds( SelectedEntries.Where( e => e.Checkout is not null ) ), _workflow.UnCheckoutAsync );
+	private Task RunOnSelectedIdsAsync(
+		IReadOnlyList<int> ids,
+		Func<IReadOnlyList<int>, Task> operation,
+		FileManagerRefresh refresh,
+		string? completedMessage = null )
+		=> ids.Count == 0
+			? Task.CompletedTask
+			: RunOperationAsync( async () =>
+			{
+				using( _localFiles.Suspend() )
+					await operation( ids );
+				if( !IsDisposed )
+					Refresh( refresh );
+			}, completedMessage );
 
-	[RelayCommand]
-	private async Task LogicalDeleteSelectedAsync()
-	{
-		await RunOnIdsAsync( RemoteIds( SelectedEntries ), _workflow.LogicalDeleteAsync, "Completed!" );
-		Refresh( FileManagerRefresh.All );
-	}
+	[RelayCommand] private Task GetLatestSelectedAsync() => RunOnSelectedIdsAsync( RemoteIds( SelectedEntries ), _workflow.GetLatestAsync, FileManagerRefresh.All );
+	[RelayCommand] private Task CheckoutSelectedAsync() => RunOnSelectedIdsAsync( RemoteIds( SelectedEntries.Where( e => e.Checkout is null ) ), _workflow.CheckoutLatestAsync, FileManagerRefresh.Entries );
+	[RelayCommand] private Task UndoCheckoutSelectedAsync() => RunOnSelectedIdsAsync( RemoteIds( SelectedEntries.Where( e => e.Checkout is not null ) ), _workflow.UnCheckoutAsync, FileManagerRefresh.Entries );
+	[RelayCommand] private Task LogicalDeleteSelectedAsync() => RunOnSelectedIdsAsync( RemoteIds( SelectedEntries ), _workflow.LogicalDeleteAsync, FileManagerRefresh.All, "Completed!" );
 
 	[RelayCommand]
 	private Task CommitSelectedAsync() => RunOperationAsync( async () =>
 	{
-		HashSet<HackFile> files = await _workflow.CollectCommitFilesAsync( SelectedEntries );
-		if( files.Count > 0 )
-			await _workflow.CommitAsync( files );
+		bool committed = false;
+		using( _localFiles.Suspend() )
+		{
+			HashSet<HackFile> files = await _workflow.CollectCommitFilesAsync( SelectedEntries );
+			if( files.Count > 0 )
+			{
+				await _workflow.CommitAsync( files );
+				committed = true;
+			}
+		}
+		if( committed && !IsDisposed )
+			Refresh( FileManagerRefresh.Entries );
 	} );
 
 	[RelayCommand] private Task OpenSelectedAsync() => OpenSelectedAsync( EntryOpenMode.Open );
@@ -861,15 +982,20 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	[RelayCommand]
 	private async Task LocalDeleteSelectedAsync()
 	{
-		List<FileInfo> files = _files.FindLocalFiles( SelectedLocalDirectory, SelectedEntries );
+		string directory = SelectedLocalDirectory;
+		IReadOnlyList<EntryRow> selection = SelectedEntries;
+		List<FileInfo> files = await Task.Run( () => _files.FindLocalFiles( directory, selection ) );
 		if( files.Count == 0 )
 			return;
 		string message = files.Count > 10
 			? $"Are you sure you want to delete ({files.Count}) files?"
 			: $"Are you sure you want to delete these files?\n{string.Join( Environment.NewLine, files.Select( f => f.FullName ) )}";
-		if( await Dialogs.ConfirmAsync( message, "Delete Files", MessageBoxIcon.Warning ) )
-			_files.DeleteFiles( files );
-		Refresh( FileManagerRefresh.Entries );
+		if( !await Dialogs.ConfirmAsync( message, "Delete Files", MessageBoxIcon.Warning ) )
+			return;
+		using( _localFiles.Suspend() )
+			await Task.Run( () => _files.DeleteFiles( files ) );
+		if( !IsDisposed )
+			Refresh( FileManagerRefresh.Entries );
 	}
 
 	[RelayCommand]
@@ -996,9 +1122,12 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			: $"{prefix}Would you like to {verb} this version to {target}?";
 		string caption = ( plan.From.Exists ? "Move" : "Download" ) + ( plan.To.Exists ? " & Overwrite" : "" );
 
-		if( await Dialogs.ConfirmAsync( message, caption, plan.To.Exists ? MessageBoxIcon.Warning : MessageBoxIcon.Question ) )
+		if( !await Dialogs.ConfirmAsync( message, caption, plan.To.Exists ? MessageBoxIcon.Warning : MessageBoxIcon.Question ) )
+			return;
+		using( _localFiles.Suspend() )
 			await _files.ExecuteMoveAsync( version, plan );
-		Refresh( FileManagerRefresh.Entries );
+		if( !IsDisposed )
+			Refresh( FileManagerRefresh.Entries );
 	}
 
 	[RelayCommand]
@@ -1024,7 +1153,14 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		if( await Dialogs.ShowMessageAsync( $"{intro}\nVersion IDs: {ids}\n{details}", "Version Download", MessageBoxButtons.YesNoCancel ) != DialogResult.Yes )
 			return;
 
-		IReadOnlyList<int> failed = await _workflow.DownloadVersionsAsync( plan.VersionIds );
+		IReadOnlyList<int> failed = [];
+		await RunOperationAsync( async () =>
+		{
+			using( _localFiles.Suspend() )
+				failed = await _workflow.DownloadVersionsAsync( plan.VersionIds );
+			if( !IsDisposed )
+				Refresh( FileManagerRefresh.All );
+		} );
 		if( failed.Count > 0 )
 			await Dialogs.ShowMessageAsync( $"Failed to download version IDs: {string.Join( ", ", failed )}" );
 	}

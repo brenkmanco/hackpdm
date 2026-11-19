@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
 
+using HackPDM.Common;
 using HackPDM.Core.Pdm;
 using HackPDM.Core.Services;
 
@@ -92,7 +93,15 @@ public sealed partial class ProfileManagerView : Page
 	}
 
 	private void UpdateEmptyHint()
-		=> EmptyConnectionHint.Visibility = ViewModel.FilteredStatus.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+	{
+		bool empty = ViewModel.FilteredStatus.Count == 0;
+		EmptyConnectionHint.Visibility = empty.ToVisibility();
+		if( empty )
+		{
+			SelectedMessageText.Text = string.Empty;
+			SelectedMessageCard.Visibility = Visibility.Collapsed;
+		}
+	}
 
 	private void ProfileManStatusList_SelectionChanged( object sender, SelectionChangedEventArgs e )
 	{

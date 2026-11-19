@@ -9,7 +9,7 @@ namespace HackPDM.Core.Pdm;
 public static class DownloadOperations
 {
 	private const int DependencyTimeoutMs = 1_000_000;
-	private const int MetadataChunkSize = 500;
+	private const int MetadataChunkSize = 250;
 	private const int DefaultBatchCount = 5;
 	private const int MinTimeoutMs = 90_000;
 	private const int MaxTimeoutMs = 30 * 60_000;
@@ -37,11 +37,11 @@ public static class DownloadOperations
 	public static long MinThroughputBytesPerSecond { get; set; } = 256 * 1024;
 	public static int MaxAttempts { get; set; } = 3;
 
-	public static Task<Result<IReadOnlyList<int>>> GetAllEntriesAndDependenciesListAsync( IReadOnlyList<int> versionIds )
-		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_entries", [ versionIds ], DependencyTimeoutMs );
+	public static Task<Result<IReadOnlyList<int>>> GetAllEntriesAndDependenciesListAsync( IReadOnlyList<int> versionIds, CancellationToken token = default )
+		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_entries", [ versionIds ], DependencyTimeoutMs, token );
 
-	public static Task<Result<IReadOnlyList<int>>> GetAllEntriesAndDependenciesByEntriesAsync( IReadOnlyList<int> entryIds )
-		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_entries_by_entries", [ entryIds ], DependencyTimeoutMs );
+	public static Task<Result<IReadOnlyList<int>>> GetAllEntriesAndDependenciesByEntriesAsync( IReadOnlyList<int> entryIds, CancellationToken token = default )
+		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_entries_by_entries", [ entryIds ], DependencyTimeoutMs, token );
 
 	public static Task<Result<IReadOnlyList<int>>> GetVersionListAsync( params int[] versionIds )
 		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_versions", [ versionIds ], DependencyTimeoutMs );
@@ -50,46 +50,38 @@ public static class DownloadOperations
 		IReadOnlyList<int> entryIDs,
 		string[]? excludedFields = null,
 		CancellationToken token = default,
-		string[]? includedFields = null )
+		string[]? includedFields = null,
+		Action<StatusMessage, string>? log = null )
 	{
-		excludedFields ??= [ "preview_image", "file_contents" ];
+		excludedFields ??= HpVersion.UsualExcludedFields;
 		if( entryIDs.Count <= MetadataChunkSize )
 		{
+			token.ThrowIfCancellationRequested();
 			return await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
 				entryIDs,
 				nameof( HpEntry.latest_version_id ),
 				includedFields is null ? excludedFields : null,
-				includedFields: includedFields );
+				includedFields: includedFields,
+				token: token );
 		}
 
 		List<HpVersion> all = new( entryIDs.Count );
 		for( int offset = 0; offset < entryIDs.Count; offset += MetadataChunkSize )
 		{
 			token.ThrowIfCancellationRequested();
-			int[] chunk = SliceChunk( entryIDs, offset, MetadataChunkSize );
+			int[] chunk = OdooRpc.SliceChunk( entryIDs, offset, MetadataChunkSize );
 			HpVersion[]? page = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
 				chunk,
 				nameof( HpEntry.latest_version_id ),
 				includedFields is null ? excludedFields : null,
-				includedFields: includedFields );
+				includedFields: includedFields,
+				token: token );
 			if( page is { Length: > 0 } )
 				all.AddRange( page );
+			int fetched = Math.Min( offset + chunk.Length, entryIDs.Count );
+			log?.Invoke( StatusMessage.PROCESSING, $"Retrieved version metadata for {fetched}/{entryIDs.Count} entries..." );
 		}
 		return all.Count > 0 ? [ .. all ] : null;
-	}
-
-	internal static T[] SliceChunk<T>( IReadOnlyList<T> source, int offset, int maxCount )
-	{
-		int count = Math.Min( maxCount, source.Count - offset );
-		T[] chunk = new T[ count ];
-		if( source is T[] arr )
-		{
-			Array.Copy( arr, offset, chunk, 0, count );
-			return chunk;
-		}
-		for( int i = 0; i < count; i++ )
-			chunk[ i ] = source[ offset + i ];
-		return chunk;
 	}
 
 	private static bool TryReadMemoryPressure( out double loadRatio, out long freeBytes )
@@ -252,7 +244,7 @@ public static class DownloadOperations
 			string? localPath = ResolveLocalPath( version );
 			string? localChecksum = localPath is not null ? Checksums.OfFile( localPath ) : null;
 
-			if( localChecksum is { Length: > 0 } && localChecksum == version.checksum )
+			if( localChecksum is { Length: > 0 } && string.Equals( localChecksum, version.checksum, StringComparison.OrdinalIgnoreCase ) )
 			{
 				log?.Invoke( StatusMessage.FOUND, $"Skipping version download: {version.name}" );
 				summary.AddSkipped();
@@ -325,7 +317,7 @@ public static class DownloadOperations
 		for( int offset = 0; offset < paths.Length; offset += VaultChecksumLookupChunkSize )
 		{
 			cToken.ThrowIfCancellationRequested();
-			string[] chunk = SliceChunk( paths, offset, VaultChecksumLookupChunkSize );
+			string[] chunk = OdooRpc.SliceChunk( paths, offset, VaultChecksumLookupChunkSize );
 			Result<HpVersion[]> versions = await Repository<HpVersion>.SearchReadAsync(
 				OdooDomain.Where( "entry_id.windows_complete_name", Operators.In, chunk ),
 				FieldSelection.Only( nameof( HpVersion.checksum ), nameof( HpVersion.windows_complete_name ) ),
@@ -421,7 +413,7 @@ public static class DownloadOperations
 					if( downloadedSize > 0 )
 						onBytesDownloaded?.Invoke( downloadedSize );
 
-					bool wroteOk = got.file_contents is not { Length: > 0 } || await LocalFileWriter.WriteAsync( got.ToHackFile() );
+					bool wroteOk = await LocalFileWriter.WriteAsync( got.ToHackFile() );
 					got.file_contents = null;
 
 					if( !wroteOk )
@@ -463,7 +455,7 @@ public static class DownloadOperations
 			return temp.Error;
 		if( await LocalFileWriter.WriteFromFileAsync( version.ToHackFile( contentsInFile: true ), temp.Value! ) )
 			return null;
-		try { File.Delete( temp.Value! ); } catch( Exception e ) when( e is IOException or UnauthorizedAccessException ) { }
+		FileOps.TryDelete( temp.Value );
 		return "could not write the file locally";
 	}
 }

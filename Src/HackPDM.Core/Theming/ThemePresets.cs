@@ -29,7 +29,7 @@ public enum FormName
 /// <param name="PageBackground">The page background this preset shows (for contrast checks).</param>
 /// <param name="Text">The main text color this preset shows (for contrast checks).</param>
 public sealed record AppPalette( PaletteName Name, string Title, bool IsDark, IReadOnlyDictionary<string, uint> Brushes,
-	uint PanelStroke, uint FancyPanelStroke, uint PageBackground, uint Text );
+	uint PanelStroke, uint FancyPanelStroke, uint PageBackground, uint Text ) : INamedPreset<PaletteName>;
 
 /// <summary>A shape preset for the whole app.</summary>
 /// <param name="CompactDensity">Fluent's compact sizing (shorter controls and rows); else the standard sizing.</param>
@@ -39,7 +39,7 @@ public sealed record AppPalette( PaletteName Name, string Title, bool IsDark, IR
 /// <param name="PanelBorderThickness">The border of the app's panels.</param>
 /// <param name="AccentPanels">Panel borders take the accent color (<see cref="AppPalette.FancyPanelStroke"/>).</param>
 public sealed record AppForm( FormName Name, string Title, string Description, bool CompactDensity, double ControlCornerRadius,
-	double OverlayCornerRadius, double PanelCornerRadius, double PanelBorderThickness, bool AccentPanels );
+	double OverlayCornerRadius, double PanelCornerRadius, double PanelBorderThickness, bool AccentPanels ) : INamedPreset<FormName>;
 
 /// <summary>The built-in color and shape presets; any palette goes with any form.</summary>
 public static class ThemePresets
@@ -51,9 +51,9 @@ public static class ThemePresets
 	/// <summary>Every palette, in menu order.</summary>
 	public static IReadOnlyList<AppPalette> Palettes { get; } =
 	[
-		new( PaletteName.Dark, "Dark", IsDark: true, FrozenDictionary<string, uint>.Empty,
+		new( PaletteName.Dark, nameof( PaletteName.Dark ), IsDark: true, FrozenDictionary<string, uint>.Empty,
 			PanelStroke: 0xFF696969, FancyPanelStroke: 0xB060CDFF, PageBackground: FluentDarkPage, Text: FluentDarkText ),
-		new( PaletteName.Light, "Light", IsDark: false, FrozenDictionary<string, uint>.Empty,
+		new( PaletteName.Light, nameof( PaletteName.Light ), IsDark: false, FrozenDictionary<string, uint>.Empty,
 			PanelStroke: 0xFFC4C9D0, FancyPanelStroke: 0xB0005FB8, PageBackground: FluentLightPage, Text: FluentLightText ),
 		new( PaletteName.NavyBlue, "Navy blue", IsDark: true, new Dictionary<string, uint>
 			{
@@ -90,54 +90,30 @@ public static class ThemePresets
 	/// <summary>Every form, in menu order.</summary>
 	public static IReadOnlyList<AppForm> Forms { get; } =
 	[
-		new( FormName.Compact, "Compact", "Small corners, tight rows and boxes: the most on screen",
+		new( FormName.Compact, nameof( FormName.Compact ), "Small corners, tight rows and boxes: the most on screen",
 			CompactDensity: true, ControlCornerRadius: 2, OverlayCornerRadius: 4, PanelCornerRadius: 4, PanelBorderThickness: 1, AccentPanels: false ),
-		new( FormName.Default, "Default", "The standard HackPDM look",
+		new( FormName.Default, nameof( FormName.Default ), "The standard HackPDM look",
 			CompactDensity: true, ControlCornerRadius: 4, OverlayCornerRadius: 8, PanelCornerRadius: 10, PanelBorderThickness: 3, AccentPanels: false ),
-		new( FormName.Modern, "Modern", "Roomy controls, round corners, thin borders",
+		new( FormName.Modern, nameof( FormName.Modern ), "Roomy controls, round corners, thin borders",
 			CompactDensity: false, ControlCornerRadius: 8, OverlayCornerRadius: 12, PanelCornerRadius: 14, PanelBorderThickness: 1, AccentPanels: false ),
-		new( FormName.Fancy, "Fancy", "Very round corners, accent-colored panels, shaded graph boxes with shadows",
+		new( FormName.Fancy, nameof( FormName.Fancy ), "Very round corners, accent-colored panels, shaded graph boxes with shadows",
 			CompactDensity: false, ControlCornerRadius: 12, OverlayCornerRadius: 16, PanelCornerRadius: 18, PanelBorderThickness: 2, AccentPanels: true ),
 	];
 
 	/// <summary>The palette named <paramref name="name"/>.</summary>
-	public static AppPalette Palette( PaletteName name )
-	{
-		int idx = (int)name;
-		if( (uint)idx < (uint)Palettes.Count && Palettes[ idx ].Name == name )
-			return Palettes[ idx ];
-		for( int i = 0; i < Palettes.Count; i++ )
-		{
-			if( Palettes[ i ].Name == name )
-				return Palettes[ i ];
-		}
-		throw new InvalidOperationException( $"Unknown palette '{name}'." );
-	}
+	public static AppPalette Palette( PaletteName name ) => EnumPresets.Find( Palettes, name, "palette" );
 
 	/// <summary>The form named <paramref name="name"/>.</summary>
-	public static AppForm Form( FormName name )
-	{
-		int idx = (int)name;
-		if( (uint)idx < (uint)Forms.Count && Forms[ idx ].Name == name )
-			return Forms[ idx ];
-		for( int i = 0; i < Forms.Count; i++ )
-		{
-			if( Forms[ i ].Name == name )
-				return Forms[ i ];
-		}
-		throw new InvalidOperationException( $"Unknown form '{name}'." );
-	}
+	public static AppForm Form( FormName name ) => EnumPresets.Find( Forms, name, "form" );
 
 	/// <summary>The panel border color for a palette and form.</summary>
 	public static uint PanelStroke( AppPalette palette, AppForm form ) => form.AccentPanels ? palette.FancyPanelStroke : palette.PanelStroke;
 
 	/// <summary>Reads a saved palette name; unknown, numeric or missing names give <paramref name="fallback"/>.</summary>
-	public static PaletteName ParsePalette( string? text, PaletteName fallback = PaletteName.Dark )
-		=> Enum.TryParse( text, out PaletteName p ) && Enum.IsDefined( p ) && !int.TryParse( text, out _ ) ? p : fallback;
+	public static PaletteName ParsePalette( string? text, PaletteName fallback = PaletteName.Dark ) => EnumPresets.Parse( text, fallback );
 
 	/// <summary>Reads a saved form name; unknown, numeric or missing names give <paramref name="fallback"/>.</summary>
-	public static FormName ParseForm( string? text, FormName fallback = FormName.Default )
-		=> Enum.TryParse( text, out FormName f ) && Enum.IsDefined( f ) && !int.TryParse( text, out _ ) ? f : fallback;
+	public static FormName ParseForm( string? text, FormName fallback = FormName.Default ) => EnumPresets.Parse( text, fallback );
 
 	/// <summary>The WCAG contrast ratio of two colors (1 to 21); a translucent <paramref name="front"/> is blended over <paramref name="back"/>.</summary>
 	public static double Contrast( uint front, uint back )

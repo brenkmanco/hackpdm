@@ -62,7 +62,7 @@ public sealed partial class HackFileManagerView : Page
 	private int _previewRequest;
 
 	/// <summary>Folders from the root to the selected one, shown in the breadcrumb bar.</summary>
-	public ObservableCollection<TreeData> BreadcrumbPath { get; } = [];
+	public RangeObservableCollection<TreeData> BreadcrumbPath { get; } = [];
 	// TreeView items are built as nodes (see DirectoryTreeBuilder); this source stays empty
 	private readonly ObservableCollection<TreeData> _treeItems = [];
 	private CancellationTokenSource? _treeSelectionCancellation;
@@ -126,12 +126,7 @@ public sealed partial class HackFileManagerView : Page
 			return;
 		_left = true;
 		_folderFilterTimer?.Stop();
-		if( _treeSelectionCancellation is { } cts )
-		{
-			_treeSelectionCancellation = null;
-			cts.Cancel();
-			cts.Dispose();
-		}
+		CtsHelper.CancelAndDispose( ref _treeSelectionCancellation );
 		ViewModel.RefreshRequested -= OnRefreshRequested;
 		ViewModel.GroupingChanged -= OnGroupingChanged;
 		ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
@@ -191,23 +186,39 @@ public sealed partial class HackFileManagerView : Page
 		OdooEntryList.SelectionChanged += OdooEntryList_SelectionChanged;
 		OdooEntryList.SelectionBatchCompleted += ( _, _ ) => SyncEntryListSelection();
 		OdooEntryList.Sorting += OdooEntryList_Sorting;
-		OdooEntryList.DoubleTapped += ( _, _ ) => ViewModel.OpenSelectedCommand.Execute( null );
+		OdooEntryList.DoubleTapped += ( _, e ) =>
+		{
+			if( ( e.OriginalSource as DependencyObject ).FindAncestor<TableViewRow>( OdooEntryList ) is not null && ViewModel.SelectedEntries.Count > 0 )
+				ViewModel.OpenSelectedCommand.Execute( null );
+		};
 		OdooEntryList.ContainerContentChanging += EntryTable_ContainerContentChanging;
 		HackChangesList.ContainerContentChanging += EntryTable_ContainerContentChanging;
 		OdooChangesList.ContainerContentChanging += EntryTable_ContainerContentChanging;
 		GroupedEntryList.ItemsSource = _groupedItems;
 		GroupedEntryList.SelectionChanged += GroupedEntryList_SelectionChanged;
 		GroupedEntryList.ItemClick += GroupedEntryList_ItemClick;
-		GroupedEntryList.DoubleTapped += ( _, _ ) =>
+		GroupedEntryList.DoubleTapped += ( _, e ) =>
 		{
-			if( ViewModel.SelectedEntries.Count > 0 )
+			if( FindGroupedEntryRow( e.OriginalSource as DependencyObject ) is not null && ViewModel.SelectedEntries.Count > 0 )
 				ViewModel.OpenSelectedCommand.Execute( null );
 		};
 		GroupedEntryList.RightTapped += GroupedEntryList_RightTapped;
-		HackChangesList.DoubleTapped += ( _, _ ) => FocusEntryFromChanges( HackChangesList.SelectedItem as EntryRow );
-		OdooChangesList.DoubleTapped += ( _, _ ) => FocusEntryFromChanges( OdooChangesList.SelectedItem as EntryRow );
+		HackChangesList.DoubleTapped += ( _, e ) =>
+		{
+			if( ( e.OriginalSource as DependencyObject ).FindAncestor<TableViewRow>( HackChangesList ) is not null )
+				FocusEntryFromChanges( HackChangesList.SelectedItem as EntryRow );
+		};
+		OdooChangesList.DoubleTapped += ( _, e ) =>
+		{
+			if( ( e.OriginalSource as DependencyObject ).FindAncestor<TableViewRow>( OdooChangesList ) is not null )
+				FocusEntryFromChanges( OdooChangesList.SelectedItem as EntryRow );
+		};
 		OdooHistory.SelectionChanged += OdooHistory_SelectionChanged;
-		OdooHistory.DoubleTapped += ( _, _ ) => ViewModel.DownloadHistoryWithDependenciesCommand.Execute( null );
+		OdooHistory.DoubleTapped += ( _, e ) =>
+		{
+			if( ( e.OriginalSource as DependencyObject ).FindAncestor<TableViewRow>( OdooHistory ) is not null )
+				ViewModel.DownloadHistoryWithDependenciesCommand.Execute( null );
+		};
 		OdooParents.SelectionChanged += ( _, e ) => PreviewVersion( ( e.AddedItems.FirstOrDefault() as ParentRow )?.Version );
 		OdooParents.DoubleTapped += OdooParents_DoubleTapped;
 		OdooChildren.SelectionChanged += ( _, e ) => PreviewVersion( ( e.AddedItems.FirstOrDefault() as ChildrenRow )?.Version );
@@ -377,7 +388,7 @@ public sealed partial class HackFileManagerView : Page
 		await LoadSelectedEntriesAsync();
 		if( IsUsingGroupedList )
 		{
-			if( GroupedEntryList.SelectedItems.OfType<EntryRow>().FirstOrDefault() is { } groupedEntry )
+			if( GroupedEntryList.SelectedItems.FirstSelected<EntryRow>() is { } groupedEntry )
 				GroupedEntryList.ScrollIntoView( groupedEntry );
 		}
 		else if( OdooEntryList.SelectedItems is { Count: > 0 } items && items[ 0 ] is EntryRow entry )
@@ -389,8 +400,8 @@ public sealed partial class HackFileManagerView : Page
 		EntryListGrouping.Apply( OdooEntryList, ViewModel.Entries, ViewModel.ActiveGroupKey );
 #if !WINDOWS
 		bool showGrouped = ViewModel.ActiveGroupKey is not null;
-		OdooEntryList.Visibility = showGrouped ? Visibility.Collapsed : Visibility.Visible;
-		GroupedEntryContainer.Visibility = showGrouped ? Visibility.Visible : Visibility.Collapsed;
+		OdooEntryList.Visibility = ( !showGrouped ).ToVisibility();
+		GroupedEntryContainer.Visibility = showGrouped.ToVisibility();
 		if( showGrouped )
 		{
 			GroupedByLabel.Text = $"Grouped by {ViewModel.ActiveGroupFieldName}";
@@ -475,7 +486,7 @@ public sealed partial class HackFileManagerView : Page
 	{
 		if( _syncingGroupedSelection || _pendingHeaderToggle )
 			return;
-		List<EntryGroupHeader> selectedHeaders = [ .. GroupedEntryList.SelectedItems.OfType<EntryGroupHeader>() ];
+		List<EntryGroupHeader> selectedHeaders = GroupedEntryList.SelectedItems.ExtractSelected<EntryGroupHeader>();
 		if( selectedHeaders.Count > 0 )
 		{
 			_syncingGroupedSelection = true;
@@ -489,12 +500,7 @@ public sealed partial class HackFileManagerView : Page
 				_syncingGroupedSelection = false;
 			}
 		}
-		List<EntryRow> selectedRows = new( GroupedEntryList.SelectedItems.Count );
-		foreach( object item in GroupedEntryList.SelectedItems )
-		{
-			if( item is EntryRow selectedRow )
-				selectedRows.Add( selectedRow );
-		}
+		List<EntryRow> selectedRows = GroupedEntryList.SelectedItems.ExtractSelected<EntryRow>();
 		ViewModel.SelectedEntries = selectedRows;
 		if( selectedRows.Count == 1 )
 			_ = ViewModel.ShowEntryDetailsAsync( selectedRows[ 0 ] );
@@ -669,10 +675,10 @@ public sealed partial class HackFileManagerView : Page
 		{
 			HackLogger.Warn( "FileManager", $"Preview failed to load: {ex.Message}", ex );
 		}
-		if( request == _previewRequest )
+		if( request == _previewRequest && !_left )
 		{
 			OdooEntryImage.Source = image;
-			NoPreviewPanel.Visibility = image is null ? Visibility.Visible : Visibility.Collapsed;
+			NoPreviewPanel.Visibility = ( image is null ).ToVisibility();
 			SyncPipPreview();
 		}
 	}
@@ -907,6 +913,7 @@ public sealed partial class HackFileManagerView : Page
 	{
 		bool show = BranchLinesToggleButton.IsChecked == true;
 		AppComposition.Theme.SetShowTreeBranchLines( show );
+		UIStorage.SaveSafe();
 		TreeBranchGuides.RefreshTree( OdooDirectoryTree, showLines: show, selectedNode: LastSelectedNode, updateSelection: true );
 	}
 
@@ -1001,28 +1008,26 @@ public sealed partial class HackFileManagerView : Page
 
 	private async void CopyPath_Click( object sender, RoutedEventArgs e )
 	{
-		string? path = ViewModel.LastSelectedNodePath ?? LastSelectedNode?.LinkedData.FullPath;
-		if( string.IsNullOrWhiteSpace( path ) )
-			return;
 		try
 		{
-			var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
-			package.SetText( path );
-			Windows.ApplicationModel.DataTransfer.Clipboard.SetContent( package );
-		}
-		catch
-		{
-			// Headless environments without a clipboard service still show feedback without crashing
-		}
+			string? path = ViewModel.LastSelectedNodePath ?? LastSelectedNode?.LinkedData.FullPath;
+			if( string.IsNullOrWhiteSpace( path ) )
+				return;
+			ClipboardHelper.TrySetText( path, "FileManager" );
 
-		int version = ++_copyFeedbackVersion;
-		CopyPathIcon.Glyph = "\uE8FB";
-		CopyPathLabel.Text = "Copied";
-		await Task.Delay( 1400 );
-		if( _left || version != _copyFeedbackVersion )
-			return;
-		CopyPathIcon.Glyph = "\uE8C8";
-		CopyPathLabel.Text = "Copy path";
+			int version = ++_copyFeedbackVersion;
+			CopyPathIcon.Glyph = "\uE8FB";
+			CopyPathLabel.Text = "Copied";
+			await Task.Delay( 1400 );
+			if( _left || version != _copyFeedbackVersion )
+				return;
+			CopyPathIcon.Glyph = "\uE8C8";
+			CopyPathLabel.Text = "Copy path";
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "FileManager", $"Copy path failed: {ex.Message}", ex );
+		}
 	}
 
 	private void JumpToTreeNode( TreeViewNode node )
@@ -1034,30 +1039,31 @@ public sealed partial class HackFileManagerView : Page
 
 	private async void OdooDirectoryTree_SelectionChanged( TreeView sender, TreeViewSelectionChangedEventArgs args )
 	{
-		if( args.AddedItems.FirstOrDefault() is not TreeData data || data.Node is null )
-			return;
-		// EnsureVisible (below, and in the locate/refresh paths) sets SelectedNode, which raises
-		// SelectionChanged again for the same node; reloading then would cancel the load in flight
-		// and loop forever without ever listing the entries.
-		if( data.Node == _loadingNode )
-			return;
+		try
+		{
+			if( args.AddedItems.FirstOrDefault() is not TreeData data || data.Node is null )
+				return;
+			// EnsureVisible (below, and in the locate/refresh paths) sets SelectedNode, which raises
+			// SelectionChanged again for the same node; reloading then would cancel the load in flight
+			// and loop forever without ever listing the entries.
+			if( data.Node == _loadingNode )
+				return;
 
-		SelectDirectory( data.Node );
-		data.EnsureVisible( sender );
-		await LoadSelectedEntriesAsync();
+			SelectDirectory( data.Node );
+			data.EnsureVisible( sender );
+			await LoadSelectedEntriesAsync();
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "FileManager", $"Tree selection failed: {ex.Message}", ex );
+		}
 	}
 
 	/// <summary>Loads the selected directory's entries; a newer load cancels an older one.</summary>
 	private Task LoadSelectedEntriesAsync()
 	{
 		_loadingNode = LastSelectedNode;
-		if( _treeSelectionCancellation is { } prev )
-		{
-			prev.Cancel();
-			prev.Dispose();
-		}
-		CancellationTokenSource next = new();
-		_treeSelectionCancellation = next;
+		CancellationTokenSource next = CtsHelper.Replace( ref _treeSelectionCancellation );
 		ViewModel.IsListLoaded = false;
 		return TreeSelectionTask = LoadAndRestoreAsync( next.Token );
 	}
@@ -1088,10 +1094,11 @@ public sealed partial class HackFileManagerView : Page
 
 	private void OdooDirectoryTree_RightTapped( object sender, RightTappedRoutedEventArgs e )
 	{
-		if( ( e.OriginalSource as FrameworkElement )?.DataContext is not TreeData data )
+		if( ( e.OriginalSource as FrameworkElement )?.DataContext is not TreeData data || data.Node is null )
 			return;
-		OdooDirectoryTree.SelectedNode = data.Node;
-		if( !ReferenceEquals( LastSelectedNode, data.Node ) )
+		if( !ReferenceEquals( OdooDirectoryTree.SelectedNode, data.Node ) )
+			OdooDirectoryTree.SelectedNode = data.Node;
+		else if( !ReferenceEquals( LastSelectedNode, data.Node ) )
 			SelectDirectory( data.Node );
 	}
 
@@ -1107,7 +1114,7 @@ public sealed partial class HackFileManagerView : Page
 	{
 		if( sender is TreeViewItem item )
 		{
-			item.FontSize = UIStorage.ColumnsInfo.FontSize;
+			item.FontSize = Math.Clamp( UIStorage.ColumnsInfo.FontSize, 10, 14 );
 			// a recycled container must not carry another folder's badge
 			if( item.Content is Panel panel )
 				RemoveBadges( panel );
@@ -1126,12 +1133,7 @@ public sealed partial class HackFileManagerView : Page
 
 	private void SyncEntryListSelection()
 	{
-		List<EntryRow> selected = new( OdooEntryList.SelectedItems.Count );
-		foreach( object item in OdooEntryList.SelectedItems )
-		{
-			if( item is EntryRow row )
-				selected.Add( row );
-		}
+		List<EntryRow> selected = OdooEntryList.SelectedItems.ExtractSelected<EntryRow>();
 		ViewModel.SelectedEntries = selected;
 		if( selected.Count == 1 )
 			_ = ViewModel.ShowEntryDetailsAsync( selected[ 0 ] );
@@ -1141,7 +1143,7 @@ public sealed partial class HackFileManagerView : Page
 	{
 		ViewModel.SelectedDetailTab = ( VersionTabs.SelectedItem as TabViewItem )?.Name;
 		EntryRow? selected = IsUsingGroupedList
-			? GroupedEntryList.SelectedItems.OfType<EntryRow>().FirstOrDefault()
+			? GroupedEntryList.SelectedItems.FirstSelected<EntryRow>()
 			: OdooEntryList.SelectedItem as EntryRow;
 		if( e.AddedItems.Count > 0 && selected is not null )
 			_ = ViewModel.ShowEntryDetailsAsync( selected );
@@ -1174,14 +1176,30 @@ public sealed partial class HackFileManagerView : Page
 
 	private async void OdooParents_DoubleTapped( object sender, DoubleTappedRoutedEventArgs e )
 	{
-		if( OdooParents.SelectedItems is [ ParentRow row ] )
-			await FindSearchSelectionAsync( row.BasePath ?? "", row.Name ?? "" );
+		try
+		{
+			if( ( e.OriginalSource as DependencyObject ).FindAncestor<TableViewRow>( OdooParents ) is not null
+				&& OdooParents.SelectedItems is [ ParentRow row ] )
+				await FindSearchSelectionAsync( row.BasePath ?? "", row.Name ?? "" );
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "FileManager", $"Locating parent entry failed: {ex.Message}", ex );
+		}
 	}
 
 	private async void OdooChildren_DoubleTapped( object sender, DoubleTappedRoutedEventArgs e )
 	{
-		if( OdooChildren.SelectedItems is [ ChildrenRow row ] )
-			await FindSearchSelectionAsync( row.BasePath ?? "", row.Name ?? "" );
+		try
+		{
+			if( ( e.OriginalSource as DependencyObject ).FindAncestor<TableViewRow>( OdooChildren ) is not null
+				&& OdooChildren.SelectedItems is [ ChildrenRow row ] )
+				await FindSearchSelectionAsync( row.BasePath ?? "", row.Name ?? "" );
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "FileManager", $"Locating child entry failed: {ex.Message}", ex );
+		}
 	}
 
 	/// <summary>Selects the directory at <paramref name="pwaPath"/> in the tree, then the entry named <paramref name="fileName"/>.</summary>
@@ -1193,11 +1211,17 @@ public sealed partial class HackFileManagerView : Page
 	{
 		try
 		{
-			await AsyncHelper.WaitUntil( () => ViewModel.IsTreeLoaded && OdooDirectoryTree.RootNodes.Count > 0, 100, 30_000 );
+			if( !string.IsNullOrEmpty( FolderFilterBox.Text ) )
+				FolderFilterBox.Text = string.Empty;
+
+			await AsyncHelper.WaitUntil( () => _left || ( ViewModel.IsTreeLoaded && OdooDirectoryTree.RootNodes.Count > 0 ), 100, 30_000 );
+			if( _left || OdooDirectoryTree.RootNodes.Count == 0 )
+				return;
+
 			TreeViewNode node = OdooDirectoryTree.RootNodes[ 0 ];
 			foreach( string part in segmentsBelowRoot.Where( p => p.Length > 0 ) )
 			{
-				node = node.Children.FirstOrDefault( n => n.LinkedData.Name == part )
+				node = node.Children.FirstOrDefault( n => string.Equals( n.LinkedData.Name, part, StringComparison.OrdinalIgnoreCase ) )
 					?? throw new ArgumentException( $"directory '{part}' not found", nameof( segmentsBelowRoot ) );
 			}
 
@@ -1207,11 +1231,11 @@ public sealed partial class HackFileManagerView : Page
 			if( !ReferenceEquals( LastSelectedNode, node ) )
 				SelectDirectory( node );
 
-			await AsyncHelper.WaitUntil( () => ViewModel.IsListLoaded, 100, 60_000 );
-			if( fileName is null )
+			await AsyncHelper.WaitUntil( () => _left || ViewModel.IsListLoaded, 100, 60_000 );
+			if( _left || fileName is null )
 				return;
 
-			EntryRow entry = ViewModel.Entries.FirstOrDefault( e => e.Name == fileName )
+			EntryRow entry = ViewModel.Entries.FirstOrDefault( e => string.Equals( e.Name, fileName, StringComparison.OrdinalIgnoreCase ) )
 				?? throw new ArgumentException( "entry doesn't exist", nameof( fileName ) );
 			SelectEntryRows( new[] { entry }, focus: true, scroll: true );
 		}
@@ -1243,10 +1267,8 @@ public sealed partial class HackFileManagerView : Page
 
 	private void HackFileManagerView_KeyDown( object sender, KeyRoutedEventArgs e )
 	{
-		bool ctrlDown = ( Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread( Windows.System.VirtualKey.Control )
-			& Windows.UI.Core.CoreVirtualKeyStates.Down ) != 0;
-		bool altDown = ( Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread( Windows.System.VirtualKey.Menu )
-			& Windows.UI.Core.CoreVirtualKeyStates.Down ) != 0;
+		bool ctrlDown = KeyboardHelper.IsDown( Windows.System.VirtualKey.Control );
+		bool altDown = KeyboardHelper.IsDown( Windows.System.VirtualKey.Menu );
 
 		if( e.Key == Windows.System.VirtualKey.F5 )
 		{
@@ -1354,11 +1376,11 @@ public sealed partial class HackFileManagerView : Page
 		MenuShowDetails.IsChecked = showDetails;
 		MenuShowPreview.IsChecked = showPreview;
 
-		FoldersPaneCard.Visibility = FoldersSplitter.Visibility = Vis( showFolders );
-		DetailsAndPreviewHost.Visibility = InspectorSplitter.Visibility = Vis( hasInspector );
-		DetailsPaneCard.Visibility = Vis( showDetails );
-		PreviewPaneCard.Visibility = Vis( showPreview );
-		DetailsPreviewSplitter.Visibility = Vis( showDetails && showPreview );
+		FoldersPaneCard.Visibility = FoldersSplitter.Visibility = showFolders.ToVisibility();
+		DetailsAndPreviewHost.Visibility = InspectorSplitter.Visibility = hasInspector.ToVisibility();
+		DetailsPaneCard.Visibility = showDetails.ToVisibility();
+		PreviewPaneCard.Visibility = showPreview.ToVisibility();
+		DetailsPreviewSplitter.Visibility = ( showDetails && showPreview ).ToVisibility();
 
 		WorkspaceGrid.RowDefinitions.Clear();
 		WorkspaceGrid.ColumnDefinitions.Clear();
@@ -1496,8 +1518,6 @@ public sealed partial class HackFileManagerView : Page
 		}
 	}
 
-	private static Visibility Vis( bool visible ) => visible ? Visibility.Visible : Visibility.Collapsed;
-
 	private void UpdateLayout( Action<WorkspaceLayoutSettings> mutate )
 	{
 		mutate( LayoutSettings );
@@ -1580,10 +1600,10 @@ public sealed partial class HackFileManagerView : Page
 		_activeDropZone = null;
 		grip.CapturePointer( e.Pointer );
 
-		ZoneLeft.Visibility = Vis( paneTag == "Folders" );
-		ZoneRight.Visibility = Vis( paneTag is "Folders" or "Details" );
-		ZoneBottom.Visibility = Vis( paneTag == "Details" );
-		ZoneSwapPreview.Visibility = Vis( paneTag == "Preview" );
+		ZoneLeft.Visibility = ( paneTag == "Folders" ).ToVisibility();
+		ZoneRight.Visibility = ( paneTag is "Folders" or "Details" ).ToVisibility();
+		ZoneBottom.Visibility = ( paneTag == "Details" ).ToVisibility();
+		ZoneSwapPreview.Visibility = ( paneTag == "Preview" ).ToVisibility();
 
 		if( paneTag == "Details" )
 			ZoneBottom.SetGrid( 1, 0, 1, 2 );
@@ -1613,9 +1633,9 @@ public sealed partial class HackFileManagerView : Page
 
 	private string? HitTestDropZone( Windows.Foundation.Point pos )
 	{
-		if( IsPointInsideDropZone( ZoneLeft, pos ) ) return "Left";
-		if( IsPointInsideDropZone( ZoneRight, pos ) ) return "Right";
-		if( IsPointInsideDropZone( ZoneBottom, pos ) ) return "Bottom";
+		if( IsPointInsideDropZone( ZoneLeft, pos ) ) return nameof( FolderDockSide.Left );
+		if( IsPointInsideDropZone( ZoneRight, pos ) ) return nameof( FolderDockSide.Right );
+		if( IsPointInsideDropZone( ZoneBottom, pos ) ) return nameof( DetailsDockPosition.Bottom );
 		if( IsPointInsideDropZone( ZoneSwapPreview, pos ) ) return "SwapPreview";
 		return null;
 	}
@@ -1653,26 +1673,28 @@ public sealed partial class HackFileManagerView : Page
 	{
 		if( !_isDraggingGrip )
 			return;
-		if( sender is UIElement grip )
-			grip.ReleasePointerCaptures();
 
+		// Capture drag state and end the drag BEFORE ReleasePointerCaptures(), which synchronously
+		// fires PointerCaptureLost -> EndPaneDrag() and would otherwise wipe pane/zone to null.
 		string? pane = _draggingPaneTag;
 		string? zone = _activeDropZone;
 		EndPaneDrag();
+		if( sender is UIElement grip )
+			grip.ReleasePointerCaptures();
 
-		if( pane == "Folders" && zone is "Left" or "Right" )
-			UpdateLayout( l => l.FoldersDock = zone == "Left" ? FolderDockSide.Left : FolderDockSide.Right );
-		else if( pane == "Details" && zone is "Right" or "Bottom" )
-			UpdateLayout( l => l.DetailsDock = zone == "Right" ? DetailsDockPosition.Right : DetailsDockPosition.Bottom );
+		if( pane == "Folders" && zone is nameof( FolderDockSide.Left ) or nameof( FolderDockSide.Right ) )
+			UpdateLayout( l => l.FoldersDock = zone == nameof( FolderDockSide.Left ) ? FolderDockSide.Left : FolderDockSide.Right );
+		else if( pane == "Details" && zone is nameof( DetailsDockPosition.Right ) or nameof( DetailsDockPosition.Bottom ) )
+			UpdateLayout( l => l.DetailsDock = zone == nameof( DetailsDockPosition.Right ) ? DetailsDockPosition.Right : DetailsDockPosition.Bottom );
 		else if( pane == "Preview" && zone == "SwapPreview" )
 			SwapPreviewPlacement_Click( sender, e );
 	}
 
 	private void UpdateDropZoneHighlights( string? activeZone )
 	{
-		ZoneLeft.Opacity = activeZone == "Left" ? 0.95 : 0.25;
-		ZoneRight.Opacity = activeZone == "Right" ? 0.95 : 0.25;
-		ZoneBottom.Opacity = activeZone == "Bottom" ? 0.95 : 0.25;
+		ZoneLeft.Opacity = activeZone == nameof( FolderDockSide.Left ) ? 0.95 : 0.25;
+		ZoneRight.Opacity = activeZone == nameof( FolderDockSide.Right ) ? 0.95 : 0.25;
+		ZoneBottom.Opacity = activeZone == nameof( DetailsDockPosition.Bottom ) ? 0.95 : 0.25;
 		ZoneSwapPreview.Opacity = activeZone == "SwapPreview" ? 0.95 : 0.25;
 	}
 

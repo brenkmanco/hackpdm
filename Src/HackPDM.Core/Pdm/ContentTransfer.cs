@@ -40,10 +40,12 @@ public static class ContentTransfer
 		Result<OdooRow> begun = await OdooRpc.ExecuteAsync<OdooRow>( UploadModel, "upload_begin", [ size, sha1 ], OdooRpc.LongTimeout, token );
 		if( !begun.Ok )
 			return Result<int>.Fail( $"upload refused: {begun.Error}" );
-		int id = begun.Value?.Int( "id" ) ?? 0;
+		int id = begun.Value?.Int( nameof( HpRecordBase.id ) ) ?? 0;
 		if( id == 0 )
 			return Result<int>.Fail( "upload refused: the server returned no upload id" );
-		int chunk = Math.Max( 1, Math.Min( ChunkBytes, begun.Value?.Int( "chunk_size" ) ?? ChunkBytes ) );
+		int chunk = begun.Value?.Int( "chunk_size" ) is int serverChunk and > 0
+			? Math.Min( ChunkBytes, serverChunk )
+			: ChunkBytes;
 
 		for( int round = 1; round <= 2; round++ )
 		{
@@ -180,15 +182,14 @@ public static class ContentTransfer
 
 	public static async Task<Result<byte[]>> DownloadBytesAsync( HpVersion version, CancellationToken token = default, Action<long>? onBytes = null )
 	{
-		using MemoryStream memory = new( (int)Math.Min( version.file_size ?? 0, int.MaxValue ) );
+		int capacity = (int)Math.Clamp( version.file_size ?? 0, 0, int.MaxValue );
+		using MemoryStream memory = new( capacity );
 		Result<string> got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, memory, token, onBytes );
 		if( !got.Ok )
 			return Result<byte[]>.Fail( got.Error );
 		if( Mismatch( version, got.Value ) is { } error )
 			return Result<byte[]>.Fail( error );
-		if( memory.TryGetBuffer( out ArraySegment<byte> seg ) && seg.Offset == 0 && seg.Array is { } arr && seg.Count == arr.Length )
-			return Result<byte[]>.Success( arr );
-		return Result<byte[]>.Success( memory.ToArray() );
+		return Result<byte[]>.Success( memory.ToByteArrayZeroCopy() );
 	}
 
 	public static async Task<Result<string>> DownloadToTempFileAsync( HpVersion version, CancellationToken token = default, Action<long>? onBytes = null )
@@ -206,14 +207,14 @@ public static class ContentTransfer
 		}
 		catch
 		{
-			TryDelete( temp );
+			FileOps.TryDelete( temp );
 			throw;
 		}
 
 		string? error = got.Ok ? Mismatch( version, got.Value ) : got.Error;
 		if( error is null )
 			return Result<string>.Success( temp );
-		TryDelete( temp );
+		FileOps.TryDelete( temp );
 		return Result<string>.Fail( error );
 	}
 
@@ -221,10 +222,4 @@ public static class ContentTransfer
 		=> version.checksum is { Length: > 0 } expected && !string.Equals( expected, actual, StringComparison.OrdinalIgnoreCase )
 			? "the downloaded file does not match the vault's checksum"
 			: null;
-
-	private static void TryDelete( string path )
-	{
-		try { File.Delete( path ); }
-		catch( Exception e ) when( e is IOException or UnauthorizedAccessException ) { }
-	}
 }

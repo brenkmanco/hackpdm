@@ -6,11 +6,6 @@ using System.Linq;
 using System.Text.Json;
 
 using HackPDM.Core.Configuration;
-using HackPDM.Core.Theming;
-
-using Microsoft.UI.Xaml.Media;
-
-using Windows.UI;
 
 namespace HackPDM.Common;
 
@@ -191,8 +186,4 @@ public static class UIStorage
 	}
 
 	public static void Reload() => GlobalData = AppSettingsStore.LoadUiConfig();
-
-	public static Color ToColor( ArgbColor c ) => Color.FromArgb( c.A, c.R, c.G, c.B );
-	public static Color ToColor( (byte A, byte R, byte G, byte B) argb ) => Color.FromArgb( argb.A, argb.R, argb.G, argb.B );
-	public static SolidColorBrush ToBrush( ArgbColor c ) => new( ToColor( c ) );
 }

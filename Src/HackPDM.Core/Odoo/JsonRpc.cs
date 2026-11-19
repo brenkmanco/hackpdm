@@ -25,9 +25,6 @@ public sealed class JsonRpcParams
 
 	[JsonPropertyName( "args" )]
 	public List<object?>? Args { get; set; }
-
-	[JsonPropertyName( "kwargs" )]
-	public Dictionary<object, object>? Kwargs { get; set; }
 }
 
 public sealed class JsonRpcResponse

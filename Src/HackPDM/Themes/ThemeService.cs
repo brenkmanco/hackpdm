@@ -54,7 +54,6 @@ public sealed class ThemeService
 	public bool StyleNeedsRestart => _settings.Form != _startupForm;
 	public GraphTheme GraphTheme => GraphThemes.From( Palette, Form );
 	public bool ShowTreeBranchLines => _settings.ShowTreeBranchLines;
-	public AppThemeMode Mode => _settings.Mode;
 	public bool IsDarkActive => _runningDark;
 	public bool NeedsRestart => _settings.Mode != _startupMode;
 	public string SavePath => AppSettingsStore.FilePath;
@@ -69,7 +68,7 @@ public sealed class ThemeService
 		}
 		catch( Exception ex )
 		{
-			HackLogger.Warn( "ThemeService", $"Could not read saved theme; falling back to defaults: {ex.Message}", ex );
+			HackLogger.Warn( nameof( ThemeService ), $"Could not read saved theme; falling back to defaults: {ex.Message}", ex );
 			return StartupTheme( new ThemeSettings() );
 		}
 	}
@@ -95,7 +94,7 @@ public sealed class ThemeService
 		resources[ PanelCornerKey ] = new CornerRadius( f.PanelCornerRadius );
 		resources[ PanelThicknessKey ] = new Thickness( f.PanelBorderThickness );
 		if( resources.TryGetValue( PanelStrokeKey, out object? stroke ) && stroke is SolidColorBrush brush )
-			brush.Color = ToColor( ThemePresets.PanelStroke( ThemePresets.Palette( palette ), f ) );
+			brush.Color = UiColors.ToUiColor( ThemePresets.PanelStroke( ThemePresets.Palette( palette ), f ) );
 		if( !f.CompactDensity
 			&& resources.MergedDictionaries.FirstOrDefault( d => d.Source?.OriginalString.EndsWith( "Compact.xaml", StringComparison.OrdinalIgnoreCase ) == true ) is { } compact )
 			resources.MergedDictionaries.Remove( compact );
@@ -118,16 +117,6 @@ public sealed class ThemeService
 			SetBackground( root, owned );
 		}
 		ApplyMode( root );
-	}
-
-	public void SetMode( AppThemeMode mode )
-	{
-		if( _settings.Mode == mode )
-			return;
-		_settings.Mode = mode;
-		foreach( var root in LiveRoots() )
-			ApplyMode( root );
-		ThemeChanged?.Invoke();
 	}
 
 	public void SetPalette( PaletteName palette )
@@ -166,12 +155,9 @@ public sealed class ThemeService
 
 	private void UpdatePanelBrush()
 	{
-		if( Application.Current.Resources.TryGetValue( PanelStrokeKey, out object? value ) && value is SolidColorBrush brush )
-			brush.Color = ToColor( ThemePresets.PanelStroke( ThemePresets.Palette( Palette ), ThemePresets.Form( Form ) ) );
+		if( ThemeResources.TryGetBrush<SolidColorBrush>( PanelStrokeKey ) is { } brush )
+			brush.Color = UiColors.ToUiColor( ThemePresets.PanelStroke( ThemePresets.Palette( Palette ), ThemePresets.Form( Form ) ) );
 	}
-
-	private static Color ToColor( uint argb )
-		=> Color.FromArgb( (byte)( argb >> 24 ), (byte)( argb >> 16 ), (byte)( argb >> 8 ), (byte)argb );
 
 	private void ApplyMode( FrameworkElement root )
 	{
@@ -186,12 +172,12 @@ public sealed class ThemeService
 	}
 
 	private Color PageBackgroundFor( ElementTheme theme )
-		=> ( theme == ElementTheme.Dark ) == _runningDark && FindBrush( PageBackgroundKey ) is { } brush
+		=> ( theme == ElementTheme.Dark ) == _runningDark && ThemeResources.TryGetBrush<SolidColorBrush>( PageBackgroundKey ) is { } brush
 			? brush.Color
 			: theme == ElementTheme.Dark ? Color.FromArgb( 0xFF, 0x20, 0x20, 0x20 ) : Color.FromArgb( 0xFF, 0xF3, 0xF3, 0xF3 );
 
 	public ArgbColor? GetColor( string key )
-		=> FindBrush( key ) is { } brush ? new ArgbColor( brush.Color.A, brush.Color.R, brush.Color.G, brush.Color.B ) : null;
+		=> ThemeResources.TryGetBrush<SolidColorBrush>( key ) is { } brush ? brush.Color.ToArgbColor() : null;
 
 	public bool IsOverridden( string key ) => _settings.OverridesFor( _runningDark ).ContainsKey( key );
 
@@ -249,7 +235,7 @@ public sealed class ThemeService
 		if( !PresetApplies )
 			return;
 		foreach( var (key, argb) in ThemePresets.Palette( Palette ).Brushes )
-			Recolor( key, new ArgbColor( (byte)( argb >> 24 ), (byte)( argb >> 16 ), (byte)( argb >> 8 ), (byte)argb ) );
+			Recolor( key, ArgbColor.FromPacked( argb ) );
 		foreach( var (key, hex) in _settings.OverridesFor( _runningDark ) )
 		{
 			if( ArgbColor.TryParse( hex, out var color ) )
@@ -259,19 +245,19 @@ public sealed class ThemeService
 
 	private bool Recolor( string key, ArgbColor color )
 	{
-		if( FindBrush( key ) is not { } brush )
+		if( ThemeResources.TryGetBrush<SolidColorBrush>( key ) is not { } brush )
 			return false;
 		_originals.TryAdd( key, brush.Color );
-		brush.Color = Color.FromArgb( color.A, color.R, color.G, color.B );
+		brush.Color = color.ToUiColor();
 		return true;
 	}
 
 	private void Restore( string key, bool toOriginal = false )
 	{
-		if( FindBrush( key ) is not { } brush )
+		if( ThemeResources.TryGetBrush<SolidColorBrush>( key ) is not { } brush )
 			return;
 		if( !toOriginal && PresetApplies && ThemePresets.Palette( Palette ).Brushes.TryGetValue( key, out uint preset ) )
-			brush.Color = ToColor( preset );
+			brush.Color = UiColors.ToUiColor( preset );
 		else if( _originals.TryGetValue( key, out var original ) )
 			brush.Color = original;
 	}
@@ -284,9 +270,6 @@ public sealed class ThemeService
 				owned.Color = PageBackgroundFor( root.ActualTheme );
 		}
 	}
-
-	private static SolidColorBrush? FindBrush( string key )
-		=> Application.Current.Resources.TryGetValue( key, out object? value ) ? value as SolidColorBrush : null;
 
 	private IEnumerable<FrameworkElement> LiveRoots()
 	{

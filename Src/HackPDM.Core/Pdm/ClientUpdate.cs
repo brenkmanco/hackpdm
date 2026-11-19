@@ -166,7 +166,7 @@ public static class ClientUpdate
 
 			if( actual != expected )
 			{
-				File.Delete( partial );
+				FileOps.TryDelete( partial );
 				HackLogger.Error( "Updater", $"SHA-256 mismatch for installer from '{source}': expected={expected}, actual={actual}; file deleted." );
 				return Result<string>.Fail( $"the downloaded installer does not match the server's SHA-256 (got {actual}); it was deleted" );
 			}
@@ -177,13 +177,13 @@ public static class ClientUpdate
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException && !token.IsCancellationRequested )
 		{
-			TryDelete( partial );
+			FileOps.TryDelete( partial );
 			HackLogger.Error( "Updater", $"Installer download from '{source}' failed: {e.Message}", e );
 			return Result<string>.Fail( $"could not download the installer from {source}: {e.Message}" );
 		}
 		catch
 		{
-			TryDelete( partial );
+			FileOps.TryDelete( partial );
 			throw;
 		}
 	}
@@ -216,12 +216,6 @@ public static class ClientUpdate
 				return false;
 		}
 		return true;
-	}
-
-	private static void TryDelete( string path )
-	{
-		try { File.Delete( path ); }
-		catch( Exception e ) when( e is IOException or UnauthorizedAccessException ) { }
 	}
 
 	public static string? ParseSha256File( string? content )

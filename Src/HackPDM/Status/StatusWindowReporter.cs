@@ -14,6 +14,7 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 	private readonly object _gate = new();
 	private CancellationTokenSource _cancellation = new();
 	private bool _cancelRegistered;
+	private int _suppressCancelDialog;
 
 	public void Log( StatusMessage statusMessage, string message )
 		=> status()?.AddLog( new BasicStatusMessage { Status = statusMessage, Message = message } );
@@ -24,6 +25,7 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 	{
 		lock( _gate )
 		{
+			Volatile.Write( ref _suppressCancelDialog, 0 );
 			if( _cancellation.IsCancellationRequested )
 			{
 				_cancellation.Dispose();
@@ -40,22 +42,36 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 		}
 	}
 
-	public void Cancel()
+	public void Cancel() => CancelCore( silent: false );
+
+	internal void CancelSilent() => CancelCore( silent: true );
+
+	private void CancelCore( bool silent )
 	{
+		CancellationTokenSource? toCancel = null;
 		lock( _gate )
 		{
+			if( silent )
+				Volatile.Write( ref _suppressCancelDialog, 1 );
 			if( !_cancellation.IsCancellationRequested )
-				_cancellation.Cancel();
+				toCancel = _cancellation;
+		}
+		if( toCancel is not null )
+		{
+			try { toCancel.Cancel(); }
+			catch( ObjectDisposedException ) { }
 		}
 	}
 
 	private void OnCancelled()
 	{
 		Log( StatusMessage.WARNING, "Operation cancelled" );
+		bool showDialog = Volatile.Read( ref _suppressCancelDialog ) == 0;
 		UiDispatcher.Post( () =>
 		{
 			status()?.SetInProcess( false );
-			_ = dialogs.ShowMessageAsync( "Cancelled Operation" );
+			if( showDialog )
+				_ = dialogs.ShowMessageAsync( "Cancelled Operation" );
 		} );
 	}
 

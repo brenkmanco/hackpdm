@@ -37,15 +37,16 @@ public static class OlePropertySet
 			var fmtid = new Guid( data.Slice( 28 + s * 20, 16 ) );
 			if( fmtid != UserDefined )
 				continue;
-			int sectionStart = (int)BinaryPrimitives.ReadUInt32LittleEndian( data[ ( 28 + s * 20 + 16 ).. ] );
-			ReadSection( data, sectionStart, result );
+			uint rawStart = BinaryPrimitives.ReadUInt32LittleEndian( data[ ( 28 + s * 20 + 16 ).. ] );
+			if( rawStart < (uint)data.Length )
+				ReadSection( data, (int)rawStart, result );
 		}
 		return result;
 	}
 
 	private static void ReadSection( ReadOnlySpan<byte> data, int start, List<(string, ushort, object?)> result )
 	{
-		if( start + 8 > data.Length )
+		if( start < 0 || start + 8 > data.Length )
 			return;
 		uint count = BinaryPrimitives.ReadUInt32LittleEndian( data[ ( start + 4 ).. ] );
 		int initialCap = (int)Math.Min( count, 4096 );
@@ -53,8 +54,10 @@ public static class OlePropertySet
 		for( int i = 0; i < count && start + 8 + i * 8 + 8 <= data.Length; i++ )
 		{
 			uint pid = BinaryPrimitives.ReadUInt32LittleEndian( data[ ( start + 8 + i * 8 ).. ] );
-			int offset = (int)BinaryPrimitives.ReadUInt32LittleEndian( data[ ( start + 12 + i * 8 ).. ] );
-			offsets[ pid ] = start + offset;
+			uint rawOffset = BinaryPrimitives.ReadUInt32LittleEndian( data[ ( start + 12 + i * 8 ).. ] );
+			long target = (long)start + rawOffset;
+			if( target <= data.Length )
+				offsets[ pid ] = (int)target;
 		}
 
 		int codePage = 1252;
@@ -86,13 +89,13 @@ public static class OlePropertySet
 		for( int i = 0; i < count && pos + 8 <= data.Length; i++ )
 		{
 			uint pid = BinaryPrimitives.ReadUInt32LittleEndian( data[ pos.. ] );
-			int length = (int)BinaryPrimitives.ReadUInt32LittleEndian( data[ ( pos + 4 ).. ] );
+			uint rawLen = BinaryPrimitives.ReadUInt32LittleEndian( data[ ( pos + 4 ).. ] );
 			pos += 8;
-			int bytes = codePage == 1200 ? length * 2 : length;
-			if( length < 0 || pos + bytes > data.Length )
+			long bytes = codePage == 1200 ? (long)rawLen * 2 : rawLen;
+			if( bytes > data.Length - pos )
 				break;
-			names.Add( ( pid, encoding.GetString( data.Slice( pos, bytes ) ).TrimEnd( '\0' ) ) );
-			pos += bytes;
+			names.Add( ( pid, encoding.GetString( data.Slice( pos, (int)bytes ) ).TrimEnd( '\0' ) ) );
+			pos += (int)bytes;
 			if( codePage == 1200 )
 				pos = ( pos + 3 ) & ~3; // Unicode entries are padded to 4 bytes
 		}
@@ -124,7 +127,7 @@ public static class OlePropertySet
 			};
 			return ( type, value );
 		}
-		catch( ArgumentOutOfRangeException )
+		catch( ArgumentException )
 		{
 			return ( type, null );
 		}
@@ -132,16 +135,21 @@ public static class OlePropertySet
 
 	private static string ReadLpStr( ReadOnlySpan<byte> v, int codePage, Encoding encoding )
 	{
-		int length = (int)BinaryPrimitives.ReadUInt32LittleEndian( v );
 		if( codePage == 1200 )
 			return ReadLpWStr( v );
-		return encoding.GetString( v.Slice( 4, length ) ).TrimEnd( '\0' );
+		uint length = BinaryPrimitives.ReadUInt32LittleEndian( v );
+		if( length > (uint)( v.Length - 4 ) )
+			throw new ArgumentOutOfRangeException( nameof( v ) );
+		return encoding.GetString( v.Slice( 4, (int)length ) ).TrimEnd( '\0' );
 	}
 
 	private static string ReadLpWStr( ReadOnlySpan<byte> v )
 	{
-		int chars = (int)BinaryPrimitives.ReadUInt32LittleEndian( v );
-		return Encoding.Unicode.GetString( v.Slice( 4, chars * 2 ) ).TrimEnd( '\0' );
+		uint chars = BinaryPrimitives.ReadUInt32LittleEndian( v );
+		long bytes = (long)chars * 2;
+		if( bytes > v.Length - 4 )
+			throw new ArgumentOutOfRangeException( nameof( v ) );
+		return Encoding.Unicode.GetString( v.Slice( 4, (int)bytes ) ).TrimEnd( '\0' );
 	}
 
 	private static Encoding EncodingFor( int codePage )

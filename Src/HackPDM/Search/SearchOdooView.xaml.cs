@@ -1,15 +1,16 @@
-using System.Collections.Generic;
-
+using HackPDM.Common;
 using HackPDM.Core.Services;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 
+using WinUI.TableView;
+
 namespace HackPDM.Search;
 
 /// <summary>View for <see cref="SearchOdooViewModel"/>: supports both full search and compact bar + quick-jump combolist.</summary>
-public sealed partial class SearchOdooView : Page
+public sealed partial class SearchOdooView : Page, IDockablePanel
 {
 	public SearchOdooViewModel ViewModel => AppComposition.SearchOdoo;
 
@@ -26,24 +27,13 @@ public sealed partial class SearchOdooView : Page
 
 		OdooSearchResults.SelectionChanged += ( _, _ ) =>
 		{
-			List<SearchRow> selected = new( OdooSearchResults.SelectedItems.Count );
-			foreach( object item in OdooSearchResults.SelectedItems )
-			{
-				if( item is SearchRow row )
-					selected.Add( row );
-			}
-			ViewModel.SelectedResults = selected;
+			if( !OdooSearchResults.IsUpdatingSelection )
+				ViewModel.SelectedResults = OdooSearchResults.SelectedItems.ExtractSelected<SearchRow>();
 		};
+		OdooSearchResults.SelectionBatchCompleted += ( _, _ ) =>
+			ViewModel.SelectedResults = OdooSearchResults.SelectedItems.ExtractSelected<SearchRow>();
 		OdooSearchPropList.SelectionChanged += ( _, _ ) =>
-		{
-			List<SearchPropertiesRow> selected = new( OdooSearchPropList.SelectedItems.Count );
-			foreach( object item in OdooSearchPropList.SelectedItems )
-			{
-				if( item is SearchPropertiesRow row )
-					selected.Add( row );
-			}
-			ViewModel.SelectedActiveProperties = selected;
-		};
+			ViewModel.SelectedActiveProperties = OdooSearchPropList.SelectedItems.ExtractSelected<SearchPropertiesRow>();
 		KeyDown += SearchOdooView_KeyDown;
 		SizeChanged += ( _, _ ) => UpdateResponsiveLayout();
 		Loaded += OnLoaded;
@@ -52,6 +42,12 @@ public sealed partial class SearchOdooView : Page
 
 	internal bool IsMinimalMode => _isMinimal;
 
+	public Window? HostWindow
+	{
+		get => _parentWindow;
+		set => StoreWindowInstance( value );
+	}
+
 	/// <summary>Remembers the window this page is shown in, or clears it when docked inside the main window.</summary>
 	public void StoreWindowInstance( Window? window )
 	{
@@ -59,7 +55,7 @@ public sealed partial class SearchOdooView : Page
 		UpdateHostButtons();
 	}
 
-	internal void SetHostMode( bool isDocked )
+	public void SetHostMode( bool isDocked )
 	{
 		if( isDocked )
 			_parentWindow = null;
@@ -67,11 +63,11 @@ public sealed partial class SearchOdooView : Page
 		UpdateResponsiveLayout();
 	}
 
-	internal void SetMinimalMode( bool minimal )
+	public void SetMinimalMode( bool minimal )
 	{
 		_isMinimal = minimal;
-		FullSearchRoot.Visibility = minimal ? Visibility.Collapsed : Visibility.Visible;
-		MinimalSearchRoot.Visibility = minimal ? Visibility.Visible : Visibility.Collapsed;
+		FullSearchRoot.Visibility = ( !minimal ).ToVisibility();
+		MinimalSearchRoot.Visibility = minimal.ToVisibility();
 		UpdateHostButtons();
 		UpdateResponsiveLayout();
 	}
@@ -79,13 +75,14 @@ public sealed partial class SearchOdooView : Page
 	private void UpdateHostButtons()
 	{
 		bool canDock = _parentWindow is not null && HackApp.HomePage is not null;
-		btnDock.Visibility = canDock ? Visibility.Visible : Visibility.Collapsed;
-		MiniDockBtn.Visibility = canDock ? Visibility.Visible : Visibility.Collapsed;
-		MiniCloseBtn.Visibility = _parentWindow is not null ? Visibility.Visible : Visibility.Collapsed;
+		btnDock.Visibility = canDock.ToVisibility();
+		MiniDockBtn.Visibility = canDock.ToVisibility();
+		MiniCloseBtn.Visibility = ( _parentWindow is not null ).ToVisibility();
 	}
 
 	private void OnLoaded( object sender, RoutedEventArgs e )
 	{
+		ViewModel.LoadLookups();
 		ViewModel.SearchCompleted -= OnSearchCompleted;
 		ViewModel.SearchCompleted += OnSearchCompleted;
 	}
@@ -143,14 +140,11 @@ public sealed partial class SearchOdooView : Page
 				QueryLayoutGrid.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
 				QueryLayoutGrid.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
 
-				Grid.SetRow( FilenameSection, 0 );
-				Grid.SetColumn( FilenameSection, 0 );
+				FilenameSection.SetGrid( 0, 0 );
 				QueryDivider.Width = double.NaN;
 				QueryDivider.Height = 1;
-				Grid.SetRow( QueryDivider, 1 );
-				Grid.SetColumn( QueryDivider, 0 );
-				Grid.SetRow( PropertySection, 2 );
-				Grid.SetColumn( PropertySection, 0 );
+				QueryDivider.SetGrid( 1, 0 );
+				PropertySection.SetGrid( 2, 0 );
 			}
 			else
 			{
@@ -159,14 +153,11 @@ public sealed partial class SearchOdooView : Page
 				QueryLayoutGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1.15, GridUnitType.Star ) } );
 				QueryLayoutGrid.RowDefinitions.Add( new RowDefinition { Height = GridLength.Auto } );
 
-				Grid.SetRow( FilenameSection, 0 );
-				Grid.SetColumn( FilenameSection, 0 );
+				FilenameSection.SetGrid( 0, 0 );
 				QueryDivider.Width = 1;
 				QueryDivider.Height = double.NaN;
-				Grid.SetRow( QueryDivider, 0 );
-				Grid.SetColumn( QueryDivider, 1 );
-				Grid.SetRow( PropertySection, 0 );
-				Grid.SetColumn( PropertySection, 2 );
+				QueryDivider.SetGrid( 0, 1 );
+				PropertySection.SetGrid( 0, 2 );
 			}
 		}
 
@@ -217,7 +208,10 @@ public sealed partial class SearchOdooView : Page
 	}
 
 	private void OdooSearchResults_DoubleTapped( object sender, DoubleTappedRoutedEventArgs e )
-		=> LocateAndFocusMainWindow( OdooSearchResults.SelectedItem as SearchRow );
+	{
+		if( ( e.OriginalSource as DependencyObject ).FindAncestor<TableViewRow>( OdooSearchResults ) is not null )
+			LocateAndFocusMainWindow( OdooSearchResults.SelectedItem as SearchRow );
+	}
 
 	private void LocateSelected_Click( object sender, RoutedEventArgs e )
 		=> LocateAndFocusMainWindow( OdooSearchResults.SelectedItem as SearchRow );

@@ -51,10 +51,29 @@ namespace HackPDM.SmokeTests;
 /// </remarks>
 internal static class SmokeTestRunner
 {
+	private static readonly Lock _reportLock = new();
 	private static readonly List<StepResult> _steps = [];
 	private static readonly List<string> _unhandled = [];
 	private static readonly Stopwatch _total = new();
 	private static int _finished;
+
+	private static void RecordUnhandled( string message )
+	{
+		lock( _reportLock )
+			_unhandled.Add( message );
+	}
+
+	private static bool HasUnhandled()
+	{
+		lock( _reportLock )
+			return _unhandled.Count > 0;
+	}
+
+	private static void RecordStep( StepResult result )
+	{
+		lock( _reportLock )
+			_steps.Add( result );
+	}
 
 	/// <summary>Whether HACKPDM_SMOKE_TEST is set to 1 or true.</summary>
 	public static bool IsEnabled
@@ -80,14 +99,14 @@ internal static class SmokeTestRunner
 
 		Application.Current.UnhandledException += ( _, e ) =>
 		{
-			_unhandled.Add( e.Exception?.ToString() ?? e.Message );
+			RecordUnhandled( e.Exception?.ToString() ?? e.Message );
 			Log( $"UNHANDLED (UI): {e.Exception}" );
 			e.Handled = true;
 			Finish( 1 );
 		};
 		AppDomain.CurrentDomain.UnhandledException += ( _, e ) =>
 		{
-			_unhandled.Add( e.ExceptionObject?.ToString() ?? "unknown" );
+			RecordUnhandled( e.ExceptionObject?.ToString() ?? "unknown" );
 			Log( $"UNHANDLED (domain): {e.ExceptionObject}" );
 			Finish( 1 );
 		};
@@ -110,13 +129,13 @@ internal static class SmokeTestRunner
 			}
 			catch( Exception ex )
 			{
-				_unhandled.Add( ex.ToString() );
+				RecordUnhandled( ex.ToString() );
 				Log( $"runner crashed: {ex}" );
 				code = 1;
 			}
 			// let any exceptions queued on the UI thread surface before exiting
 			await Task.Delay( 1000 );
-			Finish( _unhandled.Count > 0 ? 1 : code );
+			Finish( HasUnhandled() ? 1 : code );
 		} );
 	}
 
@@ -152,7 +171,7 @@ internal static class SmokeTestRunner
 			&& await Step( "login", async () =>
 			{
 				// same call the Profile Manager "Login" button makes
-				var pm = AppComposition.CreateProfileManager();
+				using var pm = AppComposition.CreateProfileManager();
 				pm.IsLoggedIn = await pm.AbleToLoginAsync();
 				if( !pm.IsLoggedIn )
 				{
@@ -175,7 +194,7 @@ internal static class SmokeTestRunner
 				page = (HackFileManagerView)frame.Content;
 
 				// the window takes the file manager's size (its preset), not the Profile Manager's
-				var preset = WindowHelper.Preset( "HackFileManager" );
+				var preset = WindowHelper.Preset( nameof( NavigatePageMenu.HackFileManager ) );
 				var appWindow = HackApp.Window!.AppWindow;
 				string Size() => $"{appWindow.Size.Width}x{appWindow.Size.Height}";
 				await WaitUntil( () => appWindow.Size.Width >= preset.Width * 0.9 && appWindow.Size.Height >= preset.Height * 0.9,
@@ -744,14 +763,14 @@ internal static class SmokeTestRunner
 		{
 			string detail = await body();
 			long stall = Interlocked.Read( ref _maxUiStallMs );
-			_steps.Add( new( name, true, sw.ElapsedMilliseconds, stall, detail ) );
+			RecordStep( new( name, true, sw.ElapsedMilliseconds, stall, detail ) );
 			Log( $"PASS {name} ({sw.ElapsedMilliseconds} ms, max UI stall {stall} ms): {detail}" );
-			return _unhandled.Count == 0;
+			return !HasUnhandled();
 		}
 		catch( Exception ex )
 		{
 			long stall = Interlocked.Read( ref _maxUiStallMs );
-			_steps.Add( new( name, false, sw.ElapsedMilliseconds, stall, ex.Message ) );
+			RecordStep( new( name, false, sw.ElapsedMilliseconds, stall, ex.Message ) );
 			Log( $"FAIL {name} ({sw.ElapsedMilliseconds} ms, max UI stall {stall} ms): {ex}" );
 			return false;
 		}
@@ -796,13 +815,20 @@ internal static class SmokeTestRunner
 		string path = Env( "HACKPDM_SMOKE_REPORT", Path.Combine( Environment.CurrentDirectory, "smoke-report.json" ) );
 		try
 		{
+			List<StepResult> stepsSnapshot;
+			List<string> unhandledSnapshot;
+			lock( _reportLock )
+			{
+				stepsSnapshot = [ .. _steps ];
+				unhandledSnapshot = [ .. _unhandled ];
+			}
 			var report = new
 			{
 				passed = exitCode == 0,
 				exitCode,
 				totalMs = _total.ElapsedMilliseconds,
-				steps = _steps,
-				unhandledExceptions = _unhandled,
+				steps = stepsSnapshot,
+				unhandledExceptions = unhandledSnapshot,
 			};
 			File.WriteAllText( path, JsonSerializer.Serialize( report, new JsonSerializerOptions { WriteIndented = true } ) );
 			Log( $"report written to {path}" );

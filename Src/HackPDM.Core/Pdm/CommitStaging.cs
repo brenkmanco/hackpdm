@@ -28,7 +28,7 @@ public static class CommitStaging
 		};
 		if( type is not null )
 		{
-			entry.cat_id = type.cat_id?.id ?? 0;
+			entry.cat_id = type.cat_id?.id;
 			entry.type_id = type.id;
 		}
 		return entry;
@@ -37,7 +37,7 @@ public static class CommitStaging
 	public static async Task<HpEntry?> FindRemoteEntryAsync( HpEntry entry )
 	{
 		HpEntry? found = ( await HpEntry.GetRecordsBySearchAsync(
-			OdooDomain.Where( "name", entry.name ).And( "dir_id", entry.dir_id?.id ).And( "deleted", false ) ) )?.FirstOrDefault();
+			OdooDomain.Where( nameof( HpEntry.name ), entry.name ).And( nameof( HpEntry.dir_id ), entry.dir_id?.id ).And( nameof( HpEntry.deleted ), false ) ) )?.FirstOrDefault();
 		if( found is { id: not 0 } )
 			found.returnType = EntryReturnType.GotExisting;
 		return found;
@@ -57,8 +57,8 @@ public static class CommitStaging
 		=> NewVersion(
 			hack,
 			stagedEntry.id,
-			stagedEntry.payload?.GetValueOrDefault( "dir_id" ) as int?,
-			stagedEntry.payload?.GetValueOrDefault( "windows_complete_name" ) as string,
+			stagedEntry.payload?.GetValueOrDefault( nameof( HpEntry.dir_id ) ) as int?,
+			stagedEntry.payload?.GetValueOrDefault( nameof( HpEntry.windows_complete_name ) ) as string,
 			stagedEntry.commit_id,
 			preReadPreview,
 			hasPreReadPreview );
@@ -68,8 +68,9 @@ public static class CommitStaging
 		HpEntry entry,
 		int commitId,
 		Action<string>? reportError = null,
-		Action<long>? onBytesUploaded = null )
-		=> StageAsync( PrepareVersion( hack, entry, commitId ), existingEntry: true, reportError, onBytesUploaded );
+		Action<long>? onBytesUploaded = null,
+		CancellationToken token = default )
+		=> StageAsync( PrepareVersion( hack, entry, commitId ), existingEntry: true, reportError, onBytesUploaded, token );
 
 	internal static Task<HpRecordStaged?> StageVersionAsync(
 		HackFile hack,
@@ -78,15 +79,17 @@ public static class CommitStaging
 		Action<string>? reportError,
 		Action<long>? onBytesUploaded,
 		byte[]? preReadPreview,
-		bool hasPreReadPreview )
-		=> StageAsync( PrepareVersion( hack, entry, commitId, preReadPreview, hasPreReadPreview ), existingEntry: true, reportError, onBytesUploaded );
+		bool hasPreReadPreview,
+		CancellationToken token = default )
+		=> StageAsync( PrepareVersion( hack, entry, commitId, preReadPreview, hasPreReadPreview ), existingEntry: true, reportError, onBytesUploaded, token );
 
 	public static Task<HpRecordStaged?> StageVersionAsync(
 		HackFile hack,
 		HpRecordStaged stagedEntry,
 		Action<string>? reportError = null,
-		Action<long>? onBytesUploaded = null )
-		=> StageAsync( PrepareVersion( hack, stagedEntry ), existingEntry: false, reportError, onBytesUploaded );
+		Action<long>? onBytesUploaded = null,
+		CancellationToken token = default )
+		=> StageAsync( PrepareVersion( hack, stagedEntry ), existingEntry: false, reportError, onBytesUploaded, token );
 
 	internal static Task<HpRecordStaged?> StageVersionAsync(
 		HackFile hack,
@@ -94,24 +97,27 @@ public static class CommitStaging
 		Action<string>? reportError,
 		Action<long>? onBytesUploaded,
 		byte[]? preReadPreview,
-		bool hasPreReadPreview )
-		=> StageAsync( PrepareVersion( hack, stagedEntry, preReadPreview, hasPreReadPreview ), existingEntry: false, reportError, onBytesUploaded );
+		bool hasPreReadPreview,
+		CancellationToken token = default )
+		=> StageAsync( PrepareVersion( hack, stagedEntry, preReadPreview, hasPreReadPreview ), existingEntry: false, reportError, onBytesUploaded, token );
 
 	private static async Task<HpRecordStaged?> StageAsync(
 		HpVersion? version,
 		bool existingEntry,
 		Action<string>? reportError,
-		Action<long>? onBytesUploaded )
+		Action<long>? onBytesUploaded,
+		CancellationToken token = default )
 	{
 		if( version is null )
 			return null;
+		token.ThrowIfCancellationRequested();
 		if( existingEntry )
 			version.HashedValues[ "__internal__existing" ] = true;
 
 		int? uploadId = null;
 		if( version.HashedValues.GetValueOrDefault( UploadSource ) is string path )
 		{
-			Result<int> uploaded = await ContentTransfer.UploadFileAsync( path, onBytes: onBytesUploaded );
+			Result<int> uploaded = await ContentTransfer.UploadFileAsync( path, token, onBytesUploaded );
 			if( !uploaded.Ok )
 			{
 				version.LastError = uploaded.Error;
@@ -131,7 +137,7 @@ public static class CommitStaging
 
 		staged.CreateTimeoutMs = ContentTransfer.TimeoutMs( inlineBytes );
 		await staged.CreateAsync();
-		staged.payload?.Remove( "file_contents" );
+		staged.payload?.Remove( nameof( HpVersion.file_contents ) );
 		version.LastError = staged.LastError;
 		if( staged.id is not null and not 0 )
 		{
@@ -166,13 +172,13 @@ public static class CommitStaging
 			name = hack.Name,
 			dir_id = dirId,
 			entry_id = entryId,
-			file_ext = hack.TypeExt?[ 1.. ].ToLowerInvariant(),
+			file_ext = hack.TypeExt is { Length: > 1 } ext ? ext[ 1.. ].ToLowerInvariant() : "",
 			WinPathway = serverName,
 			node_id = OdooDefaults.Instance.MyNode?.id,
 			file_contents = contents,
 			preview_image = hasPreReadPreview ? preReadPreview : PreviewOf( hack ),
 			commit_id = commit,
-			HashedValues = { [ "windows_complete_name" ] = serverName },
+			HashedValues = { [ nameof( HpVersion.windows_complete_name ) ] = serverName },
 		};
 		if( uploadFrom is not null )
 			version.HashedValues[ UploadSource ] = uploadFrom;
@@ -202,7 +208,7 @@ public static class CommitStaging
 		}
 		catch( Exception ex )
 		{
-			HackLogger.Error( "CommitStaging", $"Failed reading '{hack.FullPath}': {ex.Message}", ex );
+			HackLogger.Error( nameof( CommitStaging ), $"Failed reading '{hack.FullPath}': {ex.Message}", ex );
 			return null;
 		}
 	}
@@ -217,7 +223,7 @@ public static class CommitStaging
 		}
 		catch( Exception ex )
 		{
-			HackLogger.Debug( "CommitStaging", $"No preview extracted for '{path}': {ex.Message}", ex );
+			HackLogger.Debug( nameof( CommitStaging ), $"No preview extracted for '{path}': {ex.Message}", ex );
 			return null;
 		}
 	}
@@ -232,10 +238,9 @@ public static class CommitStaging
 
 	private static string? SolidWorksFileOf( HpRecordStaged? version )
 	{
-		if( version is null || !SwDocumentTypes.IsSolidWorksExtension( version.payload?.GetValueOrDefault( "file_ext" )?.ToString() ) )
+		if( version is null || !SwDocumentTypes.IsSolidWorksExtension( version.payload?.GetValueOrDefault( nameof( HpVersion.file_ext ) )?.ToString() ) )
 			return null;
-		string serverName = version.payload?.GetValueOrDefault( "WinPathway" )?.ToString()
-			?? version.HashedValues.GetValueOrDefault( "windows_complete_name" ) as string
+		string serverName = version.HashedValues.GetValueOrDefault( nameof( HpVersion.windows_complete_name ) ) as string
 			?? throw new ArgumentException( $"staged version {version.id} has no path" );
 		return PwaPaths.ToAbsolute( serverName );
 	}
@@ -283,11 +288,11 @@ public static class CommitStaging
 						payload = new Dictionary<string, object?>
 						{
 							[ "path" ] = path,
-							[ "windows_complete_name" ] = PwaPaths.ToServerName( path ),
+							[ nameof( HpVersion.windows_complete_name ) ] = PwaPaths.ToServerName( path ),
 							[ "version" ] = new Dictionary<string, object?>
 							{
-								[ "name" ] = version.payload?.GetValueOrDefault( "name" ),
-								[ "entry_id" ] = version.payload?.GetValueOrDefault( "entry_id" ),
+								[ nameof( HpVersion.name ) ] = version.payload?.GetValueOrDefault( nameof( HpVersion.name ) ),
+								[ nameof( HpVersion.entry_id ) ] = version.payload?.GetValueOrDefault( nameof( HpVersion.entry_id ) ),
 								[ "version_staged_id" ] = version.id,
 							},
 						},
@@ -296,14 +301,14 @@ public static class CommitStaging
 			}
 			if( staged.Count > 0 && await HpRecordStaged.MultiCreateAsync( staged ) is { Ok: false } failed )
 			{
-				HackLogger.Error( "CommitStaging", $"Unable to stage relationships: {failed.Error}" );
+				HackLogger.Error( nameof( CommitStaging ), $"Unable to stage relationships: {failed.Error}" );
 				return false;
 			}
 			return true;
 		}
 		catch( Exception e )
 		{
-			HackLogger.Error( "CommitStaging", $"Unable to create relationships: {e.Message}", e );
+			HackLogger.Error( nameof( CommitStaging ), $"Unable to create relationships: {e.Message}", e );
 			return false;
 		}
 	}
@@ -334,7 +339,7 @@ public static class CommitStaging
 				}
 				else
 				{
-					foreach( var (config, name, type, value) in SolidWorksUtil.DocMgr.GetProperties( file ) ?? [] )
+					foreach( var (config, name, type, value) in SolidWorksUtil.DocMgr?.GetProperties( file ) ?? [] )
 					{
 						if( HpVersionProperty.FromSwProperty( config, name, type, value, versionId, version.commit_id ) is { } property )
 							staged.Add( property );
@@ -343,13 +348,13 @@ public static class CommitStaging
 			}
 			catch( Exception e )
 			{
-				HackLogger.Error( "CommitStaging", $"Unable to create properties for staged version {version.id}: {e.Message}", e );
+				HackLogger.Error( nameof( CommitStaging ), $"Unable to create properties for staged version {version.id}: {e.Message}", e );
 				return false;
 			}
 		}
 		if( staged.Count > 0 && await HpVersionProperty.MultiStageAsync( staged ) is { Ok: false } failed )
 		{
-			HackLogger.Error( "CommitStaging", $"Unable to stage properties: {failed.Error}" );
+			HackLogger.Error( nameof( CommitStaging ), $"Unable to stage properties: {failed.Error}" );
 			return false;
 		}
 		return true;

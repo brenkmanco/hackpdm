@@ -28,7 +28,7 @@ public sealed partial class MessageBox : Page
 		[ MessageBoxButtons.CancelTryContinue ] = [ new( "Cancel", DialogResult.Cancel, 0 ), new( "Try", DialogResult.TryAgain, 2 ), new( "Continue", DialogResult.Continue, 3, true ) ],
 	};
 
-	private TaskCompletionSource<DialogResult> _result = new();
+	private TaskCompletionSource<DialogResult>? _result;
 	private Window? _window;
 
 	public MessageBox()
@@ -51,10 +51,7 @@ public sealed partial class MessageBox : Page
 				IsTextSelectionEnabled = true,
 			},
 		};
-		Grid.SetRow( text, 0 );
-		Grid.SetColumn( text, 0 );
-		Grid.SetRowSpan( text, 3 );
-		Grid.SetColumnSpan( text, 4 );
+		text.SetGrid( 0, 0, rowspan: 3, columnspan: 4 );
 		RootGrid.Children.Add( text );
 
 		ButtonSpec[] specs = Layouts.GetValueOrDefault( buttons ) ?? Layouts[ MessageBoxButtons.OK ];
@@ -70,8 +67,7 @@ public sealed partial class MessageBox : Page
 				Height = 32,
 			};
 			button.Click += ( _, _ ) => Close( spec.Result );
-			Grid.SetRow( button, ButtonRow );
-			Grid.SetColumn( button, spec.Column );
+			button.SetGrid( ButtonRow, spec.Column );
 			RootGrid.Children.Add( button );
 		}
 
@@ -93,7 +89,7 @@ public sealed partial class MessageBox : Page
 
 	private void Close( DialogResult result )
 	{
-		_result.TrySetResult( result );
+		_result?.TrySetResult( result );
 		_window?.Close();
 	}
 
@@ -105,7 +101,7 @@ public sealed partial class MessageBox : Page
 			await UiDispatcher.Current.RunAsync( () =>
 			{
 				MessageBox page = new();
-				Window window = WindowHelper.CreateWindow<Window>( "MessageBox" );
+				Window window = WindowHelper.CreateWindow<Window>( nameof( MessageBox ) );
 				window.Title = string.IsNullOrWhiteSpace( caption ) ? "Info" : caption;
 				( window.Content as Frame )?.Content = page;
 				page.Populate( message, buttons, window, result );
@@ -113,7 +109,7 @@ public sealed partial class MessageBox : Page
 		}
 		catch( Exception ex )
 		{
-			HackLogger.Warn( "MessageBox", $"XAML MessageBox failed; falling back to native dialog: {ex.Message}", ex );
+			HackLogger.Warn( nameof( MessageBox ), $"XAML MessageBox failed; falling back to native dialog: {ex.Message}", ex );
 			result.TrySetResult( ShowNative( message, caption ?? "Information", (uint)buttons | (uint)icon | 0x00040000u ) );
 		}
 		return await result.Task;
@@ -124,7 +120,7 @@ public sealed partial class MessageBox : Page
 #if WINDOWS
 		return (DialogResult)MsgBox( HackApp.Window?.IntPtrHandle ?? 0, message, title, type );
 #else
-		HackLogger.Info( "MessageBox", $"[Native MessageBox Fallback] {title}: {message}" );
+		HackLogger.Info( nameof( MessageBox ), $"[Native MessageBox Fallback] {title}: {message}" );
 		return DialogResult.OK;
 #endif
 	}

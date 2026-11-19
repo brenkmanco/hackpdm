@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 using HackPDM.Common;
+using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Pdm;
 using HackPDM.Core.Services;
@@ -71,8 +72,9 @@ public sealed partial class SearchOdooViewModel(
 
 	public void LoadLookups()
 	{
-		if( PropertiesSearchable.Count == 0 )
+		if( PropertiesSearchable.Count != OdooDefaults.Instance.IdToProp.Count )
 		{
+			PropertiesSearchable.Clear();
 			foreach( SearchPropertiesRow property in search.GetSearchableProperties() )
 				PropertiesSearchable.Add( property );
 		}
@@ -117,6 +119,11 @@ public sealed partial class SearchOdooViewModel(
 			};
 			OnPropertyChanged( nameof( QuickResultsPlaceholder ) );
 			SearchCompleted?.Invoke( rows.Count );
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Error( "Search", $"Search failed: {ex.Message}", ex );
+			SearchStatusText = $"Search failed: {ex.Message}";
 		}
 		finally
 		{
@@ -164,6 +171,7 @@ public sealed partial class SearchOdooViewModel(
 			Value = PropertyValue,
 			Name = property.Name,
 			Text = property.Text,
+			IsTextOrDate = property.IsTextOrDate,
 		} );
 		PropertyValue = string.Empty;
 	}

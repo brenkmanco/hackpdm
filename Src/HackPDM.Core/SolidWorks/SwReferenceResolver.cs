@@ -91,6 +91,16 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 	/// <summary>Follows <paramref name="segments"/> under <paramref name="root"/>, matching each name case-insensitively.</summary>
 	private static string? Find( string root, ReadOnlySpan<string> segments )
 	{
+		if( segments.IsEmpty )
+			return null;
+		if( OperatingSystem.IsWindows() )
+		{
+			string direct = root;
+			for( int i = 0; i < segments.Length; i++ )
+				direct = Path.Combine( direct, segments[ i ] );
+			if( !File.Exists( direct ) )
+				return null;
+		}
 		string current = root;
 		for( int i = 0; i < segments.Length; i++ )
 		{

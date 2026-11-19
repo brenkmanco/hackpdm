@@ -270,9 +270,9 @@ public static class GraphLayout
 			HashSet<int> pushedRoots = [ .. roots.Where( r => layer.TryGetValue( r, out int l ) && l > 0 ) ];
 			up.ExceptWith( pushedRoots );
 
-			HashSet<int> pinnedUpRoots = FindIndependentRoots(
-				[ .. roots.Where( up.Contains ) ], up, childrenOf );
-			AssignDirectionLayers( up, pinnedUpRoots, [ .. roots.Where( up.Contains ) ], parentsOf, layer, step: -1 );
+			List<int> upRoots = [ .. roots.Where( up.Contains ) ];
+			HashSet<int> pinnedUpRoots = FindIndependentRoots( upRoots, up, childrenOf );
+			AssignDirectionLayers( up, pinnedUpRoots, upRoots, parentsOf, layer, step: -1 );
 		}
 
 		// Anything not linked to a selected file joins layer 0
@@ -1112,10 +1112,10 @@ public static class GraphLayout
 		// Compute the 4 Brandes–Köpf directional layouts
 		double[][] layouts =
 		[
-			ComputeBkLayout( columns, vertCount, vertHeight, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: true, topToBottom: true ),
-			ComputeBkLayout( columns, vertCount, vertHeight, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: false, topToBottom: true ),
-			ComputeBkLayout( columns, vertCount, vertHeight, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: true, topToBottom: false ),
-			ComputeBkLayout( columns, vertCount, vertHeight, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: false, topToBottom: false ),
+			ComputeBkLayout( columns, vertCount, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: true, topToBottom: true ),
+			ComputeBkLayout( columns, vertCount, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: false, topToBottom: true ),
+			ComputeBkLayout( columns, vertCount, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: true, topToBottom: false ),
+			ComputeBkLayout( columns, vertCount, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: false, topToBottom: false ),
 		];
 
 		// Normalize each layout to start at top = 0 and find the tightest (minimum-height) one
@@ -1252,7 +1252,6 @@ public static class GraphLayout
 	private static double[] ComputeBkLayout(
 		List<int>[] columns,
 		int vertCount,
-		List<double> vertHeight,
 		List<List<int>> leftAdj,
 		List<List<int>> rightAdj,
 		int[] pos,

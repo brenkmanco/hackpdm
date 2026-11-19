@@ -32,7 +32,7 @@ public sealed class Program
             }
             catch { }
 
-            try { AppComposition.LocalFiles.Dispose(); } catch { }
+            try { AppComposition.DisposeLocalFilesIfCreated(); } catch { }
             Environment.Exit(1);
         }
     }

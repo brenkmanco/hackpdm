@@ -20,10 +20,16 @@ public interface IEntryDetailsService
 
 public sealed class EntryDetailsService : IEntryDetailsService
 {
-	private static readonly string[] NoBlobs = [ "preview_image", "file_contents" ];
+	private static readonly string[] NoBlobs = [ nameof( HpVersion.preview_image ), nameof( HpVersion.file_contents ) ];
+	private static readonly string[] HistoryInsertFields = [ "create_uid" ];
+	private static readonly string[] PropertyIdInsertFields = [ "version_property_ids" ];
 
 	private static async Task<HpVersion[]> GetVersionsAsync( int entryId )
-		=> await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>( [ entryId ], "version_ids", excludedFields: NoBlobs ) ?? [];
+		=> await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
+			[ entryId ],
+			"version_ids",
+			excludedFields: NoBlobs,
+			insertFields: HistoryInsertFields ) ?? [];
 
 	public async Task<List<HistoryRow>> GetHistoryAsync( EntryRow entry )
 	{
@@ -52,12 +58,12 @@ public sealed class EntryDetailsService : IEntryDetailsService
 			{ LatestId: not ( null or 0 ) } => await HpVersion.GetRelatedRecordByIdsAsync<HpVersion>(
 				recordIds: [ entry.LatestId.Value ],
 				relatedFieldName: relation,
-				includedFields: [ "name" ],
+				includedFields: [ nameof( HpVersion.name ) ],
 				insertFields: [ "directory_complete_name" ] ),
 			{ Id: not ( null or 0 ) } => await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
 				recordIds: [ entry.Id.Value ],
 				relatedFieldName: $"{nameof( HpEntry.latest_version_id )}.{relation}",
-				includedFields: [ "name" ],
+				includedFields: [ nameof( HpVersion.name ) ],
 				insertFields: [ "directory_complete_name" ] ),
 			_ => null,
 		};
@@ -83,35 +89,54 @@ public sealed class EntryDetailsService : IEntryDetailsService
 		if( entry.Id is not int id )
 			return [];
 
-		HpVersion[] versions = await GetVersionsAsync( id );
-		if( versions.Length == 0 )
+		HpVersion[]? versions = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
+			[ id ],
+			"version_ids",
+			includedFields: [ nameof( HpVersion.id ) ],
+			insertFields: PropertyIdInsertFields );
+		if( versions is not { Length: > 0 } )
 			return [];
 
-		List<HpVersionProperty[]?> all = await HpVersion.GetAllVersionPropertiesAsync( versions.Ids() );
-		var rows = all
-			.SelectMany( props => props ?? [] )
-			.Where( p => p is { id: not 0 } )
-			.Select( p =>
+		HashSet<int> propIds = [];
+		for( int i = 0; i < versions.Length; i++ )
+		{
+			IReadOnlyList<int> ids = OdooValues.Ids( versions[ i ].HashedValues.GetValueOrDefault( "version_property_ids" ) );
+			for( int j = 0; j < ids.Count; j++ )
+				propIds.Add( ids[ j ] );
+		}
+		if( propIds.Count == 0 )
+			return [];
+
+		HpVersionProperty[]? props = await HpVersionProperty.GetRecordsByIdsAsync( [ .. propIds ] );
+		if( props is not { Length: > 0 } )
+			return [];
+
+		List<PropertiesRow> rows = new( props.Length );
+		for( int i = 0; i < props.Length; i++ )
+		{
+			HpVersionProperty p = props[ i ];
+			if( p.id is null or 0 )
+				continue;
+			PropertyType type = p.GetValueType();
+			rows.Add( new PropertiesRow
 			{
-				PropertyType type = p.GetValueType();
-				return new PropertiesRow
+				Version = p.version_id?.id ?? 0,
+				Configuration = p.sw_config_name,
+				Name = p.prop_name,
+				Property = p.prop_id,
+				Type = type,
+				ValueData = type switch
 				{
-					Version = p.version_id?.id ?? 0,
-					Configuration = p.sw_config_name,
-					Name = p.prop_name,
-					Property = p.prop_id,
-					Type = type,
-					ValueData = type switch
-					{
-						PropertyType.Yesno => p.yesno_value,
-						PropertyType.Number => p.number_value,
-						PropertyType.Text => p.text_value,
-						PropertyType.Date => p.date_value,
-						_ => null,
-					},
-				};
+					PropertyType.Yesno => p.yesno_value,
+					PropertyType.Number => p.number_value,
+					PropertyType.Text => p.text_value,
+					PropertyType.Date => p.date_value,
+					_ => null,
+				},
 			} );
-		return [ .. rows.OrderByDescending( r => r.Version ) ];
+		}
+		rows.Sort( static ( a, b ) => b.Version.CompareTo( a.Version ) );
+		return rows;
 	}
 
 	public async Task<List<VersionRow>> GetVersionInfoAsync( EntryRow entry )
@@ -138,7 +163,7 @@ public sealed class EntryDetailsService : IEntryDetailsService
 				EntryId = version.entry_id,
 				AttachmentId = version.attachment_id,
 				ModifyDate = version.file_modify_stamp,
-				OdooCompletePath = OdooValues.Many2OneName( version.HashedValues.GetValueOrDefault( "dir_id" ) ),
+				OdooCompletePath = version.dir_id?.name,
 			},
 		];
 	}
@@ -148,7 +173,7 @@ public sealed class EntryDetailsService : IEntryDetailsService
 		if( versionId is null or 0 )
 			return null;
 
-		HpVersion? version = ( await HpVersion.GetRecordsByIdsAsync( [ versionId.Value ], includedFields: [ "preview_image" ] ) )?.FirstOrDefault();
+		HpVersion? version = ( await HpVersion.GetRecordsByIdsAsync( [ versionId.Value ], includedFields: [ nameof( HpVersion.preview_image ) ] ) )?.FirstOrDefault();
 		return version?.preview_image is { Length: > 0 } bytes ? bytes : null;
 	}
 
@@ -169,7 +194,7 @@ public sealed class EntryDetailsService : IEntryDetailsService
 
 		Dictionary<string, object?> values = new()
 		{
-			[ "preview_image" ] = Convert.ToBase64String( imageBytes ),
+			[ nameof( HpVersion.preview_image ) ] = Convert.ToBase64String( imageBytes ),
 		};
 		return await OdooRpc.WriteAsync( HpVersion.ModelName, [ versionId ], values );
 	}

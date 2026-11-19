@@ -6,12 +6,9 @@ namespace HackPDM.Core.Pdm;
 /// <summary>Represents a local/vault file along with disk metadata and optional server ids.</summary>
 public sealed class HackFile
 {
-	private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
-		? StringComparer.OrdinalIgnoreCase
-		: StringComparer.Ordinal;
-
 	private string? _identityPath;
 	private bool _identityResolved;
+	private bool? _exists;
 
 	public string? Name
 	{
@@ -30,6 +27,7 @@ public sealed class HackFile
 		{
 			field = value;
 			_identityResolved = false;
+			_exists = null;
 		}
 	}
 
@@ -50,7 +48,15 @@ public sealed class HackFile
 		set;
 	}
 	public byte[]? FileContents { get; set; }
-	public FileInfo? Info { get; set; }
+	public FileInfo? Info
+	{
+		get;
+		set
+		{
+			field = value;
+			_exists = null;
+		}
+	}
 
 	public string? TypeExt
 	{
@@ -109,18 +115,16 @@ public sealed class HackFile
 	{
 		get
 		{
-			field ??= Info?.Exists;
-			if( field is not null )
-				return field;
+			_exists ??= Info?.Exists;
+			if( _exists is not null )
+				return _exists;
 			if( FullPath is not null )
-				field = Path.Exists( FullPath );
-			return field;
+				_exists = Path.Exists( FullPath );
+			return _exists;
 		}
 	}
 
 	public HackFile() { }
-
-	public HackFile( HackFile hack ) => AssignFrom( hack );
 
 	public HackFile(
 		string name,
@@ -191,7 +195,7 @@ public sealed class HackFile
 			}
 			catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException )
 			{
-				HackLogger.Warn( "HackFile", $"Could not inspect '{FullPath}': {ex.Message}", ex );
+				HackLogger.Warn( nameof( HackFile ), $"Could not inspect '{FullPath}': {ex.Message}", ex );
 				Info = null;
 			}
 		}
@@ -221,11 +225,13 @@ public sealed class HackFile
 			return;
 		try
 		{
-			Info.LastWriteTime = OverwriteDate;
+			Info.LastWriteTimeUtc = OverwriteDate.Kind == DateTimeKind.Local
+				? OverwriteDate.ToUniversalTime()
+				: DateTime.SpecifyKind( OverwriteDate, DateTimeKind.Utc );
 		}
 		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException )
 		{
-			HackLogger.Warn( "HackFile", $"Could not set modified date on '{fullPath}': {ex.Message}", ex );
+			HackLogger.Warn( nameof( HackFile ), $"Could not set modified date on '{fullPath}': {ex.Message}", ex );
 		}
 	}
 
@@ -241,7 +247,7 @@ public sealed class HackFile
 		}
 		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException )
 		{
-			HackLogger.Warn( "HackFile", $"Could not set read-only attribute on '{FullPath}': {ex.Message}", ex );
+			HackLogger.Warn( nameof( HackFile ), $"Could not set read-only attribute on '{FullPath}': {ex.Message}", ex );
 		}
 	}
 
@@ -253,10 +259,14 @@ public sealed class HackFile
 		DirectoryName = hack?.DirectoryName;
 		RelativePath = hack?.RelativePath;
 		TypeExt = hack?.TypeExt;
+		OverwriteDate = hack?.OverwriteDate ?? default;
 		ModifiedDate = hack?.ModifiedDate ?? default;
 		Checksum = hack?.Checksum;
+		HpEntryId = hack?.HpEntryId;
+		HasRemoteEntry = hack?.HasRemoteEntry;
 		HpVersionId = hack?.HpVersionId;
 		HasRemoteVersion = hack?.HasRemoteVersion;
+		Owner = hack?.Owner;
 		FileContents = hack?.FileContents;
 		FileSize = hack?.FileSize;
 	}
@@ -322,10 +332,8 @@ public sealed class HackFile
 			return false;
 		string? mine = IdentityPath;
 		string? theirs = other.IdentityPath;
-		return mine is not null && theirs is not null && PathComparer.Equals( mine, theirs );
+		return mine is not null && theirs is not null && PwaPaths.PathComparer.Equals( mine, theirs );
 	}
 
-	public override int GetHashCode() => IdentityPath is { } path ? PathComparer.GetHashCode( path ) : 0;
-
-	public static implicit operator HackFile( FileInfo file ) => new( file );
+	public override int GetHashCode() => IdentityPath is { } path ? PwaPaths.PathComparer.GetHashCode( path ) : 0;
 }

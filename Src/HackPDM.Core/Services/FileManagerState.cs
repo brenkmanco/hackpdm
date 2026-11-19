@@ -54,7 +54,7 @@ public sealed class FileManagerState
 		return _entries is not null
 			&& ( Stale & FileManagerRefresh.Entries ) == 0
 			&& _entriesIncludeDeleted == includeDeleted
-			&& string.Equals( _entriesPath, treePath, StringComparison.OrdinalIgnoreCase );
+			&& PwaPaths.SameTreePath( _entriesPath, treePath );
 	}
 
 	public void MarkStale( FileManagerRefresh what )
@@ -68,21 +68,6 @@ public sealed class FileManagerState
 	{
 		Tree = tree;
 		Stale &= ~FileManagerRefresh.Tree;
-	}
-
-	public void LocalFilesChanged( IEnumerable<string?>? treeFolders )
-	{
-		if( LivePages > 0 )
-			return;
-		if( treeFolders is null )
-		{
-			MarkStale( FileManagerRefresh.All );
-			return;
-		}
-		if( _entriesPath is not { } kept )
-			return;
-		if( treeFolders.Any( folder => PwaPaths.SameTreePath( folder, kept ) ) )
-			MarkStale( FileManagerRefresh.Entries );
 	}
 
 	public void LocalFilesChanged( IReadOnlyList<LocalFileChange>? changes )

@@ -10,14 +10,14 @@ namespace HackPDM.Core.Services;
 
 public sealed class SavedProfileData
 {
-	[JsonPropertyName( "OdooAddress" )] public string? OdooAddress { get; set; }
-	[JsonPropertyName( "OdooPort" )] public string? OdooPort { get; set; }
-	[JsonPropertyName( "OdooUseHttps" )] public bool? OdooUseHttps { get; set; }
-	[JsonPropertyName( "OdooDb" )] public string? OdooDb { get; set; }
-	[JsonPropertyName( "PWAPathAbsolute" )] public string? PWAPathAbsolute { get; set; }
-	[JsonPropertyName( "OdooCredentialTarget" )] public string? OdooCredentialTarget { get; set; }
-	[JsonPropertyName( "Username" )] public string? Username { get; set; }
-	[JsonPropertyName( "Password" )] public string? Password { get; set; }
+	[JsonPropertyName( nameof( OdooAddress ) )] public string? OdooAddress { get; set; }
+	[JsonPropertyName( nameof( OdooPort ) )] public string? OdooPort { get; set; }
+	[JsonPropertyName( nameof( OdooUseHttps ) )] public bool? OdooUseHttps { get; set; }
+	[JsonPropertyName( nameof( OdooDb ) )] public string? OdooDb { get; set; }
+	[JsonPropertyName( nameof( PWAPathAbsolute ) )] public string? PWAPathAbsolute { get; set; }
+	[JsonPropertyName( nameof( OdooCredentialTarget ) )] public string? OdooCredentialTarget { get; set; }
+	[JsonPropertyName( nameof( Username ) )] public string? Username { get; set; }
+	[JsonPropertyName( nameof( Password ) )] public string? Password { get; set; }
 }
 
 /// <summary>Loads, saves, and applies JSON connection profiles.</summary>
@@ -70,12 +70,13 @@ public static class ProfileStore
 		if( !string.IsNullOrEmpty( profile.PWAPathAbsolute ) )
 			HackDefaults.Instance.PwaPathAbsolute = profile.PWAPathAbsolute;
 
-		string? username = FirstNonEmpty( profile.Username, odoo.OdooUser );
-		string? password = FirstNonEmpty( profile.Password, odoo.OdooPass );
-		if( username is null || password is null )
-			return;
-		odoo.OdooUser = username;
-		odoo.OdooPass = password;
+		odoo.OdooUrl = null;
+		odoo.OdooId = 0;
+
+		if( FirstNonEmpty( profile.Username, odoo.OdooUser ) is { } username )
+			odoo.OdooUser = username;
+		if( FirstNonEmpty( profile.Password, odoo.OdooPass ) is { } password )
+			odoo.OdooPass = password;
 	}
 
 	public static async Task<SavedProfileData?> ReadAsync( string path )

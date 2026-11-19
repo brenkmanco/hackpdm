@@ -45,94 +45,19 @@ public sealed class RangeObservableCollection<T> : ObservableCollection<T>
 		ReplaceAll( sorted );
 	}
 
-	public void AddRangeBounded( IReadOnlyList<T> batch, int limit )
-	{
-		int batchCount = batch.Count;
-		if( batchCount == 0 )
-			return;
-		if( limit <= 0 )
-		{
-			ClearIfNonEmpty();
-			return;
-		}
-		if( batchCount == 1 && Items.Count < limit )
-		{
-			Add( batch[ 0 ] );
-			return;
-		}
-
-		CheckReentrancy();
-		if( batchCount >= limit )
-		{
-			Items.Clear();
-			int start = batchCount - limit;
-			if( Items is List<T> list )
-				list.EnsureCapacity( limit );
-			for( int i = start; i < batchCount; i++ )
-				Items.Add( batch[ i ] );
-		}
-		else
-		{
-			int excess = Items.Count + batchCount - limit;
-			if( excess > 0 )
-			{
-				if( Items is List<T> list )
-					list.RemoveRange( 0, excess );
-				else
-					for( int i = 0; i < excess; i++ )
-						Items.RemoveAt( 0 );
-			}
-			for( int i = 0; i < batchCount; i++ )
-				Items.Add( batch[ i ] );
-		}
-		NotifyReset();
-	}
-
-	public void TrimStartTo( int limit )
-	{
-		int excess = Items.Count - Math.Max( 0, limit );
-		if( excess <= 0 )
-			return;
-		CheckReentrancy();
-		if( Items is List<T> list )
-			list.RemoveRange( 0, excess );
-		else
-			for( int i = 0; i < excess; i++ )
-				Items.RemoveAt( 0 );
-		NotifyReset();
-	}
-
 	public void Sort( Func<T, IComparable?> keySelector, bool descending )
 		=> ReplaceAll( SortToList( Items, keySelector, descending ) );
 
 	private static List<T> SortToList( IEnumerable<T> items, Func<T, IComparable?> keySelector, bool descending )
 		=> descending
-			? [ .. items.OrderByDescending( keySelector, ComparableComparer.Instance ) ]
-			: [ .. items.OrderBy( keySelector, ComparableComparer.Instance ) ];
+			? [ .. items.OrderByDescending( keySelector, SafeComparableComparer.Instance ) ]
+			: [ .. items.OrderBy( keySelector, SafeComparableComparer.Instance ) ];
 
 	private void NotifyReset()
 	{
 		OnPropertyChanged( CountChangedArgs );
 		OnPropertyChanged( IndexerChangedArgs );
 		OnCollectionChanged( ResetChangedArgs );
-	}
-
-	private sealed class ComparableComparer : IComparer<IComparable?>
-	{
-		public static readonly ComparableComparer Instance = new();
-
-		public int Compare( IComparable? x, IComparable? y )
-		{
-			if( ReferenceEquals( x, y ) )
-				return 0;
-			if( x is null )
-				return -1;
-			if( y is null )
-				return 1;
-			return x.GetType() == y.GetType()
-				? x.CompareTo( y )
-				: string.CompareOrdinal( x.ToString(), y.ToString() );
-		}
 	}
 }
 

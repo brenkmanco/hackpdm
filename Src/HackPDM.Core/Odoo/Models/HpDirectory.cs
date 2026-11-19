@@ -5,7 +5,7 @@ namespace HackPDM.Core.Odoo.Models;
 public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 {
 	public static string ModelName => "hp.directory";
-	public static string[] AllFields { get; } = [ "name", "parent_path", "parent_id", "default_cat", "deleted", "sandboxed" ];
+	public static string[] AllFields { get; } = [ nameof( name ), nameof( parent_path ), nameof( parent_id ), nameof( default_cat ), nameof( deleted ), nameof( sandboxed ) ];
 
 	public string? name { get; set; }
 	public string? parent_path { get; set; }
@@ -18,24 +18,24 @@ public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 	{
 		switch( field )
 		{
-			case "name": name = OdooValues.ReadString( value ); return true;
-			case "parent_path": parent_path = OdooValues.ReadString( value ); return true;
-			case "parent_id": parent_id = OdooValues.ReadMany2One( value ); return true;
-			case "default_cat": default_cat = OdooValues.ReadMany2One( value ); return true;
-			case "deleted": deleted = OdooValues.ReadBool( value ); return true;
-			case "sandboxed": sandboxed = OdooValues.ReadBool( value ); return true;
+			case nameof( name ): name = OdooValues.ReadString( value ); return true;
+			case nameof( parent_path ): parent_path = OdooValues.ReadString( value ); return true;
+			case nameof( parent_id ): parent_id = OdooValues.ReadMany2One( value ); return true;
+			case nameof( default_cat ): default_cat = OdooValues.ReadMany2One( value ); return true;
+			case nameof( deleted ): deleted = OdooValues.ReadBool( value ); return true;
+			case nameof( sandboxed ): sandboxed = OdooValues.ReadBool( value ); return true;
 			default: return false;
 		}
 	}
 
 	public override Dictionary<string, object?> ToOdoo() => new()
 	{
-		[ "name" ] = name,
-		[ "parent_path" ] = parent_path,
-		[ "parent_id" ] = parent_id?.id,
-		[ "default_cat" ] = default_cat?.id,
-		[ "deleted" ] = OdooValues.OutBool( deleted ),
-		[ "sandboxed" ] = OdooValues.OutBool( sandboxed ),
+		[ nameof( name ) ] = name,
+		[ nameof( parent_path ) ] = parent_path,
+		[ nameof( parent_id ) ] = parent_id?.id,
+		[ nameof( default_cat ) ] = default_cat?.id,
+		[ nameof( deleted ) ] = OdooValues.OutBool( deleted ),
+		[ nameof( sandboxed ) ] = OdooValues.OutBool( sandboxed ),
 	};
 
 	public static async Task<Result<LastAvailableDirectory>> LastAvailableDirectory( IReadOnlyList<string> paths )
@@ -96,9 +96,6 @@ public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 			OdooRpc.LongTimeout );
 		return entries.Map( RemoteEntryDto.ListFrom );
 	}
-
-	public Task<Result<IReadOnlyList<int>>> GetDirectoryEntryIDsAsync( bool withSubEntries = false, bool withDeleted = true )
-		=> GetDirectoryEntryIDsAsync( id ?? 0, withSubEntries, withDeleted );
 
 	public static Task<Result<IReadOnlyList<int>>> GetDirectoryEntryIDsAsync(
 		int directoryId,

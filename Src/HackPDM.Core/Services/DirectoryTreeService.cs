@@ -21,9 +21,6 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 		ReturnSpecialDirectories = false,
 		AttributesToSkip = FileAttributes.None,
 	};
-	private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
-		? StringComparer.OrdinalIgnoreCase
-		: StringComparer.Ordinal;
 
 	public Task<DirectoryNode?> LoadAsync() => LoadAsync( progress: null, token: CancellationToken.None );
 
@@ -35,7 +32,8 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 				return null;
 
 			string pwa = HackDefaults.Instance.PwaPathAbsolute;
-			Task<(HashSet<string> Paths, bool RootExists)> localScanTask = Task.Run( () => LocalTreePathSet( pwa ), token );
+			string rootName = remoteRoot.name is { Length: > 0 } rn ? rn : PwaPaths.Root;
+			Task<(HashSet<string> Paths, bool RootExists)> localScanTask = Task.Run( () => LocalTreePathSet( pwa, rootName ), token );
 
 			progress?.Report( "Fetching folder structure from Odoo…" );
 			Result<SubdirectoryDto> tree = await remoteRoot.GetSubdirectoriesAsync( false );
@@ -50,7 +48,7 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 			var (localPaths, rootExists) = await localScanTask;
 			return await Task.Run( () =>
 			{
-				HashSet<string> remotePaths = new( PathComparer );
+				HashSet<string> remotePaths = new( PwaPaths.PathComparer );
 				DirectoryNode root = FromRemote( remote, parentPath: null, rootExists, localPaths, remotePaths );
 				DirectoryTreeMerger.AddLocalDirectories( root, localPaths.Where( p => !remotePaths.Contains( p ) ) );
 				root.SortRecursive();
@@ -88,9 +86,9 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 		return node;
 	}
 
-	private static (HashSet<string> Paths, bool RootExists) LocalTreePathSet( string pwa )
+	private static (HashSet<string> Paths, bool RootExists) LocalTreePathSet( string pwa, string rootName )
 	{
-		HashSet<string> set = new( PathComparer );
+		HashSet<string> set = new( PwaPaths.PathComparer );
 		if( string.IsNullOrEmpty( pwa ) || !Directory.Exists( pwa ) )
 			return ( set, false );
 
@@ -104,8 +102,8 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 			if( tail.IsEmpty )
 				continue;
 			string treePath = tail.Contains( '/' )
-				? string.Concat( PwaPaths.Root, "\\", tail ).Replace( '/', '\\' )
-				: string.Concat( PwaPaths.Root, "\\", tail );
+				? string.Concat( rootName, "\\", tail ).Replace( '/', '\\' )
+				: string.Concat( rootName, "\\", tail );
 			set.Add( treePath );
 		}
 		return ( set, true );

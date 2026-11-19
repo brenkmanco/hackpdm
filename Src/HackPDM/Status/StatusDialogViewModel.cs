@@ -24,12 +24,13 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 {
 	private const string HistoryLengthSettingKey = "StatusHistoryLength";
 	private const int DefaultHistoryLength = 1000;
-	private const int MaxLogsPerUiTick = 200;
+	private const int UiFlushIntervalMs = 120;
 
-	private static int? _cachedHistoryLength;
+	private static int _cachedHistoryLength = -1;
 
 	private readonly Lock _gate = new();
 	private readonly Action _cancelOperation;
+	private readonly Action _cancelSilentOperation;
 	private readonly IDialogService _dialogs;
 	private readonly ConcurrentQueue<BasicStatusMessage> _pendingLogs = new();
 	private readonly List<BasicStatusMessage> _batchStatus = [];
@@ -37,10 +38,20 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	private readonly List<BasicStatusMessage> _batchError = [];
 	private readonly List<BasicStatusMessage> _batchWarnings = [];
 	private readonly List<BasicStatusMessage> _batchErrorsOnly = [];
-	private readonly Action _runLogFlush;
-	private readonly Action _runProgressRefresh;
-	private int _refreshQueued;
-	private int _logFlushQueued;
+	private readonly Action _runUiFlush;
+	private readonly Timer _uiFlushTimer;
+	private long _lastUiFlushTick;
+	private int _uiFlushScheduled;
+	private int _logDirty;
+	private int _progressDirty;
+	private int _maxCount;
+	private int _totalProcessed;
+	private int _skipCounter;
+	private int _processCounter;
+	private long _downloadedBytes;
+	private long _sessionDownloadedBytes;
+	private long _uploadedBytes;
+	private long _sessionUploadedBytes;
 	private bool _isInProcess;
 	private bool _autoClose;
 	private string _latestProcessingMessage = "Idle";
@@ -51,35 +62,43 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	{
 		get
 		{
-			if( _cachedHistoryLength is int cached )
+			int cached = Volatile.Read( ref _cachedHistoryLength );
+			if( cached >= 0 )
 				return cached;
 			int saved = HackDefaults.Instance.SettingsProvider?.Get( HistoryLengthSettingKey, DefaultHistoryLength ) ?? DefaultHistoryLength;
 			int clamped = Math.Clamp( saved, 10, 1_000_000 );
-			_cachedHistoryLength = clamped;
+			Volatile.Write( ref _cachedHistoryLength, clamped );
 			return clamped;
 		}
 		private set
 		{
 			int clamped = Math.Clamp( value, 10, 1_000_000 );
-			_cachedHistoryLength = clamped;
+			Volatile.Write( ref _cachedHistoryLength, clamped );
 			HackDefaults.Instance.SettingsProvider?.Set( HistoryLengthSettingKey, clamped );
 		}
 	}
 
-	public StatusDialogViewModel( IDialogService dialogs, Action cancelOperation )
+	public StatusDialogViewModel( IDialogService dialogs, Action cancelOperation, Action? cancelSilentOperation = null )
 	{
 		_dialogs = dialogs;
 		_cancelOperation = cancelOperation;
+		_cancelSilentOperation = cancelSilentOperation ?? cancelOperation;
 		_autoClose = HackDefaults.Instance.SettingsProvider?.Get( "StatusAutoClose", false ) ?? false;
-		_runLogFlush = FlushPendingLogs;
-		_runProgressRefresh = RunProgressRefresh;
+		int capacity = HistoryLength;
+		OStatus = new( capacity, newestFirst: true );
+		OInfo = new( capacity, newestFirst: true );
+		OError = new( capacity, newestFirst: true );
+		OWarnings = new( capacity, newestFirst: true );
+		OErrorsOnly = new( capacity, newestFirst: true );
+		_runUiFlush = RunUiFlush;
+		_uiFlushTimer = new Timer( _ => UiDispatcher.Post( _runUiFlush ), null, Timeout.Infinite, Timeout.Infinite );
 	}
 
-	public RangeObservableCollection<BasicStatusMessage> OStatus { get; } = [];
-	public RangeObservableCollection<BasicStatusMessage> OInfo { get; } = [];
-	public RangeObservableCollection<BasicStatusMessage> OError { get; } = [];
-	public RangeObservableCollection<BasicStatusMessage> OWarnings { get; } = [];
-	public RangeObservableCollection<BasicStatusMessage> OErrorsOnly { get; } = [];
+	public ObservableRingBuffer<BasicStatusMessage> OStatus { get; }
+	public ObservableRingBuffer<BasicStatusMessage> OInfo { get; }
+	public ObservableRingBuffer<BasicStatusMessage> OError { get; }
+	public ObservableRingBuffer<BasicStatusMessage> OWarnings { get; }
+	public ObservableRingBuffer<BasicStatusMessage> OErrorsOnly { get; }
 
 	public bool IsInProcess
 	{
@@ -98,14 +117,13 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		}
 	}
 
-	public int MaxCount { get; private set; }
-	public int TotalProcessed { get; private set; }
-	public int SkipCounter { get; private set; }
-	private int ProcessCounter { get; set; }
-	public long DownloadedBytes { get; private set; }
-	public long SessionDownloadedBytes { get; private set; }
-	public long UploadedBytes { get; private set; }
-	public long SessionUploadedBytes { get; private set; }
+	public int MaxCount => Volatile.Read( ref _maxCount );
+	public int TotalProcessed => Volatile.Read( ref _totalProcessed );
+	public int SkipCounter => Volatile.Read( ref _skipCounter );
+	public long DownloadedBytes => Volatile.Read( ref _downloadedBytes );
+	public long SessionDownloadedBytes => Volatile.Read( ref _sessionDownloadedBytes );
+	public long UploadedBytes => Volatile.Read( ref _uploadedBytes );
+	public long SessionUploadedBytes => Volatile.Read( ref _sessionUploadedBytes );
 
 	public int InfoCount => OInfo.Count;
 	public int WarningCount => OWarnings.Count;
@@ -151,11 +169,11 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		HistoryLength = clamped;
 		UiDispatcher.Post( () =>
 		{
-			OStatus.TrimStartTo( clamped );
-			OInfo.TrimStartTo( clamped );
-			OError.TrimStartTo( clamped );
-			OWarnings.TrimStartTo( clamped );
-			OErrorsOnly.TrimStartTo( clamped );
+			OStatus.Resize( clamped );
+			OInfo.Resize( clamped );
+			OError.Resize( clamped );
+			OWarnings.Resize( clamped );
+			OErrorsOnly.Resize( clamped );
 			NotifySummaryChanged();
 		} );
 	}
@@ -163,20 +181,48 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	public void AddLog( BasicStatusMessage message )
 	{
 		_pendingLogs.Enqueue( message );
-		ScheduleLogFlush();
+		Volatile.Write( ref _logDirty, 1 );
+		ScheduleUiFlush();
 	}
 
-	private void ScheduleLogFlush()
+	private void ScheduleUiFlush()
 	{
-		if( Interlocked.Exchange( ref _logFlushQueued, 1 ) == 1 )
+		if( Interlocked.CompareExchange( ref _uiFlushScheduled, 1, 0 ) != 0 )
 			return;
-		UiDispatcher.Post( _runLogFlush );
+		if( UiDispatcher.Current is InlineUiDispatcher )
+		{
+			UiDispatcher.Post( _runUiFlush );
+			return;
+		}
+		long elapsed = Environment.TickCount64 - Volatile.Read( ref _lastUiFlushTick );
+		if( elapsed >= UiFlushIntervalMs )
+			UiDispatcher.Post( _runUiFlush );
+		else
+			_uiFlushTimer.Change( (int)( UiFlushIntervalMs - elapsed ), Timeout.Infinite );
 	}
 
-	private void FlushPendingLogs()
+	private void RunUiFlush()
 	{
-		Volatile.Write( ref _logFlushQueued, 0 );
-		int limit = HistoryLength;
+		Volatile.Write( ref _lastUiFlushTick, Environment.TickCount64 );
+		Volatile.Write( ref _uiFlushScheduled, 0 );
+
+		FlushPendingLogsCore();
+		if( Interlocked.Exchange( ref _progressDirty, 0 ) != 0 )
+			NotifyProgressChanged();
+
+		if( ( Volatile.Read( ref _logDirty ) != 0 || Volatile.Read( ref _progressDirty ) != 0 || !_pendingLogs.IsEmpty )
+			&& Interlocked.CompareExchange( ref _uiFlushScheduled, 1, 0 ) == 0 )
+		{
+			_uiFlushTimer.Change( UiFlushIntervalMs, Timeout.Infinite );
+		}
+	}
+
+	private void FlushPendingLogsCore()
+	{
+		Volatile.Write( ref _logDirty, 0 );
+		if( _pendingLogs.IsEmpty )
+			return;
+
 		int drained = 0;
 		_batchStatus.Clear();
 		_batchInfo.Clear();
@@ -184,7 +230,7 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		_batchWarnings.Clear();
 		_batchErrorsOnly.Clear();
 
-		while( drained < MaxLogsPerUiTick && _pendingLogs.TryDequeue( out BasicStatusMessage? message ) )
+		while( _pendingLogs.TryDequeue( out BasicStatusMessage? message ) )
 		{
 			switch( message.Status )
 			{
@@ -209,11 +255,11 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		}
 		if( drained > 0 )
 		{
-			OStatus.AddRangeBounded( _batchStatus, limit );
-			OInfo.AddRangeBounded( _batchInfo, limit );
-			OError.AddRangeBounded( _batchError, limit );
-			OWarnings.AddRangeBounded( _batchWarnings, limit );
-			OErrorsOnly.AddRangeBounded( _batchErrorsOnly, limit );
+			OStatus.AddRange( _batchStatus );
+			OInfo.AddRange( _batchInfo );
+			OError.AddRange( _batchError );
+			OWarnings.AddRange( _batchWarnings );
+			OErrorsOnly.AddRange( _batchErrorsOnly );
 			_batchStatus.Clear();
 			_batchInfo.Clear();
 			_batchError.Clear();
@@ -221,8 +267,6 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 			_batchErrorsOnly.Clear();
 			NotifySummaryChanged();
 		}
-		if( !_pendingLogs.IsEmpty )
-			ScheduleLogFlush();
 	}
 
 	[RelayCommand( CanExecute = nameof( CanCancel ) )]
@@ -247,20 +291,21 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		} );
 	}
 
-	[RelayCommand]
 	public void ClearLogs()
 	{
 		if( IsInProcess )
 			return;
 		lock( _gate )
 		{
-			( MaxCount, ProcessCounter, SkipCounter, TotalProcessed ) = ( 0, 0, 0, 0 );
-			DownloadedBytes = 0;
-			UploadedBytes = 0;
+			( _maxCount, _processCounter, _skipCounter, _totalProcessed ) = ( 0, 0, 0, 0 );
+			_downloadedBytes = 0;
+			_uploadedBytes = 0;
 		}
 		UiDispatcher.Post( () =>
 		{
 			while( _pendingLogs.TryDequeue( out _ ) ) { }
+			Volatile.Write( ref _logDirty, 0 );
+			Volatile.Write( ref _progressDirty, 0 );
 			OStatus.Clear();
 			OInfo.Clear();
 			OError.Clear();
@@ -283,7 +328,7 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 			MessageBoxIcon.Warning );
 		if( close )
 		{
-			_cancelOperation();
+			_cancelSilentOperation();
 			SetInProcess( false );
 		}
 		return close;
@@ -293,9 +338,9 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	{
 		lock( _gate )
 		{
-			( MaxCount, ProcessCounter, SkipCounter, TotalProcessed ) = ( total, 0, 0, 0 );
-			DownloadedBytes = 0;
-			UploadedBytes = 0;
+			( _maxCount, _processCounter, _skipCounter, _totalProcessed ) = ( total, 0, 0, 0 );
+			_downloadedBytes = 0;
+			_uploadedBytes = 0;
 		}
 		QueueProgressRefresh();
 	}
@@ -306,8 +351,8 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 			return;
 		lock( _gate )
 		{
-			DownloadedBytes += bytes;
-			SessionDownloadedBytes += bytes;
+			_downloadedBytes += bytes;
+			_sessionDownloadedBytes += bytes;
 		}
 		QueueProgressRefresh();
 	}
@@ -318,8 +363,8 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 			return;
 		lock( _gate )
 		{
-			UploadedBytes += bytes;
-			SessionUploadedBytes += bytes;
+			_uploadedBytes += bytes;
+			_sessionUploadedBytes += bytes;
 		}
 		QueueProgressRefresh();
 	}
@@ -328,9 +373,9 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	{
 		lock( _gate )
 		{
-			ProcessCounter += processed;
-			SkipCounter += skipped;
-			TotalProcessed = ProcessCounter + SkipCounter;
+			_processCounter += processed;
+			_skipCounter += skipped;
+			_totalProcessed = _processCounter + _skipCounter;
 		}
 		QueueProgressRefresh();
 	}
@@ -339,8 +384,8 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	{
 		lock( _gate )
 		{
-			ProcessCounter = processed;
-			TotalProcessed = ProcessCounter + SkipCounter;
+			_processCounter = processed;
+			_totalProcessed = _processCounter + _skipCounter;
 		}
 		QueueProgressRefresh();
 	}
@@ -351,12 +396,14 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		lock( _gate )
 		{
 			wasInProcess = _isInProcess;
-			ProcessCounter = Math.Max( MaxCount - SkipCounter, 0 );
-			TotalProcessed = MaxCount;
+			_processCounter = Math.Max( _maxCount - _skipCounter, 0 );
+			_totalProcessed = _maxCount;
 			_isInProcess = false;
 		}
 		UiDispatcher.Post( () =>
 		{
+			FlushPendingLogsCore();
+			Volatile.Write( ref _progressDirty, 0 );
 			NotifyProgressChanged();
 			NotifySummaryChanged();
 			if( wasInProcess )
@@ -394,15 +441,8 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 
 	private void QueueProgressRefresh()
 	{
-		if( Interlocked.Exchange( ref _refreshQueued, 1 ) == 1 )
-			return;
-		UiDispatcher.Post( _runProgressRefresh );
-	}
-
-	private void RunProgressRefresh()
-	{
-		Volatile.Write( ref _refreshQueued, 0 );
-		NotifyProgressChanged();
+		Volatile.Write( ref _progressDirty, 1 );
+		ScheduleUiFlush();
 	}
 
 	private void NotifyProgressChanged()

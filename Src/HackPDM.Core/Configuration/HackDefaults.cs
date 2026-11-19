@@ -24,11 +24,11 @@ public sealed class HackDefaults
 
 	public string PwaPathAbsolute
 	{
-		get => _cachedPwaAbsolute ??= _settingsProvider?.Get<string>( "PWAPathAbsolute" ) ?? "";
+		get => _cachedPwaAbsolute ??= _settingsProvider?.Get<string>( nameof( Services.SavedProfileData.PWAPathAbsolute ) ) ?? "";
 		set
 		{
 			_cachedPwaAbsolute = value ?? "";
-			_settingsProvider?.Set( "PWAPathAbsolute", value );
+			_settingsProvider?.Set( nameof( Services.SavedProfileData.PWAPathAbsolute ), value );
 		}
 	}
 
@@ -50,8 +50,6 @@ public sealed class HackDefaults
 			_relativeFor = PwaPathAbsolute;
 		}
 	}
-
-	public string? CurrentPath { get; set; }
 
 	public HackDefaults() { }
 

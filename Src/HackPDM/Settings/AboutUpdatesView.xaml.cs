@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
 
 using HackPDM.Core.Configuration;
@@ -91,8 +92,13 @@ public sealed partial class AboutUpdatesView : Page
 		UpdateStatusText.Text = $"Downloading and verifying HackPDM {_availableUpdate.Version}…";
 		try
 		{
-			await HackUpdater.InstallUpdateAsync( _availableUpdate );
-			UpdateStatusText.Text = "Update package downloaded.";
+			bool ok = await HackUpdater.InstallUpdateAsync( _availableUpdate );
+			UpdateStatusText.Text = ok ? "Update package downloaded." : "Update was not installed.";
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Error( "Updater", $"Installing update failed: {ex.Message}", ex );
+			UpdateStatusText.Text = $"Update failed: {ex.Message}";
 		}
 		finally
 		{
@@ -105,7 +111,11 @@ public sealed partial class AboutUpdatesView : Page
 		=> ShellLauncher.OpenUrl( _releaseNotesUrl );
 
 	private void OpenLogs_Click( object sender, RoutedEventArgs e )
-		=> ShellLauncher.OpenFolder( HackLogger.LogDirectory );
+	{
+		try { Directory.CreateDirectory( HackLogger.LogDirectory ); }
+		catch { }
+		ShellLauncher.OpenFolder( HackLogger.LogDirectory );
+	}
 
 	private void OpenRepo_Click( object sender, RoutedEventArgs e )
 		=> ShellLauncher.OpenUrl( "https://github.com/moonxbears/wyrmpdm" );

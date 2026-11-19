@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using HackPDM.Common;
 using HackPDM.Core.Graph;
 using HackPDM.Core.Pdm;
 
@@ -215,7 +216,7 @@ public sealed partial class NodeGraphView : Grid
 	}
 
 	/// <summary>The header color of <paramref name="node"/> in the current palette.</summary>
-	public Color HeaderColor( GraphNode node ) => ToColor( _theme.Palette.Header( GraphThemes.KindOf( node ) ) );
+	public Color HeaderColor( GraphNode node ) => UiColors.ToUiColor( _theme.Palette.Header( GraphThemes.KindOf( node ) ) );
 
 	private void SetView( double zoom, double x, double y )
 	{
@@ -643,15 +644,13 @@ public sealed partial class NodeGraphView : Grid
 
 	// ------------------------------------------------------------------ colors
 
-	private static Color ToColor( uint argb ) => Color.FromArgb( (byte)( argb >> 24 ), (byte)( argb >> 16 ), (byte)( argb >> 8 ), (byte)argb );
-
 	private SolidColorBrush Brush( uint argb )
 	{
 		if( _brushCache.TryGetValue( argb, out SolidColorBrush? cached ) )
 			return cached;
 		if( _brushCache.Count >= 256 )
 			_brushCache.Clear();
-		SolidColorBrush created = new( ToColor( argb ) );
+		SolidColorBrush created = new( UiColors.ToUiColor( argb ) );
 		_brushCache[ argb ] = created;
 		return created;
 	}
@@ -668,8 +667,8 @@ public sealed partial class NodeGraphView : Grid
 			EndPoint = new Point( 1, 1 ),
 			GradientStops =
 			{
-				new GradientStop { Color = ToColor( Lighten( color, 0.12 ) ), Offset = 0 },
-				new GradientStop { Color = ToColor( Darken( color, 0.45 ) ), Offset = 1 },
+				new GradientStop { Color = UiColors.ToUiColor( Lighten( color, 0.12 ) ), Offset = 0 },
+				new GradientStop { Color = UiColors.ToUiColor( Darken( color, 0.45 ) ), Offset = 1 },
 			},
 		};
 		_gradientCache[ color ] = created;

@@ -5,7 +5,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-using HackPDM.Core.Credentials;
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Pdm;
 
@@ -132,7 +131,7 @@ public static class CrossPlatformCredentialManager
 		if( ReadFile( filePath ) is not { } dict || !dict.Remove( target ) )
 			return;
 		if( dict.Count == 0 )
-			TryDelete( filePath );
+			FileOps.TryDelete( filePath );
 		else
 			WriteFile( filePath, dict );
 	}
@@ -176,17 +175,6 @@ public static class CrossPlatformCredentialManager
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{
 			HackPDM.Core.Configuration.HackLogger.Error( "Credentials", $"Could not write fallback credential store '{filePath}': {e.Message}", e );
-		}
-	}
-
-	private static void TryDelete( string filePath )
-	{
-		try
-		{
-			File.Delete( filePath );
-		}
-		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
-		{
 		}
 	}
 

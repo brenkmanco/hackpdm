@@ -50,6 +50,7 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	private readonly Action? _accountChanged;
 	private readonly Func<IReadOnlyList<(StatusMessage Status, string Category, string Message)>>? _inspectSettings;
 	private bool _attached;
+	private bool _batchingSessionLogs;
 	private int _errorCount;
 	private int _warningCount;
 	private int _infoCount;
@@ -358,7 +359,7 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		try
 		{
 			List<(string Category, string Message)> errors = [];
-			Progress<string> stageProgress = new( message => UiDispatcher.Post( () => LoginStatusText = message ) );
+			IProgress<string> stageProgress = new UiThreadProgress<string>( message => LoginStatusText = message );
 			LoginStatusText = "Signing in to Odoo…";
 			LogSession( StatusMessage.INFO, ProfileStatusCategory.Login, $"Attempting login ({FormatConnectionTarget()})…" );
 
@@ -366,8 +367,9 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 			{
 				await OdooDefaults.Instance.InitializeAsync( stageProgress );
 			}
-			catch( Exception ex ) when( OdooDefaults.Instance.OdooId == 0 )
+			catch( Exception ex )
 			{
+				OdooDefaults.Instance.OdooId = 0;
 				errors.Add( ( ClassifyErrorCategory( ex.Message ), ex.Message ) );
 			}
 
@@ -477,11 +479,20 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		if( forceLog || !string.Equals( _session.LastReadinessFingerprint, fingerprint, StringComparison.Ordinal ) )
 		{
 			_session.LastReadinessFingerprint = fingerprint;
-			for( int i = 0; i < findings.Count; i++ )
+			_batchingSessionLogs = true;
+			try
 			{
-				var item = findings[ i ];
-				_session.AddStatus( item.Status, item.Category, item.Message );
+				for( int i = 0; i < findings.Count; i++ )
+				{
+					var item = findings[ i ];
+					_session.AddStatus( item.Status, item.Category, item.Message );
+				}
 			}
+			finally
+			{
+				_batchingSessionLogs = false;
+			}
+			SyncFromSession();
 		}
 
 		if( firstError is { } err )
@@ -530,19 +541,11 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		return ProfileStatusCategory.Login;
 	}
 
-	private static void Dispatch( Action action )
-	{
-		if( UiDispatcher.Current.HasThreadAccess )
-			action();
-		else
-			UiDispatcher.Post( action );
-	}
-
 	private void LogSession( StatusMessage status, string category, string message, bool updateBanner = false )
 	{
 		BasicStatusMessage entry = _session.AddStatus( status, category, message );
 		if( updateBanner )
-			Dispatch( () => SetBanner( entry.Status, entry.Category, entry.Message ?? string.Empty ) );
+			UiDispatcher.RunOrPost( () => SetBanner( entry.Status, entry.Category, entry.Message ?? string.Empty ) );
 	}
 
 	private void SetBanner( StatusMessage status, string category, string message )
@@ -579,7 +582,10 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	}
 
 	private void OnSessionMessageLogged( BasicStatusMessage entry )
-		=> Dispatch( () =>
+	{
+		if( _batchingSessionLogs )
+			return;
+		UiDispatcher.RunOrPost( () =>
 		{
 			OStatus.Add( entry );
 			CountStatus( entry.Status );
@@ -589,9 +595,10 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 				SetBanner( entry.Status, entry.Category, entry.Message ?? string.Empty );
 			UpdateCountsAndHints();
 		} );
+	}
 
 	private void OnSessionMessagesCleared()
-		=> Dispatch( () =>
+		=> UiDispatcher.RunOrPost( () =>
 		{
 			OStatus.ClearIfNonEmpty();
 			FilteredStatus.ClearIfNonEmpty();

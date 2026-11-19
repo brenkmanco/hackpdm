@@ -1,4 +1,5 @@
 using HackPDM.Core.Configuration;
+using HackPDM.Core.Pdm;
 
 namespace HackPDM.Core.Services;
 
@@ -14,11 +15,7 @@ public sealed record LocalFileChange( string FullPath, LocalChangeKind Kind, boo
 /// <summary>Debounces and merges rapid OS file events per path before dispatching.</summary>
 public sealed class LocalChangeBatcher( TimeSpan quiet )
 {
-	private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
-		? StringComparer.OrdinalIgnoreCase
-		: StringComparer.Ordinal;
-
-	private readonly Dictionary<string, (LocalChangeKind? Kind, DateTime Due, bool IsDirectory)> _pending = new( PathComparer );
+	private readonly Dictionary<string, (LocalChangeKind? Kind, DateTime Due, bool IsDirectory)> _pending = new( PwaPaths.PathComparer );
 	private readonly List<string> _dueKeys = [];
 
 	public int PendingCount => _pending.Count;
@@ -89,9 +86,12 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 {
 	private const int MaxScannedInNewFolder = 1000;
 	private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds( 400 );
-	private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
-		? StringComparison.OrdinalIgnoreCase
-		: StringComparison.Ordinal;
+	private static readonly EnumerationOptions NewFolderScanOptions = new()
+	{
+		RecurseSubdirectories = true,
+		IgnoreInaccessible = true,
+		ReturnSpecialDirectories = false,
+	};
 
 	private readonly object _gate = new();
 	private readonly LocalChangeBatcher _batcher = new( Quiet );
@@ -144,7 +144,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 		{
 			if( _disposed )
 				return;
-			if( string.Equals( normalized, _folder, PathComparison ) && _watcher is not null )
+			if( string.Equals( normalized, _folder, PwaPaths.PathComparison ) && _watcher is not null )
 				return;
 			StopWatching();
 			if( string.IsNullOrEmpty( normalized ) )
@@ -228,7 +228,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 					await Task.Delay( 1000 );
 					lock( _gate )
 					{
-						if( !_disposed && _watcher is null && string.Equals( _folder, folder, PathComparison ) )
+						if( !_disposed && _watcher is null && string.Equals( _folder, folder, PwaPaths.PathComparison ) )
 							StartWatchingLocked( folder );
 					}
 				}
@@ -259,7 +259,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 			if( !dir.Exists )
 				return;
 			int scanned = 0;
-			foreach( FileSystemInfo entry in dir.EnumerateFileSystemInfos( "*", SearchOption.AllDirectories ) )
+			foreach( FileSystemInfo entry in dir.EnumerateFileSystemInfos( "*", NewFolderScanOptions ) )
 			{
 				if( scanned++ >= MaxScannedInNewFolder )
 					break;
