@@ -24,11 +24,14 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 {
 	private const string HistoryLengthSettingKey = "StatusHistoryLength";
 	private const int DefaultHistoryLength = 1000;
-	private const int UiFlushIntervalMs = 120;
+	private const int UiFlushIntervalMs = 250;
+	private const int BatchListTrimThreshold = 1024;
 
 	private static int _cachedHistoryLength = -1;
 
 	private readonly Lock _gate = new();
+	private readonly TransferRateTracker _downloadRate = new();
+	private readonly TransferRateTracker _uploadRate = new();
 	private readonly Action _cancelOperation;
 	private readonly Action _cancelSilentOperation;
 	private readonly IDialogService _dialogs;
@@ -137,6 +140,19 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	public string WarningSummaryText => WarningCount == 1 ? "1 warning" : $"{WarningCount} warnings";
 	public string ErrorSummaryText => ErrorCount == 1 ? "1 error" : $"{ErrorCount} errors";
 
+	public double DownloadSpeedMbps
+	{
+		get { lock( _gate ) return _downloadRate.CurrentMbps; }
+	}
+
+	public double UploadSpeedMbps
+	{
+		get { lock( _gate ) return _uploadRate.CurrentMbps; }
+	}
+
+	public string DownloadSpeedText => TransferRateTracker.FormatMbps( DownloadSpeedMbps );
+	public string UploadSpeedText => TransferRateTracker.FormatMbps( UploadSpeedMbps );
+
 	public string CompactProgressText
 	{
 		get
@@ -144,7 +160,10 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 			if( MaxCount <= 0 )
 				return IsInProcess ? "Working..." : "Ready";
 			float percent = TotalProcessed / (float)MaxCount * 100f;
-			return $"{TotalProcessed}/{MaxCount} ({percent:f0}%)";
+			string speed = DownloadSpeedText is { Length: > 0 } dl ? dl : UploadSpeedText;
+			return speed.Length > 0
+				? $"{TotalProcessed}/{MaxCount} ({percent:f0}%) • {speed}"
+				: $"{TotalProcessed}/{MaxCount} ({percent:f0}%)";
 		}
 	}
 
@@ -158,9 +177,27 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	}
 
 	public string SkippedText => $"({SkipCounter}) Skipped";
-	public string DownloadedText => $"Downloaded: {ByteSize.Format( DownloadedBytes )}";
+	public string DownloadedText
+	{
+		get
+		{
+			string speed = DownloadSpeedText;
+			return speed.Length > 0
+				? $"Downloaded: {ByteSize.Format( DownloadedBytes )} ({speed})"
+				: $"Downloaded: {ByteSize.Format( DownloadedBytes )}";
+		}
+	}
 	public string SessionDownloadedText => $"Session Downloaded: {ByteSize.Format( SessionDownloadedBytes )}";
-	public string UploadedText => $"Uploaded: {ByteSize.Format( UploadedBytes )}";
+	public string UploadedText
+	{
+		get
+		{
+			string speed = UploadSpeedText;
+			return speed.Length > 0
+				? $"Uploaded: {ByteSize.Format( UploadedBytes )} ({speed})"
+				: $"Uploaded: {ByteSize.Format( UploadedBytes )}";
+		}
+	}
 	public string SessionUploadedText => $"Session Uploaded: {ByteSize.Format( SessionUploadedBytes )}";
 
 	public void SetHistoryLength( int length )
@@ -203,17 +240,25 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 
 	private void RunUiFlush()
 	{
-		Volatile.Write( ref _lastUiFlushTick, Environment.TickCount64 );
-		Volatile.Write( ref _uiFlushScheduled, 0 );
-
-		FlushPendingLogsCore();
-		if( Interlocked.Exchange( ref _progressDirty, 0 ) != 0 )
-			NotifyProgressChanged();
+		try
+		{
+			FlushPendingLogsCore();
+			if( Interlocked.Exchange( ref _progressDirty, 0 ) != 0 )
+				NotifyProgressChanged();
+		}
+		finally
+		{
+			Volatile.Write( ref _lastUiFlushTick, Environment.TickCount64 );
+			Volatile.Write( ref _uiFlushScheduled, 0 );
+		}
 
 		if( ( Volatile.Read( ref _logDirty ) != 0 || Volatile.Read( ref _progressDirty ) != 0 || !_pendingLogs.IsEmpty )
 			&& Interlocked.CompareExchange( ref _uiFlushScheduled, 1, 0 ) == 0 )
 		{
-			_uiFlushTimer.Change( UiFlushIntervalMs, Timeout.Infinite );
+			if( UiDispatcher.Current is InlineUiDispatcher )
+				UiDispatcher.Post( _runUiFlush );
+			else
+				_uiFlushTimer.Change( UiFlushIntervalMs, Timeout.Infinite );
 		}
 	}
 
@@ -224,6 +269,7 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 			return;
 
 		int drained = 0;
+		string previousLatest = _latestProcessingMessage;
 		_batchStatus.Clear();
 		_batchInfo.Clear();
 		_batchError.Clear();
@@ -255,18 +301,56 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		}
 		if( drained > 0 )
 		{
-			OStatus.AddRange( _batchStatus );
-			OInfo.AddRange( _batchInfo );
-			OError.AddRange( _batchError );
-			OWarnings.AddRange( _batchWarnings );
-			OErrorsOnly.AddRange( _batchErrorsOnly );
-			_batchStatus.Clear();
-			_batchInfo.Clear();
-			_batchError.Clear();
-			_batchWarnings.Clear();
-			_batchErrorsOnly.Clear();
-			NotifySummaryChanged();
+			bool statusAdded = _batchStatus.Count > 0;
+			bool infoAdded = _batchInfo.Count > 0;
+			bool warningsAdded = _batchWarnings.Count > 0;
+			bool errorsAdded = _batchErrorsOnly.Count > 0;
+			bool latestChanged = !string.Equals( previousLatest, _latestProcessingMessage, StringComparison.Ordinal );
+
+			if( statusAdded )
+				OStatus.AddRange( _batchStatus );
+			if( infoAdded )
+				OInfo.AddRange( _batchInfo );
+			if( _batchError.Count > 0 )
+				OError.AddRange( _batchError );
+			if( warningsAdded )
+				OWarnings.AddRange( _batchWarnings );
+			if( errorsAdded )
+				OErrorsOnly.AddRange( _batchErrorsOnly );
+
+			ResetBatchList( _batchStatus );
+			ResetBatchList( _batchInfo );
+			ResetBatchList( _batchError );
+			ResetBatchList( _batchWarnings );
+			ResetBatchList( _batchErrorsOnly );
+
+			if( infoAdded )
+			{
+				OnPropertyChanged( nameof( InfoCount ) );
+				OnPropertyChanged( nameof( InfoSummaryText ) );
+			}
+			if( warningsAdded )
+			{
+				OnPropertyChanged( nameof( WarningCount ) );
+				OnPropertyChanged( nameof( WarningSummaryText ) );
+			}
+			if( errorsAdded )
+			{
+				OnPropertyChanged( nameof( ErrorCount ) );
+				OnPropertyChanged( nameof( ErrorSummaryText ) );
+			}
+			if( statusAdded )
+				OnPropertyChanged( nameof( ProcessingSummaryText ) );
+			if( latestChanged )
+				OnPropertyChanged( nameof( LatestProcessingMessage ) );
 		}
+	}
+
+	private static void ResetBatchList( List<BasicStatusMessage> batch )
+	{
+		batch.Clear();
+		if( batch.Capacity > BatchListTrimThreshold )
+			batch.TrimExcess();
 	}
 
 	[RelayCommand( CanExecute = nameof( CanCancel ) )]
@@ -300,6 +384,8 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 			( _maxCount, _processCounter, _skipCounter, _totalProcessed ) = ( 0, 0, 0, 0 );
 			_downloadedBytes = 0;
 			_uploadedBytes = 0;
+			_downloadRate.Reset();
+			_uploadRate.Reset();
 		}
 		UiDispatcher.Post( () =>
 		{
@@ -341,7 +427,35 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 			( _maxCount, _processCounter, _skipCounter, _totalProcessed ) = ( total, 0, 0, 0 );
 			_downloadedBytes = 0;
 			_uploadedBytes = 0;
+			_downloadRate.Reset();
+			_uploadRate.Reset();
 		}
+		QueueProgressRefresh();
+	}
+
+	public void BeginDownloadTransfer()
+	{
+		lock( _gate )
+			_downloadRate.BeginTransfer();
+	}
+
+	public void EndDownloadTransfer()
+	{
+		lock( _gate )
+			_downloadRate.EndTransfer();
+		QueueProgressRefresh();
+	}
+
+	public void BeginUploadTransfer()
+	{
+		lock( _gate )
+			_uploadRate.BeginTransfer();
+	}
+
+	public void EndUploadTransfer()
+	{
+		lock( _gate )
+			_uploadRate.EndTransfer();
 		QueueProgressRefresh();
 	}
 
@@ -353,6 +467,7 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		{
 			_downloadedBytes += bytes;
 			_sessionDownloadedBytes += bytes;
+			_downloadRate.AddBytes( bytes );
 		}
 		QueueProgressRefresh();
 	}
@@ -365,6 +480,7 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		{
 			_uploadedBytes += bytes;
 			_sessionUploadedBytes += bytes;
+			_uploadRate.AddBytes( bytes );
 		}
 		QueueProgressRefresh();
 	}
@@ -399,6 +515,8 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 			_processCounter = Math.Max( _maxCount - _skipCounter, 0 );
 			_totalProcessed = _maxCount;
 			_isInProcess = false;
+			_downloadRate.EndTransfer();
+			_uploadRate.EndTransfer();
 		}
 		UiDispatcher.Post( () =>
 		{
@@ -453,6 +571,10 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		OnPropertyChanged( nameof( CompactProgressText ) );
 		OnPropertyChanged( nameof( ProcessingSummaryText ) );
 		OnPropertyChanged( nameof( SkippedText ) );
+		OnPropertyChanged( nameof( DownloadSpeedMbps ) );
+		OnPropertyChanged( nameof( DownloadSpeedText ) );
+		OnPropertyChanged( nameof( UploadSpeedMbps ) );
+		OnPropertyChanged( nameof( UploadSpeedText ) );
 		OnPropertyChanged( nameof( DownloadedText ) );
 		OnPropertyChanged( nameof( SessionDownloadedText ) );
 		OnPropertyChanged( nameof( UploadedText ) );

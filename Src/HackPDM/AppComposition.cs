@@ -29,7 +29,7 @@ public static class AppComposition
 	public static NavigationService Navigation => field ??= new();
 	public static ThemeService Theme => field ??= new();
 	public static StatusWindowReporter Reporter => field ??= new( Dialogs, () => StatusLog );
-	public static IPdmWorkflowService Workflow => field ??= new PdmWorkflowService( Reporter );
+	public static IPdmWorkflowService Workflow => field ??= new PdmWorkflowService( Reporter, LocalFiles );
 	public static IEntryFileService EntryFiles => field ??= new EntryFileService();
 	public static IEntryDetailsService EntryDetails => field ??= new EntryDetailsService();
 	public static LoginSession Session => field ??= CreateSession();

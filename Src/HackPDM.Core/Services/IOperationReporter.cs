@@ -17,6 +17,10 @@ public interface IOperationReporter
 	void SetProcessed( int processed );
 	void AddDownloadedBytes( long bytes );
 	void AddUploadedBytes( long bytes );
+	void BeginDownloadTransfer() { }
+	void EndDownloadTransfer() { }
+	void BeginUploadTransfer() { }
+	void EndUploadTransfer() { }
 	void Complete();
 	Task NotifyAsync( string message, string caption = "Status" );
 }

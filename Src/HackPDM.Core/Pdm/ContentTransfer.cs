@@ -1,5 +1,7 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text.Json;
 
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
@@ -10,9 +12,10 @@ namespace HackPDM.Core.Pdm;
 public static class ContentTransfer
 {
 	private const string UploadModel = "hp.upload";
+	public const int DefaultChunkBytes = 4 * 1024 * 1024;
 
 	public static long InlineLimitBytes { get; set; } = 4L * 1024 * 1024;
-	public static int ChunkBytes { get; set; } = 4 * 1024 * 1024;
+	public static int ChunkBytes { get; set; } = DefaultChunkBytes;
 	public static int MaxAttempts { get; set; } = 3;
 
 	public static bool IsLarge( long? size ) => size > InlineLimitBytes;
@@ -125,7 +128,8 @@ public static class ContentTransfer
 		long size,
 		Stream destination,
 		CancellationToken token = default,
-		Action<long>? onBytes = null )
+		Action<long>? onBytes = null,
+		AdaptiveTransferController? controller = null )
 	{
 		using IncrementalHash sha1 = IncrementalHash.CreateHash( HashAlgorithmName.SHA1 );
 		byte[]? decodeBuffer = null;
@@ -137,13 +141,18 @@ public static class ContentTransfer
 			while( offset < size )
 			{
 				token.ThrowIfCancellationRequested();
-				int wanted = (int)Math.Min( ChunkBytes, size - offset );
-				Result<OdooRow> reply = await OdooRpc.ExecuteAsync<OdooRow>(
+				int chunkLimit = controller is null
+					? ChunkBytes
+					: controller.GetChunkBytes( ChunkBytes < DefaultChunkBytes ? ChunkBytes : null );
+				int wanted = (int)Math.Min( Math.Max( 1, chunkLimit ), size - offset );
+				long rpcStart = Stopwatch.GetTimestamp();
+				Result<JsonElement> reply = await OdooRpc.ExecuteAsync<JsonElement>(
 					HpVersion.ModelName,
 					"read_contents",
 					[ versionId, offset, wanted ],
 					TimeoutMs( wanted, failures + 1 ),
-					token );
+					token ).ConfigureAwait( false );
+				TimeSpan rpcElapsed = Stopwatch.GetElapsedTime( rpcStart );
 				if( !reply.Ok )
 				{
 					if( ++failures >= MaxAttempts )
@@ -151,22 +160,44 @@ public static class ContentTransfer
 					continue;
 				}
 
-				string b64 = reply.Value?.Text( "data" ) ?? "";
-				int maxDecoded = ( ( b64.Length * 3 ) >> 2 ) + 4;
-				if( decodeBuffer is null || decodeBuffer.Length < maxDecoded )
+				byte[]? chunkBytes = null;
+				int written = 0;
+				if( reply.Value.ValueKind == JsonValueKind.Object
+					&& reply.Value.TryGetProperty( "data", out JsonElement dataElem ) )
 				{
-					if( decodeBuffer is not null )
-						ArrayPool<byte>.Shared.Return( decodeBuffer );
-					decodeBuffer = ArrayPool<byte>.Shared.Rent( Math.Max( maxDecoded, 4096 ) );
+					if( dataElem.ValueKind == JsonValueKind.String )
+					{
+						if( dataElem.TryGetBytesFromBase64( out byte[]? direct ) )
+						{
+							chunkBytes = direct;
+							written = direct.Length;
+						}
+						else
+						{
+							string b64 = dataElem.GetString() ?? "";
+							int maxDecoded = ( ( b64.Length * 3 ) >> 2 ) + 4;
+							if( decodeBuffer is null || decodeBuffer.Length < maxDecoded )
+							{
+								if( decodeBuffer is not null )
+									ArrayPool<byte>.Shared.Return( decodeBuffer );
+								decodeBuffer = ArrayPool<byte>.Shared.Rent( Math.Max( maxDecoded, 4096 ) );
+							}
+							if( !Convert.TryFromBase64String( b64, decodeBuffer, out written ) )
+								return Result<string>.Fail( "the server sent data that is not base64" );
+							chunkBytes = decodeBuffer;
+						}
+					}
+					else if( dataElem.ValueKind is not ( JsonValueKind.Null or JsonValueKind.False ) )
+					{
+						return Result<string>.Fail( "the server sent data that is not base64" );
+					}
 				}
-
-				if( !Convert.TryFromBase64String( b64, decodeBuffer, out int written ) )
-					return Result<string>.Fail( "the server sent data that is not base64" );
-				if( written == 0 )
+				if( written == 0 || chunkBytes is null )
 					return Result<string>.Fail( $"the server's file ended at byte {offset} of {size}" );
 
-				await destination.WriteAsync( decodeBuffer.AsMemory( 0, written ), token );
-				sha1.AppendData( decodeBuffer.AsSpan( 0, written ) );
+				controller?.RecordRpcSample( written, fileCount: 1, rpcElapsed );
+				await destination.WriteAsync( chunkBytes.AsMemory( 0, written ), token ).ConfigureAwait( false );
+				sha1.AppendData( chunkBytes.AsSpan( 0, written ) );
 				offset += written;
 				failures = 0;
 				onBytes?.Invoke( written );
@@ -180,11 +211,15 @@ public static class ContentTransfer
 		}
 	}
 
-	public static async Task<Result<byte[]>> DownloadBytesAsync( HpVersion version, CancellationToken token = default, Action<long>? onBytes = null )
+	public static async Task<Result<byte[]>> DownloadBytesAsync(
+		HpVersion version,
+		CancellationToken token = default,
+		Action<long>? onBytes = null,
+		AdaptiveTransferController? controller = null )
 	{
 		int capacity = (int)Math.Clamp( version.file_size ?? 0, 0, int.MaxValue );
 		using MemoryStream memory = new( capacity );
-		Result<string> got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, memory, token, onBytes );
+		Result<string> got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, memory, token, onBytes, controller ).ConfigureAwait( false );
 		if( !got.Ok )
 			return Result<byte[]>.Fail( got.Error );
 		if( Mismatch( version, got.Value ) is { } error )
@@ -192,14 +227,18 @@ public static class ContentTransfer
 		return Result<byte[]>.Success( memory.ToByteArrayZeroCopy() );
 	}
 
-	public static async Task<Result<string>> DownloadToTempFileAsync( HpVersion version, CancellationToken token = default, Action<long>? onBytes = null )
+	public static async Task<Result<string>> DownloadToTempFileAsync(
+		HpVersion version,
+		CancellationToken token = default,
+		Action<long>? onBytes = null,
+		AdaptiveTransferController? controller = null )
 	{
 		string temp = Path.Combine( Path.GetTempPath(), $"hackpdm-{Guid.NewGuid():N}.part" );
 		Result<string> got;
 		try
 		{
 			await using FileStream file = new( temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true );
-			got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, file, token, onBytes );
+			got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, file, token, onBytes, controller ).ConfigureAwait( false );
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{

@@ -158,7 +158,7 @@ public sealed class OdooConnectionSettings( ISettingsProvider? settings )
 /// <summary>Immutable reference data read from Odoo after login.</summary>
 public sealed record OdooLookupCache
 {
-	public const int DefaultBatchSize = 5;
+	public const int DefaultBatchSize = 50;
 	public const int DefaultConcurrency = 2;
 
 	public static OdooLookupCache Empty { get; } = new();

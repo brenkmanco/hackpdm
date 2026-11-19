@@ -20,6 +20,12 @@ public sealed class LocalChangeBatcher( TimeSpan quiet )
 
 	public int PendingCount => _pending.Count;
 
+	public void Clear()
+	{
+		_pending.Clear();
+		_dueKeys.Clear();
+	}
+
 	public void Add( string path, LocalChangeKind kind, DateTime now, bool isDirectory = false )
 	{
 		bool knownDir = isDirectory;
@@ -110,8 +116,50 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 
 	public IDisposable Suspend()
 	{
-		Interlocked.Increment( ref _suspendCount );
+		lock( _gate )
+		{
+			if( Interlocked.Increment( ref _suspendCount ) == 1 )
+			{
+				if( _watcher is not null )
+				{
+					try { _watcher.EnableRaisingEvents = false; }
+					catch( ObjectDisposedException ) { }
+				}
+				_batcher.Clear();
+				if( _flushArmed )
+				{
+					_flushArmed = false;
+					if( !_disposed )
+						_flush.Change( Timeout.Infinite, Timeout.Infinite );
+				}
+			}
+		}
 		return new SuspendScope( this );
+	}
+
+	private void ResumeFromSuspend()
+	{
+		lock( _gate )
+		{
+			if( Interlocked.Decrement( ref _suspendCount ) != 0 || _disposed )
+				return;
+			if( _watcher is not null )
+			{
+				try
+				{
+					_watcher.EnableRaisingEvents = true;
+					return;
+				}
+				catch( Exception e )
+				{
+					HackLogger.Warn( "FileWatcher", $"Could not resume watcher for '{_folder}': {e.Message}", e );
+					try { _watcher.Dispose(); } catch { }
+					_watcher = null;
+				}
+			}
+			if( !string.IsNullOrEmpty( _folder ) )
+				StartWatchingLocked( _folder );
+		}
 	}
 
 	private sealed class SuspendScope( LocalFileWatcher owner ) : IDisposable
@@ -120,7 +168,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 		public void Dispose()
 		{
 			if( Interlocked.Exchange( ref _disposed, 1 ) == 0 )
-				Interlocked.Decrement( ref owner._suspendCount );
+				owner.ResumeFromSuspend();
 		}
 	}
 
@@ -172,6 +220,8 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 			};
 			watcher.Created += ( _, e ) =>
 			{
+				if( Volatile.Read( ref _suspendCount ) > 0 )
+					return;
 				bool isDir = Directory.Exists( e.FullPath );
 				Add( e.FullPath, LocalChangeKind.Created, isDir );
 				if( isDir )
@@ -179,12 +229,21 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 			};
 			watcher.Changed += ( _, e ) =>
 			{
+				if( Volatile.Read( ref _suspendCount ) > 0 )
+					return;
 				if( !Directory.Exists( e.FullPath ) )
 					Add( e.FullPath, LocalChangeKind.Updated, isDirectory: false );
 			};
-			watcher.Deleted += ( _, e ) => Add( e.FullPath, LocalChangeKind.Deleted, isDirectory: false );
+			watcher.Deleted += ( _, e ) =>
+			{
+				if( Volatile.Read( ref _suspendCount ) > 0 )
+					return;
+				Add( e.FullPath, LocalChangeKind.Deleted, isDirectory: false );
+			};
 			watcher.Renamed += ( _, e ) =>
 			{
+				if( Volatile.Read( ref _suspendCount ) > 0 )
+					return;
 				bool isDir = Directory.Exists( e.FullPath );
 				Add( e.OldFullPath, LocalChangeKind.Deleted, isDir );
 				Add( e.FullPath, LocalChangeKind.Created, isDir );
@@ -192,7 +251,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 					_ = Task.Run( () => AddContentsOfNewFolder( e.FullPath ) );
 			};
 			watcher.Error += ( _, e ) => OnWatcherError( folder, watcher, e.GetException() );
-			watcher.EnableRaisingEvents = true;
+			watcher.EnableRaisingEvents = Volatile.Read( ref _suspendCount ) == 0;
 			_watcher = watcher;
 			_folder = folder;
 		}
@@ -205,18 +264,23 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 
 	private void OnWatcherError( string folder, FileSystemWatcher failedWatcher, Exception ex )
 	{
-		HackLogger.Warn( "FileWatcher", $"File watcher error for '{folder}': {ex.Message}; triggering resync and restarting watch", ex );
+		bool suspended;
 		bool shouldRecover = false;
 		lock( _gate )
 		{
+			suspended = Volatile.Read( ref _suspendCount ) > 0;
 			if( !_disposed && ReferenceEquals( _watcher, failedWatcher ) )
 			{
 				try { _watcher.Dispose(); } catch { }
 				_watcher = null;
-				shouldRecover = true;
+				shouldRecover = !suspended;
 			}
 		}
 
+		if( suspended )
+			return;
+
+		HackLogger.Warn( "FileWatcher", $"File watcher error for '{folder}': {ex.Message}; triggering resync and restarting watch", ex );
 		Overflowed?.Invoke();
 
 		if( shouldRecover && Interlocked.Exchange( ref _recoveryScheduled, 1 ) == 0 )
@@ -253,6 +317,8 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 
 	private void AddContentsOfNewFolder( string path )
 	{
+		if( Volatile.Read( ref _suspendCount ) > 0 )
+			return;
 		try
 		{
 			DirectoryInfo dir = new( path );
@@ -261,7 +327,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 			int scanned = 0;
 			foreach( FileSystemInfo entry in dir.EnumerateFileSystemInfos( "*", NewFolderScanOptions ) )
 			{
-				if( scanned++ >= MaxScannedInNewFolder )
+				if( Volatile.Read( ref _suspendCount ) > 0 || scanned++ >= MaxScannedInNewFolder )
 					break;
 				Add( entry.FullName, LocalChangeKind.Created, ( entry.Attributes & FileAttributes.Directory ) != 0 );
 			}
@@ -277,7 +343,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 			return;
 		lock( _gate )
 		{
-			if( _disposed )
+			if( _disposed || Volatile.Read( ref _suspendCount ) > 0 )
 				return;
 			_batcher.Add( path, kind, DateTime.UtcNow, isDirectory );
 			if( !_flushArmed )
@@ -293,7 +359,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 		List<LocalFileChange> due;
 		lock( _gate )
 		{
-			if( _disposed )
+			if( _disposed || Volatile.Read( ref _suspendCount ) > 0 )
 				return;
 			due = _batcher.TakeDue( DateTime.UtcNow );
 			if( _batcher.PendingCount == 0 )

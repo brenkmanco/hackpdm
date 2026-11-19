@@ -186,4 +186,30 @@ public class OdooRowParsingTests
 		Assert.Equal( "Parts", Assert.Single( tree.Directories ).Name );
 		Assert.Equal( 5, tree.Directories[ 0 ].Id );
 	}
+
+	[Fact]
+	public void PopulateFromJson_DecodesBinaryFieldsDirectlyAndFallsBackOnWhitespaceBase64()
+	{
+		byte[] payload = [ 1, 2, 3, 4, 5, 6, 7, 8 ];
+		string standardB64 = Convert.ToBase64String( payload );
+		string wrappedB64 = standardB64[ ..4 ] + "\\n" + standardB64[ 4.. ];
+
+		string json = $$"""
+			[
+				{"id": 1, "name": "a.bin", "windows_complete_name": "root\\Projects\\Parts\\a.bin", "file_contents": "{{standardB64}}", "preview_image": false},
+				{"id": 2, "name": "b.bin", "windows_complete_name": "root\\b.bin", "file_contents": "{{wrappedB64}}", "preview_image": ""}
+			]
+			""";
+
+		HpVersion[] versions = Repository<HpVersion>.PopulateFromJson( Json( json ) );
+
+		Assert.Equal( 2, versions.Length );
+		Assert.Equal( payload, versions[ 0 ].file_contents );
+		Assert.Null( versions[ 0 ].preview_image );
+		Assert.Equal( System.IO.Path.Combine( "Projects", "Parts" ), versions[ 0 ].WinPathway );
+
+		Assert.Equal( payload, versions[ 1 ].file_contents );
+		Assert.Null( versions[ 1 ].preview_image );
+		Assert.Equal( "", versions[ 1 ].WinPathway );
+	}
 }

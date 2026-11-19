@@ -78,7 +78,7 @@ public static class OdooRpc
 				JsonRpcResponse? response = await request.SendJsonAsync(
 					Settings.OdooUrl + JsonRpcEndpoint,
 					timeoutMs ?? ObjectTimeout,
-					token: token );
+					token: token ).ConfigureAwait( false );
 				if( response is null )
 					return Result<JsonElement>.Fail( "no response from the server" );
 				if( response.Error is not null )
@@ -93,7 +93,7 @@ public static class OdooRpc
 			{
 				int delayMs = attempt == 1 ? 250 : 750;
 				HackLogger.Warn( nameof( OdooRpc ), $"Transient RPC error on {service}.{method} (attempt {attempt}/{maxAttempts}), retrying in {delayMs}ms: {Describe( e )}" );
-				await Task.Delay( delayMs, token );
+				await Task.Delay( delayMs, token ).ConfigureAwait( false );
 			}
 			catch( Exception e )
 			{
@@ -117,7 +117,7 @@ public static class OdooRpc
 			"execute",
 			[ Settings.OdooDb, Settings.OdooId, Settings.OdooPass, model, method, .. args ],
 			timeoutMs,
-			token );
+			token ).ConfigureAwait( false );
 		return raw.Ok ? Convert<T>( raw.Value ) : Result<T>.Fail( raw.Error );
 	}
 
@@ -133,7 +133,7 @@ public static class OdooRpc
 			"login",
 			[ Settings.OdooDb, Settings.OdooUser, Settings.OdooPass ],
 			timeoutMs ?? CommonTimeout,
-			token );
+			token ).ConfigureAwait( false );
 		if( !raw.Ok )
 			return Result<int>.Fail( raw.Error );
 

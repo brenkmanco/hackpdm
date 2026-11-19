@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Globalization;
+using System.Text.Json;
 
 namespace HackPDM.Core.Odoo.Models;
 
@@ -344,7 +345,7 @@ public static class Repository<T> where T : HpRecord<T>, IOdooModel<T>, new()
 		CancellationToken token = default )
 		=> ids.Count == 0
 			? Task.FromResult( Result<T[]>.Success( [] ) )
-			: FetchAsync( OdooRpc.ReadAsync( Model, ids, fields.For<T>(), timeoutMs, token ), fields );
+			: FetchAsync( OdooRpc.ExecuteAsync<JsonElement>( Model, "read", [ ids, fields.For<T>() ], timeoutMs, token ), fields );
 
 	public static Task<Result<T[]>> SearchReadAsync(
 		OdooDomain? domain = null,
@@ -352,23 +353,81 @@ public static class Repository<T> where T : HpRecord<T>, IOdooModel<T>, new()
 		int? limit = null,
 		int timeoutMs = OdooRpc.LongTimeout,
 		CancellationToken token = default )
-		=> FetchAsync( OdooRpc.SearchReadAsync( Model, domain, fields.For<T>(), limit, timeoutMs, token ), fields );
+		=> FetchAsync(
+			OdooRpc.ExecuteAsync<JsonElement>(
+				Model,
+				"search_read",
+				limit is null
+					? [ domain ?? OdooDomain.All, fields.For<T>() ]
+					: [ domain ?? OdooDomain.All, fields.For<T>(), 0, limit ],
+				timeoutMs,
+				token ),
+			fields );
 
 	public static Task<Result<TOther[]>> RelatedAsync<TOther>(
 		IReadOnlyList<int> ids,
 		string relatedField,
 		FieldSelection fields = default,
-		int timeoutMs = 60000,
+		int timeoutMs = 120_000,
 		CancellationToken token = default )
 		where TOther : HpRecord<TOther>, IOdooModel<TOther>, new()
 		=> Repository<TOther>.FetchAsync(
-			OdooRpc.ExecuteAsync<IReadOnlyList<OdooRow>>( Model, "related_browse", [ ids, relatedField, fields.For<TOther>() ], timeoutMs, token ),
+			OdooRpc.ExecuteAsync<JsonElement>( Model, "related_browse", [ ids, relatedField, fields.For<TOther>() ], timeoutMs, token ),
 			fields );
 
-	internal static async Task<Result<T[]>> FetchAsync( Task<Result<IReadOnlyList<OdooRow>>> fetch, FieldSelection fields )
+	internal static async Task<Result<T[]>> FetchAsync( Task<Result<JsonElement>> fetch, FieldSelection fields )
 	{
-		Result<IReadOnlyList<OdooRow>> rows = await fetch;
-		return rows.Ok ? Result<T[]>.Success( Populate( rows.Value!, fields.Excluded ) ) : Result<T[]>.Fail( rows.Error );
+		Result<JsonElement> raw = await fetch.ConfigureAwait( false );
+		return raw.Ok
+			? Result<T[]>.Success( PopulateFromJson( raw.Value, fields.Excluded ) )
+			: Result<T[]>.Fail( raw.Error );
+	}
+
+	internal static T[] PopulateFromJson( JsonElement json, string[]? excludedFields = null )
+	{
+		if( json.ValueKind != JsonValueKind.Array )
+			return [];
+		int count = json.GetArrayLength();
+		if( count == 0 )
+			return [];
+
+		List<T> records = new( count );
+		foreach( JsonElement item in json.EnumerateArray() )
+		{
+			if( item.ValueKind != JsonValueKind.Object )
+				continue;
+			T record = new();
+			AssignFromJson( record, item );
+			record.IsRecord = true;
+			record.ExcludedFields = excludedFields;
+			record.CompleteConstruction();
+			records.Add( record );
+		}
+		return [ .. records ];
+	}
+
+	private static void AssignFromJson( T record, JsonElement row )
+	{
+		foreach( JsonProperty prop in row.EnumerateObject() )
+		{
+			string field = prop.Name;
+			JsonElement elem = prop.Value;
+			if( field == nameof( HpRecordBase.id ) )
+			{
+				if( elem.ValueKind == JsonValueKind.Number && elem.TryGetInt32( out int id ) )
+					record.id = id;
+				continue;
+			}
+
+			object? value = field is nameof( HpVersion.file_contents ) or nameof( HpVersion.preview_image )
+				&& elem.ValueKind == JsonValueKind.String
+				&& elem.TryGetBytesFromBase64( out byte[]? decoded )
+					? ( decoded.Length > 0 ? decoded : null )
+					: OdooValues.FromJson( elem );
+
+			if( !record.TrySetField( field, value ) )
+				record.HashedValues[ field ] = value;
+		}
 	}
 
 	private static T PopulateOne( IReadOnlyDictionary<string, object?> row, string[]? excludedFields )

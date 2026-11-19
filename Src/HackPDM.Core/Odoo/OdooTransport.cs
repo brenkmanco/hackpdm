@@ -58,9 +58,16 @@ public static class OdooTransport
 			: default;
 		HttpClient httpClient = HttpClientFor( proxy, pooled: !ServerClosesConnections( url ) );
 
-		using HttpResponseMessage response = await httpClient.PostAsJsonAsync( url, request, cts.Token );
+		using HttpRequestMessage message = new( HttpMethod.Post, url )
+		{
+			Content = JsonContent.Create( request ),
+		};
+		using HttpResponseMessage response = await httpClient.SendAsync(
+			message,
+			HttpCompletionOption.ResponseHeadersRead,
+			cts.Token ).ConfigureAwait( false );
 		NoteConnectionReuse( url, response );
 		response.EnsureSuccessStatusCode();
-		return await response.Content.ReadFromJsonAsync<JsonRpcResponse>( cts.Token );
+		return await response.Content.ReadFromJsonAsync<JsonRpcResponse>( cts.Token ).ConfigureAwait( false );
 	}
 }

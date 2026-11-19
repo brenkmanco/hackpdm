@@ -54,7 +54,7 @@ public sealed class ObservableRingBufferTests
 	[Fact]
 	public void NewestFirst_AddRange_SmallAndLargeBatchesKeepNewestAtZero()
 	{
-		ObservableRingBuffer<int> buffer = new( 5, newestFirst: true );
+		ObservableRingBuffer<int> buffer = new( 6, newestFirst: true );
 		int resetCount = 0;
 		buffer.CollectionChanged += ( _, e ) =>
 		{
@@ -62,23 +62,23 @@ public sealed class ObservableRingBufferTests
 				resetCount++;
 		};
 
-		// Small batch (<= 4) notifies incrementally (no Reset).
-		buffer.AddRange( [ 1, 2, 3 ] );
-		Assert.Equal( [ 3, 2, 1 ], buffer );
+		// Small batch (<= 10, < Capacity) notifies incrementally (no Reset).
+		buffer.AddRange( [ 1, 2, 3, 4, 5 ] );
+		Assert.Equal( [ 5, 4, 3, 2, 1 ], buffer );
 		Assert.Equal( 0, resetCount );
 
-		// Larger batch (> 4, < Capacity) wraps and raises a single Reset.
-		ObservableRingBuffer<int> larger = new( 8, newestFirst: true );
+		// Larger batch (> 10, < Capacity) wraps and raises a single Reset.
+		ObservableRingBuffer<int> larger = new( 14, newestFirst: true );
 		int largerResets = 0;
 		larger.CollectionChanged += ( _, e ) => { if( e.Action == NotifyCollectionChangedAction.Reset ) largerResets++; };
-		larger.AddRange( [ 1, 2 ] );
-		larger.AddRange( [ 3, 4, 5, 6, 7, 8, 9 ] );
-		Assert.Equal( [ 9, 8, 7, 6, 5, 4, 3, 2 ], larger );
+		larger.AddRange( [ 1, 2, 3 ] );
+		larger.AddRange( [ 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 ] );
+		Assert.Equal<int>( [ 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2 ], larger );
 		Assert.Equal( 1, largerResets );
 
-		// Batch >= Capacity retains only the last Capacity elements in newest-first order.
+		// Batch >= Capacity retains only the last Capacity elements in newest-first order with one Reset.
 		buffer.AddRange( [ 10, 11, 12, 13, 14, 15, 16 ] );
-		Assert.Equal( [ 16, 15, 14, 13, 12 ], buffer );
+		Assert.Equal( [ 16, 15, 14, 13, 12, 11 ], buffer );
 		Assert.Equal( 1, resetCount );
 	}
 

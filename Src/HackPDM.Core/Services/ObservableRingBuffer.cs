@@ -14,7 +14,7 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 {
 	private const int InitialAllocation = 16;
 	private const int ShrinkClearThreshold = 4096;
-	private const int IncrementalBatchLimit = 4;
+	private const int IncrementalBatchLimit = 10;
 
 	private static readonly PropertyChangedEventArgs CountChangedArgs = new( nameof( Count ) );
 	private static readonly PropertyChangedEventArgs CapacityChangedArgs = new( nameof( Capacity ) );
@@ -139,7 +139,7 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 		int batchCount = items.Count;
 		if( batchCount == 0 )
 			return;
-		if( batchCount <= IncrementalBatchLimit )
+		if( batchCount <= IncrementalBatchLimit && batchCount < Capacity )
 		{
 			for( int i = 0; i < batchCount; i++ )
 				Add( items[ i ] );

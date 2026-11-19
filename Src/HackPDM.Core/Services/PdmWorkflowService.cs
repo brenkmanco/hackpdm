@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Text.Json;
+
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
 using HackPDM.Core.Pdm;
@@ -27,9 +30,11 @@ public interface IPdmWorkflowService
 	Task<IReadOnlyList<int>> DownloadVersionsAsync( IReadOnlyList<int> versionIds );
 }
 
-public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWorkflowService
+public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileWatcher? localFiles = null ) : IPdmWorkflowService
 {
-	private const int RpcIdChunkSize = 500;
+	private const int RpcIdChunkSize = 10_000;
+	private static readonly ConcurrentDictionary<string, byte> NoDirectDependencyServerUrls = new( StringComparer.OrdinalIgnoreCase );
+	private static readonly string[] LatestVersionIdFields = [ nameof( HpEntry.latest_version_id ) ];
 	private static readonly string[] HeavyEntryFields = [ nameof( HpEntry.type_id ), nameof( HpEntry.cat_id ) ];
 	private static readonly string[] DeleteExcludedFields = [ nameof( HpEntry.type_id ), nameof( HpEntry.cat_id ), nameof( HpEntry.checkout_node ) ];
 	private static readonly string[] LatestVersionIncludedFields =
@@ -39,8 +44,6 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		nameof( HpVersion.checksum ),
 		nameof( HpVersion.file_size ),
 		nameof( HpVersion.windows_complete_name ),
-		nameof( HpVersion.dir_id ),
-		nameof( HpVersion.checkout_user ),
 	];
 
 	private void Log( StatusMessage status, string message ) => reporter.Log( status, message );
@@ -55,28 +58,41 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		return ids.ValueOr( [] );
 	}
 
+	private static bool IsMissingMethodError( string? error )
+		=> error is { Length: > 0 }
+			&& ( error.Contains( "AttributeError", StringComparison.OrdinalIgnoreCase )
+				|| error.Contains( "has no attribute", StringComparison.OrdinalIgnoreCase )
+				|| error.Contains( "doesn't exist", StringComparison.OrdinalIgnoreCase )
+				|| error.Contains( "does not exist", StringComparison.OrdinalIgnoreCase )
+				|| error.Contains( "not found", StringComparison.OrdinalIgnoreCase ) );
+
 	private async Task<IReadOnlyList<int>> ExpandWithDependenciesAsync( IReadOnlyList<int> entryIds, CancellationToken token = default )
 	{
 		HashSet<int> allIds = [ .. entryIds ];
-		bool useDirectEntryRpc = true;
+		string serverKey = OdooDefaults.Instance?.OdooUrl ?? "";
+		bool useDirectEntryRpc = string.IsNullOrEmpty( serverKey ) || !NoDirectDependencyServerUrls.ContainsKey( serverKey );
 		List<int> fallbackEntryIds = [];
 
 		for( int offset = 0; offset < entryIds.Count; offset += RpcIdChunkSize )
 		{
 			token.ThrowIfCancellationRequested();
-			int[] chunk = OdooRpc.SliceChunk( entryIds, offset, RpcIdChunkSize );
+			IReadOnlyList<int> chunk = offset == 0 && entryIds.Count <= RpcIdChunkSize
+				? entryIds
+				: OdooRpc.SliceChunk( entryIds, offset, RpcIdChunkSize );
 
 			if( useDirectEntryRpc )
 			{
-				Result<IReadOnlyList<int>> direct = await DownloadOperations.GetAllEntriesAndDependenciesByEntriesAsync( chunk, token );
+				Result<IReadOnlyList<int>> direct = await DownloadOperations.GetAllEntriesAndDependenciesByEntriesAsync( chunk, token ).ConfigureAwait( false );
 				if( direct.Ok )
 				{
 					if( direct.Value is { Count: > 0 } depIds )
 						allIds.UnionWith( depIds );
 					if( entryIds.Count > RpcIdChunkSize )
-						Log( StatusMessage.PROCESSING, $"Checked dependencies for {Math.Min( offset + chunk.Length, entryIds.Count )}/{entryIds.Count} entries..." );
+						Log( StatusMessage.PROCESSING, $"Checked dependencies for {Math.Min( offset + chunk.Count, entryIds.Count )}/{entryIds.Count} entries..." );
 					continue;
 				}
+				if( IsMissingMethodError( direct.Error ) && !string.IsNullOrEmpty( serverKey ) )
+					NoDirectDependencyServerUrls.TryAdd( serverKey, 0 );
 				useDirectEntryRpc = false;
 			}
 			fallbackEntryIds.AddRange( chunk );
@@ -85,15 +101,32 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		if( fallbackEntryIds.Count == 0 )
 			return [ .. allIds ];
 
-		List<int> versionIds = [];
+		List<int> versionIds = new( fallbackEntryIds.Count );
 		for( int offset = 0; offset < fallbackEntryIds.Count; offset += RpcIdChunkSize )
 		{
 			token.ThrowIfCancellationRequested();
-			int[] chunk = OdooRpc.SliceChunk( fallbackEntryIds, offset, RpcIdChunkSize );
-			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( chunk, includedFields: [ nameof( HpEntry.latest_version_id ) ] );
-			foreach( HpEntry e in entries ?? [] )
+			IReadOnlyList<int> chunk = offset == 0 && fallbackEntryIds.Count <= RpcIdChunkSize
+				? fallbackEntryIds
+				: OdooRpc.SliceChunk( fallbackEntryIds, offset, RpcIdChunkSize );
+			Result<JsonElement> rows = await OdooRpc.ExecuteAsync<JsonElement>(
+				HpEntry.ModelName,
+				"read",
+				[ chunk, LatestVersionIdFields ],
+				90_000,
+				token ).ConfigureAwait( false );
+			if( !rows.Ok || rows.Value.ValueKind != JsonValueKind.Array )
+				continue;
+			foreach( JsonElement row in rows.Value.EnumerateArray() )
 			{
-				if( e.latest_version_id?.id is int vid and > 0 )
+				if( row.ValueKind != JsonValueKind.Object || !row.TryGetProperty( nameof( HpEntry.latest_version_id ), out JsonElement lv ) )
+					continue;
+				int vid = lv.ValueKind switch
+				{
+					JsonValueKind.Array when lv.GetArrayLength() > 0 && lv[ 0 ].ValueKind == JsonValueKind.Number && lv[ 0 ].TryGetInt32( out int a ) => a,
+					JsonValueKind.Number when lv.TryGetInt32( out int n ) => n,
+					_ => 0,
+				};
+				if( vid > 0 )
 					versionIds.Add( vid );
 			}
 		}
@@ -101,8 +134,10 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		for( int offset = 0; offset < versionIds.Count; offset += RpcIdChunkSize )
 		{
 			token.ThrowIfCancellationRequested();
-			int[] chunk = OdooRpc.SliceChunk( versionIds, offset, RpcIdChunkSize );
-			Result<IReadOnlyList<int>> dependencies = await DownloadOperations.GetAllEntriesAndDependenciesListAsync( chunk, token );
+			IReadOnlyList<int> chunk = offset == 0 && versionIds.Count <= RpcIdChunkSize
+				? versionIds
+				: OdooRpc.SliceChunk( versionIds, offset, RpcIdChunkSize );
+			Result<IReadOnlyList<int>> dependencies = await DownloadOperations.GetAllEntriesAndDependenciesListAsync( chunk, token ).ConfigureAwait( false );
 			if( !dependencies.Ok )
 				Log( StatusMessage.WARNING, $"Dependencies could not be listed: {dependencies.Error}" );
 			else if( dependencies.Value is { Count: > 0 } depIds )
@@ -121,19 +156,24 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 			return null;
 
 		CancellationTokenSource cancellation = reporter.BeginOperation();
+		using IDisposable? watcherPause = localFiles?.Suspend();
 		try
 		{
-			IReadOnlyList<int> ids;
-			if( preExpandedIds is not null )
+			IReadOnlyList<int>? ids = preExpandedIds;
+			bool completed = await AsyncHelper.AsyncRunner( async () =>
 			{
-				ids = preExpandedIds;
-			}
-			else
+				if( ids is null )
+				{
+					Log( StatusMessage.INFO, $"Finding Entry Dependencies for {entryIds.Count} entries..." );
+					ids = await ExpandWithDependenciesAsync( entryIds, cancellation.Token ).ConfigureAwait( false );
+				}
+				await DownloadLatestAsync( ids, cancellation.Token ).ConfigureAwait( false );
+			}, "Get Latest", cancellation );
+			if( !completed )
 			{
-				Log( StatusMessage.INFO, $"Finding Entry Dependencies for {entryIds.Count} entries..." );
-				ids = await ExpandWithDependenciesAsync( entryIds, cancellation.Token );
+				await reporter.NotifyAsync( "Cancelled Download" );
+				return null;
 			}
-			await AsyncHelper.AsyncRunner( () => DownloadLatestAsync( ids, cancellation.Token ), "Get Latest", cancellation );
 			return ids;
 		}
 		catch( OperationCanceledException )
@@ -153,46 +193,72 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 		Log( StatusMessage.PROCESSING, "Retrieving all latest versions associated with entries..." );
 
 		HpVersion[]? versions = await DownloadOperations.GetLatestVersionsAsync(
-			entryIds, excludedFields: null, token: token, includedFields: LatestVersionIncludedFields, log: Log );
-		long effectiveBatchBytes = DownloadOperations.EffectiveBatchBytes();
-		List<List<HpVersion>>? batches = versions is null
-			? null
-			: DownloadOperations.BatchBySize( versions, OdooDefaults.Instance.DownloadBatchSize, effectiveBatchBytes );
+			entryIds, excludedFields: null, token: token, includedFields: LatestVersionIncludedFields, log: Log ).ConfigureAwait( false );
 		reporter.SetTotal( versions?.Length ?? 0 );
 
-		if( batches is not { Count: > 0 } || versions is null )
+		if( versions is not { Length: > 0 } )
 		{
 			reporter.Complete();
 			await reporter.NotifyAsync( "Cancelled Download... No Versions to Process" );
 			return;
 		}
 
-		Log( StatusMessage.INFO, $"Prepared {versions.Length} version(s) in {batches.Count} batch(es); comparing local files and downloading..." );
+		Log( StatusMessage.INFO, $"Retrieved {versions.Length} version(s); checking local files..." );
 
-		DownloadOperations.DownloadSummary? summary = null;
+		DownloadOperations.DownloadSummary summary = new();
 		try
 		{
-			summary = await DownloadOperations.ProcessDownloadsAsync(
-				batches,
+			List<HpVersion> toDownload = await DownloadOperations.FilterVersionsToDownloadAsync(
+				versions,
 				token,
-				OdooDefaults.Instance.ConcurrencySize,
+				summary,
 				log: Log,
-				onProgress: ( processed, skipped ) => reporter.Advance( processed, skipped ),
-				onBytesDownloaded: bytes => reporter.AddDownloadedBytes( bytes ) );
+				onProgress: ( processed, skipped ) => reporter.Advance( processed, skipped ) ).ConfigureAwait( false );
+
+			if( toDownload.Count > 0 )
+			{
+				long totalBytes = 0;
+				for( int i = 0; i < toDownload.Count; i++ )
+					totalBytes += Math.Max( 0, (long)( toDownload[ i ].file_size ?? 0 ) );
+
+				int maxBatchCount = Math.Clamp(
+					OdooDefaults.Instance.DownloadBatchSize,
+					1,
+					AdaptiveTransferController.MaxAdaptiveBatchCount );
+				AdaptiveTransferController controller = new( maxBatchCount );
+
+				Log(
+					StatusMessage.INFO,
+					$"Downloading {toDownload.Count} file(s) ({ByteSize.Format( totalBytes )}, {summary.Skipped} skipped; adaptive ≤{maxBatchCount} files / {ByteSize.Format( controller.CurrentBatchBytes )} targeting {AdaptiveTransferController.TargetRpcSeconds:F0}s/RPC)..." );
+
+				reporter.BeginDownloadTransfer();
+				try
+				{
+					await DownloadOperations.DownloadAdaptiveAsync(
+						toDownload,
+						token,
+						summary,
+						maxBatchCount: maxBatchCount,
+						maxConcurrency: OdooDefaults.Instance.ConcurrencySize,
+						log: Log,
+						onProgress: ( processed, skipped ) => reporter.Advance( processed, skipped ),
+						onBytesDownloaded: bytes => reporter.AddDownloadedBytes( bytes ),
+						controller: controller ).ConfigureAwait( false );
+				}
+				finally
+				{
+					reporter.EndDownloadTransfer();
+				}
+			}
 		}
-		catch( OperationCanceledException )
-		{
-			await reporter.NotifyAsync( "Cancelled Download" );
-		}
-		catch( Exception e )
+		catch( Exception e ) when( e is not OperationCanceledException )
 		{
 			Log( StatusMessage.ERROR, $"download failed: {e}" );
 			await reporter.NotifyAsync( $"Download failed: {e.Message}", "Get Latest" );
+			return;
 		}
 
 		reporter.Complete();
-		if( summary is null )
-			return;
 
 		string kept = summary.KeptLocalChanges.IsEmpty
 			? ""
@@ -228,37 +294,40 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 			return;
 
 		CancellationTokenSource cancellation = reporter.BeginOperation();
+		using IDisposable? watcherPause = localFiles?.Suspend();
 		try
 		{
 			int me = OdooDefaults.Instance.OdooId;
-			IReadOnlyList<int> ids = preExpandedIds ?? await ExpandWithDependenciesAsync( entryIds, cancellation.Token );
-			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync(
-				ids,
-				checkout ? null : OdooDomain.Where( nameof( HpEntry.checkout_user ), Operators.Equal, me ),
-				excludedFields: HeavyEntryFields );
-
-			if( !checkout )
+			bool completed = await AsyncHelper.AsyncRunner( async () =>
 			{
-				HpEntry[]? others = await HpEntry.GetRecordsByIdsAsync(
-					entryIds,
-					OdooDomain.Where( nameof( HpEntry.checkout_user ), Operators.NotEqual, me ).And( nameof( HpEntry.checkout_user ), Operators.NotEqual, false ),
-					includedFields: [ nameof( HpEntry.id ), nameof( HpEntry.name ), nameof( HpEntry.checkout_user ) ] );
-				foreach( HpEntry other in others ?? [] )
-					Log( StatusMessage.ERROR, $"Cannot undo the check out of {other.name}: it is checked out to {other.checkout_user?.name ?? "another user"}" );
-			}
-			if( entries is null or { Length: < 1 } )
-				return;
+				IReadOnlyList<int> ids = preExpandedIds ?? await ExpandWithDependenciesAsync( entryIds, cancellation.Token ).ConfigureAwait( false );
+				HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync(
+					ids,
+					checkout ? null : OdooDomain.Where( nameof( HpEntry.checkout_user ), Operators.Equal, me ),
+					excludedFields: HeavyEntryFields ).ConfigureAwait( false );
 
-			await AsyncHelper.AsyncRunner( async () =>
-			{
+				if( !checkout )
+				{
+					HpEntry[]? others = await HpEntry.GetRecordsByIdsAsync(
+						entryIds,
+						OdooDomain.Where( nameof( HpEntry.checkout_user ), Operators.NotEqual, me ).And( nameof( HpEntry.checkout_user ), Operators.NotEqual, false ),
+						includedFields: [ nameof( HpEntry.id ), nameof( HpEntry.name ), nameof( HpEntry.checkout_user ) ] ).ConfigureAwait( false );
+					foreach( HpEntry other in others ?? [] )
+						Log( StatusMessage.ERROR, $"Cannot undo the check out of {other.name}: it is checked out to {other.checkout_user?.name ?? "another user"}" );
+				}
+				if( entries is null or { Length: < 1 } )
+					return;
+
 				reporter.SetTotal( entries.Length );
 				if( checkout )
-					await CheckoutOperations.CheckOutEntriesAsync( entries, Log, OnCheckoutProgress, cancellation.Token );
+					await CheckoutOperations.CheckOutEntriesAsync( entries, Log, OnCheckoutProgress, cancellation.Token ).ConfigureAwait( false );
 				else
-					await CheckoutOperations.UnCheckOutEntriesAsync( entries, me, Log, OnCheckoutProgress, cancellation.Token );
+					await CheckoutOperations.UnCheckOutEntriesAsync( entries, me, Log, OnCheckoutProgress, cancellation.Token ).ConfigureAwait( false );
 				reporter.Complete();
 				await reporter.NotifyAsync( "Completed!" );
 			}, checkout ? "Checkout Files" : "UnCheckout Files", cancellation );
+			if( !completed )
+				await reporter.NotifyAsync( checkout ? "Cancelled Checkout" : "Cancelled UnCheckout" );
 		}
 		catch( OperationCanceledException )
 		{
@@ -288,6 +357,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 			return;
 
 		CancellationTokenSource cancellation = reporter.BeginOperation();
+		using IDisposable? watcherPause = localFiles?.Suspend();
 		try
 		{
 			var (localOnly, remoteExisting, unchanged, remoteByServerName) =
@@ -314,19 +384,27 @@ public sealed class PdmWorkflowService( IOperationReporter reporter ) : IPdmWork
 			Dictionary<string, HpDirectory> directoryCache = new( StringComparer.OrdinalIgnoreCase );
 			var staged = localOnly.Select( f => ( file: f, inOdoo: false ) )
 				.Concat( remoteExisting.Select( f => ( file: f, inOdoo: true ) ) );
-			foreach( var (file, inOdoo) in staged )
+			reporter.BeginUploadTransfer();
+			try
 			{
-				if( !await CommitOperations.CommitRecordAsync(
-					file,
-					commit,
-					inOdoo,
-					Log,
-					() => reporter.Advance( 1 ),
-					bytes => reporter.AddUploadedBytes( bytes ),
-					directoryCache,
-					remoteByServerName,
-					cancellation.Token ) )
-					return;
+				foreach( var (file, inOdoo) in staged )
+				{
+					if( !await CommitOperations.CommitRecordAsync(
+						file,
+						commit,
+						inOdoo,
+						Log,
+						() => reporter.Advance( 1 ),
+						bytes => reporter.AddUploadedBytes( bytes ),
+						directoryCache,
+						remoteByServerName,
+						cancellation.Token ) )
+						return;
+				}
+			}
+			finally
+			{
+				reporter.EndUploadTransfer();
 			}
 
 			var (committed, error) = await commit.ServerCommit();

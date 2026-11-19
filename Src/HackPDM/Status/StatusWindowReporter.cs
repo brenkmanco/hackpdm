@@ -80,6 +80,10 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 	public void SetProcessed( int processed ) => status()?.SetProcessed( processed );
 	public void AddDownloadedBytes( long bytes ) => status()?.AddDownloadedBytes( bytes );
 	public void AddUploadedBytes( long bytes ) => status()?.AddUploadedBytes( bytes );
+	public void BeginDownloadTransfer() => status()?.BeginDownloadTransfer();
+	public void EndDownloadTransfer() => status()?.EndDownloadTransfer();
+	public void BeginUploadTransfer() => status()?.BeginUploadTransfer();
+	public void EndUploadTransfer() => status()?.EndUploadTransfer();
 	public void Complete() => status()?.CompleteProgress();
 
 	public Task NotifyAsync( string message, string caption = "Status" )

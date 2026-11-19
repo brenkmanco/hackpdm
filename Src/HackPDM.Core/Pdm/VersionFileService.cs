@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
@@ -27,10 +29,23 @@ public static class VersionFileService
 		if( version.file_size == 0 )
 			return [];
 		if( ContentTransfer.IsLarge( version.file_size ) )
-			return ( await ContentTransfer.DownloadBytesAsync( version ) ).Value;
+			return ( await ContentTransfer.DownloadBytesAsync( version ).ConfigureAwait( false ) ).Value;
 
-		Result<IReadOnlyList<OdooRow>> rows = await OdooRpc.ReadAsync( HpVersion.ModelName, [ id ], [ FileContents ] );
-		if( rows.Value is not [ var row, .. ] || row.Text( FileContents ) is not { Length: > 0 } b64 )
+		Result<JsonElement> raw = await OdooRpc.ExecuteAsync<JsonElement>(
+			HpVersion.ModelName,
+			"read",
+			[ new[] { id }, new[] { FileContents } ] ).ConfigureAwait( false );
+		if( !raw.Ok || raw.Value.ValueKind != JsonValueKind.Array || raw.Value.GetArrayLength() == 0 )
+			return null;
+		JsonElement first = raw.Value[ 0 ];
+		if( first.ValueKind != JsonValueKind.Object
+			|| !first.TryGetProperty( FileContents, out JsonElement data )
+			|| data.ValueKind != JsonValueKind.String )
+			return null;
+		if( data.TryGetBytesFromBase64( out byte[]? decoded ) )
+			return decoded.Length > 0 ? decoded : null;
+		string? b64 = data.GetString();
+		if( string.IsNullOrEmpty( b64 ) )
 			return null;
 		try
 		{
@@ -95,7 +110,7 @@ public static class VersionFileService
 		{
 			Owner = version.checkout_user?.id is not null ? OdooDefaults.Instance?.OdooId == version.checkout_user.id : null,
 		};
-		if( version.file_contents is not { Length: > 0 } && !contentsInFile && version.file_size != 0 )
+		if( version.file_contents is not { Length: > 0 } && !contentsInFile && ( version.file_size ?? 0 ) > 0 )
 			return hack;
 		hack.FileContents = version.file_contents ?? ( contentsInFile ? null : [] );
 		hack.DirectoryName = version.WinPathway;
