@@ -65,8 +65,19 @@ public sealed partial class HackFileManagerView : Page
 	public RangeObservableCollection<TreeData> BreadcrumbPath { get; } = [];
 	// TreeView items are built as nodes (see DirectoryTreeBuilder); this source stays empty
 	private readonly ObservableCollection<TreeData> _treeItems = [];
+	private const int TreeRebuildCooldownMs = 50;
+	private const int BadgeCooldownMs = 150;
+	private const int BadgeMinIntervalMs = 50;
+	private const int MaxBadgesPerWindow = 12;
+
 	private CancellationTokenSource? _treeSelectionCancellation;
 	private DispatcherQueueTimer? _folderFilterTimer;
+	private DispatcherQueueTimer? _treeRebuildTimer;
+	private DirectoryNode? _pendingTreeRebuildRoot;
+	private long _lastTreeRebuildTick = long.MinValue / 2;
+	private readonly Dictionary<TreeViewNode, (long Tick, LocalChangeKind Kind)> _recentBadges = [];
+	private long _badgeWindowStartTick;
+	private int _badgesInWindow;
 	private PipWindow? _pipWindow;
 	private DirectoryNode? _fullTreeRoot;
 	private int _totalTreeFolderCount;
@@ -126,6 +137,9 @@ public sealed partial class HackFileManagerView : Page
 			return;
 		_left = true;
 		_folderFilterTimer?.Stop();
+		_treeRebuildTimer?.Stop();
+		_pendingTreeRebuildRoot = null;
+		_recentBadges.Clear();
 		CtsHelper.CancelAndDispose( ref _treeSelectionCancellation );
 		ViewModel.RefreshRequested -= OnRefreshRequested;
 		ViewModel.GroupingChanged -= OnGroupingChanged;
@@ -323,19 +337,52 @@ public sealed partial class HackFileManagerView : Page
 			_ = ReloadEntriesAsync();
 	}
 
-	/// <summary>Rebuilds the tree nodes and reselects the directory that was selected before.</summary>
+	/// <summary>Rebuilds the tree nodes and reselects the directory that was selected before (throttled by cooldown).</summary>
 	private Task OnTreeLoadedAsync( DirectoryNode root )
+	{
+		long now = Environment.TickCount64;
+		long elapsed = now - _lastTreeRebuildTick;
+		if( _fullTreeRoot is null || elapsed >= TreeRebuildCooldownMs || DispatcherQueue is null )
+		{
+			_pendingTreeRebuildRoot = null;
+			_treeRebuildTimer?.Stop();
+			ApplyTreeLoaded( root );
+			return Task.CompletedTask;
+		}
+
+		_pendingTreeRebuildRoot = root;
+		if( _treeRebuildTimer is null )
+		{
+			_treeRebuildTimer = DispatcherQueue.CreateTimer();
+			_treeRebuildTimer.IsRepeating = false;
+			_treeRebuildTimer.Tick += ( _, _ ) =>
+			{
+				if( _left || _pendingTreeRebuildRoot is not { } pending )
+					return;
+				_pendingTreeRebuildRoot = null;
+				ApplyTreeLoaded( pending );
+			};
+		}
+		_treeRebuildTimer.Interval = TimeSpan.FromMilliseconds( Math.Max( 10, TreeRebuildCooldownMs - elapsed ) );
+		if( !_treeRebuildTimer.IsRunning )
+			_treeRebuildTimer.Start();
+		return Task.CompletedTask;
+	}
+
+	private void ApplyTreeLoaded( DirectoryNode root )
 	{
 		_fullTreeRoot = root;
 		_totalTreeFolderCount = root.CountRecursive();
 		RebuildDisplayedTree( FolderFilterBox.Text );
-		return Task.CompletedTask;
 	}
 
 	private void RebuildDisplayedTree( string? filterText )
 	{
 		if( _fullTreeRoot is null )
 			return;
+
+		_lastTreeRebuildTick = Environment.TickCount64;
+		_recentBadges.Clear();
 
 		string query = filterText?.Trim() ?? "";
 		_isFilteringTree = query.Length > 0;
@@ -771,6 +818,25 @@ public sealed partial class HackFileManagerView : Page
 		if( VisibleNodeFor( treePath ) is not { } node
 			|| OdooDirectoryTree.ContainerFromNode( node ) is not TreeViewItem { Content: Panel panel } )
 			return;
+
+		long now = Environment.TickCount64;
+		if( _recentBadges.TryGetValue( node, out var recent ) )
+		{
+			long sinceLast = now - recent.Tick;
+			if( sinceLast < BadgeMinIntervalMs || ( recent.Kind == kind && sinceLast < BadgeCooldownMs ) )
+				return;
+		}
+
+		if( now - _badgeWindowStartTick >= BadgeCooldownMs )
+		{
+			_badgeWindowStartTick = now;
+			_badgesInWindow = 0;
+		}
+		if( _badgesInWindow >= MaxBadgesPerWindow )
+			return;
+
+		_recentBadges[ node ] = ( now, kind );
+		_badgesInWindow++;
 
 		RemoveBadges( panel );
 		var (text, brush) = kind switch

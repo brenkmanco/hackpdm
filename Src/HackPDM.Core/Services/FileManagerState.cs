@@ -74,7 +74,7 @@ public sealed class FileManagerState
 	{
 		if( LivePages > 0 )
 			return;
-		if( changes is null )
+		if( changes is null || changes.Count > 250 )
 		{
 			MarkStale( FileManagerRefresh.All );
 			return;
@@ -87,7 +87,7 @@ public sealed class FileManagerState
 			LocalFileChange change = changes[ i ];
 			string? itemPath = PwaPaths.ToServerName( change.FullPath );
 			bool isDir = change.IsDirectory
-				|| Directory.Exists( change.FullPath )
+				|| ( change.Kind != LocalChangeKind.Deleted && Directory.Exists( change.FullPath ) )
 				|| ( change.Kind == LocalChangeKind.Deleted
 					&& Tree is not null
 					&& PwaPaths.Segments( itemPath ) is { Length: > 0 } itemSegments

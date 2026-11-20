@@ -24,6 +24,9 @@ namespace HackPDM.FileManager;
 public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisposable
 {
 	private const int MaxSingleRowUpdates = 25;
+	private const int BulkReloadChangeThreshold = 200;
+	private const int TreeUpdateCooldownMs = 50;
+	private const int OverflowRefreshCooldownMs = 500;
 	private static readonly Func<EntryRow, IComparable?> GroupByStatus = static row => row.Status;
 
 	private readonly FileManagerState _state;
@@ -36,6 +39,9 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	private readonly IFilePickerService? _pickers;
 	private readonly Dictionary<string, Func<EntryRow, CancellationToken, Task>> _detailTabs;
 	private readonly SemaphoreSlim _localChangesGate = new( 1, 1 );
+	private readonly Lock _watcherQueueGate = new();
+	private readonly Dictionary<string, LocalFileChange> _queuedWatcherChanges = new( PwaPaths.PathComparer );
+	private readonly Timer _watcherCooldownTimer;
 	private readonly List<LocalFileChange> _pendingChangesDuringLoad = [];
 	private readonly CancellationTokenSource _pageCancellation = new();
 	private readonly bool _restoring;
@@ -47,6 +53,13 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	private int _entriesLoadGeneration;
 	private int _previewVersionGeneration;
 	private bool _active;
+	private bool _queuedWatcherOverflow;
+	private bool _watcherDrainScheduled;
+	private bool _watcherDrainRunning;
+	private long _lastTreePushTick = long.MinValue / 2;
+	private bool _isTreeLoadRunning;
+	private bool _pendingTreeReload;
+	private bool _pendingTreeReloadFromServer;
 
 	public HackFileManagerViewModel(
 		FileManagerState state,
@@ -110,6 +123,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		_selectionToRestore = state.SelectedEntryNames;
 		_selectionFolder = state.SelectedPath;
 		_restoring = false;
+		_watcherCooldownTimer = new Timer( _ => UiDispatcher.Post( () => _ = DrainWatcherQueueAsync() ), null, Timeout.Infinite, Timeout.Infinite );
 	}
 
 	public event Action<FileManagerRefresh>? RefreshRequested;
@@ -278,6 +292,13 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		}
 		try { _pageCancellation.Cancel(); }
 		finally { _pageCancellation.Dispose(); }
+		lock( _watcherQueueGate )
+		{
+			_queuedWatcherChanges.Clear();
+			_queuedWatcherOverflow = false;
+			_watcherDrainScheduled = false;
+			_watcherCooldownTimer.Dispose();
+		}
 		CtsHelper.CancelAndDispose( ref _detailsCancellation );
 		_localChangesGate.Dispose();
 		GC.SuppressFinalize( this );
@@ -341,33 +362,57 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	{
 		if( IsDisposed )
 			return;
-		IsTreeLoaded = false;
-		IsTreeLoading = true;
-		TreeLoadingStatus = !fromServer && HasKeptTree ? "Restoring folder tree…" : "Fetching folder structure from Odoo…";
+		if( _isTreeLoadRunning )
+		{
+			_pendingTreeReload = true;
+			_pendingTreeReloadFromServer |= fromServer;
+			return;
+		}
+		_isTreeLoadRunning = true;
 		try
 		{
-			IProgress<string> progress = new UiThreadProgress<string>( status =>
+			bool nextFromServer = fromServer;
+			while( !IsDisposed )
 			{
-				if( !IsDisposed && IsTreeLoading )
-					TreeLoadingStatus = status;
-			} );
-			DirectoryNode? root = !fromServer && HasKeptTree
-				? _state.Tree
-				: await _directoryTree.LoadAsync( progress, _pageCancellation.Token );
-			if( root is not null && !ReferenceEquals( root, _state.Tree ) )
-				_state.TreeRefreshed( root );
-			if( root is not null && !IsDisposed && TreeLoaded is { } handler )
-				await handler( root );
+				_pendingTreeReload = false;
+				_pendingTreeReloadFromServer = false;
+				IsTreeLoaded = false;
+				IsTreeLoading = true;
+				TreeLoadingStatus = !nextFromServer && HasKeptTree ? "Restoring folder tree…" : "Fetching folder structure from Odoo…";
+				try
+				{
+					IProgress<string> progress = new UiThreadProgress<string>( status =>
+					{
+						if( !IsDisposed && IsTreeLoading )
+							TreeLoadingStatus = status;
+					} );
+					DirectoryNode? root = !nextFromServer && HasKeptTree
+						? _state.Tree
+						: await _directoryTree.LoadAsync( progress, _pageCancellation.Token );
+					if( root is not null && !ReferenceEquals( root, _state.Tree ) )
+						_state.TreeRefreshed( root );
+					if( root is not null && !IsDisposed && TreeLoaded is { } handler )
+						await handler( root );
+				}
+				catch( OperationCanceledException ) { break; }
+				catch( ObjectDisposedException ) { break; }
+				finally
+				{
+					if( !IsDisposed )
+					{
+						IsTreeLoading = false;
+						IsTreeLoaded = true;
+					}
+				}
+
+				if( !_pendingTreeReload )
+					break;
+				nextFromServer = _pendingTreeReloadFromServer;
+			}
 		}
-		catch( OperationCanceledException ) { }
-		catch( ObjectDisposedException ) { }
 		finally
 		{
-			if( !IsDisposed )
-			{
-				IsTreeLoading = false;
-				IsTreeLoaded = true;
-			}
+			_isTreeLoadRunning = false;
 		}
 	}
 
@@ -505,15 +550,130 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	}
 
 	private void OnLocalFilesChanged( IReadOnlyList<LocalFileChange> batch )
-		=> UiDispatcher.Post( () => _ = ApplyLocalChangesAsync( batch ) );
+	{
+		if( IsDisposed || batch.Count == 0 )
+			return;
+		lock( _watcherQueueGate )
+		{
+			if( IsDisposed )
+				return;
+			if( !_queuedWatcherOverflow )
+			{
+				if( batch.Count > BulkReloadChangeThreshold || _queuedWatcherChanges.Count + batch.Count > BulkReloadChangeThreshold )
+				{
+					_queuedWatcherChanges.Clear();
+					_queuedWatcherOverflow = true;
+				}
+				else
+				{
+					for( int i = 0; i < batch.Count; i++ )
+					{
+						LocalFileChange incoming = batch[ i ];
+						if( _queuedWatcherChanges.TryGetValue( incoming.FullPath, out LocalFileChange? existing ) )
+						{
+							LocalChangeKind? merged = LocalChangeBatcher.Merge( existing.Kind, incoming.Kind );
+							if( merged is { } k )
+								_queuedWatcherChanges[ incoming.FullPath ] = new( incoming.FullPath, k, existing.IsDirectory || incoming.IsDirectory );
+							else
+								_queuedWatcherChanges.Remove( incoming.FullPath );
+						}
+						else
+						{
+							_queuedWatcherChanges[ incoming.FullPath ] = incoming;
+						}
+					}
+				}
+			}
+			ScheduleWatcherDrainLocked();
+		}
+	}
 
 	private void OnLocalChangesLost()
-		=> UiDispatcher.Post( () => { if( !IsDisposed ) Refresh( FileManagerRefresh.All ); } );
+	{
+		if( IsDisposed )
+			return;
+		lock( _watcherQueueGate )
+		{
+			if( IsDisposed )
+				return;
+			_queuedWatcherChanges.Clear();
+			_queuedWatcherOverflow = true;
+			ScheduleWatcherDrainLocked();
+		}
+	}
+
+	private void ScheduleWatcherDrainLocked()
+	{
+		if( _watcherDrainScheduled || _watcherDrainRunning || ( !_queuedWatcherOverflow && _queuedWatcherChanges.Count == 0 ) )
+			return;
+
+		_watcherDrainScheduled = true;
+		if( UiDispatcher.Current is InlineUiDispatcher )
+		{
+			UiDispatcher.Post( () => _ = DrainWatcherQueueAsync() );
+			return;
+		}
+
+		int cooldownMs = _queuedWatcherOverflow ? OverflowRefreshCooldownMs : TreeUpdateCooldownMs;
+		long elapsed = Environment.TickCount64 - _lastTreePushTick;
+		if( elapsed >= cooldownMs )
+			UiDispatcher.Post( () => _ = DrainWatcherQueueAsync() );
+		else
+			_watcherCooldownTimer.Change( (int)( cooldownMs - elapsed ), Timeout.Infinite );
+	}
+
+	private async Task DrainWatcherQueueAsync()
+	{
+		if( IsDisposed )
+			return;
+
+		bool overflow;
+		List<LocalFileChange>? batch = null;
+		lock( _watcherQueueGate )
+		{
+			_watcherDrainScheduled = false;
+			if( IsDisposed || _watcherDrainRunning )
+				return;
+			overflow = _queuedWatcherOverflow;
+			_queuedWatcherOverflow = false;
+			if( !overflow && _queuedWatcherChanges.Count > 0 )
+			{
+				batch = [ .. _queuedWatcherChanges.Values ];
+				_queuedWatcherChanges.Clear();
+			}
+			if( !overflow && batch is null )
+				return;
+			_watcherDrainRunning = true;
+		}
+
+		try
+		{
+			if( overflow )
+				Refresh( FileManagerRefresh.All );
+			else if( batch is not null )
+				await ApplyLocalChangesAsync( batch );
+		}
+		finally
+		{
+			lock( _watcherQueueGate )
+			{
+				_lastTreePushTick = Environment.TickCount64;
+				_watcherDrainRunning = false;
+				if( !IsDisposed && ( _queuedWatcherOverflow || _queuedWatcherChanges.Count > 0 ) )
+					ScheduleWatcherDrainLocked();
+			}
+		}
+	}
 
 	public async Task ApplyLocalChangesAsync( IReadOnlyList<LocalFileChange> batch )
 	{
 		if( IsDisposed || batch.Count == 0 )
 			return;
+		if( batch.Count > BulkReloadChangeThreshold )
+		{
+			Refresh( FileManagerRefresh.All );
+			return;
+		}
 		bool entered = false;
 		try
 		{
@@ -539,7 +699,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 					continue;
 
 				string[]? itemSegments = null;
-				bool isDirectory = change.IsDirectory || Directory.Exists( change.FullPath );
+				bool isDirectory = change.IsDirectory || ( change.Kind != LocalChangeKind.Deleted && Directory.Exists( change.FullPath ) );
 				if( !isDirectory && change.Kind == LocalChangeKind.Deleted && _state.Tree is not null )
 				{
 					itemSegments = PwaPaths.Segments( itemServerPath );
@@ -925,7 +1085,8 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			return;
 		if( await Dialogs.ConfirmAsync( $"Are you sure you want to delete this directory and ({count}) files inside?", "Delete Directory", MessageBoxIcon.Warning ) )
 		{
-			await Task.Run( () => _files.DeleteDirectory( directory ) );
+			using( _localFiles.Suspend() )
+				await Task.Run( () => _files.DeleteDirectory( directory ) );
 			await ApplyLocalChangesAsync( new LocalFileChange[] { new( directory, LocalChangeKind.Deleted, IsDirectory: true ) } );
 		}
 	}
