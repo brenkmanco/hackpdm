@@ -74,9 +74,12 @@ public static class OdooTransport
 			cts.Token ).ConfigureAwait( false );
 		NoteConnectionReuse( url, response );
 		response.EnsureSuccessStatusCode();
-		await using Stream stream = await response.Content.ReadAsStreamAsync( cts.Token ).ConfigureAwait( false );
-		using JsonDocument doc = await JsonDocument.ParseAsync( stream, cancellationToken: cts.Token ).ConfigureAwait( false );
-		return ParseResponse( doc.RootElement );
+		Stream stream = await response.Content.ReadAsStreamAsync( cts.Token ).ConfigureAwait( false );
+		await using( stream.ConfigureAwait( false ) )
+		{
+			using JsonDocument doc = await JsonDocument.ParseAsync( stream, cancellationToken: cts.Token ).ConfigureAwait( false );
+			return ParseResponse( doc.RootElement );
+		}
 	}
 
 	internal static ByteArrayContent SerializeRequest( JsonRpcRequest request )

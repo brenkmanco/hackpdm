@@ -99,9 +99,6 @@ public static class HackLogger
 	private static int _recentErrorCount;
 	private static bool _prunedOnStart;
 
-	static HackLogger()
-		=> AppDomain.CurrentDomain.ProcessExit += static ( _, _ ) => Flush( 1000 );
-
 	public static HackLogLevel MinimumLevel { get; set; } = ResolveDefaultLevel();
 	public static string LogDirectory => _logDirectoryOverride ?? Path.Combine( AppDataPaths.Data, "logs" );
 	public static int RecentErrorCount => Volatile.Read( ref _recentErrorCount );
@@ -112,7 +109,6 @@ public static class HackLogger
 		long maxFileBytes = DefaultMaxFileBytes,
 		int maxRetainedFiles = DefaultMaxRetainedFiles )
 	{
-		Flush();
 		lock( Gate )
 		{
 			_logDirectoryOverride = logDirectory;
@@ -123,7 +119,7 @@ public static class HackLogger
 			_maxFileBytes = Math.Max( 1024, maxFileBytes );
 			_maxRetainedFiles = Math.Max( 1, maxRetainedFiles );
 			_prunedOnStart = false;
-			_configEpoch++;
+			Volatile.Write( ref _configEpoch, _configEpoch + 1 );
 			if( minimumLevel is { } level )
 				MinimumLevel = level;
 		}
@@ -131,7 +127,6 @@ public static class HackLogger
 
 	public static void ResetToDefaults()
 	{
-		Flush();
 		lock( Gate )
 		{
 			_logDirectoryOverride = null;
@@ -142,7 +137,7 @@ public static class HackLogger
 			_maxFileBytes = DefaultMaxFileBytes;
 			_maxRetainedFiles = DefaultMaxRetainedFiles;
 			_prunedOnStart = false;
-			_configEpoch++;
+			Volatile.Write( ref _configEpoch, _configEpoch + 1 );
 			MinimumLevel = ResolveDefaultLevel();
 			Volatile.Write( ref _recentErrorCount, 0 );
 		}
@@ -162,17 +157,6 @@ public static class HackLogger
 			barrier ) ) )
 			return Task.CompletedTask;
 		return token.CanBeCanceled ? barrier.Task.WaitAsync( token ) : barrier.Task;
-	}
-
-	public static void Flush( int timeoutMs = 5000 )
-	{
-		try
-		{
-			FlushAsync().Wait( Math.Max( 0, timeoutMs ) );
-		}
-		catch
-		{
-		}
 	}
 
 	public static void Trace( string category, string message, Exception? ex = null, string? correlationId = null )
@@ -238,7 +222,7 @@ public static class HackLogger
 		sb.AppendLine( exception is null ? "(none)" : LogRedactor.Redact( exception.ToString() ) );
 
 		Critical( source, $"Unhandled exception: {exception?.Message ?? "unknown"}", exception );
-		Flush( 1000 );
+		_ = FlushAsync();
 		lock( Gate )
 		{
 			try
@@ -342,7 +326,7 @@ public static class HackLogger
 			{
 				if( entry.FlushBarrier is { } barrier )
 				{
-					FlushBatchSafe( batch, ref batchLines, ref batchByteCount, batchTimestamp );
+					FlushBatchSafe( batch, ref batchLines, ref batchByteCount, batchTimestamp, batchEpoch );
 					barrier.TrySetResult();
 					continue;
 				}
@@ -363,7 +347,7 @@ public static class HackLogger
 						|| batchLines >= MaxBatchLines
 						|| ( _cachedFileBytes + batchByteCount + lineBytes > maxBytes && batchByteCount > 0 ) )
 					{
-						FlushBatchSafe( batch, ref batchLines, ref batchByteCount, batchTimestamp );
+						FlushBatchSafe( batch, ref batchLines, ref batchByteCount, batchTimestamp, batchEpoch );
 					}
 				}
 
@@ -377,11 +361,11 @@ public static class HackLogger
 				batchByteCount += lineBytes;
 			}
 
-			FlushBatchSafe( batch, ref batchLines, ref batchByteCount, batchTimestamp );
+			FlushBatchSafe( batch, ref batchLines, ref batchByteCount, batchTimestamp, batchEpoch );
 		}
 	}
 
-	private static void FlushBatchSafe( StringBuilder batch, ref int batchLines, ref long batchByteCount, DateTimeOffset nowUtc )
+	private static void FlushBatchSafe( StringBuilder batch, ref int batchLines, ref long batchByteCount, DateTimeOffset nowUtc, long epoch )
 	{
 		if( batchLines == 0 )
 			return;
@@ -392,13 +376,15 @@ public static class HackLogger
 			batch.Capacity = 4096;
 		batchLines = 0;
 		batchByteCount = 0;
-		AppendPayloadSafe( nowUtc, payload, payloadBytes );
+		AppendPayloadSafe( nowUtc, epoch, payload, payloadBytes );
 	}
 
-	private static void AppendPayloadSafe( DateTimeOffset nowUtc, string payload, long payloadBytes )
+	private static void AppendPayloadSafe( DateTimeOffset nowUtc, long epoch, string payload, long payloadBytes )
 	{
 		lock( Gate )
 		{
+			if( epoch != Volatile.Read( ref _configEpoch ) )
+				return;
 			try
 			{
 				string dir = LogDirectory;

@@ -60,13 +60,13 @@ public sealed class HackLoggerTests : IDisposable
 	}
 
 	[Fact]
-	public void HackLogger_WritesRedactedRollingLogsAndPrunesOldFiles()
+	public async Task HackLogger_WritesRedactedRollingLogsAndPrunesOldFiles()
 	{
 		// Write enough lines to force multiple rotations under the 4 KiB test cap
 		for( int i = 0; i < 120; i++ )
 			HackLogger.Info( "TestCat", $"Entry {i}: password=MySecretPassword{i} payload={new string( 'B', 260 )}" );
 
-		HackLogger.Flush();
+		await HackLogger.FlushAsync();
 		string[] logFiles = Directory.GetFiles( _tempDir, "hackpdm-*.log" );
 		Assert.NotEmpty( logFiles );
 		Assert.True( logFiles.Length <= 3, $"Expected <= maxRetainedFiles (3), got {logFiles.Length}" );
@@ -78,7 +78,7 @@ public sealed class HackLoggerTests : IDisposable
 	}
 
 	[Fact]
-	public void PruneOldLogs_BreaksEqualTimestampTiesNumerically_AndKeepsNewestTenPlusActive()
+	public async Task PruneOldLogs_BreaksEqualTimestampTiesNumerically_AndKeepsNewestTenPlusActive()
 	{
 		string day = DateTimeOffset.UtcNow.ToString( "yyyyMMdd" );
 		DateTime stamp = new( 2026, 11, 24, 12, 0, 0, DateTimeKind.Utc );
@@ -91,7 +91,7 @@ public sealed class HackLoggerTests : IDisposable
 
 		HackLogger.Configure( _tempDir, HackLogLevel.Information, maxFileBytes: 1024 * 1024, maxRetainedFiles: 3 );
 		HackLogger.Info( "Tie", "active-line" );
-		HackLogger.Flush();
+		await HackLogger.FlushAsync();
 
 		string[] remaining = Directory.GetFiles( _tempDir, "hackpdm-*.log" )
 			.Select( Path.GetFileName )
