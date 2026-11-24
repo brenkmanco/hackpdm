@@ -951,15 +951,37 @@ internal static class SmokeTestRunner
 				stepsSnapshot = [ .. _steps ];
 				unhandledSnapshot = [ .. _unhandled ];
 			}
-			var report = new
+			string? parent = Path.GetDirectoryName( Path.GetFullPath( path ) );
+			if( !string.IsNullOrEmpty( parent ) )
+				Directory.CreateDirectory( parent );
+			using( FileStream fs = File.Create( path ) )
+			using( Utf8JsonWriter writer = new( fs, new JsonWriterOptions { Indented = true } ) )
 			{
-				passed = exitCode == 0,
-				exitCode,
-				totalMs = _total.ElapsedMilliseconds,
-				steps = stepsSnapshot,
-				unhandledExceptions = unhandledSnapshot,
-			};
-			File.WriteAllText( path, JsonSerializer.Serialize( report, new JsonSerializerOptions { WriteIndented = true } ) );
+				writer.WriteStartObject();
+				writer.WriteBoolean( "passed", exitCode == 0 );
+				writer.WriteNumber( "exitCode", exitCode );
+				writer.WriteNumber( "totalMs", _total.ElapsedMilliseconds );
+
+				writer.WriteStartArray( "steps" );
+				foreach( StepResult step in stepsSnapshot )
+				{
+					writer.WriteStartObject();
+					writer.WriteString( nameof( StepResult.Name ), step.Name );
+					writer.WriteBoolean( nameof( StepResult.Passed ), step.Passed );
+					writer.WriteNumber( nameof( StepResult.DurationMs ), step.DurationMs );
+					writer.WriteNumber( nameof( StepResult.MaxUiStallMs ), step.MaxUiStallMs );
+					writer.WriteString( nameof( StepResult.Detail ), step.Detail );
+					writer.WriteEndObject();
+				}
+				writer.WriteEndArray();
+
+				writer.WriteStartArray( "unhandledExceptions" );
+				foreach( string unhandled in unhandledSnapshot )
+					writer.WriteStringValue( unhandled );
+				writer.WriteEndArray();
+
+				writer.WriteEndObject();
+			}
 			Log( $"report written to {path}" );
 		}
 		catch( Exception ex )
