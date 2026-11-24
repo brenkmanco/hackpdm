@@ -37,7 +37,6 @@
                             TextWrapping="Wrap" />
                     </StackPanel>
                     <TextBox
-                        x:Name="HistoryLengthBox"
                         Grid.Column="1"
                         VerticalAlignment="Center"
                         Header="Entries per list"
@@ -55,7 +54,6 @@
                 <StackPanel Spacing="6">
                     <TextBlock FontSize="14" FontWeight="SemiBold" Text="Window Automation" />
                     <CheckBox
-                        x:Name="AutoCloseBox"
                         Content="Close status window automatically when an operation completes"
                         IsChecked="{x:Bind ViewModel.AutoClose, Mode=TwoWay}" />
                     <TextBlock
@@ -88,11 +86,9 @@
                         Orientation="Horizontal"
                         Spacing="8">
                         <Button
-                            x:Name="ClearLogsButton"
                             Command="{x:Bind ViewModel.ClearLogsCommand}"
                             Content="Clear Status Logs" />
                         <Button
-                            x:Name="SaveButton"
                             MinWidth="96"
                             Command="{x:Bind ViewModel.SubmitCommand}"
                             Content="Save"

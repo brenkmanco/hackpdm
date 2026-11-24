@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 
 using HackPDM.Common;
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Graph;
 using HackPDM.Core.Theming;
 
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -20,6 +22,7 @@ namespace HackPDM.Themes;
 public sealed class ThemeService
 {
 	private const string PageBackgroundKey = "ApplicationPageBackgroundThemeBrush";
+	private const int ColorDragCoalesceMs = 30;
 	public const string PanelStrokeKey = "HackPanelStrokeBrush";
 	public const string PanelCornerKey = "HackPanelCornerRadius";
 	public const string PanelThicknessKey = "HackPanelBorderThickness";
@@ -32,18 +35,14 @@ public sealed class ThemeService
 	private readonly bool _runningDark = Application.Current.RequestedTheme == ApplicationTheme.Dark;
 	private readonly AppThemeMode _startupMode;
 	private readonly FormName _startupForm;
-	private readonly bool _useGlobalStorage;
 	private ThemeSettings _savedSettings;
 	private ThemeSettings _settings;
+	private DispatcherQueueTimer? _coalesceTimer;
+	private bool _themeChangePending;
 
-	public ThemeService() : this( UIStorage.GlobalData.Theme, useGlobalStorage: true ) { }
-
-	public ThemeService( ThemeSettings settings ) : this( settings, useGlobalStorage: false ) { }
-
-	private ThemeService( ThemeSettings settings, bool useGlobalStorage )
+	public ThemeService()
 	{
-		_useGlobalStorage = useGlobalStorage;
-		_settings = CloneSettings( settings );
+		_settings = CloneSettings( UIStorage.GlobalData.Theme );
 		var (palette, form) = StartupTheme( _settings );
 		_settings.Palette = palette;
 		_settings.Form = form;
@@ -131,6 +130,7 @@ public sealed class ThemeService
 	{
 		if( _settings.Palette == palette )
 			return;
+		CancelDeferredThemeChanged();
 		foreach( string key in _originals.Keys )
 			Restore( key, toOriginal: true );
 		_settings.Palette = palette;
@@ -147,8 +147,11 @@ public sealed class ThemeService
 	{
 		if( _settings.Form == form )
 			return;
+		CancelDeferredThemeChanged();
 		_settings.Form = form;
 		UpdatePanelBrush();
+		UpdateTableRowHighlightBrushes();
+		RefreshOwnedBackgrounds();
 		ThemeChanged?.Invoke();
 	}
 
@@ -160,8 +163,7 @@ public sealed class ThemeService
 		if( persistImmediately )
 		{
 			_savedSettings.ShowTreeBranchLines = show;
-			if( _useGlobalStorage )
-				UIStorage.GlobalData.Theme.ShowTreeBranchLines = show;
+			UIStorage.GlobalData.Theme.ShowTreeBranchLines = show;
 		}
 		if( changed )
 			ThemeChanged?.Invoke();
@@ -219,15 +221,14 @@ public sealed class ThemeService
 		if( NeedsRestart || !Recolor( key, color ) )
 			return;
 		_settings.OverridesFor( _runningDark )[ key ] = color.ToString();
-		UpdateTableRowHighlightBrushes();
-		RefreshOwnedBackgrounds();
-		ThemeChanged?.Invoke();
+		ScheduleCoalescedThemeChanged();
 	}
 
 	public void ResetColor( string key )
 	{
 		if( NeedsRestart || !_settings.OverridesFor( _runningDark ).Remove( key ) )
 			return;
+		CancelDeferredThemeChanged();
 		Restore( key );
 		UpdateTableRowHighlightBrushes();
 		RefreshOwnedBackgrounds();
@@ -238,6 +239,7 @@ public sealed class ThemeService
 	{
 		if( NeedsRestart )
 			return;
+		CancelDeferredThemeChanged();
 		var overrides = _settings.OverridesFor( _runningDark );
 		foreach( string key in overrides.Keys )
 			Restore( key );
@@ -249,6 +251,7 @@ public sealed class ThemeService
 
 	public void Revert()
 	{
+		CancelDeferredThemeChanged();
 		foreach( string key in _originals.Keys )
 			Restore( key, toOriginal: true );
 		_settings = CloneSettings( _savedSettings );
@@ -262,12 +265,67 @@ public sealed class ThemeService
 
 	public void Save()
 	{
+		FlushDeferredThemeChanged();
 		_savedSettings = CloneSettings( _settings );
-		if( _useGlobalStorage )
+		UIStorage.GlobalData.Theme = CloneSettings( _settings );
+		UIStorage.Save();
+	}
+
+	public async Task SaveAsync()
+	{
+		FlushDeferredThemeChanged();
+		ThemeSettings snapshot = CloneSettings( _settings );
+		ThemeSettings previousGlobal = UIStorage.GlobalData.Theme;
+		UIStorage.GlobalData.Theme = CloneSettings( snapshot );
+		try
 		{
-			UIStorage.GlobalData.Theme = CloneSettings( _settings );
-			UIStorage.Save();
+			await Task.Run( UIStorage.Save );
+			_savedSettings = snapshot;
 		}
+		catch
+		{
+			UIStorage.GlobalData.Theme = previousGlobal;
+			throw;
+		}
+	}
+
+	private void ScheduleCoalescedThemeChanged()
+	{
+		_themeChangePending = true;
+		if( _coalesceTimer is null )
+		{
+			if( DispatcherQueue.GetForCurrentThread() is not { } queue )
+			{
+				FlushDeferredThemeChanged();
+				return;
+			}
+			_coalesceTimer = queue.CreateTimer();
+			_coalesceTimer.Interval = TimeSpan.FromMilliseconds( ColorDragCoalesceMs );
+			_coalesceTimer.IsRepeating = false;
+			_coalesceTimer.Tick += OnCoalesceTimerTick;
+		}
+		if( !_coalesceTimer.IsRunning )
+			_coalesceTimer.Start();
+	}
+
+	private void OnCoalesceTimerTick( DispatcherQueueTimer sender, object args )
+		=> FlushDeferredThemeChanged();
+
+	private void CancelDeferredThemeChanged()
+	{
+		_coalesceTimer?.Stop();
+		_themeChangePending = false;
+	}
+
+	private void FlushDeferredThemeChanged()
+	{
+		_coalesceTimer?.Stop();
+		if( !_themeChangePending )
+			return;
+		_themeChangePending = false;
+		UpdateTableRowHighlightBrushes();
+		RefreshOwnedBackgrounds();
+		ThemeChanged?.Invoke();
 	}
 
 	private static ThemeSettings CloneSettings( ThemeSettings source ) => new()

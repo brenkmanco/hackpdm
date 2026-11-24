@@ -5,7 +5,6 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:common="using:HackPDM.Common"
 	xmlns:controls="using:Microsoft.UI.Xaml.Controls"
-	xmlns:local="using:HackPDM"
 	xmlns:tv="using:WinUI.TableView">
 	<Application.Resources>
 		<ResourceDictionary>

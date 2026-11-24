@@ -5,7 +5,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:controls="using:HackPDM.Common"
-    xmlns:local="using:HackPDM.Shell"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
@@ -29,7 +28,6 @@
 
         <NavigationView.MenuItems>
             <NavigationViewItem
-                x:Name="HackNav"
                 Content="Hack File Manager"
                 Tag="HackFileManager"
                 ToolTipService.ToolTip="Hack File Manager (Ctrl+1)">
@@ -39,7 +37,6 @@
             </NavigationViewItem>
 
             <NavigationViewItem
-                x:Name="GraphNav"
                 Content="Dependency Graph"
                 Tag="DependencyGraph"
                 ToolTipService.ToolTip="Dependency Graph (Ctrl+2)">
@@ -51,7 +48,6 @@
             <NavigationViewItemSeparator />
 
             <NavigationViewItem
-                x:Name="ProfileNav"
                 Content="Profile Manager"
                 Tag="ProfileManager"
                 ToolTipService.ToolTip="Profile Manager (Ctrl+3)">
@@ -61,7 +57,6 @@
             </NavigationViewItem>
 
             <NavigationViewItem
-                x:Name="HackOdooNav"
                 Content="Configurations"
                 Tag="Configuration"
                 ToolTipService.ToolTip="Server &amp; Folder Configurations (Ctrl+4)">
@@ -95,7 +90,7 @@
             </NavigationViewItem>
         </NavigationView.FooterMenuItems>
 
-        <Grid x:Name="ShellExtensionsGrid">
+        <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
@@ -154,7 +149,6 @@
                                     Orientation="Horizontal"
                                     Spacing="2">
                                     <Button
-                                        x:Name="MinimalSearchHeaderButton"
                                         Padding="6,4"
                                         Click="SwitchSearchMinimal_Click"
                                         ToolTipService.ToolTip="Switch to minimal search bar">
@@ -167,7 +161,6 @@
                                         <FontIcon FontSize="11" Glyph="&#xE8AB;" />
                                     </Button>
                                     <Button
-                                        x:Name="DetachSearchButton"
                                         Padding="6,4"
                                         Click="DetachSearch_Click"
                                         ToolTipService.ToolTip="Detach Search into separate window">
@@ -267,14 +260,12 @@
                                 Orientation="Horizontal"
                                 Spacing="2">
                                 <Button
-                                    x:Name="MinimalStatusHeaderButton"
                                     Padding="6,4"
                                     Click="SwitchStatusMinimal_Click"
                                     ToolTipService.ToolTip="Switch to minimal status category bar">
                                     <FontIcon FontSize="11" Glyph="&#xE73F;" />
                                 </Button>
                                 <Button
-                                    x:Name="DetachStatusButton"
                                     Padding="6,4"
                                     Click="DetachStatus_Click"
                                     ToolTipService.ToolTip="Detach Status Log into separate window">

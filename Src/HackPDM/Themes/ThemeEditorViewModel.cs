@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -130,6 +131,10 @@ public sealed partial class ThemeEditorViewModel : ObservableObject
 	[NotifyCanExecuteChangedFor( nameof( SaveCommand ), nameof( RevertCommand ) )]
 	public partial bool HasUnsavedChanges { get; set; }
 
+	[ObservableProperty]
+	[NotifyCanExecuteChangedFor( nameof( SaveCommand ), nameof( RevertCommand ) )]
+	public partial bool IsSaving { get; set; }
+
 	partial void OnSelectedPaletteIndexChanged( int value )
 	{
 		if( value < 0 || value >= ThemePresets.Palettes.Count || ThemePresets.Palettes[ value ].Name == _theme.Palette )
@@ -209,13 +214,16 @@ public sealed partial class ThemeEditorViewModel : ObservableObject
 		StatusText = $"All {EditingThemeText.ToLowerInvariant()} colors restored to the defaults (not saved yet).";
 	}
 
+	private bool CanSaveOrRevert() => HasUnsavedChanges && !IsSaving;
+
 	/// <summary>Saves the theme to AppConfig.json; a failure is shown in the status text.</summary>
-	[RelayCommand( CanExecute = nameof( HasUnsavedChanges ) )]
-	private void Save()
+	[RelayCommand( CanExecute = nameof( CanSaveOrRevert ) )]
+	private async Task SaveAsync()
 	{
+		IsSaving = true;
 		try
 		{
-			_theme.Save();
+			await _theme.SaveAsync();
 			HasUnsavedChanges = _theme.HasUnsavedChanges;
 			string paletteTitle = ThemePresets.Palette( _theme.Palette ).Title;
 			string formTitle = ThemePresets.Form( _theme.Form ).Title;
@@ -231,10 +239,14 @@ public sealed partial class ThemeEditorViewModel : ObservableObject
 			StatusText = $"Save failed: {e.Message}";
 			_session?.LogError( ProfileStatusCategory.Settings, $"Failed to save theme settings to '{SavePath}': {e.Message}" );
 		}
+		finally
+		{
+			IsSaving = false;
+		}
 	}
 
 	/// <summary>Discards unsaved changes and re-applies the theme as last saved.</summary>
-	[RelayCommand( CanExecute = nameof( HasUnsavedChanges ) )]
+	[RelayCommand( CanExecute = nameof( CanSaveOrRevert ) )]
 	private void Revert()
 	{
 		_theme.Revert();

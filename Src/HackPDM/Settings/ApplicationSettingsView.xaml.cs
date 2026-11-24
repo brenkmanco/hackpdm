@@ -15,7 +15,6 @@ public sealed partial class ApplicationSettingsView : Page
 	public const string ThemeSectionKey = "Theme";
 	public const string StatusSectionKey = "Status";
 	public const string AboutSectionKey = "About";
-	public const string UpdatesSectionKey = "Updates";
 
 	public ApplicationSettingsView()
 	{
@@ -32,7 +31,7 @@ public sealed partial class ApplicationSettingsView : Page
 		SelectorBarItem target = sectionName switch
 		{
 			StatusSectionKey => StatusSection,
-			AboutSectionKey or UpdatesSectionKey => AboutSection,
+			AboutSectionKey => AboutSection,
 			_ => ThemeSection,
 		};
 		SettingsSections.SelectedItem = target;

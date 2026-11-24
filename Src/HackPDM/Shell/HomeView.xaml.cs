@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 using HackPDM.Common;
 using HackPDM.Core.Configuration;
@@ -52,7 +53,14 @@ public sealed partial class HomeView : Page
 		AppComposition.Navigation.Attach( this );
 		HomeNavigator.SelectedItem = ItemFor( NavigatePageMenu.ProfileManager );
 		NavFrame.Navigated += ( _, _ ) => HomeNavigator.IsBackEnabled = NavFrame.CanGoBack;
+		Unloaded += HomeView_Unloaded;
 		ArrangeSearchDrawer();
+	}
+
+	private void HomeView_Unloaded( object sender, RoutedEventArgs e )
+	{
+		HideOverlay( _overlayElement );
+		ShellOverlayCanvas.Children.Clear();
 	}
 
 	/// <summary>The frame that hosts the page selected in the navigation menu.</summary>
@@ -87,7 +95,6 @@ public sealed partial class HomeView : Page
 			NavigatePageMenu.DependencyGraph => nameof( NavigatePageMenu.DependencyGraph ),
 			NavigatePageMenu.ProfileManager => nameof( NavigatePageMenu.ProfileManager ),
 			NavigatePageMenu.Configuration => nameof( NavigatePageMenu.Configuration ),
-			NavigatePageMenu.Settings => nameof( NavigatePageMenu.Settings ),
 			_ => page.ToString(),
 		};
 		for( int i = 0; i < HomeNavigator.MenuItems.Count; i++ )
@@ -335,11 +342,11 @@ public sealed partial class HomeView : Page
 
 	internal void ShowSearchPanel( SearchOdooView page )
 	{
+		if( AppComposition.Session.IsVersionMismatch )
+			return;
 		page.StoreWindowInstance( null );
 		page.SetHostMode( isDocked: true );
 		page.SetMinimalMode( UIStorage.WorkspaceLayout.SearchMinimalMode );
-		if( AppComposition.Session.IsVersionMismatch )
-			return;
 		if( !ReferenceEquals( DockedSearchHost.Content, page ) )
 			DockedSearchHost.Content = page;
 
@@ -438,7 +445,7 @@ public sealed partial class HomeView : Page
 		UIStorage.WorkspaceLayout.StatusDrawerHeight = next;
 	}
 
-	private void ShellSplitter_DragCompleted() => UIStorage.SaveSafe();
+	private void ShellSplitter_DragCompleted() => SaveLayoutAsync();
 	private void SwitchSearchMinimal_Click( object sender, RoutedEventArgs e ) => AppComposition.Dialogs.SetSearchMinimalMode( true );
 	private void SwitchStatusMinimal_Click( object sender, RoutedEventArgs e ) => AppComposition.Dialogs.SetStatusMinimalMode( true );
 	private void DetachSearch_Click( object sender, RoutedEventArgs e ) => AppComposition.Dialogs.DetachSearchWindow();
@@ -451,8 +458,10 @@ public sealed partial class HomeView : Page
 			? FolderDockSide.Left
 			: FolderDockSide.Right;
 		ArrangeSearchDrawer();
-		UIStorage.SaveSafe();
+		SaveLayoutAsync();
 	}
+
+	private static void SaveLayoutAsync() => _ = Task.Run( UIStorage.SaveSafe );
 
 	private async void CloseStatusDrawer_Click( object sender, RoutedEventArgs e )
 	{
@@ -488,10 +497,7 @@ public sealed partial class HomeView : Page
 		_overlayFallbackHeight = height;
 
 		if( !ShellOverlayCanvas.Children.Contains( element ) )
-		{
 			ShellOverlayCanvas.Children.Add( element );
-			ShellOverlayCanvas.UpdateLayout();
-		}
 
 		element.Measure( new Windows.Foundation.Size( width, 420 ) );
 		RepositionOverlay();

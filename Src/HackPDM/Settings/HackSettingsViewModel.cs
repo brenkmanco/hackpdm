@@ -21,18 +21,16 @@ public sealed partial class HackSettingsViewModel : ObservableObject
 	private readonly IDialogService _dialogs;
 	private readonly IFilePickerService? _pickers;
 	private readonly LoginSession? _session;
-	private readonly Action? _onVaultPathChanged;
+	private readonly Func<Task>? _onVaultPathChanged;
 
 	[ObservableProperty] public partial string PwaPath { get; set; }
 	[ObservableProperty] public partial string TempFolderPath { get; set; }
-
-	public event Action? Saved;
 
 	public HackSettingsViewModel(
 		IDialogService dialogs,
 		IFilePickerService? pickers = null,
 		LoginSession? session = null,
-		Action? onVaultPathChanged = null )
+		Func<Task>? onVaultPathChanged = null )
 	{
 		_dialogs = dialogs;
 		_pickers = pickers;
@@ -58,7 +56,7 @@ public sealed partial class HackSettingsViewModel : ObservableObject
 			TempFolderPath = chosen;
 	}
 
-	public List<string> Validate()
+	private List<string> Validate()
 	{
 		PwaPath = PwaPath?.Trim() ?? string.Empty;
 		TempFolderPath = TempFolderPath?.Trim() ?? string.Empty;
@@ -74,11 +72,14 @@ public sealed partial class HackSettingsViewModel : ObservableObject
 	private async Task SubmitAsync()
 	{
 		List<string> errors = Validate();
+		string pwa = PwaPath;
+		string temp = TempFolderPath;
 		if( errors.Count == 0 )
 		{
-			if( !TryCreateDirectory( PwaPath ) )
+			var (pwaOk, tempOk) = await Task.Run( () => ( TryCreateDirectory( pwa ), TryCreateDirectory( temp ) ) );
+			if( !pwaOk )
 				errors.Add( "invalid pwa directory path" );
-			if( !TryCreateDirectory( TempFolderPath ) )
+			if( !tempOk )
 				errors.Add( "invalid temporary directory path" );
 		}
 		if( errors.Count > 0 )
@@ -89,18 +90,21 @@ public sealed partial class HackSettingsViewModel : ObservableObject
 			return;
 		}
 
-		string previousPwa = HackDefaults.Instance.PwaPathAbsolute;
-		HackDefaults.Instance.PwaPathAbsolute = PwaPath;
-		HackDefaults.Instance.PwaPathRelative = new DirectoryInfo( PwaPath ).Name;
-		PdmConstants.TemporaryPath = TempFolderPath;
-		HackDefaults.Instance.SettingsProvider?.Set( nameof( PdmConstants.TemporaryPath ), TempFolderPath );
+		bool vaultChanged = await Task.Run( () =>
+		{
+			string previousPwa = HackDefaults.Instance.PwaPathAbsolute;
+			HackDefaults.Instance.PwaPathAbsolute = pwa;
+			HackDefaults.Instance.PwaPathRelative = new DirectoryInfo( pwa ).Name;
+			PdmConstants.TemporaryPath = temp;
+			HackDefaults.Instance.SettingsProvider?.Set( nameof( PdmConstants.TemporaryPath ), temp );
+			return !string.Equals( previousPwa, pwa, StringComparison.OrdinalIgnoreCase );
+		} );
 
-		if( !string.Equals( previousPwa, PwaPath, StringComparison.OrdinalIgnoreCase ) )
-			_onVaultPathChanged?.Invoke();
+		if( vaultChanged && _onVaultPathChanged is not null )
+			await _onVaultPathChanged();
 
-		_session?.LogInfo( ProfileStatusCategory.Configuration, $"Saved local workspace folders: PWA '{PwaPath}', Temp '{TempFolderPath}'." );
+		_session?.LogInfo( ProfileStatusCategory.Configuration, $"Saved local workspace folders: PWA '{pwa}', Temp '{temp}'." );
 		await _dialogs.ShowMessageAsync( "Local folder settings saved." );
-		Saved?.Invoke();
 	}
 
 	private static bool IsValidDirectoryPath( string path )

@@ -1,4 +1,7 @@
+using System;
+
 using HackPDM.Common;
+using HackPDM.Core.Configuration;
 using HackPDM.Core.Services;
 
 using Microsoft.UI.Xaml;
@@ -23,7 +26,6 @@ public sealed partial class SearchOdooView : Page, IDockablePanel
 	public SearchOdooView()
 	{
 		InitializeComponent();
-		ViewModel.LoadLookups();
 
 		OdooSearchResults.SelectionChanged += ( _, _ ) =>
 		{
@@ -95,6 +97,7 @@ public sealed partial class SearchOdooView : Page, IDockablePanel
 	private void OnUnloaded( object sender, RoutedEventArgs e )
 	{
 		ViewModel.SearchCompleted -= OnSearchCompleted;
+		ViewModel.CancelPendingOperations();
 		MiniResultsCombo.IsDropDownOpen = false;
 		OdooSearchResults.SetSelectionBatch( [] );
 		OdooSearchPropList.SetSelectionBatch( [] );
@@ -225,13 +228,20 @@ public sealed partial class SearchOdooView : Page, IDockablePanel
 	private void LocateSelected_Click( object sender, RoutedEventArgs e )
 		=> LocateAndFocusMainWindow( OdooSearchResults.SelectedItem as SearchRow );
 
-	private void LocateAndFocusMainWindow( SearchRow? row )
+	private async void LocateAndFocusMainWindow( SearchRow? row )
 	{
 		if( row is null )
 			return;
-		ViewModel.LocateCommand.Execute( row );
-		if( _parentWindow is not null )
-			HackApp.Window?.Activate();
+		try
+		{
+			if( _parentWindow is not null )
+				HackApp.Window?.Activate();
+			await ViewModel.LocateCommand.ExecuteAsync( row );
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "Search", $"Locating entry '{row.Name}' failed: {ex.Message}", ex );
+		}
 	}
 
 	private void SearchOdooView_KeyDown( object sender, KeyRoutedEventArgs e )
@@ -243,21 +253,35 @@ public sealed partial class SearchOdooView : Page, IDockablePanel
 		}
 	}
 
-	private void FileNameTextbox_KeyDown( object sender, KeyRoutedEventArgs e )
+	private async void FileNameTextbox_KeyDown( object sender, KeyRoutedEventArgs e )
 	{
 		if( e.Key == Windows.System.VirtualKey.Enter && ViewModel.SearchCommand.CanExecute( null ) )
 		{
 			e.Handled = true;
-			ViewModel.SearchCommand.Execute( null );
+			try
+			{
+				await ViewModel.SearchCommand.ExecuteAsync( null );
+			}
+			catch( Exception ex )
+			{
+				HackLogger.Warn( "Search", $"Search command failed: {ex.Message}", ex );
+			}
 		}
 	}
 
-	private void OdooSearchPropValue_KeyDown( object sender, KeyRoutedEventArgs e )
+	private async void OdooSearchPropValue_KeyDown( object sender, KeyRoutedEventArgs e )
 	{
 		if( e.Key == Windows.System.VirtualKey.Enter && ViewModel.AddPropertyCommand.CanExecute( null ) )
 		{
 			e.Handled = true;
-			ViewModel.AddPropertyCommand.Execute( null );
+			try
+			{
+				await ViewModel.AddPropertyCommand.ExecuteAsync( null );
+			}
+			catch( Exception ex )
+			{
+				HackLogger.Warn( "Search", $"Add property filter failed: {ex.Message}", ex );
+			}
 		}
 	}
 }

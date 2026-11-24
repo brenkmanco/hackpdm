@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -43,7 +44,8 @@ public static class AppComposition
 		EntryFiles,
 		Dialogs,
 		Reporter,
-		LocateInFileManagerAsync );
+		LocateInFileManagerAsync,
+		RunTrackedOperationAsync );
 
 	public static void DisposeLocalFilesIfCreated()
 	{
@@ -65,14 +67,18 @@ public static class AppComposition
 	}
 
 	public static void OnVaultPathChanged()
+		=> _ = OnVaultPathChangedAsync();
+
+	public static Task OnVaultPathChangedAsync()
 	{
-		EntryIcons.ClearServerCache();
-		LocalFiles.Watch( PwaPaths.Vault );
+		UiDispatcher.RunOrPost( EntryIcons.ClearServerCache );
 		FileManagerState.Reset();
+		string vault = PwaPaths.Vault;
+		return Task.Run( () => LocalFiles.Watch( vault ) );
 	}
 
 	public static ProfileManagerViewModel CreateProfileManager()
-		=> new( Session, Dialogs, FilePickers, Navigation, OnVaultPathChanged, InspectSettingsStatus );
+		=> new( Session, Dialogs, FilePickers, Navigation, OnVaultPathChangedAsync, InspectSettingsStatus, SearchOdoo );
 
 	public static HackFileManagerViewModel CreateFileManager() => new(
 		FileManagerState,
@@ -86,10 +92,17 @@ public static class AppComposition
 		LocalFiles,
 		FilePickers );
 
-	public static HackSettingsViewModel CreateHackSettings() => new( Dialogs, FilePickers, Session, OnVaultPathChanged );
-	public static OdooSettingsViewModel CreateOdooSettings() => new( Dialogs, Session );
+	public static HackSettingsViewModel CreateHackSettings() => new( Dialogs, FilePickers, Session, OnVaultPathChangedAsync );
+	public static OdooSettingsViewModel CreateOdooSettings() => new( Dialogs, Session, FileManagerState, SearchOdoo );
 	public static StatusSettingsViewModel CreateStatusSettings() => new( StatusLog, Dialogs, Session );
 	public static ThemeEditorViewModel CreateThemeEditor() => new( Theme, Session );
+
+	private static async Task<bool> RunTrackedOperationAsync( Func<Task> operation )
+	{
+		using StatusWindowReporter.OperationScope scope = Reporter.BeginTrackingScope();
+		await operation();
+		return scope.CompletedWithoutErrors;
+	}
 
 	internal static Task LocateInFileManagerAsync( IReadOnlyList<string> segments, string? fileName )
 	{

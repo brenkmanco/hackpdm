@@ -24,8 +24,6 @@ public sealed partial class StatusSettingsViewModel : ObservableObject
 	[ObservableProperty] public partial string HistoryLengthText { get; set; }
 	[ObservableProperty] public partial bool AutoClose { get; set; }
 
-	public event Action? Saved;
-
 	public StatusSettingsViewModel( StatusDialogViewModel statusLog, IDialogService dialogs, LoginSession? session = null )
 	{
 		_statusLog = statusLog;
@@ -44,11 +42,11 @@ public sealed partial class StatusSettingsViewModel : ObservableObject
 			await _dialogs.ShowMessageAsync( "History Length must be a whole number between 10 and 1,000,000." );
 			return;
 		}
-		_statusLog.SetHistoryLength( historyLength );
-		_statusLog.AutoClose = AutoClose;
-		_session?.LogInfo( ProfileStatusCategory.Settings, $"Saved Status settings (history length: {historyLength}, auto-close: {(AutoClose ? "on" : "off")})." );
+		bool autoClose = AutoClose;
+		_statusLog.AutoClose = autoClose;
+		await Task.Run( () => _statusLog.SetHistoryLength( historyLength ) );
+		_session?.LogInfo( ProfileStatusCategory.Settings, $"Saved Status settings (history length: {historyLength}, auto-close: {(autoClose ? "on" : "off")})." );
 		await _dialogs.ShowMessageAsync( "Status settings saved" );
-		Saved?.Invoke();
 	}
 
 	[RelayCommand]

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 
 using HackPDM.Common;
@@ -20,6 +21,9 @@ public sealed partial class HackApp : Application
 {
 	public static HomeView? HomePage;
 	public static Window? Window;
+
+	private bool _closeSaveCompleted;
+	private bool _closeSaveInProgress;
 
 	public HackApp()
 	{
@@ -47,11 +51,7 @@ public sealed partial class HackApp : Application
 				HackLogger.Critical( "App", $"Fatal UI unhandled exception; crash dump: {dump ?? "(unavailable)"}" );
 			}
 			catch { }
-#if SMOKE_TESTS
-			if( HackPDM.SmokeTests.SmokeTestRunner.IsEnabled )
-				return;
-#endif
-			TerminateOnCrash();
+			TerminateIfNotSmokeTest();
 		};
 
 		AppDomain.CurrentDomain.UnhandledException += ( _, e ) =>
@@ -65,11 +65,7 @@ public sealed partial class HackApp : Application
 					context: $"IsTerminating={e.IsTerminating}" );
 			}
 			catch { }
-#if SMOKE_TESTS
-			if( HackPDM.SmokeTests.SmokeTestRunner.IsEnabled )
-				return;
-#endif
-			TerminateOnCrash();
+			TerminateIfNotSmokeTest();
 		};
 
 		TaskScheduler.UnobservedTaskException += ( _, e ) =>
@@ -79,8 +75,27 @@ public sealed partial class HackApp : Application
 		};
 	}
 
-	private static void TerminateOnCrash()
+	private static bool IsSmokeTestActive()
 	{
+#if SMOKE_TESTS
+		return HackPDM.SmokeTests.SmokeTestRunner.IsEnabled;
+#else
+		return false;
+#endif
+	}
+
+	private static void StartSmokeTestsIfEnabled()
+	{
+#if SMOKE_TESTS
+		if( HackPDM.SmokeTests.SmokeTestRunner.IsEnabled )
+			HackPDM.SmokeTests.SmokeTestRunner.Start();
+#endif
+	}
+
+	private static void TerminateIfNotSmokeTest()
+	{
+		if( IsSmokeTestActive() )
+			return;
 		try { AppComposition.DisposeLocalFilesIfCreated(); } catch { }
 		Environment.Exit( 1 );
 	}
@@ -90,6 +105,8 @@ public sealed partial class HackApp : Application
 		MainWindow mainWindow = new();
 		Window = mainWindow;
 		Window.SetWindowType( AppWindowPresenterKind.Overlapped );
+		if( Window.AppWindow is { } appWindow )
+			appWindow.Closing += MainWindow_Closing;
 		Window.Closed += Window_Closed;
 		Window.Activate();
 
@@ -98,8 +115,12 @@ public sealed partial class HackApp : Application
 		AppComposition.InitializeDefaults();
 		if( !string.IsNullOrEmpty( PdmConstants.TemporaryPath ) )
 		{
-			try { Directory.CreateDirectory( PdmConstants.TemporaryPath ); }
-			catch( Exception ex ) { HackLogger.Warn( "App", $"Could not create temporary directory '{PdmConstants.TemporaryPath}': {ex.Message}", ex ); }
+			string tempPath = PdmConstants.TemporaryPath;
+			_ = Task.Run( () =>
+			{
+				try { Directory.CreateDirectory( tempPath ); }
+				catch( Exception ex ) { HackLogger.Warn( "App", $"Could not create temporary directory '{tempPath}': {ex.Message}", ex ); }
+			} );
 		}
 		HackLogger.Info( "App", $"HackPDM {ClientUpdate.CurrentText} started (UI config loaded={UIStorage.GlobalData.IsLoadedFromFile}, logs={HackLogger.LogDirectory})" );
 
@@ -107,20 +128,65 @@ public sealed partial class HackApp : Application
 		mainWindow.ContentFrame.Content = HomePage;
 		AppComposition.Theme.Attach( Window );
 
-#if SMOKE_TESTS
-		if( HackPDM.SmokeTests.SmokeTestRunner.IsEnabled )
-			HackPDM.SmokeTests.SmokeTestRunner.Start();
-#endif
+		StartSmokeTestsIfEnabled();
+	}
+
+	private async void MainWindow_Closing( AppWindow sender, AppWindowClosingEventArgs args )
+	{
+		if( _closeSaveCompleted || IsSmokeTestActive() )
+			return;
+
+		args.Cancel = true;
+		if( _closeSaveInProgress )
+			return;
+
+		_closeSaveInProgress = true;
+		try
+		{
+			await Task.Run( UIStorage.SaveSafe );
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "App", $"Could not save UI config on close: {ex.Message}", ex );
+		}
+		finally
+		{
+			_closeSaveCompleted = true;
+			_closeSaveInProgress = false;
+		}
+		Window?.Close();
 	}
 
 	private void Window_Closed( object sender, WindowEventArgs args )
 	{
 		try { AppComposition.DisposeLocalFilesIfCreated(); } catch { }
-		try { UIStorage.Save(); } catch { }
-#if SMOKE_TESTS
-		if( HackPDM.SmokeTests.SmokeTestRunner.IsEnabled )
+		if( IsSmokeTestActive() )
+		{
+			if( !_closeSaveCompleted )
+			{
+				_closeSaveCompleted = true;
+				_ = Task.Run( UIStorage.SaveSafe );
+			}
 			return;
-#endif
-		Environment.Exit( 0 );
+		}
+
+		if( _closeSaveCompleted )
+		{
+			Environment.Exit( 0 );
+			return;
+		}
+
+		// Fallback if Closed arrived without AppWindow.Closing: flush on a foreground thread before exiting.
+		_closeSaveCompleted = true;
+		Thread saveThread = new( static () =>
+		{
+			UIStorage.SaveSafe();
+			Environment.Exit( 0 );
+		} )
+		{
+			IsBackground = false,
+			Name = "UIStorageShutdownSave",
+		};
+		saveThread.Start();
 	}
 }

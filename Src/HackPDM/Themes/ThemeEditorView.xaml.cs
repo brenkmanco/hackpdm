@@ -30,11 +30,20 @@ public sealed partial class ThemeEditorView : Page
 	public ThemeEditorView()
 	{
 		InitializeComponent();
-		ViewModel.SelectedColorValueChanged += ShowInPicker;
-		Unloaded += ( _, _ ) => ViewModel.SelectedColorValueChanged -= ShowInPicker;
-		ShowInPicker( ArgbColor.TryParse( ViewModel.SelectedColor?.Hex, out var c ) ? c : null );
+		Loaded += OnLoaded;
+		Unloaded += OnUnloaded;
 		FillSamples();
 	}
+
+	private void OnLoaded( object sender, RoutedEventArgs e )
+	{
+		ViewModel.SelectedColorValueChanged -= ShowInPicker;
+		ViewModel.SelectedColorValueChanged += ShowInPicker;
+		ShowInPicker( ArgbColor.TryParse( ViewModel.SelectedColor?.Hex, out var c ) ? c : null );
+	}
+
+	private void OnUnloaded( object sender, RoutedEventArgs e )
+		=> ViewModel.SelectedColorValueChanged -= ShowInPicker;
 
 	private void ShowInPicker( ArgbColor? color )
 	{
