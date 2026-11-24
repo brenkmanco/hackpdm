@@ -22,7 +22,7 @@ public static partial class LogRedactor
 	public const int Base64RedactionThreshold = 256;
 
 	[GeneratedRegex(
-		@"(?<prefix>[""']?(?:password|passwd|pass|odoo_?pass|admin_passwd|api_?key|secret|token|authorization|cookie|session_?id)[""']?\s*[:=]\s*)(?:""(?<qval>(?:\\.|[^""\\])*)""|'(?<sval>(?:\\.|[^'\\])*)'|(?<uval>[^\s,;\]\}""']+))",
+		@"(?<prefix>[""']?(?:password|passwd|pass|pwd|odoo_?pass|admin_passwd|api_?key|secret|token|authorization|cookie|session_?id|swdocmgr_key|sw_?license_?key)[""']?\s*[:=]\s*)(?:""(?<qval>(?:\\.|[^""\\])*)""|'(?<sval>(?:\\.|[^'\\])*)'|(?<uval>[^\s,;\]\}""']+))",
 		RegexOptions.IgnoreCase | RegexOptions.CultureInvariant )]
 	private static partial Regex SecretFieldRegex();
 
@@ -31,7 +31,14 @@ public static partial class LogRedactor
 		RegexOptions.IgnoreCase | RegexOptions.CultureInvariant )]
 	private static partial Regex AuthHeaderRegex();
 
-	[GeneratedRegex( @"[A-Za-z0-9+/]{256,}={0,2}", RegexOptions.CultureInvariant )]
+	[GeneratedRegex(
+		@"://[^/\s:@]+:[^/\s@]+@",
+		RegexOptions.CultureInvariant )]
+	private static partial Regex UrlCredentialsRegex();
+
+	[GeneratedRegex(
+		@"(?:[A-Za-z0-9+/\-_]{256,}|(?:[A-Za-z0-9+/\-_]{64,}\r?\n)+[A-Za-z0-9+/\-_]+)={0,2}",
+		RegexOptions.CultureInvariant )]
 	private static partial Regex LargeBase64Regex();
 
 	public static string Redact( string? input )
@@ -39,7 +46,8 @@ public static partial class LogRedactor
 		if( string.IsNullOrEmpty( input ) )
 			return string.Empty;
 
-		string result = AuthHeaderRegex().Replace( input, "${prefix}[REDACTED]" );
+		string result = UrlCredentialsRegex().Replace( input, "://[REDACTED]@" );
+		result = AuthHeaderRegex().Replace( result, "${prefix}[REDACTED]" );
 		result = SecretFieldRegex().Replace( result, static m =>
 		{
 			string prefix = m.Groups[ "prefix" ].Value;
@@ -50,7 +58,8 @@ public static partial class LogRedactor
 			return $"{prefix}[REDACTED]";
 		} );
 		return result.Length >= Base64RedactionThreshold
-			? LargeBase64Regex().Replace( result, static m => $"[REDACTED_BASE64:{m.Length}chars]" )
+			? LargeBase64Regex().Replace( result, static m =>
+				m.Length >= Base64RedactionThreshold ? $"[REDACTED_BASE64:{m.Length}chars]" : m.Value )
 			: result;
 	}
 }
@@ -173,17 +182,22 @@ public static class HackLogger
 		sb.AppendLine( exception is null ? "(none)" : LogRedactor.Redact( exception.ToString() ) );
 
 		Critical( source, $"Unhandled exception: {exception?.Message ?? "unknown"}", exception );
-		try
+		lock( Gate )
 		{
-			string dir = LogDirectory;
-			Directory.CreateDirectory( dir );
-			string path = Path.Combine( dir, $"crash-{now:yyyyMMdd-HHmmss}.log" );
-			File.WriteAllText( path, sb.ToString(), Encoding.UTF8 );
-			return path;
-		}
-		catch
-		{
-			return null;
+			try
+			{
+				string dir = LogDirectory;
+				Directory.CreateDirectory( dir );
+				string suffix = Guid.NewGuid().ToString( "N" )[ ..8 ];
+				string path = Path.Combine( dir, $"crash-{now:yyyyMMdd-HHmmss-fff}-{suffix}.log" );
+				File.WriteAllText( path, sb.ToString(), Encoding.UTF8 );
+				PruneCrashDumps( dir );
+				return path;
+			}
+			catch
+			{
+				return null;
+			}
 		}
 	}
 
@@ -265,10 +279,11 @@ public static class HackLogger
 					_cachedBasePath = null;
 					_cachedFileBytes = 0;
 				}
+				bool needsPrune = false;
 				if( !_prunedOnStart )
 				{
 					_prunedOnStart = true;
-					PruneOldLogs( dir );
+					needsPrune = true;
 				}
 
 				int dayKey = ( nowUtc.Year * 10000 ) + ( nowUtc.Month * 100 ) + nowUtc.Day;
@@ -278,18 +293,23 @@ public static class HackLogger
 					_cachedBasePath = Path.Combine( dir, $"hackpdm-{nowUtc:yyyyMMdd}.log" );
 					FileInfo info = new( _cachedBasePath );
 					_cachedFileBytes = info.Exists ? info.Length : 0;
+					if( !info.Exists )
+						needsPrune = true;
 				}
 
 				if( _cachedFileBytes >= _maxFileBytes )
 				{
 					RotateLogFile( dir, _cachedBasePath );
-					PruneOldLogs( dir );
 					_cachedFileBytes = 0;
+					needsPrune = true;
 				}
 
 				string payload = line + Environment.NewLine;
 				File.AppendAllText( _cachedBasePath, payload, Encoding.UTF8 );
 				_cachedFileBytes += Encoding.UTF8.GetByteCount( payload );
+
+				if( needsPrune )
+					PruneOldLogs( dir );
 			}
 			catch
 			{
@@ -319,6 +339,8 @@ public static class HackLogger
 		FileInfo[] files = new DirectoryInfo( dir )
 			.GetFiles( "hackpdm-*.log" )
 			.OrderByDescending( f => f.LastWriteTimeUtc )
+			.ThenByDescending( f => ParseLogSortKey( f.Name ).DateKey )
+			.ThenByDescending( f => ParseLogSortKey( f.Name ).Rotation )
 			.ThenByDescending( f => f.Name, StringComparer.Ordinal )
 			.ToArray();
 
@@ -327,6 +349,41 @@ public static class HackLogger
 			try { files[ i ].Delete(); }
 			catch { }
 		}
+	}
+
+	private static void PruneCrashDumps( string dir )
+	{
+		FileInfo[] files = new DirectoryInfo( dir )
+			.GetFiles( "crash-*.log" )
+			.OrderByDescending( f => f.LastWriteTimeUtc )
+			.ThenByDescending( f => f.Name, StringComparer.Ordinal )
+			.ToArray();
+
+		for( int i = _maxRetainedFiles; i < files.Length; i++ )
+		{
+			try { files[ i ].Delete(); }
+			catch { }
+		}
+	}
+
+	private static (int DateKey, int Rotation) ParseLogSortKey( string fileName )
+	{
+		const string prefix = "hackpdm-";
+		const string ext = ".log";
+		if( !fileName.StartsWith( prefix, StringComparison.Ordinal ) || !fileName.EndsWith( ext, StringComparison.Ordinal ) )
+			return (0, 0);
+
+		ReadOnlySpan<char> stem = fileName.AsSpan( prefix.Length, fileName.Length - prefix.Length - ext.Length );
+		int dot = stem.IndexOf( '.' );
+		if( dot < 0 )
+			return int.TryParse( stem, NumberStyles.None, CultureInfo.InvariantCulture, out int day ) ? (day, int.MaxValue) : (0, 0);
+
+		ReadOnlySpan<char> dayPart = stem[ ..dot ];
+		ReadOnlySpan<char> rotPart = stem[ ( dot + 1 ).. ];
+		if( int.TryParse( dayPart, NumberStyles.None, CultureInfo.InvariantCulture, out int d )
+			&& int.TryParse( rotPart, NumberStyles.None, CultureInfo.InvariantCulture, out int r ) )
+			return (d, r);
+		return (0, 0);
 	}
 
 	private static HackLogLevel ResolveDefaultLevel()

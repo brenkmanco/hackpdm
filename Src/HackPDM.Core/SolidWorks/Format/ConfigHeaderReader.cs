@@ -87,8 +87,22 @@ public static class ConfigHeaderReader
 		private int _pos;
 
 		public byte U8() => _pos < _data.Length ? _data[ _pos++ ] : throw new InvalidDataException( "unexpected end of stream" );
-		public ushort U16() { var v = BinaryPrimitives.ReadUInt16LittleEndian( _data[ _pos.. ] ); _pos += 2; return v; }
-		public uint U32() { var v = BinaryPrimitives.ReadUInt32LittleEndian( _data[ _pos.. ] ); _pos += 4; return v; }
+		public ushort U16()
+		{
+			if( _data.Length - _pos < 2 )
+				throw new InvalidDataException( "unexpected end of stream" );
+			var v = BinaryPrimitives.ReadUInt16LittleEndian( _data[ _pos.. ] );
+			_pos += 2;
+			return v;
+		}
+		public uint U32()
+		{
+			if( _data.Length - _pos < 4 )
+				throw new InvalidDataException( "unexpected end of stream" );
+			var v = BinaryPrimitives.ReadUInt32LittleEndian( _data[ _pos.. ] );
+			_pos += 4;
+			return v;
+		}
 
 		/// <summary>MFC WriteObject tag: 0xFFFF + schema + class name for a new class, or a 0x8000|index class back-reference.</summary>
 		public void ReadObjectTag()
@@ -98,6 +112,8 @@ public static class ConfigHeaderReader
 			{
 				U16();                    // schema
 				int length = U16();
+				if( length > _data.Length - _pos )
+					throw new InvalidDataException( "object class name runs past the end of the stream" );
 				_pos += length;           // class name
 			}
 			else if( ( tag & 0x8000 ) == 0 )
@@ -110,7 +126,10 @@ public static class ConfigHeaderReader
 		public int ReadCount()
 		{
 			ushort w = U16();
-			return w != 0xFFFF ? w : (int)U32();
+			uint count = w != 0xFFFF ? w : U32();
+			if( count > int.MaxValue )
+				throw new InvalidDataException( "count exceeds maximum supported size" );
+			return (int)count;
 		}
 
 		/// <summary>MFC CString: an optional FF FE FF Unicode marker, then a byte / WORD / DWORD length.</summary>
@@ -119,7 +138,7 @@ public static class ConfigHeaderReader
 			bool unicode = false;
 			while( true )
 			{
-				int length = U8();
+				uint length = U8();
 				if( length == 0xFF )
 				{
 					ushort w = U16();
@@ -128,14 +147,14 @@ public static class ConfigHeaderReader
 						unicode = true;
 						continue;
 					}
-					length = w == 0xFFFF ? (int)U32() : w;
+					length = w == 0xFFFF ? U32() : w;
 				}
-				int bytes = unicode ? length * 2 : length;
-				if( length < 0 || _pos + bytes > _data.Length )
+				long bytes = unicode ? (long)length * 2 : length;
+				if( bytes > _data.Length - _pos )
 					throw new InvalidDataException( "string runs past the end of the stream" );
-				ReadOnlySpan<byte> slice = _data.Slice( _pos, bytes );
+				ReadOnlySpan<byte> slice = _data.Slice( _pos, (int)bytes );
 				string s = unicode ? Encoding.Unicode.GetString( slice ) : Encoding.Latin1.GetString( slice );
-				_pos += bytes;
+				_pos += (int)bytes;
 				return s;
 			}
 		}

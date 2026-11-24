@@ -405,3 +405,201 @@ public class VersionPreviewStagingTests
 		}
 	}
 }
+
+/// <summary>Hardening tests for OLE bounds/cycles, Unicode paths, MFC CString overflow, COM SAFEARRAY helpers, and DocMgr reset.</summary>
+[Collection( HackPDM.Tests.Characterization.SharedStateCollection.Name )]
+public sealed class SwHardeningTests : IDisposable
+{
+	private readonly string _dir = Path.Combine( Path.GetTempPath(), $"hackpdm-sw-hard-{Guid.NewGuid():N}" );
+
+	public SwHardeningTests() => Directory.CreateDirectory( _dir );
+
+	public void Dispose()
+	{
+		try { Directory.Delete( _dir, recursive: true ); } catch { }
+	}
+
+	[Fact]
+	public void SwStreamStore_TruncatedOleHeader_ThrowsInvalidDataException_AndNoInterruptReturnsNull()
+	{
+		byte[] truncatedOle = [ 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0x00, 0x00 ];
+		Assert.Throws<InvalidDataException>( () => SwStreamStore.FromBytes( truncatedOle ) );
+
+		string path = Path.Combine( _dir, "short.SLDPRT" );
+		File.WriteAllBytes( path, truncatedOle );
+		SwFileReader reader = new();
+		Assert.Throws<InvalidDataException>( () => reader.GetDependencies( path, noInterrupt: false ) );
+		Assert.Null( reader.GetDependencies( path, noInterrupt: true ) );
+	}
+
+	[Fact]
+	public void SwStreamStore_CyclicDifat_ThrowsInvalidDataExceptionWithoutOom()
+	{
+		byte[] data = new byte[ 1024 ];
+		byte[] sig = [ 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 ];
+		sig.CopyTo( data, 0 );
+		BinaryPrimitives.WriteUInt16LittleEndian( data.AsSpan( 0x1E ), 9 ); // 512B sectors
+		BinaryPrimitives.WriteUInt16LittleEndian( data.AsSpan( 0x20 ), 6 ); // 64B mini-sectors
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 0x2C ), 200_000 ); // fatSectors
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 0x44 ), 0 ); // difatStart = sector 0
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 0x48 ), 1_000_000 ); // huge difatSectors
+		for( int i = 0; i < 109; i++ )
+			BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 0x4C + i * 4 ), 0xFFFFFFFF );
+		// Sector 0 (offset 512): self-looping next DIFAT sector at last uint (508)
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 512 + 508 ), 0 );
+
+		Assert.Throws<InvalidDataException>( () => SwStreamStore.FromBytes( data ) );
+	}
+
+	[Fact]
+	public void SwStreamStore_OversizedStreamAndMiniSectorOverflow_ReturnNullWithoutThrowing()
+	{
+		// 4 sectors: header + FAT(0) + Dir(1) + MiniStream(2)
+		byte[] data = new byte[ 512 * 4 ];
+		new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 }.CopyTo( data, 0 );
+		BinaryPrimitives.WriteUInt16LittleEndian( data.AsSpan( 0x1E ), 9 );
+		BinaryPrimitives.WriteUInt16LittleEndian( data.AsSpan( 0x20 ), 6 );
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 0x2C ), 1 ); // fatSectors
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 0x30 ), 1 ); // directoryStart = sector 1
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 0x38 ), 4096 ); // miniCutoff
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 0x3C ), 0xFFFFFFFE ); // miniFatStart
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 0x44 ), 0xFFFFFFFE ); // difatStart
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 0x4C ), 0 ); // fatSectorIds[0] = 0
+		for( int i = 1; i < 109; i++ )
+			BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 0x4C + i * 4 ), 0xFFFFFFFF );
+
+		// FAT (sector 0 at 512)
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 512 ), 0xFFFFFFFD );
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 516 ), 0xFFFFFFFE );
+		BinaryPrimitives.WriteUInt32LittleEndian( data.AsSpan( 520 ), 0xFFFFFFFE );
+
+		static void WriteDirEntry( Span<byte> entry, string name, byte type, uint left, uint right, uint child, uint start, uint size )
+		{
+			byte[] utf16 = Encoding.Unicode.GetBytes( name + "\0" );
+			utf16.CopyTo( entry );
+			BinaryPrimitives.WriteUInt16LittleEndian( entry[ 0x40.. ], (ushort)utf16.Length );
+			entry[ 0x42 ] = type;
+			BinaryPrimitives.WriteUInt32LittleEndian( entry[ 0x44.. ], left );
+			BinaryPrimitives.WriteUInt32LittleEndian( entry[ 0x48.. ], right );
+			BinaryPrimitives.WriteUInt32LittleEndian( entry[ 0x4C.. ], child );
+			BinaryPrimitives.WriteUInt32LittleEndian( entry[ 0x74.. ], start );
+			BinaryPrimitives.WriteUInt32LittleEndian( entry[ 0x78.. ], size );
+		}
+
+		// Dir (sector 1 at 1024): Root Entry claims >= 2 GiB size; HugeStream claims >= 2 GiB; BadMini uses sector 0x04000000
+		WriteDirEntry( data.AsSpan( 1024, 128 ), "Root Entry", 5, 0xFFFFFFFF, 0xFFFFFFFF, 1, 2, 0x80000040 );
+		WriteDirEntry( data.AsSpan( 1152, 128 ), "HugeStream", 2, 0xFFFFFFFF, 2, 0xFFFFFFFF, 2, 0x80001000 );
+		WriteDirEntry( data.AsSpan( 1280, 128 ), "BadMini", 2, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x04000000, 16 );
+
+		var store = SwStreamStore.FromBytes( data );
+		Assert.Equal( SwStreamStore.ContainerFormat.Ole, store.Format );
+		Assert.Null( store.Get( "HugeStream" ) );
+		Assert.Null( store.Get( "BadMini" ) );
+	}
+
+	[Fact]
+	public void SwStreamStore_Open_ReadsFileHeldWithReadWriteShare()
+	{
+		string path = Path.Combine( _dir, "locked.SLDPRT" );
+		byte[] bytes = SwStreamStoreChunkTests.Container( SwStreamStoreChunkTests.Chunk( "docProps/custom.xml", "<Properties />"u8.ToArray() ) );
+		File.WriteAllBytes( path, bytes );
+
+		using FileStream cadLock = new( path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete );
+		var store = SwStreamStore.Open( path );
+		Assert.Equal( SwStreamStore.ContainerFormat.Modern, store.Format );
+		Assert.Equal( "<Properties />", store.GetText( "docProps/custom.xml" ) );
+	}
+
+	[Fact]
+	public void SwFileReader_PreservesNonLatin1UnicodePaths()
+	{
+		const string unicodeRef = @"C:\Projects\Robot – 2026\Śruba_łódź_部品_деталь.SLDPRT";
+		byte[] contentMgrBytes = Encoding.Unicode.GetBytes( $@"C:\Projects\Top.SLDASM\0{unicodeRef}\0".Replace( @"\0", "\0" ) );
+		var store = SwStreamStore.FromBytes( SwStreamStoreChunkTests.Container(
+			SwStreamStoreChunkTests.Chunk( "SwDocContentMgr/SwDocContentMgrInfo", contentMgrBytes ) ) );
+
+		var refs = SwFileReader.GetReferences( store, "Top.SLDASM" );
+		Assert.Equal( [ unicodeRef ], refs );
+
+		// Also verify Header2 path extraction
+		byte[] header2Bytes = [ 0x01, 0x00, 0x00, 0x00, .. Encoding.Unicode.GetBytes( unicodeRef + "\0" ) ];
+		var oleLike = SwStreamStore.FromBytes( SwStreamStoreChunkTests.Container(
+			SwStreamStoreChunkTests.Chunk( "Header2", header2Bytes ) ) );
+		Assert.Equal( [ unicodeRef ], SwFileReader.GetReferences( oleLike, "Top.SLDASM" ) );
+	}
+
+	[Fact]
+	public void ConfigHeaderReader_CStringOverflow_DoesNotThrowArgumentOutOfRange()
+	{
+		using var ms = new MemoryStream();
+		using var bw = new BinaryWriter( ms );
+		bw.Write( (ushort)0xFFFF ); // tag
+		bw.Write( (ushort)1 );      // schema
+		bw.Write( (ushort)0 );      // class name length
+		bw.Write( (ushort)1 );      // config count = 1
+		bw.Write( (ushort)0xFFFF ); // dmConfigHeader_c tag
+		bw.Write( (ushort)1 );
+		bw.Write( (ushort)0 );
+		bw.Write( 0u );             // u32
+		// CString Unicode marker + DWORD length 0x40000001 (0x40000001 * 2 overflows 32-bit int!)
+		bw.Write( (byte)0xFF );
+		bw.Write( (ushort)0xFFFE );
+		bw.Write( (byte)0xFF );
+		bw.Write( (ushort)0xFFFF );
+		bw.Write( 0x40000001u );
+
+		var store = SwStreamStore.FromBytes( SwStreamStoreChunkTests.Container(
+			SwStreamStoreChunkTests.Chunk( "_MO_VERSION_13000/stub", [ 1 ] ),
+			SwStreamStoreChunkTests.Chunk( "Contents/CMgrHdr2", ms.ToArray() ) ) );
+
+		var names = ConfigHeaderReader.ReadNames( store );
+		Assert.Empty( names );
+	}
+
+	[Fact]
+	public void SwDocMgr_ComArrayHelpers_HandleVariantArraysAndEmptyRefs()
+	{
+		Assert.Empty( SwDocMgr.ExtractDependencies( null, null ) );
+
+		object[] deps = [ @"C:\vault\part1.SLDPRT", @"C:\vault\Virt^asm.SLDPRT", @"D:\lib\bolt.SLDPRT" ];
+		short[] isVirtual = [ 0, -1, 0 ];
+		var parsed = SwDocMgr.ExtractDependencies( deps, isVirtual );
+
+		Assert.Equal( 2, parsed.Count );
+		Assert.Equal( [ "part1.SLDPRT", @"C:\vault\part1.SLDPRT" ], parsed[ 0 ] );
+		Assert.Equal( [ "bolt.SLDPRT", @"D:\lib\bolt.SLDPRT" ], parsed[ 1 ] );
+
+		object?[] rawProps = [ "PartNo", null, "", "Material" ];
+		Assert.Equal( [ "PartNo", "Material" ], SwDocMgr.AsStrings( rawProps ).ToArray() );
+	}
+
+	[Fact]
+	public void SolidWorksUtil_DocMgr_SupportsExplicitOverrideAndLazyReset()
+	{
+		var prevDocMgr = SolidWorksUtil.DocMgr;
+		var prevLookups = OdooDefaults.Instance.Lookups;
+		try
+		{
+			SolidWorksUtil.Reset();
+			OdooDefaults.Instance.Lookups = prevLookups with { SwApi = "" };
+			ISwDocumentReader initial = SolidWorksUtil.DocMgr;
+			Assert.IsType<SwFileReader>( initial );
+
+			// Explicit test override must not be overwritten when SwApi changes
+			SwFileReader explicitReader = new();
+			SolidWorksUtil.DocMgr = explicitReader;
+			OdooDefaults.Instance.Lookups = prevLookups with { SwApi = "DUMMY-INVALID-KEY" };
+			Assert.Same( explicitReader, SolidWorksUtil.DocMgr );
+
+			// Reset clears explicit override and re-evaluates cleanly without throwing
+			SolidWorksUtil.Reset();
+			Assert.NotNull( SolidWorksUtil.DocMgr );
+		}
+		finally
+		{
+			OdooDefaults.Instance.Lookups = prevLookups;
+			SolidWorksUtil.DocMgr = prevDocMgr;
+			SolidWorksUtil.Reset();
+		}
+	}
+}

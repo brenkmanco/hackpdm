@@ -163,10 +163,12 @@ public static class GraphThemes
 	];
 
 	/// <summary>The palette named <paramref name="name"/>.</summary>
-	public static GraphPalette Palette( PaletteName name ) => EnumPresets.Find( Palettes, name, "palette" );
+	public static GraphPalette Palette( PaletteName name )
+		=> EnumPresets.Find( Palettes, Enum.IsDefined( name ) ? name : PaletteName.Dark, "palette" );
 
 	/// <summary>The form named <paramref name="name"/>.</summary>
-	public static GraphForm Form( FormName name ) => EnumPresets.Find( Forms, name, "form" );
+	public static GraphForm Form( FormName name )
+		=> EnumPresets.Find( Forms, Enum.IsDefined( name ) ? name : FormName.Default, "form" );
 
 	/// <summary>The theme for two saved names; an unknown or missing name falls back to Dark / Default.</summary>
 	public static GraphTheme From( string? palette, string? form ) => From( ThemePresets.ParsePalette( palette ), ThemePresets.ParseForm( form ) );

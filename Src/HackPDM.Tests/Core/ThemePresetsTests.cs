@@ -102,4 +102,11 @@ public class ThemePresetsTests
 		Assert.Equal( 0xFF123456u, ThemePresets.Blend( 0xFF123456, 0xFFFFFFFF ) );
 		Assert.Equal( 21, ThemePresets.Contrast( 0xFF000000, 0xFFFFFFFF ), 3 );
 	}
+
+	[Fact]
+	public void OutOfRangeEnumCasts_FallBackToDefaultPresets()
+	{
+		Assert.Equal( PaletteName.Dark, ThemePresets.Palette( (PaletteName)99 ).Name );
+		Assert.Equal( FormName.Default, ThemePresets.Form( (FormName)99 ).Name );
+	}
 }

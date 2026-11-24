@@ -159,12 +159,21 @@ public sealed class ArgbColorJsonConverter : JsonConverter<ArgbColor>
 		=> writer.WriteStringValue( value.ToString() );
 }
 
+internal sealed class EntrySortDirectionJsonConverter() : SafeEnumJsonConverter<EntrySortDirection>( EntrySortDirection.Ascending );
+internal sealed class WindowKindJsonConverter() : SafeEnumJsonConverter<WindowKind>( WindowKind.Overlapped );
+internal sealed class FolderDockSideJsonConverter() : SafeEnumJsonConverter<FolderDockSide>( FolderDockSide.Left );
+internal sealed class DetailsDockPositionJsonConverter() : SafeEnumJsonConverter<DetailsDockPosition>( DetailsDockPosition.Bottom );
+internal sealed class PreviewDockPlacementJsonConverter() : SafeEnumJsonConverter<PreviewDockPlacement>( PreviewDockPlacement.AfterDetails );
+internal sealed class WorkspaceLayoutPresetJsonConverter() : SafeEnumJsonConverter<WorkspaceLayoutPreset>( WorkspaceLayoutPreset.Balanced );
+
+[JsonConverter( typeof( EntrySortDirectionJsonConverter ) )]
 public enum EntrySortDirection
 {
 	Ascending,
 	Descending,
 }
 
+[JsonConverter( typeof( WindowKindJsonConverter ) )]
 public enum WindowKind
 {
 	Default = 0,
@@ -173,29 +182,54 @@ public enum WindowKind
 	Overlapped = 3,
 }
 
-[JsonConverter( typeof( JsonStringEnumConverter<FolderDockSide> ) )]
+[JsonConverter( typeof( FolderDockSideJsonConverter ) )]
 public enum FolderDockSide { Left, Right }
 
-[JsonConverter( typeof( JsonStringEnumConverter<DetailsDockPosition> ) )]
+[JsonConverter( typeof( DetailsDockPositionJsonConverter ) )]
 public enum DetailsDockPosition { Bottom, Right }
 
-[JsonConverter( typeof( JsonStringEnumConverter<PreviewDockPlacement> ) )]
+[JsonConverter( typeof( PreviewDockPlacementJsonConverter ) )]
 public enum PreviewDockPlacement { AfterDetails, BeforeDetails }
 
+[JsonConverter( typeof( WorkspaceLayoutPresetJsonConverter ) )]
 public enum WorkspaceLayoutPreset { Balanced, RightInspector, RightSidebar, FocusEntries }
+
+/// <summary>Canonical keys for <see cref="WindowSettingsData.PresetWindowConfig"/>.</summary>
+public static class WindowPresetKeys
+{
+	public const string ProfileManager = nameof( NavigatePageMenu.ProfileManager );
+	public const string HackFileManager = nameof( NavigatePageMenu.HackFileManager );
+	public const string DependencyGraph = nameof( NavigatePageMenu.DependencyGraph );
+	public const string OdooSettings = nameof( OdooSettings );
+	public const string HackSettings = nameof( HackSettings );
+	public const string OdooSettingsView = nameof( OdooSettingsView );
+	public const string HackSettingsView = nameof( HackSettingsView );
+	public const string ConfigSettings = nameof( ConfigSettings );
+	public const string NotLoggedIn = nameof( NotLoggedIn );
+	public const string MessageBox = nameof( MessageBox );
+	public const string StatusDialogView = nameof( StatusDialogView );
+	public const string SearchOdooView = nameof( SearchOdooView );
+	public const string OdooFileTypeManagerView = nameof( OdooFileTypeManagerView );
+	public const string ApplicationSettingsView = nameof( ApplicationSettingsView );
+	public const string AppSettings = nameof( AppSettings );
+}
 
 [Bindable( true )]
 public sealed class GroupByField
 {
-	public string FieldName { get; set; } = string.Empty;
-	public EntrySortDirection SortDirection { get; set; } = EntrySortDirection.Ascending;
+	public string FieldName { get; set => field = value ?? string.Empty; } = string.Empty;
+	public EntrySortDirection SortDirection
+	{
+		get;
+		set => field = Enum.IsDefined( value ) ? value : EntrySortDirection.Ascending;
+	} = EntrySortDirection.Ascending;
 }
 
 [Bindable( true )]
 public sealed class OdooEntryColumn
 {
 	public int DisplayIndex { get; set; } = -1;
-	public string Header { get; set; } = string.Empty;
+	public string Header { get; set => field = value ?? string.Empty; } = string.Empty;
 	public double Width { get; set; } = 100;
 	public bool AutoSize { get; set; }
 }
@@ -203,8 +237,8 @@ public sealed class OdooEntryColumn
 [Bindable( true )]
 public sealed class OdooEntryColumnID
 {
-	public string BindingPath { get; set; } = string.Empty;
-	public OdooEntryColumn Column { get; set; } = new();
+	public string BindingPath { get; set => field = value ?? string.Empty; } = string.Empty;
+	public OdooEntryColumn Column { get; set => field = value ?? new(); } = new();
 }
 
 [Bindable( true )]
@@ -214,9 +248,14 @@ public sealed class OdooEntryColumns
 	public double FontSize { get; set; } = 11;
 	public bool GroupingEnabled { get; set; } = true;
 	public bool GroupCollapsed { get; set; }
-	public GroupByField GroupBy { get; set; } = new() { FieldName = nameof( EntryRow.Status ), SortDirection = EntrySortDirection.Ascending };
+	public GroupByField GroupBy { get; set => field = value ?? DefaultGroupBy(); } = DefaultGroupBy();
 
-	public Dictionary<string, OdooEntryColumnID?> Columns { get; set; } = new()
+	public Dictionary<string, OdooEntryColumnID?> Columns { get; set => field = value ?? DefaultColumns(); } = DefaultColumns();
+
+	private static GroupByField DefaultGroupBy()
+		=> new() { FieldName = nameof( EntryRow.Status ), SortDirection = EntrySortDirection.Ascending };
+
+	private static Dictionary<string, OdooEntryColumnID?> DefaultColumns() => new()
 	{
 		[ nameof( EntryRow.Name ) ] = Column( nameof( EntryRow.Name ), 0, "Name", 200 ),
 		[ nameof( EntryRow.Type ) ] = Column( nameof( EntryRow.Type ), 1, "Type", 70 ),
@@ -249,29 +288,59 @@ public sealed class ColorSettingsData
 
 public sealed class WindowConfigData
 {
-	public string Title { get; set; } = "Window";
+	public string Title { get; set => field = value ?? "Window"; } = "Window";
 	public Vector4<int> PositionAndSize { get; set; } = ( 0, 0, 500, 350 );
-	public WindowKind WindowKind { get; set; } = WindowKind.Overlapped;
+	public WindowKind WindowKind
+	{
+		get;
+		set => field = Enum.IsDefined( value ) ? value : WindowKind.Overlapped;
+	} = WindowKind.Overlapped;
 }
 
 public sealed class WindowSettingsData
 {
 	[JsonPropertyName( "Windows" )]
-	public Dictionary<string, WindowConfigData> PresetWindowConfig { get; set; } = new()
+	public Dictionary<string, WindowConfigData> PresetWindowConfig
 	{
-		[ nameof( NavigatePageMenu.ProfileManager ) ] = new() { Title = "Profile Manager", PositionAndSize = ( 0, 0, 820, 580 ) },
-		[ "OdooSettings" ] = new() { Title = "Odoo Settings", PositionAndSize = ( 0, 0, 620, 520 ) },
-		[ "HackSettings" ] = new() { Title = "Hack Settings", PositionAndSize = ( 0, 0, 560, 320 ) },
-		[ "ConfigSettings" ] = new() { Title = "Configuration Settings", PositionAndSize = ( 0, 0, 820, 780 ) },
-		[ nameof( NavigatePageMenu.HackFileManager ) ] = new() { Title = "Hack File Manager", PositionAndSize = ( 0, 0, 1480, 880 ) },
-		[ nameof( NavigatePageMenu.DependencyGraph ) ] = new() { Title = "Dependency Graph", PositionAndSize = ( 0, 0, 1480, 880 ) },
-		[ "NotLoggedIn" ] = new() { Title = "Not Logged In", PositionAndSize = ( 0, 0, 900, 560 ) },
-		[ "MessageBox" ] = new() { Title = "Info", PositionAndSize = ( 0, 0, 450, 240 ), WindowKind = WindowKind.CompactOverlay },
-		[ "StatusDialogView" ] = new() { Title = "Status", PositionAndSize = ( 0, 0, 1180, 700 ) },
-		[ "SearchOdooView" ] = new() { Title = "Search Files", PositionAndSize = ( 0, 0, 1160, 760 ) },
-		[ "OdooFileTypeManagerView" ] = new() { Title = "File Types & Filters", PositionAndSize = ( 0, 0, 920, 620 ) },
-		[ "ApplicationSettingsView" ] = new() { Title = "Settings", PositionAndSize = ( 0, 0, 960, 680 ) },
-		[ "AppSettings" ] = new() { Title = "Settings", PositionAndSize = ( 0, 0, 1280, 820 ) },
+		get;
+		set => field = SanitizePresets( value );
+	} = DefaultPresets();
+
+	private static Dictionary<string, WindowConfigData> SanitizePresets( Dictionary<string, WindowConfigData>? value )
+	{
+		if( value is null )
+			return DefaultPresets();
+		List<string>? nullKeys = null;
+		foreach( var kv in value )
+		{
+			if( kv.Value is null )
+				( nullKeys ??= [] ).Add( kv.Key );
+		}
+		if( nullKeys is not null )
+		{
+			foreach( string key in nullKeys )
+				value.Remove( key );
+		}
+		return value;
+	}
+
+	private static Dictionary<string, WindowConfigData> DefaultPresets() => new()
+	{
+		[ WindowPresetKeys.ProfileManager ] = new() { Title = "Profile Manager", PositionAndSize = ( 0, 0, 820, 580 ) },
+		[ WindowPresetKeys.OdooSettings ] = new() { Title = "Odoo Settings", PositionAndSize = ( 0, 0, 620, 520 ) },
+		[ WindowPresetKeys.OdooSettingsView ] = new() { Title = "Odoo Settings", PositionAndSize = ( 0, 0, 620, 520 ) },
+		[ WindowPresetKeys.HackSettings ] = new() { Title = "Hack Settings", PositionAndSize = ( 0, 0, 560, 320 ) },
+		[ WindowPresetKeys.HackSettingsView ] = new() { Title = "Hack Settings", PositionAndSize = ( 0, 0, 560, 320 ) },
+		[ WindowPresetKeys.ConfigSettings ] = new() { Title = "Configuration Settings", PositionAndSize = ( 0, 0, 820, 780 ) },
+		[ WindowPresetKeys.HackFileManager ] = new() { Title = "Hack File Manager", PositionAndSize = ( 0, 0, 1480, 880 ) },
+		[ WindowPresetKeys.DependencyGraph ] = new() { Title = "Dependency Graph", PositionAndSize = ( 0, 0, 1480, 880 ) },
+		[ WindowPresetKeys.NotLoggedIn ] = new() { Title = "Not Logged In", PositionAndSize = ( 0, 0, 900, 560 ) },
+		[ WindowPresetKeys.MessageBox ] = new() { Title = "Info", PositionAndSize = ( 0, 0, 450, 240 ), WindowKind = WindowKind.CompactOverlay },
+		[ WindowPresetKeys.StatusDialogView ] = new() { Title = "Status", PositionAndSize = ( 0, 0, 1180, 700 ) },
+		[ WindowPresetKeys.SearchOdooView ] = new() { Title = "Search Files", PositionAndSize = ( 0, 0, 1160, 760 ) },
+		[ WindowPresetKeys.OdooFileTypeManagerView ] = new() { Title = "File Types & Filters", PositionAndSize = ( 0, 0, 920, 620 ) },
+		[ WindowPresetKeys.ApplicationSettingsView ] = new() { Title = "Settings", PositionAndSize = ( 0, 0, 960, 680 ) },
+		[ WindowPresetKeys.AppSettings ] = new() { Title = "Settings", PositionAndSize = ( 0, 0, 1280, 820 ) },
 	};
 }
 
@@ -279,22 +348,38 @@ public sealed class WindowSettingsData
 public sealed class WorkspaceLayoutSettings
 {
 	public bool ShowFoldersPane { get; set; } = true;
-	public FolderDockSide FoldersDock { get; set; } = FolderDockSide.Left;
+	public FolderDockSide FoldersDock
+	{
+		get;
+		set => field = Enum.IsDefined( value ) ? value : FolderDockSide.Left;
+	} = FolderDockSide.Left;
 	public double FoldersPaneWidth { get; set; } = 278;
 
 	public bool ShowDetailsPane { get; set; } = true;
-	public DetailsDockPosition DetailsDock { get; set; } = DetailsDockPosition.Bottom;
+	public DetailsDockPosition DetailsDock
+	{
+		get;
+		set => field = Enum.IsDefined( value ) ? value : DetailsDockPosition.Bottom;
+	} = DetailsDockPosition.Bottom;
 	public double DetailsPaneHeight { get; set; } = 250;
 	public double DetailsRightWidth { get; set; } = 460;
 
 	public bool ShowPreviewPane { get; set; } = true;
-	public PreviewDockPlacement PreviewPlacement { get; set; } = PreviewDockPlacement.AfterDetails;
+	public PreviewDockPlacement PreviewPlacement
+	{
+		get;
+		set => field = Enum.IsDefined( value ) ? value : PreviewDockPlacement.AfterDetails;
+	} = PreviewDockPlacement.AfterDetails;
 	public double PreviewPaneSize { get; set; } = 264;
 
 	public double GraphFoldersWidth { get; set; } = 264;
 	public double GraphFilesWidth { get; set; } = 260;
 
-	public FolderDockSide SearchDock { get; set; } = FolderDockSide.Right;
+	public FolderDockSide SearchDock
+	{
+		get;
+		set => field = Enum.IsDefined( value ) ? value : FolderDockSide.Right;
+	} = FolderDockSide.Right;
 	public double SearchDrawerWidth { get; set; } = 460;
 	public double StatusDrawerHeight { get; set; } = 280;
 	public bool SearchMinimalMode { get; set; }
@@ -328,35 +413,41 @@ public sealed class WorkspaceLayoutSettings
 	}
 }
 
+[JsonSourceGenerationOptions(
+	PropertyNameCaseInsensitive = true,
+	Converters = [ typeof( ArgbColorJsonConverter ), typeof( Vector4IntJsonConverter ) ] )]
+[JsonSerializable( typeof( AppUiConfig ) )]
+[JsonSerializable( typeof( WindowSettingsData ) )]
+[JsonSerializable( typeof( WindowConfigData ) )]
+[JsonSerializable( typeof( ColorSettingsData ) )]
+[JsonSerializable( typeof( OdooEntryColumns ) )]
+[JsonSerializable( typeof( OdooEntryColumnID ) )]
+[JsonSerializable( typeof( OdooEntryColumn ) )]
+[JsonSerializable( typeof( GroupByField ) )]
+[JsonSerializable( typeof( ThemeSettings ) )]
+[JsonSerializable( typeof( WorkspaceLayoutSettings ) )]
+internal sealed partial class AppUiConfigJsonContext : JsonSerializerContext;
+
 /// <summary>Unified UI settings section persisted inside <c>settings.json</c> under <c>UiConfig</c>.</summary>
 public sealed class AppUiConfig
 {
-	public static JsonSerializerOptions JsonOptions { get; } = new()
-	{
-		PropertyNameCaseInsensitive = true,
-		Converters =
-		{
-			new ArgbColorJsonConverter(),
-			new Vector4IntJsonConverter(),
-			new JsonStringEnumConverter(),
-		},
-	};
+	public static JsonSerializerOptions JsonOptions => AppUiConfigJsonContext.Default.Options;
 
 	[JsonIgnore]
 	public bool IsLoadedFromFile { get; set; }
 
 	[JsonPropertyName( "WindowSettings" )]
-	public WindowSettingsData Win { get; set; } = new();
+	public WindowSettingsData Win { get; set => field = value ?? new(); } = new();
 
 	[JsonPropertyName( "OdooEntryColors" )]
-	public ColorSettingsData EColors { get; set; } = new();
+	public ColorSettingsData EColors { get; set => field = value ?? new(); } = new();
 
 	[JsonPropertyName( "ColumnSettings" )]
-	public OdooEntryColumns ColumnsSettings { get; set; } = new();
+	public OdooEntryColumns ColumnsSettings { get; set => field = value ?? new(); } = new();
 
 	[JsonPropertyName( nameof( Theme ) )]
-	public ThemeSettings Theme { get; set; } = new();
+	public ThemeSettings Theme { get; set => field = value ?? new(); } = new();
 
 	[JsonPropertyName( nameof( WorkspaceLayout ) )]
-	public WorkspaceLayoutSettings WorkspaceLayout { get; set; } = new();
+	public WorkspaceLayoutSettings WorkspaceLayout { get; set => field = value ?? new(); } = new();
 }

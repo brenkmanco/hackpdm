@@ -2,9 +2,96 @@ using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace HackPDM.Core.Theming;
+
+/// <summary>
+/// Zero-reflection JSON converter for enums that validates <see cref="Enum.IsDefined{TEnum}(TEnum)"/>
+/// on both names and numeric values, falling back cleanly when a saved value is out of range or unknown.
+/// </summary>
+public class SafeEnumJsonConverter<TEnum>( TEnum fallback = default ) : JsonConverter<TEnum>
+	where TEnum : struct, Enum
+{
+	public override TEnum Read( ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options )
+	{
+		if( reader.TokenType == JsonTokenType.String )
+		{
+			string? text = reader.GetString();
+			if( !string.IsNullOrWhiteSpace( text )
+				&& !long.TryParse( text, NumberStyles.Integer, CultureInfo.InvariantCulture, out _ )
+				&& Enum.TryParse( text, ignoreCase: true, out TEnum parsed )
+				&& Enum.IsDefined( parsed ) )
+			{
+				return parsed;
+			}
+			return fallback;
+		}
+		if( reader.TokenType == JsonTokenType.Number )
+		{
+			if( reader.TryGetInt64( out long num )
+				&& Enum.TryParse( num.ToString( CultureInfo.InvariantCulture ), out TEnum parsed )
+				&& Enum.IsDefined( parsed ) )
+			{
+				return parsed;
+			}
+			return fallback;
+		}
+		reader.Skip();
+		return fallback;
+	}
+
+	public override void Write( Utf8JsonWriter writer, TEnum value, JsonSerializerOptions options )
+		=> writer.WriteStringValue( Enum.GetName( value ) ?? Enum.GetName( fallback ) );
+}
+
+internal sealed class AppThemeModeJsonConverter() : SafeEnumJsonConverter<AppThemeMode>( AppThemeMode.Dark );
+internal sealed class PaletteNameJsonConverter() : SafeEnumJsonConverter<PaletteName>( PaletteName.Dark );
+internal sealed class FormNameJsonConverter() : SafeEnumJsonConverter<FormName>( FormName.Default );
+
+internal sealed class NullablePaletteNameJsonConverter : JsonConverter<PaletteName?>
+{
+	private static readonly PaletteNameJsonConverter Inner = new();
+
+	public override PaletteName? Read( ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options )
+	{
+		if( reader.TokenType == JsonTokenType.Null )
+			return null;
+		if( reader.TokenType == JsonTokenType.String )
+		{
+			string? text = reader.GetString();
+			if( !string.IsNullOrWhiteSpace( text )
+				&& !long.TryParse( text, NumberStyles.Integer, CultureInfo.InvariantCulture, out _ )
+				&& Enum.TryParse( text, ignoreCase: true, out PaletteName parsed )
+				&& Enum.IsDefined( parsed ) )
+			{
+				return parsed;
+			}
+			return null;
+		}
+		if( reader.TokenType == JsonTokenType.Number )
+		{
+			if( reader.TryGetInt64( out long num )
+				&& Enum.TryParse( num.ToString( CultureInfo.InvariantCulture ), out PaletteName parsed )
+				&& Enum.IsDefined( parsed ) )
+			{
+				return parsed;
+			}
+			return null;
+		}
+		reader.Skip();
+		return null;
+	}
+
+	public override void Write( Utf8JsonWriter writer, PaletteName? value, JsonSerializerOptions options )
+	{
+		if( value is { } p && Enum.IsDefined( p ) )
+			Inner.Write( writer, p, options );
+		else
+			writer.WriteNullValue();
+	}
+}
 
 /// <summary>Contract for presets keyed by an enum value so lookup and parsing share one zero-reflection generic helper.</summary>
 public interface INamedPreset<out TEnum> where TEnum : struct, Enum
@@ -40,7 +127,7 @@ public static class EnumPresets
 }
 
 /// <summary>Which base theme the app uses.</summary>
-[JsonConverter( typeof( JsonStringEnumConverter<AppThemeMode> ) )]
+[JsonConverter( typeof( AppThemeModeJsonConverter ) )]
 public enum AppThemeMode
 {
 	/// <summary>Follow the operating system's light/dark setting.</summary>
@@ -56,28 +143,40 @@ public enum AppThemeMode
 public sealed class ThemeSettings
 {
 	/// <summary>The base light/dark theme; it follows <see cref="Palette"/> (kept for settings saved before the presets).</summary>
-	public AppThemeMode Mode { get; set; } = AppThemeMode.Dark;
+	public AppThemeMode Mode
+	{
+		get;
+		set => field = Enum.IsDefined( value ) ? value : AppThemeMode.Dark;
+	} = AppThemeMode.Dark;
 
 	/// <summary>The color preset; null in settings saved before the presets, which then follow <see cref="Mode"/>.</summary>
-	[JsonConverter( typeof( JsonStringEnumConverter<PaletteName> ) )]
-	public PaletteName? Palette { get; set; }
+	[JsonConverter( typeof( NullablePaletteNameJsonConverter ) )]
+	public PaletteName? Palette
+	{
+		get;
+		set => field = value is { } p && Enum.IsDefined( p ) ? p : null;
+	}
 
 	/// <summary>The shape preset.</summary>
-	[JsonConverter( typeof( JsonStringEnumConverter<FormName> ) )]
-	public FormName Form { get; set; } = FormName.Default;
+	[JsonConverter( typeof( FormNameJsonConverter ) )]
+	public FormName Form
+	{
+		get;
+		set => field = Enum.IsDefined( value ) ? value : FormName.Default;
+	} = FormName.Default;
 
 	/// <summary>Whether folder trees draw branching guide lines connecting parent and child folders.</summary>
 	public bool ShowTreeBranchLines { get; set; } = true;
 
 	/// <summary>The color preset in use: <see cref="Palette"/>, or for older settings Light when the mode was Light, else Dark.</summary>
 	[JsonIgnore]
-	public PaletteName EffectivePalette => Palette ?? ( Mode == AppThemeMode.Light ? PaletteName.Light : PaletteName.Dark );
+	public PaletteName EffectivePalette => Palette is { } p && Enum.IsDefined( p ) ? p : ( Mode == AppThemeMode.Light ? PaletteName.Light : PaletteName.Dark );
 
 	/// <summary>Theme resource key → color as "#AARRGGBB", used while the light theme is active.</summary>
-	public Dictionary<string, string> Light { get; set; } = [];
+	public Dictionary<string, string> Light { get; set => field = value ?? []; } = [];
 
 	/// <summary>Theme resource key → color as "#AARRGGBB", used while the dark theme is active.</summary>
-	public Dictionary<string, string> Dark { get; set; } = [];
+	public Dictionary<string, string> Dark { get; set => field = value ?? []; } = [];
 
 	/// <summary>Picks the color overrides for one base theme.</summary>
 	/// <param name="dark">Whether the dark theme is active.</param>

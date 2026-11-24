@@ -83,7 +83,7 @@ public sealed partial class SwFileReader : ISwDocumentReader
 		if( store.Get( "SwDocContentMgr/SwDocContentMgrInfo" ) is { } contentMgr )
 		{
 			bool first = true;
-			foreach( string path in Utf16Paths( contentMgr ) )
+			foreach( string path in Utf16Paths( contentMgr, allowNullDelimitedUnicode: true ) )
 			{
 				if( first )
 				{
@@ -102,7 +102,7 @@ public sealed partial class SwFileReader : ISwDocumentReader
 		if( store.Get( "Header2" ) is { } header )
 		{
 			HashSet<string>? inTree = tree is null ? null : new HashSet<string>( tree, StringComparer.OrdinalIgnoreCase );
-			foreach( string path in Utf16Paths( header ) )
+			foreach( string path in Utf16Paths( header, allowNullDelimitedUnicode: false ) )
 			{
 				if( ( inTree is null || inTree.Contains( path ) ) && !path.Contains( '^' ) && !IsSelf( path ) && seen.Add( path ) )
 					paths.Add( path );
@@ -115,15 +115,31 @@ public sealed partial class SwFileReader : ISwDocumentReader
 		return paths;
 	}
 
-	[GeneratedRegex( @"(?:[\x20-\x7E\xA0-\xFF]\x00)+?\.\x00[sS]\x00[lL]\x00[dD]\x00(?:[pP]\x00[rR]\x00[tT]|[aA]\x00[sS]\x00[mM]|[dD]\x00[rR]\x00[wW])\x00" )]
+	private const string Utf16CodeUnit = @"(?:[\x20-\x7E\xA0-\xFF]\x00|[\x00-\xFF][\x01-\xFD]|[\x00-\xFE]\xFE|[\x00-\xFD]\xFF)";
+	private const string SwUtf16Ext = @"\.\x00[sS]\x00[lL]\x00[dD]\x00(?:[pP]\x00[rR]\x00[tT]|[aA]\x00[sS]\x00[mM]|[dD]\x00[rR]\x00[wW])\x00";
+	private const string WindowsRootPrefix = @"(?:[A-Za-z]\x00:\x00[\\/]\x00|\\\x00\\\x00)";
+	private const string MfcUnicodePrefix = @"(?<=\xFF\xFE\xFF[\x01-\xFE])";
+	private const string AsciiUtf16Unit = @"[\x20-\x7E\xA0-\xFF]\x00";
+
+	[GeneratedRegex(
+		WindowsRootPrefix + Utf16CodeUnit + @"*?" + SwUtf16Ext +
+		@"|" + MfcUnicodePrefix + Utf16CodeUnit + @"+?" + SwUtf16Ext +
+		@"|" + AsciiUtf16Unit + @"+?" + SwUtf16Ext )]
 	private static partial Regex Utf16PathPattern();
 
+	[GeneratedRegex(
+		WindowsRootPrefix + Utf16CodeUnit + @"*?" + SwUtf16Ext +
+		@"|(?<=\x00\x00|\A)" + Utf16CodeUnit + @"+?" + SwUtf16Ext +
+		@"|" + AsciiUtf16Unit + @"+?" + SwUtf16Ext )]
+	private static partial Regex Utf16NullDelimitedPathPattern();
+
 	/// <summary>UTF-16 strings ending in a SolidWorks extension, in order.</summary>
-	private static IEnumerable<string> Utf16Paths( byte[] stream )
+	private static IEnumerable<string> Utf16Paths( byte[] stream, bool allowNullDelimitedUnicode )
 	{
 		// match on the bytes as Latin-1 so each byte is one char; decode UTF-16 directly from stream
 		string bytes = Encoding.Latin1.GetString( stream );
-		foreach( Match m in Utf16PathPattern().Matches( bytes ) )
+		Regex pattern = allowNullDelimitedUnicode ? Utf16NullDelimitedPathPattern() : Utf16PathPattern();
+		foreach( Match m in pattern.Matches( bytes ) )
 			yield return Encoding.Unicode.GetString( stream, m.Index, m.Length );
 	}
 

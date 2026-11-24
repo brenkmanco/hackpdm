@@ -1,9 +1,11 @@
 using System.Collections.Frozen;
 using System.ComponentModel;
+using System.Text.Json.Serialization;
 
 namespace HackPDM.Core.Theming;
 
 /// <summary>The color presets: they color every window, page, dialog and the dependency graph.</summary>
+[JsonConverter( typeof( PaletteNameJsonConverter ) )]
 public enum PaletteName
 {
 	Dark,
@@ -12,6 +14,7 @@ public enum PaletteName
 }
 
 /// <summary>The shape presets: control corners and density, panel borders, and the dependency graph's boxes and links.</summary>
+[JsonConverter( typeof( FormNameJsonConverter ) )]
 public enum FormName
 {
 	Compact,
@@ -104,10 +107,12 @@ public static class ThemePresets
 	];
 
 	/// <summary>The palette named <paramref name="name"/>.</summary>
-	public static AppPalette Palette( PaletteName name ) => EnumPresets.Find( Palettes, name, "palette" );
+	public static AppPalette Palette( PaletteName name )
+		=> EnumPresets.Find( Palettes, Enum.IsDefined( name ) ? name : PaletteName.Dark, "palette" );
 
 	/// <summary>The form named <paramref name="name"/>.</summary>
-	public static AppForm Form( FormName name ) => EnumPresets.Find( Forms, name, "form" );
+	public static AppForm Form( FormName name )
+		=> EnumPresets.Find( Forms, Enum.IsDefined( name ) ? name : FormName.Default, "form" );
 
 	/// <summary>The panel border color for a palette and form.</summary>
 	public static uint PanelStroke( AppPalette palette, AppForm form ) => form.AccentPanels ? palette.FancyPanelStroke : palette.PanelStroke;

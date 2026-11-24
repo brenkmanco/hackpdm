@@ -168,21 +168,32 @@ public class PlatformCompatibilityTests
     }
 
     [Fact]
-    public void SolidWorksAdapter_OnNonWindows_SafelyDegradesWithoutThrowing()
+    public void SolidWorksAdapter_OnAnyPlatform_ReturnsValidReaderWithoutThrowing()
     {
+        var docMgr = SolidWorksUtil.DocMgr;
+        Assert.NotNull(docMgr);
+
         if (!OperatingSystem.IsWindows())
         {
             // On Linux or macOS, SolidWorks COM cannot run: the managed file reader is used instead
             // (no TypeLoadException or COMException).
-            Assert.IsType<SwFileReader>(SolidWorksUtil.DocMgr);
+            Assert.IsType<SwFileReader>(docMgr);
         }
         else
         {
-            // On Windows, the guard allows property access without crashing
-            // (returns null if uninitialized/unlicensed, but does not throw)
-            var docMgr = SolidWorksUtil.DocMgr;
-            // Either null or initialized instance, but call succeeded
-            Assert.True(docMgr is null || docMgr is not null);
+            // On Windows, either SwDocMgr (when licensed + COM registered) or SwFileReader fallback is returned
+            Assert.True(docMgr is SwFileReader or SwDocMgr);
         }
+
+        Assert.Null(docMgr.GetDependencies("not-a-solidworks-file.txt", noInterrupt: true));
+    }
+
+    [Fact]
+    public void AppDataPaths_ResolveRootedDirectories()
+    {
+        Assert.True(Path.IsPathRooted(AppDataPaths.Config));
+        Assert.True(Path.IsPathRooted(AppDataPaths.Data));
+        Assert.EndsWith(AppDataPaths.FolderName, AppDataPaths.Config, StringComparison.Ordinal);
+        Assert.EndsWith(AppDataPaths.FolderName, AppDataPaths.Data, StringComparison.Ordinal);
     }
 }

@@ -97,4 +97,12 @@ public class GraphThemeTests
 		Assert.Equal( 21, GraphThemes.Contrast( 0xFF000000, 0xFFFFFFFF ), 3 );
 		Assert.Equal( 1, GraphThemes.Contrast( 0xFF336699, 0xFF336699 ), 6 );
 	}
+
+	[Fact]
+	public void OutOfRangeEnumCasts_FallBackSafelyWithoutThrowing()
+	{
+		GraphTheme theme = GraphThemes.From( (PaletteName)99, (FormName)99 );
+		Assert.Equal( PaletteName.Dark, theme.Palette.Name );
+		Assert.Equal( FormName.Default, theme.Form.Name );
+	}
 }

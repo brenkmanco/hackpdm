@@ -22,25 +22,33 @@ internal sealed unsafe partial class MacKeychainStore : ICredentialStore
 
 	public StoredCredential? Read( string target )
 	{
+		if( string.IsNullOrEmpty( target ) )
+			return null;
 		try
 		{
 			byte[] account = Encoding.UTF8.GetBytes( target );
-			int status = SecKeychainFindGenericPassword( IntPtr.Zero, (uint)Service.Length, Service, (uint)account.Length, account, out uint length, out IntPtr data, out IntPtr item );
-			if( status == ErrSecItemNotFound )
-				return null;
-			if( status != 0 )
-			{
-				CredentialLog.Warn( Name, "read", $"OSStatus {status}" );
-				return null;
-			}
+			IntPtr data = IntPtr.Zero;
+			IntPtr item = IntPtr.Zero;
 			try
 			{
+				int status = SecKeychainFindGenericPassword( IntPtr.Zero, (uint)Service.Length, Service, (uint)account.Length, account, out uint length, out data, out item );
+				if( status == ErrSecItemNotFound )
+					return null;
+				if( status != 0 )
+				{
+					CredentialLog.Warn( Name, "read", $"OSStatus {status}" );
+					return null;
+				}
+				if( data == IntPtr.Zero || length > int.MaxValue )
+					return null;
 				return CredentialSecret.Decode( Marshal.PtrToStringUTF8( data, (int)length ) );
 			}
 			finally
 			{
-				_ = SecKeychainItemFreeContent( IntPtr.Zero, data );
-				CFRelease( item );
+				if( data != IntPtr.Zero )
+					_ = SecKeychainItemFreeContent( IntPtr.Zero, data );
+				if( item != IntPtr.Zero )
+					CFRelease( item );
 			}
 		}
 		catch( Exception e ) when( e is DllNotFoundException or EntryPointNotFoundException )
@@ -52,19 +60,24 @@ internal sealed unsafe partial class MacKeychainStore : ICredentialStore
 
 	public bool Write( string target, string userName, string password )
 	{
+		if( string.IsNullOrEmpty( target ) || userName is null || password is null )
+			return false;
 		try
 		{
 			byte[] account = Encoding.UTF8.GetBytes( target );
 			byte[] secret = Encoding.UTF8.GetBytes( CredentialSecret.Encode( userName, password ) );
+			IntPtr old = IntPtr.Zero;
+			IntPtr item = IntPtr.Zero;
 			try
 			{
-				int status = SecKeychainFindGenericPassword( IntPtr.Zero, (uint)Service.Length, Service, (uint)account.Length, account, out _, out IntPtr old, out IntPtr item );
-				if( status == 0 )
+				int status = SecKeychainFindGenericPassword( IntPtr.Zero, (uint)Service.Length, Service, (uint)account.Length, account, out _, out old, out item );
+				if( old != IntPtr.Zero )
 				{
 					_ = SecKeychainItemFreeContent( IntPtr.Zero, old );
-					status = SecKeychainItemModifyAttributesAndData( item, IntPtr.Zero, (uint)secret.Length, secret );
-					CFRelease( item );
+					old = IntPtr.Zero;
 				}
+				if( status == 0 && item != IntPtr.Zero )
+					status = SecKeychainItemModifyAttributesAndData( item, IntPtr.Zero, (uint)secret.Length, secret );
 				else if( status == ErrSecItemNotFound )
 					status = SecKeychainAddGenericPassword( IntPtr.Zero, (uint)Service.Length, Service, (uint)account.Length, account, (uint)secret.Length, secret, IntPtr.Zero );
 				if( status != 0 )
@@ -73,6 +86,10 @@ internal sealed unsafe partial class MacKeychainStore : ICredentialStore
 			}
 			finally
 			{
+				if( old != IntPtr.Zero )
+					_ = SecKeychainItemFreeContent( IntPtr.Zero, old );
+				if( item != IntPtr.Zero )
+					CFRelease( item );
 				Array.Clear( secret );
 			}
 		}
@@ -85,18 +102,41 @@ internal sealed unsafe partial class MacKeychainStore : ICredentialStore
 
 	public bool Delete( string target )
 	{
+		if( string.IsNullOrEmpty( target ) )
+			return false;
 		try
 		{
 			byte[] account = Encoding.UTF8.GetBytes( target );
-			int status = SecKeychainFindGenericPassword( IntPtr.Zero, (uint)Service.Length, Service, (uint)account.Length, account, out _, out IntPtr data, out IntPtr item );
-			if( status == ErrSecItemNotFound )
-				return true;
-			if( status != 0 )
-				return false;
-			_ = SecKeychainItemFreeContent( IntPtr.Zero, data );
-			status = SecKeychainItemDelete( item );
-			CFRelease( item );
-			return status == 0;
+			IntPtr data = IntPtr.Zero;
+			IntPtr item = IntPtr.Zero;
+			try
+			{
+				int status = SecKeychainFindGenericPassword( IntPtr.Zero, (uint)Service.Length, Service, (uint)account.Length, account, out _, out data, out item );
+				if( status == ErrSecItemNotFound )
+					return true;
+				if( status != 0 || item == IntPtr.Zero )
+				{
+					if( status != 0 )
+						CredentialLog.Warn( Name, "delete", $"OSStatus {status}" );
+					return false;
+				}
+				if( data != IntPtr.Zero )
+				{
+					_ = SecKeychainItemFreeContent( IntPtr.Zero, data );
+					data = IntPtr.Zero;
+				}
+				status = SecKeychainItemDelete( item );
+				if( status != 0 )
+					CredentialLog.Warn( Name, "delete", $"OSStatus {status}" );
+				return status == 0;
+			}
+			finally
+			{
+				if( data != IntPtr.Zero )
+					_ = SecKeychainItemFreeContent( IntPtr.Zero, data );
+				if( item != IntPtr.Zero )
+					CFRelease( item );
+			}
 		}
 		catch( Exception e ) when( e is DllNotFoundException or EntryPointNotFoundException )
 		{

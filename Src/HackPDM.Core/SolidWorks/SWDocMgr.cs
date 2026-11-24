@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.InteropServices;
 
 using HackPDM.Core.Configuration;
 
@@ -28,7 +29,7 @@ public class SwDocMgr : ISwDocumentReader
     {
         try
         {
-            if (!OperatingSystem.IsWindows()) return;
+            if (!OperatingSystem.IsWindows() || string.IsNullOrEmpty(strLicenseKey)) return;
             var swClassFact = new SwDMClassFactory();
             _swDocMgr = swClassFact.GetApplication(strLicenseKey);
         }
@@ -42,21 +43,11 @@ public class SwDocMgr : ISwDocumentReader
     /// <param name="fileName">Path of the SolidWorks file; opened read-only.</param>
     /// <param name="deep">Ignored.</param>
     /// <param name="noInterrupt">When true, a document that can't be opened yields null instead of an exception.</param>
-    /// <returns><c>[file name, stored full path]</c> pairs; null when the file isn't a SolidWorks document, has no reference list, or (with <paramref name="noInterrupt"/>) can't be opened.</returns>
+    /// <returns><c>[file name, stored full path]</c> pairs (empty when none); null when the file isn't a SolidWorks document or (with <paramref name="noInterrupt"/>) can't be opened.</returns>
     /// <exception cref="Exception">The document can't be opened and <paramref name="noInterrupt"/> is false.</exception>
     /// <exception cref="InvalidOperationException">The Document Manager was not started (see <see cref="GetApplication"/>).</exception>
     public List<string[]>? GetDependencies(string fileName, bool deep=false, bool noInterrupt=false)
     {
-        // external references for assembly files (GetAllExternalReferences4)
-        // external references for part files (GetExternalFeatureReferences)
-        SwDMDocument19 swDoc;
-        SwDMSearchOption swSearchOpt;
-
-        // returns list of string arrays
-        // 0: short file name
-        // 1: long file name
-        List<string[]> listDepends = [];
-
         // get doc type
         SwDmDocumentType swDocType = SwDocumentTypes.Of(fileName);
         if (swDocType == SwDmDocumentType.swDmDocumentUnknown)
@@ -64,46 +55,107 @@ public class SwDocMgr : ISwDocumentReader
             return null;
         }
 
-        // get the document
-        SwDmDocumentOpenError nRetVal = 0;
-        swDoc = (SwDMDocument19)Started.GetDocument(fileName, swDocType, true, out nRetVal);
-        if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal || swDoc == null)
-        {
-            return !noInterrupt ? throw new Exception("Failed to open solidworks file: " + fileName) : null;
-        }
-
+        SwDMDocument? rawDoc = null;
         try
         {
-            // get arrays of dependency info (one-dimensional)
-            object oBrokenRefVar;
-            object oIsVirtual;
-            object oTimeStamp;
-            swSearchOpt = Started.GetSearchOptionObject();
-            string[] varDepends = (string[])swDoc.GetAllExternalReferences4(swSearchOpt, out oBrokenRefVar, out oIsVirtual, out oTimeStamp);
-            if (varDepends == null) return null;
-
-            bool[]? blnIsVirtual = oIsVirtual as bool[];
-            listDepends.EnsureCapacity(varDepends.Length);
-            for (int i = 0; i < varDepends.Length; i++)
+            SwDmDocumentOpenError nRetVal = 0;
+            rawDoc = Started.GetDocument(fileName, swDocType, true, out nRetVal);
+            if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal || rawDoc is not SwDMDocument19 swDoc)
             {
-                // only return non-virtual components
-                if (blnIsVirtual is not null && i < blnIsVirtual.Length && blnIsVirtual[i]) continue;
-
-                // file name with absolute path
-                string strFullName = varDepends[i];
-
-                // short file name with extension
-                string strName = SwReferenceResolver.FileName(strFullName);
-                listDepends.Add([strName, strFullName]);
+                return !noInterrupt ? throw new Exception("Failed to open solidworks file: " + fileName) : null;
             }
 
-            return listDepends;
+            SwDMSearchOption swSearchOpt = Started.GetSearchOptionObject();
+            object? rawDepends = swDoc.GetAllExternalReferences4(swSearchOpt, out _, out object? oIsVirtual, out _);
+            return ExtractDependencies(rawDepends, oIsVirtual);
+        }
+        catch (Exception ex) when (noInterrupt && ex is COMException or InvalidCastException)
+        {
+            HackLogger.Debug(nameof(SwDocMgr), $"Could not read SolidWorks dependencies for '{fileName}': {ex.Message}", ex);
+            return null;
         }
         finally
         {
-            swDoc.CloseDoc();
+            rawDoc?.CloseDoc();
         }
+    }
 
+    internal static List<string[]> ExtractDependencies(object? rawDepends, object? oIsVirtual)
+    {
+        List<string[]> listDepends = [];
+        if (rawDepends is not Array depArray || depArray.Length == 0)
+            return listDepends;
+
+        listDepends.EnsureCapacity(depArray.Length);
+        for (int i = 0; i < depArray.Length; i++)
+        {
+            // only return non-virtual components
+            if (IsVirtualAt(oIsVirtual, i))
+                continue;
+
+            string? strFullName = depArray.GetValue(i) as string;
+            if (string.IsNullOrEmpty(strFullName))
+                continue;
+
+            // short file name with extension
+            string strName = SwReferenceResolver.FileName(strFullName);
+            listDepends.Add([strName, strFullName]);
+        }
+        return listDepends;
+    }
+
+    internal static bool IsVirtualAt(object? oIsVirtual, int index)
+    {
+        if (index < 0 || oIsVirtual is null)
+            return false;
+        if (oIsVirtual is bool[] bools)
+            return index < bools.Length && bools[index];
+        if (oIsVirtual is short[] shorts)
+            return index < shorts.Length && shorts[index] != 0;
+        if (oIsVirtual is Array arr && index < arr.Length)
+        {
+            return arr.GetValue(index) switch
+            {
+                bool b => b,
+                short s => s != 0,
+                int i => i != 0,
+                sbyte sb => sb != 0,
+                byte by => by != 0,
+                ushort us => us != 0,
+                uint ui => ui != 0,
+                long l => l != 0,
+                IConvertible conv => SafeToBool(conv),
+                _ => false,
+            };
+        }
+        return false;
+    }
+
+    private static bool SafeToBool(IConvertible conv)
+    {
+        try { return conv.ToBoolean(CultureInfo.InvariantCulture); }
+        catch { return false; }
+    }
+
+    internal static IEnumerable<string> AsStrings(object? value)
+    {
+        if (value is string[] arr)
+        {
+            for (int i = 0; i < arr.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(arr[i]))
+                    yield return arr[i];
+            }
+            yield break;
+        }
+        if (value is Array genericArr)
+        {
+            for (int i = 0; i < genericArr.Length; i++)
+            {
+                if (genericArr.GetValue(i) is string s && !string.IsNullOrEmpty(s))
+                    yield return s;
+            }
+        }
     }
 
     /// <summary>Reads file-level and per-configuration custom properties through the Document Manager.</summary>
@@ -113,9 +165,6 @@ public class SwDocMgr : ISwDocumentReader
     /// <exception cref="InvalidOperationException">The Document Manager was not started (see <see cref="GetApplication"/>).</exception>
     public List<Tuple<string, string, string, object>>? GetProperties(string fileName)
     {
-        SwDMDocument swDoc;
-        SwDMConfigurationMgr swCfgMgr;
-
         // config name
         // property name
         // property type
@@ -131,26 +180,22 @@ public class SwDocMgr : ISwDocumentReader
 
         // get the document
         SwDmDocumentOpenError nRetVal = 0;
-        swDoc = (SwDMDocument)Started.GetDocument(fileName, swDocType, true, out nRetVal);
-        if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal || swDoc == null)
-        {
-            throw new Exception("Failed to open solidworks file: " + fileName);
-        }
-
+        SwDMDocument? swDoc = Started.GetDocument(fileName, swDocType, true, out nRetVal);
         try
         {
-            // get document custom properties (file level properties)
-            string[] strDocPropNames = (string[])swDoc.GetCustomPropertyNames();
-            if (strDocPropNames != null)
+            if (SwDmDocumentOpenError.swDmDocumentOpenErrorNone != nRetVal || swDoc == null)
             {
-                foreach (string strPropName in strDocPropNames)
-                {
-                    SwDmCustomInfoType nPropType = 0;
-                    object oPropValue = swDoc.GetCustomProperty(strPropName, out nPropType);
+                throw new Exception("Failed to open solidworks file: " + fileName);
+            }
 
-                    var (strPropType, oValue) = ConvertProperty(nPropType, oPropValue);
-                    lstProps.Add(Tuple.Create<string, string, string, object>("", strPropName, strPropType, oValue));
-                }
+            // get document custom properties (file level properties)
+            foreach (string strPropName in AsStrings(swDoc.GetCustomPropertyNames()))
+            {
+                SwDmCustomInfoType nPropType = 0;
+                object oPropValue = swDoc.GetCustomProperty(strPropName, out nPropType);
+
+                var (strPropType, oValue) = ConvertProperty(nPropType, oPropValue);
+                lstProps.Add(Tuple.Create<string, string, string, object>("", strPropName, strPropType, oValue));
             }
 
             // drawings don't have configurations, so we can return here
@@ -160,17 +205,15 @@ public class SwDocMgr : ISwDocumentReader
             }
 
             // parts and assemblies have configurations
-            swCfgMgr = swDoc.ConfigurationManager;
-            string[]? cfgNames = (string[]?)swCfgMgr.GetConfigurationNames();
-            if (cfgNames != null)
+            SwDMConfigurationMgr? swCfgMgr = swDoc.ConfigurationManager;
+            if (swCfgMgr != null)
             {
-                foreach (string strConfigName in cfgNames)
+                foreach (string strConfigName in AsStrings(swCfgMgr.GetConfigurationNames()))
                 {
-                    SwDMConfiguration swCfg = (SwDMConfiguration)swCfgMgr.GetConfigurationByName(strConfigName);
-                    string[] strCfgPropNames = (string[])swCfg.GetCustomPropertyNames();
-                    if (strCfgPropNames == null) continue;
+                    if (swCfgMgr.GetConfigurationByName(strConfigName) is not SwDMConfiguration swCfg)
+                        continue;
 
-                    foreach (string strPropName in strCfgPropNames)
+                    foreach (string strPropName in AsStrings(swCfg.GetCustomPropertyNames()))
                     {
                         SwDmCustomInfoType nPropType = 0;
                         object oPropValue = swCfg.GetCustomProperty(strPropName, out nPropType);
@@ -185,9 +228,8 @@ public class SwDocMgr : ISwDocumentReader
         }
         finally
         {
-            swDoc.CloseDoc();
+            swDoc?.CloseDoc();
         }
-
     }
 
     /// <summary>A Document Manager property's HackPDM type name and its value converted to match.</summary>

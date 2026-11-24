@@ -105,4 +105,59 @@ public sealed class JsonFileSettingsProviderTests : IDisposable
 		Assert.Contains( "\"OdooDb\": \"odoopdm\"", json );
 		Assert.Empty( Directory.GetFiles( Path.GetDirectoryName( FilePath )!, "*.tmp" ) );
 	}
+
+	[Fact]
+	public void ZeroReflectionPaths_SupportFloatJsonElementAndAllPrimitives()
+	{
+		JsonFileSettingsProvider settings = new( FilePath );
+		settings.Set( "Scale", 1.25f );
+		settings.Set( "Big", 9876543210L );
+		settings.Set( "Ratio", 2.5d );
+
+		using var doc = System.Text.Json.JsonDocument.Parse( "{\"A\":42,\"B\":\"ok\"}" );
+		settings.Set( "Obj", doc.RootElement );
+
+		int added = settings.ImportMissing(
+		[
+			new( "ImportedFloat", 3.5f ),
+			new( "ImportedBool", true ),
+			new( "ImportedInt", 7 ),
+			new( "ImportedLong", 1234567890123L ),
+			new( "ImportedDouble", 6.25d ),
+			new( "ImportedDecimal", 0.125m ),
+			new( "ImportedStrings", new[] { "x", "y" } ),
+		] );
+
+		Assert.Equal( 7, added );
+
+		JsonFileSettingsProvider reloaded = new( FilePath );
+		Assert.Equal( 1.25f, reloaded.Get<float>( "Scale" ) );
+		Assert.Equal( 9876543210L, reloaded.Get<long>( "Big" ) );
+		Assert.Equal( 2.5d, reloaded.Get<double>( "Ratio" ) );
+		Assert.Equal( 3.5f, reloaded.Get<float>( "ImportedFloat" ) );
+		Assert.True( reloaded.Get<bool>( "ImportedBool" ) );
+		Assert.Equal( 7, reloaded.Get<int>( "ImportedInt" ) );
+		Assert.Equal( 1234567890123L, reloaded.Get<long>( "ImportedLong" ) );
+		Assert.Equal( 6.25d, reloaded.Get<double>( "ImportedDouble" ) );
+		Assert.Equal( 0.125m, reloaded.Get<decimal>( "ImportedDecimal" ) );
+
+		var obj = reloaded.Get<System.Text.Json.JsonElement>( "Obj" );
+		Assert.Equal( System.Text.Json.JsonValueKind.Object, obj.ValueKind );
+		Assert.Equal( 42, obj.GetProperty( "A" ).GetInt32() );
+		Assert.Equal( "ok", obj.GetProperty( "B" ).GetString() );
+	}
+
+	[Theory]
+	[InlineData( "null" )]
+	[InlineData( "[1, 2, 3]" )]
+	public void NonObjectRootJson_RecordsErrorAndBacksUpFile( string content )
+	{
+		Directory.CreateDirectory( Path.GetDirectoryName( FilePath )! );
+		File.WriteAllText( FilePath, content );
+
+		JsonFileSettingsProvider settings = new( FilePath );
+		Assert.Single( settings.Errors );
+		Assert.Single( Directory.GetFiles( Path.GetDirectoryName( FilePath )!, "settings.json.unreadable-*" ) );
+		Assert.Null( settings.Get<string>( "OdooAddress" ) );
+	}
 }
