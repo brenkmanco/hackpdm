@@ -62,6 +62,7 @@ public sealed class RangeObservableCollection<T> : ObservableCollection<T>
 }
 
 /// <summary>Base view model for pages that run PDM operations reporting into the status window.</summary>
+[Microsoft.UI.Xaml.Data.Bindable]
 public abstract class OperationViewModel( IDialogService dialogs, IOperationReporter reporter ) : ObservableObject
 {
 	protected IDialogService Dialogs { get; } = dialogs;

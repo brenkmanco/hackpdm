@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.ComponentModel;
 using System.Net.Http.Headers;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -12,6 +13,7 @@ namespace HackPDM.Core.Pdm;
 
 public readonly record struct VersionCheckResult( bool IsAllowed, string? Reason );
 
+[Bindable( true )]
 public sealed record UpdateInfo(
 	string Version,
 	string DownloadUrl,

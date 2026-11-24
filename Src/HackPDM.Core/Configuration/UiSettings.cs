@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -183,12 +184,14 @@ public enum PreviewDockPlacement { AfterDetails, BeforeDetails }
 
 public enum WorkspaceLayoutPreset { Balanced, RightInspector, RightSidebar, FocusEntries }
 
+[Bindable( true )]
 public sealed class GroupByField
 {
 	public string FieldName { get; set; } = string.Empty;
 	public EntrySortDirection SortDirection { get; set; } = EntrySortDirection.Ascending;
 }
 
+[Bindable( true )]
 public sealed class OdooEntryColumn
 {
 	public int DisplayIndex { get; set; } = -1;
@@ -197,12 +200,14 @@ public sealed class OdooEntryColumn
 	public bool AutoSize { get; set; }
 }
 
+[Bindable( true )]
 public sealed class OdooEntryColumnID
 {
 	public string BindingPath { get; set; } = string.Empty;
 	public OdooEntryColumn Column { get; set; } = new();
 }
 
+[Bindable( true )]
 public sealed class OdooEntryColumns
 {
 	public double RowHeight { get; set; } = 26;

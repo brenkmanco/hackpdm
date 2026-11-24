@@ -12,6 +12,7 @@ using Windows.Storage.FileProperties;
 
 namespace HackPDM.Common;
 
+[System.ComponentModel.Bindable( true )]
 public sealed record EntryPreview( byte[]? ImageBytes, string? LocalFilePath );
 
 public interface IPreviewImageLoader

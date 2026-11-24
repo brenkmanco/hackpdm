@@ -9,6 +9,15 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace HackPDM.Themes;
 
+[Microsoft.UI.Xaml.Data.Bindable]
+public sealed class SampleRow( string name, string status, string size, string modUser )
+{
+	public string Name { get; } = name;
+	public string Status { get; } = status;
+	public string Size { get; } = size;
+	public string ModUser { get; } = modUser;
+}
+
 /// <summary>Theme editor plus a preview of every control type the app uses.</summary>
 public sealed partial class ThemeEditorView : Page
 {
@@ -78,14 +87,6 @@ public sealed partial class ThemeEditorView : Page
 	}
 
 	#region Sample data for the preview
-
-	public sealed class SampleRow( string name, string status, string size, string modUser )
-	{
-		public string Name { get; } = name;
-		public string Status { get; } = status;
-		public string Size { get; } = size;
-		public string ModUser { get; } = modUser;
-	}
 
 	private void FillSamples()
 	{

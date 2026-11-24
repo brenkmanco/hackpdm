@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.ComponentModel;
 
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
@@ -6,6 +7,7 @@ using HackPDM.Core.Pdm;
 
 namespace HackPDM.Core.Services;
 
+[Bindable( true )]
 public sealed class BasicStatusMessage
 {
 	private string? _timestampText;
@@ -25,6 +27,7 @@ public sealed class BasicStatusMessage
 	public string TimestampText => _timestampText ??= Timestamp.ToString( "HH:mm:ss" );
 }
 
+[Bindable( true )]
 public class RowData
 {
 	public virtual string? Name { get; set; } = "";
@@ -36,6 +39,7 @@ public class RowData
 }
 
 /// <summary>One row of the file manager's entry list: a remote entry, a local-only file, or both.</summary>
+[Bindable( true )]
 public sealed class EntryRow : RowData
 {
 	public int? Id { get; set; }
@@ -43,6 +47,8 @@ public sealed class EntryRow : RowData
 	public long? Size { get; set; }
 	public FileStatus Status { get; set; } = FileStatus.Lo;
 	public HpUser? Checkout { get; set; }
+	public string StatusText => Enum.GetName( Status ) ?? Status.ToString();
+	public string CheckoutText => Checkout?.ToString() ?? string.Empty;
 	public HpCategory? Category { get; set; }
 	public DateTime? LocalDate { get; set; }
 	public DateTime? RemoteDate { get; set; }
@@ -151,6 +157,7 @@ public static class EntryRowKeys
 
 public sealed record EntryListResult( List<EntryRow> Rows, int RemoteCount, int LocalOnlyCount, int LocalAndRemoteCount );
 
+[Bindable( true )]
 public sealed class HistoryRow : RowData
 {
 	public int Version { get; set; }
@@ -160,18 +167,21 @@ public sealed class HistoryRow : RowData
 	public DateTime? RelDate { get; set; }
 }
 
+[Bindable( true )]
 public sealed class ParentRow : RowData
 {
 	public int Version { get; set; }
 	public string? BasePath { get; set; }
 }
 
+[Bindable( true )]
 public sealed class ChildrenRow : RowData
 {
 	public int Version { get; set; }
 	public string? BasePath { get; set; }
 }
 
+[Bindable( true )]
 public sealed class PropertiesRow : RowData
 {
 	public int Version { get; set; }
@@ -181,6 +191,7 @@ public sealed class PropertiesRow : RowData
 	public object? ValueData { get; set; }
 }
 
+[Bindable( true )]
 public sealed class VersionRow : RowData
 {
 	public int Id { get; set; }
@@ -194,6 +205,7 @@ public sealed class VersionRow : RowData
 	public string? OdooCompletePath { get; set; }
 }
 
+[Bindable( true )]
 public sealed class SearchRow : RowData
 {
 	public int? Id { get; set; }
@@ -203,6 +215,7 @@ public sealed class SearchRow : RowData
 		: $"{Name} — {Directory}";
 }
 
+[Bindable( true )]
 public sealed class SearchPropertiesRow : RowData
 {
 	public int ID { get; set; }
@@ -211,6 +224,7 @@ public sealed class SearchPropertiesRow : RowData
 	public bool IsTextOrDate { get; set; }
 }
 
+[Bindable( true )]
 public sealed class OperatorsRow : RowData
 {
 	public Operators Operator
@@ -226,6 +240,7 @@ public sealed class OperatorsRow : RowData
 	public string? OpRepr { get; set; }
 }
 
+[Bindable( true )]
 public sealed class FileTypeRow : RowData
 {
 	public string? Extension { get; set; }
@@ -234,6 +249,7 @@ public sealed class FileTypeRow : RowData
 	public string? Description { get; set; }
 }
 
+[Bindable( true )]
 public sealed class FileTypeEntryFilterRow : RowData
 {
 	public int Id { get; set; }

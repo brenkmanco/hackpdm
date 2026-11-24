@@ -8,6 +8,7 @@
 	xmlns:conv="using:HackPDM.Common"
 	xmlns:controls="using:HackPDM.Common"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:rep="using:HackPDM.Core.Services"
 	xmlns:types="using:HackPDM.Common"
 	Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
 	mc:Ignorable="d">
@@ -24,49 +25,49 @@
 		<conv:StatusRowBackgroundConverter x:Key="StatusRowBackground" />
 		<conv:StatusTextBrushConverter x:Key="StatusTextBrush" />
 		<!--  Icon Column Template  -->
-		<DataTemplate x:Key="IconCellTemplate">
+		<DataTemplate x:Key="IconCellTemplate" x:DataType="rep:EntryRow">
 			<Canvas
 				Width="28"
 				Height="22"
 				Margin="0,0,4,0"
 				VerticalAlignment="Center"
-				ToolTipService.ToolTip="{Binding Status, Converter={StaticResource StatusDescription}}">
+				ToolTipService.ToolTip="{x:Bind Status, Converter={StaticResource StatusDescription}}">
 				<Image
 					Canvas.Left="0"
 					Canvas.Top="1"
 					Width="20"
 					Height="20"
-					Source="{Binding Type, Converter={StaticResource TypeIcon}}" />
+					Source="{x:Bind Type, Converter={StaticResource TypeIcon}}" />
 				<Image
 					Canvas.Left="10"
 					Canvas.Top="0"
 					Width="14"
 					Height="14"
-					Source="{Binding Status, Converter={StaticResource StatusIcon}}"
+					Source="{x:Bind Status, Converter={StaticResource StatusIcon}}"
 					Stretch="UniformToFill" />
 			</Canvas>
 		</DataTemplate>
 		<!--  Status Column Template  -->
-		<DataTemplate x:Key="StatusCellTemplate">
+		<DataTemplate x:Key="StatusCellTemplate" x:DataType="rep:EntryRow">
 			<TextBlock
 				Padding="4,0,4,0"
 				VerticalAlignment="Center"
 				FontWeight="SemiBold"
-				Foreground="{Binding Status, Converter={StaticResource StatusTextBrush}}"
-				Text="{Binding Status}"
-				ToolTipService.ToolTip="{Binding Status, Converter={StaticResource StatusDescription}}" />
+				Foreground="{x:Bind Status, Converter={StaticResource StatusTextBrush}}"
+				Text="{x:Bind StatusText}"
+				ToolTipService.ToolTip="{x:Bind Status, Converter={StaticResource StatusDescription}}" />
 		</DataTemplate>
 		<!--  Size Column Template  -->
-		<DataTemplate x:Key="SizeCellTemplate">
+		<DataTemplate x:Key="SizeCellTemplate" x:DataType="rep:EntryRow">
 			<TextBlock
 				Padding="5,0,5,0"
 				HorizontalAlignment="Right"
 				VerticalAlignment="Center"
-				Text="{Binding Size, Converter={StaticResource FileSizeFormatter}}"
+				Text="{x:Bind Size, Converter={StaticResource FileSizeFormatter}}"
 				TextAlignment="Right" />
 		</DataTemplate>
 		<!--  Grouped Entry List Templates  -->
-		<DataTemplate x:Key="GroupHeaderTemplate">
+		<DataTemplate x:Key="GroupHeaderTemplate" x:DataType="types:EntryGroupHeader">
 			<Border
 				Margin="0,4,0,2"
 				Padding="10,6"
@@ -84,13 +85,13 @@
 						Grid.Column="0"
 						VerticalAlignment="Center"
 						FontSize="10"
-						Glyph="{Binding ChevronGlyph}" />
+						Glyph="{x:Bind ChevronGlyph, Mode=OneWay}" />
 					<TextBlock
 						Grid.Column="1"
 						VerticalAlignment="Center"
 						FontSize="12"
 						FontWeight="SemiBold"
-						Text="{Binding DisplayKey}"
+						Text="{x:Bind DisplayKey}"
 						TextTrimming="CharacterEllipsis" />
 					<Border
 						Grid.Column="2"
@@ -101,16 +102,16 @@
 						<TextBlock
 							FontSize="10"
 							Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-							Text="{Binding CountText}" />
+							Text="{x:Bind CountText}" />
 					</Border>
 				</Grid>
 			</Border>
 		</DataTemplate>
-		<DataTemplate x:Key="GroupedEntryRowTemplate">
+		<DataTemplate x:Key="GroupedEntryRowTemplate" x:DataType="rep:EntryRow">
 			<Grid
 				MinHeight="26"
 				Padding="14,1,6,1"
-				Background="{Binding Status, Converter={StaticResource StatusRowBackground}}"
+				Background="{x:Bind Status, Converter={StaticResource StatusRowBackground}}"
 				ColumnSpacing="8">
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="36" />
@@ -127,59 +128,59 @@
 					Width="28"
 					Height="22"
 					VerticalAlignment="Center"
-					ToolTipService.ToolTip="{Binding Status, Converter={StaticResource StatusDescription}}">
+					ToolTipService.ToolTip="{x:Bind Status, Converter={StaticResource StatusDescription}}">
 					<Image
 						Canvas.Left="0"
 						Canvas.Top="1"
 						Width="20"
 						Height="20"
-						Source="{Binding Type, Converter={StaticResource TypeIcon}}" />
+						Source="{x:Bind Type, Converter={StaticResource TypeIcon}}" />
 					<Image
 						Canvas.Left="10"
 						Canvas.Top="0"
 						Width="14"
 						Height="14"
-						Source="{Binding Status, Converter={StaticResource StatusIcon}}"
+						Source="{x:Bind Status, Converter={StaticResource StatusIcon}}"
 						Stretch="UniformToFill" />
 				</Canvas>
 				<TextBlock
 					Grid.Column="1"
 					VerticalAlignment="Center"
-					Text="{Binding Name}"
+					Text="{x:Bind Name}"
 					TextTrimming="CharacterEllipsis" />
 				<TextBlock
 					Grid.Column="2"
 					VerticalAlignment="Center"
-					Text="{Binding Type}"
+					Text="{x:Bind Type}"
 					TextTrimming="CharacterEllipsis" />
 				<TextBlock
 					Grid.Column="3"
 					HorizontalAlignment="Right"
 					VerticalAlignment="Center"
-					Text="{Binding Size, Converter={StaticResource FileSizeFormatter}}"
+					Text="{x:Bind Size, Converter={StaticResource FileSizeFormatter}}"
 					TextAlignment="Right" />
 				<TextBlock
 					Grid.Column="4"
 					VerticalAlignment="Center"
 					FontWeight="SemiBold"
-					Foreground="{Binding Status, Converter={StaticResource StatusTextBrush}}"
-					Text="{Binding Status}"
+					Foreground="{x:Bind Status, Converter={StaticResource StatusTextBrush}}"
+					Text="{x:Bind StatusText}"
 					TextTrimming="CharacterEllipsis"
-					ToolTipService.ToolTip="{Binding Status, Converter={StaticResource StatusDescription}}" />
+					ToolTipService.ToolTip="{x:Bind Status, Converter={StaticResource StatusDescription}}" />
 				<TextBlock
 					Grid.Column="5"
 					VerticalAlignment="Center"
-					Text="{Binding Checkout}"
+					Text="{x:Bind CheckoutText}"
 					TextTrimming="CharacterEllipsis" />
 				<TextBlock
 					Grid.Column="6"
 					VerticalAlignment="Center"
-					Text="{Binding LocalDate, Converter={StaticResource LocalDateFormatter}}"
+					Text="{x:Bind LocalDate, Converter={StaticResource LocalDateFormatter}}"
 					TextTrimming="CharacterEllipsis" />
 				<TextBlock
 					Grid.Column="7"
 					VerticalAlignment="Center"
-					Text="{Binding RemoteDate, Converter={StaticResource LocalDateFormatter}}"
+					Text="{x:Bind RemoteDate, Converter={StaticResource LocalDateFormatter}}"
 					TextTrimming="CharacterEllipsis" />
 			</Grid>
 		</DataTemplate>
@@ -1351,11 +1352,14 @@
 								IsAddTabButtonVisible="False"
 								SelectionChanged="VersionTabs_SelectionChanged">
 								<TabViewItem x:Name="HistoryTab" Header="History" IsClosable="False">
-									<tv:TableView
+									<controls:EntryTableView
 										x:Name="OdooHistory"
 										AutoGenerateColumns="False"
 										IsReadOnly="True"
-										ItemsSource="{x:Bind ViewModel.OHistories}">
+										ItemsSource="{x:Bind ViewModel.OHistories}"
+										SelectionMode="Single"
+										SelectionUnit="Row"
+										ShowDragRectangle="False">
 										<tv:TableView.Columns>
 											<tv:TableViewTextColumn Width="95" Binding="{Binding Version}" Header="Version" />
 											<tv:TableViewTextColumn Width="135" Binding="{Binding ModUser}" Header="Mod User" />
@@ -1385,22 +1389,25 @@
 												</MenuFlyoutSubItem>
 											</MenuFlyout>
 										</tv:TableView.ContextFlyout>
-									</tv:TableView>
+									</controls:EntryTableView>
 								</TabViewItem>
 								<TabViewItem x:Name="ParentTab" Header="Where Used" IsClosable="False">
-									<tv:TableView
+									<controls:EntryTableView
 										x:Name="OdooParents"
 										AutoGenerateColumns="False"
 										CanSortColumns="False"
 										IsReadOnly="True"
 										ItemsSource="{x:Bind ViewModel.OParents}"
-										RowDetailsVisibilityMode="Collapsed">
+										RowDetailsVisibilityMode="Collapsed"
+										SelectionMode="Single"
+										SelectionUnit="Row"
+										ShowDragRectangle="False">
 										<tv:TableView.Columns>
 											<tv:TableViewTextColumn Width="95" Binding="{Binding Version}" Header="Version" />
 											<tv:TableViewTextColumn Width="220" Binding="{Binding Name}" Header="Name" />
 											<tv:TableViewTextColumn Width="*" Binding="{Binding BasePath}" Header="Folder Path" />
 										</tv:TableView.Columns>
-									</tv:TableView>
+									</controls:EntryTableView>
 								</TabViewItem>
 								<TabViewItem x:Name="ChildTab" Header="Dependents" IsClosable="False">
 									<controls:EntryTableView

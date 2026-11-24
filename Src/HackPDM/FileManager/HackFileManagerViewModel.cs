@@ -886,7 +886,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		}
 		using CancellationTokenSource linkedGuard = linked;
 		CancellationToken token = linked.Token;
-		Interlocked.Increment( ref _previewVersionGeneration );
+		int previewGeneration = Interlocked.Increment( ref _previewVersionGeneration );
 
 		ClearDetails();
 		Preview = null;
@@ -901,7 +901,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		IsPreviewLoading = true;
 		await Task.WhenAll(
 			LoadDetailTabAsync( entry, token ),
-			LoadEntryPreviewAsync( entry, token ) );
+			LoadEntryPreviewAsync( entry, previewGeneration, token ) );
 	}
 
 	private async Task LoadDetailTabAsync( EntryRow entry, CancellationToken token )
@@ -923,7 +923,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		}
 	}
 
-	private async Task LoadEntryPreviewAsync( EntryRow entry, CancellationToken token )
+	private async Task LoadEntryPreviewAsync( EntryRow entry, int generation, CancellationToken token )
 	{
 		try
 		{
@@ -941,7 +941,10 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 				: entry.Status is FileStatus.Lo
 					? new EntryPreview( null, localPath )
 					: null;
-			if( !token.IsCancellationRequested && !IsDisposed && preview is not null )
+			if( !token.IsCancellationRequested
+				&& !IsDisposed
+				&& generation == Volatile.Read( ref _previewVersionGeneration )
+				&& preview is not null )
 				Preview = preview;
 		}
 		catch( OperationCanceledException ) { }
@@ -951,28 +954,40 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		}
 		finally
 		{
-			if( !token.IsCancellationRequested && !IsDisposed )
+			if( !token.IsCancellationRequested
+				&& !IsDisposed
+				&& generation == Volatile.Read( ref _previewVersionGeneration ) )
 				IsPreviewLoading = false;
 		}
 	}
 
-	public async Task PreviewVersionAsync( int? versionId )
+	public async Task PreviewVersionAsync( int? versionId, string? localPath = null )
 	{
 		if( IsDisposed || versionId is null or 0 )
 			return;
 		int generation = Interlocked.Increment( ref _previewVersionGeneration );
+		Preview = null;
+		IsPreviewLoading = true;
 		try
 		{
-			if( await _details.GetPreviewImageAsync( versionId ) is { Length: > 0 } bytes
-				&& !IsDisposed
-				&& generation == Volatile.Read( ref _previewVersionGeneration ) )
-			{
-				Preview = new EntryPreview( bytes, null );
-			}
+			byte[]? bytes = await _details.GetPreviewImageAsync( versionId );
+			if( IsDisposed || generation != Volatile.Read( ref _previewVersionGeneration ) )
+				return;
+
+			if( bytes is not { Length: > 0 } && !string.IsNullOrEmpty( localPath ) && File.Exists( localPath ) )
+				bytes = await _details.GetLocalPreviewImageAsync( localPath );
+
+			if( !IsDisposed && generation == Volatile.Read( ref _previewVersionGeneration ) )
+				Preview = bytes is { Length: > 0 } ? new EntryPreview( bytes, null ) : null;
 		}
 		catch( Exception e )
 		{
 			HackLogger.Warn( "FileManager", $"Loading preview for version {versionId} failed: {e.Message}", e );
+		}
+		finally
+		{
+			if( !IsDisposed && generation == Volatile.Read( ref _previewVersionGeneration ) )
+				IsPreviewLoading = false;
 		}
 	}
 

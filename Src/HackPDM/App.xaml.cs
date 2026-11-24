@@ -24,6 +24,9 @@ public sealed partial class HackApp : Application
 	public HackApp()
 	{
 		InitializeComponent();
+#if !WINDOWS
+		SupplementalBindableMetadataProvider.Install();
+#endif
 		RegisterCrashHandlers();
 		var (palette, form) = ThemeService.ReadSavedTheme();
 		RequestedTheme = ThemePresets.Palette( palette ).IsDark ? ApplicationTheme.Dark : ApplicationTheme.Light;

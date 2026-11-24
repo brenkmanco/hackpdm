@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.ComponentModel;
 
 namespace HackPDM.Core.Theming;
 
@@ -28,6 +29,7 @@ public enum FormName
 /// <param name="FancyPanelStroke">The panel border in the Fancy style: the accent, softened.</param>
 /// <param name="PageBackground">The page background this preset shows (for contrast checks).</param>
 /// <param name="Text">The main text color this preset shows (for contrast checks).</param>
+[Bindable( true )]
 public sealed record AppPalette( PaletteName Name, string Title, bool IsDark, IReadOnlyDictionary<string, uint> Brushes,
 	uint PanelStroke, uint FancyPanelStroke, uint PageBackground, uint Text ) : INamedPreset<PaletteName>;
 
@@ -38,6 +40,7 @@ public sealed record AppPalette( PaletteName Name, string Title, bool IsDark, IR
 /// <param name="PanelCornerRadius">The corners of the app's panels.</param>
 /// <param name="PanelBorderThickness">The border of the app's panels.</param>
 /// <param name="AccentPanels">Panel borders take the accent color (<see cref="AppPalette.FancyPanelStroke"/>).</param>
+[Bindable( true )]
 public sealed record AppForm( FormName Name, string Title, string Description, bool CompactDensity, double ControlCornerRadius,
 	double OverlayCornerRadius, double PanelCornerRadius, double PanelBorderThickness, bool AccentPanels ) : INamedPreset<FormName>;
 

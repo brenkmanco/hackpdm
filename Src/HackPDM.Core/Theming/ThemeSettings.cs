@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -120,6 +121,7 @@ public readonly record struct ArgbColor( byte A, byte R, byte G, byte B )
 /// <param name="Label">Name shown in the editor.</param>
 /// <param name="Group">Section in the editor.</param>
 /// <param name="Description">What the color is used for.</param>
+[Bindable( true )]
 public sealed record ThemeColorKey( string Key, string Label, string Group, string Description );
 
 /// <summary>

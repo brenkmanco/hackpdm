@@ -62,7 +62,7 @@
                                 SelectedItem="{x:Bind ViewModel.SelectedComparer, Mode=TwoWay}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="rep:OperatorsRow">
-                                        <TextBlock Text="{Binding OpRepr}" />
+                                        <TextBlock Text="{x:Bind OpRepr}" />
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
@@ -133,7 +133,7 @@
                                 SelectedItem="{x:Bind ViewModel.SelectedProperty, Mode=TwoWay}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="rep:SearchPropertiesRow">
-                                        <TextBlock Text="{Binding Name}" />
+                                        <TextBlock Text="{x:Bind Name}" />
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
@@ -148,7 +148,7 @@
                                 SelectedItem="{x:Bind ViewModel.SelectedPropertyOperator, Mode=TwoWay}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="rep:OperatorsRow">
-                                        <TextBlock Text="{Binding OpRepr}" />
+                                        <TextBlock Text="{x:Bind OpRepr}" />
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
@@ -369,7 +369,7 @@
                     ToolTipService.ToolTip="Filename match operator">
                     <ComboBox.ItemTemplate>
                         <DataTemplate x:DataType="rep:OperatorsRow">
-                            <TextBlock Text="{Binding OpRepr}" />
+                            <TextBlock Text="{x:Bind OpRepr}" />
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
@@ -460,12 +460,12 @@
                                 <StackPanel Spacing="1">
                                     <TextBlock
                                         FontWeight="SemiBold"
-                                        Text="{Binding Name}"
+                                        Text="{x:Bind Name}"
                                         TextTrimming="CharacterEllipsis" />
                                     <TextBlock
                                         FontSize="11"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Text="{Binding Directory}"
+                                        Text="{x:Bind Directory}"
                                         TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                             </DataTemplate>

@@ -45,6 +45,7 @@ public sealed class EntryGroupHeader( object? key, string displayKey, IReadOnlyL
 	public event PropertyChangedEventHandler? PropertyChanged;
 }
 
+[Microsoft.UI.Xaml.Data.Bindable]
 public sealed partial class EntryGroupTemplateSelector : DataTemplateSelector
 {
 	public DataTemplate? GroupHeaderTemplate { get; set; }

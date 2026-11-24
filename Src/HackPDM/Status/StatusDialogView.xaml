@@ -452,10 +452,10 @@
                         <TextBlock
                             FontSize="10"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="{Binding TimestampText}" />
+                            Text="{x:Bind TimestampText}" />
                         <TextBlock
                             FontSize="12"
-                            Text="{Binding Message}"
+                            Text="{x:Bind Message}"
                             TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>

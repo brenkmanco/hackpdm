@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -227,15 +228,18 @@ public sealed partial class HackFileManagerView : Page
 			if( ( e.OriginalSource as DependencyObject ).FindAncestor<TableViewRow>( OdooChangesList ) is not null )
 				FocusEntryFromChanges( OdooChangesList.SelectedItem as EntryRow );
 		};
-		OdooHistory.SelectionChanged += OdooHistory_SelectionChanged;
+		OdooHistory.SelectionChanged += ( _, _ ) => { if( !OdooHistory.IsUpdatingSelection ) SyncHistorySelection(); };
+		OdooHistory.SelectionBatchCompleted += ( _, _ ) => SyncHistorySelection();
 		OdooHistory.DoubleTapped += ( _, e ) =>
 		{
 			if( ( e.OriginalSource as DependencyObject ).FindAncestor<TableViewRow>( OdooHistory ) is not null )
 				ViewModel.DownloadHistoryWithDependenciesCommand.Execute( null );
 		};
-		OdooParents.SelectionChanged += ( _, e ) => PreviewVersion( ( e.AddedItems.FirstOrDefault() as ParentRow )?.Version );
+		OdooParents.SelectionChanged += ( _, _ ) => { if( !OdooParents.IsUpdatingSelection ) SyncParentSelection(); };
+		OdooParents.SelectionBatchCompleted += ( _, _ ) => SyncParentSelection();
 		OdooParents.DoubleTapped += OdooParents_DoubleTapped;
-		OdooChildren.SelectionChanged += ( _, e ) => PreviewVersion( ( e.AddedItems.FirstOrDefault() as ChildrenRow )?.Version );
+		OdooChildren.SelectionChanged += ( _, _ ) => { if( !OdooChildren.IsUpdatingSelection ) SyncChildrenSelection(); };
+		OdooChildren.SelectionBatchCompleted += ( _, _ ) => SyncChildrenSelection();
 		OdooChildren.DoubleTapped += OdooChildren_DoubleTapped;
 		KeyDown += HackFileManagerView_KeyDown;
 
@@ -702,6 +706,8 @@ public sealed partial class HackFileManagerView : Page
 	{
 		if( e.PropertyName == nameof( HackFileManagerViewModel.Preview ) )
 			_ = ShowPreviewAsync( ViewModel.Preview );
+		else if( e.PropertyName == nameof( HackFileManagerViewModel.IsPreviewLoading ) )
+			SyncPipPreview();
 	}
 
 	/// <summary>Loads the preview image; a newer preview replaces one still loading.</summary>
@@ -1231,14 +1237,39 @@ public sealed partial class HackFileManagerView : Page
 		ViewModel.SortEntries( field, descending );
 	}
 
-	private void OdooHistory_SelectionChanged( object sender, SelectionChangedEventArgs e )
+	private void SyncHistorySelection()
 	{
-		var row = e.AddedItems.FirstOrDefault() as HistoryRow;
+		HistoryRow? row = OdooHistory.SelectedItem as HistoryRow;
 		ViewModel.SelectedHistory = row;
 		PreviewVersion( row?.Version );
 	}
 
-	private void PreviewVersion( int? versionId ) => _ = ViewModel.PreviewVersionAsync( versionId );
+	private void SyncParentSelection()
+	{
+		ParentRow? row = OdooParents.SelectedItem as ParentRow;
+		PreviewVersion( row?.Version, ResolveLocalVaultPath( row?.BasePath, row?.Name ) );
+	}
+
+	private void SyncChildrenSelection()
+	{
+		ChildrenRow? row = OdooChildren.SelectedItem as ChildrenRow
+			?? ( OdooChildren.SelectedItems.Count == 1 ? OdooChildren.SelectedItems[ 0 ] as ChildrenRow : null );
+		PreviewVersion( row?.Version, ResolveLocalVaultPath( row?.BasePath, row?.Name ) );
+	}
+
+	private static string? ResolveLocalVaultPath( string? basePath, string? name )
+	{
+		if( string.IsNullOrEmpty( name ) )
+			return null;
+		string vault = PwaPaths.Vault;
+		if( string.IsNullOrWhiteSpace( vault ) )
+			return null;
+		string relative = string.IsNullOrEmpty( basePath ) ? name : Path.Combine( basePath, name );
+		return Path.Combine( vault, relative );
+	}
+
+	private void PreviewVersion( int? versionId, string? localPath = null )
+		=> _ = ViewModel.PreviewVersionAsync( versionId, localPath );
 
 	private async void OdooParents_DoubleTapped( object sender, DoubleTappedRoutedEventArgs e )
 	{

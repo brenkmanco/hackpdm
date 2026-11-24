@@ -29,6 +29,7 @@ namespace HackPDM.Graph;
 /// <summary>A file in the dependency page's list.</summary>
 /// <param name="Id">The hp.entry id.</param>
 /// <param name="Name">The file name with its extension.</param>
+[System.ComponentModel.Bindable( true )]
 public sealed record GraphEntryItem( int Id, string Name )
 {
 	public override string ToString() => Name;

@@ -1,9 +1,13 @@
+using System.ComponentModel;
+
 namespace HackPDM.Core.Pdm;
 
 /// <summary>Identifies a folder selected in the directory tree without holding UI types.</summary>
+[Bindable( true )]
 public sealed record DirectoryRef( string Name, int DirectoryId, string TreePath, bool IsRemoteOnly );
 
 /// <summary>One folder in the merged remote + local directory tree.</summary>
+[Bindable( true )]
 public sealed class DirectoryNode( string name, int directoryId = 0 )
 {
 	private static readonly Comparison<DirectoryNode> ByNameIgnoreCase =

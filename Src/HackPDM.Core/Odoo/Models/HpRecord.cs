@@ -1,10 +1,12 @@
 using System.Collections;
+using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 
 namespace HackPDM.Core.Odoo.Models;
 
 /// <summary>Minimal reference to an Odoo record by id (used by Many2One / x2many fields).</summary>
+[Bindable( true )]
 public class HpModel
 {
 	public int? id { get; set; }
@@ -14,6 +16,7 @@ public class HpModel
 }
 
 /// <summary>Odoo many2one reference: [id, "display_name"].</summary>
+[Bindable( true )]
 public sealed class Many2One : HpModel
 {
 	public string? name { get; set; }
@@ -92,6 +95,7 @@ public interface IOdooModel<TSelf> where TSelf : HpRecord<TSelf>, IOdooModel<TSe
 }
 
 /// <summary>Common non-generic base for all Odoo model records.</summary>
+[Bindable( true )]
 public abstract class HpRecordBase
 {
 	public int? id { get; set; }
@@ -474,6 +478,7 @@ public static class Repository<T> where T : HpRecord<T>, IOdooModel<T>, new()
 }
 
 /// <summary>DTOs returned by hp.directory custom RPC methods.</summary>
+[Bindable( true )]
 public sealed record RemoteEntryDto(
 	string Name,
 	int Id,
@@ -516,6 +521,7 @@ public sealed record RemoteEntryDto(
 	}
 }
 
+[Bindable( true )]
 public sealed record SubdirectoryDto(
 	int Id,
 	string Name,
