@@ -190,8 +190,6 @@ public readonly record struct ArgbColor( byte A, byte R, byte G, byte B )
 	public static ArgbColor FromPacked( uint argb )
 		=> new( (byte)( argb >> 24 ), (byte)( argb >> 16 ), (byte)( argb >> 8 ), (byte)argb );
 
-	public uint ToPacked() => ( (uint)A << 24 ) | ( (uint)R << 16 ) | ( (uint)G << 8 ) | B;
-
 	public override string ToString() => $"#{A:X2}{R:X2}{G:X2}{B:X2}";
 
 	/// <summary>Parses a hex color such as "#AARRGGBB" or "#RRGGBB"; one leading "#" and surrounding spaces are optional.</summary>

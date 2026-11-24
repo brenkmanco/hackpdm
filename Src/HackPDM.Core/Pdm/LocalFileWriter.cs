@@ -119,56 +119,92 @@ public static class LocalFileWriter
 			HackLogger.Warn( nameof( LocalFileWriter ), $"{file.Name} file contents empty" );
 			return Task.FromResult( false );
 		}
+		return PlaceBytesAsync( file, LocalTargetPath( file ), file.FileContents );
+	}
+
+	internal static async Task<long?> WriteInRootAsync( HackFile file, string? allowedRoot, CancellationToken token = default )
+	{
+		if( file.FileContents is null || file.DirectoryName is not { Length: > 0 } dir || !IsSingleSafeFileName( file.Name ) )
+		{
+			HackLogger.Warn( nameof( LocalFileWriter ), $"{file.Name} missing contents, folder, or valid file name" );
+			return null;
+		}
+		string? target = ResolveTargetInRoot( dir, file.Name, allowedRoot );
+		if( target is null )
+			return null;
+
 		byte[] contents = file.FileContents;
-		return PlaceAsync( file, LocalTargetPath( file ), target => WriteBytesAtomicAsync( target, contents ) );
+		return await PlaceBytesAsync( file, target, contents, token ).ConfigureAwait( false )
+			? file.FileSize ?? contents.Length
+			: null;
 	}
 
 	public static Task<bool> WriteFromFileAsync( HackFile file, string sourcePath )
-		=> PlaceAsync( file, LocalTargetPath( file ), target => Task.Run( () =>
-		{
-			File.Move( sourcePath, target, overwrite: true );
-			return true;
-		} ) );
+		=> PlaceMoveAsync( file, LocalTargetPath( file ), sourcePath );
 
 	internal static Task<bool> WriteFromFileInRootAsync( HackFile file, string sourcePath, string allowedRoot )
+		=> PlaceMoveAsync( file, ResolveTargetInRoot( file.DirectoryName, file.Name, allowedRoot, warnOnReject: false ), sourcePath );
+
+	private static string? ResolveTargetInRoot( string? dir, string? name, string? allowedRoot, bool warnOnReject = true )
 	{
-		string? targetPath = null;
-		if( file.DirectoryName is { Length: > 0 } dir && IsSingleSafeFileName( file.Name ) )
+		if( dir is not { Length: > 0 } || !IsSingleSafeFileName( name ) )
+			return null;
+		try
+		{
+			string target = Path.GetFullPath( Path.Combine( dir, name ) );
+			if( PwaPaths.IsInsideDirectory( target, allowedRoot ) )
+				return target;
+			if( warnOnReject )
+				HackLogger.Warn( nameof( LocalFileWriter ), $"Refused writing '{name}' outside allowed root '{allowedRoot}'" );
+			return null;
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	private static Task<bool> PlaceMoveAsync( HackFile file, string? targetPath, string sourcePath )
+	{
+		if( targetPath is null )
+			return Task.FromResult( false );
+
+		return Task.Run( () =>
 		{
 			try
 			{
-				string candidate = Path.GetFullPath( Path.Combine( dir, file.Name ) );
-				if( PwaPaths.IsInsideDirectory( candidate, allowedRoot ) )
-					targetPath = candidate;
+				Directory.CreateDirectory( Path.GetDirectoryName( targetPath )! );
+				FileOps.ClearReadOnlyIfPresent( targetPath );
+				File.Move( sourcePath, targetPath, overwrite: true );
+				FinalizePlacement( file, targetPath );
+				return true;
 			}
-			catch
+			catch( Exception e ) when( e is UnauthorizedAccessException or IOException or ArgumentException )
 			{
+				HackLogger.Error( nameof( LocalFileWriter ), $"Failed placing '{file.Name}': {e.Message}", e );
+				return false;
 			}
-		}
-		return PlaceAsync( file, targetPath, target => Task.Run( () =>
-		{
-			File.Move( sourcePath, target, overwrite: true );
-			return true;
-		} ) );
+		} );
 	}
 
-	private static async Task<bool> PlaceAsync( HackFile file, string? targetPath, Func<string, Task<bool>> write )
+	private static async Task<bool> PlaceBytesAsync( HackFile file, string? targetPath, byte[] bytes, CancellationToken token = default )
 	{
+		if( targetPath is null )
+			return false;
+
 		try
 		{
-			if( targetPath is null )
+			await Task.Run( () =>
+			{
+				token.ThrowIfCancellationRequested();
+				Directory.CreateDirectory( Path.GetDirectoryName( targetPath )! );
+				FileOps.ClearReadOnlyIfPresent( targetPath );
+			}, token ).ConfigureAwait( false );
+
+			if( !await WriteBytesAtomicAsync( targetPath, bytes, token ).ConfigureAwait( false ) )
 				return false;
 
-			Directory.CreateDirectory( Path.GetDirectoryName( targetPath )! );
-			FileOps.ClearReadOnlyIfPresent( targetPath );
-
-			if( !await write( targetPath ) )
-				return false;
-
-			file.FullPath = targetPath;
-			file.Info = null;
-			file.ApplyModifiedDateToLocal();
-			file.ApplyNonOwnerReadOnly();
+			FinalizePlacement( file, targetPath );
 			return true;
 		}
 		catch( Exception e ) when( e is UnauthorizedAccessException or IOException or ArgumentException )
@@ -176,6 +212,14 @@ public static class LocalFileWriter
 			HackLogger.Error( nameof( LocalFileWriter ), $"Failed placing '{file.Name}': {e.Message}", e );
 			return false;
 		}
+	}
+
+	private static void FinalizePlacement( HackFile file, string targetPath )
+	{
+		file.FullPath = targetPath;
+		file.Info = null;
+		file.ApplyModifiedDateToLocal();
+		file.ApplyNonOwnerReadOnly();
 	}
 
 	internal static string? LocalTargetPath( HackFile file )
@@ -196,7 +240,7 @@ public static class LocalFileWriter
 		return PwaPaths.ResolveInsideRoot( rawRoot, combined );
 	}
 
-	private static async Task<bool> WriteBytesAtomicAsync( string path, byte[] bytes )
+	private static async Task<bool> WriteBytesAtomicAsync( string path, byte[] bytes, CancellationToken token = default )
 	{
 		if( string.IsNullOrEmpty( path ) )
 			throw new ArgumentException( "Empty path", nameof( path ) );
@@ -205,9 +249,10 @@ public static class LocalFileWriter
 		string tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
 		try
 		{
-			await using( FileStream stream = new( tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, useAsync: true ) )
+			FileStream stream = new( tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, useAsync: true );
+			await using( stream.ConfigureAwait( false ) )
 			{
-				await stream.WriteAsync( bytes );
+				await stream.WriteAsync( bytes, token ).ConfigureAwait( false );
 			}
 			File.Move( tempPath, path, overwrite: true );
 			return true;

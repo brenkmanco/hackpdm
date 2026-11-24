@@ -59,10 +59,10 @@ public sealed class HpPDMCommit : HpRecord<HpPDMCommit>, IOdooModel<HpPDMCommit>
 			"start_commit",
 			[ id ],
 			CommitTimeoutMs,
-			token );
+			token ).ConfigureAwait( false );
 		if( !response.Ok )
 		{
-			Result<IReadOnlyList<OdooRow>> state = await OdooRpc.ReadAsync( ModelName, [ id ?? 0 ], [ nameof( committed ) ], token: token );
+			Result<IReadOnlyList<OdooRow>> state = await OdooRpc.ReadAsync( ModelName, [ id ?? 0 ], [ nameof( committed ) ], token: token ).ConfigureAwait( false );
 			if( state.Value is [ var saved, .. ] && saved.Bool( nameof( committed ) ) )
 			{
 				committed = true;
@@ -82,5 +82,5 @@ public sealed class HpPDMCommit : HpRecord<HpPDMCommit>, IOdooModel<HpPDMCommit>
 	}
 
 	public async Task<bool> ServerClear( CancellationToken token = default )
-		=> ( await OdooRpc.ExecuteAsync<bool>( ModelName, "clear_commit", [ id ], token: token ) ).ValueOr( false );
+		=> ( await OdooRpc.ExecuteAsync<bool>( ModelName, "clear_commit", [ id ], token: token ).ConfigureAwait( false ) ).ValueOr( false );
 }

@@ -40,17 +40,17 @@ public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 
 	public static async Task<Result<LastAvailableDirectory>> LastAvailableDirectory( IReadOnlyList<string> paths, CancellationToken token = default )
 	{
-		Result<OdooRow> last = await OdooRpc.ExecuteAsync<OdooRow>( ModelName, "last_available_directory", [ paths ], token: token );
+		Result<OdooRow> last = await OdooRpc.ExecuteAsync<OdooRow>( ModelName, "last_available_directory", [ paths ], token: token ).ConfigureAwait( false );
 		return last.Map( row => new LastAvailableDirectory( row?.Int( "index" ) ?? 0, row?.Int( "dir_id" ) ?? 1 ) );
 	}
 
 	public static async Task<HpDirectory[]?> CreateNew( IEnumerable<string> paths, CancellationToken token = default )
 	{
 		List<string> path = [ PwaPaths.Root, .. paths ];
-		LastAvailableDirectory last = ( await LastAvailableDirectory( path, token ) ).Unwrap();
+		LastAvailableDirectory last = ( await LastAvailableDirectory( path, token ).ConfigureAwait( false ) ).Unwrap();
 		int nextIndex = last.Index + 1;
 		if( nextIndex >= path.Count )
-			return await GetRecordByIdAsync( last.DirectoryId, token: token ) is { } existing ? [ existing ] : null;
+			return await GetRecordByIdAsync( last.DirectoryId, token: token ).ConfigureAwait( false ) is { } existing ? [ existing ] : null;
 
 		Many2One? defaultCategory = OdooDefaults.Instance.HpCategories?.Any( c => c.id == 1 ) is true ? 1 : null;
 		HpDirectory[] directories = new HpDirectory[ path.Count - nextIndex ];
@@ -67,7 +67,7 @@ public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 				deleted = false,
 				default_cat = defaultCategory,
 			};
-			if( await newDirectory.CreateAsync( false, token: token ) == 0 )
+			if( await newDirectory.CreateAsync( false, token: token ).ConfigureAwait( false ) == 0 )
 				throw new InvalidOperationException( $"directory '{path[ i ]}' not created: {newDirectory.LastError}" );
 
 			directories[ i - nextIndex ] = newDirectory;
@@ -85,7 +85,7 @@ public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 			"get_children_directories_by_id",
 			[ directoryId, withEntries ],
 			OdooRpc.LongTimeout,
-			token );
+			token ).ConfigureAwait( false );
 		return tree.Map( row => SubdirectoryDto.FromRow( row ?? [] ) );
 	}
 
@@ -96,7 +96,7 @@ public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 			"get_entries",
 			[ new object?[] { directoryId, showInActive } ],
 			OdooRpc.LongTimeout,
-			token );
+			token ).ConfigureAwait( false );
 		return entries.Map( RemoteEntryDto.ListFrom );
 	}
 

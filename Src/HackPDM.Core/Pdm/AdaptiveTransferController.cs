@@ -223,15 +223,6 @@ public sealed class AdaptiveTransferController
 		}
 	}
 
-	public double EstimatedRpcBytesPerSecond
-	{
-		get
-		{
-			lock( _gate )
-				return _ewmaBytesPerSecond;
-		}
-	}
-
 	public int GetChunkBytes( int? explicitChunkLimit = null )
 	{
 		long ramCap = Math.Min( MaxServerChunkBytes, CurrentMaxBytesCap() );
@@ -317,9 +308,6 @@ internal sealed class InterleavedDownloadQueue
 		_inlineAscending.Sort( static ( a, b ) => ( a.file_size ?? 0 ).CompareTo( b.file_size ?? 0 ) );
 		_inlineLargeIndex = _inlineAscending.Count - 1;
 	}
-
-	public int LargeCount => _largeDescending.Count;
-	public int InlineCount => _inlineAscending.Count;
 
 	public bool TryDequeue( AdaptiveTransferController controller, out List<HpVersion> batch, out bool isLarge )
 	{

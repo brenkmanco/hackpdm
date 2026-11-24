@@ -14,10 +14,18 @@ public static class SwDependencies
 	/// <returns>The references in stored order; empty when the file has none, isn't a SolidWorks file, or no reader is available.</returns>
 	/// <remarks>Reads through <see cref="SolidWorksUtil.DocMgr"/>.</remarks>
 	/// <exception cref="Exception">The file can't be read (the type depends on the reader in <see cref="SolidWorksUtil.DocMgr"/>, e.g. <see cref="IOException"/> or <see cref="InvalidDataException"/>).</exception>
-	public static List<Reference> Of( string file, SwReferenceResolver resolver )
+	public static List<Reference> Of( string file, SwReferenceResolver resolver, CancellationToken token = default )
 	{
+		token.ThrowIfCancellationRequested();
 		if( SolidWorksUtil.DocMgr?.GetDependencies( file ) is not { Count: > 0 } dependencies )
 			return [];
-		return [ .. dependencies.Select( d => new Reference( d[ 1 ], resolver.Resolve( d[ 1 ], file ) ) ) ];
+		List<Reference> resolved = new( dependencies.Count );
+		for( int i = 0; i < dependencies.Count; i++ )
+		{
+			token.ThrowIfCancellationRequested();
+			string stored = dependencies[ i ][ 1 ];
+			resolved.Add( new Reference( stored, resolver.Resolve( stored, file, token ) ) );
+		}
+		return resolved;
 	}
 }

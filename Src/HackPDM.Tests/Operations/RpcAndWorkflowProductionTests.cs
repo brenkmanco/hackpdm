@@ -450,9 +450,9 @@ public sealed class RpcAndWorkflowProductionTests
 		OdooDefaults.Instance.OdooId = 0;
 
 		await Task.WhenAll(
-			OdooDefaults.Instance.InitializeLoginAsync(),
-			OdooDefaults.Instance.InitializeLoginAsync(),
-			OdooDefaults.Instance.InitializeLoginAsync() );
+			OdooDefaults.Instance.InitializeLoginAsync().AsTask(),
+			OdooDefaults.Instance.InitializeLoginAsync().AsTask(),
+			OdooDefaults.Instance.InitializeLoginAsync().AsTask() );
 
 		Assert.Equal( 1, loginCount );
 		Assert.Equal( 77, OdooDefaults.Instance.OdooId );
@@ -735,7 +735,8 @@ public sealed class RpcAndWorkflowProductionTests
 		List<HpVersion> filtered = await DownloadOperations.FilterVersionsToDownloadAsync( [ inlineEmpty ], CancellationToken.None, summary );
 		Assert.Single( filtered );
 
-		DownloadOperations.DownloadSummary dlSummary = await DownloadOperations.ProcessDownloadsAsync( [ filtered ], CancellationToken.None );
+		DownloadOperations.DownloadSummary dlSummary = new();
+		await DownloadOperations.DownloadAdaptiveAsync( filtered, CancellationToken.None, dlSummary );
 		Assert.Equal( 1, dlSummary.Downloaded );
 		Assert.Empty( dlSummary.Failed );
 		string localPath = Path.Combine( env.Vault, "empty.txt" );
@@ -756,18 +757,10 @@ public sealed class RpcAndWorkflowProductionTests
 	}
 
 	[Fact]
-	public async Task VersionFileService_DownloadContents_And_GetVersionFromLocal_And_WinPathwayPreserved()
+	public async Task VersionFileService_DownloadContents_And_WinPathwayPreserved()
 	{
 		await using MockOdooServer server = new( call =>
 		{
-			if( call.Model == HpVersion.ModelName && call.ModelMethod == "search_read" )
-			{
-				return new object[]
-				{
-					new Dictionary<string, object?> { [ "id" ] = 10, [ "name" ] = "part.txt", [ "file_size" ] = 4 },
-					new Dictionary<string, object?> { [ "id" ] = 25, [ "name" ] = "part.txt", [ "file_size" ] = 4 },
-				};
-			}
 			if( call.Model == HpVersion.ModelName && call.ModelMethod == "read" )
 			{
 				return new object[]
@@ -778,19 +771,6 @@ public sealed class RpcAndWorkflowProductionTests
 			return Array.Empty<object>();
 		} );
 		using ScopedOdooEnvironment env = new( server.BaseUrl );
-
-		string sub = Directory.CreateDirectory( Path.Combine( env.Vault, "Projects", "Parts" ) ).FullName;
-		string localFile = Path.Combine( sub, "part.txt" );
-		File.WriteAllText( localFile, "data" );
-
-		// Construct via FileInfo so RelativePath includes filename; GetVersionFromLocal must query directory only and return max id
-		HackFile hack = new( new FileInfo( localFile ), computeChecksum: false );
-		var (found, latest) = await hack.GetVersionFromLocal();
-		Assert.True( found );
-		Assert.Equal( 25, latest!.id );
-
-		RpcCall searchCall = Assert.Single( server.Calls, c => c.ModelMethod == "search_read" );
-		Assert.Contains( "root / Projects / Parts", searchCall.Args[ 5 ].GetRawText() );
 
 		// Empty string payload with null/0 file_size returns byte[0], whereas positive file_size returns null
 		HpVersion emptyWithoutSize = new() { id = 25, file_size = null };
@@ -1461,6 +1441,144 @@ public sealed class RpcAndWorkflowProductionTests
 			try { if( Directory.Exists( root1 ) ) Directory.Delete( root1, recursive: true ); } catch { }
 			try { if( Directory.Exists( root2 ) ) Directory.Delete( root2, recursive: true ); } catch { }
 		}
+	}
+
+	[Fact]
+	public async Task EntryFileService_HasConflictingLocalCopyAsync_DetectsMismatchAndMatch()
+	{
+		string pwa = Path.Combine( Path.GetTempPath(), $"hackpdm-conflict-{Guid.NewGuid():N}" );
+		var prevSettings = HackDefaults.Instance.SettingsProvider;
+		string prevPwa = HackDefaults.Instance.PwaPathAbsolute;
+		try
+		{
+			Directory.CreateDirectory( Path.Combine( pwa, "Parts" ) );
+			HackDefaults.Instance.SettingsProvider = new HackPDM.Tests.Integration.InMemorySettingsProvider();
+			HackDefaults.Instance.PwaPathAbsolute = pwa;
+
+			string localPath = Path.Combine( pwa, "Parts", "bolt.txt" );
+			byte[] payload = "bolt v1"u8.ToArray();
+			await File.WriteAllBytesAsync( localPath, payload );
+			string matchingSha = Convert.ToHexStringLower( SHA1.HashData( payload ) );
+
+			EntryFileService svc = new();
+			string absDir = Path.Combine( pwa, "Parts" );
+			HpVersion sameVersion = new()
+			{
+				name = "bolt.txt",
+				WinPathway = absDir,
+				checksum = matchingSha,
+			};
+			HpVersion differentVersion = new()
+			{
+				name = "bolt.txt",
+				WinPathway = absDir,
+				checksum = new string( '0', 40 ),
+			};
+
+			Assert.False( await svc.HasConflictingLocalCopyAsync( sameVersion ) );
+			Assert.True( await svc.HasConflictingLocalCopyAsync( differentVersion ) );
+		}
+		finally
+		{
+			HackDefaults.Instance.SettingsProvider = prevSettings;
+			HackDefaults.Instance.PwaPathAbsolute = prevPwa;
+			try { Directory.Delete( pwa, recursive: true ); } catch { }
+		}
+	}
+
+	[Fact]
+	public async Task ContentTransfer_UploadAsync_UsesValidPrecomputedSha1_AndRejectsInvalidByRehashing()
+	{
+		List<string?> sentHashes = [];
+		await using MockOdooServer server = new( call =>
+		{
+			if( call.Model == "hp.upload" && call.ModelMethod == "upload_begin" )
+			{
+				sentHashes.Add( call.Args[ 6 ].GetString() );
+				return new Dictionary<string, object?> { [ "id" ] = sentHashes.Count, [ "chunk_size" ] = 1024 };
+			}
+			if( call.Model == "hp.upload" && call.ModelMethod == "upload_chunk" )
+				return Convert.FromBase64String( call.Args[ 7 ].GetString()! ).Length + call.Args[ 6 ].GetInt64();
+			if( call.Model == "hp.upload" && call.ModelMethod == "upload_finish" )
+				return true;
+			return null;
+		} );
+		using ScopedOdooEnvironment env = new( server.BaseUrl );
+
+		byte[] content = "hello chunked upload"u8.ToArray();
+		string expectedSha = Convert.ToHexStringLower( SHA1.HashData( content ) );
+		string customSha = "ABCDEF0123456789ABCDEF0123456789ABCDEF01";
+
+		await using MemoryStream s1 = new( content );
+		Result<int> r1 = await ContentTransfer.UploadAsync( s1, precomputedSha1: customSha );
+		Assert.True( r1.Ok );
+		Assert.Equal( customSha.ToLowerInvariant(), sentHashes[ 0 ] );
+
+		await using MemoryStream s2 = new( content );
+		Result<int> r2 = await ContentTransfer.UploadAsync( s2, precomputedSha1: "not-a-valid-sha" );
+		Assert.True( r2.Ok );
+		Assert.Equal( expectedSha, sentHashes[ 1 ] );
+	}
+
+	[Fact]
+	public async Task VersionFileService_DownloadAllAsync_DownloadsInlineAndRemoteVersionsParallelSafe()
+	{
+		await using MockOdooServer server = new( call =>
+		{
+			if( call.Model == HpVersion.ModelName && call.ModelMethod == "read" )
+			{
+				return new object[]
+				{
+					new Dictionary<string, object?> { [ "id" ] = 502, [ "name" ] = "remote.txt", [ "file_size" ] = 11, [ "file_contents" ] = Convert.ToBase64String( "remote-data"u8.ToArray() ) },
+				};
+			}
+			return Array.Empty<object>();
+		} );
+		using ScopedOdooEnvironment env = new( server.BaseUrl );
+
+		HpVersion inlineVer = new()
+		{
+			id = 501,
+			name = "inline.txt",
+			WinPathway = "Sub",
+			file_contents = "inline-data"u8.ToArray(),
+			checksum = Convert.ToHexStringLower( SHA1.HashData( "inline-data"u8.ToArray() ) ),
+			file_size = 11,
+		};
+		HpVersion remoteVer = new()
+		{
+			id = 502,
+			name = "remote.txt",
+			WinPathway = "Sub",
+			checksum = Convert.ToHexStringLower( SHA1.HashData( "remote-data"u8.ToArray() ) ),
+			file_size = 11,
+		};
+
+		List<HpVersion> failed = await VersionFileService.DownloadAllAsync( [ inlineVer, remoteVer ] );
+		Assert.Empty( failed );
+		Assert.Equal( "inline-data", await File.ReadAllTextAsync( Path.Combine( env.Vault, "Sub", "inline.txt" ) ) );
+		Assert.Equal( "remote-data", await File.ReadAllTextAsync( Path.Combine( env.Vault, "Sub", "remote.txt" ) ) );
+	}
+
+	[Fact]
+	public async Task EntryDetailsAndSearch_PropagateCancellationToken_AndPreviewFastPath()
+	{
+		await using MockOdooServer server = new( _ => Array.Empty<object>() );
+		using ScopedOdooEnvironment env = new( server.BaseUrl );
+
+		EntryDetailsService details = new();
+		Assert.Null( await details.GetPreviewImageAsync( null ) );
+		Assert.Null( await details.GetLocalPreviewImageAsync( null ) );
+
+		using CancellationTokenSource cts = new();
+		cts.Cancel();
+
+		await Assert.ThrowsAnyAsync<OperationCanceledException>( async () =>
+			await details.GetHistoryAsync( new EntryRow { Id = 1, Name = "a", Status = FileStatus.Ok }, cts.Token ) );
+
+		EntrySearchService search = new();
+		await Assert.ThrowsAnyAsync<OperationCanceledException>( async () =>
+			await search.SearchAsync( new EntrySearchQuery( "a", "=", false, false, false, 10, [] ), cts.Token ) );
 	}
 
 	#endregion

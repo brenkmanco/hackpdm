@@ -39,15 +39,36 @@ public static class CheckoutOperations
 		}
 
 		log?.Invoke( StatusMessage.INFO, $"{eligible.Count} check outs" );
+		if( eligible.Count == 0 )
+			return;
+
+		int parallelism = Math.Clamp( OdooDefaults.Instance?.ConcurrencySize ?? OdooLookupCache.DefaultConcurrency, 2, 4 );
 		int processed = 0;
-		foreach( HpEntry entry in eligible )
-		{
-			token.ThrowIfCancellationRequested();
-			log?.Invoke( StatusMessage.PROCESSING, $"Checking out {entry.name} ({entry.id})" );
-			if( !await CheckOutEntryAsync( entry, token ) )
-				log?.Invoke( StatusMessage.ERROR, $"Could not check out {entry.name}: {entry.LastError ?? "refused by the server"}" );
-			progress?.Invoke( ++processed, eligible.Count );
-		}
+		long lastProgressTick = 0;
+		long lastLogTick = 0;
+		await Parallel.ForEachAsync(
+			eligible,
+			new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = token },
+			async ( entry, ct ) =>
+			{
+				ct.ThrowIfCancellationRequested();
+				long now = Environment.TickCount64;
+				if( now - Volatile.Read( ref lastLogTick ) >= 100 )
+				{
+					Volatile.Write( ref lastLogTick, now );
+					log?.Invoke( StatusMessage.PROCESSING, $"Checking out {entry.name} ({entry.id})" );
+				}
+				if( !await CheckOutEntryAsync( entry, ct ).ConfigureAwait( false ) )
+					log?.Invoke( StatusMessage.ERROR, $"Could not check out {entry.name}: {entry.LastError ?? "refused by the server"}" );
+				int current = Interlocked.Increment( ref processed );
+				long progNow = Environment.TickCount64;
+				if( current == eligible.Count || current % 16 == 0 || progNow - Volatile.Read( ref lastProgressTick ) >= 80 )
+				{
+					Volatile.Write( ref lastProgressTick, progNow );
+					progress?.Invoke( current, eligible.Count );
+				}
+			} ).ConfigureAwait( false );
+		progress?.Invoke( processed, eligible.Count );
 	}
 
 	public static async Task UnCheckOutEntriesAsync(
@@ -72,7 +93,6 @@ public static class CheckoutOperations
 			for( int i = 0; i < chunk.Length; i++ )
 			{
 				HpEntry entry = chunk[ i ];
-				log?.Invoke( StatusMessage.PROCESSING, $"Unchecking out {entry.name} ({entry.id})" );
 				if( entry.id is int id and not 0 )
 				{
 					valid.Add( entry );
@@ -82,7 +102,8 @@ public static class CheckoutOperations
 
 			if( ids.Count > 0 )
 			{
-				Result<bool> written = await OdooRpc.WriteAsync( HpEntry.ModelName, ids, ClearCheckoutValues, token: token );
+				log?.Invoke( StatusMessage.PROCESSING, $"Unchecking out {ids.Count} entry(ies)..." );
+				Result<bool> written = await OdooRpc.WriteAsync( HpEntry.ModelName, ids, ClearCheckoutValues, token: token ).ConfigureAwait( false );
 				bool ok = written.ValueOr( false );
 				foreach( HpEntry entry in valid )
 				{
@@ -106,9 +127,6 @@ public static class CheckoutOperations
 			progress?.Invoke( processed, eligible.Count );
 		}
 	}
-
-	public static List<HpEntry> FilterCheckoutEntries( IEnumerable<HpEntry> entries )
-		=> [ .. entries.Where( entry => entry.CanCheckOut() ) ];
 
 	public static List<HpEntry> FilterUnCheckoutEntries( IEnumerable<HpEntry> entries, int currentUserId )
 		=> [ .. entries.Where( entry => entry.CanUnCheckOut( currentUserId ) ) ];
@@ -137,7 +155,7 @@ public static class CheckoutOperations
 			return false;
 		}
 
-		Result<bool> checkedOut = await OdooRpc.ExecuteAsync<bool>( HpVersion.ModelName, "checkout_entry", [ versionId, nodeId ], token: token );
+		Result<bool> checkedOut = await OdooRpc.ExecuteAsync<bool>( HpVersion.ModelName, "checkout_entry", [ versionId, nodeId ], token: token ).ConfigureAwait( false );
 		entry.LastError = checkedOut.Error;
 		if( !checkedOut.ValueOr( false ) )
 			return false;
@@ -147,24 +165,6 @@ public static class CheckoutOperations
 		entry.checkout_node = nodeId;
 		entry.is_checked_out = true;
 		SetLocalReadOnly( entry, false );
-		return true;
-	}
-
-	public static async Task<bool> UnCheckOutEntryAsync( HpEntry? entry, int? currentUserId = null, CancellationToken token = default )
-	{
-		if( entry is null || !entry.CanUnCheckOut( currentUserId ) || entry.id is not int id || id == 0 )
-			return false;
-
-		Result<bool> written = await OdooRpc.WriteAsync( HpEntry.ModelName, [ id ], ClearCheckoutValues, token: token );
-		entry.LastError = written.Error;
-		if( !written.ValueOr( false ) )
-			return false;
-
-		entry.checkout_user = null;
-		entry.checkout_date = null;
-		entry.checkout_node = null;
-		entry.is_checked_out = false;
-		SetLocalReadOnly( entry, true );
 		return true;
 	}
 

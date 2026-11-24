@@ -108,8 +108,9 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 
 				OnPropertyChanged( CountChangedArgs );
 				OnPropertyChanged( IndexerChangedArgs );
-				OnCollectionChanged( new NotifyCollectionChangedEventArgs(
-					NotifyCollectionChangedAction.Add, item, addedIndex ) );
+				if( CollectionChanged is not null )
+					OnCollectionChanged( new NotifyCollectionChangedEventArgs(
+						NotifyCollectionChangedAction.Add, item, addedIndex ) );
 				return;
 			}
 
@@ -120,15 +121,17 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 				T removed = _buffer[ slot ];
 				_buffer[ slot ] = default!;
 				_count--;
-				OnCollectionChanged( new NotifyCollectionChangedEventArgs(
-					NotifyCollectionChangedAction.Remove, removed, _count ) );
+				if( CollectionChanged is not null )
+					OnCollectionChanged( new NotifyCollectionChangedEventArgs(
+						NotifyCollectionChangedAction.Remove, removed, _count ) );
 
 				_head = slot;
 				_buffer[ _head ] = item;
 				_count++;
 				OnPropertyChanged( IndexerChangedArgs );
-				OnCollectionChanged( new NotifyCollectionChangedEventArgs(
-					NotifyCollectionChangedAction.Add, item, 0 ) );
+				if( CollectionChanged is not null )
+					OnCollectionChanged( new NotifyCollectionChangedEventArgs(
+						NotifyCollectionChangedAction.Add, item, 0 ) );
 			}
 			else
 			{
@@ -136,15 +139,17 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 				_buffer[ _head ] = default!;
 				_head = _head + 1 == _buffer.Length ? 0 : _head + 1;
 				_count--;
-				OnCollectionChanged( new NotifyCollectionChangedEventArgs(
-					NotifyCollectionChangedAction.Remove, removed, 0 ) );
+				if( CollectionChanged is not null )
+					OnCollectionChanged( new NotifyCollectionChangedEventArgs(
+						NotifyCollectionChangedAction.Remove, removed, 0 ) );
 
 				int tail = PhysicalIndex( _count );
 				_buffer[ tail ] = item;
 				_count++;
 				OnPropertyChanged( IndexerChangedArgs );
-				OnCollectionChanged( new NotifyCollectionChangedEventArgs(
-					NotifyCollectionChangedAction.Add, item, _count - 1 ) );
+				if( CollectionChanged is not null )
+					OnCollectionChanged( new NotifyCollectionChangedEventArgs(
+						NotifyCollectionChangedAction.Add, item, _count - 1 ) );
 			}
 		}
 	}
@@ -163,6 +168,8 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 				return;
 			if( batchCount <= IncrementalBatchLimit && batchCount < _capacity )
 			{
+				if( _count < _capacity )
+					EnsureBufferFor( Math.Min( _count + batchCount, _capacity ) );
 				for( int i = 0; i < batchCount; i++ )
 					Add( items[ i ] );
 				return;

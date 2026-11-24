@@ -19,7 +19,7 @@ public sealed record EntrySearchQuery(
 /// <summary>Searches Odoo entries and the local workspace folder.</summary>
 public interface IEntrySearchService
 {
-	Task<List<SearchRow>> SearchAsync( EntrySearchQuery query );
+	Task<List<SearchRow>> SearchAsync( EntrySearchQuery query, CancellationToken token = default );
 	IEnumerable<SearchPropertiesRow> GetSearchableProperties();
 	IReadOnlyList<string> TreeSegmentsBelowRoot( SearchRow row );
 }
@@ -34,9 +34,9 @@ public sealed class EntrySearchService : IEntrySearchService
 		ReturnSpecialDirectories = false,
 	};
 
-	public async Task<List<SearchRow>> SearchAsync( EntrySearchQuery query )
+	public async Task<List<SearchRow>> SearchAsync( EntrySearchQuery query, CancellationToken token = default )
 	{
-		var (domain, impossible) = await BuildDomainWithStatusAsync( query );
+		var (domain, impossible) = await BuildDomainWithStatusAsync( query, token ).ConfigureAwait( false );
 		if( impossible )
 			return [];
 
@@ -44,7 +44,7 @@ public sealed class EntrySearchService : IEntrySearchService
 		int maxResults = query.MaxResults > 0 ? query.MaxResults : int.MaxValue;
 		int? rpcLimit = !needsLocalScan && query.MaxResults > 0 ? query.MaxResults : null;
 		Result<IReadOnlyList<OdooRow>> found = await OdooRpc.SearchReadAsync(
-			HpEntry.ModelName, domain, ResultFields, limit: rpcLimit, timeoutMs: OdooRpc.LongTimeout );
+			HpEntry.ModelName, domain, ResultFields, limit: rpcLimit, timeoutMs: OdooRpc.LongTimeout, token: token ).ConfigureAwait( false );
 		if( !found.Ok )
 			HackLogger.Error( "EntrySearch", $"Entry search failed: {found.Error}" );
 		IReadOnlyList<OdooRow> results = found.ValueOr( [] );
@@ -52,7 +52,7 @@ public sealed class EntrySearchService : IEntrySearchService
 		List<SearchRow> rows;
 		if( needsLocalScan )
 		{
-			rows = await Task.Run( () => FindLocalFiles( results, query.FileName, maxResults, matchRemote: !query.LocalOnly ) );
+			rows = await Task.Run( () => FindLocalFiles( results, query.FileName, maxResults, matchRemote: !query.LocalOnly, token ), token ).ConfigureAwait( false );
 		}
 		else
 		{
@@ -83,30 +83,32 @@ public sealed class EntrySearchService : IEntrySearchService
 		return PwaPaths.LocalSegments( row.Directory ) ?? [];
 	}
 
-	internal static async Task<OdooDomain> BuildDomainAsync( EntrySearchQuery query )
-		=> ( await BuildDomainWithStatusAsync( query ) ).Domain;
-
-	private static async Task<(OdooDomain Domain, bool Impossible)> BuildDomainWithStatusAsync( EntrySearchQuery query )
+	internal static ValueTask<(OdooDomain Domain, bool Impossible)> BuildDomainWithStatusAsync( EntrySearchQuery query, CancellationToken token = default )
 	{
 		OdooDomain domain = OdooDomain.All;
 		if( query.FileName.Length > 0 )
 			domain = domain.And( nameof( HpEntry.name ), query.NameComparer, query.FileName );
 
 		if( query.LocalOnly )
-			return ( domain, false );
+			return ValueTask.FromResult( ( domain, false ) );
 
 		if( query.CheckedOutToMe )
 			domain = domain.And( nameof( HpEntry.checkout_user ), OdooDefaults.Instance.OdooId );
 		if( query.DeletedRemotely )
 			domain = domain.And( nameof( HpEntry.deleted ), true );
-		if( query.Properties.Count > 0 )
-		{
-			int[] matchedIds = [ .. await EntriesMatchingAllPropertiesAsync( query.Properties ) ];
-			domain = domain.And( nameof( HpEntry.id ), "in", matchedIds );
-			if( matchedIds.Length == 0 )
-				return ( domain, true );
-		}
-		return ( domain, false );
+		if( query.Properties.Count == 0 )
+			return ValueTask.FromResult( ( domain, false ) );
+		return BuildDomainWithPropertiesAsync( domain, query.Properties, token );
+	}
+
+	private static async ValueTask<(OdooDomain Domain, bool Impossible)> BuildDomainWithPropertiesAsync(
+		OdooDomain domain,
+		IReadOnlyList<SearchPropertiesRow> properties,
+		CancellationToken token )
+	{
+		int[] matchedIds = [ .. await EntriesMatchingAllPropertiesAsync( properties, token ).ConfigureAwait( false ) ];
+		domain = domain.And( nameof( HpEntry.id ), "in", matchedIds );
+		return ( domain, matchedIds.Length == 0 );
 	}
 
 	private static (string Field, object? Value) PropertyFilterTerm( SearchPropertiesRow property )
@@ -123,17 +125,23 @@ public sealed class EntrySearchService : IEntrySearchService
 		};
 	}
 
-	private static async Task<HashSet<int>> EntriesMatchingAllPropertiesAsync( IReadOnlyList<SearchPropertiesRow> properties )
+	private static async Task<HashSet<int>> EntriesMatchingAllPropertiesAsync( IReadOnlyList<SearchPropertiesRow> properties, CancellationToken token )
 	{
-		HashSet<int>? candidates = null;
-		foreach( SearchPropertiesRow property in properties )
+		Task<Result<IReadOnlyList<OdooRow>>>[] queries = new Task<Result<IReadOnlyList<OdooRow>>>[ properties.Count ];
+		for( int i = 0; i < properties.Count; i++ )
 		{
+			SearchPropertiesRow property = properties[ i ];
 			var (field, value) = PropertyFilterTerm( property );
 			OdooDomain filter = OdooDomain.Where( nameof( HpVersionProperty.prop_id ), property.ID ).And( field, property.Comparer, value );
-			Result<IReadOnlyList<OdooRow>> matches = await OdooRpc.SearchReadAsync(
-				HpVersionProperty.ModelName, filter, [ nameof( HpVersionProperty.entry_id ) ], timeoutMs: OdooRpc.LongTimeout );
+			queries[ i ] = OdooRpc.SearchReadAsync(
+				HpVersionProperty.ModelName, filter, [ nameof( HpVersionProperty.entry_id ) ], timeoutMs: OdooRpc.LongTimeout, token: token );
+		}
 
-			IReadOnlyList<OdooRow> rows = matches.ValueOr( [] );
+		Result<IReadOnlyList<OdooRow>>[] allMatches = await Task.WhenAll( queries ).ConfigureAwait( false );
+		HashSet<int>? candidates = null;
+		for( int q = 0; q < allMatches.Length; q++ )
+		{
+			IReadOnlyList<OdooRow> rows = allMatches[ q ].ValueOr( [] );
 			if( candidates is null )
 			{
 				candidates = new HashSet<int>( rows.Count );
@@ -166,8 +174,9 @@ public sealed class EntrySearchService : IEntrySearchService
 		Directory = entry.Text( "directory_complete_name" ),
 	};
 
-	private static List<SearchRow> FindLocalFiles( IReadOnlyList<OdooRow> remoteResults, string fileName, int limit, bool matchRemote )
+	private static List<SearchRow> FindLocalFiles( IReadOnlyList<OdooRow> remoteResults, string fileName, int limit, bool matchRemote, CancellationToken token )
 	{
+		token.ThrowIfCancellationRequested();
 		string pwaPath = HackDefaults.Instance.PwaPathAbsolute;
 		if( string.IsNullOrWhiteSpace( pwaPath ) )
 			return [];
@@ -189,6 +198,7 @@ public sealed class EntrySearchService : IEntrySearchService
 		List<SearchRow> rows = [];
 		foreach( FileInfo file in pwa.EnumerateFiles( $"*{fileName}*", LocalSearchOptions ) )
 		{
+			token.ThrowIfCancellationRequested();
 			if( rows.Count >= limit )
 				break;
 

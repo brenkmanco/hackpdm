@@ -21,12 +21,17 @@ public static class ContentTransfer
 	public static bool IsLarge( long? size ) => size > InlineLimitBytes;
 	public static int TimeoutMs( long bytes, int attempt = 1 ) => DownloadOperations.ContentsTimeoutMs( bytes, attempt );
 
-	public static async Task<Result<int>> UploadFileAsync( string path, CancellationToken token = default, Action<long>? onBytes = null )
+	public static async Task<Result<int>> UploadFileAsync(
+		string path,
+		CancellationToken token = default,
+		Action<long>? onBytes = null,
+		string? precomputedSha1 = null )
 	{
 		try
 		{
-			await using FileStream stream = new( path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, useAsync: true );
-			return await UploadAsync( stream, token, onBytes );
+			FileStream stream = new( path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, useAsync: true );
+			await using( stream.ConfigureAwait( false ) )
+				return await UploadAsync( stream, token, onBytes, precomputedSha1 ).ConfigureAwait( false );
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{
@@ -34,13 +39,19 @@ public static class ContentTransfer
 		}
 	}
 
-	public static async Task<Result<int>> UploadAsync( Stream stream, CancellationToken token = default, Action<long>? onBytes = null )
+	public static async Task<Result<int>> UploadAsync(
+		Stream stream,
+		CancellationToken token = default,
+		Action<long>? onBytes = null,
+		string? precomputedSha1 = null )
 	{
 		long size = stream.Length;
 		stream.Position = 0;
-		string sha1 = Convert.ToHexStringLower( await SHA1.HashDataAsync( stream, token ) );
+		string sha1 = IsValidSha1Hex( precomputedSha1 )
+			? precomputedSha1!.Trim().ToLowerInvariant()
+			: Convert.ToHexStringLower( await SHA1.HashDataAsync( stream, token ).ConfigureAwait( false ) );
 
-		Result<OdooRow> begun = await OdooRpc.ExecuteAsync<OdooRow>( UploadModel, "upload_begin", [ size, sha1 ], OdooRpc.LongTimeout, token );
+		Result<OdooRow> begun = await OdooRpc.ExecuteAsync<OdooRow>( UploadModel, "upload_begin", [ size, sha1 ], OdooRpc.LongTimeout, token ).ConfigureAwait( false );
 		if( !begun.Ok )
 			return Result<int>.Fail( $"upload refused: {begun.Error}" );
 		int id = begun.Value?.Int( nameof( HpRecordBase.id ) ) ?? 0;
@@ -52,15 +63,30 @@ public static class ContentTransfer
 
 		for( int round = 1; round <= 2; round++ )
 		{
-			if( await SendChunksAsync( id, stream, size, chunk, token, onBytes ) is { Ok: false } sent )
+			if( await SendChunksAsync( id, stream, size, chunk, token, onBytes ).ConfigureAwait( false ) is { Ok: false } sent )
 				return Result<int>.Fail( sent.Error );
-			Result<bool> finished = await OdooRpc.ExecuteAsync<bool>( UploadModel, "upload_finish", [ id ], TimeoutMs( size ), token );
+			Result<bool> finished = await OdooRpc.ExecuteAsync<bool>( UploadModel, "upload_finish", [ id ], TimeoutMs( size ), token ).ConfigureAwait( false );
 			if( !finished.Ok )
 				return Result<int>.Fail( $"upload not completed: {finished.Error}" );
 			if( finished.Value )
 				return Result<int>.Success( id );
 		}
 		return Result<int>.Fail( "the file arrived damaged twice (did it change while it was being sent?)" );
+	}
+
+	private static bool IsValidSha1Hex( string? value )
+	{
+		if( value is null )
+			return false;
+		ReadOnlySpan<char> span = value.AsSpan().Trim();
+		if( span.Length != 40 )
+			return false;
+		for( int i = 0; i < span.Length; i++ )
+		{
+			if( !Uri.IsHexDigit( span[ i ] ) )
+				return false;
+		}
+		return true;
 	}
 
 	private static async Task<Result<bool>> SendChunksAsync(
@@ -87,7 +113,7 @@ public static class ContentTransfer
 
 				stream.Position = offset;
 				int wanted = (int)Math.Min( bufferSize, size - offset );
-				int read = await stream.ReadAtLeastAsync( buffer.AsMemory( 0, wanted ), wanted, throwOnEndOfStream: false, token );
+				int read = await stream.ReadAtLeastAsync( buffer.AsMemory( 0, wanted ), wanted, throwOnEndOfStream: false, token ).ConfigureAwait( false );
 				if( read < wanted )
 					return Result<bool>.Fail( "the file got shorter while it was being sent" );
 
@@ -96,7 +122,7 @@ public static class ContentTransfer
 					"upload_chunk",
 					[ id, offset, Convert.ToBase64String( buffer, 0, read ) ],
 					TimeoutMs( read, failures + 1 ),
-					token );
+					token ).ConfigureAwait( false );
 				if( !reply.Ok )
 				{
 					failures++;
@@ -237,8 +263,9 @@ public static class ContentTransfer
 		Result<string> got;
 		try
 		{
-			await using FileStream file = new( temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true );
-			got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, file, token, onBytes, controller ).ConfigureAwait( false );
+			FileStream file = new( temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true );
+			await using( file.ConfigureAwait( false ) )
+				got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, file, token, onBytes, controller ).ConfigureAwait( false );
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{

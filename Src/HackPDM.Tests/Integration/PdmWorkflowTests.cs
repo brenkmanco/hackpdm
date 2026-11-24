@@ -60,7 +60,6 @@ public class PdmWorkflowTests : IAsyncLifetime
 		OdooDefaults.Instance.OdooId = _me;
 		await OdooDefaults.Instance.InitializeAsync();
 		Assert.NotNull( OdooDefaults.Instance.MyNode );
-		_service.PreloadMetadata();
 	}
 
 	public Task DisposeAsync()

@@ -11,10 +11,15 @@ public static class DependencyGraphLoader
 	/// <param name="token">Cancels the call.</param>
 	/// <returns>The graph (empty for no files); or the server's error.</returns>
 	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
-	public static async Task<Result<DependencyGraph>> LoadAsync( IReadOnlyList<int> entryIds, GraphDirection direction, CancellationToken token = default )
+	public static ValueTask<Result<DependencyGraph>> LoadAsync( IReadOnlyList<int> entryIds, GraphDirection direction, CancellationToken token = default )
 	{
 		if( entryIds.Count == 0 )
-			return Result<DependencyGraph>.Success( DependencyGraph.Empty );
+			return ValueTask.FromResult( Result<DependencyGraph>.Success( DependencyGraph.Empty ) );
+		return LoadSlowAsync( entryIds, direction, token );
+	}
+
+	private static async ValueTask<Result<DependencyGraph>> LoadSlowAsync( IReadOnlyList<int> entryIds, GraphDirection direction, CancellationToken token )
+	{
 		string dir = direction switch
 		{
 			GraphDirection.Children => "children",
@@ -22,7 +27,7 @@ public static class DependencyGraphLoader
 			_ => "both",
 		};
 		Result<OdooRow> reply = await OdooRpc.ExecuteAsync<OdooRow>( "hp.entry", "dependency_graph",
-			[ entryIds, dir ], OdooRpc.LongTimeout * 3, token );
+			[ entryIds, dir ], OdooRpc.LongTimeout * 3, token ).ConfigureAwait( false );
 		return reply.Ok && reply.Value is not null
 			? Result<DependencyGraph>.Success( Parse( reply.Value ) )
 			: Result<DependencyGraph>.Fail( reply.Error ?? "empty dependency graph response" );

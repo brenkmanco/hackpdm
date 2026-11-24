@@ -11,11 +11,60 @@ public static class DownloadOperations
 {
 	private const int DependencyTimeoutMs = 1_000_000;
 	private const int MetadataChunkSize = 2000;
-	private const int DefaultBatchCount = 5;
 	private const int MinTimeoutMs = 90_000;
 	private const int MaxTimeoutMs = 30 * 60_000;
 	private const long OneGiB = 1024L * 1024 * 1024;
 	private const long HalfGiB = 512L * 1024 * 1024;
+
+	internal sealed class DeltaProgressCoalescer( Action<int, int>? target, int itemThreshold = 16, long intervalMs = 80 )
+	{
+		private readonly Lock _gate = new();
+		private int _processed;
+		private int _skipped;
+		private long _lastFlushTick = Environment.TickCount64;
+
+		public void Report( int processed, int skipped = 0 )
+		{
+			if( target is null || ( processed == 0 && skipped == 0 ) )
+				return;
+			int flushProcessed = 0;
+			int flushSkipped = 0;
+			lock( _gate )
+			{
+				_processed += processed;
+				_skipped += skipped;
+				long now = Environment.TickCount64;
+				if( _processed + _skipped >= itemThreshold || now - _lastFlushTick >= intervalMs )
+				{
+					flushProcessed = _processed;
+					flushSkipped = _skipped;
+					_processed = 0;
+					_skipped = 0;
+					_lastFlushTick = now;
+				}
+			}
+			if( flushProcessed != 0 || flushSkipped != 0 )
+				target( flushProcessed, flushSkipped );
+		}
+
+		public void Flush()
+		{
+			if( target is null )
+				return;
+			int flushProcessed;
+			int flushSkipped;
+			lock( _gate )
+			{
+				flushProcessed = _processed;
+				flushSkipped = _skipped;
+				_processed = 0;
+				_skipped = 0;
+				_lastFlushTick = Environment.TickCount64;
+			}
+			if( flushProcessed != 0 || flushSkipped != 0 )
+				target( flushProcessed, flushSkipped );
+		}
+	}
 
 	private static readonly string[] ContentFields =
 	[
@@ -158,33 +207,6 @@ public static class DownloadOperations
 		=> TryReadMemoryPressure( out double loadRatio, out long free )
 			&& ( free < HalfGiB || ( loadRatio >= 0.92 && free < 2 * OneGiB ) );
 
-	public static List<List<HpVersion>> BatchBySize( IEnumerable<HpVersion>? versions, int maxCount, long? maxBytes = null )
-	{
-		long byteBudget = maxBytes ?? MaxBatchBytes;
-		if( maxCount <= 0 )
-			maxCount = DefaultBatchCount;
-
-		List<List<HpVersion>> batches = [];
-		List<HpVersion> current = [];
-		long currentBytes = 0;
-
-		foreach( HpVersion version in ( versions ?? [] ).OrderBy( v => v.file_size ?? 0 ) )
-		{
-			long size = Math.Max( 0, (long)( version.file_size ?? 0 ) );
-			if( current.Count > 0 && ( current.Count >= maxCount || currentBytes + size > byteBudget ) )
-			{
-				batches.Add( current );
-				current = [];
-				currentBytes = 0;
-			}
-			current.Add( version );
-			currentBytes += size;
-		}
-		if( current.Count > 0 )
-			batches.Add( current );
-		return batches;
-	}
-
 	public static int ContentsTimeoutMs( long fileBytes, int attempt = 1 )
 	{
 		double wireBytes = fileBytes * 4.0 / 3.0;
@@ -201,48 +223,11 @@ public static class DownloadOperations
 		public int Skipped => _skipped;
 		public ConcurrentQueue<string> Failed { get; } = new();
 		public ConcurrentQueue<string> KeptLocalChanges { get; } = new();
+		internal ConcurrentBag<int> FailedIds { get; } = [];
 
 		internal void AddDownloaded() => Interlocked.Increment( ref _downloaded );
 		internal void AddSkipped() => Interlocked.Increment( ref _skipped );
 	}
-
-	public static async Task<DownloadSummary> ProcessDownloadsAsync(
-		IEnumerable<IEnumerable<HpVersion>> versionBatches,
-		CancellationToken cToken,
-		int maxConcurrency = 2,
-		Action<StatusMessage, string>? log = null,
-		Action<int, int>? onProgress = null,
-		Action<long>? onBytesDownloaded = null )
-	{
-		DownloadSummary summary = new();
-		await RunBatchesAsync(
-			versionBatches,
-			cToken,
-			maxConcurrency,
-			log,
-			( batch, ct ) => ProcessVersionBatchAsync( batch, ct, log, onProgress, summary, onBytesDownloaded ) ).ConfigureAwait( false );
-		return summary;
-	}
-
-	public static Task DownloadBatchesAsync(
-		IEnumerable<List<HpVersion>> versionBatches,
-		CancellationToken cToken,
-		DownloadSummary summary,
-		int maxConcurrency = 2,
-		Action<StatusMessage, string>? log = null,
-		Action<int, int>? onProgress = null,
-		Action<long>? onBytesDownloaded = null )
-		=> RunBatchesAsync(
-			versionBatches,
-			cToken,
-			maxConcurrency,
-			log,
-			async ( batch, ct ) =>
-			{
-				foreach( HpVersion version in batch )
-					log?.Invoke( StatusMessage.PROCESSING, $"Downloading latest version: {DisplayPath( version )}" );
-				await DownloadAndWriteAsync( batch, ct, log, summary, onProgress, onBytesDownloaded ).ConfigureAwait( false );
-			} );
 
 	/// <summary>
 	/// Downloads pre-filtered versions using interleaved dispatch (large files interleaved with medium
@@ -264,11 +249,13 @@ public static class DownloadOperations
 
 		controller ??= new AdaptiveTransferController( maxBatchCount );
 		InterleavedDownloadQueue queue = new( versions );
+		DeltaProgressCoalescer progress = new( onProgress );
 
 		int effectiveConcurrency = EffectiveConcurrency( maxConcurrency );
 		if( effectiveConcurrency < Math.Max( 1, maxConcurrency ) )
 			log?.Invoke( StatusMessage.INFO, $"Memory pressure detected; throttling concurrent downloads from {maxConcurrency} to {effectiveConcurrency}." );
 
+		long lastLogTick = 0;
 		using SemaphoreSlim highMemoryGate = new( 1, 1 );
 		int workerCount = Math.Min( effectiveConcurrency, versions.Count );
 		Task[] workers = new Task[ workerCount ];
@@ -287,9 +274,19 @@ public static class DownloadOperations
 					}
 					try
 					{
-						for( int j = 0; j < batch.Count; j++ )
-							log?.Invoke( StatusMessage.PROCESSING, $"Downloading latest version: {DisplayPath( batch[ j ] )}" );
-						await DownloadAndWriteAsync( batch, cToken, log, summary, onProgress, onBytesDownloaded, controller ).ConfigureAwait( false );
+						if( log is not null )
+						{
+							long now = Environment.TickCount64;
+							if( versions.Count <= 20 || now - Volatile.Read( ref lastLogTick ) >= 100 )
+							{
+								Volatile.Write( ref lastLogTick, now );
+								string msg = batch.Count == 1
+									? $"Downloading {DisplayPath( batch[ 0 ] )}"
+									: $"Downloading batch of {batch.Count} file(s)...";
+								log( StatusMessage.PROCESSING, msg );
+							}
+						}
+						await DownloadAndWriteAsync( batch, cToken, log, summary, progress, onBytesDownloaded, controller ).ConfigureAwait( false );
 					}
 					finally
 					{
@@ -300,43 +297,14 @@ public static class DownloadOperations
 			}, cToken );
 		}
 
-		await Task.WhenAll( workers ).ConfigureAwait( false );
-	}
-
-	private static async Task RunBatchesAsync<TBatch>(
-		IEnumerable<TBatch>? versionBatches,
-		CancellationToken cToken,
-		int maxConcurrency,
-		Action<StatusMessage, string>? log,
-		Func<TBatch, CancellationToken, Task> processBatch )
-	{
-		int effectiveConcurrency = EffectiveConcurrency( maxConcurrency );
-		if( effectiveConcurrency < Math.Max( 1, maxConcurrency ) )
-			log?.Invoke( StatusMessage.INFO, $"Memory pressure detected; throttling concurrent download batches from {maxConcurrency} to {effectiveConcurrency}." );
-
-		using SemaphoreSlim highMemoryGate = new( 1, 1 );
-		await Parallel.ForEachAsync(
-			versionBatches ?? [],
-			new ParallelOptions { MaxDegreeOfParallelism = effectiveConcurrency, CancellationToken = cToken },
-			async ( batch, ct ) =>
-			{
-				ct.ThrowIfCancellationRequested();
-				bool serialized = false;
-				if( IsMemoryPressureHigh() )
-				{
-					await highMemoryGate.WaitAsync( ct ).ConfigureAwait( false );
-					serialized = true;
-				}
-				try
-				{
-					await processBatch( batch, ct ).ConfigureAwait( false );
-				}
-				finally
-				{
-					if( serialized )
-						highMemoryGate.Release();
-				}
-			} ).ConfigureAwait( false );
+		try
+		{
+			await Task.WhenAll( workers ).ConfigureAwait( false );
+		}
+		finally
+		{
+			progress.Flush();
+		}
 	}
 
 	internal static bool IsEmptyInlineVersion( HpVersion version )
@@ -351,7 +319,7 @@ public static class DownloadOperations
 		HpVersion version,
 		DownloadSummary summary,
 		Action<StatusMessage, string>? log,
-		Action<int, int>? onProgress,
+		DeltaProgressCoalescer progress,
 		out (HpVersion Version, string LocalChecksum)? changedCandidate )
 	{
 		changedCandidate = null;
@@ -359,7 +327,7 @@ public static class DownloadOperations
 		{
 			log?.Invoke( StatusMessage.ERROR, $"Checksum not found for version: {version.name}" );
 			summary.AddSkipped();
-			onProgress?.Invoke( 0, 1 );
+			progress.Report( 0, 1 );
 			return false;
 		}
 
@@ -368,9 +336,8 @@ public static class DownloadOperations
 
 		if( localChecksum is { Length: > 0 } && string.Equals( localChecksum, expectedChecksum, StringComparison.OrdinalIgnoreCase ) )
 		{
-			log?.Invoke( StatusMessage.FOUND, $"Skipping version download: {version.name}" );
 			summary.AddSkipped();
-			onProgress?.Invoke( 0, 1 );
+			progress.Report( 0, 1 );
 			return false;
 		}
 
@@ -388,7 +355,7 @@ public static class DownloadOperations
 		CancellationToken cToken,
 		DownloadSummary summary,
 		Action<StatusMessage, string>? log,
-		Action<int, int>? onProgress )
+		DeltaProgressCoalescer progress )
 	{
 		List<HpVersion> verified = [];
 		HashSet<string> knownChecksumsByPath = await FetchVaultChecksumsAsync( candidateList, cToken, log ).ConfigureAwait( false );
@@ -404,7 +371,7 @@ public static class DownloadOperations
 					$"Kept local changes to {shown}: the local file is not a version from the vault, so it was not overwritten (commit it, or delete the local copy to get the vault's)" );
 				summary.KeptLocalChanges.Enqueue( shown );
 				summary.AddSkipped();
-				onProgress?.Invoke( 0, 1 );
+				progress.Report( 0, 1 );
 				continue;
 			}
 
@@ -425,6 +392,7 @@ public static class DownloadOperations
 
 		ConcurrentBag<HpVersion> toDownload = [];
 		ConcurrentBag<(HpVersion Version, string LocalChecksum)> changedLocalCandidates = [];
+		DeltaProgressCoalescer progress = new( onProgress );
 
 		int diskParallelism = Math.Clamp( Environment.ProcessorCount, 2, 8 );
 		Parallel.ForEach(
@@ -432,7 +400,7 @@ public static class DownloadOperations
 			new ParallelOptions { MaxDegreeOfParallelism = diskParallelism, CancellationToken = cToken },
 			version =>
 			{
-				if( TryClassifyVersion( version, summary, log, onProgress, out var candidate ) )
+				if( TryClassifyVersion( version, summary, log, progress, out var candidate ) )
 					toDownload.Add( version );
 				else if( candidate is { } changed )
 					changedLocalCandidates.Add( changed );
@@ -442,52 +410,16 @@ public static class DownloadOperations
 		if( !changedLocalCandidates.IsEmpty )
 		{
 			List<HpVersion> verified = await ResolveChangedLocalCandidatesAsync(
-				[ .. changedLocalCandidates ], cToken, summary, log, onProgress ).ConfigureAwait( false );
+				[ .. changedLocalCandidates ], cToken, summary, log, progress ).ConfigureAwait( false );
 			result.AddRange( verified );
 		}
 
+		progress.Flush();
+		int upToDate = summary.Skipped - summary.KeptLocalChanges.Count;
+		if( upToDate > 0 )
+			log?.Invoke( StatusMessage.FOUND, $"Skipped {upToDate} up-to-date file(s)." );
+
 		return result;
-	}
-
-	public static async Task ProcessVersionBatchAsync(
-		IEnumerable<HpVersion> batchVersions,
-		CancellationToken cToken,
-		Action<StatusMessage, string>? log = null,
-		Action<int, int>? onProgress = null,
-		DownloadSummary? summary = null,
-		Action<long>? onBytesDownloaded = null )
-	{
-		summary ??= new();
-		List<HpVersion> toDownload = [];
-		List<(HpVersion Version, string LocalChecksum)> changedLocalCandidates = [];
-
-		foreach( HpVersion version in batchVersions )
-		{
-			cToken.ThrowIfCancellationRequested();
-			if( TryClassifyVersion( version, summary, log, onProgress, out var candidate ) )
-			{
-				log?.Invoke( StatusMessage.PROCESSING, $"Downloading latest version: {DisplayPath( version )}" );
-				toDownload.Add( version );
-			}
-			else if( candidate is { } changed )
-			{
-				changedLocalCandidates.Add( changed );
-			}
-		}
-
-		if( changedLocalCandidates.Count > 0 )
-		{
-			List<HpVersion> verified = await ResolveChangedLocalCandidatesAsync(
-				changedLocalCandidates, cToken, summary, log, onProgress ).ConfigureAwait( false );
-			foreach( HpVersion v in verified )
-			{
-				log?.Invoke( StatusMessage.PROCESSING, $"Downloading latest version: {DisplayPath( v )}" );
-				toDownload.Add( v );
-			}
-		}
-
-		if( toDownload.Count > 0 )
-			await DownloadAndWriteAsync( toDownload, cToken, log, summary, onProgress, onBytesDownloaded ).ConfigureAwait( false );
 	}
 
 	private const int VaultChecksumLookupChunkSize = 500;
@@ -524,23 +456,44 @@ public static class DownloadOperations
 		if( paths.Length == 0 )
 			return known;
 
-		for( int offset = 0; offset < paths.Length; offset += VaultChecksumLookupChunkSize )
+		int chunkCount = ( paths.Length + VaultChecksumLookupChunkSize - 1 ) / VaultChecksumLookupChunkSize;
+		HpVersion[][] pages = new HpVersion[ chunkCount ][];
+
+		async Task FetchChunkAsync( int chunkIndex, CancellationToken ct )
 		{
-			cToken.ThrowIfCancellationRequested();
+			int offset = chunkIndex * VaultChecksumLookupChunkSize;
 			string[] chunk = OdooRpc.SliceChunk( paths, offset, VaultChecksumLookupChunkSize );
 			Result<HpVersion[]> versions = await Repository<HpVersion>.SearchReadAsync(
 				OdooDomain.Where( $"{nameof( HpVersion.entry_id )}.{nameof( HpEntry.windows_complete_name )}", Operators.In, chunk ),
 				FieldSelection.Only( nameof( HpVersion.checksum ), nameof( HpVersion.windows_complete_name ), nameof( HpVersion.file_size ) ),
 				timeoutMs: VaultChecksumLookupTimeoutMs,
-				token: cToken ).ConfigureAwait( false );
+				token: ct ).ConfigureAwait( false );
 			if( !versions.Ok || versions.Value is null )
 			{
 				string reason = versions.Error ?? "no data returned";
 				log?.Invoke( StatusMessage.ERROR, $"Could not verify vault version history for {chunk.Length} local file(s): {reason}" );
 				throw new OdooException( $"Could not verify vault version history: {reason}" );
 			}
+			pages[ chunkIndex ] = versions.Value;
+		}
 
-			foreach( HpVersion v in versions.Value )
+		if( chunkCount == 1 )
+		{
+			cToken.ThrowIfCancellationRequested();
+			await FetchChunkAsync( 0, cToken ).ConfigureAwait( false );
+		}
+		else
+		{
+			int parallelism = Math.Clamp( OdooDefaults.Instance?.ConcurrencySize ?? OdooLookupCache.DefaultConcurrency, 2, 4 );
+			await Parallel.ForEachAsync(
+				Enumerable.Range( 0, chunkCount ),
+				new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = cToken },
+				async ( idx, ct ) => await FetchChunkAsync( idx, ct ).ConfigureAwait( false ) ).ConfigureAwait( false );
+		}
+
+		for( int p = 0; p < pages.Length; p++ )
+		{
+			foreach( HpVersion v in pages[ p ] )
 			{
 				if( v.windows_complete_name is not { Length: > 0 } path )
 					continue;
@@ -558,7 +511,7 @@ public static class DownloadOperations
 		CancellationToken cToken,
 		Action<StatusMessage, string>? log,
 		DownloadSummary summary,
-		Action<int, int>? onProgress,
+		DeltaProgressCoalescer progress,
 		Action<long>? onBytesDownloaded,
 		AdaptiveTransferController? controller = null )
 	{
@@ -587,7 +540,7 @@ public static class DownloadOperations
 					Fail( large, error );
 				else
 					summary.AddDownloaded();
-				onProgress?.Invoke( 1, 0 );
+				progress.Report( 1, 0 );
 			}
 		}
 
@@ -650,6 +603,9 @@ public static class DownloadOperations
 					if( downloadedSize > 0 )
 						onBytesDownloaded?.Invoke( downloadedSize );
 
+					got.name ??= requested.name;
+					got.WinPathway ??= requested.WinPathway;
+					got.windows_complete_name ??= requested.windows_complete_name;
 					bool wroteOk = await LocalFileWriter.WriteAsync( got.ToHackFile() ).ConfigureAwait( false );
 					got.file_contents = null;
 
@@ -657,13 +613,13 @@ public static class DownloadOperations
 					{
 						pending.Remove( id );
 						Fail( requested, "could not write the file locally" );
-						onProgress?.Invoke( 1, 0 );
+						progress.Report( 1, 0 );
 						continue;
 					}
 
 					pending.Remove( id );
 					summary.AddDownloaded();
-					onProgress?.Invoke( 1, 0 );
+					progress.Report( 1, 0 );
 				}
 			}
 		}
@@ -671,11 +627,13 @@ public static class DownloadOperations
 		foreach( HpVersion version in pending.Values )
 		{
 			Fail( version, lastError.GetValueOrDefault( version.id ?? 0, "unknown error" ) );
-			onProgress?.Invoke( 1, 0 );
+			progress.Report( 1, 0 );
 		}
 
 		void Fail( HpVersion version, string reason )
 		{
+			if( version.id is int id and > 0 )
+				summary.FailedIds.Add( id );
 			string name = DisplayPath( version );
 			summary.Failed.Enqueue( $"{name}: {reason}" );
 			log?.Invoke( StatusMessage.ERROR, $"Failed to download {name} after {MaxAttempts} attempt(s): {reason}" );

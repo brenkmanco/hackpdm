@@ -62,7 +62,7 @@ public sealed class EntryListService : IEntryListService
 		if( directoryId is int id and not 0 )
 		{
 			progress?.Report( new EntryLoadProgress( "Fetching entries from Odoo…" ) );
-			Result<IReadOnlyList<RemoteEntryDto>> entries = await HpDirectory.GetEntriesAsync( id, includeDeleted, token );
+			Result<IReadOnlyList<RemoteEntryDto>> entries = await HpDirectory.GetEntriesAsync( id, includeDeleted, token ).ConfigureAwait( false );
 			token.ThrowIfCancellationRequested();
 			if( !entries.Ok )
 			{
@@ -72,7 +72,7 @@ public sealed class EntryListService : IEntryListService
 			remote = entries.Value;
 		}
 
-		Dictionary<string, FileInfo> localFilesByPath = await localScanTask;
+		Dictionary<string, FileInfo> localFilesByPath = await localScanTask.ConfigureAwait( false );
 		token.ThrowIfCancellationRequested();
 
 		List<EntryRow> rows = new( ( remote?.Count ?? 0 ) + localFilesByPath.Count );
@@ -123,7 +123,7 @@ public sealed class EntryListService : IEntryListService
 						if( current == total || current % 16 == 0 )
 							progress?.Report( new EntryLoadProgress( $"Comparing local files ({current} / {total})…", current, total ) );
 						return ValueTask.CompletedTask;
-					} );
+					} ).ConfigureAwait( false );
 			}
 
 			progress?.Report( new EntryLoadProgress( "Preparing entry list…" ) );
@@ -150,7 +150,7 @@ public sealed class EntryListService : IEntryListService
 
 	public async Task<EntryRow?> RefreshRowAsync( EntryRow? existing, string localPath, bool filterUnknownTypes )
 	{
-		HackFile? local = await ReadLocalFileWithRetryAsync( localPath );
+		HackFile? local = await ReadLocalFileWithRetryAsync( localPath ).ConfigureAwait( false );
 		if( existing?.Remote is { } remote )
 			return CreateRemoteRow( remote, local );
 		return local is null ? null : CreateLocalRow( local, filterUnknownTypes );
@@ -209,16 +209,19 @@ public sealed class EntryListService : IEntryListService
 		return hack;
 	}
 
-	private static async Task<HackFile?> ReadLocalFileWithRetryAsync( string localPath )
-	{
-		for( int attempt = 0; ; attempt++ )
+	private static Task<HackFile?> ReadLocalFileWithRetryAsync( string localPath )
+		=> Task.Run( async () =>
 		{
-			HackFile? local = await Task.Run( () => File.Exists( localPath ) && HackFile.GetFromPath( localPath ) is { Exists: true } hack ? hack : null );
-			if( local is null || local.Checksum is not null || attempt >= RetryDelaysMs.Length || !File.Exists( localPath ) )
-				return local;
-			await Task.Delay( RetryDelaysMs[ attempt ] );
-		}
-	}
+			for( int attempt = 0; ; attempt++ )
+			{
+				if( !File.Exists( localPath ) )
+					return null;
+				HackFile? local = HackFile.GetFromPath( localPath ) is { Exists: true } hack ? hack : null;
+				if( local is null || local.Checksum is not null || attempt >= RetryDelaysMs.Length || !File.Exists( localPath ) )
+					return local;
+				await Task.Delay( RetryDelaysMs[ attempt ] ).ConfigureAwait( false );
+			}
+		} );
 
 	private static EntryRow CreateRemoteRow( RemoteEntryDto entry, HackFile? local )
 	{

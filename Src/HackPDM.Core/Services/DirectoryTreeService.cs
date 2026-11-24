@@ -33,10 +33,10 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 
 			string pwa = HackDefaults.Instance.PwaPathAbsolute;
 			string rootName = remoteRoot.name is { Length: > 0 } rn ? rn : PwaPaths.Root;
-			Task<(HashSet<string> Paths, bool RootExists)> localScanTask = Task.Run( () => LocalTreePathSet( pwa, rootName ), token );
+			Task<(HashSet<string> Paths, bool RootExists)> localScanTask = Task.Run( () => LocalTreePathSet( pwa, rootName, token ), token );
 
 			progress?.Report( "Fetching folder structure from Odoo…" );
-			Result<SubdirectoryDto> tree = await remoteRoot.GetSubdirectoriesAsync( false );
+			Result<SubdirectoryDto> tree = await remoteRoot.GetSubdirectoriesAsync( false, token ).ConfigureAwait( false );
 			token.ThrowIfCancellationRequested();
 			if( tree.Value is not { } remote )
 			{
@@ -45,15 +45,16 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 			}
 
 			progress?.Report( "Merging local workspace folders…" );
-			var (localPaths, rootExists) = await localScanTask;
+			var (localPaths, rootExists) = await localScanTask.ConfigureAwait( false );
 			return await Task.Run( () =>
 			{
+				token.ThrowIfCancellationRequested();
 				HashSet<string> remotePaths = new( PwaPaths.PathComparer );
 				DirectoryNode root = FromRemote( remote, parentPath: null, rootExists, localPaths, remotePaths );
 				DirectoryTreeMerger.AddLocalDirectories( root, localPaths.Where( p => !remotePaths.Contains( p ) ) );
 				root.SortRecursive();
 				return root;
-			}, token );
+			}, token ).ConfigureAwait( false );
 		}
 		catch( OperationCanceledException )
 		{
@@ -86,7 +87,7 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 		return node;
 	}
 
-	private static (HashSet<string> Paths, bool RootExists) LocalTreePathSet( string pwa, string rootName )
+	private static (HashSet<string> Paths, bool RootExists) LocalTreePathSet( string pwa, string rootName, CancellationToken token )
 	{
 		HashSet<string> set = new( PwaPaths.PathComparer );
 		if( string.IsNullOrEmpty( pwa ) || !Directory.Exists( pwa ) )
@@ -96,6 +97,7 @@ public sealed class DirectoryTreeService : IDirectoryTreeService
 		int prefixLen = normalizedPwa.Length;
 		foreach( string dir in Directory.EnumerateDirectories( normalizedPwa, "*", RecursiveDirOptions ) )
 		{
+			token.ThrowIfCancellationRequested();
 			if( dir.Length <= prefixLen )
 				continue;
 			ReadOnlySpan<char> tail = dir.AsSpan( prefixLen ).Trim( "\\/" );

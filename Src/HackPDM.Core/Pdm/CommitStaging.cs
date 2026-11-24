@@ -10,6 +10,7 @@ namespace HackPDM.Core.Pdm;
 public static class CommitStaging
 {
 	internal const string UploadSource = "__upload_source";
+	internal const string UploadChecksum = "__upload_sha1";
 
 	public static HpEntry? NewEntry( HackFile hack, int dirId, HpPDMCommit? commit = null )
 	{
@@ -54,7 +55,7 @@ public static class CommitStaging
 
 	public static async Task<HpRecordStaged?> StageEntryAsync( HpEntry entry, CancellationToken token = default )
 	{
-		HpRecordStaged? staged = await entry.StageRecAsync( false, token: token );
+		HpRecordStaged? staged = await entry.StageRecAsync( false, token: token ).ConfigureAwait( false );
 		entry.returnType = staged?.id is null or 0 ? EntryReturnType.Failed : EntryReturnType.Staged;
 		return staged;
 	}
@@ -126,7 +127,8 @@ public static class CommitStaging
 		int? uploadId = null;
 		if( version.HashedValues.GetValueOrDefault( UploadSource ) is string path )
 		{
-			Result<int> uploaded = await ContentTransfer.UploadFileAsync( path, token, onBytesUploaded );
+			string? precomputedSha1 = version.HashedValues.GetValueOrDefault( UploadChecksum ) as string;
+			Result<int> uploaded = await ContentTransfer.UploadFileAsync( path, token, onBytesUploaded, precomputedSha1 ).ConfigureAwait( false );
 			if( !uploaded.Ok )
 			{
 				version.LastError = uploaded.Error;
@@ -145,7 +147,7 @@ public static class CommitStaging
 			staged.payload![ "upload_id" ] = id;
 
 		staged.CreateTimeoutMs = ContentTransfer.TimeoutMs( inlineBytes );
-		await staged.CreateAsync( token: token );
+		await staged.CreateAsync( token: token ).ConfigureAwait( false );
 		staged.payload?.Remove( nameof( HpVersion.file_contents ) );
 		version.LastError = staged.LastError;
 		if( staged.id is not null and not 0 )
@@ -190,7 +192,11 @@ public static class CommitStaging
 			HashedValues = { [ nameof( HpVersion.windows_complete_name ) ] = serverName },
 		};
 		if( uploadFrom is not null )
+		{
 			version.HashedValues[ UploadSource ] = uploadFrom;
+			if( hack.Checksum is { Length: 40 } sha1 )
+				version.HashedValues[ UploadChecksum ] = sha1;
+		}
 		return version;
 	}
 
@@ -284,7 +290,7 @@ public static class CommitStaging
 				}
 				else
 				{
-					references = SwDependencies.Of( file, resolver );
+					references = SwDependencies.Of( file, resolver, token );
 				}
 
 				for( int r = 0; r < references.Count; r++ )
@@ -309,7 +315,7 @@ public static class CommitStaging
 					} );
 				}
 			}
-			if( staged.Count > 0 && await HpRecordStaged.MultiCreateAsync( staged, token: token ) is { Ok: false } failed )
+			if( staged.Count > 0 && await HpRecordStaged.MultiCreateAsync( staged, token: token ).ConfigureAwait( false ) is { Ok: false } failed )
 			{
 				HackLogger.Error( nameof( CommitStaging ), $"Unable to stage relationships: {failed.Error}" );
 				return false;
@@ -328,12 +334,22 @@ public static class CommitStaging
 	}
 
 	public static Task<bool> StagePropertiesAsync( params HpRecordStaged[] versions )
-		=> StagePropertiesInternalAsync( versions, preOpenedStore: null, CancellationToken.None );
+		=> StagePropertiesInternalAsync( versions, preOpenedStore: null, preReadProperties: null, CancellationToken.None );
+
+	internal static Task<bool> StagePropertiesAsync(
+		HpRecordStaged version,
+		List<SwFileReader.SwProperty>? preReadProperties,
+		CancellationToken token = default )
+		=> StagePropertiesInternalAsync( [ version ], preOpenedStore: null, preReadProperties, token );
 
 	internal static Task<bool> StagePropertiesAsync( HpRecordStaged version, SwStreamStore? preOpenedStore, CancellationToken token = default )
-		=> StagePropertiesInternalAsync( [ version ], preOpenedStore, token );
+		=> StagePropertiesInternalAsync( [ version ], preOpenedStore, preReadProperties: null, token );
 
-	private static async Task<bool> StagePropertiesInternalAsync( HpRecordStaged[] versions, SwStreamStore? preOpenedStore, CancellationToken token )
+	private static async Task<bool> StagePropertiesInternalAsync(
+		HpRecordStaged[] versions,
+		SwStreamStore? preOpenedStore,
+		List<SwFileReader.SwProperty>? preReadProperties,
+		CancellationToken token )
 	{
 		List<HpVersionProperty> staged = [];
 		foreach( HpRecordStaged version in versions )
@@ -344,7 +360,15 @@ public static class CommitStaging
 				if( SolidWorksFileOf( version ) is not { } file )
 					continue;
 				int versionId = version.id is int id and not 0 ? id : throw new ArgumentException( "version id not defined" );
-				if( preOpenedStore is not null && versions.Length == 1 )
+				if( preReadProperties is not null && versions.Length == 1 )
+				{
+					foreach( SwFileReader.SwProperty p in preReadProperties )
+					{
+						if( HpVersionProperty.FromSwProperty( p.Configuration, p.Name, p.Type, p.Value, versionId, version.commit_id ) is { } property )
+							staged.Add( property );
+					}
+				}
+				else if( preOpenedStore is not null && versions.Length == 1 )
 				{
 					foreach( SwFileReader.SwProperty p in SwFileReader.ReadProperties( preOpenedStore ) )
 					{
@@ -367,7 +391,7 @@ public static class CommitStaging
 				return false;
 			}
 		}
-		if( staged.Count > 0 && await HpVersionProperty.MultiStageAsync( staged, token: token ) is { Ok: false } failed )
+		if( staged.Count > 0 && await HpVersionProperty.MultiStageAsync( staged, token: token ).ConfigureAwait( false ) is { Ok: false } failed )
 		{
 			HackLogger.Error( nameof( CommitStaging ), $"Unable to stage properties: {failed.Error}" );
 			return false;

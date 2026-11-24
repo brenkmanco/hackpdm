@@ -32,6 +32,8 @@ public sealed class HackDefaults
 		}
 	}
 
+	internal void SetPwaPathCached( string? value ) => _cachedPwaAbsolute = value ?? "";
+
 	public string PwaPathRelative
 	{
 		get

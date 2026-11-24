@@ -69,12 +69,6 @@ public static class ColorNames
 	private static readonly FrozenDictionary<string, uint> ByName =
 		StandardColors.ToFrozenDictionary( static c => c.Name, static c => c.Argb, StringComparer.OrdinalIgnoreCase );
 
-	public static (byte A, byte R, byte G, byte B) Unpack(uint argb) => (
-		(byte)((argb >> 24) & 0xFF),
-		(byte)((argb >> 16) & 0xFF),
-		(byte)((argb >> 8) & 0xFF),
-		(byte)(argb & 0xFF));
-
 	public static bool TryParse(string? text, out uint argb)
 	{
 		argb = 0;

@@ -20,7 +20,7 @@ public static class Checksums
 				FileMode.Open,
 				FileAccess.Read,
 				FileShare.ReadWrite,
-				4096,
+				131072,
 				FileOptions.SequentialScan );
 			Span<byte> hash = stackalloc byte[ SHA512.HashSizeInBytes ];
 			int written = type switch

@@ -188,7 +188,7 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 
 	public async Task<int> CreateCommitAsync( CancellationToken token = default )
 	{
-		Result<int> created = await OdooRpc.CreateCommitAsync( token: token );
+		Result<int> created = await OdooRpc.CreateCommitAsync( token: token ).ConfigureAwait( false );
 		LastError = created.Error;
 		return ( id = created.Unwrap() ) ?? 0;
 	}
@@ -199,7 +199,7 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 			HpModel,
 			ComputeValues( withEmpty, excludedFields ),
 			CreateTimeoutMs ?? OdooRpc.LongTimeout,
-			token );
+			token ).ConfigureAwait( false );
 		LastError = created.Error;
 		id = created.ValueOr( 0 );
 		IsRecord = id != 0;
@@ -211,22 +211,10 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 		HpRecordStaged? rec = PreStageRec( withEmpty, excludedFields );
 		if( rec is not null )
 		{
-			await rec.CreateAsync( token: token );
+			await rec.CreateAsync( token: token ).ConfigureAwait( false );
 			LastError = rec.LastError;
 		}
 		return rec;
-	}
-
-	public async Task<bool> WriteChangedValuesAsync( params string[] fieldNamesToWrite )
-	{
-		Dictionary<string, object?> outbound = ToOdoo();
-		Dictionary<string, object?> values = [];
-		foreach( string fieldName in fieldNamesToWrite )
-			values[ fieldName ] = outbound.GetValueOrDefault( fieldName );
-
-		Result<bool> written = await OdooRpc.WriteAsync( HpModel, [ id ?? 0 ], values );
-		LastError = written.Error;
-		return written.ValueOr( false );
 	}
 
 	public HpRecordStaged? PreStageRec( bool withEmpty = false, string[]? excludedFields = null )
@@ -268,28 +256,33 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 	private static T[]? NullIfEmpty( Result<T[]> result )
 		=> result.Value is { Length: > 0 } records ? records : null;
 
-	public static async Task<T[]?> GetAllRecordsAsync( string[]? excludedFields = null, string[]? insertFields = null, CancellationToken token = default )
-		=> NullIfEmpty( await Repository<T>.SearchReadAsync( null, new( excludedFields, null, insertFields ), token: token ) );
-
 	public static async Task<T[]?> GetRecordsBySearchAsync(
 		OdooDomain? searchFilter = null,
 		string[]? includedFields = null,
 		string[]? excludedFields = null,
 		string[]? insertFields = null,
 		CancellationToken token = default )
-		=> NullIfEmpty( await Repository<T>.SearchReadAsync( searchFilter, new( excludedFields, includedFields, insertFields ), token: token ) );
+		=> NullIfEmpty( await Repository<T>.SearchReadAsync( searchFilter, new( excludedFields, includedFields, insertFields ), token: token ).ConfigureAwait( false ) );
 
-	public static async Task<T?> GetRecordByIdAsync(
+	public static ValueTask<T?> GetRecordByIdAsync(
 		int recordId,
 		string[]? excludedFields = null,
 		string[]? includedFields = null,
 		string[]? insertFields = null,
 		CancellationToken token = default )
 		=> recordId == 0
-			? default
-			: ( await GetRecordsByIdsAsync( [ recordId ], excludedFields: excludedFields, includedFields: includedFields, insertFields: insertFields, token: token ) )?.FirstOrDefault();
+			? ValueTask.FromResult<T?>( default )
+			: GetSingleByIdAsync( recordId, excludedFields, includedFields, insertFields, token );
 
-	public static async Task<T[]?> GetRecordsByIdsAsync(
+	private static async ValueTask<T?> GetSingleByIdAsync(
+		int recordId,
+		string[]? excludedFields,
+		string[]? includedFields,
+		string[]? insertFields,
+		CancellationToken token )
+		=> ( await GetRecordsByIdsAsync( [ recordId ], excludedFields: excludedFields, includedFields: includedFields, insertFields: insertFields, token: token ).ConfigureAwait( false ) )?.FirstOrDefault();
+
+	public static ValueTask<T[]?> GetRecordsByIdsAsync(
 		IReadOnlyList<int>? recordIds,
 		OdooDomain? searchFilters = null,
 		string[]? excludedFields = null,
@@ -299,18 +292,30 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 		CancellationToken token = default )
 	{
 		if( recordIds is { Count: 0 } )
-			return null;
+			return ValueTask.FromResult<T[]?>( null );
+		return GetRecordsByIdsSlowAsync( recordIds, searchFilters, excludedFields, includedFields, insertFields, timeoutMs, token );
+	}
+
+	private static async ValueTask<T[]?> GetRecordsByIdsSlowAsync(
+		IReadOnlyList<int>? recordIds,
+		OdooDomain? searchFilters,
+		string[]? excludedFields,
+		string[]? includedFields,
+		string[]? insertFields,
+		int timeoutMs,
+		CancellationToken token )
+	{
 		FieldSelection fields = new( excludedFields, includedFields, insertFields );
 		return NullIfEmpty( searchFilters is null
-			? await Repository<T>.ReadAsync( recordIds ?? [], fields, timeoutMs, token )
+			? await Repository<T>.ReadAsync( recordIds ?? [], fields, timeoutMs, token ).ConfigureAwait( false )
 			: await Repository<T>.SearchReadAsync(
 				recordIds is not null ? searchFilters.And( nameof( id ), "in", recordIds ) : searchFilters,
 				fields,
 				timeoutMs: timeoutMs,
-				token: token ) );
+				token: token ).ConfigureAwait( false ) );
 	}
 
-	public static async Task<TOther[]?> GetRelatedRecordByIdsAsync<TOther>(
+	public static ValueTask<TOther[]?> GetRelatedRecordByIdsAsync<TOther>(
 		IReadOnlyList<int> recordIds,
 		string relatedFieldName,
 		string[]? excludedFields = null,
@@ -320,12 +325,24 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 		where TOther : HpRecord<TOther>, IOdooModel<TOther>, new()
 	{
 		if( recordIds.Count == 0 )
-			return null;
+			return ValueTask.FromResult<TOther[]?>( null );
+		return GetRelatedRecordByIdsSlowAsync<TOther>( recordIds, relatedFieldName, excludedFields, includedFields, insertFields, token );
+	}
+
+	private static async ValueTask<TOther[]?> GetRelatedRecordByIdsSlowAsync<TOther>(
+		IReadOnlyList<int> recordIds,
+		string relatedFieldName,
+		string[]? excludedFields,
+		string[]? includedFields,
+		string[]? insertFields,
+		CancellationToken token )
+		where TOther : HpRecord<TOther>, IOdooModel<TOther>, new()
+	{
 		Result<TOther[]> related = await Repository<T>.RelatedAsync<TOther>(
 			recordIds,
 			relatedFieldName,
 			new( excludedFields, includedFields, insertFields ),
-			token: token );
+			token: token ).ConfigureAwait( false );
 		return related.Value is { Length: > 0 } records ? records : null;
 	}
 }
@@ -350,14 +367,14 @@ public static class Repository<T> where T : HpRecord<T>, IOdooModel<T>, new()
 {
 	public static string Model => T.ModelName;
 
-	public static Task<Result<T[]>> ReadAsync(
+	public static ValueTask<Result<T[]>> ReadAsync(
 		IReadOnlyList<int> ids,
 		FieldSelection fields = default,
 		int timeoutMs = OdooRpc.LongTimeout,
 		CancellationToken token = default )
 		=> ids.Count == 0
-			? Task.FromResult( Result<T[]>.Success( [] ) )
-			: FetchAsync( OdooRpc.ExecuteAsync<JsonElement>( Model, "read", [ ids, fields.For<T>() ], timeoutMs, token ), fields );
+			? ValueTask.FromResult( Result<T[]>.Success( [] ) )
+			: new ValueTask<Result<T[]>>( FetchAsync( OdooRpc.ExecuteAsync<JsonElement>( Model, "read", [ ids, fields.For<T>() ], timeoutMs, token ), fields ) );
 
 	public static Task<Result<T[]>> SearchReadAsync(
 		OdooDomain? domain = null,

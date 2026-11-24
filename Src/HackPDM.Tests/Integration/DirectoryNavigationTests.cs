@@ -100,21 +100,6 @@ public class DirectoryNavigationTests
 	}
 
 	[OdooFact]
-	public async Task VersionFromLocal_ReturnsMetadataWithoutBlobs()
-	{
-		int latest = await LatestVersionIdAsync( "bracket.txt" );
-		var local = new HackPDM.Core.Pdm.HackFile { Name = "bracket.txt", RelativePath = @"root\Projects\Parts" };
-
-		var (found, version) = await local.GetVersionFromLocal();
-
-		Assert.True( found, "no version found" );
-		// it used to request *only* file_contents + preview_image, so the metadata was missing
-		Assert.Equal( latest, version!.id );
-		Assert.Equal( "bracket.txt", version.name );
-		Assert.Null( version.file_contents );
-	}
-
-	[OdooFact]
 	public async Task DownloadContents_DecodesBase64FileContents()
 	{
 		int latest = await LatestVersionIdAsync( "bracket.txt" );

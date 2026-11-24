@@ -15,7 +15,7 @@ public class EntrySearchDomainTests
 		=> new( fileName, comparer, mine, deleted, localOnly, MaxResults: 100, Properties: [] );
 
 	private static async Task<object?[]> DomainOf( EntrySearchQuery query )
-		=> [ .. ( await EntrySearchService.BuildDomainAsync( query ) ).ToRpc() ];
+		=> [ .. ( await EntrySearchService.BuildDomainWithStatusAsync( query ) ).Domain.ToRpc() ];
 
 	[Fact]
 	public async Task EmptyQuery_MatchesEverything()

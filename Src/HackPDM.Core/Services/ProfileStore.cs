@@ -66,22 +66,38 @@ public static class ProfileStore
 		lock( ApplyGate )
 		{
 			OdooDefaults odoo = OdooDefaults.Instance;
-			if( profile.OdooAddress is not null )
-				odoo.OdooAddress = profile.OdooAddress;
-			if( profile.OdooPort is not null )
-				odoo.OdooPort = profile.OdooPort;
-			if( profile.OdooDb is not null )
-				odoo.OdooDb = profile.OdooDb;
-			if( profile.OdooUseHttps is bool useHttps )
-				odoo.OdooUseHttps = useHttps;
-			if( profile.OdooCredentialTarget is not null )
-			{
-				odoo.OdooCredentialTarget = string.IsNullOrEmpty( profile.OdooCredentialTarget )
+			string? credTarget = profile.OdooCredentialTarget is null
+				? null
+				: string.IsNullOrEmpty( profile.OdooCredentialTarget )
 					? PdmConstants.DefaultOdooCredentials
 					: profile.OdooCredentialTarget;
-			}
+
+			List<KeyValuePair<string, object?>> batch = new( 6 );
+			odoo.Connection.ApplyBatch(
+				profile.OdooAddress,
+				profile.OdooPort,
+				profile.OdooDb,
+				profile.OdooUseHttps,
+				credTarget,
+				batch );
+
+			ISettingsProvider? odooSettings = odoo.Settings;
+			ISettingsProvider? hackSettings = HackDefaults.Instance.SettingsProvider;
 			if( profile.PWAPathAbsolute is not null )
-				HackDefaults.Instance.PwaPathAbsolute = profile.PWAPathAbsolute;
+			{
+				if( ReferenceEquals( odooSettings, hackSettings ) )
+				{
+					HackDefaults.Instance.SetPwaPathCached( profile.PWAPathAbsolute );
+					batch.Add( new( nameof( SavedProfileData.PWAPathAbsolute ), profile.PWAPathAbsolute ) );
+				}
+				else
+				{
+					HackDefaults.Instance.PwaPathAbsolute = profile.PWAPathAbsolute;
+				}
+			}
+
+			if( batch.Count > 0 )
+				odooSettings?.SetMany( batch );
 
 			odoo.OdooUrl = null;
 			odoo.OdooId = 0;
@@ -94,8 +110,11 @@ public static class ProfileStore
 		}
 	}
 
+	public static Task ApplyAsync( SavedProfileData profile, CancellationToken token = default )
+		=> Task.Run( () => Apply( profile ), token );
+
 	public static async Task<SavedProfileData?> ReadAsync( string path )
-		=> JsonSerializer.Deserialize( await File.ReadAllTextAsync( path, Encoding.UTF8 ), ProfileJsonContext.Default.SavedProfileData );
+		=> JsonSerializer.Deserialize( await File.ReadAllTextAsync( path, Encoding.UTF8 ).ConfigureAwait( false ), ProfileJsonContext.Default.SavedProfileData );
 
 	public static async Task WriteAsync( string path, SavedProfileData profile )
 	{
@@ -107,10 +126,11 @@ public static class ProfileStore
 		string tempPath = $"{fullPath}.{Guid.NewGuid():N}.tmp";
 		try
 		{
-			await using( FileStream stream = new( tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, useAsync: true ) )
+			FileStream stream = new( tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, useAsync: true );
+			await using( stream.ConfigureAwait( false ) )
 			{
-				await JsonSerializer.SerializeAsync( stream, profile, ProfileJsonContext.Default.SavedProfileData );
-				await stream.FlushAsync();
+				await JsonSerializer.SerializeAsync( stream, profile, ProfileJsonContext.Default.SavedProfileData ).ConfigureAwait( false );
+				await stream.FlushAsync().ConfigureAwait( false );
 			}
 			if( !OperatingSystem.IsWindows() && !string.IsNullOrEmpty( profile.Password ) )
 				File.SetUnixFileMode( tempPath, UnixFileMode.UserRead | UnixFileMode.UserWrite );

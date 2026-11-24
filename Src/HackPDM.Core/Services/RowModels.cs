@@ -210,9 +210,6 @@ public sealed class SearchRow : RowData
 {
 	public int? Id { get; set; }
 	public string? Directory { get; set; }
-	public string DisplayText => string.IsNullOrWhiteSpace( Directory )
-		? ( Name ?? string.Empty )
-		: $"{Name} — {Directory}";
 }
 
 [Bindable( true )]

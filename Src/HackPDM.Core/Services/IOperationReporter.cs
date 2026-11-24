@@ -62,7 +62,7 @@ public static class AsyncHelper
 		CancellationToken token = tokenSource?.Token ?? CancellationToken.None;
 		try
 		{
-			await Task.Run( function, token );
+			await Task.Run( function, token ).ConfigureAwait( false );
 			return true;
 		}
 		catch( OperationCanceledException ) when( token.IsCancellationRequested )

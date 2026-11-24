@@ -202,15 +202,15 @@ public static class OdooRpc
 		return chunk;
 	}
 
-	public static Task<Result<IReadOnlyList<OdooRow>>> ReadAsync(
+	public static ValueTask<Result<IReadOnlyList<OdooRow>>> ReadAsync(
 		string model,
 		IReadOnlyList<int> ids,
 		IReadOnlyList<string>? fields = null,
 		int? timeoutMs = null,
 		CancellationToken token = default )
 		=> ids.Count == 0
-			? Task.FromResult( Result<IReadOnlyList<OdooRow>>.Success( [] ) )
-			: ExecuteAsync<IReadOnlyList<OdooRow>>( model, "read", [ ids, fields ?? [] ], timeoutMs, token );
+			? ValueTask.FromResult( Result<IReadOnlyList<OdooRow>>.Success( [] ) )
+			: new ValueTask<Result<IReadOnlyList<OdooRow>>>( ExecuteAsync<IReadOnlyList<OdooRow>>( model, "read", [ ids, fields ?? [] ], timeoutMs, token ) );
 
 	public static Task<Result<IReadOnlyList<OdooRow>>> SearchReadAsync(
 		string model,
@@ -250,14 +250,14 @@ public static class OdooRpc
 		CancellationToken token = default )
 		=> ExecuteAsync<bool>( model, "write", [ ids, values ], timeoutMs, token );
 
-	public static Task<Result<bool>> UnlinkAsync(
+	public static ValueTask<Result<bool>> UnlinkAsync(
 		string model,
 		IReadOnlyList<int> ids,
 		int? timeoutMs = null,
 		CancellationToken token = default )
 		=> ids.Count == 0
-			? Task.FromResult( Result<bool>.Success( true ) )
-			: ExecuteAsync<bool>( model, "unlink", [ ids ], timeoutMs, token );
+			? ValueTask.FromResult( Result<bool>.Success( true ) )
+			: new ValueTask<Result<bool>>( ExecuteAsync<bool>( model, "unlink", [ ids ], timeoutMs, token ) );
 
 	public static Task<Result<int>> CreateCommitAsync( int? timeoutMs = null, CancellationToken token = default )
 	{

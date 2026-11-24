@@ -39,6 +39,20 @@ public interface ISettingsProvider
 	void Set<T>( string key, T value );
 	bool Contains( string key );
 	void Remove( string key );
+
+	void SetMany( IEnumerable<KeyValuePair<string, object?>> values )
+	{
+		foreach( var (key, value) in values )
+		{
+			if( value is null )
+				Remove( key );
+			else
+				Set( key, value );
+		}
+	}
+
+	Task SetManyAsync( IEnumerable<KeyValuePair<string, object?>> values, CancellationToken token = default )
+		=> Task.Run( () => SetMany( values ), token );
 }
 
 /// <summary>Thread-safe JSON file settings store written atomically via a temp file.</summary>
@@ -47,8 +61,11 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 	private static readonly JsonWriterOptions IndentedWriterOptions = new() { Indented = true };
 
 	private readonly object _gate = new();
+	private readonly SemaphoreSlim _writeGate = new( 1, 1 );
 	private readonly Dictionary<string, JsonElement> _values;
 	private readonly List<string> _errors = [];
+	private long _stateVersion;
+	private long _writtenVersion;
 
 	public JsonFileSettingsProvider( string filePath )
 	{
@@ -200,20 +217,68 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 			Remove( key );
 			return;
 		}
-		if( !TryToJsonElement( value, out JsonElement element ) )
-		{
-			if( AppSettingsJsonContext.Default.GetTypeInfo( typeof( T ) ) is not JsonTypeInfo<T> typeInfo )
-				throw new NotSupportedException( $"Settings type '{typeof( T ).Name}' is not supported without reflection." );
-			element = JsonSerializer.SerializeToElement( value, typeInfo );
-		}
-		string? error;
+		JsonElement element = SerializeToJsonElement( value );
+		long version;
+		byte[] payload;
 		lock( _gate )
 		{
 			_values[ key ] = element;
-			error = Save();
+			(version, payload) = SnapshotLocked();
 		}
+		string? error = WriteSnapshot( version, payload );
 		if( error is not null )
 			ErrorOccurred?.Invoke( error );
+	}
+
+	public Task SetAsync<T>( string key, T value, CancellationToken token = default )
+	{
+		if( value is null || ( value is JsonElement je && je.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ) )
+			return RemoveAsync( key, token );
+		JsonElement element = SerializeToJsonElement( value );
+		long version;
+		byte[] payload;
+		lock( _gate )
+		{
+			_values[ key ] = element;
+			(version, payload) = SnapshotLocked();
+		}
+		return WriteSnapshotAndNotifyAsync( version, payload, token );
+	}
+
+	public void SetMany( IEnumerable<KeyValuePair<string, object?>> values )
+	{
+		ArgumentNullException.ThrowIfNull( values );
+		List<(string Key, JsonElement? Element)> updates = PrepareBatchUpdates( values );
+		if( updates.Count == 0 )
+			return;
+		long version = 0;
+		byte[]? payload = null;
+		lock( _gate )
+		{
+			if( ApplyBatchUpdatesLocked( updates ) )
+				(version, payload) = SnapshotLocked();
+		}
+		if( payload is null )
+			return;
+		string? error = WriteSnapshot( version, payload );
+		if( error is not null )
+			ErrorOccurred?.Invoke( error );
+	}
+
+	public Task SetManyAsync( IEnumerable<KeyValuePair<string, object?>> values, CancellationToken token = default )
+	{
+		ArgumentNullException.ThrowIfNull( values );
+		List<(string Key, JsonElement? Element)> updates = PrepareBatchUpdates( values );
+		if( updates.Count == 0 )
+			return Task.CompletedTask;
+		long version = 0;
+		byte[]? payload = null;
+		lock( _gate )
+		{
+			if( ApplyBatchUpdatesLocked( updates ) )
+				(version, payload) = SnapshotLocked();
+		}
+		return payload is null ? Task.CompletedTask : WriteSnapshotAndNotifyAsync( version, payload, token );
 	}
 
 	public bool Contains( string key )
@@ -224,20 +289,37 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 
 	public void Remove( string key )
 	{
-		string? error = null;
+		long version = 0;
+		byte[]? payload = null;
 		lock( _gate )
 		{
 			if( _values.Remove( key ) )
-				error = Save();
+				(version, payload) = SnapshotLocked();
 		}
+		if( payload is null )
+			return;
+		string? error = WriteSnapshot( version, payload );
 		if( error is not null )
 			ErrorOccurred?.Invoke( error );
+	}
+
+	public Task RemoveAsync( string key, CancellationToken token = default )
+	{
+		long version = 0;
+		byte[]? payload = null;
+		lock( _gate )
+		{
+			if( _values.Remove( key ) )
+				(version, payload) = SnapshotLocked();
+		}
+		return payload is null ? Task.CompletedTask : WriteSnapshotAndNotifyAsync( version, payload, token );
 	}
 
 	public int ImportMissing( IEnumerable<KeyValuePair<string, object?>> values )
 	{
 		int added = 0;
-		string? error = null;
+		long version = 0;
+		byte[]? payload = null;
 		lock( _gate )
 		{
 			foreach( var (key, value) in values )
@@ -251,11 +333,56 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 				}
 			}
 			if( added > 0 )
-				error = Save();
+				(version, payload) = SnapshotLocked();
 		}
-		if( error is not null )
+		if( payload is not null && WriteSnapshot( version, payload ) is { } error )
 			ErrorOccurred?.Invoke( error );
 		return added;
+	}
+
+	private static JsonElement SerializeToJsonElement<T>( T value )
+	{
+		if( TryToJsonElement( value!, out JsonElement element ) )
+			return element;
+		if( AppSettingsJsonContext.Default.GetTypeInfo( typeof( T ) ) is not JsonTypeInfo<T> typeInfo )
+			throw new NotSupportedException( $"Settings type '{typeof( T ).Name}' is not supported without reflection." );
+		return JsonSerializer.SerializeToElement( value, typeInfo );
+	}
+
+	private static List<(string Key, JsonElement? Element)> PrepareBatchUpdates( IEnumerable<KeyValuePair<string, object?>> values )
+	{
+		List<(string Key, JsonElement? Element)> updates = [];
+		foreach( var (key, value) in values )
+		{
+			if( value is null || ( value is JsonElement je && je.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ) )
+			{
+				updates.Add( ( key, null ) );
+				continue;
+			}
+			if( !TryToJsonElement( value, out JsonElement element ) )
+				throw new NotSupportedException( $"Settings type '{value.GetType().Name}' is not supported without reflection." );
+			updates.Add( ( key, element ) );
+		}
+		return updates;
+	}
+
+	private bool ApplyBatchUpdatesLocked( List<(string Key, JsonElement? Element)> updates )
+	{
+		bool changed = false;
+		for( int i = 0; i < updates.Count; i++ )
+		{
+			var (key, element) = updates[ i ];
+			if( element is { } value )
+			{
+				_values[ key ] = value;
+				changed = true;
+			}
+			else if( _values.Remove( key ) )
+			{
+				changed = true;
+			}
+		}
+		return changed;
 	}
 
 	private static bool TryToJsonElement( object value, out JsonElement element )
@@ -374,29 +501,75 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 		}
 	}
 
-	private string? Save()
+	private (long Version, byte[] Payload) SnapshotLocked()
+	{
+		long version = ++_stateVersion;
+		string[] keys = new string[ _values.Count ];
+		_values.Keys.CopyTo( keys, 0 );
+		Array.Sort( keys, StringComparer.Ordinal );
+		using MemoryStream memory = new( Math.Max( 256, keys.Length * 48 ) );
+		using( Utf8JsonWriter writer = new( memory, IndentedWriterOptions ) )
+		{
+			writer.WriteStartObject();
+			for( int i = 0; i < keys.Length; i++ )
+			{
+				string k = keys[ i ];
+				writer.WritePropertyName( k );
+				_values[ k ].WriteTo( writer );
+			}
+			writer.WriteEndObject();
+		}
+		return ( version, memory.ToArray() );
+	}
+
+	private string? WriteSnapshot( long version, byte[] payload )
+	{
+		_writeGate.Wait();
+		try
+		{
+			if( _writtenVersion >= version )
+				return null;
+			string? error = WritePayloadSync( payload );
+			if( error is null )
+				_writtenVersion = version;
+			return error;
+		}
+		finally
+		{
+			_writeGate.Release();
+		}
+	}
+
+	private async Task WriteSnapshotAndNotifyAsync( long version, byte[] payload, CancellationToken token )
+	{
+		string? error;
+		await _writeGate.WaitAsync( token ).ConfigureAwait( false );
+		try
+		{
+			if( _writtenVersion >= version )
+				return;
+			error = await WritePayloadAsync( payload, token ).ConfigureAwait( false );
+			if( error is null )
+				_writtenVersion = version;
+		}
+		finally
+		{
+			_writeGate.Release();
+		}
+		if( error is not null )
+			ErrorOccurred?.Invoke( error );
+	}
+
+	private string? WritePayloadSync( byte[] payload )
 	{
 		string temp = $"{FilePath}.{Guid.NewGuid():N}.tmp";
 		try
 		{
 			if( Path.GetDirectoryName( FilePath ) is { Length: > 0 } dir )
 				Directory.CreateDirectory( dir );
-			string[] keys = new string[ _values.Count ];
-			_values.Keys.CopyTo( keys, 0 );
-			Array.Sort( keys, StringComparer.Ordinal );
 			using( FileStream stream = new( temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096 ) )
 			{
-				using( Utf8JsonWriter writer = new( stream, IndentedWriterOptions ) )
-				{
-					writer.WriteStartObject();
-					for( int i = 0; i < keys.Length; i++ )
-					{
-						string k = keys[ i ];
-						writer.WritePropertyName( k );
-						_values[ k ].WriteTo( writer );
-					}
-					writer.WriteEndObject();
-				}
+				stream.Write( payload );
 				stream.Flush( flushToDisk: true );
 			}
 			File.Move( temp, FilePath, overwrite: true );
@@ -404,21 +577,58 @@ public sealed class JsonFileSettingsProvider : ISettingsProvider
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{
-			string msg = $"Settings could not be saved to '{FilePath}': {e.Message}";
-			_errors.Add( msg );
-			HackLogger.Error( "Settings", msg, e );
-			return msg;
+			return RecordWriteError( e );
 		}
 		finally
 		{
-			try
+			CleanupTemp( temp );
+		}
+	}
+
+	private async Task<string?> WritePayloadAsync( byte[] payload, CancellationToken token )
+	{
+		string temp = $"{FilePath}.{Guid.NewGuid():N}.tmp";
+		try
+		{
+			if( Path.GetDirectoryName( FilePath ) is { Length: > 0 } dir )
+				Directory.CreateDirectory( dir );
+			FileStream stream = new( temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, useAsync: true );
+			await using( stream.ConfigureAwait( false ) )
 			{
-				if( File.Exists( temp ) )
-					File.Delete( temp );
+				await stream.WriteAsync( payload, token ).ConfigureAwait( false );
+				await stream.FlushAsync( token ).ConfigureAwait( false );
 			}
-			catch
-			{
-			}
+			File.Move( temp, FilePath, overwrite: true );
+			return null;
+		}
+		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
+		{
+			return RecordWriteError( e );
+		}
+		finally
+		{
+			CleanupTemp( temp );
+		}
+	}
+
+	private string RecordWriteError( Exception e )
+	{
+		string msg = $"Settings could not be saved to '{FilePath}': {e.Message}";
+		lock( _gate )
+			_errors.Add( msg );
+		HackLogger.Error( "Settings", msg, e );
+		return msg;
+	}
+
+	private static void CleanupTemp( string temp )
+	{
+		try
+		{
+			if( File.Exists( temp ) )
+				File.Delete( temp );
+		}
+		catch
+		{
 		}
 	}
 }

@@ -346,7 +346,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 					int delayMs = recoveryDelayMs;
 					for( int attempt = 0; attempt < MaxRecoveryAttempts; attempt++ )
 					{
-						await Task.Delay( delayMs );
+						await Task.Delay( delayMs ).ConfigureAwait( false );
 						bool recoveredOrStopped = false;
 						lock( _gate )
 						{

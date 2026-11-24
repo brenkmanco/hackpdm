@@ -83,9 +83,6 @@ public static class FileStatusPolicy
 			_ => EntryOpenTarget.None,
 		};
 	}
-
-	public static bool CanUploadIcon( FileStatus status )
-		=> status is FileStatus.Lo or FileStatus.Ft or FileStatus.If;
 }
 
 /// <summary>Validates preview image bytes before upload to hp.version.preview_image.</summary>

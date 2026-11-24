@@ -29,6 +29,8 @@ public interface IEntryFileService
 	void DeleteDirectory( string directory );
 	Task<HpVersion?> GetVersionAsync( int versionId );
 	bool HasConflictingLocalCopy( HpVersion version );
+	Task<bool> HasConflictingLocalCopyAsync( HpVersion version, CancellationToken token = default )
+		=> Task.Run( () => HasConflictingLocalCopy( version ), token );
 	Task<string> DownloadVersionAsync( HpVersion version, bool toTemp );
 	VersionMovePlan PlanMove( HpVersion version, bool toTemp );
 	Task ExecuteMoveAsync( HpVersion version, VersionMovePlan plan );
@@ -41,6 +43,8 @@ public sealed class EntryFileService : IEntryFileService
 	public async Task<IReadOnlyList<string>> OpenEntriesAsync( IEnumerable<EntryRow> entries, EntryOpenMode mode )
 	{
 		List<string> errors = [];
+		List<string> localPaths = [];
+		List<int> remoteIds = [];
 		foreach( EntryRow entry in entries )
 		{
 			bool hasRemoteId = entry.Id is not ( null or 0 );
@@ -54,10 +58,10 @@ public sealed class EntryFileService : IEntryFileService
 			switch( target )
 			{
 				case EntryOpenTarget.Local when entry.FullName is not null:
-					OpenFile( hasRemoteId ? PwaPaths.ToAbsolute( entry.FullName ) ?? entry.FullName : entry.FullName );
+					localPaths.Add( hasRemoteId ? PwaPaths.ToAbsolute( entry.FullName ) ?? entry.FullName : entry.FullName );
 					break;
 				case EntryOpenTarget.Remote:
-					await OpenLatestRemoteAsync( entry.Id ?? 0 );
+					remoteIds.Add( entry.Id ?? 0 );
 					break;
 				case EntryOpenTarget.None when mode is EntryOpenMode.LatestLocal:
 					errors.Add( $"can't open remote only file locally {entry.Name}" );
@@ -67,18 +71,34 @@ public sealed class EntryFileService : IEntryFileService
 					break;
 			}
 		}
+
+		for( int i = 0; i < localPaths.Count; i++ )
+			OpenFile( localPaths[ i ] );
+
+		if( remoteIds.Count == 1 )
+		{
+			await OpenLatestRemoteAsync( remoteIds[ 0 ] ).ConfigureAwait( false );
+		}
+		else if( remoteIds.Count > 1 )
+		{
+			int parallelism = Math.Clamp( OdooDefaults.Instance?.ConcurrencySize ?? OdooLookupCache.DefaultConcurrency, 2, 4 );
+			await Parallel.ForEachAsync(
+				remoteIds,
+				new ParallelOptions { MaxDegreeOfParallelism = parallelism },
+				async ( id, ct ) => await OpenLatestRemoteAsync( id ).ConfigureAwait( false ) ).ConfigureAwait( false );
+		}
 		return errors;
 	}
 
 	public async Task OpenLatestRemoteAsync( int entryId )
 	{
 		HpVersion? version = ( await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
-			[ entryId ], nameof( HpEntry.latest_version_id ), excludedFields: HpVersion.UsualExcludedFields ) )?.FirstOrDefault();
+			[ entryId ], nameof( HpEntry.latest_version_id ), excludedFields: HpVersion.UsualExcludedFields ).ConfigureAwait( false ) )?.FirstOrDefault();
 		if( version is null || !LocalFileWriter.IsSingleSafeFileName( version.name ) )
 			return;
 
 		string tempDir = Path.GetTempPath();
-		if( await version.DownloadFileAsync( tempDir ) )
+		if( await version.DownloadFileAsync( tempDir ).ConfigureAwait( false ) )
 			OpenFile( Path.Combine( tempDir, version.name ) );
 	}
 
@@ -178,7 +198,7 @@ public sealed class EntryFileService : IEntryFileService
 		if( versionId is 0 )
 			return null;
 
-		HpVersion? version = await HpVersion.GetRecordByIdAsync( versionId, HpVersion.UsualExcludedFields );
+		HpVersion? version = await HpVersion.GetRecordByIdAsync( versionId, HpVersion.UsualExcludedFields ).ConfigureAwait( false );
 		if( version is null )
 			return null;
 
@@ -196,6 +216,9 @@ public sealed class EntryFileService : IEntryFileService
 		string? expectedChecksum = DownloadOperations.ExpectedChecksum( version );
 		return expectedChecksum is null || !Checksums.Matches( file.FullName, expectedChecksum );
 	}
+
+	public Task<bool> HasConflictingLocalCopyAsync( HpVersion version, CancellationToken token = default )
+		=> Task.Run( () => HasConflictingLocalCopy( version ), token );
 
 	internal static string TempDirectoryFor( HpVersion version )
 	{
@@ -230,12 +253,12 @@ public sealed class EntryFileService : IEntryFileService
 	{
 		if( !toTemp )
 		{
-			await version.DownloadFileAsync( version.WinPathway ?? "" );
+			await version.DownloadFileAsync( version.WinPathway ?? "" ).ConfigureAwait( false );
 			return version.WinPathway ?? "";
 		}
 
 		string tempPath = TempDirectoryFor( version );
-		await version.DownloadFileAsync( tempPath );
+		await version.DownloadFileAsync( tempPath ).ConfigureAwait( false );
 		return tempPath;
 	}
 
@@ -252,7 +275,7 @@ public sealed class EntryFileService : IEntryFileService
 		if( plan.From.Exists )
 			MoveFile( plan.From, destinationDir );
 		else
-			await version.DownloadFileAsync( destinationDir );
+			await version.DownloadFileAsync( destinationDir ).ConfigureAwait( false );
 	}
 
 	private static void MoveFile( FileInfo source, string destinationDir )

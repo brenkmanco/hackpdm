@@ -66,6 +66,7 @@ public sealed class HackLoggerTests : IDisposable
 		for( int i = 0; i < 120; i++ )
 			HackLogger.Info( "TestCat", $"Entry {i}: password=MySecretPassword{i} payload={new string( 'B', 260 )}" );
 
+		HackLogger.Flush();
 		string[] logFiles = Directory.GetFiles( _tempDir, "hackpdm-*.log" );
 		Assert.NotEmpty( logFiles );
 		Assert.True( logFiles.Length <= 3, $"Expected <= maxRetainedFiles (3), got {logFiles.Length}" );
@@ -90,6 +91,7 @@ public sealed class HackLoggerTests : IDisposable
 
 		HackLogger.Configure( _tempDir, HackLogLevel.Information, maxFileBytes: 1024 * 1024, maxRetainedFiles: 3 );
 		HackLogger.Info( "Tie", "active-line" );
+		HackLogger.Flush();
 
 		string[] remaining = Directory.GetFiles( _tempDir, "hackpdm-*.log" )
 			.Select( Path.GetFileName )
@@ -161,5 +163,20 @@ public sealed class HackLoggerTests : IDisposable
 			HackDefaults.Instance.SettingsProvider = prevSettings;
 			HackDefaults.Instance.PwaPathAbsolute = prevPwa;
 		}
+	}
+
+	[Fact]
+	public async Task HackLogger_FlushAsync_WritesQueuedBatchesWithoutBlockingCaller()
+	{
+		for( int i = 0; i < 40; i++ )
+			HackLogger.Info( "AsyncBatch", $"Queued line {i}" );
+
+		await HackLogger.FlushAsync();
+
+		string[] logFiles = Directory.GetFiles( _tempDir, "hackpdm-*.log" );
+		Assert.NotEmpty( logFiles );
+		string combined = string.Concat( logFiles.Select( File.ReadAllText ) );
+		Assert.Contains( "Queued line 0", combined );
+		Assert.Contains( "Queued line 39", combined );
 	}
 }

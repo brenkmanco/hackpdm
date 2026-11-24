@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Channels;
 
 namespace HackPDM.Core.Configuration;
 
@@ -71,7 +72,22 @@ public static class HackLogger
 	public const int DefaultMaxRetainedFiles = 10;
 	public const string LogLevelEnvVar = "HACKPDM_LOG_LEVEL";
 
+	private readonly record struct PendingLogEntry(
+		long Epoch,
+		DateTimeOffset TimestampUtc,
+		HackLogLevel Level,
+		string Category,
+		string Message,
+		Exception? Exception,
+		string? CorrelationId,
+		TaskCompletionSource? FlushBarrier = null );
+
+	private const int MaxBatchLines = 64;
+
 	private static readonly object Gate = new();
+	private static readonly Channel<PendingLogEntry> LogChannel = Channel.CreateUnbounded<PendingLogEntry>(
+		new UnboundedChannelOptions { SingleReader = true, SingleWriter = false, AllowSynchronousContinuations = false } );
+	private static readonly Task WriterTask = StartWriterLoop();
 	private static string? _logDirectoryOverride;
 	private static string? _cachedLogDir;
 	private static int _cachedDayKey;
@@ -79,8 +95,12 @@ public static class HackLogger
 	private static long _cachedFileBytes;
 	private static long _maxFileBytes = DefaultMaxFileBytes;
 	private static int _maxRetainedFiles = DefaultMaxRetainedFiles;
+	private static long _configEpoch;
 	private static int _recentErrorCount;
 	private static bool _prunedOnStart;
+
+	static HackLogger()
+		=> AppDomain.CurrentDomain.ProcessExit += static ( _, _ ) => Flush( 1000 );
 
 	public static HackLogLevel MinimumLevel { get; set; } = ResolveDefaultLevel();
 	public static string LogDirectory => _logDirectoryOverride ?? Path.Combine( AppDataPaths.Data, "logs" );
@@ -92,6 +112,7 @@ public static class HackLogger
 		long maxFileBytes = DefaultMaxFileBytes,
 		int maxRetainedFiles = DefaultMaxRetainedFiles )
 	{
+		Flush();
 		lock( Gate )
 		{
 			_logDirectoryOverride = logDirectory;
@@ -102,6 +123,7 @@ public static class HackLogger
 			_maxFileBytes = Math.Max( 1024, maxFileBytes );
 			_maxRetainedFiles = Math.Max( 1, maxRetainedFiles );
 			_prunedOnStart = false;
+			_configEpoch++;
 			if( minimumLevel is { } level )
 				MinimumLevel = level;
 		}
@@ -109,6 +131,7 @@ public static class HackLogger
 
 	public static void ResetToDefaults()
 	{
+		Flush();
 		lock( Gate )
 		{
 			_logDirectoryOverride = null;
@@ -119,8 +142,36 @@ public static class HackLogger
 			_maxFileBytes = DefaultMaxFileBytes;
 			_maxRetainedFiles = DefaultMaxRetainedFiles;
 			_prunedOnStart = false;
+			_configEpoch++;
 			MinimumLevel = ResolveDefaultLevel();
 			Volatile.Write( ref _recentErrorCount, 0 );
+		}
+	}
+
+	public static Task FlushAsync( CancellationToken token = default )
+	{
+		TaskCompletionSource barrier = new( TaskCreationOptions.RunContinuationsAsynchronously );
+		if( !LogChannel.Writer.TryWrite( new PendingLogEntry(
+			Volatile.Read( ref _configEpoch ),
+			default,
+			HackLogLevel.None,
+			string.Empty,
+			string.Empty,
+			null,
+			null,
+			barrier ) ) )
+			return Task.CompletedTask;
+		return token.CanBeCanceled ? barrier.Task.WaitAsync( token ) : barrier.Task;
+	}
+
+	public static void Flush( int timeoutMs = 5000 )
+	{
+		try
+		{
+			FlushAsync().Wait( Math.Max( 0, timeoutMs ) );
+		}
+		catch
+		{
 		}
 	}
 
@@ -154,9 +205,14 @@ public static class HackLogger
 		if( level < MinimumLevel || MinimumLevel == HackLogLevel.None )
 			return;
 
-		DateTimeOffset now = DateTimeOffset.UtcNow;
-		string line = FormatLine( now, level, category, message, ex, correlationId );
-		AppendLineSafe( now, line );
+		LogChannel.Writer.TryWrite( new PendingLogEntry(
+			Volatile.Read( ref _configEpoch ),
+			DateTimeOffset.UtcNow,
+			level,
+			category,
+			message,
+			ex,
+			correlationId ) );
 	}
 
 	public static string? WriteCrashDump(
@@ -182,6 +238,7 @@ public static class HackLogger
 		sb.AppendLine( exception is null ? "(none)" : LogRedactor.Redact( exception.ToString() ) );
 
 		Critical( source, $"Unhandled exception: {exception?.Message ?? "unknown"}", exception );
+		Flush( 1000 );
 		lock( Gate )
 		{
 			try
@@ -263,7 +320,82 @@ public static class HackLogger
 		return sb.ToString();
 	}
 
-	private static void AppendLineSafe( DateTimeOffset nowUtc, string line )
+	private static Task StartWriterLoop()
+		=> Task.Factory.StartNew(
+			ProcessQueueAsync,
+			CancellationToken.None,
+			TaskCreationOptions.LongRunning,
+			TaskScheduler.Default ).Unwrap();
+
+	private static async Task ProcessQueueAsync()
+	{
+		ChannelReader<PendingLogEntry> reader = LogChannel.Reader;
+		StringBuilder batch = new( 4096 );
+		int batchLines = 0;
+		long batchByteCount = 0;
+		DateTimeOffset batchTimestamp = default;
+		long batchEpoch = -1;
+
+		while( await reader.WaitToReadAsync().ConfigureAwait( false ) )
+		{
+			while( reader.TryRead( out PendingLogEntry entry ) )
+			{
+				if( entry.FlushBarrier is { } barrier )
+				{
+					FlushBatchSafe( batch, ref batchLines, ref batchByteCount, batchTimestamp );
+					barrier.TrySetResult();
+					continue;
+				}
+
+				if( entry.Epoch != Volatile.Read( ref _configEpoch ) )
+					continue;
+
+				string line = FormatLine( entry.TimestampUtc, entry.Level, entry.Category, entry.Message, entry.Exception, entry.CorrelationId );
+				int lineBytes = Encoding.UTF8.GetByteCount( line ) + Encoding.UTF8.GetByteCount( Environment.NewLine );
+
+				if( batchLines > 0 )
+				{
+					int prevDay = ( batchTimestamp.Year * 10000 ) + ( batchTimestamp.Month * 100 ) + batchTimestamp.Day;
+					int nextDay = ( entry.TimestampUtc.Year * 10000 ) + ( entry.TimestampUtc.Month * 100 ) + entry.TimestampUtc.Day;
+					long maxBytes = Volatile.Read( ref _maxFileBytes );
+					if( batchEpoch != entry.Epoch
+						|| prevDay != nextDay
+						|| batchLines >= MaxBatchLines
+						|| ( _cachedFileBytes + batchByteCount + lineBytes > maxBytes && batchByteCount > 0 ) )
+					{
+						FlushBatchSafe( batch, ref batchLines, ref batchByteCount, batchTimestamp );
+					}
+				}
+
+				if( batchLines == 0 )
+				{
+					batchTimestamp = entry.TimestampUtc;
+					batchEpoch = entry.Epoch;
+				}
+				batch.Append( line ).AppendLine();
+				batchLines++;
+				batchByteCount += lineBytes;
+			}
+
+			FlushBatchSafe( batch, ref batchLines, ref batchByteCount, batchTimestamp );
+		}
+	}
+
+	private static void FlushBatchSafe( StringBuilder batch, ref int batchLines, ref long batchByteCount, DateTimeOffset nowUtc )
+	{
+		if( batchLines == 0 )
+			return;
+		string payload = batch.ToString();
+		long payloadBytes = batchByteCount;
+		batch.Clear();
+		if( batch.Capacity > 64 * 1024 )
+			batch.Capacity = 4096;
+		batchLines = 0;
+		batchByteCount = 0;
+		AppendPayloadSafe( nowUtc, payload, payloadBytes );
+	}
+
+	private static void AppendPayloadSafe( DateTimeOffset nowUtc, string payload, long payloadBytes )
 	{
 		lock( Gate )
 		{
@@ -304,9 +436,8 @@ public static class HackLogger
 					needsPrune = true;
 				}
 
-				string payload = line + Environment.NewLine;
 				File.AppendAllText( _cachedBasePath, payload, Encoding.UTF8 );
-				_cachedFileBytes += Encoding.UTF8.GetByteCount( payload );
+				_cachedFileBytes += payloadBytes;
 
 				if( needsPrune )
 					PruneOldLogs( dir );

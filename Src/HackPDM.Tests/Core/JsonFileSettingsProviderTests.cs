@@ -160,4 +160,30 @@ public sealed class JsonFileSettingsProviderTests : IDisposable
 		Assert.Single( Directory.GetFiles( Path.GetDirectoryName( FilePath )!, "settings.json.unreadable-*" ) );
 		Assert.Null( settings.Get<string>( "OdooAddress" ) );
 	}
+
+	[Fact]
+	public async Task SetManyAndAsyncSetters_BatchAndPersistValuesCleanly()
+	{
+		JsonFileSettingsProvider settings = new( FilePath );
+		settings.SetMany(
+		[
+			new( "KeyA", "alpha" ),
+			new( "KeyB", 42 ),
+			new( "KeyC", true ),
+		] );
+
+		await settings.SetManyAsync(
+		[
+			new( "KeyD", "delta" ),
+			new( "KeyB", null ),
+		] );
+		await settings.SetAsync( "KeyE", 99L );
+
+		JsonFileSettingsProvider reloaded = new( FilePath );
+		Assert.Equal( "alpha", reloaded.Get<string>( "KeyA" ) );
+		Assert.Null( reloaded.Get<int?>( "KeyB" ) );
+		Assert.True( reloaded.Get<bool>( "KeyC" ) );
+		Assert.Equal( "delta", reloaded.Get<string>( "KeyD" ) );
+		Assert.Equal( 99L, reloaded.Get<long>( "KeyE" ) );
+	}
 }

@@ -91,8 +91,9 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 	/// <param name="referencingFile">The local path of the document that holds the reference; enables the "next to the referencing document" step.</param>
 	/// <returns>The local path of the referenced file, or null when it can't be found.</returns>
 	/// <remarks>The last step scans every <c>*.sld*</c> file under the vault once (skipping inaccessible folders and reparse points) and caches the index; files added later aren't seen by this instance.</remarks>
-	public string? Resolve( string storedPath, string? referencingFile = null )
+	public string? Resolve( string storedPath, string? referencingFile = null, CancellationToken token = default )
 	{
+		token.ThrowIfCancellationRequested();
 		if( string.IsNullOrWhiteSpace( storedPath ) )
 			return null;
 		string[] segments = NormalizeSegments( Segments( storedPath ) );
@@ -125,7 +126,7 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 		{
 		}
 
-		return SearchVault( name, segments );
+		return SearchVault( name, segments, token );
 	}
 
 	/// <summary>Follows <paramref name="segments"/> under <paramref name="root"/>, matching each name case-insensitively.</summary>
@@ -178,11 +179,11 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 		}
 	}
 
-	private string? SearchVault( string name, string[] storedSegments )
+	private string? SearchVault( string name, string[] storedSegments, CancellationToken token )
 	{
 		if( _vaultRoot is null || !Directory.Exists( _vaultRoot ) )
 			return null;
-		Dictionary<string, List<string>> index = Volatile.Read( ref _byName ) ?? GetOrBuildIndex( _vaultRoot );
+		Dictionary<string, List<string>> index = Volatile.Read( ref _byName ) ?? GetOrBuildIndex( _vaultRoot, token );
 		if( !index.TryGetValue( name, out var candidates ) || candidates.Count == 0 )
 			return null;
 		if( candidates.Count == 1 )
@@ -203,25 +204,26 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 		return best;
 	}
 
-	private Dictionary<string, List<string>> GetOrBuildIndex( string root )
+	private Dictionary<string, List<string>> GetOrBuildIndex( string root, CancellationToken token )
 	{
 		lock( _indexGate )
 		{
 			if( _byName is { } existing )
 				return existing;
-			var built = IndexVault( root );
+			var built = IndexVault( root, token );
 			Volatile.Write( ref _byName, built );
 			return built;
 		}
 	}
 
-	private static Dictionary<string, List<string>> IndexVault( string root )
+	private static Dictionary<string, List<string>> IndexVault( string root, CancellationToken token )
 	{
 		var index = new Dictionary<string, List<string>>( StringComparer.OrdinalIgnoreCase );
 		try
 		{
 			foreach( string file in Directory.EnumerateFiles( root, "*.sld*", Recursive ) )
 			{
+				token.ThrowIfCancellationRequested();
 				string name = Path.GetFileName( file );
 				if( !index.TryGetValue( name, out var list ) )
 					index[ name ] = list = [];
