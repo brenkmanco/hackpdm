@@ -53,6 +53,7 @@ public sealed class ThemeService
 		_startupForm = form;
 		ApplyOverrides();
 		UpdatePanelBrush();
+		UpdateTableRowHighlightBrushes();
 	}
 
 	public PaletteName Palette => _settings.EffectivePalette;
@@ -136,6 +137,7 @@ public sealed class ThemeService
 		_settings.Mode = ThemePresets.Palette( palette ).IsDark ? AppThemeMode.Dark : AppThemeMode.Light;
 		ApplyOverrides();
 		UpdatePanelBrush();
+		UpdateTableRowHighlightBrushes();
 		foreach( var root in LiveRoots() )
 			ApplyMode( root );
 		ThemeChanged?.Invoke();
@@ -173,6 +175,23 @@ public sealed class ThemeService
 			brush.Color = UiColors.ToUiColor( ThemePresets.PanelStroke( ThemePresets.Palette( Palette ), ThemePresets.Form( Form ) ) );
 	}
 
+	private void UpdateTableRowHighlightBrushes()
+	{
+		Color accent = ThemeResources.TryGetBrush<SolidColorBrush>( "AccentFillColorDefaultBrush" )?.Color
+			?? ( _runningDark ? Color.FromArgb( 0xFF, 0x60, 0xCD, 0xFF ) : Color.FromArgb( 0xFF, 0x00, 0x5F, 0xB8 ) );
+
+		byte selectedAlpha = _runningDark ? (byte)0x3D : (byte)0x2E;
+		byte selectedHoverAlpha = _runningDark ? (byte)0x54 : (byte)0x40;
+		byte selectedPressedAlpha = _runningDark ? (byte)0x33 : (byte)0x24;
+
+		if( ThemeResources.TryGetBrush<SolidColorBrush>( "TableViewRowBackgroundSelected" ) is { } selected )
+			selected.Color = Color.FromArgb( selectedAlpha, accent.R, accent.G, accent.B );
+		if( ThemeResources.TryGetBrush<SolidColorBrush>( "TableViewRowBackgroundSelectedPointerOver" ) is { } selectedOver )
+			selectedOver.Color = Color.FromArgb( selectedHoverAlpha, accent.R, accent.G, accent.B );
+		if( ThemeResources.TryGetBrush<SolidColorBrush>( "TableViewRowBackgroundSelectedPressed" ) is { } selectedPressed )
+			selectedPressed.Color = Color.FromArgb( selectedPressedAlpha, accent.R, accent.G, accent.B );
+	}
+
 	private void ApplyMode( FrameworkElement root )
 	{
 		root.RequestedTheme = _settings.Mode switch
@@ -200,6 +219,7 @@ public sealed class ThemeService
 		if( NeedsRestart || !Recolor( key, color ) )
 			return;
 		_settings.OverridesFor( _runningDark )[ key ] = color.ToString();
+		UpdateTableRowHighlightBrushes();
 		RefreshOwnedBackgrounds();
 		ThemeChanged?.Invoke();
 	}
@@ -209,6 +229,7 @@ public sealed class ThemeService
 		if( NeedsRestart || !_settings.OverridesFor( _runningDark ).Remove( key ) )
 			return;
 		Restore( key );
+		UpdateTableRowHighlightBrushes();
 		RefreshOwnedBackgrounds();
 		ThemeChanged?.Invoke();
 	}
@@ -221,6 +242,7 @@ public sealed class ThemeService
 		foreach( string key in overrides.Keys )
 			Restore( key );
 		overrides.Clear();
+		UpdateTableRowHighlightBrushes();
 		RefreshOwnedBackgrounds();
 		ThemeChanged?.Invoke();
 	}
@@ -232,6 +254,7 @@ public sealed class ThemeService
 		_settings = CloneSettings( _savedSettings );
 		ApplyOverrides();
 		UpdatePanelBrush();
+		UpdateTableRowHighlightBrushes();
 		foreach( var root in LiveRoots() )
 			ApplyMode( root );
 		ThemeChanged?.Invoke();

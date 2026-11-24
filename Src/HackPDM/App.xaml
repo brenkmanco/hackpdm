@@ -16,6 +16,29 @@
 				<ResourceDictionary Source="ms-appx:///WinUI.TableView/Themes/TableView.xaml" />
 				<ResourceDictionary Source="ms-appx:///WinUI.TableView/Themes/TableViewColumnHeader.xaml" />
 			</ResourceDictionary.MergedDictionaries>
+			<ResourceDictionary.ThemeDictionaries>
+				<ResourceDictionary x:Key="Default">
+					<SolidColorBrush x:Key="TableViewRowBackgroundPointerOver" Color="#24FFFFFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundPressed" Color="#30FFFFFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelected" Color="#3D60CDFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPointerOver" Color="#5460CDFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPressed" Color="#3360CDFF" />
+				</ResourceDictionary>
+				<ResourceDictionary x:Key="Dark">
+					<SolidColorBrush x:Key="TableViewRowBackgroundPointerOver" Color="#24FFFFFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundPressed" Color="#30FFFFFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelected" Color="#3D60CDFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPointerOver" Color="#5460CDFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPressed" Color="#3360CDFF" />
+				</ResourceDictionary>
+				<ResourceDictionary x:Key="Light">
+					<SolidColorBrush x:Key="TableViewRowBackgroundPointerOver" Color="#16000000" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundPressed" Color="#22000000" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelected" Color="#2E005FB8" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPointerOver" Color="#40005FB8" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPressed" Color="#24005FB8" />
+				</ResourceDictionary>
+			</ResourceDictionary.ThemeDictionaries>
 			<!--  the app's panels (folder tree, lists, graph frame): set from the theme presets at startup (ThemeService)  -->
 			<SolidColorBrush x:Key="HackPanelStrokeBrush" Color="DimGray" />
 			<CornerRadius x:Key="HackPanelCornerRadius">10</CornerRadius>

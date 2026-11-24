@@ -1131,19 +1131,22 @@
 												Command="{x:Bind ViewModel.CommitDirectoryCommand}"
 												Content="Commit Folder" />
 										</Grid>
-										<tv:TableView
+										<controls:EntryTableView
 											x:Name="HackChangesList"
 											Grid.Row="1"
 											AutoGenerateColumns="False"
 											IsReadOnly="True"
-											ItemsSource="{x:Bind ViewModel.LocalChanges}">
+											ItemsSource="{x:Bind ViewModel.LocalChanges}"
+											SelectionMode="Single"
+											SelectionUnit="Row"
+											ShowDragRectangle="False">
 											<tv:TableView.Columns>
 												<tv:TableViewTextColumn Width="130" Binding="{Binding Name}" Header="File Name" />
 												<tv:TableViewTextColumn Width="*" Binding="{Binding Status, Converter={StaticResource StatusDescription}}" Header="Status" />
 												<tv:TableViewTextColumn Width="78" Binding="{Binding Size, Converter={StaticResource FileSizeFormatter}}" Header="Size" />
 												<tv:TableViewTextColumn Width="152" Binding="{Binding LocalDate, Converter={StaticResource LocalDateFormatter}}" Header="Local Date" />
 											</tv:TableView.Columns>
-										</tv:TableView>
+										</controls:EntryTableView>
 									</Grid>
 								</Border>
 
@@ -1171,19 +1174,22 @@
 												Command="{x:Bind ViewModel.GetLatestDirectoryTopCommand}"
 												Content="Download Folder" />
 										</Grid>
-										<tv:TableView
+										<controls:EntryTableView
 											x:Name="OdooChangesList"
 											Grid.Row="1"
 											AutoGenerateColumns="False"
 											IsReadOnly="True"
-											ItemsSource="{x:Bind ViewModel.RemoteChanges}">
+											ItemsSource="{x:Bind ViewModel.RemoteChanges}"
+											SelectionMode="Single"
+											SelectionUnit="Row"
+											ShowDragRectangle="False">
 											<tv:TableView.Columns>
 												<tv:TableViewTextColumn Width="130" Binding="{Binding Name}" Header="File Name" />
 												<tv:TableViewTextColumn Width="*" Binding="{Binding Status, Converter={StaticResource StatusDescription}}" Header="Status" />
 												<tv:TableViewTextColumn Width="78" Binding="{Binding Size, Converter={StaticResource FileSizeFormatter}}" Header="Size" />
 												<tv:TableViewTextColumn Width="152" Binding="{Binding RemoteDate, Converter={StaticResource LocalDateFormatter}}" Header="Remote Date" />
 											</tv:TableView.Columns>
-										</tv:TableView>
+										</controls:EntryTableView>
 									</Grid>
 								</Border>
 							</Grid>
