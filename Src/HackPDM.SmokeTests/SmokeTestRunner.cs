@@ -120,9 +120,14 @@ internal static class SmokeTestRunner
 		} );
 
 		StartUiStallProbe();
-		UiDispatcher.Post( async () =>
+		UiDispatcher.Post( () => _ = RunSmokeEntryAsync() );
+	}
+
+	private static async Task RunSmokeEntryAsync()
+	{
+		int code = 1;
+		try
 		{
-			int code;
 			try
 			{
 				code = await RunAsync() ? 0 : 1;
@@ -135,8 +140,14 @@ internal static class SmokeTestRunner
 			}
 			// let any exceptions queued on the UI thread surface before exiting
 			await Task.Delay( 1000 );
-			Finish( HasUnhandled() ? 1 : code );
-		} );
+		}
+		catch( Exception ex )
+		{
+			RecordUnhandled( ex.ToString() );
+			Log( $"post-run delay failed: {ex}" );
+			code = 1;
+		}
+		Finish( HasUnhandled() ? 1 : code );
 	}
 
 	// ------------------------------------------------------------------ steps
@@ -252,7 +263,7 @@ internal static class SmokeTestRunner
 					?? throw new InvalidOperationException( "no entry that exists on the server" );
 
 				page.LowerTabIndex = page.HistoryTabItem;
-				page.GetOdooEntryList().SelectedItem = entry;
+				page.SelectEntriesForTest( entry );
 
 				await WaitUntil( () => vm.OHistories.Count > 0, $"history rows for {entry.Name}" );
 				return $"{entry.Name}: {vm.OHistories.Count} history row(s)";
@@ -264,7 +275,7 @@ internal static class SmokeTestRunner
 				var before = page!;
 				var oldVm = before.ViewModel;
 				string? folder = oldVm.LastSelectedNodePath;
-				var selected = before.GetOdooEntryList().SelectedItem as EntryRow
+				var selected = oldVm.SelectedEntries.FirstOrDefault()
 					?? throw new InvalidOperationException( "no entry selected before leaving" );
 				EntryRow firstRow = oldVm.Entries[ 0 ];
 				var keptTree = AppComposition.FileManagerState.Tree;
@@ -285,7 +296,7 @@ internal static class SmokeTestRunner
 
 				await WaitUntil( () => vm.IsListLoaded && page.LastSelectedNode?.LinkedData.FullPath == folder,
 					$"folder {folder} selected again", () => $"selected {page.LastSelectedNode?.LinkedData.FullPath ?? "nothing"}" );
-				await WaitUntil( () => ( page.GetOdooEntryList().SelectedItem as EntryRow )?.Name == selected.Name,
+				await WaitUntil( () => vm.SelectedEntries.Any( r => r.Name == selected.Name ),
 					$"{selected.Name} selected again" );
 				await WaitUntil( () => vm.OHistories.Count > 0, "history tab filled again" );
 
@@ -330,15 +341,101 @@ internal static class SmokeTestRunner
 
 				return $"{edited.Name} rebuilt, {others.Count} other rows untouched, added + removed a row, badge shown";
 			} )
+			&& await Step( "pdm write ops (commit, checkout, get-latest, delete)", () => PdmWriteOperationsStepAsync( page! ) )
 			&& await Step( "dependency graph (children, parents, both, zoom)", DependencyGraphStepAsync )
 			&& await Step( "capture affected visuals", CaptureAffectedVisualsAsync );
 	}
 
+	private static async Task<string> PdmWriteOperationsStepAsync( HackFileManagerView page )
+	{
+		var vm = page.ViewModel;
+		string listed = PwaPaths.ToAbsolute( vm.LastSelectedNodePath )
+			?? throw new InvalidOperationException( "no active folder path for PDM write ops" );
+		Directory.CreateDirectory( listed );
+
+		string ext = ResolveWritableExtension();
+		string smokeName = $"smoke-op-{Guid.NewGuid():N}"[ ..17 ] + $".{ext}";
+		string opFile = Path.Combine( listed, smokeName );
+
+		int messageBoxesDismissed = 0;
+		MessageBox.TestOpenedCallback = ( box, _ ) =>
+		{
+			if( box.DefaultButtonForTest is null )
+				RecordUnhandled( "MessageBox opened without a default button" );
+			messageBoxesDismissed++;
+			if( !UiDispatcher.Post( () => box.CloseForTest( DialogResult.OK ) ) )
+				box.CloseForTest( DialogResult.OK );
+		};
+
+		try
+		{
+			await File.WriteAllTextAsync( opFile, "smoke write test v1\n" );
+			EntryRow? row = null;
+			await WaitUntil( () => ( row = vm.Entries.FirstOrDefault( e => e.Name == smokeName ) ) is { ReprType: EntryReprType.Local },
+				$"{smokeName} local row detected" );
+
+			page.SelectEntriesForTest( row! );
+			await WaitUntil( () => vm.SelectedEntries is [ { } s ] && s.Name == smokeName, $"{smokeName} selected for commit" );
+			await vm.CommitSelectedCommand.ExecuteAsync( null );
+			await WaitUntil( () => ( row = vm.Entries.FirstOrDefault( e => e.Name == smokeName ) ) is { Id: > 0, LatestId: > 0, Status: FileStatus.Ok },
+				$"{smokeName} committed to server",
+				() => row is null ? "missing row" : $"id={row.Id} latest={row.LatestId} status={row.Status}" );
+
+			page.SelectEntriesForTest( row! );
+			await vm.CheckoutSelectedCommand.ExecuteAsync( null );
+			await WaitUntil( () => ( row = vm.Entries.FirstOrDefault( e => e.Name == smokeName ) ) is { Checkout: not null },
+				$"{smokeName} checked out" );
+
+			page.SelectEntriesForTest( row! );
+			await vm.UndoCheckoutSelectedCommand.ExecuteAsync( null );
+			await WaitUntil( () => ( row = vm.Entries.FirstOrDefault( e => e.Name == smokeName ) ) is { Checkout: null },
+				$"{smokeName} undo checkout" );
+
+			File.Delete( opFile );
+			await WaitUntil( () => ( row = vm.Entries.FirstOrDefault( e => e.Name == smokeName ) ) is { ReprType: EntryReprType.Remote, Status: FileStatus.Ro },
+				$"{smokeName} became remote-only after local delete" );
+
+			page.SelectEntriesForTest( row! );
+			await vm.GetLatestSelectedCommand.ExecuteAsync( null );
+			await WaitUntil( () => File.Exists( opFile )
+					&& ( row = vm.Entries.FirstOrDefault( e => e.Name == smokeName ) ) is { ReprType: EntryReprType.Both, Status: FileStatus.Ok },
+				$"{smokeName} downloaded via get-latest" );
+
+			page.SelectEntriesForTest( row! );
+			await vm.LogicalDeleteSelectedCommand.ExecuteAsync( null );
+			await WaitUntil( () => vm.Entries.All( e => e.Name != smokeName ),
+				$"{smokeName} logically deleted" );
+
+			if( messageBoxesDismissed == 0 )
+				throw new InvalidOperationException( "Expected completion MessageBox was never displayed" );
+
+			return $"{smokeName}: commit -> checkout -> undo-checkout -> get-latest -> logical-delete ({messageBoxesDismissed} dialog(s))";
+		}
+		finally
+		{
+			MessageBox.TestOpenedCallback = null;
+			try { if( File.Exists( opFile ) ) File.Delete( opFile ); } catch { }
+		}
+	}
+
+	private static string ResolveWritableExtension()
+	{
+		var odoo = OdooDefaults.Instance;
+		if( odoo.RestrictTypes != true || odoo.ExtToType.ContainsKey( "txt" ) || odoo.ExtToType.ContainsKey( ".txt" ) )
+			return "txt";
+		foreach( var t in odoo.HpTypes ?? [] )
+		{
+			string ext = ( t.file_ext ?? "" ).Trim().TrimStart( '.' ).ToLowerInvariant();
+			if( ext.Length > 0 && !HackPDM.Core.SolidWorks.SwDocumentTypes.IsSolidWorksExtension( ext ) )
+				return ext;
+		}
+		return "txt";
+	}
+
 	private static async Task<string> CaptureAffectedVisualsAsync()
 	{
-		if( Environment.GetEnvironmentVariable( "HACKPDM_SMOKE_SCREENSHOT" ) is not { Length: > 0 }
-			|| Environment.GetEnvironmentVariable( ThemeService.SmokeThemeVariable ) is { Length: > 0 } )
-			return "skipped (no screenshot path or theme matrix run)";
+		if( Environment.GetEnvironmentVariable( ThemeService.SmokeThemeVariable ) is { Length: > 0 } )
+			return "skipped (theme matrix run)";
 
 		var frame = HackApp.HomePage!.ContentFrame;
 		List<string> saved = [];
@@ -346,16 +443,16 @@ internal static class SmokeTestRunner
 		AppComposition.Navigation.NavigateTo( NavigatePageMenu.HackFileManager );
 		await WaitUntil( () => frame.Content is HackFileManagerView { IsLoaded: true } fm && fm.ViewModel.IsListLoaded, "HackFileManager shown with entries" );
 		var fmPage = (HackFileManagerView)frame.Content;
-		await Task.Delay( 400 );
+		await Task.Delay( 200 );
 		saved.Add( await SaveScreenshotAsync( (UIElement)HackApp.Window!.Content!, "shell-nav" ) );
 		saved.Add( await SaveScreenshotAsync( fmPage, "file-manager" ) );
 		fmPage.ApplyLayoutPresetForTest( WorkspaceLayoutPreset.RightInspector );
-		await Task.Delay( 350 );
+		await Task.Delay( 200 );
 		saved.Add( await SaveScreenshotAsync( fmPage, "file-manager-docked" ) );
 		fmPage.ApplyLayoutPresetForTest( WorkspaceLayoutPreset.Balanced );
-		await Task.Delay( 250 );
+		await Task.Delay( 150 );
 		fmPage.ShowTopTab( changes: true );
-		await Task.Delay( 400 );
+		await Task.Delay( 200 );
 		saved.Add( await SaveScreenshotAsync( fmPage, "file-manager-changes" ) );
 		fmPage.ShowTopTab( changes: false );
 
@@ -366,15 +463,15 @@ internal static class SmokeTestRunner
 		fmPage.ViewModel.IsEntriesProgressIndeterminate = false;
 		fmPage.ViewModel.EntriesLoadingPercent = 50;
 		fmPage.ViewModel.IsEntriesLoading = true;
-		await Task.Delay( 300 );
+		await Task.Delay( 150 );
 		saved.Add( await SaveScreenshotAsync( fmPage, "file-manager-loading" ) );
 		fmPage.ViewModel.IsEntriesLoading = false;
 		fmPage.ViewModel.IsTreeLoading = false;
 
-		WindowHelper.CreateWindowAndPage<OdooFileTypeManagerView>( out var typesPage, out var typesWindow );
+		WindowHelper.CreateWindowAndPage<OdooFileTypeManagerView>( out var typesPage, out var typesWindow, presetName: WindowHelper.Presets.OdooFileTypeManagerView );
 		typesPage.StoreWindowInstance( typesWindow );
 		await WaitUntil( () => typesPage.IsLoaded, "OdooFileTypeManagerView shown" );
-		await Task.Delay( 400 );
+		await Task.Delay( 200 );
 		saved.Add( await SaveScreenshotAsync( typesPage, "file-types" ) );
 		typesWindow.Close();
 
@@ -394,31 +491,42 @@ internal static class SmokeTestRunner
 		await WaitUntil( () => pmPage.ViewModel.FilteredStatus.All( m => m.Category == ProfileStatusCategory.Connection ) && pmPage.ViewModel.FilteredStatus.Count > 0, "ProfileManager Connection filter applied" );
 		pmPage.ViewModel.SelectedCategoryFilterIndex = 0;
 
-		await Task.Delay( 400 );
+		await Task.Delay( 200 );
 		saved.Add( await SaveScreenshotAsync( pmPage, "profile-manager" ) );
 
 		pmPage.ViewModel.LoginStatusText = "Loading workspace metadata (nodes, users, types, settings)…";
 		pmPage.ViewModel.IsLoggingIn = true;
-		await Task.Delay( 300 );
+		await Task.Delay( 150 );
 		saved.Add( await SaveScreenshotAsync( pmPage, "profile-manager-loading" ) );
 		pmPage.ViewModel.IsLoggingIn = false;
 		pmPage.ViewModel.LoginStatusText = string.Empty;
 
 		AppComposition.Navigation.NavigateTo( NavigatePageMenu.Configuration );
 		await WaitUntil( () => frame.Content is ConfigurationView { IsLoaded: true }, "ConfigurationView shown" );
-		await Task.Delay( 400 );
+		await Task.Delay( 200 );
 		saved.Add( await SaveScreenshotAsync( (UIElement)frame.Content, "configuration" ) );
 
 		AppComposition.Navigation.NavigateTo( NavigatePageMenu.Settings );
 		await WaitUntil( () => frame.Content is ApplicationSettingsView { IsLoaded: true }, "ApplicationSettingsView shown" );
-		( (ApplicationSettingsView)frame.Content ).SelectSection( "Status" );
-		await Task.Delay( 500 );
-		saved.Add( await SaveScreenshotAsync( (UIElement)frame.Content, "status-settings" ) );
+		var settingsPage = (ApplicationSettingsView)frame.Content;
+		settingsPage.SelectSection( "Theme" );
+		await Task.Delay( 100 );
+		settingsPage.SelectSection( "About" );
+		await Task.Delay( 100 );
+		settingsPage.SelectSection( "Status" );
+		await Task.Delay( 250 );
+		saved.Add( await SaveScreenshotAsync( settingsPage, "status-settings" ) );
 
-		// Populate representative statuses + metrics, navigate back to HackFileManager, and test docked + detached Status Log & Search Vault extensions
-		AppComposition.Navigation.NavigateTo( NavigatePageMenu.HackFileManager );
-		await WaitUntil( () => frame.Content is HackFileManagerView { IsLoaded: true }, "HackFileManager active for docked extensions" );
+		// Exercise Graph -> FileManager locate navigation
+		AppComposition.Navigation.NavigateTo( NavigatePageMenu.DependencyGraph );
+		await WaitUntil( () => frame.Content is DependencyGraphView { IsLoaded: true }, "DependencyGraph shown for locate" );
+		await AppComposition.LocateInFileManagerAsync( PwaPaths.Segments( @"Projects\Assembly" ), "bolt.sldprt" );
+		await WaitUntil( () => frame.Content is HackFileManagerView { IsLoaded: true } locatedFm
+				&& locatedFm.ViewModel.IsListLoaded
+				&& locatedFm.ViewModel.SelectedEntries.Any( e => string.Equals( e.Name, "bolt.sldprt", StringComparison.OrdinalIgnoreCase ) ),
+			"Graph locate navigated to HackFileManager and selected bolt.sldprt" );
 
+		// Populate representative statuses + metrics, and test docked + detached Status Log & Search Vault extensions
 		var statusVm = AppComposition.StatusLog;
 		statusVm.AutoClose = false;
 		statusVm.ResetProgress( 5 );
@@ -443,8 +551,24 @@ internal static class SmokeTestRunner
 			"Docked StatusDialogView and SearchOdooView shown in HomeView" );
 		var statusPage = dialogs.CurrentStatusPage!;
 		var searchPage = dialogs.CurrentSearchPage!;
+
+		// Exercise Search query + Locate to FileManager navigation
+		searchPage.ViewModel.FileName = "arm.sldasm";
 		await searchPage.ViewModel.SearchCommand.ExecuteAsync( null );
-		await Task.Delay( 500 );
+		SearchRow armMatch = searchPage.ViewModel.SearchResultsList.FirstOrDefault(
+				r => string.Equals( r.Name, "arm.sldasm", StringComparison.OrdinalIgnoreCase )
+					&& ( r.Directory?.Contains( "Assembly", StringComparison.OrdinalIgnoreCase ) ?? false ) )
+			?? searchPage.ViewModel.SearchResultsList.FirstOrDefault( r => string.Equals( r.Name, "arm.sldasm", StringComparison.OrdinalIgnoreCase ) )
+			?? throw new InvalidOperationException( "Search did not return arm.sldasm" );
+		searchPage.ViewModel.LocateCommand.Execute( armMatch );
+		await WaitUntil( () => frame.Content is HackFileManagerView { IsLoaded: true } locatedSearchFm
+				&& locatedSearchFm.ViewModel.IsListLoaded
+				&& locatedSearchFm.ViewModel.SelectedEntries.Any( e => string.Equals( e.Name, "arm.sldasm", StringComparison.OrdinalIgnoreCase ) ),
+			"Search locate selected arm.sldasm in HackFileManager" );
+
+		searchPage.ViewModel.FileName = string.Empty;
+		await searchPage.ViewModel.SearchCommand.ExecuteAsync( null );
+		await Task.Delay( 250 );
 		saved.Add( await SaveScreenshotAsync( (UIElement)HackApp.Window!.Content!, "shell-docked-extensions" ) );
 
 		// Switch both extensions to Minimal mode, verify category counts + Error hover popup, and capture visual
@@ -458,9 +582,9 @@ internal static class SmokeTestRunner
 				&& statusVm.WarningCount >= 1
 				&& statusVm.ErrorCount >= 1,
 			"Minimal Search and Status categories shown" );
-		await Task.Delay( 300 );
+		await Task.Delay( 200 );
 		statusPage.OpenHoverPopupForTest( StatusMessage.ERROR );
-		await Task.Delay( 250 );
+		await Task.Delay( 150 );
 		saved.Add( await SaveScreenshotAsync( (UIElement)HackApp.Window!.Content!, "shell-minimal-extensions" ) );
 
 		// Clicking the hover popup opens the full Status Dialog; opening full Search restores full Search view
@@ -468,20 +592,25 @@ internal static class SmokeTestRunner
 		dialogs.ShowFullSearchWindow();
 		await WaitUntil( () => !statusPage.IsMinimalMode && !searchPage.IsMinimalMode, "Full Status and Search restored from minimal mode" );
 
-		// Detach Status Log into its own window, capture screenshot, re-dock back into HomeView, then close
+		// Detach Status Log into its own window, capture screenshot, exercise minimal-detach -> re-dock cleanly, then close
 		dialogs.DetachStatusWindow();
 		await WaitUntil( () => statusPage.ParentWindow is not null && statusPage.IsLoaded, "StatusDialogView detached" );
-		await Task.Delay( 400 );
+		await Task.Delay( 200 );
 		saved.Add( await SaveScreenshotAsync( statusPage, "status-dialog" ) );
+		dialogs.SetStatusMinimalMode( true );
+		await WaitUntil( () => statusPage.IsMinimalMode, "Detached StatusDialogView switched to minimal mode" );
+		statusPage.OpenHoverPopupForTest( StatusMessage.WARNING );
+		await Task.Delay( 100 );
 		dialogs.DockStatusWindow();
-		await WaitUntil( () => HackApp.HomePage is { IsStatusDrawerOpen: true } && statusPage.IsLoaded, "StatusDialogView re-docked" );
+		await WaitUntil( () => HackApp.HomePage is { IsStatusDrawerOpen: true } && statusPage.ParentWindow is null && statusPage.IsLoaded, "StatusDialogView re-docked" );
+		dialogs.SetStatusMinimalMode( false );
 		dialogs.CloseStatusWindow();
 		await WaitUntil( () => HackApp.HomePage is { IsStatusDrawerOpen: false }, "StatusDialogView closed" );
 
 		// Detach Search Vault into its own window, capture screenshot, re-dock back into HomeView, then close
 		dialogs.DetachSearchWindow();
 		await WaitUntil( () => dialogs.CurrentSearchPage is { IsLoaded: true }, "SearchOdooView detached" );
-		await Task.Delay( 400 );
+		await Task.Delay( 200 );
 		saved.Add( await SaveScreenshotAsync( searchPage, "search" ) );
 		dialogs.DockSearchWindow();
 		await WaitUntil( () => HackApp.HomePage is { IsSearchDrawerOpen: true } && searchPage.IsLoaded, "SearchOdooView re-docked" );
@@ -493,7 +622,7 @@ internal static class SmokeTestRunner
 		await WaitUntil( () => frame.Content is NotLoggedInView { IsLoaded: true }, "NotLoggedInView shown" );
 		saved.Add( await SaveScreenshotAsync( (UIElement)frame.Content, "not-logged-in" ) );
 
-		return string.Join( "", saved );
+		return $"ui checks + locate + status/search panels passed{string.Join( "", saved )}";
 	}
 
 	/// <summary>

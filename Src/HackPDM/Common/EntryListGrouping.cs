@@ -90,7 +90,8 @@ internal static class EntryListGrouping
 		IEnumerable<EntryRow> rows,
 		Func<EntryRow, IComparable?> groupKey,
 		IReadOnlySet<string>? collapsedKeys = null,
-		bool defaultCollapsed = false )
+		bool defaultCollapsed = false,
+		IReadOnlySet<string>? expandedKeys = null )
 	{
 		List<(object? Key, string DisplayKey, List<EntryRow> Items)> buckets = [];
 		Dictionary<string, int> byDisplay = new( StringComparer.Ordinal );
@@ -114,7 +115,11 @@ internal static class EntryListGrouping
 		for( int i = 0; i < buckets.Count; i++ )
 		{
 			var (key, display, items) = buckets[ i ];
-			bool collapsed = collapsedKeys is not null ? collapsedKeys.Contains( display ) : defaultCollapsed;
+			bool collapsed = collapsedKeys is not null && collapsedKeys.Contains( display )
+				? true
+				: expandedKeys is not null && expandedKeys.Contains( display )
+					? false
+					: defaultCollapsed;
 			result.Add( new EntryGroupHeader( key, display, items, isExpanded: !collapsed ) );
 		}
 		return result;

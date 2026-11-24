@@ -8,12 +8,17 @@ using HackPDM.Core.Pdm;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 
 namespace HackPDM.Common;
 
 public sealed partial class MessageBox : Page
 {
 	private const int ButtonRow = 3;
+
+#if SMOKE_TESTS
+	internal static Action<MessageBox, MessageBoxButtons>? TestOpenedCallback;
+#endif
 
 	private sealed record ButtonSpec( string Label, DialogResult Result, int Column, bool IsDefault = false );
 
@@ -30,11 +35,17 @@ public sealed partial class MessageBox : Page
 
 	private TaskCompletionSource<DialogResult>? _result;
 	private Window? _window;
+	private Button? _defaultButton;
 
 	public MessageBox()
 	{
 		InitializeComponent();
 	}
+
+#if SMOKE_TESTS
+	internal Button? DefaultButtonForTest => _defaultButton;
+	internal void CloseForTest( DialogResult result ) => Close( result );
+#endif
 
 	private void Populate( string message, MessageBoxButtons buttons, Window window, TaskCompletionSource<DialogResult> result )
 	{
@@ -56,6 +67,7 @@ public sealed partial class MessageBox : Page
 
 		ButtonSpec[] specs = Layouts.GetValueOrDefault( buttons ) ?? Layouts[ MessageBoxButtons.OK ];
 		ButtonSpec defaultSpec = Array.Find( specs, s => s.IsDefault ) ?? specs[ ^1 ];
+		Button? defaultButton = null;
 		foreach( ButtonSpec spec in specs )
 		{
 			Button button = new()
@@ -69,11 +81,28 @@ public sealed partial class MessageBox : Page
 			button.Click += ( _, _ ) => Close( spec.Result );
 			button.SetGrid( ButtonRow, spec.Column );
 			RootGrid.Children.Add( button );
+			if( spec.IsDefault || defaultButton is null )
+				defaultButton = button;
 		}
+		_defaultButton = defaultButton;
+
+		void FocusDefault()
+		{
+			_defaultButton?.Focus( FocusState.Programmatic );
+#if SMOKE_TESTS
+			TestOpenedCallback?.Invoke( this, buttons );
+#endif
+		}
+		if( IsLoaded )
+			FocusDefault();
+		else
+			Loaded += ( _, _ ) => FocusDefault();
 
 		window.Closed += ( _, _ ) => result.TrySetResult( DialogResult.Cancel );
 		KeyDown += ( _, e ) =>
 		{
+			if( e.Handled )
+				return;
 			if( e.Key == Windows.System.VirtualKey.Escape )
 			{
 				e.Handled = true;
@@ -81,6 +110,8 @@ public sealed partial class MessageBox : Page
 			}
 			else if( e.Key == Windows.System.VirtualKey.Enter )
 			{
+				if( XamlRoot is not null && FocusManager.GetFocusedElement( XamlRoot ) is Button focused && !ReferenceEquals( focused, _defaultButton ) )
+					return;
 				e.Handled = true;
 				Close( defaultSpec.Result );
 			}
@@ -101,7 +132,7 @@ public sealed partial class MessageBox : Page
 			await UiDispatcher.Current.RunAsync( () =>
 			{
 				MessageBox page = new();
-				Window window = WindowHelper.CreateWindow<Window>( nameof( MessageBox ) );
+				Window window = WindowHelper.CreateWindow<Window>( WindowHelper.Presets.MessageBox );
 				window.Title = string.IsNullOrWhiteSpace( caption ) ? "Info" : caption;
 				( window.Content as Frame )?.Content = page;
 				page.Populate( message, buttons, window, result );

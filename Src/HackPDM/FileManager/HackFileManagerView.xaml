@@ -896,6 +896,7 @@
 											Width="38"
 											CanReorder="True"
 											CanResize="True"
+											CanSort="False"
 											CellTemplate="{StaticResource IconCellTemplate}" />
 										<tv:TableViewTextColumn Binding="{Binding Name}" SortMemberPath="Name" />
 										<tv:TableViewTextColumn Binding="{Binding Type}" SortMemberPath="Type" />

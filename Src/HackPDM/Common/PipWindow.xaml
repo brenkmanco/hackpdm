@@ -14,8 +14,24 @@
     </Window.SystemBackdrop>
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!--  CompactOverlay titlebar drag strip (visible on Windows when extending into titlebar)  -->
+        <Grid
+            x:Name="PipTitleBar"
+            Grid.Row="0"
+            Height="32"
+            Background="Transparent"
+            Visibility="Collapsed" />
+
         <!--  1. Root preview host  -->
-        <Grid x:Name="PipContentRoot" Padding="8">
+        <Grid
+            x:Name="PipContentRoot"
+            Grid.Row="1"
+            Padding="8">
             <TextBlock
                 x:Name="PipEmptyText"
                 HorizontalAlignment="Center"
@@ -31,11 +47,12 @@
                 Visibility="Collapsed" />
         </Grid>
 
-        <!--  2. Overlay return button  -->
+        <!--  2. Overlay return button (bottom-right, clear of CompactOverlay caption controls)  -->
         <Grid
+            Grid.Row="1"
             Margin="10"
             HorizontalAlignment="Right"
-            VerticalAlignment="Top">
+            VerticalAlignment="Bottom">
             <Button
                 x:Name="ExitPipButton"
                 Padding="8"

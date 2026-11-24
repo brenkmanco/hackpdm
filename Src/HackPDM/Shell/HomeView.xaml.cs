@@ -28,14 +28,18 @@ namespace HackPDM.Shell;
 /// </summary>
 public sealed partial class HomeView : Page
 {
+	private const int MinimalSearchMinWidth = 960;
+	private const int FullSearchMinWidth = 1120;
+	private const int FullStatusMinHeight = 720;
+
 	/// <summary>Each page and the window size, title, and menu order it uses.</summary>
 	private static readonly FrozenDictionary<NavigatePageMenu, (Type Page, string Config, int Order)> Pages = new Dictionary<NavigatePageMenu, (Type Page, string Config, int Order)>
 	{
-		[ NavigatePageMenu.HackFileManager ] = ( typeof( HackFileManagerView ), nameof( NavigatePageMenu.HackFileManager ), 0 ),
-		[ NavigatePageMenu.DependencyGraph ] = ( typeof( DependencyGraphView ), nameof( NavigatePageMenu.DependencyGraph ), 1 ),
-		[ NavigatePageMenu.ProfileManager ] = ( typeof( ProfileManagerView ), nameof( NavigatePageMenu.ProfileManager ), 2 ),
-		[ NavigatePageMenu.Configuration ] = ( typeof( ConfigurationView ), "ConfigSettings", 3 ),
-		[ NavigatePageMenu.Settings ] = ( typeof( ApplicationSettingsView ), "AppSettings", 4 ),
+		[ NavigatePageMenu.HackFileManager ] = ( typeof( HackFileManagerView ), WindowHelper.Presets.HackFileManager, 0 ),
+		[ NavigatePageMenu.DependencyGraph ] = ( typeof( DependencyGraphView ), WindowHelper.Presets.DependencyGraph, 1 ),
+		[ NavigatePageMenu.ProfileManager ] = ( typeof( ProfileManagerView ), WindowHelper.Presets.ProfileManager, 2 ),
+		[ NavigatePageMenu.Configuration ] = ( typeof( ConfigurationView ), WindowHelper.Presets.ConfigSettings, 3 ),
+		[ NavigatePageMenu.Settings ] = ( typeof( ApplicationSettingsView ), WindowHelper.Presets.AppSettings, 4 ),
 	}.ToFrozenDictionary();
 
 	private bool _syncingSelection;
@@ -116,12 +120,12 @@ public sealed partial class HomeView : Page
 	{
 		if( AppComposition.Session.IsVersionMismatch && page is not NavigatePageMenu.ProfileManager and not NavigatePageMenu.Configuration )
 		{
-			Navigate( typeof( NotLoggedInView ), "NotLoggedIn", page, NavigationSlideAxis.Up );
+			Navigate( typeof( NotLoggedInView ), WindowHelper.Presets.NotLoggedIn, page, NavigationSlideAxis.Up );
 			return;
 		}
 		if( page is NavigatePageMenu.HackFileManager or NavigatePageMenu.DependencyGraph && !AppComposition.Session.IsLoggedIn )
 		{
-			Navigate( typeof( NotLoggedInView ), "NotLoggedIn", page, NavigationSlideAxis.Up );
+			Navigate( typeof( NotLoggedInView ), WindowHelper.Presets.NotLoggedIn, page, NavigationSlideAxis.Up );
 			return;
 		}
 		var (type, config, _) = Pages[ page ];
@@ -144,7 +148,7 @@ public sealed partial class HomeView : Page
 	{
 		// Resize before navigating so the destination page lays out once at its target dimensions.
 		if( HackApp.Window is { } window )
-			WindowHelper.ApplyPreset( window, WindowHelper.Preset( config ) );
+			ApplyWindowPreset( window, config );
 
 		if( NavFrame.CurrentSourcePageType == page )
 			return;
@@ -156,6 +160,25 @@ public sealed partial class HomeView : Page
 			NavigationTransitions.Play( NavFrame.Content, slide );
 		PruneStaleBackStack( AppComposition.Session.IsLoggedIn );
 		HomeNavigator.IsBackEnabled = NavFrame.CanGoBack;
+	}
+
+	private void ApplyWindowPreset( Window window, string config )
+	{
+		WindowPreset preset = WindowHelper.Preset( config );
+		var (minWidth, minHeight) = ActiveDrawerMinimums();
+		WindowHelper.ApplyPreset( window, preset with
+		{
+			Width = Math.Max( preset.Width, minWidth ),
+			Height = Math.Max( preset.Height, minHeight ),
+		} );
+	}
+
+	private (int MinWidth, int MinHeight) ActiveDrawerMinimums()
+	{
+		int minWidth = !IsSearchDrawerOpen ? 0
+			: UIStorage.WorkspaceLayout.SearchMinimalMode ? MinimalSearchMinWidth : FullSearchMinWidth;
+		int minHeight = IsStatusDrawerOpen && !UIStorage.WorkspaceLayout.StatusMinimalMode ? FullStatusMinHeight : 0;
+		return ( minWidth, minHeight );
 	}
 
 	private void PruneStaleBackStack( bool isLoggedIn )
@@ -192,7 +215,7 @@ public sealed partial class HomeView : Page
 			try { HomeNavigator.SelectedItem = null; }
 			finally { _syncingSelection = false; }
 			if( HackApp.Window is { } win )
-				WindowHelper.ApplyPreset( win, WindowHelper.Preset( "NotLoggedIn" ) );
+				ApplyWindowPreset( win, WindowHelper.Presets.NotLoggedIn );
 			return;
 		}
 
@@ -214,7 +237,7 @@ public sealed partial class HomeView : Page
 				_syncingSelection = false;
 			}
 			if( HackApp.Window is { } window )
-				WindowHelper.ApplyPreset( window, WindowHelper.Preset( entry.Config ) );
+				ApplyWindowPreset( window, entry.Config );
 			NavigationTransitions.Play( NavFrame.Content, NavigationSlideAxis.Right );
 			break;
 		}
@@ -291,7 +314,7 @@ public sealed partial class HomeView : Page
 			return;
 		}
 		StatusDrawerRow.Height = new GridLength( Math.Clamp( UIStorage.WorkspaceLayout.StatusDrawerHeight, 160, 560 ) );
-		EnsureMinimumWindowDimensions( minWidth: 0, minHeight: 720 );
+		EnsureMinimumWindowDimensions( minWidth: 0, minHeight: FullStatusMinHeight );
 	}
 
 	internal void HideStatusPanelImmediate()
@@ -368,7 +391,7 @@ public sealed partial class HomeView : Page
 			MainAndSearchGrid.RowDefinitions.Add( new RowDefinition { Height = star } );
 			DockedSearchDrawer.SetGrid( 0, 0 );
 			NavFrame.SetGrid( 1, 0 );
-			EnsureMinimumWindowDimensions( minWidth: 960, minHeight: 0 );
+			EnsureMinimumWindowDimensions( minWidth: MinimalSearchMinWidth, minHeight: 0 );
 			return;
 		}
 
@@ -384,7 +407,7 @@ public sealed partial class HomeView : Page
 		DockedSearchDrawer.SetGrid( 0, onLeft ? 0 : 2 );
 		SearchSplitter.SetGrid( 0, 1 );
 		NavFrame.SetGrid( 0, onLeft ? 2 : 0 );
-		EnsureMinimumWindowDimensions( minWidth: 1120, minHeight: 0 );
+		EnsureMinimumWindowDimensions( minWidth: FullSearchMinWidth, minHeight: 0 );
 	}
 
 	private static void EnsureMinimumWindowDimensions( int minWidth, int minHeight )

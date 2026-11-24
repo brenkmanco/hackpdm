@@ -9,6 +9,8 @@ using HackPDM.Status;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Media;
 
 namespace HackPDM.Common;
 
@@ -48,8 +50,12 @@ public sealed class DialogService : IDialogService
 	public DialogService()
 	{
 		_status = new(
-			presetKey: nameof( StatusDialogView ),
-			minimalSize: ( 920, 120 ),
+			presetKey: WindowHelper.Presets.StatusDialogView,
+#if WINDOWS
+			minimalSize: ( 920, 150 ),
+#else
+			minimalSize: ( 920, 420 ),
+#endif
 			createPage: () => new StatusDialogView(),
 			getMinimal: () => UIStorage.WorkspaceLayout.StatusMinimalMode,
 			setMinimal: v => UIStorage.WorkspaceLayout.StatusMinimalMode = v,
@@ -60,7 +66,7 @@ public sealed class DialogService : IDialogService
 			refreshDocked: h => h.ApplyStatusDrawerMode() );
 
 		_search = new(
-			presetKey: nameof( SearchOdooView ),
+			presetKey: WindowHelper.Presets.SearchOdooView,
 			minimalSize: ( 980, 320 ),
 			createPage: () => new SearchOdooView(),
 			getMinimal: () => UIStorage.WorkspaceLayout.SearchMinimalMode,
@@ -173,10 +179,12 @@ public sealed class DialogService : IDialogService
 				return;
 			}
 			TPage page = ( HackApp.HomePage is { } home ? takeForDetach( home ) : null ) ?? CurrentPage ?? createPage();
+			CloseOpenPopups( page.XamlRoot );
 			CurrentPage = page;
-			Window window = WindowHelper.CreateWindowForExistingPage( page );
+			Window window = WindowHelper.CreateWindowForExistingPage( page, presetName: presetKey );
 			page.HostWindow = window;
 			page.SetHostMode( isDocked: false );
+			ConfigureDetachedPopups( page );
 			bool minimal = getMinimal();
 			page.SetMinimalMode( minimal );
 			if( minimal )
@@ -213,7 +221,10 @@ public sealed class DialogService : IDialogService
 			if( HackApp.HomePage is not { } home )
 				return;
 
+			CloseOpenPopups( page.XamlRoot );
 			win.Closed -= OnClosed;
+			page.HostWindow = null;
+			page.SetHostMode( isDocked: true );
 			if( win.Content is Frame frame )
 				frame.Content = null;
 			win.Content = null;
@@ -223,6 +234,35 @@ public sealed class DialogService : IDialogService
 
 			showDocked( home, page );
 			HackApp.Window?.Activate();
+		}
+
+		private static void CloseOpenPopups( XamlRoot? root )
+		{
+			if( root is null )
+				return;
+			try
+			{
+				foreach( Popup popup in VisualTreeHelper.GetOpenPopupsForXamlRoot( root ) )
+					popup.IsOpen = false;
+			}
+			catch
+			{
+			}
+		}
+
+		private static void ConfigureDetachedPopups( Page page )
+		{
+#if WINDOWS
+			if( page.Content is not Panel root )
+				return;
+			for( int i = 0; i < root.Children.Count; i++ )
+			{
+				if( root.Children[ i ] is Popup popup && !popup.IsOpen )
+					popup.ShouldConstrainToRootBounds = false;
+			}
+#else
+			_ = page;
+#endif
 		}
 
 		private void OnClosed( object sender, WindowEventArgs args )

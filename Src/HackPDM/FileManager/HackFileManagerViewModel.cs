@@ -55,6 +55,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	private bool _active;
 	private bool _queuedWatcherOverflow;
 	private bool _watcherDrainScheduled;
+	private bool _watcherScheduledForOverflow;
 	private bool _watcherDrainRunning;
 	private long _lastTreePushTick = long.MinValue / 2;
 	private bool _isTreeLoadRunning;
@@ -116,6 +117,14 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		};
 
 		_restoring = true;
+		if( state.GroupField is null )
+		{
+			state.IsGroupingEnabled = UIStorage.ColumnsInfo.GroupingEnabled;
+			string? configuredGroup = UIStorage.ColumnsInfo.GroupBy?.FieldName;
+			state.GroupField = !string.IsNullOrWhiteSpace( configuredGroup ) && EntryRowKeys.TryGetGroupKey( configuredGroup, out _ )
+				? configuredGroup
+				: nameof( EntryRow.Status );
+		}
 		ShowInactive = state.ShowInactive;
 		IsGroupingEnabled = state.IsGroupingEnabled;
 		if( EntryRowKeys.TryGetGroupKey( state.GroupField, out var groupKey ) )
@@ -135,6 +144,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 	public bool IsDisposed { get; private set; }
 	public bool HasKeptTree => _state.Tree is not null && ( _state.Stale & FileManagerRefresh.Tree ) == 0;
+	public bool IsEntriesStale => ( _state.Stale & FileManagerRefresh.Entries ) != 0;
 	public bool IsTreeLoaded { get; set; }
 	public bool IsListLoaded { get; set; }
 	public bool IsFiltered { get; set; } = true;
@@ -255,7 +265,6 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	} = [];
 
 	private string SelectedLocalDirectory => _files.ResolveLocalDirectory( LastSelectedNodePath );
-	private int SelectedDirectoryId => SelectedDirectory?.DirectoryId ?? 0;
 	private static int[] RemoteIds( IEnumerable<EntryRow> rows ) => RemoteIds( rows.Select( r => r.Id ) );
 
 	public void Initialize() => _workflow.PreloadMetadata();
@@ -297,6 +306,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			_queuedWatcherChanges.Clear();
 			_queuedWatcherOverflow = false;
 			_watcherDrainScheduled = false;
+			_watcherScheduledForOverflow = false;
 			_watcherCooldownTimer.Dispose();
 		}
 		CtsHelper.CancelAndDispose( ref _detailsCancellation );
@@ -307,7 +317,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	public void RefreshFromServer()
 	{
 		_state.MarkStale( FileManagerRefresh.All );
-		RefreshRequested?.Invoke( FileManagerRefresh.Tree );
+		RefreshRequested?.Invoke( FileManagerRefresh.All );
 	}
 
 	private void Refresh( FileManagerRefresh what )
@@ -422,6 +432,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			return;
 		IsListLoaded = false;
 		int generation = Interlocked.Increment( ref _entriesLoadGeneration );
+		_pendingChangesDuringLoad.Clear();
 		CancellationTokenSource linked;
 		try
 		{
@@ -449,6 +460,12 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			if( SelectedDirectory is not { } directory )
 			{
 				Entries.ClearIfNonEmpty();
+				SelectedEntries = [];
+				ClearDetails();
+				Preview = null;
+				IsDetailsLoading = false;
+				IsPreviewLoading = false;
+				IsEmptyDirectory = false;
 				return;
 			}
 
@@ -494,7 +511,8 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		{
 			if( !IsDisposed )
 			{
-				if( generation == Volatile.Read( ref _entriesLoadGeneration ) )
+				bool currentGeneration = generation == Volatile.Read( ref _entriesLoadGeneration );
+				if( currentGeneration )
 					IsEntriesLoading = false;
 				if( !linked.IsCancellationRequested )
 				{
@@ -505,6 +523,10 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 						_pendingChangesDuringLoad.Clear();
 						_ = ApplyLocalChangesAsync( replay );
 					}
+				}
+				else if( currentGeneration )
+				{
+					_pendingChangesDuringLoad.Clear();
 				}
 			}
 		}
@@ -604,10 +626,26 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 	private void ScheduleWatcherDrainLocked()
 	{
-		if( _watcherDrainScheduled || _watcherDrainRunning || ( !_queuedWatcherOverflow && _queuedWatcherChanges.Count == 0 ) )
+		if( _watcherDrainRunning || ( !_queuedWatcherOverflow && _queuedWatcherChanges.Count == 0 ) )
 			return;
 
+		if( _watcherDrainScheduled )
+		{
+			if( _queuedWatcherOverflow && !_watcherScheduledForOverflow )
+			{
+				_watcherScheduledForOverflow = true;
+				if( UiDispatcher.Current is not InlineUiDispatcher )
+				{
+					long remainingMs = OverflowRefreshCooldownMs - ( Environment.TickCount64 - _lastTreePushTick );
+					if( remainingMs > 0 )
+						_watcherCooldownTimer.Change( (int)remainingMs, Timeout.Infinite );
+				}
+			}
+			return;
+		}
+
 		_watcherDrainScheduled = true;
+		_watcherScheduledForOverflow = _queuedWatcherOverflow;
 		if( UiDispatcher.Current is InlineUiDispatcher )
 		{
 			UiDispatcher.Post( () => _ = DrainWatcherQueueAsync() );
@@ -631,10 +669,26 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		List<LocalFileChange>? batch = null;
 		lock( _watcherQueueGate )
 		{
-			_watcherDrainScheduled = false;
 			if( IsDisposed || _watcherDrainRunning )
+			{
+				_watcherDrainScheduled = false;
+				_watcherScheduledForOverflow = false;
 				return;
+			}
 			overflow = _queuedWatcherOverflow;
+			if( overflow && UiDispatcher.Current is not InlineUiDispatcher )
+			{
+				long remainingMs = OverflowRefreshCooldownMs - ( Environment.TickCount64 - _lastTreePushTick );
+				if( remainingMs > 0 )
+				{
+					_watcherDrainScheduled = true;
+					_watcherScheduledForOverflow = true;
+					_watcherCooldownTimer.Change( (int)remainingMs, Timeout.Infinite );
+					return;
+				}
+			}
+			_watcherDrainScheduled = false;
+			_watcherScheduledForOverflow = false;
 			_queuedWatcherOverflow = false;
 			if( !overflow && _queuedWatcherChanges.Count > 0 )
 			{
@@ -863,6 +917,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 	public void ClearDetails()
 	{
+		SelectedHistory = null;
 		OHistories.ClearIfNonEmpty();
 		OParents.ClearIfNonEmpty();
 		OChildren.ClearIfNonEmpty();
@@ -1021,20 +1076,20 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		Func<IReadOnlyList<int>, Task> operation,
 		string? completedMessage = null )
 	{
-		if( SelectedDirectory is not { } directory )
+		if( SelectedDirectory is not { DirectoryId: > 0 } directory )
 		{
 			await Dialogs.ShowMessageAsync( "Current directory doesn't exist remotely." );
 			return;
 		}
 		await RunOperationAsync( async () =>
 		{
-			Reporter.Log( StatusMessage.PROCESSING, $"{what} all entries within directory ({directory.Name}, id: {SelectedDirectoryId})" );
+			Reporter.Log( StatusMessage.PROCESSING, $"{what} all entries within directory ({directory.Name}, id: {directory.DirectoryId})" );
 			using( _localFiles.Suspend() )
 			{
-				IReadOnlyList<int> entryIds = await _workflow.GetDirectoryEntryIdsAsync( SelectedDirectoryId, withSubdirectories, withDeleted );
+				IReadOnlyList<int> entryIds = await _workflow.GetDirectoryEntryIdsAsync( directory.DirectoryId, withSubdirectories, withDeleted );
 				if( entryIds.Count == 0 )
 				{
-					Reporter.Log( StatusMessage.INFO, $"No remote entries found in directory ({directory.Name}, id: {SelectedDirectoryId})." );
+					Reporter.Log( StatusMessage.INFO, $"No remote entries found in directory ({directory.Name}, id: {directory.DirectoryId})." );
 					return;
 				}
 				await operation( entryIds );
@@ -1055,7 +1110,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 	private async Task RestoreDirectoryCoreAsync( bool withSubdirectories )
 	{
-		if( SelectedDirectory is null )
+		if( SelectedDirectory is not { DirectoryId: > 0 } directory )
 		{
 			await Dialogs.ShowMessageAsync( "Current directory doesn't exist remotely." );
 			return;
@@ -1063,7 +1118,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		await RunOperationAsync( async () =>
 		{
 			using( _localFiles.Suspend() )
-				await _workflow.RestoreDeletedInDirectoryAsync( SelectedDirectoryId, withSubdirectories );
+				await _workflow.RestoreDeletedInDirectoryAsync( directory.DirectoryId, withSubdirectories );
 			if( !IsDisposed )
 				Refresh( FileManagerRefresh.All );
 		}, "Completed!" );
@@ -1072,7 +1127,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	[RelayCommand]
 	private async Task CommitDirectoryAsync()
 	{
-		if( SelectedDirectory?.IsRemoteOnly is true )
+		if( SelectedDirectory is null || SelectedDirectory.IsRemoteOnly )
 			return;
 		await RunOperationAsync( async () =>
 		{
@@ -1095,6 +1150,8 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	[RelayCommand]
 	private async Task LocalDeleteDirectoryAsync()
 	{
+		if( SelectedDirectory is null || SelectedDirectory.IsRemoteOnly )
+			return;
 		string directory = SelectedLocalDirectory;
 		if( await Task.Run( () => _files.CountFiles( directory ) ) is not int count )
 			return;
@@ -1211,11 +1268,13 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			return;
 
 		EntryRow? entry = SelectedEntries is [ { } single ] ? single : null;
-		int? targetVersionId = SelectedHistory?.Version is int histId and > 0
-			? histId
-			: entry?.LatestId is int latestId and > 0
-				? latestId
-				: null;
+		int? targetVersionId = entry is null
+			? null
+			: SelectedHistory?.Version is int histId and > 0
+				? histId
+				: entry.LatestId is int latestId and > 0
+					? latestId
+					: null;
 		if( targetVersionId is not int versionId )
 		{
 			await Dialogs.ShowMessageAsync(

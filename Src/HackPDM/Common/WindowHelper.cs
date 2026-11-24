@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using HackPDM.Core.Configuration;
+using HackPDM.Core.Pdm;
 
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -20,6 +21,22 @@ public sealed record WindowPreset(
 
 public static partial class WindowHelper
 {
+	public static class Presets
+	{
+		public const string ProfileManager = nameof( NavigatePageMenu.ProfileManager );
+		public const string HackFileManager = nameof( NavigatePageMenu.HackFileManager );
+		public const string DependencyGraph = nameof( NavigatePageMenu.DependencyGraph );
+		public const string ConfigSettings = "ConfigSettings";
+		public const string AppSettings = "AppSettings";
+		public const string NotLoggedIn = "NotLoggedIn";
+		public const string MessageBox = nameof( HackPDM.Common.MessageBox );
+		public const string StatusDialogView = nameof( HackPDM.Status.StatusDialogView );
+		public const string SearchOdooView = nameof( HackPDM.Search.SearchOdooView );
+		public const string OdooFileTypeManagerView = nameof( HackPDM.Settings.OdooFileTypeManagerView );
+		public const string ApplicationSettingsView = nameof( HackPDM.Settings.ApplicationSettingsView );
+		public const string DefaultWindow = "TemplateWindow";
+	}
+
 	private static readonly ConditionalWeakTable<Page, Window> PageWindows = new();
 	private static readonly WindowSettingsData Defaults = new();
 	private static readonly string? AppIconPath = ResolveAppIconPath();
@@ -86,29 +103,44 @@ public static partial class WindowHelper
 			window.Activate();
 		if( withFrame )
 			window.Content = new Frame();
-		ApplyPreset( window, Preset( presetName ?? "TemplateWindow" ) );
+		ApplyPreset( window, Preset( presetName ?? Presets.DefaultWindow ) );
 		AppComposition.Theme.Attach( window );
 		return window;
 	}
 
-	public static void CreateWindowAndPage<T>( out T page, out Window window, bool activated = true ) where T : Page, new()
+	public static void CreateWindowAndPage<T>( out T page, out Window window, bool activated = true, string? presetName = null ) where T : Page, new()
 	{
 		page = new T();
-		window = CreateWindowForExistingPage( page, activated );
+		window = CreateWindowForExistingPage( page, activated, presetName );
 	}
 
-	public static Window CreateWindowForExistingPage( Page page, bool activated = true )
+	public static Window CreateWindowForExistingPage( Page page, bool activated = true, string? presetName = null )
 	{
 		Window window = new();
 		ApplyAppIcon( window );
 		if( activated )
 			window.Activate();
 		window.Content = new Frame { Content = page };
-		ApplyPreset( window, Preset( page.GetType().Name ) );
+		ApplyPreset( window, Preset( presetName ?? PresetKeyFor( page ) ) );
 		AppComposition.Theme.Attach( window );
 		PageWindows.AddOrUpdate( page, window );
 		return window;
 	}
+
+	private static string PresetKeyFor( Page page ) => page switch
+	{
+		HackPDM.Status.StatusDialogView => Presets.StatusDialogView,
+		HackPDM.Search.SearchOdooView => Presets.SearchOdooView,
+		HackPDM.Settings.OdooFileTypeManagerView => Presets.OdooFileTypeManagerView,
+		HackPDM.Settings.ApplicationSettingsView => Presets.ApplicationSettingsView,
+		HackPDM.FileManager.HackFileManagerView => Presets.HackFileManager,
+		HackPDM.Graph.DependencyGraphView => Presets.DependencyGraph,
+		HackPDM.Login.ProfileManagerView => Presets.ProfileManager,
+		HackPDM.Settings.ConfigurationView => Presets.ConfigSettings,
+		HackPDM.Shell.NotLoggedInView => Presets.NotLoggedIn,
+		HackPDM.Common.MessageBox => Presets.MessageBox,
+		_ => Presets.DefaultWindow,
+	};
 
 	public static void ApplyPreset( Window window, WindowPreset preset )
 	{

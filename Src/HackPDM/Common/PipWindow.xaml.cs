@@ -33,6 +33,8 @@ public sealed partial class PipWindow : Window
 		{
 			compactOverlay = true;
 			ExtendsContentIntoTitleBar = true;
+			PipTitleBar.Visibility = Visibility.Visible;
+			SetTitleBar( PipTitleBar );
 		}
 #endif
 		if( !compactOverlay )

@@ -58,6 +58,8 @@ public sealed partial class HackFileManagerView : Page
 	public Task? TreeSelectionTask { get; private set; }
 	/// <summary>The tree node whose entries are loading or loaded (see OdooDirectoryTree_SelectionChanged).</summary>
 	private TreeViewNode? _loadingNode;
+	private string? _loadingTreePath;
+	private int? _loadingDirectoryId;
 
 	private readonly IPreviewImageLoader _previewLoader = new PreviewImageLoader();
 	private int _previewRequest;
@@ -99,6 +101,8 @@ public sealed partial class HackFileManagerView : Page
 	private readonly RangeObservableCollection<object> _groupedItems = [];
 	private List<EntryGroupHeader> _groups = [];
 	private readonly HashSet<string> _collapsedGroupKeys = new( StringComparer.Ordinal );
+	private readonly HashSet<string> _expandedGroupKeys = new( StringComparer.Ordinal );
+	private bool? _groupDefaultCollapsed;
 	private bool _syncingGroupedSelection;
 	private bool _pendingHeaderToggle;
 	private bool IsUsingGroupedList => GroupedEntryContainer.Visibility == Visibility.Visible;
@@ -195,6 +199,8 @@ public sealed partial class HackFileManagerView : Page
 		OdooDirectoryTree.RightTapped += OdooDirectoryTree_RightTapped;
 		OdooDirectoryBreadcrumb.ItemClicked += OdooDirectoryBreadcrumb_ItemClicked;
 		BranchLinesToggleButton.IsChecked = AppComposition.Theme.ShowTreeBranchLines;
+		if( HackApp.Window?.AppWindow.Presenter is OverlappedPresenter presenter )
+			Anchor.IsChecked = presenter.IsAlwaysOnTop;
 		AppComposition.Theme.ThemeChanged += OnThemeChanged;
 		TreeBranchGuides.RefreshTree( OdooDirectoryTree, showLines: AppComposition.Theme.ShowTreeBranchLines );
 		ApplyWorkspaceLayout();
@@ -422,13 +428,50 @@ public sealed partial class HackFileManagerView : Page
 		}
 		else if( !_isFilteringTree )
 		{
-			TreeBranchGuides.RefreshTree( OdooDirectoryTree, showLines: AppComposition.Theme.ShowTreeBranchLines, selectedNode: OdooDirectoryTree.SelectedNode, updateSelection: true );
+			TreeData? fallback = FindNearestAncestorNode( ViewModel.LastSelectedNodePath );
+			_loadingNode = null;
+			_loadingTreePath = null;
+			_loadingDirectoryId = null;
+			if( fallback is { Node: { } fallbackNode } )
+			{
+				SelectDirectory( fallbackNode );
+				_ = LoadSelectedEntriesAsync();
+				fallback.EnsureVisible( OdooDirectoryTree );
+			}
+			else
+			{
+				bool hadSelection = LastSelectedNode is not null || ViewModel.SelectedDirectory is not null;
+				SelectDirectory( null );
+				if( hadSelection )
+				{
+					CtsHelper.CancelAndDispose( ref _treeSelectionCancellation );
+					ViewModel.Entries.ClearIfNonEmpty();
+					ViewModel.SelectedEntries = [];
+					ViewModel.IsEmptyDirectory = false;
+					ViewModel.IsListLoaded = false;
+					_ = ViewModel.ShowEntryDetailsAsync( null );
+				}
+			}
 		}
 
 		int shownCount = displayRoot.CountRecursive();
 		TreeSummaryText.Text = _isFilteringTree
 			? $"{shownCount} / {_totalTreeFolderCount} folders matching \"{query}\""
 			: $"{_totalTreeFolderCount} folder{(_totalTreeFolderCount == 1 ? "" : "s")}";
+	}
+
+	private TreeData? FindNearestAncestorNode( string? path )
+	{
+		if( string.IsNullOrEmpty( path ) || OdooDirectoryTree.RootNodes.Count == 0 )
+			return null;
+		string[] parts = PwaPaths.Segments( path );
+		for( int len = parts.Length - 1; len >= 1; len-- )
+		{
+			string candidate = PwaPaths.ToServerName( parts[ ..len ] );
+			if( OdooDirectoryTree.FindTreeNode( candidate ) is { } found )
+				return found;
+		}
+		return OdooDirectoryTree.RootNodes[ 0 ].LinkedData;
 	}
 
 	private async Task ReloadEntriesAsync()
@@ -458,6 +501,11 @@ public sealed partial class HackFileManagerView : Page
 			GroupedByLabel.Text = $"Grouped by {ViewModel.ActiveGroupFieldName}";
 			RebuildGroupedList();
 		}
+		else
+		{
+			OdooEntryList.SetSelectionBatch( ViewModel.SelectedEntries );
+			RestoreSortArrow();
+		}
 #endif
 	}
 
@@ -469,11 +517,13 @@ public sealed partial class HackFileManagerView : Page
 			_groupedItems.Clear();
 			return;
 		}
+		bool defaultCollapsed = _groupDefaultCollapsed ?? UIStorage.ColumnsInfo.GroupCollapsed;
 		_groups = EntryListGrouping.BuildGroups(
 			ViewModel.Entries,
 			groupKey,
-			_collapsedGroupKeys.Count > 0 ? _collapsedGroupKeys : null,
-			UIStorage.ColumnsInfo.GroupCollapsed );
+			_collapsedGroupKeys,
+			defaultCollapsed,
+			_expandedGroupKeys );
 		RefreshGroupedFlatList();
 	}
 
@@ -481,11 +531,11 @@ public sealed partial class HackFileManagerView : Page
 	{
 		HashSet<EntryRow> previousSelection = [ .. ( selectionToKeep ?? ViewModel.SelectedEntries ) ];
 		_syncingGroupedSelection = true;
+		List<EntryRow> restored = [];
 		try
 		{
 			_groupedItems.ReplaceAll( EntryListGrouping.FlattenVisible( _groups ) );
 			GroupedEntryList.SelectedItems.Clear();
-			List<EntryRow> restored = [];
 			if( previousSelection.Count > 0 )
 			{
 				foreach( object item in _groupedItems )
@@ -503,6 +553,11 @@ public sealed partial class HackFileManagerView : Page
 		{
 			_syncingGroupedSelection = false;
 		}
+		bool selectionChanged = previousSelection.Count != restored.Count || !previousSelection.SetEquals( restored );
+		if( restored.Count != 1 )
+			_ = ViewModel.ShowEntryDetailsAsync( null );
+		else if( selectionChanged )
+			_ = ViewModel.ShowEntryDetailsAsync( restored[ 0 ] );
 	}
 
 	private void GroupedEntryList_ItemClick( object sender, ItemClickEventArgs e )
@@ -521,9 +576,15 @@ public sealed partial class HackFileManagerView : Page
 				return;
 			header.IsExpanded = !header.IsExpanded;
 			if( header.IsExpanded )
+			{
 				_collapsedGroupKeys.Remove( header.DisplayKey );
+				_expandedGroupKeys.Add( header.DisplayKey );
+			}
 			else
+			{
+				_expandedGroupKeys.Remove( header.DisplayKey );
 				_collapsedGroupKeys.Add( header.DisplayKey );
+			}
 			RefreshGroupedFlatList( keptSelection );
 		}
 
@@ -537,6 +598,37 @@ public sealed partial class HackFileManagerView : Page
 	{
 		if( _syncingGroupedSelection || _pendingHeaderToggle )
 			return;
+
+		bool hasAddedHeader = false;
+		for( int i = 0; i < e.AddedItems.Count; i++ )
+		{
+			if( e.AddedItems[ i ] is EntryGroupHeader )
+			{
+				hasAddedHeader = true;
+				break;
+			}
+		}
+		if( hasAddedHeader )
+		{
+			_syncingGroupedSelection = true;
+			try
+			{
+				List<EntryGroupHeader> headers = GroupedEntryList.SelectedItems.ExtractSelected<EntryGroupHeader>();
+				foreach( EntryGroupHeader header in headers )
+					GroupedEntryList.SelectedItems.Remove( header );
+				for( int i = 0; i < e.RemovedItems.Count; i++ )
+				{
+					if( e.RemovedItems[ i ] is EntryRow removedRow && !GroupedEntryList.SelectedItems.Contains( removedRow ) )
+						GroupedEntryList.SelectedItems.Add( removedRow );
+				}
+			}
+			finally
+			{
+				_syncingGroupedSelection = false;
+			}
+			return;
+		}
+
 		List<EntryGroupHeader> selectedHeaders = GroupedEntryList.SelectedItems.ExtractSelected<EntryGroupHeader>();
 		if( selectedHeaders.Count > 0 )
 		{
@@ -553,8 +645,7 @@ public sealed partial class HackFileManagerView : Page
 		}
 		List<EntryRow> selectedRows = GroupedEntryList.SelectedItems.ExtractSelected<EntryRow>();
 		ViewModel.SelectedEntries = selectedRows;
-		if( selectedRows.Count == 1 )
-			_ = ViewModel.ShowEntryDetailsAsync( selectedRows[ 0 ] );
+		_ = ViewModel.ShowEntryDetailsAsync( selectedRows.Count == 1 ? selectedRows[ 0 ] : null );
 	}
 
 	private void GroupedEntryList_RightTapped( object sender, RightTappedRoutedEventArgs e )
@@ -596,7 +687,9 @@ public sealed partial class HackFileManagerView : Page
 
 	private void ExpandAllGroups_Click( object sender, RoutedEventArgs e )
 	{
+		_groupDefaultCollapsed = false;
 		_collapsedGroupKeys.Clear();
+		_expandedGroupKeys.Clear();
 		foreach( EntryGroupHeader group in _groups )
 			group.IsExpanded = true;
 		RefreshGroupedFlatList();
@@ -604,11 +697,11 @@ public sealed partial class HackFileManagerView : Page
 
 	private void CollapseAllGroups_Click( object sender, RoutedEventArgs e )
 	{
+		_groupDefaultCollapsed = true;
+		_collapsedGroupKeys.Clear();
+		_expandedGroupKeys.Clear();
 		foreach( EntryGroupHeader group in _groups )
-		{
 			group.IsExpanded = false;
-			_collapsedGroupKeys.Add( group.DisplayKey );
-		}
 		RefreshGroupedFlatList();
 	}
 
@@ -641,6 +734,7 @@ public sealed partial class HackFileManagerView : Page
 					{
 						group.IsExpanded = true;
 						_collapsedGroupKeys.Remove( group.DisplayKey );
+						_expandedGroupKeys.Add( group.DisplayKey );
 						expandedAny = true;
 						break;
 					}
@@ -674,6 +768,8 @@ public sealed partial class HackFileManagerView : Page
 			}
 			if( ViewModel.SelectedEntries is [ var single ] )
 				_ = ViewModel.ShowEntryDetailsAsync( single );
+			else if( !expandedAny )
+				_ = ViewModel.ShowEntryDetailsAsync( null );
 			if( focus )
 				GroupedEntryList.Focus( FocusState.Programmatic );
 			if( scroll )
@@ -783,10 +879,7 @@ public sealed partial class HackFileManagerView : Page
 			if( remaining.Count == 0 )
 				_ = ViewModel.ShowEntryDetailsAsync( null );
 			else if( IsUsingGroupedList )
-			{
-				if( remaining.Count == 1 )
-					_ = ViewModel.ShowEntryDetailsAsync( remaining[ 0 ] );
-			}
+				_ = ViewModel.ShowEntryDetailsAsync( remaining.Count == 1 ? remaining[ 0 ] : null );
 			else
 				SelectEntryRows( remaining, scroll: false );
 			return;
@@ -803,8 +896,7 @@ public sealed partial class HackFileManagerView : Page
 		if( IsUsingGroupedList )
 		{
 			ViewModel.SelectedEntries = target;
-			if( target.Count == 1 )
-				_ = ViewModel.ShowEntryDetailsAsync( target[ 0 ] );
+			_ = ViewModel.ShowEntryDetailsAsync( target.Count == 1 ? target[ 0 ] : null );
 			return;
 		}
 		SelectEntryRows( target, scroll: false );
@@ -1120,6 +1212,16 @@ public sealed partial class HackFileManagerView : Page
 			// and loop forever without ever listing the entries.
 			if( data.Node == _loadingNode )
 				return;
+			bool sameTarget = _loadingTreePath is not null
+				&& PwaPaths.SameTreePath( data.FullPath, _loadingTreePath )
+				&& data.DirectoryId == _loadingDirectoryId;
+			if( sameTarget && ( TreeSelectionTask is { IsCompleted: false } || !ViewModel.IsEntriesStale ) )
+			{
+				_loadingNode = data.Node;
+				if( !ReferenceEquals( LastSelectedNode, data.Node ) )
+					SelectDirectory( data.Node );
+				return;
+			}
 
 			SelectDirectory( data.Node );
 			data.EnsureVisible( sender );
@@ -1135,8 +1237,13 @@ public sealed partial class HackFileManagerView : Page
 	private Task LoadSelectedEntriesAsync()
 	{
 		_loadingNode = LastSelectedNode;
+		_loadingTreePath = ViewModel.LastSelectedNodePath;
+		_loadingDirectoryId = ViewModel.SelectedDirectory?.DirectoryId;
 		CancellationTokenSource next = CtsHelper.Replace( ref _treeSelectionCancellation );
+		if( ViewModel.SelectedEntries.Count > 0 )
+			ViewModel.SelectedEntries = [];
 		ViewModel.IsListLoaded = false;
+		_ = ViewModel.ShowEntryDetailsAsync( null );
 		return TreeSelectionTask = LoadAndRestoreAsync( next.Token );
 	}
 
@@ -1207,16 +1314,13 @@ public sealed partial class HackFileManagerView : Page
 	{
 		List<EntryRow> selected = OdooEntryList.SelectedItems.ExtractSelected<EntryRow>();
 		ViewModel.SelectedEntries = selected;
-		if( selected.Count == 1 )
-			_ = ViewModel.ShowEntryDetailsAsync( selected[ 0 ] );
+		_ = ViewModel.ShowEntryDetailsAsync( selected.Count == 1 ? selected[ 0 ] : null );
 	}
 
 	private void VersionTabs_SelectionChanged( object sender, SelectionChangedEventArgs e )
 	{
 		ViewModel.SelectedDetailTab = ( VersionTabs.SelectedItem as TabViewItem )?.Name;
-		EntryRow? selected = IsUsingGroupedList
-			? GroupedEntryList.SelectedItems.FirstSelected<EntryRow>()
-			: OdooEntryList.SelectedItem as EntryRow;
+		EntryRow? selected = ViewModel.SelectedEntries is [ { } single ] ? single : null;
 		if( e.AddedItems.Count > 0 && selected is not null )
 			_ = ViewModel.ShowEntryDetailsAsync( selected );
 	}
@@ -1225,15 +1329,20 @@ public sealed partial class HackFileManagerView : Page
 	{
 		// the view model sorts the source collection; stop TableView sorting it a second time
 		e.Handled = true;
+		if( !e.Column.CanSort )
+			return;
+		string? field = e.Column.SortMemberPath
+			?? ( e.Column as TableViewBoundColumn )?.Binding?.Path?.Path
+			?? e.Column.Header?.ToString();
+		if( !EntryRowKeys.TryGetSortKey( field, out _ ) )
+			return;
+
 		foreach( var column in OdooEntryList.Columns.Where( c => c != e.Column ) )
 			column.SortDirection = null;
 
 		bool descending = e.Column.SortDirection is SortDirection.Ascending;
 		e.Column.SortDirection = descending ? SortDirection.Descending : SortDirection.Ascending;
 
-		string? field = e.Column.SortMemberPath
-			?? ( e.Column as TableViewBoundColumn )?.Binding?.Path?.Path
-			?? e.Column.Header?.ToString();
 		ViewModel.SortEntries( field, descending );
 	}
 
@@ -1322,14 +1431,27 @@ public sealed partial class HackFileManagerView : Page
 					?? throw new ArgumentException( $"directory '{part}' not found", nameof( segmentsBelowRoot ) );
 			}
 
+			bool changedFolder = !ReferenceEquals( LastSelectedNode, node );
 			foreach( var root in OdooDirectoryTree.RootNodes )
 				root.IsExpanded = false;
-			node.LinkedData.EnsureVisible( OdooDirectoryTree );
-			if( !ReferenceEquals( LastSelectedNode, node ) )
+			if( changedFolder )
+			{
 				SelectDirectory( node );
+				Task loadTask = LoadSelectedEntriesAsync();
+				node.LinkedData.EnsureVisible( OdooDirectoryTree );
+				await loadTask;
+			}
+			else
+			{
+				node.LinkedData.EnsureVisible( OdooDirectoryTree );
+				if( TreeSelectionTask is { } inFlight )
+					await inFlight;
+				else if( !ViewModel.IsListLoaded )
+					await LoadSelectedEntriesAsync();
+			}
 
 			await AsyncHelper.WaitUntil( () => _left || ViewModel.IsListLoaded, 100, 60_000 );
-			if( _left || fileName is null )
+			if( _left || fileName is null || !ReferenceEquals( LastSelectedNode, node ) )
 				return;
 
 			EntryRow entry = ViewModel.Entries.FirstOrDefault( e => string.Equals( e.Name, fileName, StringComparison.OrdinalIgnoreCase ) )
@@ -1392,7 +1514,7 @@ public sealed partial class HackFileManagerView : Page
 
 	private void ManageTypes_Click( object sender, RoutedEventArgs e )
 	{
-		WindowHelper.CreateWindowAndPage<OdooFileTypeManagerView>( out var page, out var window );
+		WindowHelper.CreateWindowAndPage<OdooFileTypeManagerView>( out var page, out var window, presetName: WindowHelper.Presets.OdooFileTypeManagerView );
 		window.Title = "File Types & Filters";
 		page.StoreWindowInstance( window );
 	}
@@ -1809,6 +1931,7 @@ public sealed partial class HackFileManagerView : Page
 	/// <summary>The entry list control, for the smoke tests.</summary>
 	/// <returns>The page's entry table.</returns>
 	public TableView GetOdooEntryList() => OdooEntryList;
+	internal void SelectEntriesForTest( params EntryRow[] rows ) => SelectEntryRows( rows );
 	internal TabViewItem HistoryTabItem => HistoryTab;
 	internal TabViewItem? LowerTabIndex
 	{

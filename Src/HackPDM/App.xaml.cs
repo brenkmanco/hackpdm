@@ -87,7 +87,8 @@ public sealed partial class HackApp : Application
 
 	protected override void OnLaunched( LaunchActivatedEventArgs args )
 	{
-		Window = new MainWindow();
+		MainWindow mainWindow = new();
+		Window = mainWindow;
 		Window.SetWindowType( AppWindowPresenterKind.Overlapped );
 		Window.Closed += Window_Closed;
 		Window.Activate();
@@ -103,7 +104,7 @@ public sealed partial class HackApp : Application
 		HackLogger.Info( "App", $"HackPDM {ClientUpdate.CurrentText} started (UI config loaded={UIStorage.GlobalData.IsLoadedFromFile}, logs={HackLogger.LogDirectory})" );
 
 		HomePage = new HomeView();
-		Window.Content = new Frame { Content = HomePage };
+		mainWindow.ContentFrame.Content = HomePage;
 		AppComposition.Theme.Attach( Window );
 
 #if SMOKE_TESTS
