@@ -165,7 +165,7 @@ public sealed partial class SearchOdooViewModel(
 				maxResults,
 				LocalOnly ? Array.Empty<SearchPropertiesRow>() : new List<SearchPropertiesRow>( PropertiesActive ) );
 
-			List<SearchRow> rows = await Task.Run( () => search.SearchAsync( query ), token ).WaitAsync( token );
+			List<SearchRow> rows = await search.SearchAsync( query, token );
 			if( token.IsCancellationRequested )
 				return;
 			SearchResultsList.ReplaceAll( rows );

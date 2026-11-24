@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 
 using HackPDM.Common;
 using HackPDM.Core.Configuration;
@@ -194,16 +195,35 @@ public sealed partial class SearchOdooView : Page, IDockablePanel
 		AppComposition.Dialogs.ShowFullSearchWindow();
 	}
 
-	private void MiniResultsCombo_SelectionChanged( object sender, SelectionChangedEventArgs e )
+	private async void MiniResultsCombo_SelectionChanged( object sender, SelectionChangedEventArgs e )
 	{
 		SearchRow? row = MiniResultsCombo.SelectedItem as SearchRow;
 		MiniLocateBtn.IsEnabled = row is not null;
-		if( !_suppressComboNavigate && row is not null )
-			LocateAndFocusMainWindow( row );
+		if( _suppressComboNavigate || row is null )
+			return;
+		try
+		{
+			await LocateAndFocusMainWindowAsync( row );
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "Search", $"Locating entry '{row.Name}' failed: {ex.Message}", ex );
+		}
 	}
 
-	private void MiniLocate_Click( object sender, RoutedEventArgs e )
-		=> LocateAndFocusMainWindow( MiniResultsCombo.SelectedItem as SearchRow );
+	private async void MiniLocate_Click( object sender, RoutedEventArgs e )
+	{
+		if( MiniResultsCombo.SelectedItem is not SearchRow row )
+			return;
+		try
+		{
+			await LocateAndFocusMainWindowAsync( row );
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "Search", $"Locating entry '{row.Name}' failed: {ex.Message}", ex );
+		}
+	}
 
 	private void OdooDock_Click( object sender, RoutedEventArgs e )
 		=> AppComposition.Dialogs.DockSearchWindow();
@@ -219,29 +239,43 @@ public sealed partial class SearchOdooView : Page, IDockablePanel
 			AppComposition.Dialogs.CloseSearchWindow();
 	}
 
-	private void OdooSearchResults_DoubleTapped( object sender, DoubleTappedRoutedEventArgs e )
+	private async void OdooSearchResults_DoubleTapped( object sender, DoubleTappedRoutedEventArgs e )
 	{
-		if( ( e.OriginalSource as DependencyObject ).FindAncestor<TableViewRow>( OdooSearchResults ) is not null )
-			LocateAndFocusMainWindow( OdooSearchResults.SelectedItem as SearchRow );
+		if( ( e.OriginalSource as DependencyObject ).FindAncestor<TableViewRow>( OdooSearchResults ) is not null
+			&& OdooSearchResults.SelectedItem is SearchRow row )
+		{
+			try
+			{
+				await LocateAndFocusMainWindowAsync( row );
+			}
+			catch( Exception ex )
+			{
+				HackLogger.Warn( "Search", $"Locating entry '{row.Name}' failed: {ex.Message}", ex );
+			}
+		}
 	}
 
-	private void LocateSelected_Click( object sender, RoutedEventArgs e )
-		=> LocateAndFocusMainWindow( OdooSearchResults.SelectedItem as SearchRow );
-
-	private async void LocateAndFocusMainWindow( SearchRow? row )
+	private async void LocateSelected_Click( object sender, RoutedEventArgs e )
 	{
-		if( row is null )
+		if( OdooSearchResults.SelectedItem is not SearchRow row )
 			return;
 		try
 		{
-			if( _parentWindow is not null )
-				HackApp.Window?.Activate();
-			await ViewModel.LocateCommand.ExecuteAsync( row );
+			await LocateAndFocusMainWindowAsync( row );
 		}
 		catch( Exception ex )
 		{
 			HackLogger.Warn( "Search", $"Locating entry '{row.Name}' failed: {ex.Message}", ex );
 		}
+	}
+
+	private async Task LocateAndFocusMainWindowAsync( SearchRow? row )
+	{
+		if( row is null )
+			return;
+		if( _parentWindow is not null )
+			HackApp.Window?.Activate();
+		await ViewModel.LocateCommand.ExecuteAsync( row );
 	}
 
 	private void SearchOdooView_KeyDown( object sender, KeyRoutedEventArgs e )
