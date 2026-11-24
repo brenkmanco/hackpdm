@@ -92,31 +92,31 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		{
 			[ PdmConstants.HistoryTab ] = async ( entry, ct ) =>
 			{
-				var rows = await Task.Run( () => _details.GetHistoryAsync( entry ), ct );
+				var rows = await _details.GetHistoryAsync( entry, ct );
 				ct.ThrowIfCancellationRequested();
 				OHistories.ReplaceAll( rows );
 			},
 			[ PdmConstants.ParentTab ] = async ( entry, ct ) =>
 			{
-				var rows = await Task.Run( () => _details.GetParentsAsync( entry ), ct );
+				var rows = await _details.GetParentsAsync( entry, ct );
 				ct.ThrowIfCancellationRequested();
 				OParents.ReplaceAll( rows );
 			},
 			[ PdmConstants.ChildTab ] = async ( entry, ct ) =>
 			{
-				var rows = await Task.Run( () => _details.GetChildrenAsync( entry ), ct );
+				var rows = await _details.GetChildrenAsync( entry, ct );
 				ct.ThrowIfCancellationRequested();
 				OChildren.ReplaceAll( rows );
 			},
 			[ PdmConstants.PropertiesTab ] = async ( entry, ct ) =>
 			{
-				var rows = await Task.Run( () => _details.GetPropertiesAsync( entry ), ct );
+				var rows = await _details.GetPropertiesAsync( entry, ct );
 				ct.ThrowIfCancellationRequested();
 				OProperties.ReplaceAll( rows );
 			},
 			[ PdmConstants.InfoTab ] = async ( entry, ct ) =>
 			{
-				var rows = await Task.Run( () => _details.GetVersionInfoAsync( entry ), ct );
+				var rows = await _details.GetVersionInfoAsync( entry, ct );
 				ct.ThrowIfCancellationRequested();
 				OVersions.ReplaceAll( rows );
 			},
@@ -1269,21 +1269,23 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	{
 		try
 		{
-			var (image, localPath) = await Task.Run( async () =>
+			token.ThrowIfCancellationRequested();
+			byte[]? image = entry.LatestId is int versionId
+				? await _details.GetPreviewImageAsync( versionId, token )
+				: null;
+			token.ThrowIfCancellationRequested();
+
+			string? localPath = null;
+			if( image is not { Length: > 0 } )
 			{
+				localPath = await Task.Run( () => entry.LocalFile is { Exists: true } local ? local.FullName : null, token );
 				token.ThrowIfCancellationRequested();
-				byte[]? bytes = entry.LatestId is int versionId
-					? await _details.GetPreviewImageAsync( versionId ).ConfigureAwait( false )
-					: null;
-				token.ThrowIfCancellationRequested();
-				string? path = entry.LocalFile is { Exists: true } local ? local.FullName : null;
-				if( bytes is not { Length: > 0 } && path is not null )
+				if( localPath is not null )
 				{
-					bytes = await _details.GetLocalPreviewImageAsync( path ).ConfigureAwait( false );
+					image = await _details.GetLocalPreviewImageAsync( localPath, token );
 					token.ThrowIfCancellationRequested();
 				}
-				return (bytes, path);
-			}, token );
+			}
 
 			EntryPreview? preview = image is { Length: > 0 }
 				? new EntryPreview( image, null )
@@ -1340,17 +1342,17 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		IsPreviewLoading = true;
 		try
 		{
-			byte[]? bytes = await Task.Run( async () =>
+			token.ThrowIfCancellationRequested();
+			byte[]? bytes = versionId is > 0
+				? await _details.GetPreviewImageAsync( versionId, token )
+				: null;
+			token.ThrowIfCancellationRequested();
+			if( bytes is not { Length: > 0 }
+				&& !string.IsNullOrEmpty( localPath )
+				&& await Task.Run( () => File.Exists( localPath ), token ) )
 			{
-				token.ThrowIfCancellationRequested();
-				byte[]? result = versionId is > 0
-					? await _details.GetPreviewImageAsync( versionId ).ConfigureAwait( false )
-					: null;
-				token.ThrowIfCancellationRequested();
-				if( result is not { Length: > 0 } && !string.IsNullOrEmpty( localPath ) && File.Exists( localPath ) )
-					result = await _details.GetLocalPreviewImageAsync( localPath ).ConfigureAwait( false );
-				return result;
-			}, token );
+				bytes = await _details.GetLocalPreviewImageAsync( localPath, token );
+			}
 
 			if( !IsDisposed && !token.IsCancellationRequested && generation == Volatile.Read( ref _previewVersionGeneration ) )
 				Preview = bytes is { Length: > 0 } ? new EntryPreview( bytes, null ) : null;
@@ -1675,8 +1677,9 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			return;
 		}
 
-		// EntryDetailsService.UploadPreviewImageAsync encodes Base64 synchronously before its RPC await.
-		var result = await Task.Run( () => _details.UploadPreviewImageAsync( versionId, bytes ), _pageCancellation.Token );
+		HackPDM.Core.Odoo.Result<bool> result;
+		try { result = await _details.UploadPreviewImageAsync( versionId, bytes, _pageCancellation.Token ); }
+		catch( OperationCanceledException ) { return; }
 		if( !result.Ok || !result.Value )
 		{
 			await Dialogs.ShowMessageAsync( result.Error ?? "Could not upload the preview image.", "Upload Preview Image", MessageBoxButtons.OK, MessageBoxIcon.Error );
@@ -1697,7 +1700,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	[RelayCommand]
 	private Task DownloadHistoryAsync() => WithHistoryVersionAsync( async version =>
 	{
-		bool hasConflict = await Task.Run( () => _files.HasConflictingLocalCopy( version ), _pageCancellation.Token );
+		bool hasConflict = await _files.HasConflictingLocalCopyAsync( version, _pageCancellation.Token );
 		if( !hasConflict )
 		{
 			await Task.Run( () => _files.DownloadVersionAsync( version, toTemp: false ), _pageCancellation.Token );

@@ -369,7 +369,7 @@ public sealed partial class DependencyGraphViewModel : ObservableObject, IDispos
 			IsGraphLoading = true;
 			IsGraphBusyOverlayVisible = true;
 
-			Result<DependencyGraph> graphResult = await Task.Run( () => DependencyGraphLoader.LoadAsync( roots, direction, token ), token );
+			Result<DependencyGraph> graphResult = await DependencyGraphLoader.LoadAsync( roots, direction, token );
 			if( IsDisposed || token.IsCancellationRequested )
 				return;
 			if( !graphResult.Ok )
@@ -579,19 +579,19 @@ public sealed partial class DependencyGraphViewModel : ObservableObject, IDispos
 			switch( tab )
 			{
 				case GraphDetailTab.History:
-					Apply( HistoryRows, await Task.Run( () => _details.GetHistoryAsync( row ), token ) );
+					Apply( HistoryRows, await _details.GetHistoryAsync( row, token ) );
 					break;
 				case GraphDetailTab.WhereUsed:
-					Apply( ParentRows, await Task.Run( () => _details.GetParentsAsync( row ), token ) );
+					Apply( ParentRows, await _details.GetParentsAsync( row, token ) );
 					break;
 				case GraphDetailTab.Dependents:
-					Apply( ChildRows, await Task.Run( () => _details.GetChildrenAsync( row ), token ) );
+					Apply( ChildRows, await _details.GetChildrenAsync( row, token ) );
 					break;
 				case GraphDetailTab.Properties:
-					Apply( PropertyRows, await Task.Run( () => _details.GetPropertiesAsync( row ), token ) );
+					Apply( PropertyRows, await _details.GetPropertiesAsync( row, token ) );
 					break;
 				case GraphDetailTab.Info:
-					Apply( VersionRows, await Task.Run( () => _details.GetVersionInfoAsync( row ), token ) );
+					Apply( VersionRows, await _details.GetVersionInfoAsync( row, token ) );
 					break;
 			}
 		}
@@ -620,7 +620,7 @@ public sealed partial class DependencyGraphViewModel : ObservableObject, IDispos
 		try
 		{
 			byte[]? bytes = node.VersionId > 0
-				? await Task.Run( () => _details.GetPreviewImageAsync( node.VersionId ), token )
+				? await _details.GetPreviewImageAsync( node.VersionId, token )
 				: null;
 			if( IsDisposed || token.IsCancellationRequested || previewGen != Volatile.Read( ref _previewGeneration ) || _detailNode?.Id != node.Id )
 				return;
