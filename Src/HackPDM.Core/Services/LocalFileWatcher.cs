@@ -102,12 +102,15 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 		ReturnSpecialDirectories = false,
 	};
 
+	private const int MaxRecoveryAttempts = 5;
 	private readonly object _gate = new();
+	private readonly object _flushDispatchLock = new();
 	private readonly LocalChangeBatcher _batcher = new( Quiet );
 	private readonly Timer _flush;
 	private readonly Timer _burstSettle;
 	private FileSystemWatcher? _watcher;
 	private string? _folder;
+	private long _watchGeneration;
 	private bool _flushArmed;
 	private bool _burstActive;
 	private bool _trailingOverflowNeeded;
@@ -175,7 +178,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 				}
 			}
 			if( !string.IsNullOrEmpty( _folder ) )
-				StartWatchingLocked( _folder );
+				StartWatchingLocked( _folder, createIfMissing: false );
 		}
 	}
 
@@ -214,16 +217,21 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 			StopWatching();
 			if( string.IsNullOrEmpty( normalized ) )
 				return;
-			StartWatchingLocked( normalized );
+			StartWatchingLocked( normalized, createIfMissing: true );
 		}
 	}
 
-	private void StartWatchingLocked( string folder )
+	private void StartWatchingLocked( string folder, bool createIfMissing )
 	{
 		FileSystemWatcher? watcher = null;
 		try
 		{
-			Directory.CreateDirectory( folder );
+			if( createIfMissing )
+				Directory.CreateDirectory( folder );
+			else if( !Directory.Exists( folder ) )
+				return;
+
+			long generation = Interlocked.Increment( ref _watchGeneration );
 			watcher = new( folder )
 			{
 				IncludeSubdirectories = true,
@@ -237,35 +245,35 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 			};
 			watcher.Created += ( _, e ) =>
 			{
-				if( Volatile.Read( ref _suspendCount ) > 0 )
+				if( Volatile.Read( ref _suspendCount ) > 0 || Volatile.Read( ref _watchGeneration ) != generation )
 					return;
 				bool isDir = Directory.Exists( e.FullPath );
-				Add( e.FullPath, LocalChangeKind.Created, isDir );
+				Add( e.FullPath, LocalChangeKind.Created, isDir, generation );
 				if( isDir )
-					_ = Task.Run( () => AddContentsOfNewFolder( e.FullPath ) );
+					_ = Task.Run( () => AddContentsOfNewFolder( e.FullPath, generation ) );
 			};
 			watcher.Changed += ( _, e ) =>
 			{
-				if( Volatile.Read( ref _suspendCount ) > 0 )
+				if( Volatile.Read( ref _suspendCount ) > 0 || Volatile.Read( ref _watchGeneration ) != generation )
 					return;
 				if( !Directory.Exists( e.FullPath ) )
-					Add( e.FullPath, LocalChangeKind.Updated, isDirectory: false );
+					Add( e.FullPath, LocalChangeKind.Updated, isDirectory: false, generation );
 			};
 			watcher.Deleted += ( _, e ) =>
 			{
-				if( Volatile.Read( ref _suspendCount ) > 0 )
+				if( Volatile.Read( ref _suspendCount ) > 0 || Volatile.Read( ref _watchGeneration ) != generation )
 					return;
-				Add( e.FullPath, LocalChangeKind.Deleted, isDirectory: false );
+				Add( e.FullPath, LocalChangeKind.Deleted, isDirectory: false, generation );
 			};
 			watcher.Renamed += ( _, e ) =>
 			{
-				if( Volatile.Read( ref _suspendCount ) > 0 )
+				if( Volatile.Read( ref _suspendCount ) > 0 || Volatile.Read( ref _watchGeneration ) != generation )
 					return;
 				bool isDir = Directory.Exists( e.FullPath );
-				Add( e.OldFullPath, LocalChangeKind.Deleted, isDir );
-				Add( e.FullPath, LocalChangeKind.Created, isDir );
+				Add( e.OldFullPath, LocalChangeKind.Deleted, isDir, generation );
+				Add( e.FullPath, LocalChangeKind.Created, isDir, generation );
 				if( isDir )
-					_ = Task.Run( () => AddContentsOfNewFolder( e.FullPath ) );
+					_ = Task.Run( () => AddContentsOfNewFolder( e.FullPath, generation ) );
 			};
 			watcher.Error += ( _, e ) => OnWatcherError( folder, watcher, e.GetException() );
 			watcher.EnableRaisingEvents = Volatile.Read( ref _suspendCount ) == 0;
@@ -335,11 +343,30 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 			{
 				try
 				{
-					await Task.Delay( recoveryDelayMs );
-					lock( _gate )
+					int delayMs = recoveryDelayMs;
+					for( int attempt = 0; attempt < MaxRecoveryAttempts; attempt++ )
 					{
-						if( !_disposed && _watcher is null && string.Equals( _folder, folder, PwaPaths.PathComparison ) )
-							StartWatchingLocked( folder );
+						await Task.Delay( delayMs );
+						bool recoveredOrStopped = false;
+						lock( _gate )
+						{
+							if( _disposed || !string.Equals( _folder, folder, PwaPaths.PathComparison ) )
+							{
+								recoveredOrStopped = true;
+							}
+							else if( _watcher is not null )
+							{
+								recoveredOrStopped = true;
+							}
+							else if( Volatile.Read( ref _suspendCount ) == 0 )
+							{
+								StartWatchingLocked( folder, createIfMissing: false );
+								recoveredOrStopped = _watcher is not null;
+							}
+						}
+						if( recoveredOrStopped )
+							break;
+						delayMs = Math.Min( 3000, delayMs * 2 );
 					}
 				}
 				finally
@@ -361,9 +388,9 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 			|| name.EndsWith( ".swp", StringComparison.OrdinalIgnoreCase );
 	}
 
-	private void AddContentsOfNewFolder( string path )
+	private void AddContentsOfNewFolder( string path, long generation )
 	{
-		if( Volatile.Read( ref _suspendCount ) > 0 )
+		if( Volatile.Read( ref _suspendCount ) > 0 || Volatile.Read( ref _watchGeneration ) != generation )
 			return;
 		try
 		{
@@ -373,9 +400,11 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 			int scanned = 0;
 			foreach( FileSystemInfo entry in dir.EnumerateFileSystemInfos( "*", NewFolderScanOptions ) )
 			{
-				if( Volatile.Read( ref _suspendCount ) > 0 || scanned++ >= MaxScannedInNewFolder )
+				if( Volatile.Read( ref _suspendCount ) > 0
+					|| Volatile.Read( ref _watchGeneration ) != generation
+					|| scanned++ >= MaxScannedInNewFolder )
 					break;
-				Add( entry.FullName, LocalChangeKind.Created, ( entry.Attributes & FileAttributes.Directory ) != 0 );
+				Add( entry.FullName, LocalChangeKind.Created, ( entry.Attributes & FileAttributes.Directory ) != 0, generation );
 			}
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
@@ -386,7 +415,7 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 	internal void SimulateChangeForTest( string path, LocalChangeKind kind, bool isDirectory = false )
 		=> Add( path, kind, isDirectory );
 
-	private void Add( string path, LocalChangeKind kind, bool isDirectory )
+	private void Add( string path, LocalChangeKind kind, bool isDirectory, long? expectedGeneration = null )
 	{
 		if( Volatile.Read( ref _suspendCount ) > 0 || IsNoise( path ) )
 			return;
@@ -395,6 +424,8 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 		lock( _gate )
 		{
 			if( _disposed || Volatile.Read( ref _suspendCount ) > 0 )
+				return;
+			if( expectedGeneration is long gen && Volatile.Read( ref _watchGeneration ) != gen )
 				return;
 			if( _burstActive )
 			{
@@ -458,25 +489,30 @@ public sealed class LocalFileWatcher : ILocalFileWatcher, IDisposable
 
 	private void Flush()
 	{
-		List<LocalFileChange> due;
-		lock( _gate )
+		lock( _flushDispatchLock )
 		{
-			if( _disposed || Volatile.Read( ref _suspendCount ) > 0 || _burstActive )
-				return;
-			due = _batcher.TakeDue( DateTime.UtcNow );
-			if( _batcher.PendingCount == 0 )
+			List<LocalFileChange> due;
+			lock( _gate )
 			{
-				_flushArmed = false;
-				_flush.Change( Timeout.Infinite, Timeout.Infinite );
+				if( _disposed || Volatile.Read( ref _suspendCount ) > 0 || _burstActive )
+					return;
+				due = _batcher.TakeDue( DateTime.UtcNow );
+				if( _batcher.PendingCount == 0 )
+				{
+					_flushArmed = false;
+					_flush.Change( Timeout.Infinite, Timeout.Infinite );
+				}
+				_consecutiveOverflows = 0;
 			}
-			_consecutiveOverflows = 0;
+			if( due.Count > 0 )
+				Changed?.Invoke( due );
 		}
-		if( due.Count > 0 )
-			Changed?.Invoke( due );
 	}
 
 	private void StopWatching()
 	{
+		Interlocked.Increment( ref _watchGeneration );
+		_batcher.Clear();
 		_watcher?.Dispose();
 		_watcher = null;
 		_folder = null;

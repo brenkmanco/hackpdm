@@ -11,28 +11,36 @@ namespace HackPDM.Core.Pdm;
 /// <summary>Filters commit candidates, ensures server directories exist, and stages records for commit.</summary>
 public static class CommitOperations
 {
-	private const int LookupChunkSize = 200;
+	private const int LookupChunkSize = 50;
+	private const int VersionChunkSize = 200;
 	private static readonly string[] EntryLookupFields =
 	[
 		nameof( HpEntry.id ),
 		nameof( HpEntry.name ),
 		nameof( HpEntry.dir_id ),
+		nameof( HpEntry.deleted ),
 		nameof( HpEntry.checkout_user ),
 		nameof( HpEntry.latest_version_id ),
 		nameof( HpEntry.windows_complete_name ),
 	];
-	private static readonly string[] ChecksumOnlyFields = [ nameof( HpVersion.checksum ) ];
+	private static readonly string[] ChecksumOnlyFields = [ nameof( HpVersion.checksum ), nameof( HpVersion.file_size ) ];
 
 	private sealed record CachedFilterRegex( string[] Patterns, Regex? Regex );
 	private static CachedFilterRegex? _filterRegexCache;
 
-	public static async Task<HpDirectory?> CreateDirectoriesAsync( HackFile? hack )
+	public static async Task<HpDirectory?> CreateDirectoriesAsync( HackFile? hack, CancellationToken token = default )
 	{
 		if( hack is null )
 			return null;
-		return ( await HpDirectory.CreateNew( DirectorySegments( hack ) ) )?.LastOrDefault()
+		return ( await HpDirectory.CreateNew( DirectorySegments( hack ), token ) )?.LastOrDefault()
 			?? throw new InvalidOperationException( $"{HpDirectory.ModelName} didn't create any records" );
 	}
+
+	internal static string EscapeLikeLiteral( string value )
+		=> value
+			.Replace( "\\", "\\\\", StringComparison.Ordinal )
+			.Replace( "%", "\\%", StringComparison.Ordinal )
+			.Replace( "_", "\\_", StringComparison.Ordinal );
 
 	internal static string[] DirectorySegments( HackFile hack )
 		=> PwaPaths.LocalSegments( hack.FullPath is { Length: > 0 } full ? Path.GetDirectoryName( full ) : hack.DirectoryName ) ?? [];
@@ -85,39 +93,58 @@ public static class CommitOperations
 		{
 			token.ThrowIfCancellationRequested();
 			string[] chunk = OdooRpc.SliceChunk( distinctServerNames, offset, LookupChunkSize );
-			OdooDomain filter = OdooDomain.Where( nameof( HpEntry.windows_complete_name ), "in", chunk ).And( nameof( HpEntry.deleted ), false );
-			HpEntry[]? batch = await HpEntry.GetRecordsBySearchAsync( searchFilter: filter, includedFields: EntryLookupFields );
-			if( batch is not { Length: > 0 } )
+			OdooDomain filter = OdooDomain.Where( nameof( HpEntry.windows_complete_name ), Operators.ILikeEqual, EscapeLikeLiteral( chunk[ 0 ] ) );
+			for( int i = 1; i < chunk.Length; i++ )
+				filter |= OdooDomain.Where( nameof( HpEntry.windows_complete_name ), Operators.ILikeEqual, EscapeLikeLiteral( chunk[ i ] ) );
+
+			Result<HpEntry[]> batchResult = await Repository<HpEntry>.SearchReadAsync(
+				filter,
+				FieldSelection.Only( EntryLookupFields ),
+				token: token ).ConfigureAwait( false );
+			if( !batchResult.Ok )
+				throw new OdooException( $"Could not look up existing remote entries: {batchResult.Error}" );
+			if( batchResult.Value is not { Length: > 0 } batch )
 				continue;
 			foreach( HpEntry found in batch )
 			{
 				if( found.id is not null and not 0 && found.windows_complete_name is { Length: > 0 } wcn )
-					entryByServerName.TryAdd( wcn, found );
+				{
+					if( !entryByServerName.TryGetValue( wcn, out HpEntry? existing )
+						|| ( existing.deleted is true && found.deleted is not true ) )
+					{
+						entryByServerName[ wcn ] = found;
+					}
+				}
 			}
 		}
 
 		// Batch-query latest version checksums for all matched remote entries in 1 RPC per chunk
-		Dictionary<int, string?> checksumByVersionId = [];
+		Dictionary<int, (string? Checksum, int? FileSize)> versionInfoById = [];
 		if( entryByServerName.Count > 0 )
 		{
 			HashSet<int> versionIds = [];
 			foreach( HpEntry found in entryByServerName.Values )
 			{
-				if( found.latest_version_id?.id is int vid and not 0 )
+				if( found.deleted is not true && found.latest_version_id?.id is int vid and not 0 )
 					versionIds.Add( vid );
 			}
 			if( versionIds.Count > 0 )
 			{
 				int[] allVids = [ .. versionIds ];
-				for( int offset = 0; offset < allVids.Length; offset += LookupChunkSize )
+				for( int offset = 0; offset < allVids.Length; offset += VersionChunkSize )
 				{
 					token.ThrowIfCancellationRequested();
-					int[] chunk = OdooRpc.SliceChunk( allVids, offset, LookupChunkSize );
-					HpVersion[]? versions = await HpVersion.GetRecordsByIdsAsync( chunk, includedFields: ChecksumOnlyFields );
-					foreach( HpVersion v in versions ?? [] )
+					int[] chunk = OdooRpc.SliceChunk( allVids, offset, VersionChunkSize );
+					Result<HpVersion[]> versionsResult = await Repository<HpVersion>.ReadAsync(
+						chunk,
+						FieldSelection.Only( ChecksumOnlyFields ),
+						token: token ).ConfigureAwait( false );
+					if( !versionsResult.Ok )
+						throw new OdooException( $"Could not look up latest version checksums: {versionsResult.Error}" );
+					foreach( HpVersion v in versionsResult.Value ?? [] )
 					{
 						if( v.id is int vid )
-							checksumByVersionId[ vid ] = v.checksum;
+							versionInfoById[ vid ] = ( v.checksum, v.file_size );
 					}
 				}
 			}
@@ -133,10 +160,19 @@ public static class CommitOperations
 			if( entryByServerName.TryGetValue( serverName, out HpEntry? entry )
 				&& string.Equals( entry.name, hack.Name, StringComparison.OrdinalIgnoreCase ) )
 			{
+				if( entry.deleted is true )
+				{
+					log?.Invoke( StatusMessage.ERROR, $"entry '{filePath}' already exists on the server as deleted (Dt); restore or permanently delete it before committing" );
+					continue;
+				}
 				bool mine = entry.checkout_user?.id == myId;
-				string? latest = entry.latest_version_id?.id is int vid and not 0
-					? checksumByVersionId.GetValueOrDefault( vid )
-					: null;
+				string? latest = null;
+				if( entry.latest_version_id?.id is int vid and not 0 && versionInfoById.TryGetValue( vid, out var info ) )
+				{
+					latest = !string.IsNullOrEmpty( info.Checksum )
+						? info.Checksum
+						: ( info.FileSize == 0 ? Checksums.EmptySha1 : null );
+				}
 				if( latest is { Length: > 0 }
 					&& string.Equals( latest, hack.GetChecksum(), StringComparison.OrdinalIgnoreCase ) )
 				{
@@ -223,16 +259,16 @@ public static class CommitOperations
 				}
 				else
 				{
-					HpDirectory? dir = await ResolveDirectoryCachedAsync( hack, directoryCache );
+					HpDirectory? dir = await ResolveDirectoryCachedAsync( hack, directoryCache, token );
 					HpEntry probe = CommitStaging.NewEntry( hack, dir?.id ?? 0, commit ) ?? new();
-					entry = await CommitStaging.FindRemoteEntryAsync( probe );
+					entry = await CommitStaging.FindRemoteEntryAsync( probe, token );
 				}
 				if( entry is null )
 					throw new InvalidOperationException( $"Could not find existing remote entry for {hack.Name}; aborting commit to prevent duplicate records." );
 			}
 			else
 			{
-				HpDirectory? dir = await ResolveDirectoryCachedAsync( hack, directoryCache );
+				HpDirectory? dir = await ResolveDirectoryCachedAsync( hack, directoryCache, token );
 				entry = CommitStaging.NewEntry( hack, dir?.id ?? 0, commit )
 					?? throw new InvalidOperationException( $"Could not create entry metadata for {hack.Name} (restricted file type)." );
 			}
@@ -249,7 +285,7 @@ public static class CommitOperations
 			}
 			else if( entry.returnType is EntryReturnType.Staged )
 			{
-				HpRecordStaged? entryStaged = await CommitStaging.StageEntryAsync( entry );
+				HpRecordStaged? entryStaged = await CommitStaging.StageEntryAsync( entry, token );
 				log?.Invoke( StatusMessage.PROCESSING, "staging local entry..." );
 				log?.Invoke( StatusMessage.PROCESSING, "staging local version..." );
 				versionStaged = entryStaged is null
@@ -275,11 +311,11 @@ public static class CommitOperations
 			}
 
 			log?.Invoke( StatusMessage.PROCESSING, "staging local version relationships..." );
-			if( !await CommitStaging.StageRelationshipsAsync( versionStaged, preReadDeps ) )
+			if( !await CommitStaging.StageRelationshipsAsync( versionStaged, preReadDeps, token ) )
 				throw new ArgumentException( $"Failed to stage version relationships for {versionStaged.payload?.GetValueOrDefault( nameof( HpVersion.name ) )}" );
 
 			log?.Invoke( StatusMessage.PROCESSING, "staging local version properties ..." );
-			if( !await CommitStaging.StagePropertiesAsync( versionStaged, swStore ) )
+			if( !await CommitStaging.StagePropertiesAsync( versionStaged, swStore, token ) )
 				throw new ArgumentException( $"Failed to stage version properties for {versionStaged.payload?.GetValueOrDefault( nameof( HpVersion.name ) )}" );
 
 			onRecordStaged?.Invoke();
@@ -296,14 +332,14 @@ public static class CommitOperations
 		return true;
 	}
 
-	private static async Task<HpDirectory?> ResolveDirectoryCachedAsync( HackFile hack, Dictionary<string, HpDirectory>? cache )
+	private static async Task<HpDirectory?> ResolveDirectoryCachedAsync( HackFile hack, Dictionary<string, HpDirectory>? cache, CancellationToken token )
 	{
 		if( cache is null )
-			return await CreateDirectoriesAsync( hack );
+			return await CreateDirectoriesAsync( hack, token );
 		string key = string.Join( PwaPaths.NameSeparator, DirectorySegments( hack ) );
 		if( cache.TryGetValue( key, out HpDirectory? existing ) )
 			return existing;
-		HpDirectory? created = await CreateDirectoriesAsync( hack );
+		HpDirectory? created = await CreateDirectoriesAsync( hack, token );
 		if( created is not null )
 			cache[ key ] = created;
 		return created;

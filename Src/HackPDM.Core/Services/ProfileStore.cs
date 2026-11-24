@@ -20,10 +20,16 @@ public sealed class SavedProfileData
 	[JsonPropertyName( nameof( Password ) )] public string? Password { get; set; }
 }
 
+[JsonSourceGenerationOptions( WriteIndented = true )]
+[JsonSerializable( typeof( SavedProfileData ) )]
+internal partial class ProfileJsonContext : JsonSerializerContext
+{
+}
+
 /// <summary>Loads, saves, and applies JSON connection profiles.</summary>
 public static class ProfileStore
 {
-	private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
+	private static readonly Lock ApplyGate = new();
 
 	public static SavedProfileData Template => new()
 	{
@@ -56,34 +62,66 @@ public static class ProfileStore
 
 	public static void Apply( SavedProfileData profile )
 	{
-		OdooDefaults odoo = OdooDefaults.Instance;
-		if( !string.IsNullOrEmpty( profile.OdooAddress ) )
-			odoo.OdooAddress = profile.OdooAddress;
-		if( !string.IsNullOrEmpty( profile.OdooPort ) )
-			odoo.OdooPort = profile.OdooPort;
-		if( !string.IsNullOrEmpty( profile.OdooDb ) )
-			odoo.OdooDb = profile.OdooDb;
-		if( profile.OdooUseHttps is bool useHttps )
-			odoo.OdooUseHttps = useHttps;
-		if( !string.IsNullOrEmpty( profile.OdooCredentialTarget ) )
-			odoo.OdooCredentialTarget = profile.OdooCredentialTarget;
-		if( !string.IsNullOrEmpty( profile.PWAPathAbsolute ) )
-			HackDefaults.Instance.PwaPathAbsolute = profile.PWAPathAbsolute;
+		ArgumentNullException.ThrowIfNull( profile );
+		lock( ApplyGate )
+		{
+			OdooDefaults odoo = OdooDefaults.Instance;
+			if( profile.OdooAddress is not null )
+				odoo.OdooAddress = profile.OdooAddress;
+			if( profile.OdooPort is not null )
+				odoo.OdooPort = profile.OdooPort;
+			if( profile.OdooDb is not null )
+				odoo.OdooDb = profile.OdooDb;
+			if( profile.OdooUseHttps is bool useHttps )
+				odoo.OdooUseHttps = useHttps;
+			if( profile.OdooCredentialTarget is not null )
+			{
+				odoo.OdooCredentialTarget = string.IsNullOrEmpty( profile.OdooCredentialTarget )
+					? PdmConstants.DefaultOdooCredentials
+					: profile.OdooCredentialTarget;
+			}
+			if( profile.PWAPathAbsolute is not null )
+				HackDefaults.Instance.PwaPathAbsolute = profile.PWAPathAbsolute;
 
-		odoo.OdooUrl = null;
-		odoo.OdooId = 0;
+			odoo.OdooUrl = null;
+			odoo.OdooId = 0;
+			odoo.Lookups = OdooLookupCache.Empty;
 
-		if( FirstNonEmpty( profile.Username, odoo.OdooUser ) is { } username )
-			odoo.OdooUser = username;
-		if( FirstNonEmpty( profile.Password, odoo.OdooPass ) is { } password )
-			odoo.OdooPass = password;
+			if( FirstNonEmpty( profile.Username, odoo.OdooUser ) is { } username )
+				odoo.OdooUser = username;
+			if( FirstNonEmpty( profile.Password, odoo.OdooPass ) is { } password )
+				odoo.OdooPass = password;
+		}
 	}
 
 	public static async Task<SavedProfileData?> ReadAsync( string path )
-		=> JsonSerializer.Deserialize<SavedProfileData>( await File.ReadAllTextAsync( path, Encoding.UTF8 ) );
+		=> JsonSerializer.Deserialize( await File.ReadAllTextAsync( path, Encoding.UTF8 ), ProfileJsonContext.Default.SavedProfileData );
 
-	public static Task WriteAsync( string path, SavedProfileData profile )
-		=> File.WriteAllTextAsync( path, JsonSerializer.Serialize( profile, WriteOptions ) );
+	public static async Task WriteAsync( string path, SavedProfileData profile )
+	{
+		ArgumentNullException.ThrowIfNull( profile );
+		string fullPath = Path.GetFullPath( path );
+		if( Path.GetDirectoryName( fullPath ) is { Length: > 0 } dir )
+			Directory.CreateDirectory( dir );
+
+		string tempPath = $"{fullPath}.{Guid.NewGuid():N}.tmp";
+		try
+		{
+			await using( FileStream stream = new( tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, useAsync: true ) )
+			{
+				await JsonSerializer.SerializeAsync( stream, profile, ProfileJsonContext.Default.SavedProfileData );
+				await stream.FlushAsync();
+			}
+			if( !OperatingSystem.IsWindows() && !string.IsNullOrEmpty( profile.Password ) )
+				File.SetUnixFileMode( tempPath, UnixFileMode.UserRead | UnixFileMode.UserWrite );
+			File.Move( tempPath, fullPath, overwrite: true );
+		}
+		catch
+		{
+			FileOps.TryDelete( tempPath );
+			throw;
+		}
+	}
 
 	private static string? FirstNonEmpty( string? first, string? second )
 		=> !string.IsNullOrEmpty( first ) ? first : !string.IsNullOrEmpty( second ) ? second : null;

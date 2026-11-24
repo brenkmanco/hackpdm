@@ -174,7 +174,63 @@ public static class PwaPaths
 	}
 
 	public static string? ToAbsolute( string? serverPath )
-		=> serverPath is null ? null : Path.Combine( Vault, ToRelative( serverPath ) );
+	{
+		if( serverPath is null )
+			return null;
+		string vault = Vault;
+		if( string.IsNullOrWhiteSpace( vault ) || ContainsTraversalSegment( serverPath ) )
+			return null;
+		return ResolveInsideRoot( vault, ToRelative( serverPath ), allowRoot: true );
+	}
+
+	internal static bool ContainsTraversalSegment( string path )
+	{
+		SegmentEnumerator e = new( path.AsSpan() );
+		while( e.MoveNext() )
+		{
+			if( e.Current is "." or ".." )
+				return true;
+		}
+		return false;
+	}
+
+	internal static bool IsInsideDirectory( [NotNullWhen( true )] string? candidatePath, string? rootDirectory, bool allowRoot = false )
+	{
+		if( string.IsNullOrWhiteSpace( candidatePath ) || string.IsNullOrWhiteSpace( rootDirectory ) )
+			return false;
+		try
+		{
+			string normalizedRoot = Path.TrimEndingDirectorySeparator( Path.GetFullPath( rootDirectory ) );
+			string normalizedTarget = Path.TrimEndingDirectorySeparator( Path.GetFullPath( candidatePath ) );
+			if( string.Equals( normalizedTarget, normalizedRoot, PathComparison ) )
+				return allowRoot;
+			string prefix = normalizedRoot.EndsWith( Path.DirectorySeparatorChar )
+				? normalizedRoot
+				: normalizedRoot + Path.DirectorySeparatorChar;
+			return normalizedTarget.StartsWith( prefix, PathComparison );
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	internal static string? ResolveInsideRoot( string rootDirectory, string relativePath, bool allowRoot = false )
+	{
+		if( string.IsNullOrWhiteSpace( rootDirectory ) )
+			return null;
+		try
+		{
+			string normalizedRoot = Path.TrimEndingDirectorySeparator( Path.GetFullPath( rootDirectory ) );
+			string combined = string.IsNullOrEmpty( relativePath ) ? normalizedRoot : Path.Combine( normalizedRoot, relativePath );
+			string normalizedTarget = Path.TrimEndingDirectorySeparator( Path.GetFullPath( combined ) );
+			return IsInsideDirectory( normalizedTarget, normalizedRoot, allowRoot ) ? normalizedTarget : null;
+		}
+		catch
+		{
+			return null;
+		}
+	}
 
 	public static string FolderOf( string? serverName )
 	{

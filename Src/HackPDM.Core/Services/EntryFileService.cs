@@ -74,11 +74,12 @@ public sealed class EntryFileService : IEntryFileService
 	{
 		HpVersion? version = ( await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
 			[ entryId ], nameof( HpEntry.latest_version_id ), excludedFields: HpVersion.UsualExcludedFields ) )?.FirstOrDefault();
-		if( version is null )
+		if( version is null || !LocalFileWriter.IsSingleSafeFileName( version.name ) )
 			return;
 
-		if( await version.DownloadFileAsync( Path.GetTempPath() ) )
-			OpenFile( Path.Combine( version.WinPathway ?? "", version.name ?? "" ) );
+		string tempDir = Path.GetTempPath();
+		if( await version.DownloadFileAsync( tempDir ) )
+			OpenFile( Path.Combine( tempDir, version.name ) );
 	}
 
 	public void OpenContainingFolders( IEnumerable<EntryRow> entries )
@@ -119,12 +120,25 @@ public sealed class EntryFileService : IEntryFileService
 		return result;
 	}
 
+	private static readonly EnumerationOptions RecursiveFileOptions = new()
+	{
+		RecurseSubdirectories = true,
+		IgnoreInaccessible = true,
+	};
+
 	public void DeleteFiles( IEnumerable<FileInfo> files )
 	{
 		foreach( FileInfo file in files )
 		{
-			FileOps.ClearReadOnlyIfPresent( file.FullName );
-			file.Delete();
+			try
+			{
+				FileOps.ClearReadOnlyIfPresent( file.FullName );
+				file.Delete();
+			}
+			catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException )
+			{
+				HackLogger.Warn( nameof( EntryFileService ), $"Could not delete '{file.FullName}': {ex.Message}", ex );
+			}
 		}
 	}
 
@@ -132,16 +146,31 @@ public sealed class EntryFileService : IEntryFileService
 	{
 		if( !Directory.Exists( directory ) )
 			return null;
-		int count = 0;
-		foreach( string _ in Directory.EnumerateFiles( directory ) )
-			count++;
-		return count;
+		try
+		{
+			int count = 0;
+			foreach( string _ in Directory.EnumerateFiles( directory, "*", RecursiveFileOptions ) )
+				count++;
+			return count;
+		}
+		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException )
+		{
+			HackLogger.Warn( nameof( EntryFileService ), $"Could not count files in '{directory}': {ex.Message}", ex );
+			return null;
+		}
 	}
 
 	public void DeleteDirectory( string directory )
 	{
-		FileOps.ClearReadOnlyRecursive( directory );
-		Directory.Delete( directory, true );
+		try
+		{
+			FileOps.ClearReadOnlyRecursive( directory );
+			Directory.Delete( directory, true );
+		}
+		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException )
+		{
+			HackLogger.Warn( nameof( EntryFileService ), $"Could not delete directory '{directory}': {ex.Message}", ex );
+		}
 	}
 
 	public async Task<HpVersion?> GetVersionAsync( int versionId )
@@ -159,8 +188,42 @@ public sealed class EntryFileService : IEntryFileService
 
 	public bool HasConflictingLocalCopy( HpVersion version )
 	{
-		FileInfo file = new( Path.Combine( version.WinPathway ?? "", version.name ?? "" ) );
-		return file.Exists && !Checksums.Matches( file.FullName, version.checksum );
+		if( !LocalFileWriter.IsSingleSafeFileName( version.name ) )
+			return false;
+		FileInfo file = new( Path.Combine( version.WinPathway ?? "", version.name ) );
+		if( !file.Exists )
+			return false;
+		string? expectedChecksum = DownloadOperations.ExpectedChecksum( version );
+		return expectedChecksum is null || !Checksums.Matches( file.FullName, expectedChecksum );
+	}
+
+	internal static string TempDirectoryFor( HpVersion version )
+	{
+		string relative;
+		if( !string.IsNullOrEmpty( version.dir_id?.name ) )
+		{
+			relative = PwaPaths.ToRelative( version.dir_id.name );
+		}
+		else if( !string.IsNullOrEmpty( version.windows_complete_name ) )
+		{
+			relative = PwaPaths.FolderOf( version.windows_complete_name );
+		}
+		else if( !string.IsNullOrEmpty( version.WinPathway ) )
+		{
+			string? serverDir = Path.IsPathFullyQualified( version.WinPathway )
+				? PwaPaths.ToServerDirectory( version.WinPathway )
+				: version.WinPathway;
+			relative = PwaPaths.ToRelative( serverDir );
+		}
+		else
+		{
+			relative = "";
+		}
+
+		if( string.IsNullOrEmpty( relative ) || PwaPaths.ContainsTraversalSegment( relative ) )
+			return PdmConstants.TemporaryPath;
+		return PwaPaths.ResolveInsideRoot( PdmConstants.TemporaryPath, relative, allowRoot: true )
+			?? PdmConstants.TemporaryPath;
 	}
 
 	public async Task<string> DownloadVersionAsync( HpVersion version, bool toTemp )
@@ -171,15 +234,14 @@ public sealed class EntryFileService : IEntryFileService
 			return version.WinPathway ?? "";
 		}
 
-		string relative = PwaPaths.ToRelative( version.dir_id?.name );
-		string tempPath = Path.Combine( PdmConstants.TemporaryPath, relative );
+		string tempPath = TempDirectoryFor( version );
 		await version.DownloadFileAsync( tempPath );
 		return tempPath;
 	}
 
 	public VersionMovePlan PlanMove( HpVersion version, bool toTemp )
 	{
-		FileInfo temp = new( Path.Combine( PdmConstants.TemporaryPath, version.name ?? "" ) );
+		FileInfo temp = new( Path.Combine( TempDirectoryFor( version ), version.name ?? "" ) );
 		FileInfo working = new( Path.Combine( version.WinPathway ?? "", version.name ?? "" ) );
 		return toTemp ? new( working, temp, true ) : new( temp, working, false );
 	}

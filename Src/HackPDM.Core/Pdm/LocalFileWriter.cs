@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using HackPDM.Core.Configuration;
 
 namespace HackPDM.Core.Pdm;
@@ -59,17 +61,31 @@ public static class FileOps
 /// <summary>Safely writes downloaded file contents into the working folder.</summary>
 public static class LocalFileWriter
 {
+	internal static bool IsSingleSafeFileName( [NotNullWhen( true )] string? name )
+		=> !string.IsNullOrWhiteSpace( name )
+			&& name is not ( "." or ".." )
+			&& name.IndexOfAny( [ '\\', '/' ] ) < 0
+			&& !Path.IsPathRooted( name );
+
 	public static long? Write( HackFile file )
+		=> WriteInRoot( file, PwaPaths.Vault );
+
+	internal static long? WriteInRoot( HackFile file, string? allowedRoot )
 	{
-		if( file.FileContents is null || file.DirectoryName is not { } dir || file.Name is not { Length: > 0 } name )
+		if( file.FileContents is null || file.DirectoryName is not { Length: > 0 } dir || !IsSingleSafeFileName( file.Name ) )
 		{
-			HackLogger.Warn( nameof( LocalFileWriter ), $"{file.Name} missing contents, folder, or name" );
+			HackLogger.Warn( nameof( LocalFileWriter ), $"{file.Name} missing contents, folder, or valid file name" );
 			return null;
 		}
 		try
 		{
-			Directory.CreateDirectory( dir );
-			string target = Path.Combine( dir, name );
+			string target = Path.GetFullPath( Path.Combine( dir, file.Name ) );
+			if( !PwaPaths.IsInsideDirectory( target, allowedRoot ) )
+			{
+				HackLogger.Warn( nameof( LocalFileWriter ), $"Refused writing '{file.Name}' outside allowed root '{allowedRoot}'" );
+				return null;
+			}
+			Directory.CreateDirectory( Path.GetDirectoryName( target )! );
 			FileOps.ClearReadOnlyIfPresent( target );
 			string tempPath = $"{target}.{Guid.NewGuid():N}.tmp";
 			try
@@ -89,7 +105,7 @@ public static class LocalFileWriter
 			file.ApplyNonOwnerReadOnly();
 			return file.FileSize ?? file.FileContents.Length;
 		}
-		catch( Exception e ) when( e is UnauthorizedAccessException or IOException or ArgumentException )
+		catch( Exception e ) when( e is UnauthorizedAccessException or IOException or ArgumentException or NotSupportedException )
 		{
 			HackLogger.Error( nameof( LocalFileWriter ), $"Failed writing '{file.Name}': {e.Message}", e );
 			return null;
@@ -104,21 +120,43 @@ public static class LocalFileWriter
 			return Task.FromResult( false );
 		}
 		byte[] contents = file.FileContents;
-		return PlaceAsync( file, target => WriteBytesAtomicAsync( target, contents ) );
+		return PlaceAsync( file, LocalTargetPath( file ), target => WriteBytesAtomicAsync( target, contents ) );
 	}
 
 	public static Task<bool> WriteFromFileAsync( HackFile file, string sourcePath )
-		=> PlaceAsync( file, target => Task.Run( () =>
+		=> PlaceAsync( file, LocalTargetPath( file ), target => Task.Run( () =>
 		{
 			File.Move( sourcePath, target, overwrite: true );
 			return true;
 		} ) );
 
-	private static async Task<bool> PlaceAsync( HackFile file, Func<string, Task<bool>> write )
+	internal static Task<bool> WriteFromFileInRootAsync( HackFile file, string sourcePath, string allowedRoot )
+	{
+		string? targetPath = null;
+		if( file.DirectoryName is { Length: > 0 } dir && IsSingleSafeFileName( file.Name ) )
+		{
+			try
+			{
+				string candidate = Path.GetFullPath( Path.Combine( dir, file.Name ) );
+				if( PwaPaths.IsInsideDirectory( candidate, allowedRoot ) )
+					targetPath = candidate;
+			}
+			catch
+			{
+			}
+		}
+		return PlaceAsync( file, targetPath, target => Task.Run( () =>
+		{
+			File.Move( sourcePath, target, overwrite: true );
+			return true;
+		} ) );
+	}
+
+	private static async Task<bool> PlaceAsync( HackFile file, string? targetPath, Func<string, Task<bool>> write )
 	{
 		try
 		{
-			if( LocalTargetPath( file ) is not { } targetPath )
+			if( targetPath is null )
 				return false;
 
 			Directory.CreateDirectory( Path.GetDirectoryName( targetPath )! );
@@ -142,7 +180,7 @@ public static class LocalFileWriter
 
 	internal static string? LocalTargetPath( HackFile file )
 	{
-		if( file.DirectoryName is null )
+		if( file.DirectoryName is null || !IsSingleSafeFileName( file.Name ) )
 			return null;
 		string rawRoot = HackDefaults.Instance?.PwaPathAbsolute ?? "";
 		if( string.IsNullOrWhiteSpace( rawRoot ) )
@@ -152,18 +190,10 @@ public static class LocalFileWriter
 			.Replace( '\\', Path.DirectorySeparatorChar )
 			.Replace( '/', Path.DirectorySeparatorChar )
 			.TrimStart( Path.DirectorySeparatorChar );
-		if( file.Name is { Length: > 0 } name
-			&& !Path.GetFileName( relative.AsSpan() ).Equals( name.AsSpan(), StringComparison.OrdinalIgnoreCase ) )
-		{
-			relative = relative.Length == 0 ? name : Path.Combine( relative, name );
-		}
-		if( relative.Length == 0 )
+		if( Path.IsPathRooted( relative ) )
 			return null;
-
-		string root = Path.GetFullPath( rawRoot );
-		string target = Path.GetFullPath( Path.Combine( root, relative ) );
-		string rootWithSeparator = root.EndsWith( Path.DirectorySeparatorChar ) ? root : root + Path.DirectorySeparatorChar;
-		return target.StartsWith( rootWithSeparator, PwaPaths.PathComparison ) ? target : null;
+		string combined = relative.Length == 0 ? file.Name : Path.Combine( relative, file.Name );
+		return PwaPaths.ResolveInsideRoot( rawRoot, combined );
 	}
 
 	private static async Task<bool> WriteBytesAtomicAsync( string path, byte[] bytes )

@@ -10,7 +10,7 @@ public sealed class HpVersionProperty : HpRecord<HpVersionProperty>, IOdooModel<
 	public static string[] AllFields { get; } =
 	[
 		nameof( prop_name ), nameof( sw_config_name ), nameof( text_value ), nameof( number_value ),
-		nameof( yesno_value ), nameof( date_value ), nameof( version_id ), nameof( prop_id ),
+		nameof( yesno_value ), nameof( date_value ), nameof( version_id ), nameof( prop_id ), nameof( entry_id ),
 	];
 
 	public string? prop_name { get; set; }
@@ -21,6 +21,7 @@ public sealed class HpVersionProperty : HpRecord<HpVersionProperty>, IOdooModel<
 	public DateTime? date_value { get; set; }
 	public Many2One? version_id { get; set; }
 	public Many2One? prop_id { get; set; }
+	public Many2One? entry_id { get; set; }
 
 	public override bool TrySetField( string field, object? value )
 	{
@@ -34,6 +35,7 @@ public sealed class HpVersionProperty : HpRecord<HpVersionProperty>, IOdooModel<
 			case nameof( date_value ): date_value = OdooValues.ReadDateTime( value ); return true;
 			case nameof( version_id ): version_id = OdooValues.ReadMany2One( value ); return true;
 			case nameof( prop_id ): prop_id = OdooValues.ReadMany2One( value ); return true;
+			case nameof( entry_id ): entry_id = OdooValues.ReadMany2One( value ); return true;
 			default: return false;
 		}
 	}
@@ -48,10 +50,23 @@ public sealed class HpVersionProperty : HpRecord<HpVersionProperty>, IOdooModel<
 		[ nameof( date_value ) ] = OdooValues.OutDateTime( date_value ),
 		[ nameof( version_id ) ] = version_id?.id,
 		[ nameof( prop_id ) ] = prop_id?.id,
+		[ nameof( entry_id ) ] = entry_id?.id,
 	};
 
 	public PropertyType GetValueType()
 	{
+		if( prop_id?.id is int propId
+			&& OdooDefaults.Instance?.IdToProp.TryGetValue( propId, out HpProperty? prop ) is true )
+		{
+			switch( prop.prop_type )
+			{
+				case "text": return PropertyType.Text;
+				case "number": return PropertyType.Number;
+				case "yesno": return PropertyType.Yesno;
+				case "date": return PropertyType.Date;
+			}
+		}
+
 		if( !string.IsNullOrEmpty( text_value ) && text_value != "False" )
 			return PropertyType.Text;
 		if( date_value is not null )
@@ -59,6 +74,10 @@ public sealed class HpVersionProperty : HpRecord<HpVersionProperty>, IOdooModel<
 		if( number_value is not null and not 0f )
 			return PropertyType.Number;
 		if( yesno_value is true )
+			return PropertyType.Yesno;
+		if( number_value is not null && yesno_value is null && text_value is null && date_value is null )
+			return PropertyType.Number;
+		if( yesno_value is not null && number_value is null && text_value is null && date_value is null )
 			return PropertyType.Yesno;
 		return PropertyType.None;
 	}

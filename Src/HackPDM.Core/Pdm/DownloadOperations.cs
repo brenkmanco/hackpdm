@@ -45,7 +45,10 @@ public static class DownloadOperations
 		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_entries_by_entries", [ entryIds ], DependencyTimeoutMs, token );
 
 	public static Task<Result<IReadOnlyList<int>>> GetVersionListAsync( params int[] versionIds )
-		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_versions", [ versionIds ], DependencyTimeoutMs );
+		=> GetVersionListAsync( versionIds, CancellationToken.None );
+
+	public static Task<Result<IReadOnlyList<int>>> GetVersionListAsync( IReadOnlyList<int> versionIds, CancellationToken token = default )
+		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_versions", [ versionIds ], DependencyTimeoutMs, token );
 
 	public static async Task<HpVersion[]?> GetLatestVersionsAsync(
 		IReadOnlyList<int> entryIDs,
@@ -336,6 +339,80 @@ public static class DownloadOperations
 			} ).ConfigureAwait( false );
 	}
 
+	internal static bool IsEmptyInlineVersion( HpVersion version )
+		=> version.file_size == 0 && ( string.IsNullOrEmpty( version.checksum ) || version.checksum == "False" );
+
+	internal static string? ExpectedChecksum( HpVersion version )
+		=> IsEmptyInlineVersion( version )
+			? Checksums.EmptySha1
+			: ( !string.IsNullOrEmpty( version.checksum ) && version.checksum != "False" ? version.checksum : null );
+
+	private static bool TryClassifyVersion(
+		HpVersion version,
+		DownloadSummary summary,
+		Action<StatusMessage, string>? log,
+		Action<int, int>? onProgress,
+		out (HpVersion Version, string LocalChecksum)? changedCandidate )
+	{
+		changedCandidate = null;
+		if( ExpectedChecksum( version ) is not { } expectedChecksum )
+		{
+			log?.Invoke( StatusMessage.ERROR, $"Checksum not found for version: {version.name}" );
+			summary.AddSkipped();
+			onProgress?.Invoke( 0, 1 );
+			return false;
+		}
+
+		string? localPath = ResolveLocalPath( version );
+		string? localChecksum = localPath is not null ? Checksums.OfFile( localPath ) : null;
+
+		if( localChecksum is { Length: > 0 } && string.Equals( localChecksum, expectedChecksum, StringComparison.OrdinalIgnoreCase ) )
+		{
+			log?.Invoke( StatusMessage.FOUND, $"Skipping version download: {version.name}" );
+			summary.AddSkipped();
+			onProgress?.Invoke( 0, 1 );
+			return false;
+		}
+
+		if( localChecksum is not null )
+		{
+			changedCandidate = ( version, localChecksum );
+			return false;
+		}
+
+		return true;
+	}
+
+	private static async Task<List<HpVersion>> ResolveChangedLocalCandidatesAsync(
+		List<(HpVersion Version, string LocalChecksum)> candidateList,
+		CancellationToken cToken,
+		DownloadSummary summary,
+		Action<StatusMessage, string>? log,
+		Action<int, int>? onProgress )
+	{
+		List<HpVersion> verified = [];
+		HashSet<string> knownChecksumsByPath = await FetchVaultChecksumsAsync( candidateList, cToken, log ).ConfigureAwait( false );
+		foreach( var (version, localChecksum) in candidateList )
+		{
+			cToken.ThrowIfCancellationRequested();
+			string key = $"{version.windows_complete_name}\0{localChecksum}";
+			if( !knownChecksumsByPath.Contains( key ) )
+			{
+				string shown = DisplayPath( version );
+				log?.Invoke(
+					StatusMessage.WARNING,
+					$"Kept local changes to {shown}: the local file is not a version from the vault, so it was not overwritten (commit it, or delete the local copy to get the vault's)" );
+				summary.KeptLocalChanges.Enqueue( shown );
+				summary.AddSkipped();
+				onProgress?.Invoke( 0, 1 );
+				continue;
+			}
+
+			verified.Add( version );
+		}
+		return verified;
+	}
+
 	public static async Task<List<HpVersion>> FilterVersionsToDownloadAsync(
 		IReadOnlyList<HpVersion> versions,
 		CancellationToken cToken,
@@ -355,57 +432,18 @@ public static class DownloadOperations
 			new ParallelOptions { MaxDegreeOfParallelism = diskParallelism, CancellationToken = cToken },
 			version =>
 			{
-				if( string.IsNullOrEmpty( version.checksum ) || version.checksum == "False" )
-				{
-					log?.Invoke( StatusMessage.ERROR, $"Checksum not found for version: {version.name}" );
-					summary.AddSkipped();
-					onProgress?.Invoke( 0, 1 );
-					return;
-				}
-
-				string? localPath = ResolveLocalPath( version );
-				string? localChecksum = localPath is not null ? Checksums.OfFile( localPath ) : null;
-
-				if( localChecksum is { Length: > 0 } && string.Equals( localChecksum, version.checksum, StringComparison.OrdinalIgnoreCase ) )
-				{
-					log?.Invoke( StatusMessage.FOUND, $"Skipping version download: {version.name}" );
-					summary.AddSkipped();
-					onProgress?.Invoke( 0, 1 );
-					return;
-				}
-
-				if( localChecksum is not null )
-				{
-					changedLocalCandidates.Add( ( version, localChecksum ) );
-					return;
-				}
-
-				toDownload.Add( version );
+				if( TryClassifyVersion( version, summary, log, onProgress, out var candidate ) )
+					toDownload.Add( version );
+				else if( candidate is { } changed )
+					changedLocalCandidates.Add( changed );
 			} );
 
 		List<HpVersion> result = [ .. toDownload ];
 		if( !changedLocalCandidates.IsEmpty )
 		{
-			List<(HpVersion Version, string LocalChecksum)> candidateList = [ .. changedLocalCandidates ];
-			HashSet<string> knownChecksumsByPath = await FetchVaultChecksumsAsync( candidateList, cToken, log ).ConfigureAwait( false );
-			foreach( var (version, localChecksum) in candidateList )
-			{
-				cToken.ThrowIfCancellationRequested();
-				string key = $"{version.windows_complete_name}\0{localChecksum}";
-				if( !knownChecksumsByPath.Contains( key ) )
-				{
-					string shown = DisplayPath( version );
-					log?.Invoke(
-						StatusMessage.WARNING,
-						$"Kept local changes to {shown}: the local file is not a version from the vault, so it was not overwritten (commit it, or delete the local copy to get the vault's)" );
-					summary.KeptLocalChanges.Enqueue( shown );
-					summary.AddSkipped();
-					onProgress?.Invoke( 0, 1 );
-					continue;
-				}
-
-				result.Add( version );
-			}
+			List<HpVersion> verified = await ResolveChangedLocalCandidatesAsync(
+				[ .. changedLocalCandidates ], cToken, summary, log, onProgress ).ConfigureAwait( false );
+			result.AddRange( verified );
 		}
 
 		return result;
@@ -426,55 +464,25 @@ public static class DownloadOperations
 		foreach( HpVersion version in batchVersions )
 		{
 			cToken.ThrowIfCancellationRequested();
-			if( string.IsNullOrEmpty( version.checksum ) || version.checksum == "False" )
+			if( TryClassifyVersion( version, summary, log, onProgress, out var candidate ) )
 			{
-				log?.Invoke( StatusMessage.ERROR, $"Checksum not found for version: {version.name}" );
-				summary.AddSkipped();
-				onProgress?.Invoke( 0, 1 );
-				continue;
+				log?.Invoke( StatusMessage.PROCESSING, $"Downloading latest version: {DisplayPath( version )}" );
+				toDownload.Add( version );
 			}
-
-			string? localPath = ResolveLocalPath( version );
-			string? localChecksum = localPath is not null ? Checksums.OfFile( localPath ) : null;
-
-			if( localChecksum is { Length: > 0 } && string.Equals( localChecksum, version.checksum, StringComparison.OrdinalIgnoreCase ) )
+			else if( candidate is { } changed )
 			{
-				log?.Invoke( StatusMessage.FOUND, $"Skipping version download: {version.name}" );
-				summary.AddSkipped();
-				onProgress?.Invoke( 0, 1 );
-				continue;
+				changedLocalCandidates.Add( changed );
 			}
-
-			if( localChecksum is not null )
-			{
-				changedLocalCandidates.Add( ( version, localChecksum ) );
-				continue;
-			}
-
-			log?.Invoke( StatusMessage.PROCESSING, $"Downloading latest version: {DisplayPath( version )}" );
-			toDownload.Add( version );
 		}
 
 		if( changedLocalCandidates.Count > 0 )
 		{
-			HashSet<string> knownChecksumsByPath = await FetchVaultChecksumsAsync( changedLocalCandidates, cToken, log ).ConfigureAwait( false );
-			foreach( var (version, localChecksum) in changedLocalCandidates )
+			List<HpVersion> verified = await ResolveChangedLocalCandidatesAsync(
+				changedLocalCandidates, cToken, summary, log, onProgress ).ConfigureAwait( false );
+			foreach( HpVersion v in verified )
 			{
-				string key = $"{version.windows_complete_name}\0{localChecksum}";
-				if( !knownChecksumsByPath.Contains( key ) )
-				{
-					string shown = DisplayPath( version );
-					log?.Invoke(
-						StatusMessage.WARNING,
-						$"Kept local changes to {shown}: the local file is not a version from the vault, so it was not overwritten (commit it, or delete the local copy to get the vault's)" );
-					summary.KeptLocalChanges.Enqueue( shown );
-					summary.AddSkipped();
-					onProgress?.Invoke( 0, 1 );
-					continue;
-				}
-
-				log?.Invoke( StatusMessage.PROCESSING, $"Downloading latest version: {DisplayPath( version )}" );
-				toDownload.Add( version );
+				log?.Invoke( StatusMessage.PROCESSING, $"Downloading latest version: {DisplayPath( v )}" );
+				toDownload.Add( v );
 			}
 		}
 
@@ -497,13 +505,22 @@ public static class DownloadOperations
 		return null;
 	}
 
-	private static async Task<HashSet<string>> FetchVaultChecksumsAsync(
+	private static Task<HashSet<string>> FetchVaultChecksumsAsync(
 		List<(HpVersion Version, string LocalChecksum)> candidates,
+		CancellationToken cToken,
+		Action<StatusMessage, string>? log )
+		=> FetchVaultChecksumsForPathsAsync(
+			candidates.Select( static c => ( c.Version, c.LocalChecksum, c.Version.windows_complete_name ) ).ToList(),
+			cToken,
+			log );
+
+	internal static async Task<HashSet<string>> FetchVaultChecksumsForPathsAsync(
+		List<(HpVersion Version, string LocalChecksum, string? ServerPath)> candidates,
 		CancellationToken cToken,
 		Action<StatusMessage, string>? log )
 	{
 		HashSet<string> known = new( StringComparer.OrdinalIgnoreCase );
-		string[] paths = [ .. candidates.Select( c => c.Version.windows_complete_name ).OfType<string>().Distinct( StringComparer.OrdinalIgnoreCase ) ];
+		string[] paths = [ .. candidates.Select( c => c.ServerPath ).OfType<string>().Distinct( StringComparer.OrdinalIgnoreCase ) ];
 		if( paths.Length == 0 )
 			return known;
 
@@ -512,20 +529,25 @@ public static class DownloadOperations
 			cToken.ThrowIfCancellationRequested();
 			string[] chunk = OdooRpc.SliceChunk( paths, offset, VaultChecksumLookupChunkSize );
 			Result<HpVersion[]> versions = await Repository<HpVersion>.SearchReadAsync(
-				OdooDomain.Where( "entry_id.windows_complete_name", Operators.In, chunk ),
-				FieldSelection.Only( nameof( HpVersion.checksum ), nameof( HpVersion.windows_complete_name ) ),
+				OdooDomain.Where( $"{nameof( HpVersion.entry_id )}.{nameof( HpEntry.windows_complete_name )}", Operators.In, chunk ),
+				FieldSelection.Only( nameof( HpVersion.checksum ), nameof( HpVersion.windows_complete_name ), nameof( HpVersion.file_size ) ),
 				timeoutMs: VaultChecksumLookupTimeoutMs,
 				token: cToken ).ConfigureAwait( false );
 			if( !versions.Ok || versions.Value is null )
 			{
-				log?.Invoke( StatusMessage.WARNING, $"Could not verify vault version history for {chunk.Length} local file(s): {versions.Error ?? "no data returned"}" );
-				continue;
+				string reason = versions.Error ?? "no data returned";
+				log?.Invoke( StatusMessage.ERROR, $"Could not verify vault version history for {chunk.Length} local file(s): {reason}" );
+				throw new OdooException( $"Could not verify vault version history: {reason}" );
 			}
 
 			foreach( HpVersion v in versions.Value )
 			{
-				if( v.windows_complete_name is { Length: > 0 } path && v.checksum is { Length: > 0 } checksum )
+				if( v.windows_complete_name is not { Length: > 0 } path )
+					continue;
+				if( v.checksum is { Length: > 0 } checksum )
 					known.Add( $"{path}\0{checksum}" );
+				else if( v.file_size == 0 )
+					known.Add( $"{path}\0{Checksums.EmptySha1}" );
 			}
 		}
 		return known;
@@ -616,7 +638,7 @@ public static class DownloadOperations
 				{
 					int id = requested.id!.Value;
 					if( !byId.Remove( id, out HpVersion? got )
-						|| ( got.file_contents is not { Length: > 0 } && ( got.file_size ?? 0 ) > 0 ) )
+						|| ( got.file_contents is not { Length: > 0 } && ( got.file_size ?? requested.file_size ) is not 0 ) )
 					{
 						lastError[ id ] = !read.Ok
 							? $"{rpcError} ({ByteSize.Format( bytes )} request, {timeout / 1000}s timeout)"

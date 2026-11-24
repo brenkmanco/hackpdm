@@ -34,18 +34,27 @@ public static class CommitStaging
 		return entry;
 	}
 
-	public static async Task<HpEntry?> FindRemoteEntryAsync( HpEntry entry )
+	public static async Task<HpEntry?> FindRemoteEntryAsync( HpEntry entry, CancellationToken token = default )
 	{
-		HpEntry? found = ( await HpEntry.GetRecordsBySearchAsync(
-			OdooDomain.Where( nameof( HpEntry.name ), entry.name ).And( nameof( HpEntry.dir_id ), entry.dir_id?.id ).And( nameof( HpEntry.deleted ), false ) ) )?.FirstOrDefault();
+		string escapedName = CommitOperations.EscapeLikeLiteral( entry.name ?? "" );
+		OdooDomain domain = OdooDomain.Where( nameof( HpEntry.name ), Operators.ILikeEqual, escapedName )
+			.And( nameof( HpEntry.dir_id ), entry.dir_id?.id );
+		Result<HpEntry[]> res = await Repository<HpEntry>.SearchReadAsync( domain, token: token ).ConfigureAwait( false );
+		if( !res.Ok )
+			throw new OdooException( $"Could not look up remote entry '{entry.name}': {res.Error}" );
+
+		HpEntry? found = res.Value?.FirstOrDefault( static e => e.deleted is not true )
+			?? res.Value?.FirstOrDefault();
+		if( found?.deleted is true )
+			throw new InvalidOperationException( $"Entry '{entry.name}' already exists on the server as deleted (Dt)." );
 		if( found is { id: not 0 } )
 			found.returnType = EntryReturnType.GotExisting;
 		return found;
 	}
 
-	public static async Task<HpRecordStaged?> StageEntryAsync( HpEntry entry )
+	public static async Task<HpRecordStaged?> StageEntryAsync( HpEntry entry, CancellationToken token = default )
 	{
-		HpRecordStaged? staged = await entry.StageRecAsync( false );
+		HpRecordStaged? staged = await entry.StageRecAsync( false, token: token );
 		entry.returnType = staged?.id is null or 0 ? EntryReturnType.Failed : EntryReturnType.Staged;
 		return staged;
 	}
@@ -136,7 +145,7 @@ public static class CommitStaging
 			staged.payload![ "upload_id" ] = id;
 
 		staged.CreateTimeoutMs = ContentTransfer.TimeoutMs( inlineBytes );
-		await staged.CreateAsync();
+		await staged.CreateAsync( token: token );
 		staged.payload?.Remove( nameof( HpVersion.file_contents ) );
 		version.LastError = staged.LastError;
 		if( staged.id is not null and not 0 )
@@ -246,15 +255,16 @@ public static class CommitStaging
 	}
 
 	public static Task<bool> StageRelationshipsAsync( params HpRecordStaged[] versions )
-		=> StageRelationshipsInternalAsync( versions, preReadDependencies: null );
+		=> StageRelationshipsInternalAsync( versions, preReadDependencies: null, CancellationToken.None );
 
-	internal static Task<bool> StageRelationshipsAsync( HpRecordStaged version, List<string[]>? preReadDependencies )
-		=> StageRelationshipsInternalAsync( [ version ], preReadDependencies );
+	internal static Task<bool> StageRelationshipsAsync( HpRecordStaged version, List<string[]>? preReadDependencies, CancellationToken token = default )
+		=> StageRelationshipsInternalAsync( [ version ], preReadDependencies, token );
 
-	private static async Task<bool> StageRelationshipsInternalAsync( HpRecordStaged[] versions, List<string[]>? preReadDependencies )
+	private static async Task<bool> StageRelationshipsInternalAsync( HpRecordStaged[] versions, List<string[]>? preReadDependencies, CancellationToken token )
 	{
 		try
 		{
+			token.ThrowIfCancellationRequested();
 			SwReferenceResolver resolver = new( HackDefaults.Instance?.PwaPathAbsolute );
 			List<HpRecordStaged> staged = [];
 			for( int i = 0; i < versions.Length; i++ )
@@ -299,12 +309,16 @@ public static class CommitStaging
 					} );
 				}
 			}
-			if( staged.Count > 0 && await HpRecordStaged.MultiCreateAsync( staged ) is { Ok: false } failed )
+			if( staged.Count > 0 && await HpRecordStaged.MultiCreateAsync( staged, token: token ) is { Ok: false } failed )
 			{
 				HackLogger.Error( nameof( CommitStaging ), $"Unable to stage relationships: {failed.Error}" );
 				return false;
 			}
 			return true;
+		}
+		catch( OperationCanceledException )
+		{
+			throw;
 		}
 		catch( Exception e )
 		{
@@ -314,16 +328,17 @@ public static class CommitStaging
 	}
 
 	public static Task<bool> StagePropertiesAsync( params HpRecordStaged[] versions )
-		=> StagePropertiesInternalAsync( versions, preOpenedStore: null );
+		=> StagePropertiesInternalAsync( versions, preOpenedStore: null, CancellationToken.None );
 
-	internal static Task<bool> StagePropertiesAsync( HpRecordStaged version, SwStreamStore? preOpenedStore )
-		=> StagePropertiesInternalAsync( [ version ], preOpenedStore );
+	internal static Task<bool> StagePropertiesAsync( HpRecordStaged version, SwStreamStore? preOpenedStore, CancellationToken token = default )
+		=> StagePropertiesInternalAsync( [ version ], preOpenedStore, token );
 
-	private static async Task<bool> StagePropertiesInternalAsync( HpRecordStaged[] versions, SwStreamStore? preOpenedStore )
+	private static async Task<bool> StagePropertiesInternalAsync( HpRecordStaged[] versions, SwStreamStore? preOpenedStore, CancellationToken token )
 	{
 		List<HpVersionProperty> staged = [];
 		foreach( HpRecordStaged version in versions )
 		{
+			token.ThrowIfCancellationRequested();
 			try
 			{
 				if( SolidWorksFileOf( version ) is not { } file )
@@ -352,7 +367,7 @@ public static class CommitStaging
 				return false;
 			}
 		}
-		if( staged.Count > 0 && await HpVersionProperty.MultiStageAsync( staged ) is { Ok: false } failed )
+		if( staged.Count > 0 && await HpVersionProperty.MultiStageAsync( staged, token: token ) is { Ok: false } failed )
 		{
 			HackLogger.Error( nameof( CommitStaging ), $"Unable to stage properties: {failed.Error}" );
 			return false;

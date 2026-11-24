@@ -13,6 +13,7 @@ public sealed class TransferRateTracker
 	private const double RollingWindowSeconds = 8.0;
 	private const double MinActiveDisplaySeconds = 0.05;
 
+	private readonly Lock _gate = new();
 	private readonly Func<long> _nowTicks;
 	private readonly long _tickFrequency;
 	private readonly Queue<(long ActiveTick, long Bytes)> _samples = [];
@@ -31,75 +32,105 @@ public sealed class TransferRateTracker
 		_tickFrequency = Math.Max( 1, tickFrequency );
 	}
 
-	public bool IsActive => _active;
-	public long TotalBytes => _totalBytes;
+	public bool IsActive
+	{
+		get
+		{
+			lock( _gate )
+				return _active;
+		}
+	}
+
+	public long TotalBytes
+	{
+		get
+		{
+			lock( _gate )
+				return _totalBytes;
+		}
+	}
 
 	public void Reset()
 	{
-		_samples.Clear();
-		_activeStartTick = 0;
-		_accumulatedActiveTicks = 0;
-		_windowBytes = 0;
-		_totalBytes = 0;
-		_active = false;
+		lock( _gate )
+		{
+			_samples.Clear();
+			_activeStartTick = 0;
+			_accumulatedActiveTicks = 0;
+			_windowBytes = 0;
+			_totalBytes = 0;
+			_active = false;
+		}
 	}
 
 	public void BeginTransfer()
 	{
-		if( _active )
-			return;
-		_activeStartTick = _nowTicks();
-		_active = true;
+		lock( _gate )
+		{
+			if( _active )
+				return;
+			_activeStartTick = _nowTicks();
+			_active = true;
+		}
 	}
 
 	public void EndTransfer()
 	{
-		if( !_active )
-			return;
-		long now = _nowTicks();
-		if( now > _activeStartTick )
-			_accumulatedActiveTicks += now - _activeStartTick;
-		_active = false;
+		lock( _gate )
+		{
+			if( !_active )
+				return;
+			long now = _nowTicks();
+			if( now > _activeStartTick )
+				_accumulatedActiveTicks += now - _activeStartTick;
+			_active = false;
+		}
 	}
 
 	public void AddBytes( long bytes )
 	{
 		if( bytes <= 0 )
 			return;
-		long now = _nowTicks();
-		if( !_active )
+		lock( _gate )
 		{
-			_activeStartTick = now;
-			_active = true;
+			long now = _nowTicks();
+			if( !_active )
+			{
+				_activeStartTick = now;
+				_active = true;
+			}
+			long activeTick = ActiveTicksAt( now );
+			_totalBytes += bytes;
+			_samples.Enqueue( ( activeTick, bytes ) );
+			_windowBytes += bytes;
+			PruneSamples( activeTick );
 		}
-		long activeTick = ActiveTicksAt( now );
-		_totalBytes += bytes;
-		_samples.Enqueue( ( activeTick, bytes ) );
-		_windowBytes += bytes;
-		PruneSamples( activeTick );
 	}
 
 	public double CurrentMbps
 	{
 		get
 		{
-			if( _totalBytes <= 0 )
-				return 0;
-
-			long activeTicks = ActiveTicksAt( _nowTicks() );
-			if( _active )
+			lock( _gate )
 			{
-				PruneSamples( activeTicks );
-				long windowTicks = (long)( RollingWindowSeconds * _tickFrequency );
-				if( activeTicks >= windowTicks )
-					return _windowBytes > 0 ? BytesPerSecondToMbps( _windowBytes / RollingWindowSeconds ) : 0;
+				if( _totalBytes <= 0 )
+					return 0;
 
-				double activeSeconds = (double)activeTicks / _tickFrequency;
-				return activeSeconds < MinActiveDisplaySeconds ? 0 : BytesPerSecondToMbps( _totalBytes / activeSeconds );
+				long activeTicks = ActiveTicksAt( _nowTicks() );
+				if( _active )
+				{
+					PruneSamples( activeTicks );
+					long windowTicks = (long)( RollingWindowSeconds * _tickFrequency );
+					if( activeTicks >= windowTicks )
+						return _windowBytes > 0 ? BytesPerSecondToMbps( _windowBytes / RollingWindowSeconds ) : 0;
+
+					double activeSeconds = (double)activeTicks / _tickFrequency;
+					return activeSeconds < MinActiveDisplaySeconds ? 0 : BytesPerSecondToMbps( _totalBytes / activeSeconds );
+				}
+
+				double totalSeconds = (double)_accumulatedActiveTicks / _tickFrequency;
+				return totalSeconds <= 0 ? 0 : BytesPerSecondToMbps( _totalBytes / totalSeconds );
 			}
-
-			double totalSeconds = (double)_accumulatedActiveTicks / _tickFrequency;
-			return totalSeconds <= 0 ? 0 : BytesPerSecondToMbps( _totalBytes / totalSeconds );
 		}
 	}
 

@@ -21,7 +21,7 @@ public static class EntryStatusResolver
 		return latestChecksum switch
 		{
 			bool => FileStatus.NoVersions,
-			string when localChecksum is null => FileStatus.Ro,
+			string when localChecksum is null => localModified is null ? FileStatus.Ro : FileStatus.Unknown,
 			string latest when string.Equals( localChecksum, latest, StringComparison.OrdinalIgnoreCase ) => FileStatus.Ok,
 			string => remoteDate > localModified ? FileStatus.Nv : FileStatus.Lm,
 			_ => FileStatus.Unknown,

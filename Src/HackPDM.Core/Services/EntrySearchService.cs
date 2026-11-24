@@ -131,7 +131,7 @@ public sealed class EntrySearchService : IEntrySearchService
 			var (field, value) = PropertyFilterTerm( property );
 			OdooDomain filter = OdooDomain.Where( nameof( HpVersionProperty.prop_id ), property.ID ).And( field, property.Comparer, value );
 			Result<IReadOnlyList<OdooRow>> matches = await OdooRpc.SearchReadAsync(
-				HpVersionProperty.ModelName, filter, [ nameof( HpVersion.entry_id ) ], timeoutMs: OdooRpc.LongTimeout );
+				HpVersionProperty.ModelName, filter, [ nameof( HpVersionProperty.entry_id ) ], timeoutMs: OdooRpc.LongTimeout );
 
 			IReadOnlyList<OdooRow> rows = matches.ValueOr( [] );
 			if( candidates is null )
@@ -139,7 +139,7 @@ public sealed class EntrySearchService : IEntrySearchService
 				candidates = new HashSet<int>( rows.Count );
 				for( int i = 0; i < rows.Count; i++ )
 				{
-					if( rows[ i ].RefId( nameof( HpVersion.entry_id ) ) is int id and not 0 )
+					if( rows[ i ].RefId( nameof( HpVersionProperty.entry_id ) ) is int id and not 0 )
 						candidates.Add( id );
 				}
 			}
@@ -148,7 +148,7 @@ public sealed class EntrySearchService : IEntrySearchService
 				HashSet<int> next = new( rows.Count );
 				for( int i = 0; i < rows.Count; i++ )
 				{
-					if( rows[ i ].RefId( nameof( HpVersion.entry_id ) ) is int id and not 0 && candidates.Contains( id ) )
+					if( rows[ i ].RefId( nameof( HpVersionProperty.entry_id ) ) is int id and not 0 && candidates.Contains( id ) )
 						next.Add( id );
 				}
 				candidates = next;

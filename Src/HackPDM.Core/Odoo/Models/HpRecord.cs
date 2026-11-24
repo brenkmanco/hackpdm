@@ -181,36 +181,37 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 
 		if( id is not null and not 0 )
 			values[ nameof( id ) ] = id;
-		if( commit_id is not null and not { id: 0 } )
-			values[ nameof( commit_id ) ] = commit_id.id;
+		if( commit_id?.id is int commitId and not 0 )
+			values[ nameof( commit_id ) ] = commitId;
 		return values;
 	}
 
-	public async Task<int> CreateCommitAsync()
+	public async Task<int> CreateCommitAsync( CancellationToken token = default )
 	{
-		Result<int> created = await OdooRpc.CreateCommitAsync();
+		Result<int> created = await OdooRpc.CreateCommitAsync( token: token );
 		LastError = created.Error;
 		return ( id = created.Unwrap() ) ?? 0;
 	}
 
-	public async Task<int> CreateAsync( bool withEmpty = false, string[]? excludedFields = null )
+	public async Task<int> CreateAsync( bool withEmpty = false, string[]? excludedFields = null, CancellationToken token = default )
 	{
 		Result<int> created = await OdooRpc.CreateAsync(
 			HpModel,
 			ComputeValues( withEmpty, excludedFields ),
-			CreateTimeoutMs ?? OdooRpc.LongTimeout );
+			CreateTimeoutMs ?? OdooRpc.LongTimeout,
+			token );
 		LastError = created.Error;
 		id = created.ValueOr( 0 );
 		IsRecord = id != 0;
 		return id ?? 0;
 	}
 
-	public async Task<HpRecordStaged?> StageRecAsync( bool withEmpty = false, string[]? excludedFields = null )
+	public async Task<HpRecordStaged?> StageRecAsync( bool withEmpty = false, string[]? excludedFields = null, CancellationToken token = default )
 	{
 		HpRecordStaged? rec = PreStageRec( withEmpty, excludedFields );
 		if( rec is not null )
 		{
-			await rec.CreateAsync();
+			await rec.CreateAsync( token: token );
 			LastError = rec.LastError;
 		}
 		return rec;
@@ -230,7 +231,7 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 
 	public HpRecordStaged? PreStageRec( bool withEmpty = false, string[]? excludedFields = null )
 	{
-		if( commit_id is null or { id: 0 } )
+		if( commit_id?.id is null or 0 )
 			return null;
 		if( this is HpRecordStaged stagedSelf )
 			return stagedSelf;
@@ -251,37 +252,42 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 
 	public static Task<Result<IReadOnlyList<int>>> MultiCreateAsync(
 		IEnumerable<HpRecord<T>> records,
-		bool withEmpty = false )
-		=> OdooRpc.CreateManyAsync( T.ModelName, records.Select( r => r.ComputeValues( withEmpty ) ) );
+		bool withEmpty = false,
+		CancellationToken token = default )
+		=> OdooRpc.CreateManyAsync( T.ModelName, records.Select( r => r.ComputeValues( withEmpty ) ), token: token );
 
 	public static Task<Result<IReadOnlyList<int>>> MultiStageAsync(
 		IEnumerable<HpRecord<T>> records,
-		bool withEmpty = false )
+		bool withEmpty = false,
+		CancellationToken token = default )
 		=> OdooRpc.CreateManyAsync(
 			HpRecordStaged.ModelName,
-			records.Select( r => r.PreStageRec( withEmpty )?.ComputeValues( false ) ).OfType<Dictionary<string, object?>>() );
+			records.Select( r => r.PreStageRec( withEmpty )?.ComputeValues( false ) ).OfType<Dictionary<string, object?>>(),
+			token: token );
 
 	private static T[]? NullIfEmpty( Result<T[]> result )
 		=> result.Value is { Length: > 0 } records ? records : null;
 
-	public static async Task<T[]?> GetAllRecordsAsync( string[]? excludedFields = null, string[]? insertFields = null )
-		=> NullIfEmpty( await Repository<T>.SearchReadAsync( null, new( excludedFields, null, insertFields ) ) );
+	public static async Task<T[]?> GetAllRecordsAsync( string[]? excludedFields = null, string[]? insertFields = null, CancellationToken token = default )
+		=> NullIfEmpty( await Repository<T>.SearchReadAsync( null, new( excludedFields, null, insertFields ), token: token ) );
 
 	public static async Task<T[]?> GetRecordsBySearchAsync(
 		OdooDomain? searchFilter = null,
 		string[]? includedFields = null,
 		string[]? excludedFields = null,
-		string[]? insertFields = null )
-		=> NullIfEmpty( await Repository<T>.SearchReadAsync( searchFilter, new( excludedFields, includedFields, insertFields ) ) );
+		string[]? insertFields = null,
+		CancellationToken token = default )
+		=> NullIfEmpty( await Repository<T>.SearchReadAsync( searchFilter, new( excludedFields, includedFields, insertFields ), token: token ) );
 
 	public static async Task<T?> GetRecordByIdAsync(
 		int recordId,
 		string[]? excludedFields = null,
 		string[]? includedFields = null,
-		string[]? insertFields = null )
+		string[]? insertFields = null,
+		CancellationToken token = default )
 		=> recordId == 0
 			? default
-			: ( await GetRecordsByIdsAsync( [ recordId ], excludedFields: excludedFields, includedFields: includedFields, insertFields: insertFields ) )?.FirstOrDefault();
+			: ( await GetRecordsByIdsAsync( [ recordId ], excludedFields: excludedFields, includedFields: includedFields, insertFields: insertFields, token: token ) )?.FirstOrDefault();
 
 	public static async Task<T[]?> GetRecordsByIdsAsync(
 		IReadOnlyList<int>? recordIds,
@@ -289,17 +295,19 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 		string[]? excludedFields = null,
 		string[]? includedFields = null,
 		string[]? insertFields = null,
-		int timeoutMs = 90000 )
+		int timeoutMs = 90000,
+		CancellationToken token = default )
 	{
 		if( recordIds is { Count: 0 } )
 			return null;
 		FieldSelection fields = new( excludedFields, includedFields, insertFields );
 		return NullIfEmpty( searchFilters is null
-			? await Repository<T>.ReadAsync( recordIds ?? [], fields, timeoutMs )
+			? await Repository<T>.ReadAsync( recordIds ?? [], fields, timeoutMs, token )
 			: await Repository<T>.SearchReadAsync(
 				recordIds is not null ? searchFilters.And( nameof( id ), "in", recordIds ) : searchFilters,
 				fields,
-				timeoutMs: timeoutMs ) );
+				timeoutMs: timeoutMs,
+				token: token ) );
 	}
 
 	public static async Task<TOther[]?> GetRelatedRecordByIdsAsync<TOther>(

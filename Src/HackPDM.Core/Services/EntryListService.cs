@@ -62,10 +62,13 @@ public sealed class EntryListService : IEntryListService
 		if( directoryId is int id and not 0 )
 		{
 			progress?.Report( new EntryLoadProgress( "Fetching entries from Odoo…" ) );
-			Result<IReadOnlyList<RemoteEntryDto>> entries = await HpDirectory.GetEntriesAsync( id, includeDeleted );
+			Result<IReadOnlyList<RemoteEntryDto>> entries = await HpDirectory.GetEntriesAsync( id, includeDeleted, token );
 			token.ThrowIfCancellationRequested();
 			if( !entries.Ok )
+			{
 				HackLogger.Error( "EntryList", $"Entries of directory {id} could not be read: {entries.Error}" );
+				throw new OdooException( $"Could not load directory entries: {entries.Error}" );
+			}
 			remote = entries.Value;
 		}
 
@@ -95,7 +98,8 @@ public sealed class EntryListService : IEntryListService
 					continue;
 
 				matchedLocalPaths.Add( fullLocalPath );
-				bool needsChecksum = !entry.Deleted && entry.CheckoutUserId is null or 0 && entry.LatestChecksum is string;
+				bool hasVersionChecksum = entry.LatestChecksum is string || ( entry.LatestVersionId is > 0 && entry.Size == 0 );
+				bool needsChecksum = !entry.Deleted && entry.CheckoutUserId is null or 0 && hasVersionChecksum;
 				if( needsChecksum )
 					toHash.Add( ( i, localInfo ) );
 				else
@@ -220,11 +224,13 @@ public sealed class EntryListService : IEntryListService
 	{
 		OdooDefaults defaults = OdooDefaults.Instance;
 		HpUser? checkout = entry.CheckoutUserId is int userId ? defaults.IdToUser.GetValueOrDefault( userId ) : null;
+		object latestChecksum = entry.LatestChecksum
+			?? ( entry.LatestVersionId is > 0 && entry.Size == 0 ? (object)Checksums.EmptySha1 : false );
 		FileStatus status = EntryStatusResolver.ResolveRemote(
 			deleted: entry.Deleted,
 			checkoutUserId: entry.CheckoutUserId,
 			myUserId: defaults.OdooId,
-			latestChecksum: entry.LatestChecksum ?? (object)false,
+			latestChecksum: latestChecksum,
 			localChecksum: local?.Checksum,
 			remoteDate: entry.LatestDate ?? default,
 			localModified: local?.ModifiedDate );

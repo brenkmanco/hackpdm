@@ -160,6 +160,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		try
 		{
 			IReadOnlyList<int>? ids = preExpandedIds;
+			bool downloadSucceeded = false;
 			bool completed = await AsyncHelper.AsyncRunner( async () =>
 			{
 				if( ids is null )
@@ -167,14 +168,14 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 					Log( StatusMessage.INFO, $"Finding Entry Dependencies for {entryIds.Count} entries..." );
 					ids = await ExpandWithDependenciesAsync( entryIds, cancellation.Token ).ConfigureAwait( false );
 				}
-				await DownloadLatestAsync( ids, cancellation.Token ).ConfigureAwait( false );
+				downloadSucceeded = await DownloadLatestAsync( ids, cancellation.Token ).ConfigureAwait( false );
 			}, "Get Latest", cancellation );
 			if( !completed )
 			{
 				await reporter.NotifyAsync( "Cancelled Download" );
 				return null;
 			}
-			return ids;
+			return downloadSucceeded ? ids : null;
 		}
 		catch( OperationCanceledException )
 		{
@@ -187,7 +188,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		}
 	}
 
-	private async Task DownloadLatestAsync( IReadOnlyList<int> entryIds, CancellationToken token )
+	private async Task<bool> DownloadLatestAsync( IReadOnlyList<int> entryIds, CancellationToken token )
 	{
 		Log( StatusMessage.FOUND, $"{entryIds.Count} entries" );
 		Log( StatusMessage.PROCESSING, "Retrieving all latest versions associated with entries..." );
@@ -200,7 +201,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		{
 			reporter.Complete();
 			await reporter.NotifyAsync( "Cancelled Download... No Versions to Process" );
-			return;
+			return false;
 		}
 
 		Log( StatusMessage.INFO, $"Retrieved {versions.Length} version(s); checking local files..." );
@@ -255,7 +256,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		{
 			Log( StatusMessage.ERROR, $"download failed: {e}" );
 			await reporter.NotifyAsync( $"Download failed: {e.Message}", "Get Latest" );
-			return;
+			return false;
 		}
 
 		reporter.Complete();
@@ -267,7 +268,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		if( summary.Failed.IsEmpty )
 		{
 			await reporter.NotifyAsync( $"Completed! {summary.Downloaded} downloaded, {summary.Skipped - summary.KeptLocalChanges.Count} already up to date.{kept}" );
-			return;
+			return true;
 		}
 
 		string[] failed = [ .. summary.Failed ];
@@ -276,6 +277,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 				+ string.Join( "\n", failed.Take( 15 ) )
 				+ ( failed.Length > 15 ? $"\n...and {failed.Length - 15} more (see the status log)" : "" ) + kept,
 			"Get Latest" );
+		return false;
 	}
 
 	public Task CheckoutAsync( IReadOnlyList<int> entryIds ) => ChangeCheckoutAsync( entryIds, checkout: true, preExpandedIds: null );
@@ -304,14 +306,16 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 				HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync(
 					ids,
 					checkout ? null : OdooDomain.Where( nameof( HpEntry.checkout_user ), Operators.Equal, me ),
-					excludedFields: HeavyEntryFields ).ConfigureAwait( false );
+					excludedFields: HeavyEntryFields,
+					token: cancellation.Token ).ConfigureAwait( false );
 
 				if( !checkout )
 				{
 					HpEntry[]? others = await HpEntry.GetRecordsByIdsAsync(
 						entryIds,
 						OdooDomain.Where( nameof( HpEntry.checkout_user ), Operators.NotEqual, me ).And( nameof( HpEntry.checkout_user ), Operators.NotEqual, false ),
-						includedFields: [ nameof( HpEntry.id ), nameof( HpEntry.name ), nameof( HpEntry.checkout_user ) ] ).ConfigureAwait( false );
+						includedFields: [ nameof( HpEntry.id ), nameof( HpEntry.name ), nameof( HpEntry.checkout_user ) ],
+						token: cancellation.Token ).ConfigureAwait( false );
 					foreach( HpEntry other in others ?? [] )
 						Log( StatusMessage.ERROR, $"Cannot undo the check out of {other.name}: it is checked out to {other.checkout_user?.name ?? "another user"}" );
 				}
@@ -345,14 +349,9 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		reporter.SetProcessed( processed );
 	}
 
-	public Task CommitAsync( IEnumerable<HackFile> hackFiles )
+	public async Task CommitAsync( IEnumerable<HackFile> hackFiles )
 	{
 		List<HackFile> files = [ .. hackFiles ];
-		return AsyncHelper.AsyncRunner( () => CommitFilesAsync( files ), "Commit Files" );
-	}
-
-	private async Task CommitFilesAsync( List<HackFile> files )
-	{
 		if( files.Count == 0 )
 			return;
 
@@ -360,23 +359,45 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		using IDisposable? watcherPause = localFiles?.Suspend();
 		try
 		{
+			bool completed = await AsyncHelper.AsyncRunner(
+				() => CommitFilesAsync( files, cancellation.Token ),
+				"Commit Files",
+				cancellation ).ConfigureAwait( false );
+			if( !completed )
+				await reporter.NotifyAsync( "Cancelled Commit" ).ConfigureAwait( false );
+		}
+		catch( OperationCanceledException )
+		{
+			await reporter.NotifyAsync( "Cancelled Commit" ).ConfigureAwait( false );
+		}
+		finally
+		{
+			reporter.Complete();
+		}
+	}
+
+	private async Task CommitFilesAsync( List<HackFile> files, CancellationToken token )
+	{
+		try
+		{
 			var (localOnly, remoteExisting, unchanged, remoteByServerName) =
-				await CommitOperations.FilterAndSegmentCommitFilesAsync( files, Log, cancellation.Token );
+				await CommitOperations.FilterAndSegmentCommitFilesAsync( files, Log, token );
 			if( localOnly.Length == 0 && remoteExisting.Length == 0 )
 			{
 				if( unchanged.Length > 0 )
 				{
-					await CheckInUnchangedAsync( unchanged, cancellation.Token );
+					await CheckInUnchangedAsync( unchanged, token );
 					reporter.Complete();
 					await reporter.NotifyAsync( "Completed!" );
 					return;
 				}
 				Log( StatusMessage.ERROR, "--- No entries to commit ---" );
+				await reporter.NotifyAsync( "No eligible entries to commit (see the status log).", "Commit Files" );
 				return;
 			}
 
 			HpPDMCommit commit = new() { node_by = OdooDefaults.Instance.MyNode?.id };
-			await commit.CreateCommitAsync();
+			await commit.CreateCommitAsync( token );
 
 			reporter.SetTotal( localOnly.Length + remoteExisting.Length );
 			Log( StatusMessage.PROCESSING, "--- Preparing to stage records ---" );
@@ -384,6 +405,14 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 			Dictionary<string, HpDirectory> directoryCache = new( StringComparer.OrdinalIgnoreCase );
 			var staged = localOnly.Select( f => ( file: f, inOdoo: false ) )
 				.Concat( remoteExisting.Select( f => ( file: f, inOdoo: true ) ) );
+			string? lastStageError = null;
+			void LogWithStageError( StatusMessage status, string message )
+			{
+				if( status == StatusMessage.ERROR )
+					lastStageError = message;
+				Log( status, message );
+			}
+
 			reporter.BeginUploadTransfer();
 			try
 			{
@@ -393,13 +422,18 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 						file,
 						commit,
 						inOdoo,
-						Log,
+						LogWithStageError,
 						() => reporter.Advance( 1 ),
 						bytes => reporter.AddUploadedBytes( bytes ),
 						directoryCache,
 						remoteByServerName,
-						cancellation.Token ) )
+						token ) )
+					{
+						await reporter.NotifyAsync(
+							$"Commit failed: {lastStageError ?? "staging failed; changes rolled back."}",
+							"Commit Files" );
 						return;
+					}
 				}
 			}
 			finally
@@ -407,7 +441,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 				reporter.EndUploadTransfer();
 			}
 
-			var (committed, error) = await commit.ServerCommit();
+			var (committed, error) = await commit.ServerCommit( token );
 			if( !committed )
 			{
 				Log( StatusMessage.ERROR, $"Commit failed on the server: {error}" );
@@ -415,17 +449,19 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 				return;
 			}
 
-			await CheckInUnchangedAsync( unchanged, cancellation.Token );
+			await CheckInUnchangedAsync( unchanged, token );
 			reporter.Complete();
 			await reporter.NotifyAsync( "Completed!" );
 		}
-		catch( OperationCanceledException )
+		catch( OdooException ex )
 		{
-			await reporter.NotifyAsync( "Cancelled Commit" );
+			Log( StatusMessage.ERROR, $"Commit failed: {ex.Message}" );
+			await reporter.NotifyAsync( $"Commit failed: {ex.Message}", "Commit Files" );
 		}
-		finally
+		catch( Exception ex ) when( ex is not OperationCanceledException )
 		{
-			reporter.Complete();
+			Log( StatusMessage.ERROR, $"Commit failed: {ex.Message}" );
+			await reporter.NotifyAsync( $"Commit failed: {ex.Message}", "Commit Files" );
 		}
 	}
 
@@ -462,6 +498,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 				foreach( BrokenDependency b in broken )
 					Log( StatusMessage.ERROR, $"({b.Reason}) file: {b.FullPath}" );
 				Log( StatusMessage.ERROR, "Commit Terminated" );
+				return [];
 			}
 			else
 			{
@@ -498,7 +535,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		CancellationTokenSource cancellation = reporter.BeginOperation();
 		try
 		{
-			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( entryIds, excludedFields: DeleteExcludedFields );
+			HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync( entryIds, excludedFields: DeleteExcludedFields, token: cancellation.Token );
 			await AsyncHelper.AsyncRunner( () => DeleteOperations.SetDeletedAsync( entries, true, Log, cancellation.Token ), "Logically Delete Files", cancellation );
 		}
 		finally
@@ -515,20 +552,28 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 			HpEntry[]? entries;
 			if( withSubdirectories )
 			{
-				IReadOnlyList<int> ids = await GetDirectoryEntryIdsAsync( directoryId, withSubdirectories: true, withDeleted: true );
+				Result<IReadOnlyList<int>> idsResult = await HpDirectory.GetDirectoryEntryIDsAsync( directoryId, withSubEntries: true, withDeleted: true, token: cancellation.Token );
+				if( !idsResult.Ok )
+				{
+					Log( StatusMessage.ERROR, $"Could not list the directory's entries: {idsResult.Error}" );
+					return;
+				}
+				IReadOnlyList<int> ids = idsResult.ValueOr( [] );
 				if( ids.Count == 0 )
 					return;
 				entries = await HpEntry.GetRecordsByIdsAsync(
 					ids,
 					searchFilters: OdooDomain.Where( nameof( HpEntry.deleted ), true ),
-					excludedFields: DeleteExcludedFields );
+					excludedFields: DeleteExcludedFields,
+					token: cancellation.Token );
 			}
 			else
 			{
 				entries = await HpEntry.GetRecordsByIdsAsync(
 					null,
 					searchFilters: OdooDomain.Where( nameof( HpEntry.deleted ), true ).And( nameof( HpEntry.dir_id ), directoryId ),
-					excludedFields: DeleteExcludedFields );
+					excludedFields: DeleteExcludedFields,
+					token: cancellation.Token );
 			}
 
 			if( entries is not { Length: > 0 } )
@@ -556,7 +601,7 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		{
 			await AsyncHelper.AsyncRunner( async () =>
 			{
-				deleted = await DeleteOperations.PermanentDeleteEntry( entryIds, Log );
+				deleted = await DeleteOperations.PermanentDeleteEntry( entryIds, Log, cancellation.Token );
 				if( deleted )
 					Log( StatusMessage.SUCCESS, "Completed permanent delete" );
 			}, "Permanently Delete Files", cancellation );

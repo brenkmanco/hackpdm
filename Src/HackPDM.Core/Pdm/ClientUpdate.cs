@@ -137,7 +137,8 @@ public static class ClientUpdate
 		bool web = Uri.TryCreate( source, UriKind.Absolute, out Uri? uri ) && uri.Scheme is "http" or "https";
 		string fileName = Path.GetFileName( web ? uri!.AbsolutePath : uri is { IsFile: true } ? uri.LocalPath : source );
 		if( string.IsNullOrEmpty( fileName ) )
-			fileName = "HackPDM-setup";
+			fileName = OperatingSystem.IsWindows() ? "HackPDM-setup.exe" : "HackPDM-setup";
+		bool createdTempDir = targetDirectory is null;
 		targetDirectory ??= Path.Combine( Path.GetTempPath(), $"hackpdm-update-{Guid.NewGuid():N}" );
 		string target = Path.Combine( targetDirectory, fileName );
 		string partial = target + ".download";
@@ -168,7 +169,7 @@ public static class ClientUpdate
 
 			if( actual != expected )
 			{
-				FileOps.TryDelete( partial );
+				CleanupFailedDownload( partial, createdTempDir ? targetDirectory : null );
 				HackLogger.Error( "Updater", $"SHA-256 mismatch for installer from '{source}': expected={expected}, actual={actual}; file deleted." );
 				return Result<string>.Fail( $"the downloaded installer does not match the server's SHA-256 (got {actual}); it was deleted" );
 			}
@@ -179,14 +180,30 @@ public static class ClientUpdate
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException && !token.IsCancellationRequested )
 		{
-			FileOps.TryDelete( partial );
+			CleanupFailedDownload( partial, createdTempDir ? targetDirectory : null );
 			HackLogger.Error( "Updater", $"Installer download from '{source}' failed: {e.Message}", e );
 			return Result<string>.Fail( $"could not download the installer from {source}: {e.Message}" );
 		}
 		catch
 		{
-			FileOps.TryDelete( partial );
+			CleanupFailedDownload( partial, createdTempDir ? targetDirectory : null );
 			throw;
+		}
+	}
+
+	private static void CleanupFailedDownload( string partialPath, string? autoCreatedDirectory )
+	{
+		FileOps.TryDelete( partialPath );
+		if( autoCreatedDirectory is not null )
+		{
+			try
+			{
+				if( Directory.Exists( autoCreatedDirectory ) && !Directory.EnumerateFileSystemEntries( autoCreatedDirectory ).Any() )
+					Directory.Delete( autoCreatedDirectory, recursive: false );
+			}
+			catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException )
+			{
+			}
 		}
 	}
 
@@ -302,7 +319,7 @@ public static class ClientUpdate
 				Source: "GitHub Releases",
 				IsMandatory: false ) );
 		}
-		catch( Exception e ) when( e is HttpRequestException or TaskCanceledException or JsonException && !token.IsCancellationRequested )
+		catch( Exception e ) when( e is HttpRequestException or IOException or TaskCanceledException or JsonException && !token.IsCancellationRequested )
 		{
 			return Result<UpdateInfo?>.Fail( $"Could not check GitHub Releases: {e.Message}" );
 		}

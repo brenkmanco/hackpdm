@@ -115,10 +115,27 @@ public static class CheckoutOperations
 
 	public static async Task<bool> CheckOutEntryAsync( HpEntry? entry, CancellationToken token = default )
 	{
-		if( entry is null || !entry.CanCheckOut() )
+		if( entry is null )
 			return false;
-		if( entry.latest_version_id?.id is not int versionId || versionId == 0 || OdooDefaults.Instance.MyNode?.id is not int nodeId )
+		if( !entry.CanCheckOut() )
+		{
+			entry.LastError = entry.deleted is true
+				? "entry is deleted"
+				: entry.checkout_user?.id is int holder and not 0
+					? $"checked out to {entry.checkout_user.name ?? $"user {holder}"}"
+					: "entry cannot be checked out";
 			return false;
+		}
+		if( entry.latest_version_id?.id is not int versionId || versionId == 0 )
+		{
+			entry.LastError = "entry has no committed version to check out";
+			return false;
+		}
+		if( OdooDefaults.Instance.MyNode?.id is not int nodeId || nodeId == 0 )
+		{
+			entry.LastError = "workstation node (hp.node) is not registered";
+			return false;
+		}
 
 		Result<bool> checkedOut = await OdooRpc.ExecuteAsync<bool>( HpVersion.ModelName, "checkout_entry", [ versionId, nodeId ], token: token );
 		entry.LastError = checkedOut.Error;

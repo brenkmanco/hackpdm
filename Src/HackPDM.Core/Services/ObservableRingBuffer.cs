@@ -21,17 +21,27 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 	private static readonly PropertyChangedEventArgs IndexerChangedArgs = new( "Item[]" );
 	private static readonly NotifyCollectionChangedEventArgs ResetChangedArgs = new( NotifyCollectionChangedAction.Reset );
 
+	private readonly object _gate = new();
 	private T[] _buffer = [];
 	private int _head; // Physical index of logical index 0
 	private int _count;
+	private int _capacity;
 
-	public int Capacity { get; private set; }
-	public int Count => _count;
+	public int Capacity
+	{
+		get { lock( _gate ) return _capacity; }
+	}
+
+	public int Count
+	{
+		get { lock( _gate ) return _count; }
+	}
+
 	public bool NewestFirst { get; }
 	public bool IsReadOnly => false;
 	bool IList.IsFixedSize => false;
-	bool ICollection.IsSynchronized => false;
-	object ICollection.SyncRoot => this;
+	bool ICollection.IsSynchronized => true;
+	object ICollection.SyncRoot => _gate;
 
 	public event NotifyCollectionChangedEventHandler? CollectionChanged;
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -44,7 +54,7 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 		if( capacity <= 0 )
 			throw new ArgumentOutOfRangeException( nameof( capacity ), "Capacity must be greater than zero." );
 
-		Capacity = capacity;
+		_capacity = capacity;
 		NewestFirst = newestFirst;
 	}
 
@@ -52,81 +62,90 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 	{
 		get
 		{
-			ValidateIndex( index );
-			return _buffer[ PhysicalIndex( index ) ]!;
+			lock( _gate )
+			{
+				ValidateIndex( index );
+				return _buffer[ PhysicalIndex( index ) ]!;
+			}
 		}
 		set
 		{
-			ValidateIndex( index );
-			int physical = PhysicalIndex( index );
-			T oldItem = _buffer[ physical ];
-			_buffer[ physical ] = value;
+			lock( _gate )
+			{
+				ValidateIndex( index );
+				int physical = PhysicalIndex( index );
+				T oldItem = _buffer[ physical ];
+				_buffer[ physical ] = value;
 
-			OnPropertyChanged( IndexerChangedArgs );
-			OnCollectionChanged( new NotifyCollectionChangedEventArgs(
-				NotifyCollectionChangedAction.Replace, value, oldItem, index ) );
+				OnPropertyChanged( IndexerChangedArgs );
+				OnCollectionChanged( new NotifyCollectionChangedEventArgs(
+					NotifyCollectionChangedAction.Replace, value, oldItem, index ) );
+			}
 		}
 	}
 
 	/// <summary>Inserts an item in O(1), dropping the oldest item first when at capacity.</summary>
 	public void Add( T item )
 	{
-		if( _count < Capacity )
+		lock( _gate )
 		{
-			EnsureBufferFor( _count + 1 );
-			int addedIndex;
+			if( _count < _capacity )
+			{
+				EnsureBufferFor( _count + 1 );
+				int addedIndex;
+				if( NewestFirst )
+				{
+					_head = _head == 0 ? _buffer.Length - 1 : _head - 1;
+					_buffer[ _head ] = item;
+					addedIndex = 0;
+				}
+				else
+				{
+					addedIndex = _count;
+					_buffer[ PhysicalIndex( addedIndex ) ] = item;
+				}
+				_count++;
+
+				OnPropertyChanged( CountChangedArgs );
+				OnPropertyChanged( IndexerChangedArgs );
+				OnCollectionChanged( new NotifyCollectionChangedEventArgs(
+					NotifyCollectionChangedAction.Add, item, addedIndex ) );
+				return;
+			}
+
+			// Capacity reached: evict oldest first so Count stays consistent during Remove and Add events.
 			if( NewestFirst )
 			{
-				_head = _head == 0 ? _buffer.Length - 1 : _head - 1;
+				int slot = _head == 0 ? _buffer.Length - 1 : _head - 1;
+				T removed = _buffer[ slot ];
+				_buffer[ slot ] = default!;
+				_count--;
+				OnCollectionChanged( new NotifyCollectionChangedEventArgs(
+					NotifyCollectionChangedAction.Remove, removed, _count ) );
+
+				_head = slot;
 				_buffer[ _head ] = item;
-				addedIndex = 0;
+				_count++;
+				OnPropertyChanged( IndexerChangedArgs );
+				OnCollectionChanged( new NotifyCollectionChangedEventArgs(
+					NotifyCollectionChangedAction.Add, item, 0 ) );
 			}
 			else
 			{
-				addedIndex = _count;
-				_buffer[ PhysicalIndex( addedIndex ) ] = item;
+				T removed = _buffer[ _head ];
+				_buffer[ _head ] = default!;
+				_head = _head + 1 == _buffer.Length ? 0 : _head + 1;
+				_count--;
+				OnCollectionChanged( new NotifyCollectionChangedEventArgs(
+					NotifyCollectionChangedAction.Remove, removed, 0 ) );
+
+				int tail = PhysicalIndex( _count );
+				_buffer[ tail ] = item;
+				_count++;
+				OnPropertyChanged( IndexerChangedArgs );
+				OnCollectionChanged( new NotifyCollectionChangedEventArgs(
+					NotifyCollectionChangedAction.Add, item, _count - 1 ) );
 			}
-			_count++;
-
-			OnPropertyChanged( CountChangedArgs );
-			OnPropertyChanged( IndexerChangedArgs );
-			OnCollectionChanged( new NotifyCollectionChangedEventArgs(
-				NotifyCollectionChangedAction.Add, item, addedIndex ) );
-			return;
-		}
-
-		// Capacity reached: evict oldest first so Count stays consistent during Remove and Add events.
-		if( NewestFirst )
-		{
-			int slot = _head == 0 ? _buffer.Length - 1 : _head - 1;
-			T removed = _buffer[ slot ];
-			_buffer[ slot ] = default!;
-			_count--;
-			OnCollectionChanged( new NotifyCollectionChangedEventArgs(
-				NotifyCollectionChangedAction.Remove, removed, _count ) );
-
-			_head = slot;
-			_buffer[ _head ] = item;
-			_count++;
-			OnPropertyChanged( IndexerChangedArgs );
-			OnCollectionChanged( new NotifyCollectionChangedEventArgs(
-				NotifyCollectionChangedAction.Add, item, 0 ) );
-		}
-		else
-		{
-			T removed = _buffer[ _head ];
-			_buffer[ _head ] = default!;
-			_head = _head + 1 == _buffer.Length ? 0 : _head + 1;
-			_count--;
-			OnCollectionChanged( new NotifyCollectionChangedEventArgs(
-				NotifyCollectionChangedAction.Remove, removed, 0 ) );
-
-			int tail = PhysicalIndex( _count );
-			_buffer[ tail ] = item;
-			_count++;
-			OnPropertyChanged( IndexerChangedArgs );
-			OnCollectionChanged( new NotifyCollectionChangedEventArgs(
-				NotifyCollectionChangedAction.Add, item, _count - 1 ) );
 		}
 	}
 
@@ -136,81 +155,88 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 	/// </summary>
 	public void AddRange( IReadOnlyList<T> items )
 	{
-		int batchCount = items.Count;
-		if( batchCount == 0 )
-			return;
-		if( batchCount <= IncrementalBatchLimit && batchCount < Capacity )
+		ArgumentNullException.ThrowIfNull( items );
+		lock( _gate )
 		{
-			for( int i = 0; i < batchCount; i++ )
-				Add( items[ i ] );
-			return;
-		}
+			int batchCount = items.Count;
+			if( batchCount == 0 )
+				return;
+			if( batchCount <= IncrementalBatchLimit && batchCount < _capacity )
+			{
+				for( int i = 0; i < batchCount; i++ )
+					Add( items[ i ] );
+				return;
+			}
 
-		if( batchCount >= Capacity )
-		{
-			EnsureBufferFor( Capacity );
-			int start = batchCount - Capacity;
-			if( NewestFirst )
+			if( batchCount >= _capacity )
 			{
-				for( int i = 0; i < Capacity; i++ )
-					_buffer[ i ] = items[ batchCount - 1 - i ];
-			}
-			else
-			{
-				for( int i = 0; i < Capacity; i++ )
-					_buffer[ i ] = items[ start + i ];
-			}
-			_head = 0;
-			_count = Capacity;
-		}
-		else
-		{
-			int nextCount = Math.Min( _count + batchCount, Capacity );
-			EnsureBufferFor( nextCount );
-			int len = _buffer.Length;
-			if( NewestFirst )
-			{
-				for( int i = 0; i < batchCount; i++ )
+				EnsureBufferFor( _capacity );
+				int start = batchCount - _capacity;
+				if( NewestFirst )
 				{
-					_head = _head == 0 ? len - 1 : _head - 1;
-					_buffer[ _head ] = items[ i ];
-					if( _count < Capacity )
-						_count++;
+					for( int i = 0; i < _capacity; i++ )
+						_buffer[ i ] = items[ batchCount - 1 - i ];
 				}
+				else
+				{
+					for( int i = 0; i < _capacity; i++ )
+						_buffer[ i ] = items[ start + i ];
+				}
+				_head = 0;
+				_count = _capacity;
 			}
 			else
 			{
-				for( int i = 0; i < batchCount; i++ )
+				int nextCount = Math.Min( _count + batchCount, _capacity );
+				EnsureBufferFor( nextCount );
+				int len = _buffer.Length;
+				if( NewestFirst )
 				{
-					if( _count < Capacity )
+					for( int i = 0; i < batchCount; i++ )
 					{
-						_buffer[ PhysicalIndex( _count ) ] = items[ i ];
-						_count++;
-					}
-					else
-					{
+						_head = _head == 0 ? len - 1 : _head - 1;
 						_buffer[ _head ] = items[ i ];
-						_head = _head + 1 == len ? 0 : _head + 1;
+						if( _count < _capacity )
+							_count++;
+					}
+				}
+				else
+				{
+					for( int i = 0; i < batchCount; i++ )
+					{
+						if( _count < _capacity )
+						{
+							_buffer[ PhysicalIndex( _count ) ] = items[ i ];
+							_count++;
+						}
+						else
+						{
+							_buffer[ _head ] = items[ i ];
+							_head = _head + 1 == len ? 0 : _head + 1;
+						}
 					}
 				}
 			}
-		}
 
-		NotifyReset();
+			NotifyReset();
+		}
 	}
 
 	/// <summary>Removes every item and raises a Reset notification if non-empty.</summary>
 	public void Clear()
 	{
-		if( _count == 0 )
-			return;
-		if( _buffer.Length > ShrinkClearThreshold )
-			_buffer = [];
-		else
-			Array.Clear( _buffer, 0, _buffer.Length );
-		_head = 0;
-		_count = 0;
-		NotifyReset();
+		lock( _gate )
+		{
+			if( _count == 0 )
+				return;
+			if( _buffer.Length > ShrinkClearThreshold )
+				_buffer = [];
+			else
+				Array.Clear( _buffer, 0, _buffer.Length );
+			_head = 0;
+			_count = 0;
+			NotifyReset();
+		}
 	}
 
 	/// <summary>Changes capacity, retaining up to <paramref name="newCapacity"/> newest items in their current display order.</summary>
@@ -218,33 +244,38 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 	{
 		if( newCapacity <= 0 )
 			throw new ArgumentOutOfRangeException( nameof( newCapacity ), "Capacity must be greater than zero." );
-		if( newCapacity == Capacity )
-			return;
-
-		int previousCount = _count;
-		Capacity = newCapacity;
-		OnPropertyChanged( CapacityChangedArgs );
-
-		if( _count == 0 )
+		lock( _gate )
 		{
-			if( _buffer.Length > newCapacity )
-				_buffer = [];
-			return;
+			if( newCapacity == _capacity )
+				return;
+
+			int previousCount = _count;
+			if( _count == 0 )
+			{
+				if( _buffer.Length > newCapacity )
+					_buffer = [];
+				_capacity = newCapacity;
+				OnPropertyChanged( CapacityChangedArgs );
+				return;
+			}
+
+			if( _count > newCapacity || _buffer.Length > newCapacity )
+			{
+				int keep = Math.Min( _count, newCapacity );
+				int startOffset = NewestFirst ? 0 : _count - keep;
+				T[] next = new T[ newCapacity ];
+				CopyToCore( next, 0, startOffset, keep );
+				_buffer = next;
+				_head = 0;
+				_count = keep;
+			}
+
+			_capacity = newCapacity;
+			OnPropertyChanged( CapacityChangedArgs );
+
+			if( _count != previousCount )
+				NotifyReset();
 		}
-
-		if( _count <= newCapacity && _buffer.Length <= newCapacity )
-			return;
-
-		int keep = Math.Min( _count, newCapacity );
-		int startOffset = NewestFirst ? 0 : _count - keep;
-		T[] next = new T[ newCapacity ];
-		CopyToCore( next, 0, startOffset, keep );
-		_buffer = next;
-		_head = 0;
-		_count = keep;
-
-		if( keep != previousCount )
-			NotifyReset();
 	}
 
 	private int PhysicalIndex( int logicalIndex )
@@ -256,17 +287,17 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 
 	private void EnsureBufferFor( int needed )
 	{
-		int target = Math.Min( needed, Capacity );
+		int target = Math.Min( needed, _capacity );
 		if( _buffer.Length >= target )
 			return;
 
 		int nextLength = _buffer.Length == 0
 			? InitialAllocation
-			: ( _buffer.Length > Capacity / 2 ? Capacity : _buffer.Length * 2 );
+			: ( _buffer.Length > _capacity / 2 ? _capacity : _buffer.Length * 2 );
 		if( nextLength < target )
 			nextLength = target;
-		if( nextLength > Capacity )
-			nextLength = Capacity;
+		if( nextLength > _capacity )
+			nextLength = _capacity;
 
 		T[] next = new T[ nextLength ];
 		if( _count > 0 )
@@ -308,8 +339,15 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 
 	public IEnumerator<T> GetEnumerator()
 	{
-		for( int i = 0; i < _count; i++ )
-			yield return _buffer[ PhysicalIndex( i ) ]!;
+		T[] snapshot;
+		lock( _gate )
+		{
+			if( _count == 0 )
+				return Enumerable.Empty<T>().GetEnumerator();
+			snapshot = new T[ _count ];
+			CopyToCore( snapshot, 0, 0, _count );
+		}
+		return ( (IEnumerable<T>)snapshot ).GetEnumerator();
 	}
 
 	IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -317,12 +355,15 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 	public int IndexOf( T item )
 	{
 		EqualityComparer<T> comparer = EqualityComparer<T>.Default;
-		for( int i = 0; i < _count; i++ )
+		lock( _gate )
 		{
-			if( comparer.Equals( _buffer[ PhysicalIndex( i ) ], item ) )
-				return i;
+			for( int i = 0; i < _count; i++ )
+			{
+				if( comparer.Equals( _buffer[ PhysicalIndex( i ) ], item ) )
+					return i;
+			}
+			return -1;
 		}
-		return -1;
 	}
 
 	public bool Contains( T item ) => IndexOf( item ) >= 0;
@@ -331,10 +372,13 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 	{
 		ArgumentNullException.ThrowIfNull( array );
 		ArgumentOutOfRangeException.ThrowIfNegative( arrayIndex );
-		if( array.Length - arrayIndex < _count )
-			throw new ArgumentException( "Destination array is not long enough to copy all items.", nameof( array ) );
+		lock( _gate )
+		{
+			if( array.Length - arrayIndex < _count )
+				throw new ArgumentException( "Destination array is not long enough to copy all items.", nameof( array ) );
 
-		CopyToCore( array, arrayIndex, 0, _count );
+			CopyToCore( array, arrayIndex, 0, _count );
+		}
 	}
 
 	public bool Remove( T item ) => throw new NotSupportedException( "Arbitrary removes are not supported on RingBuffers." );
@@ -349,8 +393,11 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 
 	int IList.Add( object? value )
 	{
-		Add( (T)value! );
-		return NewestFirst ? 0 : _count - 1;
+		lock( _gate )
+		{
+			Add( (T)value! );
+			return NewestFirst ? 0 : _count - 1;
+		}
 	}
 
 	bool IList.Contains( object? value ) => value is T item && Contains( item );
@@ -368,7 +415,12 @@ public sealed class ObservableRingBuffer<T> : IList<T>, IReadOnlyList<T>, IList,
 			CopyTo( typed, index );
 			return;
 		}
-		for( int i = 0; i < _count; i++ )
-			array.SetValue( _buffer[ PhysicalIndex( i ) ], index + i );
+		lock( _gate )
+		{
+			if( array.Length - index < _count )
+				throw new ArgumentException( "Destination array is not long enough to copy all items.", nameof( array ) );
+			for( int i = 0; i < _count; i++ )
+				array.SetValue( _buffer[ PhysicalIndex( i ) ], index + i );
+		}
 	}
 }
