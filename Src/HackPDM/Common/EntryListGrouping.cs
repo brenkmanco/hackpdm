@@ -1,8 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Globalization;
+
+using CommunityToolkit.Mvvm.ComponentModel;
 
 using HackPDM.Core.Services;
 
@@ -15,34 +16,26 @@ using WinUI.TableView;
 namespace HackPDM.Common;
 
 [Microsoft.UI.Xaml.Data.Bindable]
-public sealed class EntryGroupHeader( object? key, string displayKey, IReadOnlyList<EntryRow> items, bool isExpanded ) : INotifyPropertyChanged
+public sealed partial class EntryGroupHeader : ObservableObject
 {
-	private static readonly PropertyChangedEventArgs IsExpandedChangedArgs = new( nameof( IsExpanded ) );
-	private static readonly PropertyChangedEventArgs ChevronGlyphChangedArgs = new( nameof( ChevronGlyph ) );
+	[ObservableProperty]
+	[NotifyPropertyChangedFor( nameof( ChevronGlyph ) )]
+	public partial bool IsExpanded { get; set; }
 
-	private bool _isExpanded = isExpanded;
+	public EntryGroupHeader( object? key, string displayKey, IReadOnlyList<EntryRow> items, bool isExpanded )
+	{
+		Key = key;
+		DisplayKey = displayKey;
+		Items = items;
+		IsExpanded = isExpanded;
+	}
 
-	public object? Key { get; } = key;
-	public string DisplayKey { get; } = displayKey;
-	public IReadOnlyList<EntryRow> Items { get; } = items;
+	public object? Key { get; }
+	public string DisplayKey { get; }
+	public IReadOnlyList<EntryRow> Items { get; }
 	public int Count => Items.Count;
 	public string CountText => Count == 1 ? "1 item" : $"{Count} items";
 	public string ChevronGlyph => IsExpanded ? "\uE70D" : "\uE76C";
-
-	public bool IsExpanded
-	{
-		get => _isExpanded;
-		set
-		{
-			if( _isExpanded == value )
-				return;
-			_isExpanded = value;
-			PropertyChanged?.Invoke( this, IsExpandedChangedArgs );
-			PropertyChanged?.Invoke( this, ChevronGlyphChangedArgs );
-		}
-	}
-
-	public event PropertyChangedEventHandler? PropertyChanged;
 }
 
 [Microsoft.UI.Xaml.Data.Bindable]

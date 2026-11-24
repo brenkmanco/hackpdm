@@ -92,7 +92,9 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 		SizeChanged += ( _, _ ) => UpdateDensity();
 	}
 
+#if SMOKE_TESTS
 	internal bool IsMinimalMode => _isMinimal;
+#endif
 
 	public void SetHostMode( bool isDocked )
 	{
@@ -126,6 +128,7 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 
 	internal Task RequestCloseAsync() => CloseWindowAsync();
 
+#if SMOKE_TESTS
 	internal void OpenHoverPopupForTest( StatusMessage kind )
 	{
 		Border pill = kind switch
@@ -142,6 +145,7 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 		HideHoverPopup();
 		AppComposition.Dialogs.ShowFullStatusWindow();
 	}
+#endif
 
 	private void UpdateDensity()
 	{
@@ -216,6 +220,11 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 		ViewModel.OperationCompleted -= OnOperationCompleted;
 		ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
 		AppComposition.Theme.ThemeChanged -= OnThemeChanged;
+		if( _settingsWindow is { } settingsWindow )
+		{
+			settingsWindow.Closed -= OnSettingsWindowClosed;
+			_settingsWindow = null;
+		}
 		HideHoverPopup();
 	}
 
@@ -234,7 +243,7 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 			or nameof( StatusDialogViewModel.InfoCount ) )
 		{
 			UpdateCategoryPillAccents();
-			if( _activeHoverKind is { } kind && ( StatusHoverPopup.IsOpen || _hoverCard?.Parent is not null ) )
+			if( _isMinimal && _activeHoverKind is { } kind && IsHoverPopupCurrentlyOpen() )
 			{
 				if( ( kind == StatusMessage.WARNING && e.PropertyName == nameof( StatusDialogViewModel.WarningCount ) )
 					|| ( kind == StatusMessage.ERROR && e.PropertyName == nameof( StatusDialogViewModel.ErrorCount ) )
@@ -251,6 +260,9 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 			}
 		}
 	}
+
+	private bool IsHoverPopupCurrentlyOpen()
+		=> _isDocked ? _hoverCard?.Parent is not null : StatusHoverPopup.IsOpen;
 
 	private void UpdateCategoryPillAccents()
 	{
@@ -377,6 +389,7 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 		if( !_isMinimal || XamlRoot is null )
 			return;
 		CancelHoverCloseTimer();
+		bool alreadyOpenSameKind = _activeHoverKind == kind && IsHoverPopupCurrentlyOpen();
 		_activeHoverKind = kind;
 
 		Border card = EnsureHoverCard();
@@ -388,24 +401,40 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 		};
 
 		const int maxShown = 8;
-		_hoverScratch.Clear();
 		int take = Math.Min( source.Count, maxShown );
-		for( int i = 0; i < take; i++ )
-			_hoverScratch.Add( source[ i ] );
+		if( HasHoverMessagesChanged( source, take ) )
+		{
+			_hoverScratch.Clear();
+			for( int i = 0; i < take; i++ )
+				_hoverScratch.Add( source[ i ] );
+			_hoverMessages.ReplaceAll( _hoverScratch );
+		}
 
-		_hoverIcon!.Glyph = glyph;
-		_hoverIcon.Foreground = accentBrush;
-		card.BorderBrush = accentBrush;
+		if( !alreadyOpenSameKind )
+		{
+			_hoverIcon!.Glyph = glyph;
+			_hoverIcon.Foreground = accentBrush;
+			card.BorderBrush = accentBrush;
+			_hoverEmptyText!.Text = emptyMessage;
+		}
 		_hoverTitle!.Text = $"{titlePrefix} ({source.Count})";
 
-		_hoverMessages.ReplaceAll( _hoverScratch );
-		_hoverItems!.Visibility = _hoverScratch.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-		_hoverEmptyText!.Text = emptyMessage;
-		_hoverEmptyText.Visibility = _hoverScratch.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+		Visibility itemsVis = take > 0 ? Visibility.Visible : Visibility.Collapsed;
+		if( _hoverItems!.Visibility != itemsVis )
+			_hoverItems.Visibility = itemsVis;
 
-		int hidden = source.Count - _hoverScratch.Count;
+		Visibility emptyVis = take == 0 ? Visibility.Visible : Visibility.Collapsed;
+		if( _hoverEmptyText!.Visibility != emptyVis )
+			_hoverEmptyText.Visibility = emptyVis;
+
+		int hidden = source.Count - take;
 		_hoverOverflowText!.Text = hidden > 0 ? $"+{hidden} more in full Status Log…" : string.Empty;
-		_hoverOverflowText.Visibility = hidden > 0 ? Visibility.Visible : Visibility.Collapsed;
+		Visibility overflowVis = hidden > 0 ? Visibility.Visible : Visibility.Collapsed;
+		if( _hoverOverflowText.Visibility != overflowVis )
+			_hoverOverflowText.Visibility = overflowVis;
+
+		if( alreadyOpenSameKind )
+			return;
 
 		StatusHoverPopup.IsOpen = false;
 		if( _isDocked && HackApp.HomePage is { } home )
@@ -443,6 +472,18 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 		StatusHoverPopup.HorizontalOffset = xOffset;
 		StatusHoverPopup.VerticalOffset = yOffset;
 		StatusHoverPopup.IsOpen = true;
+	}
+
+	private bool HasHoverMessagesChanged( ObservableRingBuffer<BasicStatusMessage> source, int take )
+	{
+		if( _hoverMessages.Count != take )
+			return true;
+		for( int i = 0; i < take; i++ )
+		{
+			if( !ReferenceEquals( _hoverMessages[ i ], source[ i ] ) )
+				return true;
+		}
+		return false;
 	}
 
 	private void ScheduleHoverPopupClose()
@@ -540,14 +581,21 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 
 	private async void AppWindow_Closing( AppWindow sender, AppWindowClosingEventArgs args )
 	{
-		if( _allowClose || _isDocked || ParentWindow is not { } parent || !ReferenceEquals( parent.AppWindow, sender ) )
-			return;
-		object? hosted = ( parent.Content as Frame )?.Content ?? parent.Content;
-		if( !ReferenceEquals( hosted, this ) || !ViewModel.IsInProcess )
-			return;
-		// hold the close (it can't wait for the answer), then close for real if the user confirms
-		args.Cancel = true;
-		await CloseWindowAsync();
+		try
+		{
+			if( _allowClose || _isDocked || ParentWindow is not { } parent || !ReferenceEquals( parent.AppWindow, sender ) )
+				return;
+			object? hosted = ( parent.Content as Frame )?.Content ?? parent.Content;
+			if( !ReferenceEquals( hosted, this ) || !ViewModel.IsInProcess )
+				return;
+			// hold the close (it can't wait for the answer), then close for real if the user confirms
+			args.Cancel = true;
+			await CloseWindowAsync();
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "StatusDialog", $"AppWindow closing handler failed: {ex.Message}", ex );
+		}
 	}
 
 	private void StatusHorizontalSplitter_DragDelta( double delta )

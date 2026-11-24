@@ -21,6 +21,8 @@ public sealed record WindowPreset(
 
 public static partial class WindowHelper
 {
+	private const string DefaultWindowPreset = "TemplateWindow";
+
 	public static class Presets
 	{
 		public const string ProfileManager = nameof( NavigatePageMenu.ProfileManager );
@@ -33,8 +35,6 @@ public static partial class WindowHelper
 		public const string StatusDialogView = nameof( HackPDM.Status.StatusDialogView );
 		public const string SearchOdooView = nameof( HackPDM.Search.SearchOdooView );
 		public const string OdooFileTypeManagerView = nameof( HackPDM.Settings.OdooFileTypeManagerView );
-		public const string ApplicationSettingsView = nameof( HackPDM.Settings.ApplicationSettingsView );
-		public const string DefaultWindow = "TemplateWindow";
 	}
 
 	private static readonly ConditionalWeakTable<Page, Window> PageWindows = new();
@@ -103,7 +103,7 @@ public static partial class WindowHelper
 			window.Activate();
 		if( withFrame )
 			window.Content = new Frame();
-		ApplyPreset( window, Preset( presetName ?? Presets.DefaultWindow ) );
+		ApplyPreset( window, Preset( presetName ?? DefaultWindowPreset ) );
 		AppComposition.Theme.Attach( window );
 		return window;
 	}
@@ -132,14 +132,14 @@ public static partial class WindowHelper
 		HackPDM.Status.StatusDialogView => Presets.StatusDialogView,
 		HackPDM.Search.SearchOdooView => Presets.SearchOdooView,
 		HackPDM.Settings.OdooFileTypeManagerView => Presets.OdooFileTypeManagerView,
-		HackPDM.Settings.ApplicationSettingsView => Presets.ApplicationSettingsView,
+		HackPDM.Settings.ApplicationSettingsView => Presets.AppSettings,
 		HackPDM.FileManager.HackFileManagerView => Presets.HackFileManager,
 		HackPDM.Graph.DependencyGraphView => Presets.DependencyGraph,
 		HackPDM.Login.ProfileManagerView => Presets.ProfileManager,
 		HackPDM.Settings.ConfigurationView => Presets.ConfigSettings,
 		HackPDM.Shell.NotLoggedInView => Presets.NotLoggedIn,
 		HackPDM.Common.MessageBox => Presets.MessageBox,
-		_ => Presets.DefaultWindow,
+		_ => DefaultWindowPreset,
 	};
 
 	public static void ApplyPreset( Window window, WindowPreset preset )

@@ -135,8 +135,10 @@ public static class KeyboardHelper
 
 public static class BitmapImageLoader
 {
-	public static async Task LoadFromBytesAsync( BitmapImage image, byte[] bytes )
+	public static async Task LoadFromBytesAsync( BitmapImage image, byte[] bytes, int decodePixelWidth = 0 )
 	{
+		if( decodePixelWidth > 0 && image.DecodePixelWidth == 0 )
+			image.DecodePixelWidth = decodePixelWidth;
 		using InMemoryRandomAccessStream stream = new();
 		await stream.WriteAsync( bytes.AsBuffer() );
 		stream.Seek( 0 );

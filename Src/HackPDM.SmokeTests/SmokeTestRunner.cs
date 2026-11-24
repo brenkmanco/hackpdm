@@ -226,7 +226,7 @@ internal static class SmokeTestRunner
 				var all = Nodes().ToList();
 				directory = wanted is { Length: > 0 }
 					? all.FirstOrDefault( d => string.Equals( d.Name, wanted, StringComparison.OrdinalIgnoreCase ) )
-					: all.FirstOrDefault( d => d.DirectoryId is > 0 && !d.HasChildren )
+					: all.FirstOrDefault( d => d.DirectoryId is > 0 && !d.HasSubfolders )
 						?? all.FirstOrDefault( d => d.DirectoryId is > 0 );
 				if( directory is null )
 					throw new InvalidOperationException(

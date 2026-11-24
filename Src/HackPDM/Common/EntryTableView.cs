@@ -37,7 +37,12 @@ public sealed partial class EntryTableView : TableView
 		public readonly Border Overlay;
 		public bool IsAttached;
 		public bool DeferredHooked;
+		public int DeferredGeneration;
+		public RoutedEventHandler? LoadedHandler;
 		public object? PendingItem;
+		public bool? AppliedSelected;
+		public bool? AppliedHovered;
+		public HighlightPalette? AppliedPalette;
 
 		public RowHighlightHost()
 		{
@@ -65,11 +70,17 @@ public sealed partial class EntryTableView : TableView
 		}
 	}
 
-	private sealed record HighlightPalette(
-		SolidColorBrush Hover,
-		SolidColorBrush Selected,
-		SolidColorBrush SelectedHover,
-		SolidColorBrush Indicator );
+	private sealed class HighlightPalette(
+		SolidColorBrush hover,
+		SolidColorBrush selected,
+		SolidColorBrush selectedHover,
+		SolidColorBrush indicator )
+	{
+		public SolidColorBrush Hover { get; } = hover;
+		public SolidColorBrush Selected { get; } = selected;
+		public SolidColorBrush SelectedHover { get; } = selectedHover;
+		public SolidColorBrush Indicator { get; } = indicator;
+	}
 
 	private static bool _highlightCacheDirty = true;
 	private static bool _cachedDark;
@@ -79,6 +90,7 @@ public sealed partial class EntryTableView : TableView
 	private static SolidColorBrush? _selectedBrush;
 	private static SolidColorBrush? _selectedHoverBrush;
 	private static SolidColorBrush? _indicatorBrush;
+	private static HighlightPalette? _cachedPalette;
 
 	private readonly ConditionalWeakTable<TableViewRow, RowHighlightHost> _rowHosts = new();
 	private readonly HashSet<TableViewRow> _realizedRows = [];
@@ -202,10 +214,14 @@ public sealed partial class EntryTableView : TableView
 			// while preserving multi-selection when right-clicking an already-selected row.
 			if( !SelectedItems.Contains( item ) )
 			{
-				ApplySelection( [ item ], anchorIndex: index, reconcileOnRelease: false );
+				_hoveredRow = row;
+				_realizedRows.Add( row );
+				ApplySelection( [ item ], anchorIndex: index, reconcileOnRelease: false, refreshIfUnchanged: true );
 			}
-			SetHoveredRow( row );
-			UpdateRowHighlight( row, item );
+			else
+			{
+				SetHoveredRow( row );
+			}
 			return;
 		}
 
@@ -219,24 +235,34 @@ public sealed partial class EntryTableView : TableView
 		bool ctrl = IsKeyDown( e, VirtualKeyModifiers.Control, VirtualKey.Control );
 		bool shift = IsKeyDown( e, VirtualKeyModifiers.Shift, VirtualKey.Shift );
 
+		TableViewRow? previousHover = _hoveredRow;
+		_hoveredRow = row;
+		_realizedRows.Add( row );
+		bool refreshedAll = false;
+
 		switch( SelectionMode )
 		{
 			case ListViewSelectionMode.Single:
-				ApplySelection( [ item ], anchorIndex: index, reconcileOnRelease: true );
+				refreshedAll = ApplySelection( [ item ], anchorIndex: index, reconcileOnRelease: true, refreshIfUnchanged: false );
 				break;
 
 			case ListViewSelectionMode.Multiple:
-				ToggleItemSelection( item, index );
+				refreshedAll = ToggleItemSelection( item, index );
 				break;
 
 			case ListViewSelectionMode.Extended:
-				ApplyExtendedSelection( item, index, ctrl, shift );
+				refreshedAll = ApplyExtendedSelection( item, index, ctrl, shift );
 				break;
 		}
 
+		if( !refreshedAll )
+		{
+			if( previousHover is not null && !ReferenceEquals( previousHover, row ) && _realizedRows.Contains( previousHover ) )
+				UpdateRowHighlight( previousHover, previousHover.Content );
+			UpdateRowHighlight( row, item );
+		}
+
 		_justAddedByTableView.Clear();
-		SetHoveredRow( row );
-		UpdateRowHighlight( row, item );
 		row.Focus( FocusState.Pointer );
 		e.Handled = true;
 	}
@@ -330,7 +356,7 @@ public sealed partial class EntryTableView : TableView
 		UpdateRowHighlight( row, args.Item );
 	}
 
-	private void ApplyExtendedSelection( object item, int index, bool ctrl, bool shift )
+	private bool ApplyExtendedSelection( object item, int index, bool ctrl, bool shift )
 	{
 		if( shift )
 		{
@@ -353,29 +379,22 @@ public sealed partial class EntryTableView : TableView
 				if( Items[ i ] is { } rowItem && seen.Add( rowItem ) )
 					target.Add( rowItem );
 			}
-			ApplySelection( target, anchorIndex: anchor, reconcileOnRelease: true );
-			return;
+			return ApplySelection( target, anchorIndex: anchor, reconcileOnRelease: true, refreshIfUnchanged: false );
 		}
 
 		if( ctrl )
-		{
-			ToggleItemSelection( item, index );
-			return;
-		}
+			return ToggleItemSelection( item, index );
 
-		ApplySelection( [ item ], anchorIndex: index, reconcileOnRelease: true );
+		return ApplySelection( [ item ], anchorIndex: index, reconcileOnRelease: true, refreshIfUnchanged: false );
 	}
 
-	private void ToggleItemSelection( object item, int index )
+	private bool ToggleItemSelection( object item, int index )
 	{
 		bool wasSelectedBeforePress = SelectedItems.Contains( item ) && !_justAddedByTableView.Contains( item );
 		_anchorIndex = index;
 
 		if( SelectionMode == ListViewSelectionMode.Single )
-		{
-			ApplySelection( wasSelectedBeforePress ? [] : [ item ], anchorIndex: index, reconcileOnRelease: true );
-			return;
-		}
+			return ApplySelection( wasSelectedBeforePress ? [] : [ item ], anchorIndex: index, reconcileOnRelease: true, refreshIfUnchanged: false );
 
 		// Mutate SelectedItems in place — O(1) instead of clearing and re-adding every selected row
 		bool changed = false;
@@ -400,6 +419,7 @@ public sealed partial class EntryTableView : TableView
 			RefreshAllRowHighlights();
 			SelectionBatchCompleted?.Invoke( this, EventArgs.Empty );
 		}
+		return changed;
 	}
 
 	/// <summary>Replaces <see cref="ListViewBase.SelectedItems"/> in a single guarded batch, firing <see cref="SelectionBatchCompleted"/> once.</summary>
@@ -409,15 +429,19 @@ public sealed partial class EntryTableView : TableView
 		ApplySelection( target, anchorIndex: _anchorIndex, reconcileOnRelease: false );
 	}
 
-	private void ApplySelection( List<object> target, int anchorIndex, bool reconcileOnRelease )
+	private bool ApplySelection( List<object> target, int anchorIndex, bool reconcileOnRelease, bool refreshIfUnchanged = true )
 	{
 		_anchorIndex = anchorIndex;
 		_expectedSelectionAfterRelease = reconcileOnRelease ? target : null;
 
 		if( SelectionMatches( target ) )
 		{
-			RefreshAllRowHighlights();
-			return;
+			if( refreshIfUnchanged )
+			{
+				RefreshAllRowHighlights();
+				return true;
+			}
+			return false;
 		}
 
 		_isUpdatingSelection = true;
@@ -445,6 +469,7 @@ public sealed partial class EntryTableView : TableView
 		}
 		RefreshAllRowHighlights();
 		SelectionBatchCompleted?.Invoke( this, EventArgs.Empty );
+		return true;
 	}
 
 	private void SetHoveredRow( TableViewRow? next )
@@ -511,11 +536,28 @@ public sealed partial class EntryTableView : TableView
 		if( !_rowHosts.TryGetValue( row, out RowHighlightHost? host ) )
 			return;
 		host.PendingItem = null;
+		host.DeferredGeneration++;
+		host.DeferredHooked = false;
+		if( host.LoadedHandler is { } handler )
+		{
+			row.Loaded -= handler;
+			host.LoadedHandler = null;
+		}
 		ApplyOverlayVisuals( host, selected: false, hovered: false, palette: null );
 	}
 
 	private static void ApplyOverlayVisuals( RowHighlightHost host, bool selected, bool hovered, HighlightPalette? palette )
 	{
+		if( host.AppliedSelected == selected
+			&& host.AppliedHovered == hovered
+			&& ReferenceEquals( host.AppliedPalette, palette ) )
+		{
+			return;
+		}
+		host.AppliedSelected = selected;
+		host.AppliedHovered = hovered;
+		host.AppliedPalette = palette;
+
 		if( ( selected || hovered ) && palette is not null )
 		{
 			host.Overlay.Background = ( selected, hovered ) switch
@@ -548,9 +590,12 @@ public sealed partial class EntryTableView : TableView
 		if( host.DeferredHooked )
 			return;
 		host.DeferredHooked = true;
+		int generation = ++host.DeferredGeneration;
 
 		void Reapply()
 		{
+			if( generation != host.DeferredGeneration )
+				return;
 			host.DeferredHooked = false;
 			if( !_realizedRows.Contains( row ) )
 				return;
@@ -566,9 +611,14 @@ public sealed partial class EntryTableView : TableView
 
 		if( !row.IsLoaded )
 		{
-			void OnRowLoaded( object s, RoutedEventArgs _ )
+			RoutedEventHandler? handler = null;
+			handler = ( s, _ ) =>
 			{
-				row.Loaded -= OnRowLoaded;
+				row.Loaded -= handler;
+				if( ReferenceEquals( host.LoadedHandler, handler ) )
+					host.LoadedHandler = null;
+				if( generation != host.DeferredGeneration )
+					return;
 				host.DeferredHooked = false;
 				if( !_realizedRows.Contains( row ) )
 					return;
@@ -580,14 +630,17 @@ public sealed partial class EntryTableView : TableView
 				if( DispatcherQueue is { } loadedQueue )
 				{
 					host.DeferredHooked = true;
-					loadedQueue.TryEnqueue( Reapply );
+					if( !loadedQueue.TryEnqueue( Reapply ) )
+						host.DeferredHooked = false;
 				}
-			}
-			row.Loaded += OnRowLoaded;
+			};
+			host.LoadedHandler = handler;
+			row.Loaded += handler;
 		}
 		else if( DispatcherQueue is { } queue )
 		{
-			queue.TryEnqueue( Reapply );
+			if( !queue.TryEnqueue( Reapply ) )
+				host.DeferredHooked = false;
 		}
 		else
 		{
@@ -602,6 +655,9 @@ public sealed partial class EntryTableView : TableView
 			if( host.Overlay.Parent is not null )
 				return true;
 			host.IsAttached = false;
+			host.AppliedSelected = null;
+			host.AppliedHovered = null;
+			host.AppliedPalette = null;
 		}
 
 		if( VisualTreeHelper.GetChildrenCount( row ) == 0 )
@@ -699,7 +755,8 @@ public sealed partial class EntryTableView : TableView
 			?? ( isDark ? Color.FromArgb( 0xFF, 0x60, 0xCD, 0xFF ) : Color.FromArgb( 0xFF, 0x00, 0x5F, 0xB8 ) );
 
 		if( _highlightCacheDirty || _cachedDark != isDark || _cachedAccent != accent
-			|| _hoverBrush is null || _selectedBrush is null || _selectedHoverBrush is null || _indicatorBrush is null )
+			|| _hoverBrush is null || _selectedBrush is null || _selectedHoverBrush is null || _indicatorBrush is null
+			|| _cachedPalette is null )
 		{
 			_cachedDark = isDark;
 			_cachedAccent = accent;
@@ -714,9 +771,10 @@ public sealed partial class EntryTableView : TableView
 			( _selectedBrush ??= new SolidColorBrush() ).Color = selectedColor;
 			( _selectedHoverBrush ??= new SolidColorBrush() ).Color = selectedHoverColor;
 			( _indicatorBrush ??= new SolidColorBrush() ).Color = indicatorColor;
+			_cachedPalette = new HighlightPalette( _hoverBrush, _selectedBrush, _selectedHoverBrush, _indicatorBrush );
 		}
 
-		return new HighlightPalette( _hoverBrush, _selectedBrush, _selectedHoverBrush, _indicatorBrush );
+		return _cachedPalette;
 	}
 
 	private bool SelectionMatches( List<object> expected )

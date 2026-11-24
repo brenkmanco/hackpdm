@@ -60,7 +60,6 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 		public bool SuppressCancelDialog { get; set; }
 		public bool HasCompleted { get; set; }
 		public bool WasCancelled { get; set; }
-		public bool HasErrors { get; set; }
 	}
 
 	/// <summary>Starts a scope that captures errors and cancellations across one or more workflow calls on the current async flow.</summary>
@@ -72,8 +71,6 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 		{
 			OperationState? op = _currentOp.Value;
 			OperationScope? scope = op?.Scope ?? _currentScope.Value;
-			if( op is not null )
-				op.HasErrors = true;
 			scope?.RecordError();
 		}
 		status()?.AddLog( new BasicStatusMessage { Status = statusMessage, Message = message } );
@@ -163,7 +160,7 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 		Log( StatusMessage.WARNING, "Operation cancelled" );
 		if( tokenToClear is not null || showDialog )
 		{
-			UiDispatcher.Post( () =>
+			UiDispatcher.RunOrPost( () =>
 			{
 				if( tokenToClear is long token )
 					status()?.TryClearInProcess( token );
@@ -188,6 +185,7 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 		OperationState? op = _currentOp.Value;
 		long? tokenToComplete = null;
 		CancellationTokenRegistration registration = default;
+		OperationState? opToDispose = null;
 		lock( _gate )
 		{
 			if( op is null )
@@ -209,11 +207,13 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 			registration = op.CancelRegistration;
 			op.CancelRegistration = default;
 			_activeOps.Remove( op );
+			opToDispose = op;
 
 			if( _activeOps.Count == 0 )
 				tokenToComplete = _nextToken;
 		}
 		registration.Dispose();
+		opToDispose?.Cts.Dispose();
 
 		if( tokenToComplete is long token )
 			status()?.CompleteProgress( token );
@@ -232,8 +232,6 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 		else if( message.StartsWith( "Download failed", StringComparison.OrdinalIgnoreCase )
 			|| message.StartsWith( "Commit failed", StringComparison.OrdinalIgnoreCase ) )
 		{
-			if( op is not null )
-				op.HasErrors = true;
 			scope?.RecordError();
 		}
 		return dialogs.ShowMessageAsync( message, caption, MessageBoxButtons.OK );

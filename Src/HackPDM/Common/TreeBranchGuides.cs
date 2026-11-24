@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -24,6 +25,8 @@ public sealed partial class TreeBranchGuides : Canvas
 {
 	private sealed class TreeRenderState
 	{
+		private bool _treeRefreshQueued;
+
 		public bool ShowLines { get; set; } = true;
 		public double? BaseChevronCenterX { get; set; }
 		public double? BaseContentOriginX { get; set; }
@@ -50,6 +53,39 @@ public sealed partial class TreeBranchGuides : Canvas
 					chain[ cur.Depth ] = cur;
 			}
 			SelectedAncestors = chain;
+		}
+
+		public void QueueTreeRedraw( DispatcherQueue? dispatcherQueue )
+		{
+			if( _treeRefreshQueued )
+				return;
+			_treeRefreshQueued = true;
+
+			void Flush()
+			{
+				_treeRefreshQueued = false;
+				RedrawAllControls();
+			}
+
+			if( dispatcherQueue is not null )
+			{
+				if( !dispatcherQueue.TryEnqueue( Flush ) )
+					_treeRefreshQueued = false;
+			}
+			else
+			{
+				Flush();
+			}
+		}
+
+		private void RedrawAllControls()
+		{
+			ActiveControls.RemoveAll( static r => !r.TryGetTarget( out _ ) );
+			for( int i = 0; i < ActiveControls.Count; i++ )
+			{
+				if( ActiveControls[ i ].TryGetTarget( out var control ) )
+					control.RedrawFromTree();
+			}
 		}
 	}
 
@@ -127,14 +163,7 @@ public sealed partial class TreeBranchGuides : Canvas
 			state.SetSelectedNode( selectedNode );
 		state.PassiveBrush = ResolvePassiveBrush();
 		state.ActiveBrush = ResolveActiveBrush();
-
-		state.ActiveControls.RemoveAll( static r =>
-		{
-			if( !r.TryGetTarget( out var control ) )
-				return true;
-			control.QueueRedraw();
-			return false;
-		} );
+		state.QueueTreeRedraw( tree.DispatcherQueue );
 	}
 
 	private static void OnNodeDataChanged( DependencyObject d, DependencyPropertyChangedEventArgs e )
@@ -207,17 +236,26 @@ public sealed partial class TreeBranchGuides : Canvas
 		_redrawQueued = true;
 		if( DispatcherQueue is { } dq )
 		{
-			dq.TryEnqueue( () =>
+			if( !dq.TryEnqueue( () =>
 			{
 				_redrawQueued = false;
 				Redraw();
-			} );
+			} ) )
+			{
+				_redrawQueued = false;
+			}
 		}
 		else
 		{
 			_redrawQueued = false;
 			Redraw();
 		}
+	}
+
+	private void RedrawFromTree()
+	{
+		_redrawQueued = false;
+		Redraw();
 	}
 
 	private void HideUnusedRects( int usedCount )
@@ -232,7 +270,7 @@ public sealed partial class TreeBranchGuides : Canvas
 	private void Redraw()
 	{
 		int usedRects = 0;
-		if( NodeData is not { Node: { } node, IsLinked: true } data )
+		if( NodeData is not { Node: { } node } data )
 		{
 			HideUnusedRects( 0 );
 			return;
@@ -309,13 +347,7 @@ public sealed partial class TreeBranchGuides : Canvas
 		}
 
 		if( geometryChanged )
-		{
-			for( int i = 0; i < state.ActiveControls.Count; i++ )
-			{
-				if( state.ActiveControls[ i ].TryGetTarget( out var peer ) && !ReferenceEquals( peer, this ) )
-					peer.QueueRedraw();
-			}
-		}
+			state.QueueTreeRedraw( tree.DispatcherQueue ?? DispatcherQueue );
 
 		double indent = state.DetectedIndent ?? Math.Max( 12.0, IndentWidth );
 		double baseChevronCenterX = state.BaseChevronCenterX

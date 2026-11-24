@@ -4,6 +4,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 using HackPDM.Core.Configuration;
 
@@ -13,6 +15,12 @@ namespace HackPDM.Common;
 public static class AppSettingsStore
 {
 	public const string UiConfigKey = "UiConfig";
+
+	private static readonly Lock SaveGate = new();
+	private static readonly Lock WriteLock = new();
+	private static JsonElement? _pendingUiConfig;
+	private static long _latestSaveSeq;
+	private static int _saveScheduled;
 
 	public static string FilePath => Path.Combine( AppDataPaths.Config, "settings.json" );
 
@@ -92,8 +100,71 @@ public static class AppSettingsStore
 	internal static void SaveUiConfig( AppUiConfig config )
 	{
 		JsonElement element = JsonSerializer.SerializeToElement( config, AppUiConfig.JsonOptions );
-		AppComposition.Settings.Set( UiConfigKey, element );
-		config.IsLoadedFromFile = true;
+		lock( SaveGate )
+		{
+			_latestSaveSeq++;
+			_pendingUiConfig = null;
+			config.IsLoadedFromFile = true;
+		}
+		lock( WriteLock )
+			AppComposition.Settings.Set( UiConfigKey, element );
+	}
+
+	internal static void QueueSaveUiConfig( AppUiConfig config )
+	{
+		JsonElement element = JsonSerializer.SerializeToElement( config, AppUiConfig.JsonOptions );
+		bool startWorker;
+		lock( SaveGate )
+		{
+			_latestSaveSeq++;
+			_pendingUiConfig = element;
+			config.IsLoadedFromFile = true;
+			startWorker = Interlocked.CompareExchange( ref _saveScheduled, 1, 0 ) == 0;
+		}
+		if( startWorker )
+			_ = Task.Run( FlushQueuedUiConfigAsync );
+	}
+
+	private static async Task FlushQueuedUiConfigAsync()
+	{
+		try
+		{
+			await Task.Delay( 50 ).ConfigureAwait( false );
+			while( true )
+			{
+				JsonElement element;
+				long seq;
+				lock( SaveGate )
+				{
+					if( _pendingUiConfig is not { } pending )
+					{
+						Volatile.Write( ref _saveScheduled, 0 );
+						return;
+					}
+					element = pending;
+					seq = _latestSaveSeq;
+					_pendingUiConfig = null;
+				}
+
+				try
+				{
+					lock( WriteLock )
+					{
+						if( seq >= Volatile.Read( ref _latestSaveSeq ) )
+							AppComposition.Settings.Set( UiConfigKey, element );
+					}
+				}
+				catch( Exception e )
+				{
+					HackLogger.Warn( "Settings", $"Could not save UI config: {e.Message}", e );
+				}
+			}
+		}
+		catch( Exception e )
+		{
+			Volatile.Write( ref _saveScheduled, 0 );
+			HackLogger.Warn( "Settings", $"Could not flush queued UI config: {e.Message}", e );
+		}
 	}
 
 	private static void TryImportLegacyAppConfig( JsonFileSettingsProvider settings )
@@ -181,9 +252,7 @@ public static class UIStorage
 
 	public static void SaveSafe()
 	{
-		try { Save(); }
+		try { AppSettingsStore.QueueSaveUiConfig( GlobalData ); }
 		catch( Exception e ) { HackLogger.Warn( "Settings", $"Could not save UI config: {e.Message}", e ); }
 	}
-
-	public static void Reload() => GlobalData = AppSettingsStore.LoadUiConfig();
 }

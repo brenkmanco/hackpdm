@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Runtime.CompilerServices;
+
+using CommunityToolkit.Mvvm.ComponentModel;
 
 using HackPDM.Core.Pdm;
 
@@ -23,24 +24,31 @@ public enum FolderOriginKind
 }
 
 [Microsoft.UI.Xaml.Data.Bindable]
-public sealed partial class TreeData( string? name ) : INotifyPropertyChanged
+public sealed partial class TreeData : ObservableObject
 {
 	private static readonly bool[] EmptyContinuations = [];
-	private static readonly PropertyChangedEventArgs IsSelectedChangedArgs = new( nameof( IsSelectedInTree ) );
-	private static readonly PropertyChangedEventArgs NameFontWeightChangedArgs = new( nameof( NameFontWeight ) );
-	private static readonly PropertyChangedEventArgs IsExpandedChangedArgs = new( nameof( IsExpanded ) );
-	private static readonly PropertyChangedEventArgs BranchRevisionChangedArgs = new( nameof( BranchRevision ) );
-	private static readonly PropertyChangedEventArgs IsLastSiblingChangedArgs = new( nameof( IsLastSibling ) );
-	private static readonly PropertyChangedEventArgs AncestorContinuationsChangedArgs = new( nameof( AncestorContinuations ) );
-	private static readonly PropertyChangedEventArgs IsRootNodeChangedArgs = new( nameof( IsRootNode ) );
-	private static readonly PropertyChangedEventArgs SubfolderCountChangedArgs = new( nameof( SubfolderCount ) );
-	private static readonly PropertyChangedEventArgs SubfolderCountTextChangedArgs = new( nameof( SubfolderCountText ) );
-	private static readonly PropertyChangedEventArgs SubfolderCountVisibilityChangedArgs = new( nameof( SubfolderCountVisibility ) );
-	private static readonly PropertyChangedEventArgs TooltipTextChangedArgs = new( nameof( TooltipText ) );
 
 	private string? _cachedFullPath;
 
-	public event PropertyChangedEventHandler? PropertyChanged;
+	[ObservableProperty]
+	[NotifyPropertyChangedFor( nameof( NameFontWeight ) )]
+	public partial bool IsSelectedInTree { get; internal set; }
+
+	[ObservableProperty]
+	public partial bool IsLastSibling { get; private set; }
+
+	[ObservableProperty]
+	public partial bool[] AncestorContinuations { get; private set; }
+
+	[ObservableProperty]
+	public partial int BranchRevision { get; private set; }
+
+	public TreeData( string? name )
+	{
+		Name = name;
+		IsLastSibling = true;
+		AncestorContinuations = EmptyContinuations;
+	}
 
 	public TreeView? ParentTree { get; internal set; }
 	public TreeViewNode? Node { get; internal set; }
@@ -56,7 +64,7 @@ public sealed partial class TreeData( string? name ) : INotifyPropertyChanged
 			field = value;
 			_cachedFullPath = null;
 		}
-	} = name;
+	}
 
 	public string? FullPath
 	{
@@ -89,25 +97,7 @@ public sealed partial class TreeData( string? name ) : INotifyPropertyChanged
 	public string TooltipText =>
 		$"{FullPath ?? Name}\n{OriginLabel}{( SubfolderCount > 0 ? $" · {SubfolderCount} subfolder{( SubfolderCount == 1 ? "" : "s" )}" : "" )}";
 
-	public bool IsSelectedInTree
-	{
-		get;
-		internal set
-		{
-			if( field == value )
-				return;
-			field = value;
-			Notify( IsSelectedChangedArgs );
-			Notify( NameFontWeightChangedArgs );
-		}
-	}
-
 	public int SiblingIndex { get; private set; }
-	public bool IsLastSibling { get; private set; } = true;
-	public bool[] AncestorContinuations { get; private set; } = EmptyContinuations;
-	public int BranchRevision { get; private set; }
-	public bool IsLinked => Node is not null;
-	public bool HasChildren => Node?.HasChildren ?? false;
 	public bool HasSubfolders => SubfolderCount > 0;
 
 	public bool IsExpanded
@@ -119,56 +109,64 @@ public sealed partial class TreeData( string? name ) : INotifyPropertyChanged
 				return;
 			Node.IsExpanded = value;
 			BranchRevision++;
-			Notify( IsExpandedChangedArgs );
-			Notify( BranchRevisionChangedArgs );
+			OnPropertyChanged( nameof( IsExpanded ) );
 		}
 	}
 
-	internal void SetBranchState( bool isLastSibling, bool[] ancestorContinuations, bool recursive = false, int siblingIndex = 0, string? parentFullPath = null )
+	internal void SetBranchState(
+		bool isLastSibling,
+		bool[] ancestorContinuations,
+		bool recursive = false,
+		int siblingIndex = 0,
+		string? parentFullPath = null,
+		int depth = -1,
+		bool notifyDisplay = true )
 	{
+		int currentDepth = depth >= 0 ? depth : Depth;
 		SiblingIndex = siblingIndex;
 		IsLastSibling = isLastSibling;
 		AncestorContinuations = ancestorContinuations;
 		_cachedFullPath = parentFullPath is null ? Name : $"{parentFullPath}\\{Name}";
 		BranchRevision++;
-		if( PropertyChanged is not null )
-		{
+		if( notifyDisplay )
 			RefreshDisplay();
-			Notify( IsLastSiblingChangedArgs );
-			Notify( AncestorContinuationsChangedArgs );
-			Notify( BranchRevisionChangedArgs );
-		}
 
 		if( !recursive || Node is null )
 			return;
 
 		int count = Node.Children.Count;
-		bool[] childContinuations = Depth >= 1 ? [ .. ancestorContinuations, !isLastSibling ] : EmptyContinuations;
+		if( count == 0 )
+			return;
+
+		bool[] childContinuations = currentDepth >= 1 ? [ .. ancestorContinuations, !isLastSibling ] : EmptyContinuations;
 		for( int i = 0; i < count; i++ )
-			Node.Children[ i ].LinkedData.SetBranchState( i == count - 1, childContinuations, recursive: true, siblingIndex: i, parentFullPath: _cachedFullPath );
+		{
+			Node.Children[ i ].LinkedData.SetBranchState(
+				i == count - 1,
+				childContinuations,
+				recursive: true,
+				siblingIndex: i,
+				parentFullPath: _cachedFullPath,
+				depth: currentDepth + 1,
+				notifyDisplay: notifyDisplay );
+		}
 	}
 
 	internal void NotifyBranchChanged()
 	{
 		BranchRevision++;
-		Notify( IsExpandedChangedArgs );
-		Notify( BranchRevisionChangedArgs );
+		OnPropertyChanged( nameof( IsExpanded ) );
 	}
 
 	internal void RefreshDisplay()
 	{
-		if( PropertyChanged is null )
-			return;
-		Notify( IsRootNodeChangedArgs );
-		Notify( NameFontWeightChangedArgs );
-		Notify( SubfolderCountChangedArgs );
-		Notify( SubfolderCountTextChangedArgs );
-		Notify( SubfolderCountVisibilityChangedArgs );
-		Notify( TooltipTextChangedArgs );
+		OnPropertyChanged( nameof( IsRootNode ) );
+		OnPropertyChanged( nameof( NameFontWeight ) );
+		OnPropertyChanged( nameof( SubfolderCount ) );
+		OnPropertyChanged( nameof( SubfolderCountText ) );
+		OnPropertyChanged( nameof( SubfolderCountVisibility ) );
+		OnPropertyChanged( nameof( TooltipText ) );
 	}
-
-	private void Notify( PropertyChangedEventArgs args )
-		=> PropertyChanged?.Invoke( this, args );
 }
 
 public static class TreeViewExtensions
@@ -307,8 +305,8 @@ internal static class DirectoryTreeBuilder
 	{
 		tree.RootNodes.Clear();
 		TreeViewNode rootNode = CreateNode( tree, root, parentPath: null, expandedPaths, expandAll );
+		rootNode.LinkedData.SetBranchState( isLastSibling: true, [], recursive: true, depth: 0, notifyDisplay: false );
 		tree.RootNodes.Add( rootNode );
-		rootNode.LinkedData.SetBranchState( isLastSibling: true, [], recursive: true );
 	}
 
 	private static TreeViewNode CreateNode(

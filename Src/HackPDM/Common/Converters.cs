@@ -25,7 +25,8 @@ public sealed partial class FileSizeConverter : IValueConverter
 		_ => value,
 	};
 
-	public object ConvertBack( object value, Type targetType, object parameter, string language ) => value;
+	public object ConvertBack( object value, Type targetType, object parameter, string language )
+		=> throw new NotSupportedException();
 }
 
 public sealed partial class LocalDateTimeConverter : IValueConverter
@@ -44,7 +45,8 @@ public sealed partial class LocalDateTimeConverter : IValueConverter
 		return local.ToString( "g", CultureInfo.CurrentCulture );
 	}
 
-	public object? ConvertBack( object? value, Type targetType, object? parameter, string language ) => value;
+	public object ConvertBack( object? value, Type targetType, object? parameter, string language )
+		=> throw new NotSupportedException();
 }
 
 public sealed partial class OperatorConverter : IValueConverter

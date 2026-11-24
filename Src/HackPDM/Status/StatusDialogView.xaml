@@ -11,6 +11,22 @@
     xmlns:controls="using:HackPDM.Common"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     mc:Ignorable="d">
+    <Page.Resources>
+        <DataTemplate x:Key="StatusActionCellTemplate" x:DataType="rep:BasicStatusMessage">
+            <TextBlock
+                Padding="4,0,4,0"
+                VerticalAlignment="Center"
+                Text="{x:Bind Status}" />
+        </DataTemplate>
+        <DataTemplate x:Key="StatusMessageCellTemplate" x:DataType="rep:BasicStatusMessage">
+            <TextBlock
+                Padding="4,0,4,0"
+                VerticalAlignment="Center"
+                Text="{x:Bind Message}"
+                TextTrimming="CharacterEllipsis"
+                ToolTipService.ToolTip="{x:Bind Message}" />
+        </DataTemplate>
+    </Page.Resources>
     <Grid x:Name="StatusRootGrid">
         <!--  Full Status Dialog Layout  -->
         <Grid x:Name="FullStatusRoot" Margin="12" RowSpacing="8">
@@ -45,23 +61,24 @@
                             Text="Operations" />
                     </Border>
                     <tv:TableView
-                        x:Name="StatusList"
                         Grid.Row="1"
                         AutoGenerateColumns="False"
                         BorderThickness="0"
-                        CanSortColumns="True"
+                        CanSortColumns="{x:Bind ViewModel.CanSortLogColumns, Mode=OneWay}"
                         IsReadOnly="True"
                         ItemsSource="{x:Bind ViewModel.OStatus, Mode=OneWay}"
                         RowDetailsVisibilityMode="Collapsed">
                         <tv:TableView.Columns>
-                            <tv:TableViewTextColumn
+                            <tv:TableViewTemplateColumn
                                 Width="128"
-                                Binding="{Binding Status}"
-                                Header="Action" />
-                            <tv:TableViewTextColumn
+                                CellTemplate="{StaticResource StatusActionCellTemplate}"
+                                Header="Action"
+                                SortMemberPath="Status" />
+                            <tv:TableViewTemplateColumn
                                 Width="*"
-                                Binding="{Binding Message}"
-                                Header="Description" />
+                                CellTemplate="{StaticResource StatusMessageCellTemplate}"
+                                Header="Description"
+                                SortMemberPath="Message" />
                         </tv:TableView.Columns>
                     </tv:TableView>
                 </Grid>
@@ -69,13 +86,12 @@
 
             <!--  Resizable Horizontal Divider  -->
             <controls:PaneSplitter
-                x:Name="StatusHorizontalSplitter"
                 Grid.Row="1"
                 DragDelta="StatusHorizontalSplitter_DragDelta"
                 Orientation="Horizontal" />
 
             <!--  Lower Split: Info | Warnings & Errors  -->
-            <Grid x:Name="LowerLogsGrid" Grid.Row="2">
+            <Grid Grid.Row="2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition x:Name="InfoLogCol" Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -104,30 +120,30 @@
                                 Text="Info" />
                         </Border>
                         <tv:TableView
-                            x:Name="InfoList"
                             Grid.Row="1"
                             AutoGenerateColumns="False"
                             BorderThickness="0"
-                            CanSortColumns="True"
+                            CanSortColumns="{x:Bind ViewModel.CanSortLogColumns, Mode=OneWay}"
                             IsReadOnly="True"
                             ItemsSource="{x:Bind ViewModel.OInfo, Mode=OneWay}"
                             RowDetailsVisibilityMode="Collapsed">
                             <tv:TableView.Columns>
-                                <tv:TableViewTextColumn
+                                <tv:TableViewTemplateColumn
                                     Width="128"
-                                    Binding="{Binding Status}"
-                                    Header="Action" />
-                                <tv:TableViewTextColumn
+                                    CellTemplate="{StaticResource StatusActionCellTemplate}"
+                                    Header="Action"
+                                    SortMemberPath="Status" />
+                                <tv:TableViewTemplateColumn
                                     Width="*"
-                                    Binding="{Binding Message}"
-                                    Header="Description" />
+                                    CellTemplate="{StaticResource StatusMessageCellTemplate}"
+                                    Header="Description"
+                                    SortMemberPath="Message" />
                             </tv:TableView.Columns>
                         </tv:TableView>
                     </Grid>
                 </Border>
 
                 <controls:PaneSplitter
-                    x:Name="StatusVerticalSplitter"
                     Grid.Column="1"
                     DragDelta="StatusVerticalSplitter_DragDelta"
                     Orientation="Vertical" />
@@ -154,23 +170,24 @@
                                 Text="Warnings &amp; Errors" />
                         </Border>
                         <tv:TableView
-                            x:Name="ErrorList"
                             Grid.Row="1"
                             AutoGenerateColumns="False"
                             BorderThickness="0"
-                            CanSortColumns="True"
+                            CanSortColumns="{x:Bind ViewModel.CanSortLogColumns, Mode=OneWay}"
                             IsReadOnly="True"
                             ItemsSource="{x:Bind ViewModel.OError, Mode=OneWay}"
                             RowDetailsVisibilityMode="Collapsed">
                             <tv:TableView.Columns>
-                                <tv:TableViewTextColumn
+                                <tv:TableViewTemplateColumn
                                     Width="128"
-                                    Binding="{Binding Status}"
-                                    Header="Action" />
-                                <tv:TableViewTextColumn
+                                    CellTemplate="{StaticResource StatusActionCellTemplate}"
+                                    Header="Action"
+                                    SortMemberPath="Status" />
+                                <tv:TableViewTemplateColumn
                                     Width="*"
-                                    Binding="{Binding Message}"
-                                    Header="Description" />
+                                    CellTemplate="{StaticResource StatusMessageCellTemplate}"
+                                    Header="Description"
+                                    SortMemberPath="Message" />
                             </tv:TableView.Columns>
                         </tv:TableView>
                     </Grid>
@@ -179,13 +196,13 @@
 
             <!--  Progress Bar  -->
             <ProgressBar
-                x:Name="fileCheckStatus"
-                Maximum="{x:Bind ViewModel.MaxCount, Mode=OneWay}"
-                Value="{x:Bind ViewModel.TotalProcessed, Mode=OneWay}"
                 Grid.Row="3"
                 Height="10"
                 HorizontalAlignment="Stretch"
-                VerticalAlignment="Center" />
+                VerticalAlignment="Center"
+                IsIndeterminate="{x:Bind ViewModel.IsIndeterminate, Mode=OneWay}"
+                Maximum="{x:Bind ViewModel.MaxCount, Mode=OneWay}"
+                Value="{x:Bind ViewModel.TotalProcessed, Mode=OneWay}" />
 
             <!--  Progress Text, Metrics & Control Buttons  -->
             <Grid
@@ -204,28 +221,23 @@
                     Orientation="Horizontal"
                     Spacing="14">
                     <TextBlock
-                        x:Name="ProgressText"
                         VerticalAlignment="Center"
                         Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}" />
                     <TextBlock
-                        x:Name="SkippedLabel"
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{x:Bind ViewModel.EtaText, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.HasEta, Mode=OneWay}" />
+                    <TextBlock
                         VerticalAlignment="Center"
                         Text="{x:Bind ViewModel.SkippedText, Mode=OneWay}" />
                     <StackPanel VerticalAlignment="Center" Spacing="2">
-                        <TextBlock
-                            x:Name="Downloaded"
-                            Text="{x:Bind ViewModel.DownloadedText, Mode=OneWay}" />
-                        <TextBlock
-                            x:Name="TotalDownload"
-                            Text="{x:Bind ViewModel.SessionDownloadedText, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.DownloadedText, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.SessionDownloadedText, Mode=OneWay}" />
                     </StackPanel>
                     <StackPanel VerticalAlignment="Center" Spacing="2">
-                        <TextBlock
-                            x:Name="Uploaded"
-                            Text="{x:Bind ViewModel.UploadedText, Mode=OneWay}" />
-                        <TextBlock
-                            x:Name="TotalUpload"
-                            Text="{x:Bind ViewModel.SessionUploadedText, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.UploadedText, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.SessionUploadedText, Mode=OneWay}" />
                     </StackPanel>
                 </StackPanel>
 
@@ -237,7 +249,6 @@
                     Orientation="Horizontal"
                     Spacing="8">
                     <Button
-                        x:Name="MinimalStatusBtn"
                         Click="SwitchToMinimalStatus_Click"
                         Content="Minimal"
                         ToolTipService.ToolTip="Switch to compact category bar" />
@@ -248,29 +259,23 @@
                         ToolTipService.ToolTip="Dock Status Log into the main window"
                         Visibility="Collapsed" />
                     <Button
-                        x:Name="OpenLogsBtn"
                         Command="{x:Bind ViewModel.OpenLogsFolderCommand}"
                         Content="Logs Folder"
                         ToolTipService.ToolTip="Open the HackPDM diagnostic logs folder" />
                     <Button
-                        x:Name="CopyDiagnosticsBtn"
                         Click="CopyDiagnosticsBtn_Click"
                         Content="Copy Diagnostics"
                         ToolTipService.ToolTip="Copy redacted client/server diagnostic summary to clipboard" />
                     <Button
-                        x:Name="StatusSettings"
                         Content="Configure Settings"
                         Click="StatusSettings_Click" />
                     <CheckBox
-                        x:Name="cbxAutoClose"
                         Content="Close When Complete"
                         IsChecked="{x:Bind ViewModel.AutoClose, Mode=TwoWay}" />
                     <Button
-                        x:Name="cmdCancel"
                         Content="Cancel"
                         Command="{x:Bind ViewModel.CancelCommand}" />
                     <Button
-                        x:Name="cmdClose"
                         Content="Close"
                         Click="CmdCloseClick" />
                 </StackPanel>
@@ -297,7 +302,6 @@
                     Spacing="8">
                     <!--  Processing  -->
                     <Border
-                        x:Name="ProcessingPill"
                         Padding="8,4"
                         Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -397,10 +401,17 @@
                         FontSize="12"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         Text="{x:Bind ViewModel.CompactProgressText, Mode=OneWay}" />
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{x:Bind ViewModel.EtaText, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.HasEta, Mode=OneWay}" />
                     <ProgressBar
                         Width="88"
                         Height="6"
                         VerticalAlignment="Center"
+                        IsIndeterminate="{x:Bind ViewModel.IsIndeterminate, Mode=OneWay}"
                         Maximum="{x:Bind ViewModel.MaxCount, Mode=OneWay}"
                         Value="{x:Bind ViewModel.TotalProcessed, Mode=OneWay}" />
                     <Button
@@ -410,7 +421,6 @@
                         FontSize="11"
                         Visibility="{x:Bind ViewModel.IsInProcess, Mode=OneWay}" />
                     <Button
-                        x:Name="MiniFullStatusBtn"
                         Padding="10,4"
                         Click="OpenFullStatus_Click"
                         Content="Full Log"

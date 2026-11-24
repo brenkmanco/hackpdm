@@ -92,21 +92,21 @@ public sealed class DialogService : IDialogService
 	public async Task<bool> ConfirmAsync( string message, string caption, MessageBoxIcon icon = MessageBoxIcon.Question )
 		=> await MessageBox.ShowAsync( message, caption, MessageBoxButtons.YesNoCancel, icon ) is DialogResult.Yes or DialogResult.OK;
 
-	public void ShowStatusWindow() => UiDispatcher.Post( _status.Show );
-	public void ToggleStatusWindow() => UiDispatcher.Post( _status.Toggle );
-	public void CloseStatusWindow() => UiDispatcher.Post( _status.Close );
-	public void DetachStatusWindow() => UiDispatcher.Post( _status.Detach );
-	public void DockStatusWindow() => UiDispatcher.Post( _status.Dock );
-	public void SetStatusMinimalMode( bool minimal ) => UiDispatcher.Post( () => _status.SetMinimal( minimal ) );
-	public void ShowFullStatusWindow() => UiDispatcher.Post( () => { _status.SetMinimal( false ); _status.Show(); } );
+	public void ShowStatusWindow() => UiDispatcher.RunOrPost( _status.Show );
+	public void ToggleStatusWindow() => UiDispatcher.RunOrPost( _status.Toggle );
+	public void CloseStatusWindow() => UiDispatcher.RunOrPost( _status.Close );
+	public void DetachStatusWindow() => UiDispatcher.RunOrPost( _status.Detach );
+	public void DockStatusWindow() => UiDispatcher.RunOrPost( _status.Dock );
+	public void SetStatusMinimalMode( bool minimal ) => UiDispatcher.RunOrPost( () => _status.SetMinimal( minimal ) );
+	public void ShowFullStatusWindow() => UiDispatcher.RunOrPost( () => { _status.SetMinimal( false ); _status.Show(); } );
 
-	public void ShowSearchWindow() => UiDispatcher.Post( _search.Show );
-	public void ToggleSearchWindow() => UiDispatcher.Post( _search.Toggle );
-	public void CloseSearchWindow() => UiDispatcher.Post( _search.Close );
-	public void DetachSearchWindow() => UiDispatcher.Post( _search.Detach );
-	public void DockSearchWindow() => UiDispatcher.Post( _search.Dock );
-	public void SetSearchMinimalMode( bool minimal ) => UiDispatcher.Post( () => _search.SetMinimal( minimal ) );
-	public void ShowFullSearchWindow() => UiDispatcher.Post( () => { _search.SetMinimal( false ); _search.Show(); } );
+	public void ShowSearchWindow() => UiDispatcher.RunOrPost( _search.Show );
+	public void ToggleSearchWindow() => UiDispatcher.RunOrPost( _search.Toggle );
+	public void CloseSearchWindow() => UiDispatcher.RunOrPost( _search.Close );
+	public void DetachSearchWindow() => UiDispatcher.RunOrPost( _search.Detach );
+	public void DockSearchWindow() => UiDispatcher.RunOrPost( _search.Dock );
+	public void SetSearchMinimalMode( bool minimal ) => UiDispatcher.RunOrPost( () => _search.SetMinimal( minimal ) );
+	public void ShowFullSearchWindow() => UiDispatcher.RunOrPost( () => { _search.SetMinimal( false ); _search.Show(); } );
 
 	private sealed class DockablePanelController<TPage>(
 		string presetKey,
