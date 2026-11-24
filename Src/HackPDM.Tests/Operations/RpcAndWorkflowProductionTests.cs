@@ -895,6 +895,54 @@ public sealed class RpcAndWorkflowProductionTests
 	}
 
 	[Fact]
+	public async Task PdmWorkflowService_ChangeCheckoutAsync_LogsErrorAndNotifies_WhenEntrySearchReadFails()
+	{
+		bool failFirstEntrySearch = true;
+		bool failSecondUncheckoutSearch = false;
+		await using MockOdooServer server = new( call =>
+		{
+			if( call.Model == HpEntry.ModelName && call.ModelMethod == "get_recursive_dependency_entries_by_entries" )
+				return new[] { 10 };
+			if( call.Model == HpEntry.ModelName && call.ModelMethod == "search_read" )
+			{
+				if( failFirstEntrySearch )
+					return new MockHttpResponse( 200, "OK", JsonRpcErrorBody( "AccessError", "entry lookup denied" ) );
+				if( failSecondUncheckoutSearch && call.Args[ 5 ].GetRawText().Contains( "\"!=\"" ) )
+					return new MockHttpResponse( 200, "OK", JsonRpcErrorBody( "UserError", "holder lookup failed" ) );
+				return Array.Empty<object>();
+			}
+			return Array.Empty<object>();
+		} );
+		using ScopedOdooEnvironment env = new( server.BaseUrl );
+
+		RecordingReporter checkoutReporter = new();
+		PdmWorkflowService service = new( checkoutReporter );
+		await service.CheckoutAsync( [ 10 ] );
+
+		Assert.Contains( server.Calls, c => c.Model == HpEntry.ModelName && c.ModelMethod == "search_read" );
+		Assert.DoesNotContain( server.Calls, c => c.Model == HpEntry.ModelName && c.ModelMethod == "read" );
+		Assert.DoesNotContain( server.Calls, c => c.ModelMethod == "checkout_entry" );
+		Assert.Contains( checkoutReporter.Logs, l => l.Status == StatusMessage.ERROR && l.Message.Contains( "entry lookup denied" ) );
+		Assert.Contains( checkoutReporter.Notices, n => n.Caption == "Checkout Files" && n.Message.Contains( "entry lookup denied" ) );
+
+		RecordingReporter uncheckoutPrimaryReporter = new();
+		await new PdmWorkflowService( uncheckoutPrimaryReporter ).UnCheckoutAsync( [ 10 ] );
+
+		Assert.DoesNotContain( server.Calls, c => c.ModelMethod == "write" );
+		Assert.Contains( uncheckoutPrimaryReporter.Logs, l => l.Status == StatusMessage.ERROR && l.Message.Contains( "entry lookup denied" ) );
+		Assert.Contains( uncheckoutPrimaryReporter.Notices, n => n.Caption == "UnCheckout Files" && n.Message.Contains( "entry lookup denied" ) );
+
+		failFirstEntrySearch = false;
+		failSecondUncheckoutSearch = true;
+		RecordingReporter uncheckoutOthersReporter = new();
+		await new PdmWorkflowService( uncheckoutOthersReporter ).UnCheckoutAsync( [ 10 ] );
+
+		Assert.DoesNotContain( server.Calls, c => c.ModelMethod == "write" );
+		Assert.Contains( uncheckoutOthersReporter.Logs, l => l.Status == StatusMessage.ERROR && l.Message.Contains( "holder lookup failed" ) );
+		Assert.Contains( uncheckoutOthersReporter.Notices, n => n.Caption == "UnCheckout Files" && n.Message.Contains( "holder lookup failed" ) );
+	}
+
+	[Fact]
 	public async Task PdmWorkflowService_CommitAsync_CatchesOdooException_AndNotifiesOnFailure()
 	{
 		await using MockOdooServer server = new( call =>

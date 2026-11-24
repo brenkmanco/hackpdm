@@ -290,11 +290,40 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 			await ChangeCheckoutAsync( entryIds, checkout: true, preExpandedIds: expanded );
 	}
 
+	private static async Task<Result<List<HpEntry>>> SearchEntriesByIdChunksAsync(
+		IReadOnlyList<int> entryIds,
+		OdooDomain? extraFilter,
+		FieldSelection fields,
+		CancellationToken token )
+	{
+		if( entryIds.Count == 0 )
+			return Result<List<HpEntry>>.Success( [] );
+
+		List<HpEntry> entries = new( entryIds.Count );
+		for( int offset = 0; offset < entryIds.Count; offset += RpcIdChunkSize )
+		{
+			token.ThrowIfCancellationRequested();
+			IReadOnlyList<int> chunk = offset == 0 && entryIds.Count <= RpcIdChunkSize
+				? entryIds
+				: OdooRpc.SliceChunk( entryIds, offset, RpcIdChunkSize );
+			OdooDomain domain = extraFilter is null
+				? OdooDomain.IdIn( chunk )
+				: extraFilter.And( nameof( HpEntry.id ), Operators.In, chunk );
+			Result<HpEntry[]> batch = await Repository<HpEntry>.SearchReadAsync( domain, fields, token: token ).ConfigureAwait( false );
+			if( !batch.Ok )
+				return Result<List<HpEntry>>.Fail( batch.Error );
+			if( batch.Value is { Length: > 0 } rows )
+				entries.AddRange( rows );
+		}
+		return Result<List<HpEntry>>.Success( entries );
+	}
+
 	private async Task ChangeCheckoutAsync( IReadOnlyList<int> entryIds, bool checkout, IReadOnlyList<int>? preExpandedIds )
 	{
 		if( entryIds is null or { Count: < 1 } )
 			return;
 
+		string opTitle = checkout ? "Checkout Files" : "UnCheckout Files";
 		CancellationTokenSource cancellation = reporter.BeginOperation();
 		using IDisposable? watcherPause = localFiles?.Suspend();
 		try
@@ -303,33 +332,48 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 			bool completed = await AsyncHelper.AsyncRunner( async () =>
 			{
 				IReadOnlyList<int> ids = preExpandedIds ?? await ExpandWithDependenciesAsync( entryIds, cancellation.Token ).ConfigureAwait( false );
-				HpEntry[]? entries = await HpEntry.GetRecordsByIdsAsync(
+				Result<List<HpEntry>> entriesResult = await SearchEntriesByIdChunksAsync(
 					ids,
 					checkout ? null : OdooDomain.Where( nameof( HpEntry.checkout_user ), Operators.Equal, me ),
-					excludedFields: HeavyEntryFields,
-					token: cancellation.Token ).ConfigureAwait( false );
+					new( Excluded: HeavyEntryFields ),
+					cancellation.Token ).ConfigureAwait( false );
+				if( !entriesResult.Ok )
+				{
+					string message = $"Could not fetch entries to {( checkout ? "check out" : "undo check out of" )}: {entriesResult.Error}";
+					Log( StatusMessage.ERROR, message );
+					await reporter.NotifyAsync( message, opTitle ).ConfigureAwait( false );
+					return;
+				}
 
 				if( !checkout )
 				{
-					HpEntry[]? others = await HpEntry.GetRecordsByIdsAsync(
+					Result<List<HpEntry>> othersResult = await SearchEntriesByIdChunksAsync(
 						entryIds,
 						OdooDomain.Where( nameof( HpEntry.checkout_user ), Operators.NotEqual, me ).And( nameof( HpEntry.checkout_user ), Operators.NotEqual, false ),
-						includedFields: [ nameof( HpEntry.id ), nameof( HpEntry.name ), nameof( HpEntry.checkout_user ) ],
-						token: cancellation.Token ).ConfigureAwait( false );
-					foreach( HpEntry other in others ?? [] )
+						FieldSelection.Only( nameof( HpEntry.id ), nameof( HpEntry.name ), nameof( HpEntry.checkout_user ) ),
+						cancellation.Token ).ConfigureAwait( false );
+					if( !othersResult.Ok )
+					{
+						string message = $"Could not check who has entries checked out: {othersResult.Error}";
+						Log( StatusMessage.ERROR, message );
+						await reporter.NotifyAsync( message, opTitle ).ConfigureAwait( false );
+						return;
+					}
+					foreach( HpEntry other in othersResult.Value! )
 						Log( StatusMessage.ERROR, $"Cannot undo the check out of {other.name}: it is checked out to {other.checkout_user?.name ?? "another user"}" );
 				}
-				if( entries is null or { Length: < 1 } )
+				if( entriesResult.Value is not { Count: > 0 } entries )
 					return;
 
-				reporter.SetTotal( entries.Length );
+				reporter.SetTotal( entries.Count );
+				HpEntry[] entryArray = [ .. entries ];
 				if( checkout )
-					await CheckoutOperations.CheckOutEntriesAsync( entries, Log, OnCheckoutProgress, cancellation.Token ).ConfigureAwait( false );
+					await CheckoutOperations.CheckOutEntriesAsync( entryArray, Log, OnCheckoutProgress, cancellation.Token ).ConfigureAwait( false );
 				else
-					await CheckoutOperations.UnCheckOutEntriesAsync( entries, me, Log, OnCheckoutProgress, cancellation.Token ).ConfigureAwait( false );
+					await CheckoutOperations.UnCheckOutEntriesAsync( entryArray, me, Log, OnCheckoutProgress, cancellation.Token ).ConfigureAwait( false );
 				reporter.Complete();
 				await reporter.NotifyAsync( "Completed!" );
-			}, checkout ? "Checkout Files" : "UnCheckout Files", cancellation );
+			}, opTitle, cancellation );
 			if( !completed )
 				await reporter.NotifyAsync( checkout ? "Cancelled Checkout" : "Cancelled UnCheckout" );
 		}
