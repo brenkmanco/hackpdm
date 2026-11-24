@@ -2,38 +2,22 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 using HackPDM.Common;
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Graph;
-using HackPDM.Core.Odoo;
-using HackPDM.Core.Odoo.Models;
 using HackPDM.Core.Pdm;
 using HackPDM.Core.Services;
-using HackPDM.Core.Theming;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 
 using Windows.System;
 
-using DetailRow = HackPDM.Core.Services.EntryRow;
-
 namespace HackPDM.Graph;
-
-/// <summary>A file in the dependency page's list.</summary>
-/// <param name="Id">The hp.entry id.</param>
-/// <param name="Name">The file name with its extension.</param>
-[System.ComponentModel.Bindable( true )]
-public sealed record GraphEntryItem( int Id, string Name )
-{
-	public override string ToString() => Name;
-}
 
 /// <summary>
 /// Folders on the left, the files of the selected folder in the middle (several can be selected) and
@@ -43,53 +27,40 @@ public sealed record GraphEntryItem( int Id, string Name )
 /// </summary>
 public sealed partial class DependencyGraphView : Page
 {
-	private static readonly char[] PathSeparators = [ '\\', '/' ];
-	private readonly List<GraphEntryItem> _entries = [];
-	private readonly Dictionary<int, GraphNode> _nodesById = [];
-	private readonly SolidColorBrush _infoHeaderBrush = new();
-	private CancellationTokenSource? _entriesLoad;
-	private CancellationTokenSource? _graphLoad;
+	private const double DetailPanelSpace = 336;
+
+	public DependencyGraphViewModel ViewModel { get; } = new( AppComposition.EntryDetails, new PreviewImageLoader() );
+
 	private bool _quietSelection;
 	private bool _themeSubscribed;
 	private bool _suppressDetailTabLoad;
 	private bool _left;
-	private DependencyGraph _graph = DependencyGraph.Empty;
-	/// <summary>The files the graph is drawn around: the list's selection, or a file double-clicked in the graph.</summary>
-	private IReadOnlyList<int> _roots = [];
-
-	private readonly IEntryDetailsService _details = AppComposition.EntryDetails;
-	private readonly IPreviewImageLoader _previews = new PreviewImageLoader();
-	private CancellationTokenSource? _detailLoad;
-	private CancellationTokenSource? _previewLoad;
-	/// <summary>The file whose details are open; null when the panel is closed.</summary>
-	private GraphNode? _detailNode;
-	private const double DetailPanelSpace = 336;
-
-	// the file manager's detail tables, for the clicked file
-	public RangeObservableCollection<TreeData> BreadcrumbPath { get; } = [];
 	private TreeViewNode? _selectedFolderNode;
 	private TreeData? _selectedFolderData;
+
 	private TreeViewNode? CurrentSelectedFolderNode => _selectedFolderNode ?? FolderTree.SelectedNode;
-	public RangeObservableCollection<HistoryRow> HistoryRows { get; } = [];
-	public RangeObservableCollection<ParentRow> ParentRows { get; } = [];
-	public RangeObservableCollection<ChildrenRow> ChildRows { get; } = [];
-	public RangeObservableCollection<PropertiesRow> PropertyRows { get; } = [];
-	public RangeObservableCollection<VersionRow> VersionRows { get; } = [];
 
 	public DependencyGraphView()
 	{
 		InitializeComponent();
-		InfoHeader.Background = _infoHeaderBrush;
 		Graph.Theme = AppComposition.Theme.GraphTheme;
+		ViewModel.SetCurrentForm( Graph.Theme.Form );
 		GraphBranchLinesToggle.IsChecked = AppComposition.Theme.ShowTreeBranchLines;
 		ApplyGraphPaneLayout();
-		Unloaded += ( _, _ ) => UnsubscribeTheme();
-		FolderTree.SelectionChanged += ( sender, args ) =>
+
+		Unloaded += OnUnloaded;
+		ViewModel.GraphArranged += OnGraphArranged;
+		ViewModel.SelectEntryInListRequested += OnSelectEntryInListRequested;
+		ViewModel.ClearEntryListSelectionRequested += OnClearEntryListSelectionRequested;
+		ViewModel.ZoomRequested += factor => Graph.ZoomBy( factor );
+		ViewModel.FitRequested += () => Graph.Fit();
+
+		FolderTree.SelectionChanged += ( _, args ) =>
 		{
 			if( SelectedNodeFromArgs( args ) is not { } node || ReferenceEquals( node, _selectedFolderNode ) )
 				return;
 			SyncFolderSelection( node );
-			_ = LoadEntriesAsync( node );
+			ViewModel.PendingLoad = ViewModel.LoadEntriesAsync( node.LinkedData.DirectoryId, debounce: true );
 		};
 		FolderTree.Expanding += ( _, e ) =>
 		{
@@ -105,54 +76,42 @@ public sealed partial class DependencyGraphView : Page
 		EntryList.SelectionChanged += ( _, _ ) => OnEntrySelectionChanged();
 		SelectAll.Checked += ( _, _ ) => SetAllSelected( true );
 		SelectAll.Unchecked += ( _, _ ) => SetAllSelected( false );
-		ShowChildren.Checked += ( _, _ ) => _ = LoadGraphAsync();
-		ShowParents.Checked += ( _, _ ) => _ = LoadGraphAsync();
-		ShowBoth.Checked += ( _, _ ) => _ = LoadGraphAsync();
-		ZoomIn.Click += ( _, _ ) => Graph.ZoomBy( 1.25 );
-		ZoomOut.Click += ( _, _ ) => Graph.ZoomBy( 0.8 );
-		FitButton.Click += ( _, _ ) => Graph.Fit();
-		Graph.ZoomChanged += zoom => ZoomText.Text = $"{zoom * 100:0}%";
+		Graph.ZoomChanged += ViewModel.UpdateZoom;
 		Graph.NodeSelected += node =>
 		{
-			ShowStatus();
-			_ = ShowDetailsAsync( node );
+			ViewModel.UpdateStatus( node );
+			_ = ShowDetailsSafeAsync( node );
 		};
-		Graph.NodeInvoked += Focus;
-		DetailClose.Click += ( _, _ ) => CloseDetails();
+		Graph.NodeInvoked += ViewModel.FocusNode;
+
 		DetailTabs.SelectedIndex = 0;
+		ViewModel.SetSelectedDetailTab( ResolveDetailTab( DetailTabs.SelectedItem as TabViewItem ), reloadIfOpen: false );
 		DetailTabs.SelectionChanged += ( _, _ ) =>
 		{
 			if( !_suppressDetailTabLoad )
-				_ = LoadDetailTabAsync();
+				ViewModel.SetSelectedDetailTab( ResolveDetailTab( DetailTabs.SelectedItem as TabViewItem ) );
 		};
-		InfoFocus.Click += ( _, _ ) =>
-		{
-			if( _detailNode is { } node )
-				Focus( node );
-		};
-		InfoLocate.Click += ( _, _ ) => _ = LocateAsync();
+
 		KeyboardAccelerator escape = new() { Key = VirtualKey.Escape };
 		escape.Invoked += ( _, e ) =>
 		{
-			if( DetailPanel.Visibility == Visibility.Visible )
+			if( ViewModel.IsDetailsOpen )
 			{
 				e.Handled = true;
-				CloseDetails();
+				ViewModel.CloseDetails();
 			}
 		};
 		KeyboardAccelerators.Add( escape );
 	}
 
 	/// <summary>Which dependencies the switch asks for.</summary>
-	public GraphDirection Direction => ShowParents.IsChecked == true ? GraphDirection.Parents
-		: ShowBoth.IsChecked == true ? GraphDirection.Both
-		: GraphDirection.Children;
+	public GraphDirection Direction => ViewModel.Direction;
 
 	/// <summary>The graph on screen (the smoke tests read it).</summary>
 	internal NodeGraphView GraphView => Graph;
 
 	/// <summary>The files listed for the selected folder.</summary>
-	internal IReadOnlyList<GraphEntryItem> Entries => _entries;
+	internal IReadOnlyList<GraphEntryItem> Entries => ViewModel.Entries;
 
 	/// <summary>The folder tree (the smoke tests pick folders in it).</summary>
 	internal TreeView Folders => FolderTree;
@@ -163,7 +122,7 @@ public sealed partial class DependencyGraphView : Page
 		SyncFolderSelection( node );
 		node.LinkedData.EnsureVisible( FolderTree );
 		FolderTree.SelectedNode = node;
-		return PendingLoad = LoadEntriesAsync( node );
+		return ViewModel.PendingLoad = ViewModel.LoadEntriesAsync( node.LinkedData.DirectoryId );
 	}
 
 	/// <summary>Selects the listed files named <paramref name="names"/> (the smoke tests).</summary>
@@ -179,14 +138,34 @@ public sealed partial class DependencyGraphView : Page
 	internal void SetSelectAll( bool selected ) => SelectAll.IsChecked = selected;
 
 	/// <summary>Flips the Children / Parents / Both switch (the smoke tests).</summary>
-	internal void SetDirection( GraphDirection direction )
-		=> ( direction switch { GraphDirection.Parents => ShowParents, GraphDirection.Both => ShowBoth, _ => ShowChildren } ).IsChecked = true;
+	internal void SetDirection( GraphDirection direction ) => ViewModel.Direction = direction;
 
 	/// <summary>The files the graph was last drawn around.</summary>
-	internal IReadOnlyList<int> Roots => _graph.Roots;
+	internal IReadOnlyList<int> Roots => ViewModel.Roots;
 
 	/// <summary>The load in progress (the smoke tests wait on it).</summary>
-	internal Task? PendingLoad { get; private set; }
+	internal Task? PendingLoad => ViewModel.PendingLoad;
+
+	/// <summary>Closes the details panel, as its close button does (the smoke tests).</summary>
+	internal void CloseDetailsForTest() => ViewModel.CloseDetails();
+
+	/// <summary>Whether the details panel is open (the smoke tests).</summary>
+	internal bool DetailsOpen => ViewModel.IsDetailsOpen;
+
+	/// <summary>The details load in progress (the smoke tests wait on it).</summary>
+	internal Task? DetailsLoad => ViewModel.DetailsLoad;
+
+	/// <summary>The info card's lines (the smoke tests).</summary>
+	internal string DetailsText => ViewModel.DetailsText;
+
+	/// <summary>Detail tables read by smoke tests.</summary>
+	internal RangeObservableCollection<HistoryRow> HistoryRows => ViewModel.HistoryRows;
+	internal RangeObservableCollection<ParentRow> ParentRows => ViewModel.ParentRows;
+	internal RangeObservableCollection<ChildrenRow> ChildRows => ViewModel.ChildRows;
+
+	/// <summary>Shows a detail tab ("History", "Where Used", "Dependents", "Properties", "Info") (the smoke tests).</summary>
+	internal void ShowDetailTab( string header )
+		=> DetailTabs.SelectedItem = DetailTabs.TabItems.OfType<TabViewItem>().First( t => t.Header as string == header );
 
 	protected override void OnNavigatedTo( NavigationEventArgs e )
 	{
@@ -195,6 +174,28 @@ public sealed partial class DependencyGraphView : Page
 		SubscribeTheme();
 		Loaded -= OnLoaded;
 		Loaded += OnLoaded;
+	}
+
+	protected override void OnNavigatedFrom( NavigationEventArgs e )
+	{
+		Leave();
+		base.OnNavigatedFrom( e );
+	}
+
+	private void OnUnloaded( object sender, RoutedEventArgs e ) => Leave();
+
+	private void Leave()
+	{
+		if( _left )
+			return;
+		_left = true;
+		Loaded -= OnLoaded;
+		Unloaded -= OnUnloaded;
+		UnsubscribeTheme();
+		ViewModel.GraphArranged -= OnGraphArranged;
+		ViewModel.SelectEntryInListRequested -= OnSelectEntryInListRequested;
+		ViewModel.ClearEntryListSelectionRequested -= OnClearEntryListSelectionRequested;
+		ViewModel.Dispose();
 	}
 
 	private void SubscribeTheme()
@@ -220,141 +221,52 @@ public sealed partial class DependencyGraphView : Page
 		// template to them only when the tree has an (empty) items source, set once the page is loaded;
 		// the nodes are added after the first layout or the folders opened below stay closed
 		FolderTree.ItemsSource = new ObservableCollection<TreeData>();
-		PendingLoad = LoadTreeAfterLayoutAsync();
+		ViewModel.PendingLoad = LoadTreeAfterLayoutAsync();
 	}
 
 	private async Task LoadTreeAfterLayoutAsync()
 	{
-		TreeLoadingOverlay.Visibility = Visibility.Visible;
-		TreeBusyRing.IsActive = true;
-		await Task.Delay( AppComposition.FileManagerState.Tree is null ? 30 : 16 );
-		if( _left )
-			return;
-		await LoadTreeAsync();
+		try
+		{
+			ViewModel.IsTreeLoading = true;
+			await Task.Delay( AppComposition.FileManagerState.Tree is null ? 30 : 16 );
+			if( _left )
+				return;
+			await LoadTreeAsync();
+		}
+		catch( OperationCanceledException ) { }
+		catch( Exception ex )
+		{
+			HackLogger.Warn( nameof( NavigatePageMenu.DependencyGraph ), $"Loading dependency graph tree failed: {ex.Message}", ex );
+		}
+		finally
+		{
+			if( !_left )
+				ViewModel.IsTreeLoading = false;
+		}
 	}
-
-	protected override void OnNavigatedFrom( NavigationEventArgs e )
-	{
-		_left = true;
-		Loaded -= OnLoaded;
-		UnsubscribeTheme();
-		CtsHelper.CancelAndDispose( ref _detailLoad );
-		CtsHelper.CancelAndDispose( ref _previewLoad );
-		CtsHelper.CancelAndDispose( ref _entriesLoad );
-		CtsHelper.CancelAndDispose( ref _graphLoad );
-		base.OnNavigatedFrom( e );
-	}
-
-	// ------------------------------------------------------------------ folders and files
 
 	private async Task LoadTreeAsync()
 	{
 		if( _left )
 			return;
-		try
-		{
-			TreeLoadingOverlay.Visibility = Visibility.Visible;
-			TreeBusyRing.IsActive = true;
-			DirectoryNode? root = AppComposition.FileManagerState.Tree ?? await new DirectoryTreeService().LoadAsync();
-			if( _left )
-				return;
-			if( root is null )
-			{
-				Status.Text = "The folder tree could not be read from the server.";
-				return;
-			}
-			AppComposition.FileManagerState.Tree ??= root;
-			DirectoryTreeBuilder.Build( FolderTree, root );
-			if( FolderTree.RootNodes.Count == 0 )
-				return;
-			TreeViewNode first = FolderTree.RootNodes[ 0 ];
-			first.LinkedData.IsExpanded = true;
-			// start in the folder the file manager has open
-			string? path = AppComposition.FileManagerState.SelectedPath;
-			TreeViewNode target = ( path is null ? null : FolderTree.FindTreeNode( path )?.Node ) ?? first;
-			SyncFolderSelection( target );
-			FolderTree.SelectedNode = target;
-			target.LinkedData.EnsureVisible( FolderTree );
-			await LoadEntriesAsync( target );
-		}
-		catch( Exception ex )
-		{
-			HackLogger.Warn( nameof( NavigatePageMenu.DependencyGraph ), $"Loading folder tree failed: {ex.Message}", ex );
-			if( !_left )
-				Status.Text = $"The folder tree could not be read: {ex.Message}";
-		}
-		finally
-		{
-			if( !_left )
-			{
-				TreeBusyRing.IsActive = false;
-				TreeLoadingOverlay.Visibility = Visibility.Collapsed;
-			}
-		}
-	}
-
-	private async Task LoadEntriesAsync( TreeViewNode? node = null )
-	{
-		if( _left )
+		DirectoryNode? root = await ViewModel.LoadDirectoryTreeAsync();
+		if( _left || root is null )
 			return;
-		CancellationTokenSource load = CtsHelper.Replace( ref _entriesLoad );
-		CancellationToken token = load.Token;
-		int? directoryId = ( node ?? CurrentSelectedFolderNode )?.LinkedData.DirectoryId;
 
-		_quietSelection = true;
-		_entries.Clear();
-		EntryList.ItemsSource = null;
-		SelectAll.IsChecked = false;
-		_quietSelection = false;
-		EntryCount.Text = "";
-		if( directoryId is not int id || id == 0 )
-		{
-			SetEntryBusy( false );
-			EntryCount.Text = "This folder is not on the server.";
+		DirectoryTreeBuilder.Build( FolderTree, root );
+		if( FolderTree.RootNodes.Count == 0 )
 			return;
-		}
 
-		SetEntryBusy( true );
-		try
-		{
-			Result<IReadOnlyList<RemoteEntryDto>> rows = await HpDirectory.GetEntriesAsync( id );
-			if( _left || token.IsCancellationRequested )
-				return;
-			if( !rows.Ok )
-			{
-				EntryCount.Text = $"The files could not be read: {rows.Error}";
-				return;
-			}
-			_entries.AddRange( rows.Value!.Where( static r => !r.Deleted ).OrderBy( static r => r.Name, StringComparer.OrdinalIgnoreCase )
-				.Select( static r => new GraphEntryItem( r.Id, r.Name ) ) );
-			EntryList.ItemsSource = _entries;
-			EntryCount.Text = _entries.Count == 1 ? "1 file" : $"{_entries.Count} files";
-		}
-		catch( OperationCanceledException )
-		{
-		}
-		catch( Exception ex )
-		{
-			HackLogger.Warn( nameof( NavigatePageMenu.DependencyGraph ), $"Loading folder entries failed: {ex.Message}", ex );
-			if( !_left && ReferenceEquals( _entriesLoad, load ) )
-				EntryCount.Text = $"The files could not be read: {ex.Message}";
-		}
-		finally
-		{
-			if( !_left && ReferenceEquals( _entriesLoad, load ) )
-				SetEntryBusy( false );
-		}
-	}
-
-	private void SetEntryBusy( bool busy )
-	{
-		EntryBusyRing.IsActive = busy;
-		EntryBusyBar.Visibility = busy.ToVisibility();
-		EntryBusyOverlay.Visibility = busy.ToVisibility();
-		if( busy )
-			Busy.IsActive = true;
-		else if( GraphBusyOverlay.Visibility != Visibility.Visible )
-			Busy.IsActive = false;
+		TreeViewNode first = FolderTree.RootNodes[ 0 ];
+		first.LinkedData.IsExpanded = true;
+		// start in the folder the file manager has open
+		string? path = AppComposition.FileManagerState.SelectedPath;
+		TreeViewNode target = ( path is null ? null : FolderTree.FindTreeNode( path )?.Node ) ?? first;
+		SyncFolderSelection( target );
+		FolderTree.SelectedNode = target;
+		target.LinkedData.EnsureVisible( FolderTree );
+		await ViewModel.LoadEntriesAsync( target.LinkedData.DirectoryId );
 	}
 
 	private void SetAllSelected( bool selected )
@@ -380,126 +292,69 @@ public sealed partial class DependencyGraphView : Page
 		for( int i = 0; i < selected.Count; i++ )
 			ids.Add( selected[ i ].Id );
 		_quietSelection = true;
-		SelectAll.IsChecked = ids.Count > 0 && ids.Count == _entries.Count;
+		SelectAll.IsChecked = ids.Count > 0 && ids.Count == ViewModel.Entries.Count;
 		_quietSelection = false;
-		_roots = ids;
-		PendingLoad = LoadGraphAsync( debounce: true );
+		ViewModel.SetRoots( ids, debounce: true );
 	}
 
-	/// <summary>Draws the graph around one file (double-clicked in the graph).</summary>
-	private void Focus( GraphNode node )
+	private void OnSelectEntryInListRequested( GraphEntryItem listed )
 	{
-		GraphEntryItem? listed = null;
-		for( int i = 0; i < _entries.Count; i++ )
-		{
-			if( _entries[ i ].Id == node.Id )
-			{
-				listed = _entries[ i ];
-				break;
-			}
-		}
-		if( listed is not null )
-		{
-			// in this folder: make it the list's only selection, which redraws the graph
-			EntryList.SelectedItems.Clear();
-			EntryList.SelectedItem = listed;
-			EntryList.ScrollIntoView( listed );
-			return;
-		}
+		EntryList.SelectedItems.Clear();
+		EntryList.SelectedItem = listed;
+		EntryList.ScrollIntoView( listed );
+	}
+
+	private void OnClearEntryListSelectionRequested()
+	{
 		_quietSelection = true;
 		EntryList.SelectedItems.Clear();
 		SelectAll.IsChecked = false;
 		_quietSelection = false;
-		_roots = new[] { node.Id };
-		PendingLoad = LoadGraphAsync();
 	}
 
-	// ------------------------------------------------------------------ graph
-
-	private async Task LoadGraphAsync( bool debounce = false )
+	private void OnGraphArranged( GraphLayoutResult arranged )
 	{
 		if( _left )
 			return;
-		CancellationTokenSource load = CtsHelper.Replace( ref _graphLoad );
-		CancellationToken token = load.Token;
-		IReadOnlyList<int> roots = _roots;
-		GraphDirection direction = Direction;
+		Graph.Show( arranged );
+		// the open details stay open when their file is still in the graph
+		if( ViewModel.DetailNode is { } open && Graph.SelectNode( open.Id ) )
+			Graph.EnsureVisible( open.Id, DetailPanelSpace );
+		else
+			ViewModel.CloseDetails();
+		ViewModel.UpdateStatus( Graph.SelectedNode );
+	}
+
+	private async Task ShowDetailsSafeAsync( GraphNode? node )
+	{
 		try
 		{
-			// clicking through the list or shift-selecting fires several changes in a row
-			if( debounce )
-				await Task.Delay( 150, token );
 			if( _left )
 				return;
-			Busy.IsActive = true;
-			GraphBusyOverlay.Visibility = ( roots.Count > 0 ).ToVisibility();
-			GraphBusyRing.IsActive = roots.Count > 0;
-			Result<DependencyGraph> graph = await DependencyGraphLoader.LoadAsync( roots, direction, token );
-			if( _left || token.IsCancellationRequested )
-				return;
-			if( !graph.Ok )
+			if( node is null )
 			{
-				Status.Text = $"The dependencies could not be read: {graph.Error}";
+				ViewModel.CloseDetails();
 				return;
 			}
-			_graph = graph.Value!;
-			_nodesById.Clear();
-			for( int i = 0; i < _graph.Nodes.Count; i++ )
-				_nodesById[ _graph.Nodes[ i ].Id ] = _graph.Nodes[ i ];
-			GraphForm form = Graph.Theme.Form;
-			GraphLayoutResult arranged = await Task.Run( () => GraphLayout.Arrange( _graph, direction, form.Layout ), token );
-			if( _left || token.IsCancellationRequested )
-				return;
-			Graph.Show( arranged );
-			// the open details stay open when their file is still in the graph
-			if( _detailNode is { } open && Graph.SelectNode( open.Id ) )
-				Graph.EnsureVisible( open.Id, DetailPanelSpace );
-			else
-				CloseDetails();
-			Hint.Visibility = ( _graph.Nodes.Count == 0 ).ToVisibility();
-			ZoomText.Text = $"{Graph.Zoom * 100:0}%";
-			ShowStatus();
-		}
-		catch( OperationCanceledException )
-		{
-		}
-		finally
-		{
-			if( !_left && ReferenceEquals( _graphLoad, load ) )
+			if( DetailTabs.SelectedItem is null )
 			{
-				GraphBusyRing.IsActive = false;
-				GraphBusyOverlay.Visibility = Visibility.Collapsed;
-				if( EntryBusyOverlay.Visibility != Visibility.Visible )
-					Busy.IsActive = false;
+				_suppressDetailTabLoad = true;
+				try { DetailTabs.SelectedIndex = 0; }
+				finally { _suppressDetailTabLoad = false; }
+				ViewModel.SetSelectedDetailTab( ResolveDetailTab( DetailTabs.SelectedItem as TabViewItem ), reloadIfOpen: false );
 			}
+			Task detailsTask = ViewModel.ShowDetailsAsync( node, Graph.HeaderColor( node ) );
+			Graph.EnsureVisible( node.Id, DetailPanelSpace );
+			await detailsTask;
+		}
+		catch( OperationCanceledException ) { }
+		catch( Exception ex )
+		{
+			HackLogger.Warn( nameof( NavigatePageMenu.DependencyGraph ), $"Showing node details failed: {ex.Message}", ex );
 		}
 	}
 
-	private void ShowStatus()
-	{
-		if( _graph.Nodes.Count == 0 )
-		{
-			Status.Text = "";
-			return;
-		}
-		int others = _graph.Nodes.Count - _graph.Roots.Count;
-		string what = Direction switch
-		{
-			GraphDirection.Children => others == 1 ? "1 file used" : $"{others} files used",
-			GraphDirection.Parents => others == 1 ? "used by 1 file" : $"used by {others} files",
-			_ => others == 1 ? "1 related file" : $"{others} related files",
-		};
-		string text = $"{_graph.Roots.Count} selected · {what} · {_graph.Edges.Count} links";
-		if( _graph.Truncated )
-			text += " · stopped early (too many files), not everything is shown";
-		if( Graph.SelectedNode is { } node )
-			text += $"   |   {node.Path}  ({ByteSize.Format( node.Size, " " )})";
-		Status.Text = text;
-	}
-
-	// ------------------------------------------------------------------ theme
-
-	/// <summary>The app's theme changed (Settings → Theme): redraw the graph in its colors and shapes, no server call.</summary>
+	/// <summary>The app's theme changed (Settings -> Theme): redraw the graph in its colors and shapes, no server call.</summary>
 	private async void OnThemeChanged()
 	{
 		try
@@ -516,28 +371,15 @@ public sealed partial class DependencyGraphView : Page
 			if( theme == prev )
 				return;
 			Graph.Theme = theme;
-			if( _detailNode is { } shown )
-				_infoHeaderBrush.Color = Graph.HeaderColor( shown );
-			if( _graph.Nodes.Count == 0 )
+			if( ViewModel.DetailNode is { } shown )
+				ViewModel.InfoHeaderBrush.Color = Graph.HeaderColor( shown );
+
+			GraphLayoutResult? arranged = await ViewModel.ArrangeForThemeAsync( prev, theme, Graph.Layout );
+			if( _left || arranged is null || Graph.Theme != theme )
 				return;
 
-			// Palette-only changes keep identical box coordinates — skip layout completely
-			GraphLayoutResult arranged;
-			if( theme.Form.Layout == prev.Form.Layout && Graph.Layout.Nodes.Count > 0 )
-			{
-				arranged = Graph.Layout;
-			}
-			else
-			{
-				DependencyGraph snapshot = _graph;
-				GraphDirection dir = Direction;
-				arranged = await Task.Run( () => GraphLayout.Arrange( snapshot, dir, theme.Form.Layout ) );
-				if( _left || !ReferenceEquals( _graph, snapshot ) || Graph.Theme != theme )
-					return;
-			}
 			Graph.Show( arranged );
-			// the open details stay on their file
-			if( _detailNode is { } open && Graph.SelectNode( open.Id ) )
+			if( ViewModel.DetailNode is { } open && Graph.SelectNode( open.Id ) )
 				Graph.EnsureVisible( open.Id, DetailPanelSpace );
 		}
 		catch( Exception ex )
@@ -546,193 +388,14 @@ public sealed partial class DependencyGraphView : Page
 		}
 	}
 
-	// ------------------------------------------------------------------ details of the clicked file
-
-	/// <summary>Closes the details panel, as its close button does (the smoke tests).</summary>
-	internal void CloseDetailsForTest() => CloseDetails();
-
-	/// <summary>Whether the details panel is open (the smoke tests).</summary>
-	internal bool DetailsOpen => DetailPanel.Visibility == Visibility.Visible;
-
-	/// <summary>The details load in progress (the smoke tests wait on it).</summary>
-	internal Task? DetailsLoad { get; private set; }
-
-	/// <summary>The info card's lines (the smoke tests).</summary>
-	internal string DetailsText => string.Join( " | ", new[] { InfoPreviewNone, InfoName, InfoType, InfoSize, InfoVersions, InfoState, InfoFolder, InfoModified, InfoUses, InfoUsedBy }
-		.Select( t => t.Text ) );
-
-	/// <summary>Shows a detail tab ("History", "Where Used", "Dependents", "Properties", "Info") (the smoke tests).</summary>
-	internal void ShowDetailTab( string header )
-		=> DetailTabs.SelectedItem = DetailTabs.TabItems.OfType<TabViewItem>().First( t => t.Header as string == header );
-
-	private Task ShowDetailsAsync( GraphNode? node )
+	private GraphDetailTab ResolveDetailTab( TabViewItem? tab ) => tab?.Name switch
 	{
-		if( node is null )
-		{
-			CloseDetails();
-			return Task.CompletedTask;
-		}
-		bool same = _detailNode?.Id == node.Id && DetailsOpen;
-		_detailNode = node;
-		FillInfoCard( node, keepPreview: same );
-		DetailPanel.Visibility = Visibility.Visible;
-		if( DetailTabs.SelectedItem is null )
-		{
-			_suppressDetailTabLoad = true;
-			try { DetailTabs.SelectedIndex = 0; }
-			finally { _suppressDetailTabLoad = false; }
-		}
-		Graph.EnsureVisible( node.Id, DetailPanelSpace );
-		if( same )
-			return DetailsLoad ?? Task.CompletedTask;
-		return DetailsLoad = LoadDetailsAsync( node );
-	}
-
-	private void CloseDetails()
-	{
-		CtsHelper.CancelAndDispose( ref _detailLoad );
-		CtsHelper.CancelAndDispose( ref _previewLoad );
-		_detailNode = null;
-		DetailPanel.Visibility = Visibility.Collapsed;
-	}
-
-	private void FillInfoCard( GraphNode node, bool keepPreview = false )
-	{
-		_infoHeaderBrush.Color = Graph.HeaderColor( node );
-		InfoName.Text = node.Name;
-		string type = node.TypeName.Length > 0 ? node.TypeName : node.Ext.ToUpperInvariant() + " file";
-		InfoType.Text = node.Category.Length > 0 ? $"{type} · {node.Category}" : type;
-		InfoSize.Text = ByteSize.Format( node.Size, " " );
-		InfoVersions.Text = node.Versions switch
-		{
-			0 => "no versions",
-			1 => $"1 version (id {node.VersionId})",
-			_ => $"{node.Versions} versions, latest id {node.VersionId}",
-		};
-		InfoState.Text = node.Deleted ? "Deleted"
-			: node.CheckedOut ? $"Checked out by {( node.CheckoutUser.Length > 0 ? node.CheckoutUser : "someone" )}"
-			: "Not checked out";
-
-		int cut = node.Path.LastIndexOfAny( PathSeparators );
-		InfoFolder.Text = cut > 0 ? node.Path[ ..cut ] : node.Path;
-		ToolTipService.SetToolTip( InfoFolder, node.Path );
-		InfoModified.Text = DateTime.TryParse( node.Modified, System.Globalization.CultureInfo.InvariantCulture,
-			System.Globalization.DateTimeStyles.AssumeUniversal, out DateTime changed ) ? changed.ToLocalTime().ToString( "g" ) : "unknown";
-
-		InfoUses.Text = Related( _graph.Edges.Where( e => e.Parent == node.Id ).Select( e => e.Child ), GraphDirection.Parents );
-		InfoUsedBy.Text = Related( _graph.Edges.Where( e => e.Child == node.Id ).Select( e => e.Parent ), GraphDirection.Children );
-		string[] pathParts = node.Path.Split( PathSeparators, StringSplitOptions.RemoveEmptyEntries );
-		InfoLocate.IsEnabled = !node.Deleted && pathParts.Length >= 2;
-
-		if( keepPreview )
-			return;
-		InfoPreview.Source = null;
-		InfoPreviewNone.Text = "loading…";
-		InfoPreviewNone.Visibility = Visibility.Visible;
-	}
-
-	/// <summary>"2 files: a, b" for the linked files in the graph; a hint when <paramref name="hiddenIn"/> does not show them.</summary>
-	private string Related( IEnumerable<int> ids, GraphDirection hiddenIn )
-	{
-		HashSet<int> seen = [];
-		List<string> names = [];
-		foreach( int id in ids )
-		{
-			if( seen.Add( id ) && _nodesById.TryGetValue( id, out GraphNode? found ) )
-				names.Add( found.Name );
-		}
-		if( names.Count == 0 )
-			return Direction == hiddenIn ? "not shown in this view" : "nothing";
-		names.Sort( StringComparer.OrdinalIgnoreCase );
-		string list = string.Join( ", ", names.Take( 4 ) ) + ( names.Count > 4 ? $", +{names.Count - 4} more" : "" );
-		return names.Count == 1 ? list : $"{names.Count} files: {list}";
-	}
-
-	private async Task LoadDetailsAsync( GraphNode node )
-	{
-		CancellationTokenSource preview = CtsHelper.Replace( ref _previewLoad );
-		CancellationToken token = preview.Token;
-		await LoadDetailTabAsync();
-		try
-		{
-			byte[]? bytes = node.VersionId > 0 ? await _details.GetPreviewImageAsync( node.VersionId ) : null;
-			if( _left || token.IsCancellationRequested || _detailNode?.Id != node.Id )
-				return;
-			ImageSource? image = await _previews.FromBytesAsync( bytes );
-			if( _left || token.IsCancellationRequested || _detailNode?.Id != node.Id )
-				return;
-			InfoPreview.Source = image;
-			InfoPreviewNone.Text = "no preview";
-			InfoPreviewNone.Visibility = ( image is null ).ToVisibility();
-		}
-		catch( Exception e )
-		{
-			HackLogger.Warn( nameof( NavigatePageMenu.DependencyGraph ), $"Preview of '{node.Name}' failed: {e.Message}", e );
-			if( !_left && _detailNode?.Id == node.Id )
-				InfoPreviewNone.Text = "no preview";
-		}
-	}
-
-	/// <summary>Fills the visible detail table for the open file (one server call or two, like the file manager).</summary>
-	private Task LoadDetailTabAsync()
-	{
-		CancellationTokenSource load = CtsHelper.Replace( ref _detailLoad );
-		CancellationToken token = load.Token;
-		HistoryRows.ClearIfNonEmpty();
-		ParentRows.ClearIfNonEmpty();
-		ChildRows.ClearIfNonEmpty();
-		PropertyRows.ClearIfNonEmpty();
-		VersionRows.ClearIfNonEmpty();
-		if( _detailNode is not { } node || DetailTabs.SelectedItem is not TabViewItem tab )
-			return Task.CompletedTask;
-		DetailRow row = new() { Id = node.Id, LatestId = node.VersionId > 0 ? node.VersionId : null };
-		return DetailsLoad = FillAsync();
-
-		async Task FillAsync()
-		{
-			try
-			{
-				switch( tab.Name )
-				{
-					case nameof( HistoryTab ):
-						Apply( HistoryRows, await _details.GetHistoryAsync( row ) );
-						break;
-					case nameof( ParentTab ):
-						Apply( ParentRows, await _details.GetParentsAsync( row ) );
-						break;
-					case nameof( ChildTab ):
-						Apply( ChildRows, await _details.GetChildrenAsync( row ) );
-						break;
-					case nameof( PropertiesTab ):
-						Apply( PropertyRows, await _details.GetPropertiesAsync( row ) );
-						break;
-					case nameof( InfoTab ):
-						Apply( VersionRows, await _details.GetVersionInfoAsync( row ) );
-						break;
-				}
-			}
-			catch( Exception e )
-			{
-				HackLogger.Warn( nameof( NavigatePageMenu.DependencyGraph ), $"{tab.Name} of '{node.Name}' failed: {e.Message}", e );
-			}
-		}
-
-		void Apply<T>( RangeObservableCollection<T> target, List<T> rows )
-		{
-			if( !token.IsCancellationRequested )
-				target.ReplaceAll( rows );
-		}
-	}
-
-	/// <summary>Opens the file manager on the open file.</summary>
-	private Task LocateAsync()
-	{
-		if( _detailNode is not { } node )
-			return Task.CompletedTask;
-		string[] parts = node.Path.Split( PathSeparators, StringSplitOptions.RemoveEmptyEntries );
-		// the path starts with the root folder and ends with the file
-		return parts.Length < 2 ? Task.CompletedTask : AppComposition.LocateInFileManagerAsync( parts[ 1..^1 ], node.Name );
-	}
+		nameof( ParentTab ) => GraphDetailTab.WhereUsed,
+		nameof( ChildTab ) => GraphDetailTab.Dependents,
+		nameof( PropertiesTab ) => GraphDetailTab.Properties,
+		nameof( InfoTab ) => GraphDetailTab.Info,
+		_ => GraphDetailTab.History,
+	};
 
 	private static TreeViewNode? SelectedNodeFromArgs( TreeViewSelectionChangedEventArgs args )
 		=> args.AddedItems.FirstOrDefault() switch
@@ -751,7 +414,7 @@ public sealed partial class DependencyGraphView : Page
 		_selectedFolderData = node?.LinkedData;
 		if( _selectedFolderData is not null )
 			_selectedFolderData.IsSelectedInTree = true;
-		node?.UpdateBreadCrumbCollection( BreadcrumbPath );
+		node?.UpdateBreadCrumbCollection( ViewModel.BreadcrumbPath );
 		TreeBranchGuides.RefreshTree( FolderTree, showLines: AppComposition.Theme.ShowTreeBranchLines, selectedNode: node, updateSelection: true );
 	}
 
@@ -764,7 +427,7 @@ public sealed partial class DependencyGraphView : Page
 		SyncFolderSelection( node );
 		FolderTree.SelectedNode = node;
 		data.EnsureVisible( FolderTree );
-		_ = LoadEntriesAsync( node );
+		ViewModel.PendingLoad = ViewModel.LoadEntriesAsync( node.LinkedData.DirectoryId );
 	}
 
 	private void BranchLinesToggle_Click( object sender, RoutedEventArgs e )

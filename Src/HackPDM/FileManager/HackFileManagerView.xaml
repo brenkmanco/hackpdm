@@ -7,6 +7,7 @@
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:conv="using:HackPDM.Common"
 	xmlns:controls="using:HackPDM.Common"
+	xmlns:graph="using:HackPDM.Graph"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	xmlns:rep="using:HackPDM.Core.Services"
 	xmlns:types="using:HackPDM.Common"
@@ -24,6 +25,7 @@
 		<conv:FileStatusDescriptionConverter x:Key="StatusDescription" />
 		<conv:StatusRowBackgroundConverter x:Key="StatusRowBackground" />
 		<conv:StatusTextBrushConverter x:Key="StatusTextBrush" />
+		<graph:ValueTextConverter x:Key="ValueFormatter" />
 		<!--  Icon Column Template  -->
 		<DataTemplate x:Key="IconCellTemplate" x:DataType="rep:EntryRow">
 			<Canvas
@@ -65,6 +67,78 @@
 				VerticalAlignment="Center"
 				Text="{x:Bind Size, Converter={StaticResource FileSizeFormatter}}"
 				TextAlignment="Right" />
+		</DataTemplate>
+		<!--  Compiled Entry / Changes Cell Templates  -->
+		<DataTemplate x:Key="EntryNameCellTemplate" x:DataType="rep:EntryRow">
+			<TextBlock
+				Padding="4,0,4,0"
+				VerticalAlignment="Center"
+				Text="{x:Bind Name}"
+				TextTrimming="CharacterEllipsis" />
+		</DataTemplate>
+		<DataTemplate x:Key="EntryTypeCellTemplate" x:DataType="rep:EntryRow">
+			<TextBlock
+				Padding="4,0,4,0"
+				VerticalAlignment="Center"
+				Text="{x:Bind Type}"
+				TextTrimming="CharacterEllipsis" />
+		</DataTemplate>
+		<DataTemplate x:Key="EntryCheckoutCellTemplate" x:DataType="rep:EntryRow">
+			<TextBlock
+				Padding="4,0,4,0"
+				VerticalAlignment="Center"
+				Text="{x:Bind CheckoutText}"
+				TextTrimming="CharacterEllipsis" />
+		</DataTemplate>
+		<DataTemplate x:Key="EntryLocalDateCellTemplate" x:DataType="rep:EntryRow">
+			<TextBlock
+				Padding="4,0,4,0"
+				VerticalAlignment="Center"
+				Text="{x:Bind LocalDate, Converter={StaticResource LocalDateFormatter}}" />
+		</DataTemplate>
+		<DataTemplate x:Key="EntryRemoteDateCellTemplate" x:DataType="rep:EntryRow">
+			<TextBlock
+				Padding="4,0,4,0"
+				VerticalAlignment="Center"
+				Text="{x:Bind RemoteDate, Converter={StaticResource LocalDateFormatter}}" />
+		</DataTemplate>
+		<DataTemplate x:Key="EntryFullNameCellTemplate" x:DataType="rep:EntryRow">
+			<TextBlock
+				Padding="4,0,4,0"
+				VerticalAlignment="Center"
+				Text="{x:Bind FullName}"
+				TextTrimming="CharacterEllipsis" />
+		</DataTemplate>
+		<DataTemplate x:Key="ChangesStatusCellTemplate" x:DataType="rep:EntryRow">
+			<TextBlock
+				Padding="4,0,4,0"
+				VerticalAlignment="Center"
+				Text="{x:Bind Status, Converter={StaticResource StatusDescription}}"
+				TextTrimming="CharacterEllipsis" />
+		</DataTemplate>
+		<DataTemplate x:Key="ChangesSizeCellTemplate" x:DataType="rep:EntryRow">
+			<TextBlock
+				Padding="4,0,4,0"
+				VerticalAlignment="Center"
+				Text="{x:Bind Size, Converter={StaticResource FileSizeFormatter}}" />
+		</DataTemplate>
+		<DataTemplate x:Key="ParentVersionCellTemplate" x:DataType="rep:ParentRow">
+			<TextBlock VerticalAlignment="Center" Text="{x:Bind Version}" />
+		</DataTemplate>
+		<DataTemplate x:Key="ParentNameCellTemplate" x:DataType="rep:ParentRow">
+			<TextBlock VerticalAlignment="Center" Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+		</DataTemplate>
+		<DataTemplate x:Key="ParentPathCellTemplate" x:DataType="rep:ParentRow">
+			<TextBlock VerticalAlignment="Center" Text="{x:Bind BasePath}" TextTrimming="CharacterEllipsis" />
+		</DataTemplate>
+		<DataTemplate x:Key="ChildVersionCellTemplate" x:DataType="rep:ChildrenRow">
+			<TextBlock VerticalAlignment="Center" Text="{x:Bind Version}" />
+		</DataTemplate>
+		<DataTemplate x:Key="ChildNameCellTemplate" x:DataType="rep:ChildrenRow">
+			<TextBlock VerticalAlignment="Center" Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+		</DataTemplate>
+		<DataTemplate x:Key="ChildPathCellTemplate" x:DataType="rep:ChildrenRow">
+			<TextBlock VerticalAlignment="Center" Text="{x:Bind BasePath}" TextTrimming="CharacterEllipsis" />
 		</DataTemplate>
 		<!--  Grouped Entry List Templates  -->
 		<DataTemplate x:Key="GroupHeaderTemplate" x:DataType="types:EntryGroupHeader">
@@ -206,7 +280,6 @@
 
 		<!--  Top Folder Navigation & Breadcrumb Bar  -->
 		<Border
-			x:Name="BreadcrumbHeaderCard"
 			Grid.Row="0"
 			Padding="6,4"
 			Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
@@ -368,7 +441,6 @@
 						</StackPanel>
 					</Border>
 					<Button
-						x:Name="LayoutMenuButton"
 						Padding="8,4"
 						ToolTipService.ToolTip="Rearrange or dock workspace panels">
 						<StackPanel Orientation="Horizontal" Spacing="5">
@@ -436,7 +508,6 @@
 								PointerMoved="PaneGrip_PointerMoved"
 								PointerPressed="FoldersGrip_PointerPressed"
 								PointerReleased="PaneGrip_PointerReleased"
-								Tag="Folders"
 								ToolTipService.ToolTip="Drag to dock Folders Left or Right">
 								<StackPanel Orientation="Horizontal" Spacing="6">
 									<Grid
@@ -485,21 +556,18 @@
 									<FontIcon FontSize="11" Glyph="&#xE8FD;" />
 								</ToggleButton>
 								<Button
-									x:Name="ExpandAllButton"
 									Padding="5,4"
 									Click="ExpandAllFolders_Click"
 									ToolTipService.ToolTip="Expand all folders">
 									<FontIcon FontSize="10" Glyph="&#xE70D;" />
 								</Button>
 								<Button
-									x:Name="CollapseAllButton"
 									Padding="5,4"
 									Click="CollapseAllFolders_Click"
 									ToolTipService.ToolTip="Collapse all folders">
 									<FontIcon FontSize="10" Glyph="&#xE70E;" />
 								</Button>
 								<Button
-									x:Name="RefreshTreeButton"
 									Padding="5,4"
 									Click="Refresh_Click"
 									ToolTipService.ToolTip="Refresh folder tree (F5)">
@@ -569,37 +637,34 @@
 							<TreeView.ContextFlyout>
 								<MenuFlyout>
 									<MenuFlyoutSubItem x:Name="TreeDownload" Text="Download">
-										<MenuFlyoutItem x:Name="TreeDownloadAll" Text="All"
+										<MenuFlyoutItem Text="All"
 										Command="{x:Bind ViewModel.GetLatestDirectoryCommand}" />
-										<MenuFlyoutItem x:Name="TreeDownloadTop" Text="Top Directory"
+										<MenuFlyoutItem Text="Top Directory"
 										Command="{x:Bind ViewModel.GetLatestDirectoryTopCommand}" />
 									</MenuFlyoutSubItem>
 									<MenuFlyoutSeparator />
-									<MenuFlyoutItem x:Name="TreeCheckout" Text="Checkout"
+									<MenuFlyoutItem Text="Checkout"
 										Command="{x:Bind ViewModel.CheckoutDirectoryCommand}" />
-									<MenuFlyoutItem x:Name="TreeUndoCheckout" Text="Undo Checkout"
+									<MenuFlyoutItem Text="Undo Checkout"
 										Command="{x:Bind ViewModel.UndoCheckoutDirectoryCommand}" />
 									<MenuFlyoutSeparator />
-									<MenuFlyoutItem x:Name="TreeCommit" Text="Commit"
+									<MenuFlyoutItem Text="Commit"
 										Command="{x:Bind ViewModel.CommitDirectoryCommand}" />
 									<MenuFlyoutSeparator />
-									<MenuFlyoutItem x:Name="TreeAnalyze" IsEnabled="False" Text="Analyze (Soon)" />
-									<MenuFlyoutSeparator />
-									<MenuFlyoutSubItem x:Name="TreeDelete" Text="Delete">
-										<MenuFlyoutItem x:Name="TreeLocalDelete" Text="Local"
+									<MenuFlyoutSubItem Text="Delete">
+										<MenuFlyoutItem Text="Local"
 										Command="{x:Bind ViewModel.LocalDeleteDirectoryCommand}" />
-										<MenuFlyoutItem x:Name="TreeLogicalDelete" Text="Logical"
+										<MenuFlyoutItem Text="Logical"
 										Command="{x:Bind ViewModel.LogicalDeleteDirectoryCommand}" />
-										<MenuFlyoutItem x:Name="TreePermanentDelete" IsEnabled="False" Text="Permanent (Soon)" />
 									</MenuFlyoutSubItem>
 									<MenuFlyoutSubItem x:Name="TreeUndelete" Text="Restore">
-										<MenuFlyoutItem x:Name="TreeRestoreAll" Text="All"
+										<MenuFlyoutItem Text="All"
 										Command="{x:Bind ViewModel.RestoreDirectoryRecursiveCommand}" />
-										<MenuFlyoutItem x:Name="TreeRestoreTop" Text="Top Directory"
+										<MenuFlyoutItem Text="Top Directory"
 										Command="{x:Bind ViewModel.RestoreDirectoryCommand}" />
 									</MenuFlyoutSubItem>
 									<MenuFlyoutSeparator />
-									<MenuFlyoutItem x:Name="TreeOpenDirectory" Text="Open Directory"
+									<MenuFlyoutItem Text="Open Directory"
 										Command="{x:Bind ViewModel.OpenDirectoryCommand}" />
 								</MenuFlyout>
 							</TreeView.ContextFlyout>
@@ -857,18 +922,16 @@
 									</StackPanel>
 								</ToggleButton>
 								<Button
-									x:Name="AdditionalTools"
 									Padding="7,4"
 									ToolTipService.ToolTip="Additional tools">
 									<FontIcon FontSize="12" Glyph="&#xE712;" />
 									<Button.Flyout>
 										<MenuFlyout>
-											<MenuFlyoutItem x:Name="OdooRefreshDropdown" Click="Refresh_Click" Text="Refresh View (F5)" />
-											<MenuFlyoutItem x:Name="OdooSearchDropdown" Click="Search_Click" Text="Search (Ctrl+F)" />
-											<MenuFlyoutItem x:Name="OdooManageTypesDropdown" Click="ManageTypes_Click" Text="Manage File Types" />
+											<MenuFlyoutItem Click="Refresh_Click" Text="Refresh View (F5)" />
+											<MenuFlyoutItem Click="Search_Click" Text="Search (Ctrl+F)" />
+											<MenuFlyoutItem Click="ManageTypes_Click" Text="Manage File Types" />
 											<MenuFlyoutSeparator />
-											<MenuFlyoutItem x:Name="ShowHidden" IsEnabled="False" Text="Ignore Filter (Soon)" />
-											<MenuFlyoutItem x:Name="StatusWindowDropdown" Click="StatusWindow_Click" Text="Status Log" />
+											<MenuFlyoutItem Click="StatusWindow_Click" Text="Status Log" />
 										</MenuFlyout>
 									</Button.Flyout>
 								</Button>
@@ -898,14 +961,14 @@
 											CanResize="True"
 											CanSort="False"
 											CellTemplate="{StaticResource IconCellTemplate}" />
-										<tv:TableViewTextColumn Binding="{Binding Name}" SortMemberPath="Name" />
-										<tv:TableViewTextColumn Binding="{Binding Type}" SortMemberPath="Type" />
+										<tv:TableViewTemplateColumn CellTemplate="{StaticResource EntryNameCellTemplate}" SortMemberPath="Name" />
+										<tv:TableViewTemplateColumn CellTemplate="{StaticResource EntryTypeCellTemplate}" SortMemberPath="Type" />
 										<tv:TableViewTemplateColumn CellTemplate="{StaticResource SizeCellTemplate}" SortMemberPath="Size" />
 										<tv:TableViewTemplateColumn CellTemplate="{StaticResource StatusCellTemplate}" SortMemberPath="Status" />
-										<tv:TableViewTextColumn Binding="{Binding Checkout}" SortMemberPath="Checkout" />
-										<tv:TableViewTextColumn Binding="{Binding LocalDate, Converter={StaticResource LocalDateFormatter}}" SortMemberPath="LocalDate" />
-										<tv:TableViewTextColumn Binding="{Binding RemoteDate, Converter={StaticResource LocalDateFormatter}}" SortMemberPath="RemoteDate" />
-										<tv:TableViewTextColumn Binding="{Binding FullName}" SortMemberPath="FullName" />
+										<tv:TableViewTemplateColumn CellTemplate="{StaticResource EntryCheckoutCellTemplate}" SortMemberPath="Checkout" />
+										<tv:TableViewTemplateColumn CellTemplate="{StaticResource EntryLocalDateCellTemplate}" SortMemberPath="LocalDate" />
+										<tv:TableViewTemplateColumn CellTemplate="{StaticResource EntryRemoteDateCellTemplate}" SortMemberPath="RemoteDate" />
+										<tv:TableViewTemplateColumn CellTemplate="{StaticResource EntryFullNameCellTemplate}" SortMemberPath="FullName" />
 									</tv:TableView.Columns>
 									<tv:TableView.ContextFlyout>
 										<MenuFlyout>
@@ -924,7 +987,6 @@
 											<MenuFlyoutSeparator />
 											<MenuFlyoutItem Text="Commit" Command="{x:Bind ViewModel.CommitSelectedCommand}" />
 											<MenuFlyoutSeparator />
-											<MenuFlyoutItem IsEnabled="False" Text="Restore (Soon)" />
 											<MenuFlyoutItem Text="Upload Preview Image" Command="{x:Bind ViewModel.UploadPreviewImageCommand}" />
 											<MenuFlyoutSeparator />
 											<MenuFlyoutSubItem x:Name="EntryDelete" Text="Delete">
@@ -963,11 +1025,10 @@
 												Spacing="6">
 												<FontIcon FontSize="11" Glyph="&#xE8FD;" />
 												<TextBlock
-													x:Name="GroupedByLabel"
 													VerticalAlignment="Center"
 													FontSize="11"
 													FontWeight="SemiBold"
-													Text="Grouped by Status" />
+													Text="{x:Bind ViewModel.GroupedByLabelText, Mode=OneWay}" />
 											</StackPanel>
 											<StackPanel
 												Grid.Column="1"
@@ -975,7 +1036,6 @@
 												Orientation="Horizontal"
 												Spacing="4">
 												<Button
-													x:Name="GroupByMenuButton"
 													Padding="7,3"
 													ToolTipService.ToolTip="Choose field to group by">
 													<StackPanel Orientation="Horizontal" Spacing="4">
@@ -1141,10 +1201,10 @@
 											SelectionUnit="Row"
 											ShowDragRectangle="False">
 											<tv:TableView.Columns>
-												<tv:TableViewTextColumn Width="130" Binding="{Binding Name}" Header="File Name" />
-												<tv:TableViewTextColumn Width="*" Binding="{Binding Status, Converter={StaticResource StatusDescription}}" Header="Status" />
-												<tv:TableViewTextColumn Width="78" Binding="{Binding Size, Converter={StaticResource FileSizeFormatter}}" Header="Size" />
-												<tv:TableViewTextColumn Width="152" Binding="{Binding LocalDate, Converter={StaticResource LocalDateFormatter}}" Header="Local Date" />
+												<tv:TableViewTemplateColumn Width="130" CellTemplate="{StaticResource EntryNameCellTemplate}" Header="File Name" />
+												<tv:TableViewTemplateColumn Width="*" CellTemplate="{StaticResource ChangesStatusCellTemplate}" Header="Status" />
+												<tv:TableViewTemplateColumn Width="78" CellTemplate="{StaticResource ChangesSizeCellTemplate}" Header="Size" />
+												<tv:TableViewTemplateColumn Width="152" CellTemplate="{StaticResource EntryLocalDateCellTemplate}" Header="Local Date" />
 											</tv:TableView.Columns>
 										</controls:EntryTableView>
 									</Grid>
@@ -1184,10 +1244,10 @@
 											SelectionUnit="Row"
 											ShowDragRectangle="False">
 											<tv:TableView.Columns>
-												<tv:TableViewTextColumn Width="130" Binding="{Binding Name}" Header="File Name" />
-												<tv:TableViewTextColumn Width="*" Binding="{Binding Status, Converter={StaticResource StatusDescription}}" Header="Status" />
-												<tv:TableViewTextColumn Width="78" Binding="{Binding Size, Converter={StaticResource FileSizeFormatter}}" Header="Size" />
-												<tv:TableViewTextColumn Width="152" Binding="{Binding RemoteDate, Converter={StaticResource LocalDateFormatter}}" Header="Remote Date" />
+												<tv:TableViewTemplateColumn Width="130" CellTemplate="{StaticResource EntryNameCellTemplate}" Header="File Name" />
+												<tv:TableViewTemplateColumn Width="*" CellTemplate="{StaticResource ChangesStatusCellTemplate}" Header="Status" />
+												<tv:TableViewTemplateColumn Width="78" CellTemplate="{StaticResource ChangesSizeCellTemplate}" Header="Size" />
+												<tv:TableViewTemplateColumn Width="152" CellTemplate="{StaticResource EntryRemoteDateCellTemplate}" Header="Remote Date" />
 											</tv:TableView.Columns>
 										</controls:EntryTableView>
 									</Grid>
@@ -1209,22 +1269,18 @@
 								Orientation="Horizontal"
 								Spacing="14">
 								<TextBlock
-									x:Name="EntryListStatus"
 									VerticalAlignment="Center"
 									FontWeight="SemiBold"
 									Text="{x:Bind ViewModel.EntriesLabel, Mode=OneWay}" />
 								<TextBlock
-									x:Name="EntryListModified"
 									VerticalAlignment="Center"
 									Foreground="{ThemeResource TextFillColorSecondaryBrush}"
 									Text="{x:Bind ViewModel.EntriesLabelModified, Mode=OneWay}" />
 								<TextBlock
-									x:Name="EntryListLocalOnly"
 									VerticalAlignment="Center"
 									Foreground="{ThemeResource TextFillColorSecondaryBrush}"
 									Text="{x:Bind ViewModel.EntriesLabelLocal, Mode=OneWay}" />
 								<TextBlock
-									x:Name="EntryListRemoteOnly"
 									VerticalAlignment="Center"
 									Foreground="{ThemeResource TextFillColorSecondaryBrush}"
 									Text="{x:Bind ViewModel.EntriesLabelRemote, Mode=OneWay}" />
@@ -1284,7 +1340,6 @@
 									PointerMoved="PaneGrip_PointerMoved"
 									PointerPressed="DetailsGrip_PointerPressed"
 									PointerReleased="PaneGrip_PointerReleased"
-									Tag="Details"
 									ToolTipService.ToolTip="Drag to dock Inspector Bottom or Right">
 									<StackPanel Orientation="Horizontal" Spacing="6">
 										<Grid
@@ -1322,7 +1377,6 @@
 									Orientation="Horizontal"
 									Spacing="2">
 									<Button
-										x:Name="SwapInspectorDockButton"
 										Padding="5,3"
 										Click="ToggleInspectorDock_Click"
 										ToolTipService.ToolTip="Switch Inspector between Bottom and Right dock">
@@ -1368,30 +1422,60 @@
 										SelectionUnit="Row"
 										ShowDragRectangle="False">
 										<tv:TableView.Columns>
-											<tv:TableViewTextColumn Width="95" Binding="{Binding Version}" Header="Version" />
-											<tv:TableViewTextColumn Width="135" Binding="{Binding ModUser}" Header="Mod User" />
-											<tv:TableViewTextColumn Width="155" Binding="{Binding ModDate, Converter={StaticResource LocalDateFormatter}}" Header="Mod Date" />
-											<tv:TableViewTextColumn Width="105" Binding="{Binding Size, Converter={StaticResource FileSizeFormatter}}" Header="Size" />
-											<tv:TableViewTextColumn MinWidth="115" Width="*" Binding="{Binding RelDate, Converter={StaticResource LocalDateFormatter}}" Header="Rel Date" />
+											<tv:TableViewTemplateColumn Width="95" Header="Version">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:HistoryRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind Version}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="135" Header="Mod User">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:HistoryRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind ModUser}" TextTrimming="CharacterEllipsis" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="155" Header="Mod Date">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:HistoryRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind ModDate, Converter={StaticResource LocalDateFormatter}}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="105" Header="Size">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:HistoryRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind Size, Converter={StaticResource FileSizeFormatter}}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn MinWidth="115" Width="*" Header="Rel Date">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:HistoryRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind RelDate, Converter={StaticResource LocalDateFormatter}}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
 										</tv:TableView.Columns>
 										<tv:TableView.ContextFlyout>
-											<MenuFlyout x:Name="HistoryContextMenu">
+											<MenuFlyout>
 												<MenuFlyoutSubItem x:Name="HistoryDownload" Text="Download">
-													<MenuFlyoutItem x:Name="HistoryDownloadTemp" Text="Temporary"
+													<MenuFlyoutItem Text="Temporary"
 													Command="{x:Bind ViewModel.DownloadHistoryToTempCommand}" />
-													<MenuFlyoutItem x:Name="HistoryDownloadOverwrite" Text="Overwrite"
+													<MenuFlyoutItem Text="Overwrite"
 													Command="{x:Bind ViewModel.DownloadHistoryOverwriteCommand}" />
 												</MenuFlyoutSubItem>
-												<MenuFlyoutSubItem x:Name="HistoryOpen" Text="Open">
-													<MenuFlyoutItem x:Name="HistoryOpenTemp" Text="Temporary"
+												<MenuFlyoutSubItem Text="Open">
+													<MenuFlyoutItem Text="Temporary"
 													Command="{x:Bind ViewModel.OpenHistoryFromTempCommand}" />
-													<MenuFlyoutItem x:Name="HistoryOpenOverwrite" Text="Overwrite"
+													<MenuFlyoutItem Text="Overwrite"
 													Command="{x:Bind ViewModel.OpenHistoryOverwriteCommand}" />
 												</MenuFlyoutSubItem>
 												<MenuFlyoutSubItem x:Name="HistoryMove" Text="Move">
-													<MenuFlyoutItem x:Name="HistoryMoveTemp" Text="Temporary"
+													<MenuFlyoutItem Text="Temporary"
 													Command="{x:Bind ViewModel.MoveHistoryToTempCommand}" />
-													<MenuFlyoutItem x:Name="HistoryMoveOverwrite" Text="Overwrite"
+													<MenuFlyoutItem Text="Overwrite"
 													Command="{x:Bind ViewModel.MoveHistoryToWorkingCommand}" />
 												</MenuFlyoutSubItem>
 											</MenuFlyout>
@@ -1410,9 +1494,9 @@
 										SelectionUnit="Row"
 										ShowDragRectangle="False">
 										<tv:TableView.Columns>
-											<tv:TableViewTextColumn Width="95" Binding="{Binding Version}" Header="Version" />
-											<tv:TableViewTextColumn Width="220" Binding="{Binding Name}" Header="Name" />
-											<tv:TableViewTextColumn Width="*" Binding="{Binding BasePath}" Header="Folder Path" />
+											<tv:TableViewTemplateColumn Width="95" CellTemplate="{StaticResource ParentVersionCellTemplate}" Header="Version" />
+											<tv:TableViewTemplateColumn Width="220" CellTemplate="{StaticResource ParentNameCellTemplate}" Header="Name" />
+											<tv:TableViewTemplateColumn Width="*" CellTemplate="{StaticResource ParentPathCellTemplate}" Header="Folder Path" />
 										</tv:TableView.Columns>
 									</controls:EntryTableView>
 								</TabViewItem>
@@ -1427,45 +1511,127 @@
 										SelectionUnit="Row"
 										ShowDragRectangle="False">
 										<tv:TableView.Columns>
-											<tv:TableViewTextColumn Width="95" Binding="{Binding Version}" Header="Version" />
-											<tv:TableViewTextColumn Width="220" Binding="{Binding Name}" Header="Name" />
-											<tv:TableViewTextColumn Width="*" Binding="{Binding BasePath}" Header="Folder Path" />
+											<tv:TableViewTemplateColumn Width="95" CellTemplate="{StaticResource ChildVersionCellTemplate}" Header="Version" />
+											<tv:TableViewTemplateColumn Width="220" CellTemplate="{StaticResource ChildNameCellTemplate}" Header="Name" />
+											<tv:TableViewTemplateColumn Width="*" CellTemplate="{StaticResource ChildPathCellTemplate}" Header="Folder Path" />
 										</tv:TableView.Columns>
 									</controls:EntryTableView>
 								</TabViewItem>
 								<TabViewItem x:Name="PropertiesTab" Header="Properties" IsClosable="False">
 									<tv:TableView
-										x:Name="OdooProperties"
 										AutoGenerateColumns="False"
 										IsReadOnly="True"
 										ItemsSource="{x:Bind ViewModel.OProperties}"
 										RowDetailsVisibilityMode="Collapsed">
 										<tv:TableView.Columns>
-											<tv:TableViewTextColumn Width="95" Binding="{Binding Version}" Header="Version" />
-											<tv:TableViewTextColumn Width="160" Binding="{Binding Name}" Header="Property" />
-											<tv:TableViewTextColumn Width="150" Binding="{Binding Configuration}" Header="Configuration" />
-											<tv:TableViewTextColumn Width="95" Binding="{Binding Type}" Header="Type" />
-											<tv:TableViewTextColumn Width="*" Binding="{Binding ValueData}" Header="Value" />
+											<tv:TableViewTemplateColumn Width="95" Header="Version">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:PropertiesRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind Version}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="160" Header="Property">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:PropertiesRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="150" Header="Configuration">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:PropertiesRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind Configuration}" TextTrimming="CharacterEllipsis" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="95" Header="Type">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:PropertiesRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind Type}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="*" Header="Value">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:PropertiesRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind ValueData, Converter={StaticResource ValueFormatter}}" TextTrimming="CharacterEllipsis" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
 										</tv:TableView.Columns>
 									</tv:TableView>
 								</TabViewItem>
 								<TabViewItem x:Name="InfoTab" Header="Info" IsClosable="False">
 									<tv:TableView
-										x:Name="OdooVersionInfoList"
 										AutoGenerateColumns="False"
 										IsReadOnly="True"
 										ItemsSource="{x:Bind ViewModel.OVersions}"
 										RowDetailsVisibilityMode="Collapsed">
 										<tv:TableView.Columns>
-											<tv:TableViewTextColumn Width="105" Binding="{Binding Id}" Header="Version Id" />
-											<tv:TableViewTextColumn Width="105" Binding="{Binding FileSize, Converter={StaticResource FileSizeFormatter}}" Header="File Size" />
-											<tv:TableViewTextColumn Width="115" Binding="{Binding DirectoryId}" Header="Directory Id" />
-											<tv:TableViewTextColumn Width="95" Binding="{Binding NodeId}" Header="Node Id" />
-											<tv:TableViewTextColumn Width="95" Binding="{Binding EntryId}" Header="Entry Id" />
-											<tv:TableViewTextColumn Width="125" Binding="{Binding AttachmentId}" Header="Attachment Id" />
-											<tv:TableViewTextColumn Width="155" Binding="{Binding ModifyDate, Converter={StaticResource LocalDateFormatter}}" Header="Modify Date" />
-											<tv:TableViewTextColumn Width="180" Binding="{Binding Checksum}" Header="Checksum" />
-											<tv:TableViewTextColumn Width="260" Binding="{Binding OdooCompletePath}" Header="Odoo Complete Path" />
+											<tv:TableViewTemplateColumn Width="105" Header="Version Id">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:VersionRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind Id}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="105" Header="File Size">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:VersionRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind FileSize, Converter={StaticResource FileSizeFormatter}}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="115" Header="Directory Id">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:VersionRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind DirectoryId}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="95" Header="Node Id">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:VersionRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind NodeId}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="95" Header="Entry Id">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:VersionRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind EntryId}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="125" Header="Attachment Id">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:VersionRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind AttachmentId}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="155" Header="Modify Date">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:VersionRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind ModifyDate, Converter={StaticResource LocalDateFormatter}}" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="180" Header="Checksum">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:VersionRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind Checksum}" TextTrimming="CharacterEllipsis" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
+											<tv:TableViewTemplateColumn Width="260" Header="Odoo Complete Path">
+												<tv:TableViewTemplateColumn.CellTemplate>
+													<DataTemplate x:DataType="rep:VersionRow">
+														<TextBlock VerticalAlignment="Center" Text="{x:Bind OdooCompletePath}" TextTrimming="CharacterEllipsis" />
+													</DataTemplate>
+												</tv:TableViewTemplateColumn.CellTemplate>
+											</tv:TableViewTemplateColumn>
 										</tv:TableView.Columns>
 									</tv:TableView>
 								</TabViewItem>
@@ -1523,7 +1689,6 @@
 									PointerMoved="PaneGrip_PointerMoved"
 									PointerPressed="PreviewGrip_PointerPressed"
 									PointerReleased="PaneGrip_PointerReleased"
-									Tag="Preview"
 									ToolTipService.ToolTip="Drag to swap Preview position or dock">
 									<StackPanel Orientation="Horizontal" Spacing="6">
 										<Grid
@@ -1561,14 +1726,12 @@
 									Orientation="Horizontal"
 									Spacing="2">
 									<Button
-										x:Name="UploadPreviewButton"
 										Padding="5,3"
 										Command="{x:Bind ViewModel.UploadPreviewImageCommand}"
 										ToolTipService.ToolTip="Upload custom preview image for selected committed file">
 										<FontIcon FontSize="11" Glyph="&#xE898;" />
 									</Button>
 									<Button
-										x:Name="EnterPipButton"
 										Padding="5,3"
 										Click="OnTogglePipClicked"
 										ToolTipService.ToolTip="Pop preview into Picture-in-Picture window">
@@ -1591,25 +1754,22 @@
 						</Border>
 
 						<Grid
-							x:Name="ImageSlot"
 							Grid.Row="1"
 							Margin="8"
 							HorizontalAlignment="Stretch"
 							VerticalAlignment="Stretch">
 							<StackPanel
-								x:Name="NoPreviewPanel"
 								HorizontalAlignment="Center"
 								VerticalAlignment="Center"
-								Spacing="8">
+								Spacing="8"
+								Visibility="{x:Bind ViewModel.IsNoPreviewVisible, Mode=OneWay}">
 								<ProgressRing
-									x:Name="LoadRing"
 									Width="30"
 									Height="30"
 									HorizontalAlignment="Center"
-									IsActive="{x:Bind ViewModel.IsPreviewLoading, Mode=OneWay}"
-									Visibility="{x:Bind ViewModel.IsPreviewLoading, Mode=OneWay}" />
+									IsActive="{x:Bind ViewModel.IsPreviewBusy, Mode=OneWay}"
+									Visibility="{x:Bind ViewModel.IsPreviewBusy, Mode=OneWay}" />
 								<TextBlock
-									x:Name="NoPreviewText"
 									HorizontalAlignment="Center"
 									Foreground="{ThemeResource TextFillColorSecondaryBrush}"
 									Text="{x:Bind ViewModel.PreviewStatusText, Mode=OneWay}"

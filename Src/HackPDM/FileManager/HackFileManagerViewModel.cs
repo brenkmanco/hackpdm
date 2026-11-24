@@ -40,6 +40,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	private readonly Dictionary<string, Func<EntryRow, CancellationToken, Task>> _detailTabs;
 	private readonly SemaphoreSlim _localChangesGate = new( 1, 1 );
 	private readonly Lock _watcherQueueGate = new();
+	private readonly Lock _treeLock = new();
 	private readonly Dictionary<string, LocalFileChange> _queuedWatcherChanges = new( PwaPaths.PathComparer );
 	private readonly Timer _watcherCooldownTimer;
 	private readonly List<LocalFileChange> _pendingChangesDuringLoad = [];
@@ -47,7 +48,12 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	private readonly bool _restoring;
 	private readonly string? _selectionFolder;
 
+	private CancellationTokenSource? _treeLoadCancellation;
 	private CancellationTokenSource? _detailsCancellation;
+	private CancellationTokenSource? _previewCancellation;
+	private CancellationTokenSource? _sortCancellation;
+	private TaskCompletionSource _treeLoadedTcs = new( TaskCreationOptions.RunContinuationsAsynchronously );
+	private TaskCompletionSource _listLoadedTcs = new( TaskCreationOptions.RunContinuationsAsynchronously );
 	private IReadOnlyList<string> _selectionToRestore;
 	private Func<EntryRow, IComparable?> _groupKey = GroupByStatus;
 	private int _entriesLoadGeneration;
@@ -86,31 +92,31 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		{
 			[ PdmConstants.HistoryTab ] = async ( entry, ct ) =>
 			{
-				var rows = await _details.GetHistoryAsync( entry );
+				var rows = await Task.Run( () => _details.GetHistoryAsync( entry ), ct );
 				ct.ThrowIfCancellationRequested();
 				OHistories.ReplaceAll( rows );
 			},
 			[ PdmConstants.ParentTab ] = async ( entry, ct ) =>
 			{
-				var rows = await _details.GetParentsAsync( entry );
+				var rows = await Task.Run( () => _details.GetParentsAsync( entry ), ct );
 				ct.ThrowIfCancellationRequested();
 				OParents.ReplaceAll( rows );
 			},
 			[ PdmConstants.ChildTab ] = async ( entry, ct ) =>
 			{
-				var rows = await _details.GetChildrenAsync( entry );
+				var rows = await Task.Run( () => _details.GetChildrenAsync( entry ), ct );
 				ct.ThrowIfCancellationRequested();
 				OChildren.ReplaceAll( rows );
 			},
 			[ PdmConstants.PropertiesTab ] = async ( entry, ct ) =>
 			{
-				var rows = await _details.GetPropertiesAsync( entry );
+				var rows = await Task.Run( () => _details.GetPropertiesAsync( entry ), ct );
 				ct.ThrowIfCancellationRequested();
 				OProperties.ReplaceAll( rows );
 			},
 			[ PdmConstants.InfoTab ] = async ( entry, ct ) =>
 			{
-				var rows = await _details.GetVersionInfoAsync( entry );
+				var rows = await Task.Run( () => _details.GetVersionInfoAsync( entry ), ct );
 				ct.ThrowIfCancellationRequested();
 				OVersions.ReplaceAll( rows );
 			},
@@ -127,6 +133,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		}
 		ShowInactive = state.ShowInactive;
 		IsGroupingEnabled = state.IsGroupingEnabled;
+		GroupField = state.GroupField;
 		if( EntryRowKeys.TryGetGroupKey( state.GroupField, out var groupKey ) )
 			_groupKey = groupKey;
 		_selectionToRestore = state.SelectedEntryNames;
@@ -140,14 +147,30 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	public event Func<DirectoryNode, Task>? TreeLoaded;
 	public event Func<IReadOnlyList<string>, string?, Task>? LocateRequested;
 	public event Action<string, LocalChangeKind>? FolderChanged;
-	public event Action<EntryRow?, EntryRow?>? RowReplaced;
+	public event Action<bool>? LiveBatchApplying;
+	public event Action<IReadOnlyDictionary<EntryRow, EntryRow?>>? RowsReplaced;
 
 	public bool IsDisposed { get; private set; }
 	public bool HasKeptTree => _state.Tree is not null && ( _state.Stale & FileManagerRefresh.Tree ) == 0;
 	public bool IsEntriesStale => ( _state.Stale & FileManagerRefresh.Entries ) != 0;
-	public bool IsTreeLoaded { get; set; }
-	public bool IsListLoaded { get; set; }
-	public bool IsFiltered { get; set; } = true;
+
+	[ObservableProperty] public partial bool IsTreeLoaded { get; set; }
+	partial void OnIsTreeLoadedChanged( bool value )
+	{
+		if( value )
+			_treeLoadedTcs.TrySetResult();
+		else if( _treeLoadedTcs.Task.IsCompleted )
+			_treeLoadedTcs = new( TaskCreationOptions.RunContinuationsAsynchronously );
+	}
+
+	[ObservableProperty] public partial bool IsListLoaded { get; set; }
+	partial void OnIsListLoadedChanged( bool value )
+	{
+		if( value )
+			_listLoadedTcs.TrySetResult();
+		else if( _listLoadedTcs.Task.IsCompleted )
+			_listLoadedTcs = new( TaskCreationOptions.RunContinuationsAsynchronously );
+	}
 
 	[ObservableProperty] public partial bool IsTreeLoading { get; set; }
 	[ObservableProperty] public partial string TreeLoadingStatus { get; set; } = "Syncing server & local folders…";
@@ -169,15 +192,41 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 	[ObservableProperty]
 	[NotifyPropertyChangedFor( nameof( IsPreviewVisible ) )]
+	[NotifyPropertyChangedFor( nameof( IsNoPreviewVisible ) )]
+	[NotifyPropertyChangedFor( nameof( IsPreviewBusy ) )]
 	[NotifyPropertyChangedFor( nameof( PreviewStatusText ) )]
 	public partial bool IsPreviewLoading { get; set; }
 
 	[ObservableProperty]
 	[NotifyPropertyChangedFor( nameof( IsPreviewVisible ) )]
+	[NotifyPropertyChangedFor( nameof( IsNoPreviewVisible ) )]
+	[NotifyPropertyChangedFor( nameof( IsPreviewBusy ) )]
+	[NotifyPropertyChangedFor( nameof( PreviewStatusText ) )]
+	public partial bool IsPreviewDecoding { get; set; }
+
+	[ObservableProperty]
+	[NotifyPropertyChangedFor( nameof( IsPreviewVisible ) )]
+	[NotifyPropertyChangedFor( nameof( IsNoPreviewVisible ) )]
 	public partial EntryPreview? Preview { get; set; }
 
-	public bool IsPreviewVisible => !IsPreviewLoading && Preview is not null;
-	public string PreviewStatusText => IsPreviewLoading ? "Loading preview…" : "No preview";
+	[ObservableProperty]
+	[NotifyPropertyChangedFor( nameof( IsPreviewVisible ) )]
+	[NotifyPropertyChangedFor( nameof( IsNoPreviewVisible ) )]
+	public partial bool HasPreviewImage { get; set; }
+
+	partial void OnPreviewChanged( EntryPreview? value )
+	{
+		if( value is null )
+		{
+			HasPreviewImage = false;
+			IsPreviewDecoding = false;
+		}
+	}
+
+	public bool IsPreviewVisible => !IsPreviewLoading && !IsPreviewDecoding && Preview is not null && HasPreviewImage;
+	public bool IsNoPreviewVisible => !IsPreviewVisible;
+	public bool IsPreviewBusy => IsPreviewLoading || IsPreviewDecoding;
+	public string PreviewStatusText => IsPreviewBusy ? "Loading preview…" : "No preview";
 
 	[ObservableProperty] public partial string EntriesLabel { get; set; } = "Entries: 0";
 	[ObservableProperty] public partial string EntriesLabelLocal { get; set; } = "Local Only: 0";
@@ -194,7 +243,6 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		if( _restoring )
 			return;
 		_state.ShowInactive = value;
-		Entries.Clear();
 		RefreshRequested?.Invoke( FileManagerRefresh.Entries );
 	}
 
@@ -207,6 +255,17 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		GroupingChanged?.Invoke();
 	}
 
+	[ObservableProperty]
+	[NotifyPropertyChangedFor( nameof( ActiveGroupFieldName ) )]
+	[NotifyPropertyChangedFor( nameof( GroupedByLabelText ) )]
+	public partial string? GroupField { get; set; }
+
+	partial void OnGroupFieldChanged( string? value )
+	{
+		if( !_restoring )
+			_state.GroupField = value;
+	}
+
 	public RangeObservableCollection<EntryRow> Entries { get; } = [];
 	public RangeObservableCollection<EntryRow> LocalChanges { get; } = [];
 	public RangeObservableCollection<EntryRow> RemoteChanges { get; } = [];
@@ -217,7 +276,8 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	public RangeObservableCollection<VersionRow> OVersions { get; } = [];
 
 	public Func<EntryRow, IComparable?>? ActiveGroupKey => IsGroupingEnabled ? _groupKey : null;
-	public string ActiveGroupFieldName => _state.GroupField ?? nameof( EntryRow.Status );
+	public string ActiveGroupFieldName => GroupField ?? nameof( EntryRow.Status );
+	public string GroupedByLabelText => $"Grouped by {ActiveGroupFieldName}";
 	public IReadOnlySet<string> ExpandedPaths => _state.ExpandedPaths;
 	public (string Field, bool Descending)? EntrySort => _state.Sort;
 	public HistoryRow? SelectedHistory { get; set; }
@@ -244,30 +304,51 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		set => _state.SelectedDetailTab = value;
 	}
 
-	public IReadOnlyList<EntryRow> SelectedEntries
+	[ObservableProperty]
+	public partial IReadOnlyList<EntryRow> SelectedEntries { get; set; } = [];
+
+	partial void OnSelectedEntriesChanged( IReadOnlyList<EntryRow> value )
 	{
-		get;
-		set
+		if( IsListLoaded && !IsDisposed )
 		{
-			field = value;
-			if( IsListLoaded && !IsDisposed )
+			List<string> names = new( value.Count );
+			for( int i = 0; i < value.Count; i++ )
 			{
-				List<string> names = new( value.Count );
-				for( int i = 0; i < value.Count; i++ )
-				{
-					if( value[ i ].Name is { } name )
-						names.Add( name );
-				}
-				_state.SelectedEntryNames = names;
+				if( value[ i ].Name is { } name )
+					names.Add( name );
 			}
-			UpdateSelectionLabel( value );
+			_state.SelectedEntryNames = names;
 		}
-	} = [];
+		UpdateSelectionLabel( value );
+	}
 
 	private string SelectedLocalDirectory => _files.ResolveLocalDirectory( LastSelectedNodePath );
 	private static int[] RemoteIds( IEnumerable<EntryRow> rows ) => RemoteIds( rows.Select( r => r.Id ) );
 
-	public void Initialize() => _workflow.PreloadMetadata();
+	public Task WaitForTreeLoadedAsync( CancellationToken token = default )
+		=> IsTreeLoaded ? Task.CompletedTask : _treeLoadedTcs.Task.WaitAsync( token );
+
+	public Task WaitForListLoadedAsync( CancellationToken token = default )
+		=> IsListLoaded ? Task.CompletedTask : _listLoadedTcs.Task.WaitAsync( token );
+
+	internal Task<int> CountTreeAsync( DirectoryNode root, CancellationToken token = default )
+		=> Task.Run( () =>
+		{
+			lock( _treeLock )
+				return root.CountRecursive();
+		}, token );
+
+	internal Task<(DirectoryNode? Filtered, int Count)> FilterTreeAsync( DirectoryNode root, string query, CancellationToken token = default )
+		=> Task.Run( () =>
+		{
+			token.ThrowIfCancellationRequested();
+			lock( _treeLock )
+			{
+				DirectoryNode? filtered = string.IsNullOrEmpty( query ) ? root : root.Filter( query );
+				int count = filtered?.CountRecursive() ?? 0;
+				return (filtered, count);
+			}
+		}, token );
 
 	public (IReadOnlyList<string> Segments, string? FileName)? Activate()
 	{
@@ -301,6 +382,8 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		}
 		try { _pageCancellation.Cancel(); }
 		finally { _pageCancellation.Dispose(); }
+		_treeLoadedTcs.TrySetCanceled();
+		_listLoadedTcs.TrySetCanceled();
 		lock( _watcherQueueGate )
 		{
 			_queuedWatcherChanges.Clear();
@@ -309,7 +392,10 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			_watcherScheduledForOverflow = false;
 			_watcherCooldownTimer.Dispose();
 		}
+		CtsHelper.CancelAndDispose( ref _treeLoadCancellation );
 		CtsHelper.CancelAndDispose( ref _detailsCancellation );
+		CtsHelper.CancelAndDispose( ref _previewCancellation );
+		CtsHelper.CancelAndDispose( ref _sortCancellation );
 		_localChangesGate.Dispose();
 		GC.SuppressFinalize( this );
 	}
@@ -376,6 +462,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		{
 			_pendingTreeReload = true;
 			_pendingTreeReloadFromServer |= fromServer;
+			CtsHelper.CancelAndDispose( ref _treeLoadCancellation );
 			return;
 		}
 		_isTreeLoadRunning = true;
@@ -389,8 +476,12 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 				IsTreeLoaded = false;
 				IsTreeLoading = true;
 				TreeLoadingStatus = !nextFromServer && HasKeptTree ? "Restoring folder tree…" : "Fetching folder structure from Odoo…";
+				CancellationTokenSource iterCts = CtsHelper.Replace( ref _treeLoadCancellation );
+				CancellationTokenSource? linked = null;
 				try
 				{
+					linked = CancellationTokenSource.CreateLinkedTokenSource( iterCts.Token, _pageCancellation.Token );
+					CancellationToken token = linked.Token;
 					IProgress<string> progress = new UiThreadProgress<string>( status =>
 					{
 						if( !IsDisposed && IsTreeLoading )
@@ -398,21 +489,28 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 					} );
 					DirectoryNode? root = !nextFromServer && HasKeptTree
 						? _state.Tree
-						: await _directoryTree.LoadAsync( progress, _pageCancellation.Token );
+						: await Task.Run( () => _directoryTree.LoadAsync( progress, token ), token );
+					token.ThrowIfCancellationRequested();
 					if( root is not null && !ReferenceEquals( root, _state.Tree ) )
 						_state.TreeRefreshed( root );
 					if( root is not null && !IsDisposed && TreeLoaded is { } handler )
 						await handler( root );
 				}
+				catch( OperationCanceledException ) when( _pendingTreeReload && !IsDisposed && !_pageCancellation.IsCancellationRequested )
+				{
+					nextFromServer = _pendingTreeReloadFromServer;
+					continue;
+				}
 				catch( OperationCanceledException ) { break; }
 				catch( ObjectDisposedException ) { break; }
+				catch( Exception ex )
+				{
+					HackLogger.Error( "FileManager", $"Loading directory tree failed: {ex.Message}", ex );
+					break;
+				}
 				finally
 				{
-					if( !IsDisposed )
-					{
-						IsTreeLoading = false;
-						IsTreeLoaded = true;
-					}
+					linked?.Dispose();
 				}
 
 				if( !_pendingTreeReload )
@@ -422,6 +520,12 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		}
 		finally
 		{
+			CtsHelper.CancelAndDispose( ref _treeLoadCancellation );
+			if( !IsDisposed )
+			{
+				IsTreeLoading = false;
+				IsTreeLoaded = true;
+			}
 			_isTreeLoadRunning = false;
 		}
 	}
@@ -431,6 +535,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		if( IsDisposed )
 			return;
 		IsListLoaded = false;
+		CtsHelper.CancelAndDispose( ref _sortCancellation );
 		int generation = Interlocked.Increment( ref _entriesLoadGeneration );
 		_pendingChangesDuringLoad.Clear();
 		CancellationTokenSource linked;
@@ -456,7 +561,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 		try
 		{
-			await AsyncHelper.WaitUntil( () => IsTreeLoaded, 100, -1, token );
+			await WaitForTreeLoadedAsync( token );
 			if( SelectedDirectory is not { } directory )
 			{
 				Entries.ClearIfNonEmpty();
@@ -488,16 +593,18 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 						EntriesLoadingPercent = Math.Clamp( p.Completed * 100.0 / p.Total, 0, 100 );
 				} );
 
-				result = await _entryList.LoadAsync( directory.DirectoryId, directory.TreePath, includeDeleted, IsFiltered, progress, token );
+				result = await Task.Run(
+					() => _entryList.LoadAsync( directory.DirectoryId, directory.TreePath, includeDeleted, filterUnknownTypes: true, progress, token ),
+					token );
 				token.ThrowIfCancellationRequested();
 				_state.RememberEntries( directory.TreePath, includeDeleted, result );
 			}
 
-			if( _state.Sort is var (field, descending) && EntryRowKeys.TryGetSortKey( field, out var sortKey ) )
-				Entries.ReplaceSorted( result.Rows, sortKey, descending );
-			else
-				Entries.ReplaceAll( result.Rows );
-			UpdateEntryLabels( result );
+			var sort = _state.Sort;
+			var prepared = await Task.Run( () => PrepareEntriesPresentation( result, sort ), token );
+			token.ThrowIfCancellationRequested();
+			Entries.ReplaceAll( prepared.Rows );
+			ApplyEntryLabels( result, prepared.LocalPending, prepared.RemotePending, prepared.ModifiedCount );
 			IsEmptyDirectory = Entries.Count == 0;
 			GroupingChanged?.Invoke();
 		}
@@ -532,17 +639,27 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		}
 	}
 
-	private void UpdateEntryLabels( EntryListResult result )
+	private static (List<EntryRow> Rows, List<EntryRow> LocalPending, List<EntryRow> RemotePending, int ModifiedCount) PrepareEntriesPresentation(
+		EntryListResult result,
+		(string Field, bool Descending)? sort )
 	{
-		int total = result.RemoteCount + result.LocalOnlyCount;
-		int remoteOnly = Math.Max( 0, result.RemoteCount - result.LocalAndRemoteCount );
+		List<EntryRow> rows = sort is var (field, descending) && EntryRowKeys.TryGetSortKey( field, out var sortKey )
+			? SortRows( result.Rows, sortKey, descending )
+			: result.Rows;
+
+		(List<EntryRow> localPending, List<EntryRow> remotePending, int modifiedCount) = CollectChangeBuckets( rows );
+		return (rows, localPending, remotePending, modifiedCount);
+	}
+
+	private static (List<EntryRow> LocalPending, List<EntryRow> RemotePending, int ModifiedCount) CollectChangeBuckets( IReadOnlyList<EntryRow> rows )
+	{
 		List<EntryRow> localPending = [];
 		List<EntryRow> remotePending = [];
 		int modifiedCount = 0;
 
-		for( int i = 0; i < result.Rows.Count; i++ )
+		for( int i = 0; i < rows.Count; i++ )
 		{
-			EntryRow r = result.Rows[ i ];
+			EntryRow r = rows[ i ];
 			switch( r.Status )
 			{
 				case FileStatus.Lo:
@@ -557,6 +674,22 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 					break;
 			}
 		}
+		return (localPending, remotePending, modifiedCount);
+	}
+
+	private static List<EntryRow> SortRows( IEnumerable<EntryRow> rows, Func<EntryRow, IComparable?> keySelector, bool descending )
+		=> descending
+			? [ .. rows.OrderByDescending( keySelector, SafeComparableComparer.Instance ) ]
+			: [ .. rows.OrderBy( keySelector, SafeComparableComparer.Instance ) ];
+
+	private void ApplyEntryLabels(
+		EntryListResult result,
+		List<EntryRow> localPending,
+		List<EntryRow> remotePending,
+		int modifiedCount )
+	{
+		int total = result.RemoteCount + result.LocalOnlyCount;
+		int remoteOnly = Math.Max( 0, result.RemoteCount - result.LocalAndRemoteCount );
 
 		EntriesLabel = $"Entries: {total}";
 		EntriesLabelLocal = $"Local Only: {result.LocalOnlyCount}";
@@ -707,6 +840,10 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			else if( batch is not null )
 				await ApplyLocalChangesAsync( batch );
 		}
+		catch( Exception ex )
+		{
+			HackLogger.Error( "FileManager", $"Draining local file changes failed: {ex.Message}", ex );
+		}
 		finally
 		{
 			lock( _watcherQueueGate )
@@ -739,95 +876,156 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			string? listed = IsListLoaded ? LastSelectedNodePath : null;
 			string? activeFolder = LastSelectedNodePath;
 			bool entriesLoading = !IsListLoaded && activeFolder is not null;
+			DirectoryNode? treeSnapshot = _state.Tree;
 
-			List<LocalFileChange> here = [];
-			Dictionary<string, LocalChangeKind> elsewhere = new( StringComparer.OrdinalIgnoreCase );
-			bool treeChanged = false;
-			bool reloadCurrentEntries = false;
-
-			foreach( LocalFileChange change in batch )
+			var classified = await Task.Run( () =>
 			{
-				string? itemServerPath = PwaPaths.ToServerName( change.FullPath );
-				string? parentFolder = PwaPaths.ToServerName( Path.GetDirectoryName( change.FullPath ) );
-				if( itemServerPath is null && parentFolder is null )
-					continue;
+				List<LocalFileChange> here = [];
+				List<LocalFileChange> pending = [];
+				Dictionary<string, LocalChangeKind> elsewhere = new( StringComparer.OrdinalIgnoreCase );
+				bool treeChanged = false;
+				bool reloadCurrentEntries = false;
 
-				string[]? itemSegments = null;
-				bool isDirectory = change.IsDirectory || ( change.Kind != LocalChangeKind.Deleted && Directory.Exists( change.FullPath ) );
-				if( !isDirectory && change.Kind == LocalChangeKind.Deleted && _state.Tree is not null )
+				foreach( LocalFileChange change in batch )
 				{
-					itemSegments = PwaPaths.Segments( itemServerPath );
-					isDirectory = itemSegments.Length > 0 && _state.Tree.FindBySegments( itemSegments ) is not null;
-				}
+					string? itemServerPath = PwaPaths.ToServerName( change.FullPath );
+					string? parentFolder = PwaPaths.ToServerName( Path.GetDirectoryName( change.FullPath ) );
+					if( itemServerPath is null && parentFolder is null )
+						continue;
 
-				if( isDirectory )
-				{
-					itemSegments ??= PwaPaths.Segments( itemServerPath );
-					if( itemSegments.Length > 0 && _state.Tree is { } tree )
+					string[]? itemSegments = null;
+					bool isDirectory = change.IsDirectory || ( change.Kind != LocalChangeKind.Deleted && Directory.Exists( change.FullPath ) );
+					if( !isDirectory && change.Kind == LocalChangeKind.Deleted && treeSnapshot is not null )
 					{
-						if( change.Kind == LocalChangeKind.Created )
-							treeChanged |= tree.EnsureLocalPath( itemSegments );
-						else if( change.Kind == LocalChangeKind.Deleted )
+						itemSegments = PwaPaths.Segments( itemServerPath );
+						if( itemSegments.Length > 0 )
 						{
-							treeChanged |= tree.MarkLocalDeleted( itemSegments );
-							if( activeFolder is not null && PwaPaths.IsSameOrAncestorTreePath( itemServerPath, activeFolder ) )
-								reloadCurrentEntries = true;
+							lock( _treeLock )
+								isDirectory = treeSnapshot.FindBySegments( itemSegments ) is not null;
 						}
 					}
-					if( parentFolder is not null && ( listed is null || !PwaPaths.SameTreePath( parentFolder, listed ) ) )
+
+					if( isDirectory )
+					{
+						itemSegments ??= PwaPaths.Segments( itemServerPath );
+						if( itemSegments.Length > 0 && treeSnapshot is not null )
+						{
+							lock( _treeLock )
+							{
+								if( change.Kind == LocalChangeKind.Created )
+									treeChanged |= treeSnapshot.EnsureLocalPath( itemSegments );
+								else if( change.Kind == LocalChangeKind.Deleted )
+								{
+									treeChanged |= treeSnapshot.MarkLocalDeleted( itemSegments );
+									if( activeFolder is not null && PwaPaths.IsSameOrAncestorTreePath( itemServerPath, activeFolder ) )
+										reloadCurrentEntries = true;
+								}
+							}
+						}
+						if( parentFolder is not null && ( listed is null || !PwaPaths.SameTreePath( parentFolder, listed ) ) )
+							MergeElsewhere( elsewhere, parentFolder, change.Kind );
+						continue;
+					}
+
+					if( parentFolder is null )
+						continue;
+					if( listed is not null && PwaPaths.SameTreePath( parentFolder, listed ) )
+						here.Add( change );
+					else if( entriesLoading && PwaPaths.SameTreePath( parentFolder, activeFolder ) )
+						pending.Add( change );
+					else
 						MergeElsewhere( elsewhere, parentFolder, change.Kind );
-					continue;
 				}
 
-				if( parentFolder is null )
-					continue;
-				if( listed is not null && PwaPaths.SameTreePath( parentFolder, listed ) )
-					here.Add( change );
-				else if( entriesLoading && PwaPaths.SameTreePath( parentFolder, activeFolder ) )
-					_pendingChangesDuringLoad.Add( change );
-				else
-					MergeElsewhere( elsewhere, parentFolder, change.Kind );
-			}
-
-			if( treeChanged && _state.Tree is { } updatedTree && !IsDisposed )
-			{
-				if( LastSelectedNodePath is { } selectedPath )
+				string? fallbackSelectedPath = null;
+				if( treeChanged && treeSnapshot is not null && activeFolder is not null )
 				{
-					string[] selectedSegments = PwaPaths.Segments( selectedPath );
-					if( updatedTree.FindBySegments( selectedSegments ) is null )
+					string[] selectedSegments = PwaPaths.Segments( activeFolder );
+					lock( _treeLock )
 					{
-						int len = selectedSegments.Length - 1;
-						while( len > 0 && updatedTree.FindBySegments( selectedSegments.AsSpan( 0, len ) ) is null )
-							len--;
-						LastSelectedNodePath = len == 0
-							? updatedTree.Name
-							: string.Join( PwaPaths.NameSeparator, [ updatedTree.Name, .. selectedSegments[ ..len ] ] );
-						reloadCurrentEntries = true;
+						if( treeSnapshot.FindBySegments( selectedSegments ) is null )
+						{
+							int len = selectedSegments.Length - 1;
+							while( len > 0 && treeSnapshot.FindBySegments( selectedSegments.AsSpan( 0, len ) ) is null )
+								len--;
+							fallbackSelectedPath = len == 0
+								? treeSnapshot.Name
+								: string.Join( PwaPaths.NameSeparator, [ treeSnapshot.Name, .. selectedSegments[ ..len ] ] );
+							reloadCurrentEntries = true;
+						}
 					}
 				}
-				if( TreeLoaded is { } treeHandler )
-					await treeHandler( updatedTree );
+
+				return (Here: here, Pending: pending, Elsewhere: elsewhere, TreeChanged: treeChanged, ReloadCurrentEntries: reloadCurrentEntries, FallbackSelectedPath: fallbackSelectedPath);
+			}, _pageCancellation.Token );
+
+			if( IsDisposed )
+				return;
+
+			if( classified.Pending.Count > 0 )
+			{
+				if( IsListLoaded && PwaPaths.SameTreePath( LastSelectedNodePath, activeFolder ) )
+				{
+					listed ??= LastSelectedNodePath;
+					classified.Here.AddRange( classified.Pending );
+				}
+				else if( !IsListLoaded )
+				{
+					_pendingChangesDuringLoad.AddRange( classified.Pending );
+				}
 			}
 
-			foreach( var (folder, kind) in elsewhere )
+			if( classified.FallbackSelectedPath is not null )
+				LastSelectedNodePath = classified.FallbackSelectedPath;
+
+			if( classified.TreeChanged && treeSnapshot is not null && !IsDisposed )
+			{
+				if( TreeLoaded is { } treeHandler )
+					await treeHandler( treeSnapshot );
+			}
+
+			foreach( var (folder, kind) in classified.Elsewhere )
 				FolderChanged?.Invoke( folder, kind );
 
-			if( reloadCurrentEntries || here.Count > MaxSingleRowUpdates )
+			if( classified.ReloadCurrentEntries || classified.Here.Count > MaxSingleRowUpdates )
 			{
 				Refresh( FileManagerRefresh.Entries );
 				return;
 			}
+			if( classified.Here.Count == 0 || listed is null )
+				return;
 
-			bool changed = false;
-			foreach( LocalFileChange change in here )
-				changed |= await RefreshRowAsync( change.FullPath, listed! );
-			if( changed && !IsDisposed )
+			// Deduplicate paths targeting the same file name while preserving batch order.
+			Dictionary<string, string> uniquePathsByName = new( PwaPaths.PathComparer );
+			foreach( LocalFileChange change in classified.Here )
+				uniquePathsByName[ Path.GetFileName( change.FullPath ) ] = change.FullPath;
+
+			int generation = Volatile.Read( ref _entriesLoadGeneration );
+			List<EntryRow> currentEntries = [ .. Entries ];
+			var sort = _state.Sort;
+
+			var batchUpdate = await Task.Run(
+				() => BuildLiveBatchAsync( currentEntries, uniquePathsByName, sort, _pageCancellation.Token ),
+				_pageCancellation.Token );
+
+			if( IsDisposed || !IsListLoaded || !PwaPaths.SameTreePath( LastSelectedNodePath, listed ) || generation != Volatile.Read( ref _entriesLoadGeneration ) )
+				return;
+			if( !batchUpdate.Changed || batchUpdate.Result is null )
+				return;
+
+			LiveBatchApplying?.Invoke( true );
+			try
 			{
-				if( _state.Sort is var (field, descending) && EntryRowKeys.TryGetSortKey( field, out var sortKey ) )
-					Entries.Sort( sortKey, descending );
-				KeepListedRows();
+				Entries.ReplaceAll( batchUpdate.Result.Rows );
+				_state.RememberEntries( LastSelectedNodePath, ShowInactive, batchUpdate.Result );
+				ApplyEntryLabels( batchUpdate.Result, batchUpdate.LocalPending!, batchUpdate.RemotePending!, batchUpdate.ModifiedCount );
 				IsEmptyDirectory = IsListLoaded && SelectedDirectory is not null && Entries.Count == 0;
+				RowsReplaced?.Invoke( batchUpdate.Replacements! );
 				GroupingChanged?.Invoke();
+			}
+			finally
+			{
+				LiveBatchApplying?.Invoke( false );
 			}
 		}
 		catch( OperationCanceledException ) { }
@@ -846,63 +1044,94 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		}
 	}
 
-	private static void MergeElsewhere( Dictionary<string, LocalChangeKind> map, string folder, LocalChangeKind kind )
-		=> map[ folder ] = map.TryGetValue( folder, out LocalChangeKind prev ) && prev != kind ? LocalChangeKind.Updated : kind;
-
-	private async Task<bool> RefreshRowAsync( string localPath, string listedFolder )
+	private async Task<(
+		bool Changed,
+		EntryListResult? Result,
+		List<EntryRow>? LocalPending,
+		List<EntryRow>? RemotePending,
+		int ModifiedCount,
+		Dictionary<EntryRow, EntryRow?>? Replacements)> BuildLiveBatchAsync(
+		List<EntryRow> currentEntries,
+		Dictionary<string, string> uniquePathsByName,
+		(string Field, bool Descending)? sort,
+		CancellationToken token )
 	{
-		string name = Path.GetFileName( localPath );
-		EntryRow? old = FindEntryByName( name, out _ );
-		EntryRow? row = await _entryList.RefreshRowAsync( old, localPath, IsFiltered );
-		if( IsDisposed || !IsListLoaded || !PwaPaths.SameTreePath( LastSelectedNodePath, listedFolder ) )
-			return false;
+		Dictionary<string, int> indexByName = new( currentEntries.Count, StringComparer.OrdinalIgnoreCase );
+		for( int i = 0; i < currentEntries.Count; i++ )
+		{
+			if( currentEntries[ i ].Name is { } n && !indexByName.ContainsKey( n ) )
+				indexByName[ n ] = i;
+		}
 
-		int index = old is null ? -1 : Entries.IndexOf( old );
-		if( index < 0 )
-			FindEntryByName( name, out index );
-		EntryRow? replaced = index >= 0 ? Entries[ index ] : null;
-		if( row is null )
+		List<(int ExistingIndex, EntryRow? OldRow, string LocalPath)> workItems = new( uniquePathsByName.Count );
+		foreach( var (fileName, localPath) in uniquePathsByName )
 		{
-			if( index < 0 )
-				return false;
-			Entries.RemoveAt( index );
+			int idx = indexByName.TryGetValue( fileName, out int foundIdx ) ? foundIdx : -1;
+			EntryRow? old = idx >= 0 ? currentEntries[ idx ] : null;
+			workItems.Add( (idx, old, localPath) );
 		}
-		else if( index >= 0 )
-		{
-			Entries[ index ] = row;
-		}
-		else
-		{
-			Entries.Add( row );
-		}
-		RowReplaced?.Invoke( replaced, row );
-		return true;
-	}
 
-	private EntryRow? FindEntryByName( string name, out int index )
-	{
-		for( int i = 0; i < Entries.Count; i++ )
-		{
-			if( string.Equals( Entries[ i ].Name, name, StringComparison.OrdinalIgnoreCase ) )
+		EntryRow?[] refreshedRows = new EntryRow?[ workItems.Count ];
+		await Parallel.ForEachAsync(
+			Enumerable.Range( 0, workItems.Count ),
+			new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp( workItems.Count, 1, 8 ), CancellationToken = token },
+			async ( i, _ ) =>
 			{
-				index = i;
-				return Entries[ i ];
+				refreshedRows[ i ] = await _entryList.RefreshRowAsync( workItems[ i ].OldRow, workItems[ i ].LocalPath, filterUnknownTypes: true ).ConfigureAwait( false );
+			} );
+
+		token.ThrowIfCancellationRequested();
+
+		Dictionary<EntryRow, EntryRow?> replacements = [];
+		HashSet<int> removedIndices = [];
+		List<EntryRow> addedRows = [];
+		bool changed = false;
+
+		for( int i = 0; i < workItems.Count; i++ )
+		{
+			var (idx, oldRow, _) = workItems[ i ];
+			EntryRow? nextRow = refreshedRows[ i ];
+			if( nextRow is null )
+			{
+				if( idx < 0 )
+					continue;
+				removedIndices.Add( idx );
+				replacements[ oldRow! ] = null;
+				changed = true;
+			}
+			else if( idx >= 0 )
+			{
+				currentEntries[ idx ] = nextRow;
+				replacements[ oldRow! ] = nextRow;
+				changed = true;
+			}
+			else
+			{
+				addedRows.Add( nextRow );
+				changed = true;
 			}
 		}
-		index = -1;
-		return null;
-	}
 
-	private void KeepListedRows()
-	{
-		List<EntryRow> rows = new( Entries.Count );
+		if( !changed )
+			return default;
+
+		List<EntryRow> updatedRows = new( currentEntries.Count - removedIndices.Count + addedRows.Count );
+		for( int i = 0; i < currentEntries.Count; i++ )
+		{
+			if( !removedIndices.Contains( i ) )
+				updatedRows.Add( currentEntries[ i ] );
+		}
+		updatedRows.AddRange( addedRows );
+
+		if( sort is var (field, descending) && EntryRowKeys.TryGetSortKey( field, out var sortKey ) )
+			updatedRows = SortRows( updatedRows, sortKey, descending );
+
 		int remoteCount = 0;
 		int localOnlyCount = 0;
 		int localAndRemoteCount = 0;
-		for( int i = 0; i < Entries.Count; i++ )
+		for( int i = 0; i < updatedRows.Count; i++ )
 		{
-			EntryRow r = Entries[ i ];
-			rows.Add( r );
+			EntryRow r = updatedRows[ i ];
 			if( r.Id is > 0 )
 				remoteCount++;
 			if( r.ReprType == EntryReprType.Local )
@@ -910,10 +1139,14 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			else if( r.ReprType == EntryReprType.Both )
 				localAndRemoteCount++;
 		}
-		EntryListResult result = new( rows, remoteCount, localOnlyCount, localAndRemoteCount );
-		_state.RememberEntries( LastSelectedNodePath, ShowInactive, result );
-		UpdateEntryLabels( result );
+
+		EntryListResult result = new( updatedRows, remoteCount, localOnlyCount, localAndRemoteCount );
+		(List<EntryRow> localPending, List<EntryRow> remotePending, int modifiedCount) = CollectChangeBuckets( updatedRows );
+		return (true, result, localPending, remotePending, modifiedCount, replacements);
 	}
+
+	private static void MergeElsewhere( Dictionary<string, LocalChangeKind> map, string folder, LocalChangeKind kind )
+		=> map[ folder ] = map.TryGetValue( folder, out LocalChangeKind prev ) && prev != kind ? LocalChangeKind.Updated : kind;
 
 	public void ClearDetails()
 	{
@@ -929,18 +1162,24 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	{
 		if( IsDisposed )
 			return;
+
 		CancellationTokenSource nextDetails = CtsHelper.Replace( ref _detailsCancellation );
-		CancellationTokenSource linked;
+		CancellationTokenSource nextPreview = CtsHelper.Replace( ref _previewCancellation );
+		CancellationTokenSource? linkedDetails = null;
+		CancellationTokenSource? linkedPreview = null;
 		try
 		{
-			linked = CancellationTokenSource.CreateLinkedTokenSource( nextDetails.Token, _pageCancellation.Token );
+			linkedDetails = CancellationTokenSource.CreateLinkedTokenSource( nextDetails.Token, _pageCancellation.Token );
+			linkedPreview = CancellationTokenSource.CreateLinkedTokenSource( nextPreview.Token, _pageCancellation.Token );
 		}
 		catch( ObjectDisposedException )
 		{
+			linkedDetails?.Dispose();
+			linkedPreview?.Dispose();
 			return;
 		}
-		using CancellationTokenSource linkedGuard = linked;
-		CancellationToken token = linked.Token;
+		using CancellationTokenSource detailsGuard = linkedDetails;
+		using CancellationTokenSource previewGuard = linkedPreview;
 		int previewGeneration = Interlocked.Increment( ref _previewVersionGeneration );
 
 		ClearDetails();
@@ -954,9 +1193,56 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 		IsDetailsLoading = true;
 		IsPreviewLoading = true;
-		await Task.WhenAll(
-			LoadDetailTabAsync( entry, token ),
-			LoadEntryPreviewAsync( entry, previewGeneration, token ) );
+		try
+		{
+			await Task.WhenAll(
+				LoadDetailTabAsync( entry, linkedDetails.Token ),
+				LoadEntryPreviewAsync( entry, previewGeneration, linkedPreview.Token ) );
+		}
+		catch( OperationCanceledException ) { }
+		catch( ObjectDisposedException ) { }
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "FileManager", $"Showing details for '{entry.Name}' failed: {ex.Message}", ex );
+		}
+	}
+
+	public async Task LoadSelectedDetailTabAsync( EntryRow? entry )
+	{
+		if( IsDisposed )
+			return;
+
+		CancellationTokenSource nextDetails = CtsHelper.Replace( ref _detailsCancellation );
+		CancellationTokenSource? linkedDetails = null;
+		try
+		{
+			linkedDetails = CancellationTokenSource.CreateLinkedTokenSource( nextDetails.Token, _pageCancellation.Token );
+		}
+		catch( ObjectDisposedException )
+		{
+			linkedDetails?.Dispose();
+			return;
+		}
+		using CancellationTokenSource detailsGuard = linkedDetails;
+
+		ClearDetails();
+		if( entry is null )
+		{
+			IsDetailsLoading = false;
+			return;
+		}
+
+		IsDetailsLoading = true;
+		try
+		{
+			await LoadDetailTabAsync( entry, linkedDetails.Token );
+		}
+		catch( OperationCanceledException ) { }
+		catch( ObjectDisposedException ) { }
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "FileManager", $"Switching detail tab for '{entry.Name}' failed: {ex.Message}", ex );
+		}
 	}
 
 	private async Task LoadDetailTabAsync( EntryRow entry, CancellationToken token )
@@ -967,6 +1253,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 				await fill( entry, token );
 		}
 		catch( OperationCanceledException ) { }
+		catch( ObjectDisposedException ) { }
 		catch( Exception e )
 		{
 			HackLogger.Warn( "FileManager", $"Loading {SelectedDetailTab} for '{entry.Name}' failed: {e.Message}", e );
@@ -982,14 +1269,21 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	{
 		try
 		{
-			byte[]? image = entry.LatestId is int versionId ? await _details.GetPreviewImageAsync( versionId ) : null;
-			token.ThrowIfCancellationRequested();
-			string? localPath = entry.LocalFile is { Exists: true } local ? local.FullName : null;
-			if( image is not { Length: > 0 } && localPath is not null )
+			var (image, localPath) = await Task.Run( async () =>
 			{
-				image = await _details.GetLocalPreviewImageAsync( localPath );
 				token.ThrowIfCancellationRequested();
-			}
+				byte[]? bytes = entry.LatestId is int versionId
+					? await _details.GetPreviewImageAsync( versionId ).ConfigureAwait( false )
+					: null;
+				token.ThrowIfCancellationRequested();
+				string? path = entry.LocalFile is { Exists: true } local ? local.FullName : null;
+				if( bytes is not { Length: > 0 } && path is not null )
+				{
+					bytes = await _details.GetLocalPreviewImageAsync( path ).ConfigureAwait( false );
+					token.ThrowIfCancellationRequested();
+				}
+				return (bytes, path);
+			}, token );
 
 			EntryPreview? preview = image is { Length: > 0 }
 				? new EntryPreview( image, null )
@@ -1003,6 +1297,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 				Preview = preview;
 		}
 		catch( OperationCanceledException ) { }
+		catch( ObjectDisposedException ) { }
 		catch( Exception e )
 		{
 			HackLogger.Warn( "FileManager", $"Loading preview for '{entry.Name}' failed: {e.Message}", e );
@@ -1018,30 +1313,57 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 	public async Task PreviewVersionAsync( int? versionId, string? localPath = null )
 	{
-		if( IsDisposed || versionId is null or 0 )
+		if( IsDisposed )
 			return;
+		CancellationTokenSource nextPreview = CtsHelper.Replace( ref _previewCancellation );
+		CancellationTokenSource? linkedPreview = null;
+		try
+		{
+			linkedPreview = CancellationTokenSource.CreateLinkedTokenSource( nextPreview.Token, _pageCancellation.Token );
+		}
+		catch( ObjectDisposedException )
+		{
+			linkedPreview?.Dispose();
+			return;
+		}
+		using CancellationTokenSource previewGuard = linkedPreview;
+		CancellationToken token = linkedPreview.Token;
 		int generation = Interlocked.Increment( ref _previewVersionGeneration );
+
 		Preview = null;
+		if( versionId is null or 0 && string.IsNullOrEmpty( localPath ) )
+		{
+			IsPreviewLoading = false;
+			return;
+		}
+
 		IsPreviewLoading = true;
 		try
 		{
-			byte[]? bytes = await _details.GetPreviewImageAsync( versionId );
-			if( IsDisposed || generation != Volatile.Read( ref _previewVersionGeneration ) )
-				return;
+			byte[]? bytes = await Task.Run( async () =>
+			{
+				token.ThrowIfCancellationRequested();
+				byte[]? result = versionId is > 0
+					? await _details.GetPreviewImageAsync( versionId ).ConfigureAwait( false )
+					: null;
+				token.ThrowIfCancellationRequested();
+				if( result is not { Length: > 0 } && !string.IsNullOrEmpty( localPath ) && File.Exists( localPath ) )
+					result = await _details.GetLocalPreviewImageAsync( localPath ).ConfigureAwait( false );
+				return result;
+			}, token );
 
-			if( bytes is not { Length: > 0 } && !string.IsNullOrEmpty( localPath ) && File.Exists( localPath ) )
-				bytes = await _details.GetLocalPreviewImageAsync( localPath );
-
-			if( !IsDisposed && generation == Volatile.Read( ref _previewVersionGeneration ) )
+			if( !IsDisposed && !token.IsCancellationRequested && generation == Volatile.Read( ref _previewVersionGeneration ) )
 				Preview = bytes is { Length: > 0 } ? new EntryPreview( bytes, null ) : null;
 		}
+		catch( OperationCanceledException ) { }
+		catch( ObjectDisposedException ) { }
 		catch( Exception e )
 		{
 			HackLogger.Warn( "FileManager", $"Loading preview for version {versionId} failed: {e.Message}", e );
 		}
 		finally
 		{
-			if( !IsDisposed && generation == Volatile.Read( ref _previewVersionGeneration ) )
+			if( !IsDisposed && !token.IsCancellationRequested && generation == Volatile.Read( ref _previewVersionGeneration ) )
 				IsPreviewLoading = false;
 		}
 	}
@@ -1052,21 +1374,59 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		if( !EntryRowKeys.TryGetGroupKey( propertyName, out var key ) )
 			return;
 		_groupKey = key;
-		_state.GroupField = propertyName;
-		OnPropertyChanged( nameof( ActiveGroupFieldName ) );
+		GroupField = propertyName;
 		if( !IsGroupingEnabled )
 			IsGroupingEnabled = true;
 		else
 			GroupingChanged?.Invoke();
 	}
 
-	public void SortEntries( string? fieldName, bool descending )
+	public async Task SortEntriesAsync( string? fieldName, bool descending )
 	{
-		if( !EntryRowKeys.TryGetSortKey( fieldName, out var key ) )
+		if( IsDisposed || !EntryRowKeys.TryGetSortKey( fieldName, out var key ) )
 			return;
-		Entries.Sort( key, descending );
-		_state.Sort = ( fieldName!, descending );
-		GroupingChanged?.Invoke();
+
+		_state.Sort = (fieldName!, descending);
+		CancellationTokenSource nextSort = CtsHelper.Replace( ref _sortCancellation );
+		CancellationTokenSource? linked = null;
+		try
+		{
+			linked = CancellationTokenSource.CreateLinkedTokenSource( nextSort.Token, _pageCancellation.Token );
+		}
+		catch( ObjectDisposedException )
+		{
+			linked?.Dispose();
+			return;
+		}
+		using CancellationTokenSource linkedGuard = linked;
+		CancellationToken token = linked.Token;
+
+		int generation = Volatile.Read( ref _entriesLoadGeneration );
+		List<EntryRow> snapshot = [ .. Entries ];
+		try
+		{
+			List<EntryRow> sorted = await Task.Run( () => SortRows( snapshot, key, descending ), token );
+			if( IsDisposed || token.IsCancellationRequested || generation != Volatile.Read( ref _entriesLoadGeneration ) )
+				return;
+
+			LiveBatchApplying?.Invoke( true );
+			try
+			{
+				Entries.ReplaceAll( sorted );
+				RowsReplaced?.Invoke( new Dictionary<EntryRow, EntryRow?>() );
+				GroupingChanged?.Invoke();
+			}
+			finally
+			{
+				LiveBatchApplying?.Invoke( false );
+			}
+		}
+		catch( OperationCanceledException ) { }
+		catch( ObjectDisposedException ) { }
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "FileManager", $"Sorting entries by '{fieldName}' failed: {ex.Message}", ex );
+		}
 	}
 
 	private async Task RunOnDirectoryAsync(
@@ -1145,7 +1505,12 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		} );
 	}
 
-	[RelayCommand] private void OpenDirectory() => _files.OpenFolder( SelectedLocalDirectory );
+	[RelayCommand]
+	private Task OpenDirectoryAsync()
+	{
+		string directory = SelectedLocalDirectory;
+		return Task.Run( () => _files.OpenFolder( directory ) );
+	}
 
 	[RelayCommand]
 	private async Task LocalDeleteDirectoryAsync()
@@ -1203,11 +1568,18 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	[RelayCommand] private Task OpenSelectedAsync() => OpenSelectedAsync( EntryOpenMode.Open );
 	[RelayCommand] private Task OpenSelectedLatestRemoteAsync() => OpenSelectedAsync( EntryOpenMode.LatestRemote );
 	[RelayCommand] private Task OpenSelectedLatestLocalAsync() => OpenSelectedAsync( EntryOpenMode.LatestLocal );
-	[RelayCommand] private void OpenSelectedFolders() => _files.OpenContainingFolders( SelectedEntries );
+
+	[RelayCommand]
+	private Task OpenSelectedFoldersAsync()
+	{
+		IReadOnlyList<EntryRow> selection = SelectedEntries;
+		return Task.Run( () => _files.OpenContainingFolders( selection ) );
+	}
 
 	private async Task OpenSelectedAsync( EntryOpenMode mode )
 	{
-		IReadOnlyList<string> errors = await _files.OpenEntriesAsync( SelectedEntries, mode );
+		IReadOnlyList<EntryRow> selection = SelectedEntries;
+		IReadOnlyList<string> errors = await Task.Run( () => _files.OpenEntriesAsync( selection, mode ), _pageCancellation.Token );
 		if( errors.Count > 0 )
 			await Dialogs.ShowMessageAsync( string.Join( Environment.NewLine, errors ) );
 	}
@@ -1288,20 +1660,23 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			return;
 
 		byte[] bytes;
-		try { bytes = await File.ReadAllBytesAsync( filePath ); }
+		try { bytes = await File.ReadAllBytesAsync( filePath, _pageCancellation.Token ); }
+		catch( OperationCanceledException ) { return; }
 		catch( Exception ex )
 		{
 			await Dialogs.ShowMessageAsync( $"Could not read the selected image: {ex.Message}", "Upload Preview Image", MessageBoxButtons.OK, MessageBoxIcon.Error );
 			return;
 		}
 
-		if( PreviewImageValidator.Validate( bytes ) is { } validationError )
+		string? validationError = await Task.Run( () => PreviewImageValidator.Validate( bytes ), _pageCancellation.Token );
+		if( validationError is not null )
 		{
 			await Dialogs.ShowMessageAsync( validationError, "Invalid Image", MessageBoxButtons.OK, MessageBoxIcon.Warning );
 			return;
 		}
 
-		var result = await _details.UploadPreviewImageAsync( versionId, bytes );
+		// EntryDetailsService.UploadPreviewImageAsync encodes Base64 synchronously before its RPC await.
+		var result = await Task.Run( () => _details.UploadPreviewImageAsync( versionId, bytes ), _pageCancellation.Token );
 		if( !result.Ok || !result.Value )
 		{
 			await Dialogs.ShowMessageAsync( result.Error ?? "Could not upload the preview image.", "Upload Preview Image", MessageBoxButtons.OK, MessageBoxIcon.Error );
@@ -1314,27 +1689,29 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 	private async Task WithHistoryVersionAsync( Func<HpVersion, Task> act )
 	{
-		if( await _files.GetVersionAsync( SelectedHistory?.Version ?? 0 ) is { } version )
+		int versionId = SelectedHistory?.Version ?? 0;
+		if( await Task.Run( () => _files.GetVersionAsync( versionId ), _pageCancellation.Token ) is { } version )
 			await act( version );
 	}
 
 	[RelayCommand]
 	private Task DownloadHistoryAsync() => WithHistoryVersionAsync( async version =>
 	{
-		if( !_files.HasConflictingLocalCopy( version ) )
+		bool hasConflict = await Task.Run( () => _files.HasConflictingLocalCopy( version ), _pageCancellation.Token );
+		if( !hasConflict )
 		{
-			await _files.DownloadVersionAsync( version, toTemp: false );
+			await Task.Run( () => _files.DownloadVersionAsync( version, toTemp: false ), _pageCancellation.Token );
 			return;
 		}
 		DialogResult answer = await Dialogs.ShowMessageAsync(
 			"File exists as a different version.\nRetry:\tDownload to Temporary Folder\nIgnore:\tOverwrite current version\nAbort:\tCancel",
 			"File Version Conflict", MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Warning );
 		if( answer is DialogResult.Retry or DialogResult.Ignore )
-			await _files.DownloadVersionAsync( version, toTemp: answer is DialogResult.Retry );
+			await Task.Run( () => _files.DownloadVersionAsync( version, toTemp: answer is DialogResult.Retry ), _pageCancellation.Token );
 	} );
 
-	[RelayCommand] private Task DownloadHistoryToTempAsync() => WithHistoryVersionAsync( v => _files.DownloadVersionAsync( v, toTemp: true ) );
-	[RelayCommand] private Task DownloadHistoryOverwriteAsync() => WithHistoryVersionAsync( v => _files.DownloadVersionAsync( v, toTemp: false ) );
+	[RelayCommand] private Task DownloadHistoryToTempAsync() => WithHistoryVersionAsync( v => Task.Run( () => _files.DownloadVersionAsync( v, toTemp: true ), _pageCancellation.Token ) );
+	[RelayCommand] private Task DownloadHistoryOverwriteAsync() => WithHistoryVersionAsync( v => Task.Run( () => _files.DownloadVersionAsync( v, toTemp: false ), _pageCancellation.Token ) );
 	[RelayCommand] private Task OpenHistoryFromTempAsync() => WithHistoryVersionAsync( v => OpenHistoryAsync( v, toTemp: true ) );
 	[RelayCommand] private Task OpenHistoryOverwriteAsync() => WithHistoryVersionAsync( v => OpenHistoryAsync( v, toTemp: false ) );
 	[RelayCommand] private Task MoveHistoryToTempAsync() => WithHistoryVersionAsync( v => MoveHistoryAsync( v, toTemp: true ) );
@@ -1342,25 +1719,31 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 	private async Task OpenHistoryAsync( HpVersion version, bool toTemp )
 	{
-		string folder = await _files.DownloadVersionAsync( version, toTemp );
-		_files.OpenFile( Path.Combine( folder, version.name ?? "" ) );
+		string folder = await Task.Run( () => _files.DownloadVersionAsync( version, toTemp ), _pageCancellation.Token );
+		string filePath = Path.Combine( folder, version.name ?? "" );
+		await Task.Run( () => _files.OpenFile( filePath ), _pageCancellation.Token );
 	}
 
 	private async Task MoveHistoryAsync( HpVersion version, bool toTemp )
 	{
-		VersionMovePlan plan = _files.PlanMove( version, toTemp );
+		var (plan, fromExists, toExists) = await Task.Run( () =>
+		{
+			VersionMovePlan movePlan = _files.PlanMove( version, toTemp );
+			return (movePlan, movePlan.From.Exists, movePlan.To.Exists);
+		}, _pageCancellation.Token );
+
 		string target = toTemp ? "temporary" : "current";
-		string prefix = plan.From.Exists ? "" : $"File doesn't exist in {plan.From.DirectoryName}.\n";
-		string verb = plan.From.Exists ? "move" : "download";
-		string message = plan.To.Exists
+		string prefix = fromExists ? "" : $"File doesn't exist in {plan.From.DirectoryName}.\n";
+		string verb = fromExists ? "move" : "download";
+		string message = toExists
 			? $"{prefix}Would you like to {verb} this version to {target} and overwrite that version?"
 			: $"{prefix}Would you like to {verb} this version to {target}?";
-		string caption = ( plan.From.Exists ? "Move" : "Download" ) + ( plan.To.Exists ? " & Overwrite" : "" );
+		string caption = ( fromExists ? "Move" : "Download" ) + ( toExists ? " & Overwrite" : "" );
 
-		if( !await Dialogs.ConfirmAsync( message, caption, plan.To.Exists ? MessageBoxIcon.Warning : MessageBoxIcon.Question ) )
+		if( !await Dialogs.ConfirmAsync( message, caption, toExists ? MessageBoxIcon.Warning : MessageBoxIcon.Question ) )
 			return;
 		using( _localFiles.Suspend() )
-			await _files.ExecuteMoveAsync( version, plan );
+			await Task.Run( () => _files.ExecuteMoveAsync( version, plan ), _pageCancellation.Token );
 		if( !IsDisposed )
 			Refresh( FileManagerRefresh.Entries );
 	}
