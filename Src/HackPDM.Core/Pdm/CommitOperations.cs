@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
+using HackPDM.Core.Services;
 using HackPDM.Core.SolidWorks;
 using HackPDM.Core.SolidWorks.Format;
 
@@ -51,7 +52,8 @@ public static class CommitOperations
 	internal static async Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting, HpEntry[] UnchangedCheckedOut, Dictionary<string, HpEntry> RemoteByServerName)> SegmentCommitFilesAsync(
 		IEnumerable<HackFile> hackFiles,
 		Action<StatusMessage, string>? log = null,
-		CancellationToken token = default )
+		CancellationToken token = default,
+		OperationPauseController? pause = null )
 	{
 		List<(HackFile Hack, string FilePath, string ServerName)> allowed = [];
 		OdooDefaults defaults = OdooDefaults.Instance;
@@ -88,6 +90,9 @@ public static class CommitOperations
 
 		async Task FetchEntryChunkAsync( int chunkIndex, CancellationToken ct )
 		{
+			if( pause is not null )
+				await pause.WaitIfPausedAsync( ct ).ConfigureAwait( false );
+			using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 			int offset = chunkIndex * LookupChunkSize;
 			string[] chunk = OdooRpc.SliceChunk( distinctServerNames, offset, LookupChunkSize );
 			OdooDomain filter = OdooDomain.Where( nameof( HpEntry.windows_complete_name ), Operators.ILikeEqual, EscapeLikeLiteral( chunk[ 0 ] ) );
@@ -151,6 +156,9 @@ public static class CommitOperations
 
 				async Task FetchVersionChunkAsync( int chunkIndex, CancellationToken ct )
 				{
+					if( pause is not null )
+						await pause.WaitIfPausedAsync( ct ).ConfigureAwait( false );
+					using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 					int offset = chunkIndex * VersionChunkSize;
 					int[] chunk = OdooRpc.SliceChunk( allVids, offset, VersionChunkSize );
 					Result<HpVersion[]> versionsResult = await Repository<HpVersion>.ReadAsync(
@@ -244,10 +252,11 @@ public static class CommitOperations
 		Action<long>? onBytesUploaded = null,
 		Dictionary<string, HpDirectory>? directoryCache = null,
 		IReadOnlyDictionary<string, HpEntry>? remoteEntryCache = null,
-		CancellationToken token = default )
+		CancellationToken token = default,
+		OperationPauseController? pause = null )
 		=> CommitRecordInternalAsync(
 			hack, commit, inOdoo, log, onRecordStaged, onBytesUploaded,
-			directoryCache, remoteEntryCache, clearOnFailure: true, token );
+			directoryCache, remoteEntryCache, clearOnFailure: true, token, pause );
 
 	internal static async Task<bool> CommitRecordInternalAsync(
 		HackFile? hack,
@@ -259,7 +268,8 @@ public static class CommitOperations
 		Dictionary<string, HpDirectory>? directoryCache,
 		IReadOnlyDictionary<string, HpEntry>? remoteEntryCache,
 		bool clearOnFailure,
-		CancellationToken token )
+		CancellationToken token,
+		OperationPauseController? pause = null )
 	{
 		if( hack is null )
 			return false;
@@ -270,6 +280,9 @@ public static class CommitOperations
 				await commit.ServerClear().ConfigureAwait( false );
 			return false;
 		}
+
+		if( pause is not null )
+			await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
 
 		// Extract preview, references, and properties up front so SwStreamStore (full file byte[]) can be GC'd before upload RPCs.
 		ReadSwCommitMetadata(
@@ -285,30 +298,37 @@ public static class CommitOperations
 			token.ThrowIfCancellationRequested();
 
 			HpEntry? entry;
-			if( inOdoo )
+			HpRecordStaged? entryStaged = null;
+			using( OperationPauseController.EnterScope( pause ) )
 			{
-				string serverName = ServerWindowsName( hack );
-				if( remoteEntryCache is not null && remoteEntryCache.TryGetValue( serverName, out HpEntry? cached ) && cached.id is not null and not 0 )
+				if( inOdoo )
 				{
-					cached.returnType = EntryReturnType.GotExisting;
-					cached.commit_id = new Many2One { id = commit.id };
-					cached.LocalFile = hack;
-					entry = cached;
+					string serverName = ServerWindowsName( hack );
+					if( remoteEntryCache is not null && remoteEntryCache.TryGetValue( serverName, out HpEntry? cached ) && cached.id is not null and not 0 )
+					{
+						cached.returnType = EntryReturnType.GotExisting;
+						cached.commit_id = new Many2One { id = commit.id };
+						cached.LocalFile = hack;
+						entry = cached;
+					}
+					else
+					{
+						HpDirectory? dir = await ResolveDirectoryCachedAsync( hack, directoryCache, token ).ConfigureAwait( false );
+						HpEntry probe = CommitStaging.NewEntry( hack, dir?.id ?? 0, commit ) ?? new();
+						entry = await CommitStaging.FindRemoteEntryAsync( probe, token ).ConfigureAwait( false );
+					}
+					if( entry is null )
+						throw new InvalidOperationException( $"Could not find existing remote entry for {hack.Name}; aborting commit to prevent duplicate records." );
 				}
 				else
 				{
 					HpDirectory? dir = await ResolveDirectoryCachedAsync( hack, directoryCache, token ).ConfigureAwait( false );
-					HpEntry probe = CommitStaging.NewEntry( hack, dir?.id ?? 0, commit ) ?? new();
-					entry = await CommitStaging.FindRemoteEntryAsync( probe, token ).ConfigureAwait( false );
+					entry = CommitStaging.NewEntry( hack, dir?.id ?? 0, commit )
+						?? throw new InvalidOperationException( $"Could not create entry metadata for {hack.Name} (restricted file type)." );
 				}
-				if( entry is null )
-					throw new InvalidOperationException( $"Could not find existing remote entry for {hack.Name}; aborting commit to prevent duplicate records." );
-			}
-			else
-			{
-				HpDirectory? dir = await ResolveDirectoryCachedAsync( hack, directoryCache, token ).ConfigureAwait( false );
-				entry = CommitStaging.NewEntry( hack, dir?.id ?? 0, commit )
-					?? throw new InvalidOperationException( $"Could not create entry metadata for {hack.Name} (restricted file type)." );
+
+				if( entry.returnType is EntryReturnType.Staged )
+					entryStaged = await CommitStaging.StageEntryAsync( entry, token ).ConfigureAwait( false );
 			}
 
 			HpRecordStaged? versionStaged = null;
@@ -318,16 +338,13 @@ public static class CommitOperations
 			{
 				versionStaged = await CommitStaging.StageVersionAsync(
 					hack, entry, commit.id ?? 0, e => stageError = e, onBytesUploaded,
-					hasPreReadPreview ? preReadPreview : null, hasPreReadPreview, token ).ConfigureAwait( false );
+					hasPreReadPreview ? preReadPreview : null, hasPreReadPreview, token, pause ).ConfigureAwait( false );
 			}
-			else if( entry.returnType is EntryReturnType.Staged )
+			else if( entry.returnType is EntryReturnType.Staged && entryStaged is not null )
 			{
-				HpRecordStaged? entryStaged = await CommitStaging.StageEntryAsync( entry, token ).ConfigureAwait( false );
-				versionStaged = entryStaged is null
-					? null
-					: await CommitStaging.StageVersionAsync(
-						hack, entryStaged, e => stageError = e, onBytesUploaded,
-						hasPreReadPreview ? preReadPreview : null, hasPreReadPreview, token ).ConfigureAwait( false );
+				versionStaged = await CommitStaging.StageVersionAsync(
+					hack, entryStaged, e => stageError = e, onBytesUploaded,
+					hasPreReadPreview ? preReadPreview : null, hasPreReadPreview, token, pause ).ConfigureAwait( false );
 			}
 			preReadPreview = null;
 			if( entry.returnType is EntryReturnType.Failed )
@@ -354,14 +371,20 @@ public static class CommitOperations
 				return true;
 			}
 
-			if( !await CommitStaging.StageRelationshipsAsync( versionStaged, dependencies, token ).ConfigureAwait( false ) )
-				throw new ArgumentException( $"Failed to stage version relationships for {versionStaged.payload?.GetValueOrDefault( nameof( HpVersion.name ) )}" );
+			if( pause is not null )
+				await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
 
-			bool propsOk = preReadProperties is not null
-				? await CommitStaging.StagePropertiesAsync( versionStaged, preReadProperties, token ).ConfigureAwait( false )
-				: await CommitStaging.StagePropertiesAsync( versionStaged, preOpenedStore: null, token ).ConfigureAwait( false );
-			if( !propsOk )
-				throw new ArgumentException( $"Failed to stage version properties for {versionStaged.payload?.GetValueOrDefault( nameof( HpVersion.name ) )}" );
+			using( OperationPauseController.EnterScope( pause ) )
+			{
+				if( !await CommitStaging.StageRelationshipsAsync( versionStaged, dependencies, token ).ConfigureAwait( false ) )
+					throw new ArgumentException( $"Failed to stage version relationships for {versionStaged.payload?.GetValueOrDefault( nameof( HpVersion.name ) )}" );
+
+				bool propsOk = preReadProperties is not null
+					? await CommitStaging.StagePropertiesAsync( versionStaged, preReadProperties, token ).ConfigureAwait( false )
+					: await CommitStaging.StagePropertiesAsync( versionStaged, preOpenedStore: null, token ).ConfigureAwait( false );
+				if( !propsOk )
+					throw new ArgumentException( $"Failed to stage version properties for {versionStaged.payload?.GetValueOrDefault( nameof( HpVersion.name ) )}" );
+			}
 
 			onRecordStaged?.Invoke();
 		}
@@ -432,7 +455,8 @@ public static class CommitOperations
 	internal static async Task PreResolveDirectoriesAsync(
 		IEnumerable<HackFile> files,
 		Dictionary<string, HpDirectory> directoryCache,
-		CancellationToken token )
+		CancellationToken token,
+		OperationPauseController? pause = null )
 	{
 		List<(string Key, HackFile Representative)> missing = [];
 		HashSet<string> seen = new( StringComparer.OrdinalIgnoreCase );
@@ -454,7 +478,10 @@ public static class CommitOperations
 
 		for( int i = 0; i < missing.Count; i++ )
 		{
+			if( pause is not null )
+				await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
 			token.ThrowIfCancellationRequested();
+			using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 			await ResolveDirectoryCachedAsync( missing[ i ].Representative, directoryCache, token ).ConfigureAwait( false );
 		}
 	}
@@ -532,8 +559,9 @@ public static class CommitOperations
 	internal static Task<(HackFile[] LocalOnly, HackFile[] RemoteExisting, HpEntry[] UnchangedCheckedOut, Dictionary<string, HpEntry> RemoteByServerName)> FilterAndSegmentCommitFilesAsync(
 		IEnumerable<HackFile> hackFiles,
 		Action<StatusMessage, string>? log = null,
-		CancellationToken token = default )
-		=> SegmentCommitFilesAsync( FilterByName( hackFiles ), log, token );
+		CancellationToken token = default,
+		OperationPauseController? pause = null )
+		=> SegmentCommitFilesAsync( FilterByName( hackFiles ), log, token, pause );
 
 	private static List<HackFile> FilterByName( IEnumerable<HackFile> hackFiles )
 	{

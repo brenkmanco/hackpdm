@@ -4,6 +4,7 @@ using System.Text.Json;
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
+using HackPDM.Core.Services;
 
 namespace HackPDM.Core.Pdm;
 
@@ -99,7 +100,14 @@ public static class VersionFileService
 		return wrote;
 	}
 
-	public static Task<List<HpVersion>> DownloadAllAsync( this IEnumerable<HpVersion> versions, CancellationToken token = default )
+	public static Task<List<HpVersion>> DownloadAllAsync(
+		this IEnumerable<HpVersion> versions,
+		CancellationToken token = default,
+		OperationPauseController? pause = null,
+		Action<int, long>? onVersionCompleted = null,
+		Action<int, int>? onProgress = null,
+		Action<long>? onBytesDownloaded = null,
+		Action<StatusMessage, string>? log = null )
 	{
 		HpVersion[] versionList = versions as HpVersion[] ?? [ .. versions ];
 		if( versionList.Length == 0 )
@@ -124,6 +132,7 @@ public static class VersionFileService
 					if( localPath is null )
 					{
 						failed.Add( version );
+						onProgress?.Invoke( 1, 0 );
 						return;
 					}
 
@@ -132,10 +141,16 @@ public static class VersionFileService
 						string? expectedChecksum = DownloadOperations.ExpectedChecksum( version );
 						string? localChecksum = Checksums.OfFile( localPath );
 						if( expectedChecksum is { Length: > 0 } && string.Equals( localChecksum, expectedChecksum, StringComparison.OrdinalIgnoreCase ) )
+						{
+							if( version.id is int id and > 0 )
+								onVersionCompleted?.Invoke( id, 0 );
+							onProgress?.Invoke( 0, 1 );
 							return;
+						}
 						if( localChecksum is null )
 						{
 							failed.Add( version );
+							onProgress?.Invoke( 1, 0 );
 							return;
 						}
 						conflictsToVerify.Add( ( version, localPath, localChecksum ) );
@@ -148,20 +163,26 @@ public static class VersionFileService
 
 			if( !conflictsToVerify.IsEmpty )
 			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
 				var conflictList = conflictsToVerify.ToList();
 				HashSet<string> known;
 				try
 				{
+					using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 					known = await DownloadOperations.FetchVaultChecksumsForPathsAsync(
 						conflictList.Select( static c => ( c.Version, c.LocalChecksum, c.Version.windows_complete_name ?? PwaPaths.ToServerName( c.LocalPath ) ) ).ToList(),
 						token,
-						log: null ).ConfigureAwait( false );
+						log ).ConfigureAwait( false );
 				}
 				catch( Exception ex ) when( ex is not OperationCanceledException )
 				{
 					HackLogger.Warn( nameof( VersionFileService ), $"Could not verify local file modifications before version download: {ex.Message}", ex );
 					foreach( var c in conflictList )
+					{
 						failed.Add( c.Version );
+						onProgress?.Invoke( 1, 0 );
+					}
 					known = [];
 					conflictList.Clear();
 				}
@@ -173,7 +194,9 @@ public static class VersionFileService
 					if( serverPath is null || !known.Contains( key ) )
 					{
 						HackLogger.Warn( nameof( VersionFileService ), $"Kept local changes to '{localPath}' instead of overwriting with historical version {version.id}." );
+						log?.Invoke( StatusMessage.WARNING, $"Kept local changes to {localPath} instead of overwriting with version {version.id}." );
 						failed.Add( version );
+						onProgress?.Invoke( 0, 1 );
 						continue;
 					}
 					ready.Add( version );
@@ -201,7 +224,12 @@ public static class VersionFileService
 						token,
 						summary,
 						maxBatchCount: Math.Clamp( OdooDefaults.Instance?.DownloadBatchSize ?? OdooLookupCache.DefaultBatchSize, 1, AdaptiveTransferController.MaxAdaptiveBatchCount ),
-						maxConcurrency: concurrency ).ConfigureAwait( false );
+						maxConcurrency: concurrency,
+						log: log,
+						onProgress: onProgress,
+						onBytesDownloaded: onBytesDownloaded,
+						pause: pause,
+						onVersionCompleted: onVersionCompleted ).ConfigureAwait( false );
 					if( !summary.FailedIds.IsEmpty )
 					{
 						HashSet<int> failedIdSet = [ .. summary.FailedIds ];
@@ -220,8 +248,16 @@ public static class VersionFileService
 						new ParallelOptions { MaxDegreeOfParallelism = concurrency, CancellationToken = token },
 						async ( version, ct ) =>
 						{
-							if( !await version.DownloadFileAsync( ct ).ConfigureAwait( false ) )
+							if( pause is not null )
+								await pause.WaitIfPausedAsync( ct ).ConfigureAwait( false );
+							bool ok;
+							using( OperationPauseController.EnterScope( pause ) )
+								ok = await version.DownloadFileAsync( ct ).ConfigureAwait( false );
+							if( !ok )
 								failed.Add( version );
+							else if( version.id is int id and > 0 )
+								onVersionCompleted?.Invoke( id, version.file_size ?? 0 );
+							onProgress?.Invoke( 1, 0 );
 						} ).ConfigureAwait( false );
 				}
 			}

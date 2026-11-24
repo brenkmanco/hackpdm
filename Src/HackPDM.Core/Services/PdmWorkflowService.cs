@@ -14,6 +14,8 @@ public sealed record VersionDownloadPlan( HpVersion Version, bool IsLatest, IRea
 /// <summary>Orchestrates core PDM workflows (get latest, checkout, commit, delete, restore, historical versions).</summary>
 public interface IPdmWorkflowService
 {
+	event Action? ResumableDownloadChanged;
+	bool HasActiveCommit { get; }
 	Task<IReadOnlyList<int>> GetDirectoryEntryIdsAsync( int directoryId, bool withSubdirectories, bool withDeleted = false );
 	Task GetLatestAsync( IReadOnlyList<int> entryIds );
 	Task CheckoutAsync( IReadOnlyList<int> entryIds );
@@ -28,11 +30,17 @@ public interface IPdmWorkflowService
 	Task<bool> PermanentDeleteAsync( IReadOnlyList<int> entryIds );
 	Task<VersionDownloadPlan?> PlanVersionDownloadAsync( int versionId );
 	Task<IReadOnlyList<int>> DownloadVersionsAsync( IReadOnlyList<int> versionIds );
+	DownloadResumeState? GetResumableDownload();
+	Task<bool> ResumeDownloadAsync();
+	void ClearResumableDownload();
+	bool PrepareForShutdown();
+	Task WaitActiveCommitCleanupAsync( TimeSpan timeout );
 }
 
-public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileWatcher? localFiles = null ) : IPdmWorkflowService
+public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileWatcher? localFiles = null, DownloadResumeStore? resumeStore = null ) : IPdmWorkflowService
 {
 	private const int RpcIdChunkSize = 10_000;
+	private const int VersionReadChunkSize = 2000;
 	private static readonly ConcurrentDictionary<string, byte> NoDirectDependencyServerUrls = new( StringComparer.OrdinalIgnoreCase );
 	private static readonly string[] LatestVersionIdFields = [ nameof( HpEntry.latest_version_id ) ];
 	private static readonly string[] HeavyEntryFields = [ nameof( HpEntry.type_id ), nameof( HpEntry.cat_id ) ];
@@ -45,6 +53,17 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		nameof( HpVersion.file_size ),
 		nameof( HpVersion.windows_complete_name ),
 	];
+
+	private readonly DownloadResumeStore _resumeStore = resumeStore ?? DownloadResumeStore.Default;
+	private readonly Lock _stateGate = new();
+	private DownloadCheckpointTracker? _activeDownloadCheckpoint;
+	private bool _shutdownPreservingDownload;
+	private int _activeCommitCount;
+	private Task? _activeCommitTask;
+
+	public event Action? ResumableDownloadChanged;
+
+	public bool HasActiveCommit => Volatile.Read( ref _activeCommitCount ) > 0;
 
 	private void Log( StatusMessage status, string message ) => reporter.Log( status, message );
 
@@ -66,7 +85,10 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 				|| error.Contains( "does not exist", StringComparison.OrdinalIgnoreCase )
 				|| error.Contains( "not found", StringComparison.OrdinalIgnoreCase ) );
 
-	private async Task<IReadOnlyList<int>> ExpandWithDependenciesAsync( IReadOnlyList<int> entryIds, CancellationToken token = default )
+	private async Task<IReadOnlyList<int>> ExpandWithDependenciesAsync(
+		IReadOnlyList<int> entryIds,
+		CancellationToken token = default,
+		OperationPauseController? pause = null )
 	{
 		HashSet<int> allIds = [ .. entryIds ];
 		string serverKey = OdooDefaults.Instance?.OdooUrl ?? "";
@@ -77,9 +99,13 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 
 		if( useDirectEntryRpc && totalChunks > 0 )
 		{
+			if( pause is not null )
+				await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
 			token.ThrowIfCancellationRequested();
 			IReadOnlyList<int> firstChunk = totalChunks == 1 ? entryIds : OdooRpc.SliceChunk( entryIds, 0, RpcIdChunkSize );
-			Result<IReadOnlyList<int>> firstDirect = await DownloadOperations.GetAllEntriesAndDependenciesByEntriesAsync( firstChunk, token ).ConfigureAwait( false );
+			Result<IReadOnlyList<int>> firstDirect;
+			using( OperationPauseController.EnterScope( pause ) )
+				firstDirect = await DownloadOperations.GetAllEntriesAndDependenciesByEntriesAsync( firstChunk, token ).ConfigureAwait( false );
 			if( firstDirect.Ok )
 			{
 				if( firstDirect.Value is { Count: > 0 } depIds )
@@ -93,6 +119,9 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 						new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = token },
 						async ( chunkIndex, ct ) =>
 						{
+							if( pause is not null )
+								await pause.WaitIfPausedAsync( ct ).ConfigureAwait( false );
+							using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 							IReadOnlyList<int> chunk = OdooRpc.SliceChunk( entryIds, chunkIndex * RpcIdChunkSize, RpcIdChunkSize );
 							Result<IReadOnlyList<int>> direct = await DownloadOperations.GetAllEntriesAndDependenciesByEntriesAsync( chunk, ct ).ConfigureAwait( false );
 							if( direct.Ok )
@@ -124,6 +153,9 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 			new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = token },
 			async ( chunkIndex, ct ) =>
 			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( ct ).ConfigureAwait( false );
+				using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 				int offset = chunkIndex * RpcIdChunkSize;
 				IReadOnlyList<int> chunk = fallbackChunkCount == 1
 					? fallbackEntryIds
@@ -169,6 +201,9 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 				new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = token },
 				async ( chunkIndex, ct ) =>
 				{
+					if( pause is not null )
+						await pause.WaitIfPausedAsync( ct ).ConfigureAwait( false );
+					using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 					int offset = chunkIndex * RpcIdChunkSize;
 					IReadOnlyList<int> chunk = verChunkCount == 1
 						? versionIds
@@ -190,58 +225,216 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		return [ .. allIds ];
 	}
 
-	public Task GetLatestAsync( IReadOnlyList<int> entryIds )
-		=> GetLatestCoreAsync( entryIds, preExpandedIds: null );
+	private static string CurrentAccountKey()
+	{
+		OdooDefaults? odoo = OdooDefaults.Instance;
+		HackDefaults? hack = HackDefaults.Instance;
+		return DownloadResumeStore.BuildAccountKey( odoo?.OdooUrl, odoo?.OdooDb, odoo?.OdooUser, hack?.PwaPathAbsolute );
+	}
 
-	private async Task<IReadOnlyList<int>?> GetLatestCoreAsync( IReadOnlyList<int> entryIds, IReadOnlyList<int>? preExpandedIds )
+	public static DownloadResumeState? GetStoredResumableDownload( DownloadResumeStore? store = null )
+	{
+		if( !( HackDefaults.Instance?.PersistDownloadResume ?? true ) )
+			return null;
+		return ( store ?? DownloadResumeStore.Default ).LoadForAccount( CurrentAccountKey() );
+	}
+
+	public DownloadResumeState? GetResumableDownload()
+		=> GetStoredResumableDownload( _resumeStore );
+
+	public void ClearResumableDownload()
+	{
+		DownloadCheckpointTracker? active;
+		lock( _stateGate )
+			active = _activeDownloadCheckpoint;
+		active?.Clear();
+		_resumeStore.Clear();
+		ResumableDownloadChanged?.Invoke();
+	}
+
+	public bool PrepareForShutdown()
+	{
+		bool persist = HackDefaults.Instance?.PersistDownloadResume ?? true;
+		DownloadCheckpointTracker? active;
+		lock( _stateGate )
+		{
+			active = _activeDownloadCheckpoint;
+			if( active is not null && persist )
+				_shutdownPreservingDownload = true;
+		}
+		if( active is not null )
+		{
+			if( persist )
+				active.FlushSync();
+			else
+				active.Clear();
+		}
+		return HasActiveCommit;
+	}
+
+	public async Task WaitActiveCommitCleanupAsync( TimeSpan timeout )
+	{
+		Task? task;
+		lock( _stateGate )
+			task = _activeCommitTask;
+		if( task is null || task.IsCompleted )
+			return;
+		try
+		{
+			await task.WaitAsync( timeout ).ConfigureAwait( false );
+		}
+		catch
+		{
+		}
+	}
+
+	public Task GetLatestAsync( IReadOnlyList<int> entryIds )
+		=> GetLatestCoreAsync( entryIds, preExpandedIds: null, DownloadResumeKind.GetLatest, checkoutEntryIds: null );
+
+	private async Task<IReadOnlyList<int>?> GetLatestCoreAsync(
+		IReadOnlyList<int> entryIds,
+		IReadOnlyList<int>? preExpandedIds,
+		string resumeKind,
+		IReadOnlyList<int>? checkoutEntryIds )
 	{
 		if( entryIds is null or { Count: < 1 } )
 			return null;
 
-		CancellationTokenSource cancellation = reporter.BeginOperation();
+		CancellationTokenSource cancellation = reporter.BeginOperation( canPause: true );
+		OperationPauseController? pause = reporter.PauseController;
 		using IDisposable? watcherPause = localFiles?.Suspend();
+		bool persistEnabled = HackDefaults.Instance?.PersistDownloadResume ?? true;
+		DownloadCheckpointTracker? checkpoint = persistEnabled
+			? new DownloadCheckpointTracker(
+				_resumeStore,
+				enabled: true,
+				accountKey: CurrentAccountKey(),
+				vaultPath: HackDefaults.Instance?.PwaPathAbsolute ?? string.Empty,
+				operationKind: resumeKind,
+				label: resumeKind == DownloadResumeKind.CheckoutLatest ? "Checkout & Get Latest" : "Get Latest",
+				pendingEntryIds: entryIds,
+				checkoutEntryIds: checkoutEntryIds )
+			: null;
+		checkpoint?.InitializePendingEntries( flushNow: true );
+
+		Action<OperationPauseState>? pauseHandler = BeginDownloadSession( pause, checkpoint, persistEnabled );
+
 		try
 		{
 			IReadOnlyList<int>? ids = preExpandedIds;
 			bool downloadSucceeded = false;
 			bool completed = await AsyncHelper.AsyncRunner( async () =>
 			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( cancellation.Token ).ConfigureAwait( false );
 				if( ids is null )
 				{
 					Log( StatusMessage.INFO, $"Finding Entry Dependencies for {entryIds.Count} entries..." );
-					ids = await ExpandWithDependenciesAsync( entryIds, cancellation.Token ).ConfigureAwait( false );
+					ids = await ExpandWithDependenciesAsync( entryIds, cancellation.Token, pause ).ConfigureAwait( false );
 				}
-				downloadSucceeded = await DownloadLatestAsync( ids, cancellation.Token ).ConfigureAwait( false );
+				downloadSucceeded = await DownloadLatestAsync( ids, cancellation.Token, pause, checkpoint ).ConfigureAwait( false );
 			}, "Get Latest", cancellation ).ConfigureAwait( false );
 			if( !completed )
 			{
-				await reporter.NotifyAsync( "Cancelled Download" ).ConfigureAwait( false );
+				await HandleDownloadCancellationAsync( checkpoint ).ConfigureAwait( false );
 				return null;
 			}
 			return downloadSucceeded ? ids : null;
 		}
 		catch( OperationCanceledException )
 		{
-			await reporter.NotifyAsync( "Cancelled Download" ).ConfigureAwait( false );
+			await HandleDownloadCancellationAsync( checkpoint ).ConfigureAwait( false );
 			return null;
 		}
 		finally
 		{
-			reporter.Complete();
+			EndDownloadSession( pause, pauseHandler, checkpoint );
 		}
 	}
 
-	private async Task<bool> DownloadLatestAsync( IReadOnlyList<int> entryIds, CancellationToken token )
+	private Action<OperationPauseState>? BeginDownloadSession(
+		OperationPauseController? pause,
+		DownloadCheckpointTracker? checkpoint,
+		bool persistEnabled )
 	{
+		Action<OperationPauseState>? handler = null;
+		if( pause is not null )
+		{
+			handler = state =>
+			{
+				if( state == OperationPauseState.Paused )
+				{
+					checkpoint?.FlushSync();
+					Log( StatusMessage.INFO, persistEnabled
+						? "Download paused at a safe stopping point. Click Resume to continue (or close the app to resume later)."
+						: "Download paused at a safe stopping point. Click Resume to continue." );
+				}
+				else if( state == OperationPauseState.Running )
+				{
+					Log( StatusMessage.INFO, "Resuming download..." );
+				}
+			};
+			pause.StateChanged += handler;
+		}
+
+		lock( _stateGate )
+		{
+			_shutdownPreservingDownload = false;
+			_activeDownloadCheckpoint = checkpoint;
+		}
+		return handler;
+	}
+
+	private Task HandleDownloadCancellationAsync( DownloadCheckpointTracker? checkpoint )
+	{
+		bool preserve;
+		lock( _stateGate )
+			preserve = _shutdownPreservingDownload;
+		if( preserve && checkpoint is { Enabled: true } && checkpoint.HasWork() )
+		{
+			checkpoint.FlushSync();
+			return Task.CompletedTask;
+		}
+		checkpoint?.Clear();
+		return reporter.NotifyAsync( "Cancelled Download" );
+	}
+
+	private void EndDownloadSession(
+		OperationPauseController? pause,
+		Action<OperationPauseState>? handler,
+		DownloadCheckpointTracker? checkpoint )
+	{
+		if( pause is not null && handler is not null )
+			pause.StateChanged -= handler;
+		lock( _stateGate )
+		{
+			if( ReferenceEquals( _activeDownloadCheckpoint, checkpoint ) )
+				_activeDownloadCheckpoint = null;
+			_shutdownPreservingDownload = false;
+		}
+		reporter.Complete();
+		ResumableDownloadChanged?.Invoke();
+	}
+
+	private async Task<bool> DownloadLatestAsync(
+		IReadOnlyList<int> entryIds,
+		CancellationToken token,
+		OperationPauseController? pause = null,
+		DownloadCheckpointTracker? checkpoint = null )
+	{
+		if( pause is not null )
+			await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
+
 		Log( StatusMessage.FOUND, $"{entryIds.Count} entries" );
 		Log( StatusMessage.PROCESSING, "Retrieving all latest versions associated with entries..." );
 
 		HpVersion[]? versions = await DownloadOperations.GetLatestVersionsAsync(
-			entryIds, excludedFields: null, token: token, includedFields: LatestVersionIncludedFields, log: Log ).ConfigureAwait( false );
+			entryIds, excludedFields: null, token: token, includedFields: LatestVersionIncludedFields, log: Log, pause: pause ).ConfigureAwait( false );
 		reporter.SetTotal( versions?.Length ?? 0 );
 
 		if( versions is not { Length: > 0 } )
 		{
+			checkpoint?.Clear();
 			reporter.Complete();
 			await reporter.NotifyAsync( "Cancelled Download... No Versions to Process" ).ConfigureAwait( false );
 			return false;
@@ -252,6 +445,9 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		DownloadOperations.DownloadSummary summary = new();
 		try
 		{
+			if( pause is not null )
+				await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
+
 			List<HpVersion> toDownload = await DownloadOperations.FilterVersionsToDownloadAsync(
 				versions,
 				token,
@@ -261,6 +457,11 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 
 			if( toDownload.Count > 0 )
 			{
+				checkpoint?.SetResolvedVersions( toDownload, versions.Length, summary.Skipped );
+
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
+
 				long totalBytes = 0;
 				for( int i = 0; i < toDownload.Count; i++ )
 					totalBytes += Math.Max( 0, (long)( toDownload[ i ].file_size ?? 0 ) );
@@ -287,7 +488,9 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 						log: Log,
 						onProgress: ( processed, skipped ) => reporter.Advance( processed, skipped ),
 						onBytesDownloaded: bytes => reporter.AddDownloadedBytes( bytes ),
-						controller: controller ).ConfigureAwait( false );
+						controller: controller,
+						pause: pause,
+						onVersionCompleted: ( vid, bytes ) => checkpoint?.MarkVersionCompleted( vid, bytes ) ).ConfigureAwait( false );
 				}
 				finally
 				{
@@ -301,6 +504,16 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 			await reporter.NotifyAsync( $"Download failed: {e.Message}", "Get Latest" ).ConfigureAwait( false );
 			return false;
 		}
+
+		if( summary.Failed.IsEmpty )
+			checkpoint?.Clear();
+		else if( checkpoint is { Enabled: true } && !summary.FailedIds.IsEmpty )
+		{
+			checkpoint.SaveFailedOnly( summary.FailedIds );
+			Log( StatusMessage.INFO, $"{summary.FailedIds.Count} unfinished file(s) saved for resume." );
+		}
+		else
+			checkpoint?.Clear();
 
 		reporter.Complete();
 
@@ -323,12 +536,231 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		return false;
 	}
 
+	public async Task<bool> ResumeDownloadAsync()
+	{
+		DownloadResumeState? state = GetResumableDownload();
+		if( state is null || !state.HasRemainingWork )
+		{
+			_resumeStore.Clear();
+			ResumableDownloadChanged?.Invoke();
+			return false;
+		}
+
+		if( state.RemainingVersionIds.Length == 0 && state.PendingEntryIds.Length > 0 )
+		{
+			if( string.Equals( state.OperationKind, DownloadResumeKind.CheckoutLatest, StringComparison.Ordinal ) )
+			{
+				await CheckoutLatestAsync( state.PendingEntryIds ).ConfigureAwait( false );
+				return GetResumableDownload() is null;
+			}
+			await GetLatestAsync( state.PendingEntryIds ).ConfigureAwait( false );
+			return GetResumableDownload() is null;
+		}
+
+		CancellationTokenSource cancellation = reporter.BeginOperation( canPause: true );
+		OperationPauseController? pause = reporter.PauseController;
+		using IDisposable? watcherPause = localFiles?.Suspend();
+		bool persistEnabled = HackDefaults.Instance?.PersistDownloadResume ?? true;
+		DownloadCheckpointTracker? checkpoint = persistEnabled
+			? new DownloadCheckpointTracker(
+				_resumeStore,
+				enabled: true,
+				accountKey: state.AccountKey,
+				vaultPath: state.VaultPath,
+				operationKind: state.OperationKind,
+				label: state.Label,
+				pendingEntryIds: null,
+				checkoutEntryIds: state.CheckoutEntryIds,
+				existingState: state )
+			: null;
+
+		Action<OperationPauseState>? pauseHandler = BeginDownloadSession( pause, checkpoint, persistEnabled );
+
+		bool succeeded = false;
+		bool runCheckout = false;
+		try
+		{
+			int initialProcessed = Math.Max( 0, state.CompletedCount - state.SkippedCount );
+			reporter.RestoreProgress( Math.Max( state.TotalCount, state.RemainingVersionIds.Length ), initialProcessed, state.SkippedCount, state.DownloadedBytes );
+			Log( StatusMessage.INFO, $"Resuming saved download ({state.RemainingVersionIds.Length} remaining version(s))..." );
+
+			bool completed = await AsyncHelper.AsyncRunner( async () =>
+			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( cancellation.Token ).ConfigureAwait( false );
+
+				HpVersion[] versions = await FetchVersionsByIdsChunkedAsync(
+					state.RemainingVersionIds,
+					pause,
+					cancellation.Token ).ConfigureAwait( false );
+
+				if( versions.Length == 0 )
+				{
+					checkpoint?.Clear();
+					succeeded = true;
+					runCheckout = string.Equals( state.OperationKind, DownloadResumeKind.CheckoutLatest, StringComparison.Ordinal )
+						&& state.CheckoutEntryIds.Length > 0;
+					reporter.Complete();
+					await reporter.NotifyAsync( "Completed! All remaining files were already up to date." ).ConfigureAwait( false );
+					return;
+				}
+
+				DownloadOperations.DownloadSummary summary = new();
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( cancellation.Token ).ConfigureAwait( false );
+
+				List<HpVersion> toDownload = await DownloadOperations.FilterVersionsToDownloadAsync(
+					versions,
+					cancellation.Token,
+					summary,
+					log: Log,
+					onProgress: ( processed, skipped ) => reporter.Advance( processed, skipped ) ).ConfigureAwait( false );
+
+				if( toDownload.Count > 0 )
+				{
+					checkpoint?.SetResolvedVersions( toDownload, Math.Max( state.TotalCount, versions.Length ), summary.Skipped );
+					if( pause is not null )
+						await pause.WaitIfPausedAsync( cancellation.Token ).ConfigureAwait( false );
+
+					int maxBatchCount = Math.Clamp( OdooDefaults.Instance.DownloadBatchSize, 1, AdaptiveTransferController.MaxAdaptiveBatchCount );
+					AdaptiveTransferController controller = new( maxBatchCount );
+
+					reporter.BeginDownloadTransfer();
+					try
+					{
+						await DownloadOperations.DownloadAdaptiveAsync(
+							toDownload,
+							cancellation.Token,
+							summary,
+							maxBatchCount: maxBatchCount,
+							maxConcurrency: OdooDefaults.Instance.ConcurrencySize,
+							log: Log,
+							onProgress: ( processed, skipped ) => reporter.Advance( processed, skipped ),
+							onBytesDownloaded: bytes => reporter.AddDownloadedBytes( bytes ),
+							controller: controller,
+							pause: pause,
+							onVersionCompleted: ( vid, bytes ) => checkpoint?.MarkVersionCompleted( vid, bytes ) ).ConfigureAwait( false );
+					}
+					finally
+					{
+						reporter.EndDownloadTransfer();
+					}
+				}
+
+				if( summary.Failed.IsEmpty )
+				{
+					checkpoint?.Clear();
+					succeeded = true;
+					runCheckout = string.Equals( state.OperationKind, DownloadResumeKind.CheckoutLatest, StringComparison.Ordinal )
+						&& state.CheckoutEntryIds.Length > 0;
+					reporter.Complete();
+					string kept = summary.KeptLocalChanges.IsEmpty
+						? ""
+						: $"\n{summary.KeptLocalChanges.Count} file(s) with local changes were kept, not overwritten:\n"
+							+ string.Join( "\n", summary.KeptLocalChanges.Take( 15 ) );
+					await reporter.NotifyAsync( $"Completed! {summary.Downloaded} downloaded, {summary.Skipped - summary.KeptLocalChanges.Count} already up to date.{kept}" ).ConfigureAwait( false );
+				}
+				else
+				{
+					if( checkpoint is { Enabled: true } && !summary.FailedIds.IsEmpty )
+					{
+						checkpoint.SaveFailedOnly( summary.FailedIds );
+						Log( StatusMessage.INFO, $"{summary.FailedIds.Count} unfinished file(s) saved for resume." );
+					}
+					else
+					{
+						checkpoint?.Clear();
+					}
+					reporter.Complete();
+					string[] failed = [ .. summary.Failed ];
+					await reporter.NotifyAsync(
+						$"Completed with {failed.Length} file(s) NOT downloaded ({summary.Downloaded} downloaded, {summary.Skipped} up to date):\n"
+							+ string.Join( "\n", failed.Take( 15 ) )
+							+ ( failed.Length > 15 ? $"\n...and {failed.Length - 15} more (see the status log)" : "" ),
+						"Resume Download" ).ConfigureAwait( false );
+				}
+			}, "Resume Download", cancellation ).ConfigureAwait( false );
+
+			if( !completed )
+			{
+				await HandleDownloadCancellationAsync( checkpoint ).ConfigureAwait( false );
+				return false;
+			}
+		}
+		catch( OperationCanceledException )
+		{
+			await HandleDownloadCancellationAsync( checkpoint ).ConfigureAwait( false );
+			return false;
+		}
+		finally
+		{
+			EndDownloadSession( pause, pauseHandler, checkpoint );
+		}
+
+		if( runCheckout )
+			await ChangeCheckoutAsync( state.CheckoutEntryIds, checkout: true, preExpandedIds: null ).ConfigureAwait( false );
+
+		return succeeded;
+	}
+
+	private async Task<HpVersion[]> FetchVersionsByIdsChunkedAsync(
+		IReadOnlyList<int> versionIds,
+		OperationPauseController? pause,
+		CancellationToken token )
+	{
+		if( versionIds.Count == 0 )
+			return [];
+		if( versionIds.Count <= VersionReadChunkSize )
+		{
+			if( pause is not null )
+				await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
+			using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
+			return await HpVersion.GetRecordsByIdsAsync( versionIds, includedFields: LatestVersionIncludedFields, token: token ).ConfigureAwait( false ) ?? [];
+		}
+
+		int chunkCount = ( versionIds.Count + VersionReadChunkSize - 1 ) / VersionReadChunkSize;
+		HpVersion[]?[] pages = new HpVersion[]?[ chunkCount ];
+		await Parallel.ForEachAsync(
+			Enumerable.Range( 0, chunkCount ),
+			new ParallelOptions { MaxDegreeOfParallelism = RpcParallelism, CancellationToken = token },
+			async ( chunkIndex, ct ) =>
+			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( ct ).ConfigureAwait( false );
+				using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
+				int[] chunk = OdooRpc.SliceChunk( versionIds, chunkIndex * VersionReadChunkSize, VersionReadChunkSize );
+				pages[ chunkIndex ] = await HpVersion.GetRecordsByIdsAsync( chunk, includedFields: LatestVersionIncludedFields, token: ct ).ConfigureAwait( false );
+			} ).ConfigureAwait( false );
+
+		int total = 0;
+		for( int i = 0; i < pages.Length; i++ )
+			total += pages[ i ]?.Length ?? 0;
+		if( total == 0 )
+			return [];
+
+		HpVersion[] all = new HpVersion[ total ];
+		int pos = 0;
+		for( int i = 0; i < pages.Length; i++ )
+		{
+			if( pages[ i ] is { Length: > 0 } page )
+			{
+				Array.Copy( page, 0, all, pos, page.Length );
+				pos += page.Length;
+			}
+		}
+		return all;
+	}
+
 	public Task CheckoutAsync( IReadOnlyList<int> entryIds ) => ChangeCheckoutAsync( entryIds, checkout: true, preExpandedIds: null );
 	public Task UnCheckoutAsync( IReadOnlyList<int> entryIds ) => ChangeCheckoutAsync( entryIds, checkout: false, preExpandedIds: null );
 
 	public async Task CheckoutLatestAsync( IReadOnlyList<int> entryIds )
 	{
-		IReadOnlyList<int>? expanded = await GetLatestCoreAsync( entryIds, preExpandedIds: null ).ConfigureAwait( false );
+		IReadOnlyList<int>? expanded = await GetLatestCoreAsync(
+			entryIds,
+			preExpandedIds: null,
+			DownloadResumeKind.CheckoutLatest,
+			checkoutEntryIds: entryIds ).ConfigureAwait( false );
 		if( expanded is { Count: > 0 } )
 			await ChangeCheckoutAsync( entryIds, checkout: true, preExpandedIds: expanded ).ConfigureAwait( false );
 	}
@@ -460,12 +892,32 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		if( files.Count == 0 )
 			return;
 
-		CancellationTokenSource cancellation = reporter.BeginOperation();
+		TaskCompletionSource commitDone = new( TaskCreationOptions.RunContinuationsAsynchronously );
+		lock( _stateGate )
+		{
+			_activeCommitCount++;
+			_activeCommitTask = commitDone.Task;
+		}
+
+		CancellationTokenSource cancellation = reporter.BeginOperation( canPause: true );
+		OperationPauseController? pause = reporter.PauseController;
 		using IDisposable? watcherPause = localFiles?.Suspend();
+
+		void OnPauseStateChanged( OperationPauseState state )
+		{
+			if( state == OperationPauseState.Paused )
+				Log( StatusMessage.INFO, "Commit paused at a safe stopping point. Click Resume to continue (commits do not persist across app restarts)." );
+			else if( state == OperationPauseState.Running )
+				Log( StatusMessage.INFO, "Resuming commit..." );
+		}
+
+		if( pause is not null )
+			pause.StateChanged += OnPauseStateChanged;
+
 		try
 		{
 			bool completed = await AsyncHelper.AsyncRunner(
-				() => CommitFilesAsync( files, cancellation.Token ),
+				() => CommitFilesAsync( files, cancellation.Token, pause ),
 				"Commit Files",
 				cancellation ).ConfigureAwait( false );
 			if( !completed )
@@ -477,20 +929,34 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		}
 		finally
 		{
+			if( pause is not null )
+				pause.StateChanged -= OnPauseStateChanged;
+			commitDone.TrySetResult();
+			lock( _stateGate )
+			{
+				_activeCommitCount--;
+				if( ReferenceEquals( _activeCommitTask, commitDone.Task ) )
+					_activeCommitTask = null;
+			}
 			reporter.Complete();
 		}
 	}
 
-	private async Task CommitFilesAsync( List<HackFile> files, CancellationToken token )
+	private async Task CommitFilesAsync( List<HackFile> files, CancellationToken token, OperationPauseController? pause )
 	{
 		try
 		{
+			if( pause is not null )
+				await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
+
 			var (localOnly, remoteExisting, unchanged, remoteByServerName) =
-				await CommitOperations.FilterAndSegmentCommitFilesAsync( files, Log, token ).ConfigureAwait( false );
+				await CommitOperations.FilterAndSegmentCommitFilesAsync( files, Log, token, pause ).ConfigureAwait( false );
 			if( localOnly.Length == 0 && remoteExisting.Length == 0 )
 			{
 				if( unchanged.Length > 0 )
 				{
+					if( pause is not null )
+						await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
 					await CheckInUnchangedAsync( unchanged, token ).ConfigureAwait( false );
 					reporter.Complete();
 					await reporter.NotifyAsync( "Completed!" ).ConfigureAwait( false );
@@ -501,14 +967,18 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 				return;
 			}
 
+			if( pause is not null )
+				await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
+
 			HpPDMCommit commit = new() { node_by = OdooDefaults.Instance.MyNode?.id };
-			await commit.CreateCommitAsync( token ).ConfigureAwait( false );
+			using( OperationPauseController.EnterScope( pause ) )
+				await commit.CreateCommitAsync( token ).ConfigureAwait( false );
 
 			reporter.SetTotal( localOnly.Length + remoteExisting.Length );
 			Log( StatusMessage.PROCESSING, "--- Preparing to stage records ---" );
 
 			Dictionary<string, HpDirectory> directoryCache = new( StringComparer.OrdinalIgnoreCase );
-			await CommitOperations.PreResolveDirectoriesAsync( localOnly, directoryCache, token ).ConfigureAwait( false );
+			await CommitOperations.PreResolveDirectoriesAsync( localOnly, directoryCache, token, pause ).ConfigureAwait( false );
 
 			(HackFile File, bool InOdoo)[] staged = new (HackFile, bool)[ localOnly.Length + remoteExisting.Length ];
 			for( int i = 0; i < localOnly.Length; i++ )
@@ -533,6 +1003,8 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 				{
 					if( staged.Length == 1 )
 					{
+						if( pause is not null )
+							await pause.WaitIfPausedAsync( batchCts.Token ).ConfigureAwait( false );
 						if( !await CommitOperations.CommitRecordInternalAsync(
 							staged[ 0 ].File,
 							commit,
@@ -543,7 +1015,8 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 							directoryCache,
 							remoteByServerName,
 							clearOnFailure: false,
-							batchCts.Token ).ConfigureAwait( false ) )
+							batchCts.Token,
+							pause ).ConfigureAwait( false ) )
 						{
 							stageFailed = 1;
 						}
@@ -555,6 +1028,8 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 							new ParallelOptions { MaxDegreeOfParallelism = RpcParallelism, CancellationToken = batchCts.Token },
 							async ( item, ct ) =>
 							{
+								if( pause is not null )
+									await pause.WaitIfPausedAsync( ct ).ConfigureAwait( false );
 								if( !await CommitOperations.CommitRecordInternalAsync(
 									item.File,
 									commit,
@@ -565,7 +1040,8 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 									directoryCache,
 									remoteByServerName,
 									clearOnFailure: false,
-									ct ).ConfigureAwait( false ) )
+									ct,
+									pause ).ConfigureAwait( false ) )
 								{
 									Interlocked.Exchange( ref stageFailed, 1 );
 									batchCts.Cancel();
@@ -596,14 +1072,31 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 				reporter.EndUploadTransfer();
 			}
 
-			var (committed, error) = await commit.ServerCommit( token ).ConfigureAwait( false );
-			if( !committed )
+			if( pause is not null )
 			{
-				Log( StatusMessage.ERROR, $"Commit failed on the server: {error}" );
-				await reporter.NotifyAsync( $"Commit failed: {error}", "Commit Files" ).ConfigureAwait( false );
+				try
+				{
+					await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
+				}
+				catch( OperationCanceledException )
+				{
+					await commit.ServerClear().ConfigureAwait( false );
+					throw;
+				}
+			}
+
+			(bool committed, string? error) serverCommitResult;
+			using( OperationPauseController.EnterScope( pause ) )
+				serverCommitResult = await commit.ServerCommit( token ).ConfigureAwait( false );
+			if( !serverCommitResult.committed )
+			{
+				Log( StatusMessage.ERROR, $"Commit failed on the server: {serverCommitResult.error}" );
+				await reporter.NotifyAsync( $"Commit failed: {serverCommitResult.error}", "Commit Files" ).ConfigureAwait( false );
 				return;
 			}
 
+			if( pause is not null )
+				await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
 			await CheckInUnchangedAsync( unchanged, token ).ConfigureAwait( false );
 			reporter.Complete();
 			await reporter.NotifyAsync( "Completed!" ).ConfigureAwait( false );
@@ -797,10 +1290,95 @@ public sealed class PdmWorkflowService( IOperationReporter reporter, ILocalFileW
 		return new VersionDownloadPlan( version, entry?.latest_version_id == versionId, versionIds );
 	}
 
-	public Task<IReadOnlyList<int>> DownloadVersionsAsync( IReadOnlyList<int> versionIds )
-		=> Task.Run<IReadOnlyList<int>>( async () =>
+	public async Task<IReadOnlyList<int>> DownloadVersionsAsync( IReadOnlyList<int> versionIds )
+	{
+		if( versionIds is null or { Count: 0 } )
+			return [];
+
+		int[] requestedIds = [ .. versionIds.Where( static id => id > 0 ).Distinct() ];
+		if( requestedIds.Length == 0 )
+			return [];
+
+		CancellationTokenSource cancellation = reporter.BeginOperation( canPause: true );
+		OperationPauseController? pause = reporter.PauseController;
+		using IDisposable? watcherPause = localFiles?.Suspend();
+		bool persistEnabled = HackDefaults.Instance?.PersistDownloadResume ?? true;
+		DownloadCheckpointTracker? checkpoint = persistEnabled
+			? new DownloadCheckpointTracker(
+				_resumeStore,
+				enabled: true,
+				accountKey: CurrentAccountKey(),
+				vaultPath: HackDefaults.Instance?.PwaPathAbsolute ?? string.Empty,
+				operationKind: DownloadResumeKind.DownloadVersions,
+				label: "Download Versions",
+				existingState: new DownloadResumeState
+				{
+					TotalCount = requestedIds.Length,
+					RemainingVersionIds = requestedIds,
+				} )
+			: null;
+		checkpoint?.FlushSync();
+
+		Action<OperationPauseState>? pauseHandler = BeginDownloadSession( pause, checkpoint, persistEnabled );
+
+		try
 		{
-			HpVersion[] versions = await HpVersion.GetRecordsByIdsAsync( versionIds, excludedFields: HpVersion.UsualExcludedFields ).ConfigureAwait( false ) ?? [];
-			return ( await versions.DownloadAllAsync().ConfigureAwait( false ) ).Ids();
-		} );
+			List<HpVersion> failed = [];
+			bool completed = await AsyncHelper.AsyncRunner( async () =>
+			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( cancellation.Token ).ConfigureAwait( false );
+
+				HpVersion[] versions = await FetchVersionsByIdsChunkedAsync( requestedIds, pause, cancellation.Token ).ConfigureAwait( false );
+				reporter.SetTotal( versions.Length );
+				if( versions.Length == 0 )
+				{
+					checkpoint?.Clear();
+					return;
+				}
+
+				checkpoint?.SetResolvedVersions( versions, versions.Length, skippedDelta: 0 );
+				reporter.BeginDownloadTransfer();
+				try
+				{
+					failed = await versions.DownloadAllAsync(
+						cancellation.Token,
+						pause: pause,
+						onVersionCompleted: ( vid, bytes ) => checkpoint?.MarkVersionCompleted( vid, bytes ),
+						onProgress: ( processed, skipped ) => reporter.Advance( processed, skipped ),
+						onBytesDownloaded: bytes => reporter.AddDownloadedBytes( bytes ),
+						log: Log ).ConfigureAwait( false );
+				}
+				finally
+				{
+					reporter.EndDownloadTransfer();
+				}
+
+				int[] failedIds = failed.Ids();
+				if( failedIds.Length == 0 )
+					checkpoint?.Clear();
+				else if( checkpoint is { Enabled: true } )
+					checkpoint.SaveFailedOnly( failedIds );
+				else
+					checkpoint?.Clear();
+			}, "Download Versions", cancellation ).ConfigureAwait( false );
+
+			if( !completed )
+			{
+				await HandleDownloadCancellationAsync( checkpoint ).ConfigureAwait( false );
+				return [];
+			}
+
+			return failed.Ids();
+		}
+		catch( OperationCanceledException )
+		{
+			await HandleDownloadCancellationAsync( checkpoint ).ConfigureAwait( false );
+			return [];
+		}
+		finally
+		{
+			EndDownloadSession( pause, pauseHandler, checkpoint );
+		}
+	}
 }

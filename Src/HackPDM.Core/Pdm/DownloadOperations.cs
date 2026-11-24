@@ -3,6 +3,7 @@ using System.Diagnostics;
 
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
+using HackPDM.Core.Services;
 
 namespace HackPDM.Core.Pdm;
 
@@ -104,12 +105,16 @@ public static class DownloadOperations
 		string[]? excludedFields = null,
 		CancellationToken token = default,
 		string[]? includedFields = null,
-		Action<StatusMessage, string>? log = null )
+		Action<StatusMessage, string>? log = null,
+		OperationPauseController? pause = null )
 	{
 		excludedFields ??= HpVersion.UsualExcludedFields;
 		if( entryIDs.Count <= MetadataChunkSize )
 		{
+			if( pause is not null )
+				await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
 			token.ThrowIfCancellationRequested();
+			using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 			return await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
 				entryIDs,
 				nameof( HpEntry.latest_version_id ),
@@ -128,6 +133,9 @@ public static class DownloadOperations
 			new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = token },
 			async ( chunkIndex, ct ) =>
 			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( ct ).ConfigureAwait( false );
+				using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 				int offset = chunkIndex * MetadataChunkSize;
 				int[] chunk = OdooRpc.SliceChunk( entryIDs, offset, MetadataChunkSize );
 				HpVersion[]? page = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
@@ -242,7 +250,9 @@ public static class DownloadOperations
 		Action<StatusMessage, string>? log = null,
 		Action<int, int>? onProgress = null,
 		Action<long>? onBytesDownloaded = null,
-		AdaptiveTransferController? controller = null )
+		AdaptiveTransferController? controller = null,
+		OperationPauseController? pause = null,
+		Action<int, long>? onVersionCompleted = null )
 	{
 		if( versions.Count == 0 )
 			return;
@@ -263,8 +273,13 @@ public static class DownloadOperations
 		{
 			workers[ i ] = Task.Run( async () =>
 			{
-				while( queue.TryDequeue( controller, out List<HpVersion> batch, out _ ) )
+				while( true )
 				{
+					if( pause is not null )
+						await pause.WaitIfPausedAsync( cToken ).ConfigureAwait( false );
+					if( !queue.TryDequeue( controller, out List<HpVersion> batch, out _ ) )
+						break;
+
 					cToken.ThrowIfCancellationRequested();
 					bool serialized = false;
 					if( IsMemoryPressureHigh() )
@@ -286,7 +301,7 @@ public static class DownloadOperations
 								log( StatusMessage.PROCESSING, msg );
 							}
 						}
-						await DownloadAndWriteAsync( batch, cToken, log, summary, progress, onBytesDownloaded, controller ).ConfigureAwait( false );
+						await DownloadAndWriteAsync( batch, cToken, log, summary, progress, onBytesDownloaded, controller, pause, onVersionCompleted ).ConfigureAwait( false );
 					}
 					finally
 					{
@@ -513,7 +528,9 @@ public static class DownloadOperations
 		DownloadSummary summary,
 		DeltaProgressCoalescer progress,
 		Action<long>? onBytesDownloaded,
-		AdaptiveTransferController? controller = null )
+		AdaptiveTransferController? controller = null,
+		OperationPauseController? pause = null,
+		Action<int, long>? onVersionCompleted = null )
 	{
 		Dictionary<int, HpVersion> pending = new( versions.Count );
 		for( int i = 0; i < versions.Count; i++ )
@@ -534,12 +551,17 @@ public static class DownloadOperations
 		{
 			foreach( HpVersion large in largeVersions )
 			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( cToken ).ConfigureAwait( false );
 				cToken.ThrowIfCancellationRequested();
 				pending.Remove( large.id!.Value );
-				if( await DownloadLargeAsync( large, cToken, onBytesDownloaded, controller ).ConfigureAwait( false ) is { } error )
+				if( await DownloadLargeAsync( large, cToken, onBytesDownloaded, controller, pause ).ConfigureAwait( false ) is { } error )
 					Fail( large, error );
 				else
+				{
 					summary.AddDownloaded();
+					onVersionCompleted?.Invoke( large.id!.Value, large.file_size ?? 0 );
+				}
 				progress.Report( 1, 0 );
 			}
 		}
@@ -556,7 +578,11 @@ public static class DownloadOperations
 
 			foreach( List<HpVersion> group in groups )
 			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( cToken ).ConfigureAwait( false );
 				cToken.ThrowIfCancellationRequested();
+
+				using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 				long bytes = 0;
 				for( int i = 0; i < group.Count; i++ )
 					bytes += group[ i ].file_size ?? 0;
@@ -619,6 +645,7 @@ public static class DownloadOperations
 
 					pending.Remove( id );
 					summary.AddDownloaded();
+					onVersionCompleted?.Invoke( id, downloadedSize );
 					progress.Report( 1, 0 );
 				}
 			}
@@ -644,20 +671,28 @@ public static class DownloadOperations
 		HpVersion requested,
 		CancellationToken cToken,
 		Action<long>? onBytesDownloaded,
-		AdaptiveTransferController? controller = null )
+		AdaptiveTransferController? controller = null,
+		OperationPauseController? pause = null )
 	{
-		Result<HpVersion[]> read = await Repository<HpVersion>.ReadAsync(
-			[ requested.id!.Value ],
-			FieldSelection.Only( LargeFileFields ),
-			OdooRpc.LongTimeout,
-			token: cToken ).ConfigureAwait( false );
+		Result<HpVersion[]> read;
+		using( OperationPauseController.EnterScope( pause ) )
+		{
+			read = await Repository<HpVersion>.ReadAsync(
+				[ requested.id!.Value ],
+				FieldSelection.Only( LargeFileFields ),
+				OdooRpc.LongTimeout,
+				token: cToken ).ConfigureAwait( false );
+		}
 		if( read.Value is not [ { } version, .. ] )
 			return read.Error ?? "the version could not be read";
-		Result<string> temp = await ContentTransfer.DownloadToTempFileAsync( version, cToken, onBytesDownloaded, controller ).ConfigureAwait( false );
+		Result<string> temp = await ContentTransfer.DownloadToTempFileAsync( version, cToken, onBytesDownloaded, controller, pause ).ConfigureAwait( false );
 		if( !temp.Ok )
 			return temp.Error;
-		if( await LocalFileWriter.WriteFromFileAsync( version.ToHackFile( contentsInFile: true ), temp.Value! ).ConfigureAwait( false ) )
-			return null;
+		using( OperationPauseController.EnterScope( pause ) )
+		{
+			if( await LocalFileWriter.WriteFromFileAsync( version.ToHackFile( contentsInFile: true ), temp.Value! ).ConfigureAwait( false ) )
+				return null;
+		}
 		FileOps.TryDelete( temp.Value );
 		return "could not write the file locally";
 	}

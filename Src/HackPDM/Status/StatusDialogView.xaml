@@ -31,6 +31,7 @@
         <!--  Full Status Dialog Layout  -->
         <Grid x:Name="FullStatusRoot" Margin="12" RowSpacing="8">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition x:Name="OperationsRow" Height="3*" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition x:Name="LowerLogsRow" Height="2*" />
@@ -38,9 +39,45 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!--  Main Operations Log Card  -->
+            <!--  Saved Download Resume Banner  -->
             <Border
                 Grid.Row="0"
+                Padding="12,8"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Visibility="{x:Bind ViewModel.ShowResumableDownloadBanner, Mode=OneWay}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                    <FontIcon
+                        VerticalAlignment="Center"
+                        FontSize="16"
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        Glyph="&#xE896;" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                        <TextBlock FontSize="12" FontWeight="SemiBold" Text="Unfinished download ready to resume" />
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="{x:Bind ViewModel.ResumableDownloadSummary, Mode=OneWay}"
+                            TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Orientation="Horizontal" Spacing="6">
+                        <Button
+                            Command="{x:Bind ViewModel.ResumeSavedDownloadCommand}"
+                            Content="Resume Download"
+                            Style="{StaticResource AccentButtonStyle}" />
+                        <Button
+                            Command="{x:Bind ViewModel.ClearSavedDownloadCommand}"
+                            Content="Clear"
+                            ToolTipService.ToolTip="Discard saved download progress" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!--  Main Operations Log Card  -->
+            <Border
+                Grid.Row="1"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
@@ -86,13 +123,13 @@
 
             <!--  Resizable Horizontal Divider  -->
             <controls:PaneSplitter
-                Grid.Row="1"
+                Grid.Row="2"
                 DragCompleted="StatusSplitter_DragCompleted"
                 DragDelta="StatusHorizontalSplitter_DragDelta"
                 Orientation="Horizontal" />
 
             <!--  Lower Split: Info | Warnings & Errors  -->
-            <Grid Grid.Row="2">
+            <Grid Grid.Row="3">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition x:Name="InfoLogCol" Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -198,7 +235,7 @@
 
             <!--  Progress Bar  -->
             <ProgressBar
-                Grid.Row="3"
+                Grid.Row="4"
                 Height="10"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Center"
@@ -209,7 +246,7 @@
             <!--  Progress Text, Metrics & Control Buttons  -->
             <Grid
                 x:Name="StatusFooterGrid"
-                Grid.Row="4"
+                Grid.Row="5"
                 ColumnSpacing="12"
                 RowSpacing="6">
                 <Grid.ColumnDefinitions>
@@ -275,6 +312,10 @@
                         Content="Close When Complete"
                         IsChecked="{x:Bind ViewModel.AutoClose, Mode=TwoWay}" />
                     <Button
+                        Command="{x:Bind ViewModel.TogglePauseCommand}"
+                        Content="{x:Bind ViewModel.PauseButtonText, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.ShowPauseButton, Mode=OneWay}" />
+                    <Button
                         Content="Cancel"
                         Command="{x:Bind ViewModel.CancelCommand}" />
                     <Button
@@ -315,7 +356,7 @@
                             <ProgressRing
                                 Width="13"
                                 Height="13"
-                                IsActive="{x:Bind ViewModel.IsInProcess, Mode=OneWay}"
+                                IsActive="{x:Bind ViewModel.IsActivelyRunning, Mode=OneWay}"
                                 Visibility="{x:Bind ViewModel.IsInProcess, Mode=OneWay}" />
                             <FontIcon FontSize="12" Glyph="&#xE9D9;" />
                             <TextBlock
@@ -418,10 +459,23 @@
                         Value="{x:Bind ViewModel.TotalProcessed, Mode=OneWay}" />
                     <Button
                         Padding="8,4"
+                        Command="{x:Bind ViewModel.TogglePauseCommand}"
+                        Content="{x:Bind ViewModel.PauseButtonText, Mode=OneWay}"
+                        FontSize="11"
+                        Visibility="{x:Bind ViewModel.ShowPauseButton, Mode=OneWay}" />
+                    <Button
+                        Padding="8,4"
                         Command="{x:Bind ViewModel.CancelCommand}"
                         Content="Cancel"
                         FontSize="11"
                         Visibility="{x:Bind ViewModel.IsInProcess, Mode=OneWay}" />
+                    <Button
+                        Padding="8,4"
+                        Command="{x:Bind ViewModel.ResumeSavedDownloadCommand}"
+                        Content="Resume Saved"
+                        FontSize="11"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Visibility="{x:Bind ViewModel.ShowResumableDownloadBanner, Mode=OneWay}" />
                     <Button
                         Padding="10,4"
                         Click="OpenFullStatus_Click"

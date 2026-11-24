@@ -11,10 +11,20 @@ public interface IOperationReporter
 	void Log( StatusMessage status, string message );
 	void ShowWindow();
 	CancellationTokenSource BeginOperation();
+	CancellationTokenSource BeginOperation( bool canPause ) => BeginOperation();
+	OperationPauseController? PauseController => null;
 	void Cancel();
 	void SetTotal( int total );
 	void Advance( int processed, int skipped = 0 );
 	void SetProcessed( int processed );
+	void RestoreProgress( int total, int processed, int skipped, long downloadedBytes )
+	{
+		SetTotal( total );
+		if( processed > 0 || skipped > 0 )
+			Advance( processed, skipped );
+		if( downloadedBytes > 0 )
+			AddDownloadedBytes( downloadedBytes );
+	}
 	void AddDownloadedBytes( long bytes );
 	void AddUploadedBytes( long bytes );
 	void BeginDownloadTransfer() { }

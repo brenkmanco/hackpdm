@@ -65,6 +65,51 @@
                 </StackPanel>
             </Border>
 
+            <!--  Download Persistence & Resume Card  -->
+            <Border
+                Padding="16"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="6">
+                <StackPanel Spacing="10">
+                    <StackPanel Spacing="6">
+                        <TextBlock FontSize="14" FontWeight="SemiBold" Text="Download Persistence &amp; Resume" />
+                        <CheckBox
+                            Content="Save unfinished download progress across app restarts (recommended)"
+                            IsChecked="{x:Bind ViewModel.PersistDownloadResume, Mode=TwoWay}" />
+                        <TextBlock
+                            Margin="28,0,0,0"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Allows Get Latest, Checkout Latest, and Dependency Downloads to resume from remaining files if the app closes. Commits are never persisted across restarts."
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Border
+                        Padding="12,8"
+                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock FontSize="12" FontWeight="SemiBold" Text="Saved Download State" />
+                                <TextBlock
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="{x:Bind ViewModel.SavedDownloadStatusText, Mode=OneWay}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Command="{x:Bind ViewModel.ClearSavedDownloadCommand}"
+                                Content="Clear Saved Download State" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
             <!--  Actions Card  -->
             <Border
                 Padding="16"

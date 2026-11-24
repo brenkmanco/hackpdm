@@ -1,6 +1,7 @@
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
+using HackPDM.Core.Services;
 using HackPDM.Core.SolidWorks;
 using HackPDM.Core.SolidWorks.Format;
 
@@ -90,8 +91,9 @@ public static class CommitStaging
 		Action<long>? onBytesUploaded,
 		byte[]? preReadPreview,
 		bool hasPreReadPreview,
-		CancellationToken token = default )
-		=> StageAsync( PrepareVersion( hack, entry, commitId, preReadPreview, hasPreReadPreview ), existingEntry: true, reportError, onBytesUploaded, token );
+		CancellationToken token = default,
+		OperationPauseController? pause = null )
+		=> StageAsync( PrepareVersion( hack, entry, commitId, preReadPreview, hasPreReadPreview ), existingEntry: true, reportError, onBytesUploaded, token, pause );
 
 	public static Task<HpRecordStaged?> StageVersionAsync(
 		HackFile hack,
@@ -108,18 +110,22 @@ public static class CommitStaging
 		Action<long>? onBytesUploaded,
 		byte[]? preReadPreview,
 		bool hasPreReadPreview,
-		CancellationToken token = default )
-		=> StageAsync( PrepareVersion( hack, stagedEntry, preReadPreview, hasPreReadPreview ), existingEntry: false, reportError, onBytesUploaded, token );
+		CancellationToken token = default,
+		OperationPauseController? pause = null )
+		=> StageAsync( PrepareVersion( hack, stagedEntry, preReadPreview, hasPreReadPreview ), existingEntry: false, reportError, onBytesUploaded, token, pause );
 
 	private static async Task<HpRecordStaged?> StageAsync(
 		HpVersion? version,
 		bool existingEntry,
 		Action<string>? reportError,
 		Action<long>? onBytesUploaded,
-		CancellationToken token = default )
+		CancellationToken token = default,
+		OperationPauseController? pause = null )
 	{
 		if( version is null )
 			return null;
+		if( pause is not null )
+			await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
 		token.ThrowIfCancellationRequested();
 		if( existingEntry )
 			version.HashedValues[ "__internal__existing" ] = true;
@@ -128,7 +134,7 @@ public static class CommitStaging
 		if( version.HashedValues.GetValueOrDefault( UploadSource ) is string path )
 		{
 			string? precomputedSha1 = version.HashedValues.GetValueOrDefault( UploadChecksum ) as string;
-			Result<int> uploaded = await ContentTransfer.UploadFileAsync( path, token, onBytesUploaded, precomputedSha1 ).ConfigureAwait( false );
+			Result<int> uploaded = await ContentTransfer.UploadFileAsync( path, token, onBytesUploaded, precomputedSha1, pause ).ConfigureAwait( false );
 			if( !uploaded.Ok )
 			{
 				version.LastError = uploaded.Error;
@@ -137,6 +143,9 @@ public static class CommitStaging
 			}
 			uploadId = uploaded.Value;
 		}
+
+		if( pause is not null )
+			await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
 
 		HpRecordStaged? staged = version.PreStageRec();
 		int inlineBytes = version.file_contents?.Length ?? 0;
@@ -147,7 +156,8 @@ public static class CommitStaging
 			staged.payload![ "upload_id" ] = id;
 
 		staged.CreateTimeoutMs = ContentTransfer.TimeoutMs( inlineBytes );
-		await staged.CreateAsync( token: token ).ConfigureAwait( false );
+		using( OperationPauseController.EnterScope( pause ) )
+			await staged.CreateAsync( token: token ).ConfigureAwait( false );
 		staged.payload?.Remove( nameof( HpVersion.file_contents ) );
 		version.LastError = staged.LastError;
 		if( staged.id is not null and not 0 )

@@ -278,14 +278,21 @@
 			<RowDefinition Height="*" />
 		</Grid.RowDefinitions>
 
-		<!--  Top Folder Navigation & Breadcrumb Bar  -->
-		<Border
-			Grid.Row="0"
-			Padding="6,4"
-			Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-			BorderBrush="{StaticResource HackPanelStrokeBrush}"
-			BorderThickness="1"
-			CornerRadius="6">
+		<!--  Top Header Area (Breadcrumb Bar + Optional Resume Banner)  -->
+		<Grid Grid.Row="0" RowSpacing="6">
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+			</Grid.RowDefinitions>
+
+			<!--  Top Folder Navigation & Breadcrumb Bar  -->
+			<Border
+				Grid.Row="0"
+				Padding="6,4"
+				Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+				BorderBrush="{StaticResource HackPanelStrokeBrush}"
+				BorderThickness="1"
+				CornerRadius="6">
 			<Grid ColumnSpacing="6">
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="Auto" />
@@ -468,7 +475,56 @@
 					</Button>
 				</StackPanel>
 			</Grid>
-		</Border>
+			</Border>
+
+			<!--  Saved Download Resume Banner  -->
+			<Border
+				Grid.Row="1"
+				Padding="10,6"
+				Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+				BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+				BorderThickness="1"
+				CornerRadius="6"
+				Visibility="{x:Bind ViewModel.HasResumableDownload, Mode=OneWay}">
+				<Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+					<FontIcon
+						VerticalAlignment="Center"
+						FontSize="15"
+						Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+						Glyph="&#xE896;" />
+					<StackPanel
+						Grid.Column="1"
+						VerticalAlignment="Center"
+						Spacing="1">
+						<TextBlock
+							FontSize="12"
+							FontWeight="SemiBold"
+							Text="Unfinished download ready to resume" />
+						<TextBlock
+							FontSize="11"
+							Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+							Text="{x:Bind ViewModel.ResumableDownloadSummary, Mode=OneWay}"
+							TextTrimming="CharacterEllipsis" />
+					</StackPanel>
+					<StackPanel
+						Grid.Column="2"
+						VerticalAlignment="Center"
+						Orientation="Horizontal"
+						Spacing="6">
+						<Button
+							Padding="10,4"
+							Command="{x:Bind ViewModel.ResumeSavedDownloadCommand}"
+							Content="Resume Download"
+							Style="{StaticResource AccentButtonStyle}" />
+						<Button
+							Padding="8,4"
+							Command="{x:Bind ViewModel.ClearSavedDownloadCommand}"
+							Content="Clear"
+							ToolTipService.ToolTip="Discard saved download progress" />
+					</StackPanel>
+				</Grid>
+			</Border>
+		</Grid>
 
 		<!--  Rearrangeable & Dockable Workspace Container  -->
 		<Grid x:Name="WorkspaceGrid" Grid.Row="1">

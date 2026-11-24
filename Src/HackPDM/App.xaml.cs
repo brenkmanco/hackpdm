@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using HackPDM.Common;
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Pdm;
+using HackPDM.Core.Services;
 using HackPDM.Core.Theming;
 using HackPDM.Shell;
 using HackPDM.Themes;
@@ -146,6 +147,34 @@ public sealed partial class HackApp : Application
 			return;
 
 		_closeSaveInProgress = true;
+		if( AppComposition.TryGetWorkflow( out IPdmWorkflowService? workflow ) && workflow is not null )
+		{
+			if( workflow.HasActiveCommit )
+			{
+				bool confirm = await AppComposition.Dialogs.ConfirmAsync(
+					"A commit operation is currently running or paused. Closing now will cancel the commit and roll back uncommitted server staging.\n\nClose anyway?",
+					"Commit In Progress",
+					MessageBoxIcon.Warning );
+				if( !confirm )
+				{
+					_closeSaveInProgress = false;
+					return;
+				}
+			}
+
+			try
+			{
+				bool waitCommitCleanup = await Task.Run( workflow.PrepareForShutdown );
+				AppComposition.Reporter.CancelSilent();
+				if( waitCommitCleanup )
+					await workflow.WaitActiveCommitCleanupAsync( TimeSpan.FromSeconds( 3 ) );
+			}
+			catch( Exception ex )
+			{
+				HackLogger.Warn( "App", $"Could not flush active workflow state on close: {ex.Message}", ex );
+			}
+		}
+
 		try
 		{
 			HomePage?.CaptureLayoutState();
@@ -199,6 +228,15 @@ public sealed partial class HackApp : Application
 		}
 
 		// Fallback if Closed arrived without AppWindow.Closing: capture & flush synchronously before exiting.
+		try
+		{
+			if( AppComposition.TryGetWorkflow( out IPdmWorkflowService? workflow ) && workflow is not null )
+			{
+				workflow.PrepareForShutdown();
+				AppComposition.Reporter.CancelSilent();
+			}
+		}
+		catch { }
 		try
 		{
 			HomePage?.CaptureLayoutState();

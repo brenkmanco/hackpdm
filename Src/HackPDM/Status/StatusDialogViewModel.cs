@@ -40,6 +40,10 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 	private readonly TransferRateTracker _uploadRate = new();
 	private readonly Action _cancelOperation;
 	private readonly Action _cancelSilentOperation;
+	private readonly Action? _togglePauseOperation;
+	private readonly Func<Task>? _resumeSavedDownload;
+	private readonly Action? _clearSavedDownload;
+	private readonly Func<DownloadResumeState?>? _getResumableDownload;
 	private readonly IDialogService _dialogs;
 	private readonly Queue<(long Seq, BasicStatusMessage Msg)> _pendingPriorityLogs = new();
 	private readonly Queue<(long Seq, BasicStatusMessage Msg)> _pendingTransientLogs = new();
@@ -79,6 +83,11 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 	private int _lastEtaSampleProcessed;
 	private double _emaItemsPerSec;
 	private bool _isInProcess;
+	private bool _canPause;
+	private OperationPauseState _pauseState;
+	private long _pausedAtTick;
+	private bool _wasDownloadActiveBeforePause;
+	private bool _wasUploadActiveBeforePause;
 	private bool _rateRefreshRunning;
 	private readonly bool _initialized;
 
@@ -87,6 +96,15 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 
 	[ObservableProperty]
 	public partial string LatestProcessingMessage { get; private set; }
+
+	[ObservableProperty]
+	[NotifyPropertyChangedFor( nameof( ShowResumableDownloadBanner ) )]
+	[NotifyCanExecuteChangedFor( nameof( ResumeSavedDownloadCommand ) )]
+	[NotifyCanExecuteChangedFor( nameof( ClearSavedDownloadCommand ) )]
+	public partial bool HasResumableDownload { get; private set; }
+
+	[ObservableProperty]
+	public partial string ResumableDownloadSummary { get; private set; } = string.Empty;
 
 	private UiProgressState _ui = UiProgressState.Initial;
 
@@ -111,11 +129,22 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 		}
 	}
 
-	public StatusDialogViewModel( IDialogService dialogs, Action cancelOperation, Action? cancelSilentOperation = null )
+	public StatusDialogViewModel(
+		IDialogService dialogs,
+		Action cancelOperation,
+		Action? cancelSilentOperation = null,
+		Action? togglePauseOperation = null,
+		Func<Task>? resumeSavedDownload = null,
+		Action? clearSavedDownload = null,
+		Func<DownloadResumeState?>? getResumableDownload = null )
 	{
 		_dialogs = dialogs;
 		_cancelOperation = cancelOperation;
 		_cancelSilentOperation = cancelSilentOperation ?? cancelOperation;
+		_togglePauseOperation = togglePauseOperation;
+		_resumeSavedDownload = resumeSavedDownload;
+		_clearSavedDownload = clearSavedDownload;
+		_getResumableDownload = getResumableDownload;
 		bool savedAutoClose = HackDefaults.Instance.SettingsProvider?.Get( AutoCloseSettingKey, false ) ?? false;
 		_autoCloseSaveTarget = savedAutoClose ? 1 : 0;
 		AutoClose = savedAutoClose;
@@ -147,6 +176,20 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 	}
 
 	public bool CanSortLogColumns => !_ui.IsInProcess;
+	public bool CanPause => _ui.CanPause;
+	public OperationPauseState PauseState => _ui.PauseState;
+	public bool IsPausing => _ui.IsInProcess && _ui.PauseState == OperationPauseState.Pausing;
+	public bool IsPaused => _ui.IsInProcess && _ui.PauseState == OperationPauseState.Paused;
+	public bool IsActivelyRunning => _ui.IsInProcess && _ui.PauseState != OperationPauseState.Paused;
+	public bool ShowPauseButton => _ui.IsInProcess && _ui.CanPause;
+	public bool CanTogglePause => _ui.IsInProcess && _ui.CanPause && _ui.PauseState != OperationPauseState.Pausing;
+	public string PauseButtonText => _ui.PauseState switch
+	{
+		OperationPauseState.Pausing => "Pausing…",
+		OperationPauseState.Paused => "Resume",
+		_ => "Pause",
+	};
+	public bool ShowResumableDownloadBanner => !_ui.IsInProcess && HasResumableDownload;
 	public bool IsIndeterminate => _ui.IsIndeterminate;
 	public int MaxCount => _ui.MaxCount;
 	public int TotalProcessed => _ui.TotalProcessed;
@@ -417,9 +460,107 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 
 	private bool CanCancel() => IsInProcess;
 
+	[RelayCommand( CanExecute = nameof( CanTogglePause ) )]
+	private void TogglePause() => _togglePauseOperation?.Invoke();
+
+	private bool CanResumeSavedDownload() => !IsInProcess && HasResumableDownload && _resumeSavedDownload is not null;
+
+	[RelayCommand( CanExecute = nameof( CanResumeSavedDownload ) )]
+	private async Task ResumeSavedDownloadAsync()
+	{
+		if( _resumeSavedDownload is { } resume )
+			await resume();
+	}
+
+	private bool CanClearSavedDownload() => !IsInProcess && HasResumableDownload && _clearSavedDownload is not null;
+
+	[RelayCommand( CanExecute = nameof( CanClearSavedDownload ) )]
+	private void ClearSavedDownload()
+	{
+		_clearSavedDownload?.Invoke();
+		RefreshResumableDownloadState();
+	}
+
+	public void RefreshResumableDownloadState()
+	{
+		if( Volatile.Read( ref _disposed ) != 0 || _getResumableDownload is null )
+			return;
+		_ = RefreshResumableDownloadStateAsync();
+	}
+
+	private async Task RefreshResumableDownloadStateAsync()
+	{
+		try
+		{
+			DownloadResumeState? state = await Task.Run( () => _getResumableDownload?.Invoke() ).ConfigureAwait( false );
+			bool has = state is { HasRemainingWork: true };
+			string summary = state is { HasRemainingWork: true } ? state.FormatSummary() : string.Empty;
+			UiDispatcher.RunOrPost( () =>
+			{
+				if( Volatile.Read( ref _disposed ) != 0 )
+					return;
+				HasResumableDownload = has;
+				ResumableDownloadSummary = summary;
+			} );
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "StatusDialog", $"Could not check resumable download state: {ex.Message}", ex );
+		}
+	}
+
 	public void SetInProcess( bool inProcess ) => SetInProcessCore( inProcess, token: null );
 
 	internal void SetInProcess( bool inProcess, long token ) => SetInProcessCore( inProcess, token );
+
+	internal void SetPauseState( bool canPause, OperationPauseState state, long token )
+	{
+		bool stopRate = false;
+		bool startRate = false;
+		bool changed;
+		lock( _gate )
+		{
+			if( token != _activeToken && token != 0 )
+				return;
+			OperationPauseState prevState = _pauseState;
+			changed = _canPause != canPause || prevState != state;
+			_canPause = canPause;
+			_pauseState = state;
+
+			if( state == OperationPauseState.Paused && prevState != OperationPauseState.Paused )
+			{
+				_pausedAtTick = Stopwatch.GetTimestamp();
+				_wasDownloadActiveBeforePause = _downloadRate.IsActive;
+				_wasUploadActiveBeforePause = _uploadRate.IsActive;
+				_downloadRate.EndTransfer();
+				_uploadRate.EndTransfer();
+				stopRate = TakeStopRateTimerLocked();
+			}
+			else if( prevState == OperationPauseState.Paused && state == OperationPauseState.Running )
+			{
+				long now = Stopwatch.GetTimestamp();
+				if( _pausedAtTick > 0 && _progressStartTick > 0 && now > _pausedAtTick )
+					_progressStartTick += now - _pausedAtTick;
+				_pausedAtTick = 0;
+				_lastEtaSampleTick = now;
+				_lastEtaSampleProcessed = _totalProcessed;
+				if( _wasDownloadActiveBeforePause )
+					_downloadRate.BeginTransfer();
+				if( _wasUploadActiveBeforePause )
+					_uploadRate.BeginTransfer();
+				_wasDownloadActiveBeforePause = false;
+				_wasUploadActiveBeforePause = false;
+				startRate = TakeStartRateTimerLocked();
+			}
+		}
+		if( stopRate )
+			TryChangeTimer( _rateRefreshTimer, Timeout.Infinite, Timeout.Infinite );
+		else if( startRate )
+			TryChangeTimer( _rateRefreshTimer, RateRefreshIntervalMs, RateRefreshIntervalMs );
+
+		if( changed )
+			UiDispatcher.RunOrPost( _syncProgressAction );
+	}
 
 	internal void TryClearInProcess( long expectedToken )
 	{
@@ -431,6 +572,11 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 			if( _isInProcess )
 			{
 				_isInProcess = false;
+				_canPause = false;
+				_pauseState = OperationPauseState.None;
+				_pausedAtTick = 0;
+				_wasDownloadActiveBeforePause = false;
+				_wasUploadActiveBeforePause = false;
 				changed = true;
 			}
 		}
@@ -449,10 +595,24 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 				_activeToken++;
 			changed = _isInProcess != inProcess;
 			_isInProcess = inProcess;
-			if( inProcess && changed && _progressStartTick == 0 && _maxCount > 0 )
+			if( !inProcess )
 			{
-				_progressStartTick = Stopwatch.GetTimestamp();
-				_lastEtaSampleTick = _progressStartTick;
+				_canPause = false;
+				_pauseState = OperationPauseState.None;
+				_pausedAtTick = 0;
+				_wasDownloadActiveBeforePause = false;
+				_wasUploadActiveBeforePause = false;
+			}
+			else if( changed )
+			{
+				_pausedAtTick = 0;
+				_wasDownloadActiveBeforePause = false;
+				_wasUploadActiveBeforePause = false;
+				if( _progressStartTick == 0 && _maxCount > 0 )
+				{
+					_progressStartTick = Stopwatch.GetTimestamp();
+					_lastEtaSampleTick = _progressStartTick;
+				}
 			}
 		}
 		if( changed )
@@ -535,6 +695,28 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 			_downloadedBytes = 0;
 			_uploadedBytes = 0;
 			ResetEtaStateLocked( total );
+			_downloadRate.Reset();
+			_uploadRate.Reset();
+			stopTimer = TakeStopRateTimerLocked();
+		}
+		if( stopTimer )
+			TryChangeTimer( _rateRefreshTimer, Timeout.Infinite, Timeout.Infinite );
+		QueueProgressRefresh();
+	}
+
+	public void RestoreProgress( int total, int processed, int skipped, long downloadedBytes )
+	{
+		bool stopTimer;
+		lock( _gate )
+		{
+			_maxCount = Math.Max( 0, total );
+			_processCounter = Math.Max( 0, processed );
+			_skipCounter = Math.Max( 0, skipped );
+			_totalProcessed = _processCounter + _skipCounter;
+			_downloadedBytes = Math.Max( 0, downloadedBytes );
+			_uploadedBytes = 0;
+			ResetEtaStateLocked( _maxCount );
+			_lastEtaSampleProcessed = _totalProcessed;
 			_downloadRate.Reset();
 			_uploadRate.Reset();
 			stopTimer = TakeStopRateTimerLocked();
@@ -679,6 +861,11 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 			_processCounter = Math.Max( _maxCount - _skipCounter, 0 );
 			_totalProcessed = _maxCount;
 			_isInProcess = false;
+			_canPause = false;
+			_pauseState = OperationPauseState.None;
+			_pausedAtTick = 0;
+			_wasDownloadActiveBeforePause = false;
+			_wasUploadActiveBeforePause = false;
 			_emaItemsPerSec = 0;
 			_downloadRate.EndTransfer();
 			_uploadRate.EndTransfer();
@@ -784,7 +971,7 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 
 	private void SyncProcessingSummaryIfChanged()
 	{
-		string nextSummary = FormatProcessingSummary( _ui.IsInProcess, _ui.MaxCount, _ui.TotalProcessed, OStatus.Count );
+		string nextSummary = FormatProcessingSummary( _ui.IsInProcess, _ui.PauseState, _ui.MaxCount, _ui.TotalProcessed, OStatus.Count );
 		if( string.Equals( nextSummary, _ui.ProcessingSummaryText, StringComparison.Ordinal ) )
 			return;
 		_ui = _ui with { ProcessingSummaryText = nextSummary };
@@ -796,6 +983,8 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 		string etaText = ComputeEtaTextLocked();
 		return new ProgressSnapshot(
 			_isInProcess,
+			_canPause,
+			_pauseState,
 			_maxCount,
 			_totalProcessed,
 			_skipCounter,
@@ -813,10 +1002,12 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 	private void PublishProgressSnapshot( in ProgressSnapshot snap )
 	{
 		UiProgressState prev = _ui;
-		bool isIndeterminate = snap.IsInProcess && snap.MaxCount <= 0;
+		bool isPaused = snap.IsInProcess && snap.PauseState == OperationPauseState.Paused;
+		bool isPausing = snap.IsInProcess && snap.PauseState == OperationPauseState.Pausing;
+		bool isIndeterminate = snap.IsInProcess && !isPaused && snap.MaxCount <= 0;
 
-		string dlSpeed = TransferRateTracker.FormatMbps( snap.DownloadMbps );
-		string ulSpeed = TransferRateTracker.FormatMbps( snap.UploadMbps );
+		string dlSpeed = isPaused ? string.Empty : TransferRateTracker.FormatMbps( snap.DownloadMbps );
+		string ulSpeed = isPaused ? string.Empty : TransferRateTracker.FormatMbps( snap.UploadMbps );
 		string activeSpeed = ( snap.DownloadActive, snap.UploadActive ) switch
 		{
 			( true, false ) => dlSpeed,
@@ -827,14 +1018,20 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 		string compactProgressText;
 		if( snap.MaxCount <= 0 )
 		{
-			compactProgressText = snap.IsInProcess ? "Working..." : "Ready";
+			compactProgressText = isPaused ? "Paused"
+				: isPausing ? "Pausing…"
+				: snap.IsInProcess ? "Working..."
+				: "Ready";
 		}
 		else
 		{
 			float percent = snap.TotalProcessed / (float)snap.MaxCount * 100f;
-			compactProgressText = activeSpeed.Length > 0
+			string baseProgress = activeSpeed.Length > 0
 				? $"{snap.TotalProcessed}/{snap.MaxCount} ({percent:f0}%) • {activeSpeed}"
 				: $"{snap.TotalProcessed}/{snap.MaxCount} ({percent:f0}%)";
+			compactProgressText = isPaused ? $"Paused — {baseProgress}"
+				: isPausing ? $"Pausing — {baseProgress}"
+				: baseProgress;
 		}
 
 		float fullPercent = snap.MaxCount > 0 ? snap.TotalProcessed / (float)snap.MaxCount * 100f : 0f;
@@ -848,11 +1045,13 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 			? $"Uploaded: {ByteSize.Format( snap.UploadedBytes )} ({ulSpeed})"
 			: $"Uploaded: {ByteSize.Format( snap.UploadedBytes )}";
 		string sessionUploadedText = $"Session Uploaded: {ByteSize.Format( snap.SessionUploadedBytes )}";
-		string processingSummaryText = FormatProcessingSummary( snap.IsInProcess, snap.MaxCount, snap.TotalProcessed, OStatus.Count );
+		string processingSummaryText = FormatProcessingSummary( snap.IsInProcess, snap.PauseState, snap.MaxCount, snap.TotalProcessed, OStatus.Count );
 		bool hasEta = snap.EtaText.Length > 0;
 
 		UiProgressState next = new(
 			snap.IsInProcess,
+			snap.CanPause,
+			snap.PauseState,
 			isIndeterminate,
 			snap.MaxCount,
 			snap.TotalProcessed,
@@ -878,7 +1077,28 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 		{
 			OnPropertyChanged( nameof( IsInProcess ) );
 			OnPropertyChanged( nameof( CanSortLogColumns ) );
+			OnPropertyChanged( nameof( ShowResumableDownloadBanner ) );
 			CancelCommand.NotifyCanExecuteChanged();
+			ResumeSavedDownloadCommand.NotifyCanExecuteChanged();
+			ClearSavedDownloadCommand.NotifyCanExecuteChanged();
+		}
+		if( next.CanPause != prev.CanPause )
+			OnPropertyChanged( nameof( CanPause ) );
+		if( next.PauseState != prev.PauseState )
+		{
+			OnPropertyChanged( nameof( PauseState ) );
+			OnPropertyChanged( nameof( IsPausing ) );
+			OnPropertyChanged( nameof( IsPaused ) );
+			OnPropertyChanged( nameof( PauseButtonText ) );
+		}
+		if( next.IsInProcess != prev.IsInProcess || next.CanPause != prev.CanPause || next.PauseState != prev.PauseState )
+		{
+			OnPropertyChanged( nameof( IsActivelyRunning ) );
+			OnPropertyChanged( nameof( ShowPauseButton ) );
+			OnPropertyChanged( nameof( CanTogglePause ) );
+			OnPropertyChanged( nameof( IsPausing ) );
+			OnPropertyChanged( nameof( IsPaused ) );
+			TogglePauseCommand.NotifyCanExecuteChanged();
 		}
 		if( next.IsIndeterminate != prev.IsIndeterminate )
 			OnPropertyChanged( nameof( IsIndeterminate ) );
@@ -918,10 +1138,16 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 			OnPropertyChanged( nameof( ProcessingSummaryText ) );
 	}
 
-	private static string FormatProcessingSummary( bool isInProcess, int maxCount, int totalProcessed, int statusCount )
-		=> isInProcess
-			? ( maxCount > 0 ? $"Processing {totalProcessed}/{maxCount}" : "Processing..." )
-			: ( statusCount > 0 ? $"{statusCount} ops" : "Idle" );
+	private static string FormatProcessingSummary( bool isInProcess, OperationPauseState pauseState, int maxCount, int totalProcessed, int statusCount )
+	{
+		if( !isInProcess )
+			return statusCount > 0 ? $"{statusCount} ops" : "Idle";
+		if( pauseState == OperationPauseState.Paused )
+			return maxCount > 0 ? $"Paused {totalProcessed}/{maxCount}" : "Paused";
+		if( pauseState == OperationPauseState.Pausing )
+			return maxCount > 0 ? $"Pausing {totalProcessed}/{maxCount}…" : "Pausing…";
+		return maxCount > 0 ? $"Processing {totalProcessed}/{maxCount}" : "Processing...";
+	}
 
 	private void ResetEtaStateLocked( int total )
 	{
@@ -933,6 +1159,10 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 
 	private string ComputeEtaTextLocked()
 	{
+		if( _isInProcess && _pauseState == OperationPauseState.Paused )
+			return "Paused";
+		if( _isInProcess && _pauseState == OperationPauseState.Pausing )
+			return "Pausing…";
 		if( !_isInProcess || _maxCount <= 0 || _totalProcessed <= 0 || _totalProcessed >= _maxCount )
 			return string.Empty;
 
@@ -1071,6 +1301,8 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 
 	private readonly record struct ProgressSnapshot(
 		bool IsInProcess,
+		bool CanPause,
+		OperationPauseState PauseState,
 		int MaxCount,
 		int TotalProcessed,
 		int SkipCounter,
@@ -1086,6 +1318,8 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 
 	private readonly record struct UiProgressState(
 		bool IsInProcess,
+		bool CanPause,
+		OperationPauseState PauseState,
 		bool IsIndeterminate,
 		int MaxCount,
 		int TotalProcessed,
@@ -1107,6 +1341,8 @@ public sealed partial class StatusDialogViewModel : ObservableObject, IDisposabl
 	{
 		public static readonly UiProgressState Initial = new(
 			IsInProcess: false,
+			CanPause: false,
+			PauseState: OperationPauseState.None,
 			IsIndeterminate: false,
 			MaxCount: 0,
 			TotalProcessed: 0,

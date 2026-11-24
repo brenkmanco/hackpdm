@@ -5,6 +5,7 @@ using System.Text.Json;
 
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
+using HackPDM.Core.Services;
 
 namespace HackPDM.Core.Pdm;
 
@@ -25,13 +26,14 @@ public static class ContentTransfer
 		string path,
 		CancellationToken token = default,
 		Action<long>? onBytes = null,
-		string? precomputedSha1 = null )
+		string? precomputedSha1 = null,
+		OperationPauseController? pause = null )
 	{
 		try
 		{
 			FileStream stream = new( path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, useAsync: true );
 			await using( stream.ConfigureAwait( false ) )
-				return await UploadAsync( stream, token, onBytes, precomputedSha1 ).ConfigureAwait( false );
+				return await UploadAsync( stream, token, onBytes, precomputedSha1, pause ).ConfigureAwait( false );
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{
@@ -43,15 +45,21 @@ public static class ContentTransfer
 		Stream stream,
 		CancellationToken token = default,
 		Action<long>? onBytes = null,
-		string? precomputedSha1 = null )
+		string? precomputedSha1 = null,
+		OperationPauseController? pause = null )
 	{
+		if( pause is not null )
+			await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
+
 		long size = stream.Length;
 		stream.Position = 0;
 		string sha1 = IsValidSha1Hex( precomputedSha1 )
 			? precomputedSha1!.Trim().ToLowerInvariant()
 			: Convert.ToHexStringLower( await SHA1.HashDataAsync( stream, token ).ConfigureAwait( false ) );
 
-		Result<OdooRow> begun = await OdooRpc.ExecuteAsync<OdooRow>( UploadModel, "upload_begin", [ size, sha1 ], OdooRpc.LongTimeout, token ).ConfigureAwait( false );
+		Result<OdooRow> begun;
+		using( OperationPauseController.EnterScope( pause ) )
+			begun = await OdooRpc.ExecuteAsync<OdooRow>( UploadModel, "upload_begin", [ size, sha1 ], OdooRpc.LongTimeout, token ).ConfigureAwait( false );
 		if( !begun.Ok )
 			return Result<int>.Fail( $"upload refused: {begun.Error}" );
 		int id = begun.Value?.Int( nameof( HpRecordBase.id ) ) ?? 0;
@@ -63,9 +71,13 @@ public static class ContentTransfer
 
 		for( int round = 1; round <= 2; round++ )
 		{
-			if( await SendChunksAsync( id, stream, size, chunk, token, onBytes ).ConfigureAwait( false ) is { Ok: false } sent )
+			if( await SendChunksAsync( id, stream, size, chunk, token, onBytes, pause ).ConfigureAwait( false ) is { Ok: false } sent )
 				return Result<int>.Fail( sent.Error );
-			Result<bool> finished = await OdooRpc.ExecuteAsync<bool>( UploadModel, "upload_finish", [ id ], TimeoutMs( size ), token ).ConfigureAwait( false );
+			if( pause is not null )
+				await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
+			Result<bool> finished;
+			using( OperationPauseController.EnterScope( pause ) )
+				finished = await OdooRpc.ExecuteAsync<bool>( UploadModel, "upload_finish", [ id ], TimeoutMs( size ), token ).ConfigureAwait( false );
 			if( !finished.Ok )
 				return Result<int>.Fail( $"upload not completed: {finished.Error}" );
 			if( finished.Value )
@@ -95,7 +107,8 @@ public static class ContentTransfer
 		long size,
 		int chunk,
 		CancellationToken token,
-		Action<long>? onBytes )
+		Action<long>? onBytes,
+		OperationPauseController? pause = null )
 	{
 		int bufferSize = (int)Math.Min( chunk, Math.Max( size, 1 ) );
 		byte[] buffer = ArrayPool<byte>.Shared.Rent( bufferSize );
@@ -107,10 +120,13 @@ public static class ContentTransfer
 
 			while( offset < size )
 			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
 				token.ThrowIfCancellationRequested();
 				if( failures >= MaxAttempts )
 					return Result<bool>.Fail( $"upload failed at byte {offset} of {size}: {lastError}" );
 
+				using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 				stream.Position = offset;
 				int wanted = (int)Math.Min( bufferSize, size - offset );
 				int read = await stream.ReadAtLeastAsync( buffer.AsMemory( 0, wanted ), wanted, throwOnEndOfStream: false, token ).ConfigureAwait( false );
@@ -155,7 +171,8 @@ public static class ContentTransfer
 		Stream destination,
 		CancellationToken token = default,
 		Action<long>? onBytes = null,
-		AdaptiveTransferController? controller = null )
+		AdaptiveTransferController? controller = null,
+		OperationPauseController? pause = null )
 	{
 		using IncrementalHash sha1 = IncrementalHash.CreateHash( HashAlgorithmName.SHA1 );
 		byte[]? decodeBuffer = null;
@@ -166,7 +183,11 @@ public static class ContentTransfer
 
 			while( offset < size )
 			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
 				token.ThrowIfCancellationRequested();
+
+				using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 				int chunkLimit = controller is null
 					? ChunkBytes
 					: controller.GetChunkBytes( ChunkBytes < DefaultChunkBytes ? ChunkBytes : null );
@@ -241,11 +262,12 @@ public static class ContentTransfer
 		HpVersion version,
 		CancellationToken token = default,
 		Action<long>? onBytes = null,
-		AdaptiveTransferController? controller = null )
+		AdaptiveTransferController? controller = null,
+		OperationPauseController? pause = null )
 	{
 		int capacity = (int)Math.Clamp( version.file_size ?? 0, 0, int.MaxValue );
 		using MemoryStream memory = new( capacity );
-		Result<string> got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, memory, token, onBytes, controller ).ConfigureAwait( false );
+		Result<string> got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, memory, token, onBytes, controller, pause ).ConfigureAwait( false );
 		if( !got.Ok )
 			return Result<byte[]>.Fail( got.Error );
 		if( Mismatch( version, got.Value ) is { } error )
@@ -257,7 +279,8 @@ public static class ContentTransfer
 		HpVersion version,
 		CancellationToken token = default,
 		Action<long>? onBytes = null,
-		AdaptiveTransferController? controller = null )
+		AdaptiveTransferController? controller = null,
+		OperationPauseController? pause = null )
 	{
 		string temp = Path.Combine( Path.GetTempPath(), $"hackpdm-{Guid.NewGuid():N}.part" );
 		Result<string> got;
@@ -265,7 +288,7 @@ public static class ContentTransfer
 		{
 			FileStream file = new( temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true );
 			await using( file.ConfigureAwait( false ) )
-				got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, file, token, onBytes, controller ).ConfigureAwait( false );
+				got = await DownloadAsync( version.id ?? 0, version.file_size ?? 0, file, token, onBytes, controller, pause ).ConfigureAwait( false );
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{

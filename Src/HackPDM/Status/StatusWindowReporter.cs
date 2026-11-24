@@ -51,10 +51,12 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 		}
 	}
 
-	private sealed class OperationState( long token, OperationScope? scope )
+	private sealed class OperationState( long token, OperationScope? scope, OperationPauseController? pause )
 	{
 		public long Token { get; } = token;
 		public OperationScope? Scope { get; } = scope;
+		public OperationPauseController? Pause { get; } = pause;
+		public Action<OperationPauseState>? PauseHandler { get; set; }
 		public CancellationTokenSource Cts { get; } = new();
 		public CancellationTokenRegistration CancelRegistration { get; set; }
 		public bool SuppressCancelDialog { get; set; }
@@ -78,15 +80,25 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 
 	public void ShowWindow() => dialogs.ShowStatusWindow();
 
-	public CancellationTokenSource BeginOperation()
+	public OperationPauseController? PauseController => _currentOp.Value?.Pause;
+
+	public CancellationTokenSource BeginOperation() => BeginOperation( canPause: false );
+
+	public CancellationTokenSource BeginOperation( bool canPause )
 	{
 		OperationScope? scope = _currentScope.Value;
+		OperationPauseController? pause = canPause ? new OperationPauseController() : null;
 		OperationState op;
 		long token;
 		lock( _gate )
 		{
 			token = ++_nextToken;
-			op = new OperationState( token, scope );
+			op = new OperationState( token, scope, pause );
+			if( pause is not null )
+			{
+				op.PauseHandler = state => status()?.SetPauseState( canPause: true, state, token );
+				pause.StateChanged += op.PauseHandler;
+			}
 			op.CancelRegistration = op.Cts.Token.Register( static state =>
 			{
 				var (reporter, operation) = ((StatusWindowReporter, OperationState))state!;
@@ -96,8 +108,28 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 		}
 		scope?.RecordOperationStarted();
 		_currentOp.Value = op;
-		status()?.SetInProcess( true, token );
+		StatusDialogViewModel? vm = status();
+		vm?.SetPauseState( canPause, pause?.State ?? OperationPauseState.None, token );
+		vm?.SetInProcess( true, token );
 		return op.Cts;
+	}
+
+	public void TogglePause()
+	{
+		List<OperationPauseController>? targets = null;
+		lock( _gate )
+		{
+			for( int i = 0; i < _activeOps.Count; i++ )
+			{
+				OperationState op = _activeOps[ i ];
+				if( !op.HasCompleted && !op.WasCancelled && op.Pause is { } pause )
+					( targets ??= [] ).Add( pause );
+			}
+		}
+		if( targets is null )
+			return;
+		for( int i = 0; i < targets.Count; i++ )
+			targets[ i ].TogglePause();
 	}
 
 	public void Cancel() => CancelCore( silent: false );
@@ -126,8 +158,20 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 			return;
 		for( int i = 0; i < toCancel.Count; i++ )
 		{
-			try { toCancel[ i ].Cts.Cancel(); }
+			OperationState op = toCancel[ i ];
+			DetachPauseHandler( op );
+			op.Pause?.ResetForCompletion();
+			try { op.Cts.Cancel(); }
 			catch( ObjectDisposedException ) { }
+		}
+	}
+
+	private static void DetachPauseHandler( OperationState op )
+	{
+		if( op.Pause is { } pause && op.PauseHandler is { } handler )
+		{
+			pause.StateChanged -= handler;
+			op.PauseHandler = null;
 		}
 	}
 
@@ -173,6 +217,7 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 	public void SetTotal( int total ) => status()?.ResetProgress( total );
 	public void Advance( int processed, int skipped = 0 ) => status()?.Advance( processed, skipped );
 	public void SetProcessed( int processed ) => status()?.SetProcessed( processed );
+	public void RestoreProgress( int total, int processed, int skipped, long downloadedBytes ) => status()?.RestoreProgress( total, processed, skipped, downloadedBytes );
 	public void AddDownloadedBytes( long bytes ) => status()?.AddDownloadedBytes( bytes );
 	public void AddUploadedBytes( long bytes ) => status()?.AddUploadedBytes( bytes );
 	public void BeginDownloadTransfer() => status()?.BeginDownloadTransfer();
@@ -211,6 +256,11 @@ public sealed class StatusWindowReporter( IDialogService dialogs, Func<StatusDia
 
 			if( _activeOps.Count == 0 )
 				tokenToComplete = _nextToken;
+		}
+		if( opToDispose is not null )
+		{
+			DetachPauseHandler( opToDispose );
+			opToDispose.Pause?.ResetForCompletion();
 		}
 		registration.Dispose();
 		opToDispose?.Cts.Dispose();

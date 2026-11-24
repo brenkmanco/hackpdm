@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 using HackPDM.Common;
@@ -22,7 +23,9 @@ namespace HackPDM;
 /// <summary>Composition root wiring concrete core services, theme service, session state, and view models.</summary>
 public static class AppComposition
 {
+	private static readonly Lock WorkflowLock = new();
 	private static LocalFileWatcher? _localFiles;
+	private static PdmWorkflowService? _workflow;
 
 	public static JsonFileSettingsProvider Settings => field ??= AppSettingsStore.Open();
 	public static IDialogService Dialogs => field ??= new DialogService();
@@ -30,13 +33,28 @@ public static class AppComposition
 	public static NavigationService Navigation => field ??= new();
 	public static ThemeService Theme => field ??= new();
 	public static StatusWindowReporter Reporter => field ??= new( Dialogs, () => StatusLog );
-	public static IPdmWorkflowService Workflow => field ??= new PdmWorkflowService( Reporter, LocalFiles );
+	public static IPdmWorkflowService Workflow
+	{
+		get
+		{
+			if( _workflow is { } existing )
+				return existing;
+			lock( WorkflowLock )
+				return _workflow ??= CreateWorkflow();
+		}
+	}
 	public static IEntryFileService EntryFiles => field ??= new EntryFileService();
 	public static IEntryDetailsService EntryDetails => field ??= new EntryDetailsService();
 	public static LoginSession Session => field ??= CreateSession();
 	public static FileManagerState FileManagerState => field ??= new();
 	public static LocalFileWatcher LocalFiles => _localFiles ??= CreateLocalFileWatcher();
-	public static StatusDialogViewModel StatusLog => field ??= new( Dialogs, () => Reporter.Cancel(), () => Reporter.CancelSilent() );
+	public static StatusDialogViewModel StatusLog => field ??= CreateStatusLog();
+
+	public static bool TryGetWorkflow( out IPdmWorkflowService? workflow )
+	{
+		workflow = _workflow;
+		return workflow is not null;
+	}
 
 	public static SearchOdooViewModel SearchOdoo => field ??= new(
 		new EntrySearchService(),
@@ -71,14 +89,26 @@ public static class AppComposition
 
 	public static Task OnVaultPathChangedAsync()
 	{
-		UiDispatcher.RunOrPost( EntryIcons.ClearServerCache );
+		UiDispatcher.RunOrPost( () =>
+		{
+			EntryIcons.ClearServerCache();
+			StatusLog.RefreshResumableDownloadState();
+		} );
 		FileManagerState.Reset();
 		string vault = PwaPaths.Vault;
 		return Task.Run( () => LocalFiles.Watch( vault ) );
 	}
 
 	public static ProfileManagerViewModel CreateProfileManager()
-		=> new( Session, Dialogs, FilePickers, Navigation, OnVaultPathChangedAsync, InspectSettingsStatus, SearchOdoo );
+		=> new(
+			Session,
+			Dialogs,
+			FilePickers,
+			Navigation,
+			OnVaultPathChangedAsync,
+			InspectSettingsStatus,
+			SearchOdoo,
+			() => UiDispatcher.RunOrPost( () => StatusLog.RefreshResumableDownloadState() ) );
 
 	public static HackFileManagerViewModel CreateFileManager() => new(
 		FileManagerState,
@@ -94,7 +124,7 @@ public static class AppComposition
 
 	public static HackSettingsViewModel CreateHackSettings() => new( Dialogs, FilePickers, Session, OnVaultPathChangedAsync );
 	public static OdooSettingsViewModel CreateOdooSettings() => new( Dialogs, Session, FileManagerState, SearchOdoo );
-	public static StatusSettingsViewModel CreateStatusSettings() => new( StatusLog, Dialogs, Session );
+	public static StatusSettingsViewModel CreateStatusSettings() => new( StatusLog, Dialogs, Session, Workflow );
 	public static ThemeEditorViewModel CreateThemeEditor() => new( Theme, Session );
 
 	private static async Task<bool> RunTrackedOperationAsync( Func<Task> operation )
@@ -110,6 +140,43 @@ public static class AppComposition
 		Navigation.NavigateTo( NavigatePageMenu.HackFileManager );
 		return located;
 	}
+
+	private static PdmWorkflowService CreateWorkflow()
+	{
+		PdmWorkflowService workflow = new( Reporter, LocalFiles );
+		workflow.ResumableDownloadChanged += OnResumableDownloadChanged;
+		return workflow;
+	}
+
+	private static async Task ResumeSavedDownloadFromStatusAsync()
+	{
+		Reporter.ShowWindow();
+		await Workflow.ResumeDownloadAsync();
+		FileManagerState.MarkStale( FileManagerRefresh.All );
+	}
+
+	private static StatusDialogViewModel CreateStatusLog()
+	{
+		StatusDialogViewModel vm = new(
+			Dialogs,
+			() => Reporter.Cancel(),
+			() => Reporter.CancelSilent(),
+			() => Reporter.TogglePause(),
+			ResumeSavedDownloadFromStatusAsync,
+			() =>
+			{
+				if( _workflow is { } wf )
+					wf.ClearResumableDownload();
+				else
+					DownloadResumeStore.Default.Clear();
+			},
+			() => _workflow is { } wf ? wf.GetResumableDownload() : PdmWorkflowService.GetStoredResumableDownload() );
+		UiDispatcher.Post( vm.RefreshResumableDownloadState );
+		return vm;
+	}
+
+	private static void OnResumableDownloadChanged()
+		=> UiDispatcher.RunOrPost( () => StatusLog.RefreshResumableDownloadState() );
 
 	private static LoginSession CreateSession()
 	{

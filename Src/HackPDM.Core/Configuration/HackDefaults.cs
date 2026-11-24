@@ -3,6 +3,8 @@ namespace HackPDM.Core.Configuration;
 /// <summary>Process-wide local workspace (PWA) settings.</summary>
 public sealed class HackDefaults
 {
+	public const string PersistDownloadResumeKey = "PersistDownloadResume";
+
 	private ISettingsProvider? _settingsProvider;
 	private string? _cachedPwaAbsolute;
 	private string? _relativeFor;
@@ -30,6 +32,12 @@ public sealed class HackDefaults
 			_cachedPwaAbsolute = value ?? "";
 			_settingsProvider?.Set( nameof( Services.SavedProfileData.PWAPathAbsolute ), value );
 		}
+	}
+
+	public bool PersistDownloadResume
+	{
+		get => _settingsProvider?.Get( PersistDownloadResumeKey, true ) ?? true;
+		set => _settingsProvider?.Set( PersistDownloadResumeKey, value );
 	}
 
 	internal void SetPwaPathCached( string? value ) => _cachedPwaAbsolute = value ?? "";

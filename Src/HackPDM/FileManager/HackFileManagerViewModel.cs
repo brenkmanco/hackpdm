@@ -191,6 +191,13 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 	[ObservableProperty] public partial bool IsDetailsLoading { get; set; }
 
 	[ObservableProperty]
+	[NotifyCanExecuteChangedFor( nameof( ResumeSavedDownloadCommand ) )]
+	[NotifyCanExecuteChangedFor( nameof( ClearSavedDownloadCommand ) )]
+	public partial bool HasResumableDownload { get; private set; }
+
+	[ObservableProperty] public partial string ResumableDownloadSummary { get; private set; } = string.Empty;
+
+	[ObservableProperty]
 	[NotifyPropertyChangedFor( nameof( IsPreviewVisible ) )]
 	[NotifyPropertyChangedFor( nameof( IsNoPreviewVisible ) )]
 	[NotifyPropertyChangedFor( nameof( IsPreviewBusy ) )]
@@ -365,15 +372,47 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			_active = true;
 			_state.LivePages++;
 			_state.LocateRequested += ForwardLocateAsync;
+			_workflow.ResumableDownloadChanged += OnWorkflowResumableDownloadChanged;
 			_localFiles.Changed += OnLocalFilesChanged;
 			_localFiles.Overflowed += OnLocalChangesLost;
 			_localFiles.Watch( PwaPaths.Vault );
 		}
+		RefreshResumableDownload();
 		return _state.TakePendingLocate();
 	}
 
 	private Task ForwardLocateAsync( IReadOnlyList<string> segments, string? fileName )
 		=> LocateRequested?.Invoke( segments, fileName ) ?? Task.CompletedTask;
+
+	private void OnWorkflowResumableDownloadChanged()
+	{
+		if( !IsDisposed )
+			UiDispatcher.RunOrPost( RefreshResumableDownload );
+	}
+
+	public void RefreshResumableDownload()
+	{
+		if( !IsDisposed )
+			_ = RefreshResumableDownloadAsync();
+	}
+
+	private async Task RefreshResumableDownloadAsync()
+	{
+		try
+		{
+			CancellationToken ct = _pageCancellation.Token;
+			DownloadResumeState? state = await Task.Run( () => _workflow.GetResumableDownload(), ct );
+			if( IsDisposed || ct.IsCancellationRequested )
+				return;
+			HasResumableDownload = state is { HasRemainingWork: true };
+			ResumableDownloadSummary = state is { HasRemainingWork: true } ? state.FormatSummary() : string.Empty;
+		}
+		catch( OperationCanceledException ) { }
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "FileManager", $"Could not check resumable download state: {ex.Message}", ex );
+		}
+	}
 
 	public void Dispose()
 	{
@@ -385,6 +424,7 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 			_active = false;
 			_state.LivePages--;
 			_state.LocateRequested -= ForwardLocateAsync;
+			_workflow.ResumableDownloadChanged -= OnWorkflowResumableDownloadChanged;
 			_localFiles.Changed -= OnLocalFilesChanged;
 			_localFiles.Overflowed -= OnLocalChangesLost;
 		}
@@ -1574,6 +1614,29 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		if( committed && !IsDisposed )
 			Refresh( FileManagerRefresh.Entries );
 	} );
+
+	private bool CanResumeSavedDownload() => HasResumableDownload;
+
+	[RelayCommand( CanExecute = nameof( CanResumeSavedDownload ) )]
+	private Task ResumeSavedDownloadAsync() => RunOperationAsync( async () =>
+	{
+		await _workflow.ResumeDownloadAsync();
+		if( !IsDisposed )
+		{
+			RefreshResumableDownload();
+			Refresh( FileManagerRefresh.All );
+		}
+	} );
+
+	private bool CanClearSavedDownload() => HasResumableDownload;
+
+	[RelayCommand( CanExecute = nameof( CanClearSavedDownload ) )]
+	private async Task ClearSavedDownloadAsync()
+	{
+		await Task.Run( _workflow.ClearResumableDownload );
+		if( !IsDisposed )
+			RefreshResumableDownload();
+	}
 
 	[RelayCommand] private Task OpenSelectedAsync() => OpenSelectedAsync( EntryOpenMode.Open );
 	[RelayCommand] private Task OpenSelectedLatestRemoteAsync() => OpenSelectedAsync( EntryOpenMode.LatestRemote );

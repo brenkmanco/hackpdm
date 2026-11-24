@@ -57,6 +57,7 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	private readonly Func<Task> _accountChanged;
 	private readonly Func<IReadOnlyList<(StatusMessage Status, string Category, string Message)>> _inspectSettings;
 	private readonly SearchOdooViewModel _search;
+	private readonly Action? _onAuthStateChanged;
 	private CancellationTokenSource? _operationCts;
 	private CancellationTokenSource? _inspectCts;
 	private Task? _inspectTask;
@@ -73,7 +74,8 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		INavigationService navigation,
 		Func<Task> accountChanged,
 		Func<IReadOnlyList<(StatusMessage Status, string Category, string Message)>> inspectSettings,
-		SearchOdooViewModel search )
+		SearchOdooViewModel search,
+		Action? onAuthStateChanged = null )
 	{
 		_session = session;
 		_dialogs = dialogs;
@@ -82,6 +84,7 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		_accountChanged = accountChanged;
 		_inspectSettings = inspectSettings;
 		_search = search;
+		_onAuthStateChanged = onAuthStateChanged;
 		IsLoggedIn = _session.IsLoggedIn;
 		Attach();
 	}
@@ -284,6 +287,7 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		OdooDefaults.Instance.OdooId = 0;
 		OdooDefaults.Instance.Lookups = OdooLookupCache.Empty;
 		await _accountChanged();
+		_onAuthStateChanged?.Invoke();
 		_search.ResetForSessionChange();
 		LogSession( StatusMessage.INFO, ProfileStatusCategory.Login, $"Signed out of Odoo session ({target}).", updateBanner: true );
 	}
@@ -312,6 +316,7 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 					_search.ResetForSessionChange();
 					LogSession( StatusMessage.INFO, ProfileStatusCategory.Login, $"Switched active account to '{odoo.OdooUser}' on '{odoo.OdooDb}'; cached workspace cleared." );
 				}
+				_onAuthStateChanged?.Invoke();
 				_search.LoadLookups();
 				bool savedCredentials = await Task.Run( () => odoo.SaveCredentials(), token );
 				if( savedCredentials )
