@@ -97,6 +97,7 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 	public void SetHostMode( bool isDocked )
 	{
 		_isDocked = isDocked;
+		HideHoverPopup();
 		if( isDocked )
 			ParentWindow = null;
 		UpdateHostButtons();
@@ -196,7 +197,9 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 
 	private void OnLoaded( object sender, RoutedEventArgs e )
 	{
-		if( !_isDocked )
+		if( _isDocked )
+			ParentWindow = null;
+		else
 			ParentWindow ??= WindowHelper.WindowOf( this );
 		ViewModel.OperationCompleted -= OnOperationCompleted;
 		ViewModel.OperationCompleted += OnOperationCompleted;
@@ -419,6 +422,9 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 			StatusHoverPopup.Child = card;
 
 		StatusHoverPopup.XamlRoot = XamlRoot;
+#if WINDOWS
+		StatusHoverPopup.ShouldConstrainToRootBounds = false;
+#endif
 		card.Measure( new Size( 440, 340 ) );
 		double popupW = 440;
 		double popupH = Math.Clamp( card.DesiredSize.Height, 110, 340 );
@@ -467,6 +473,7 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 		CancelHoverCloseTimer();
 		_activeHoverKind = null;
 		StatusHoverPopup.IsOpen = false;
+		StatusHoverPopup.Child = null;
 		HackApp.HomePage?.HideOverlay( _hoverCard );
 	}
 
@@ -518,7 +525,7 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 			return;
 		}
 		WindowHelper.CreateWindowAndPage<ApplicationSettingsView>( out var page, out var window );
-		page.SelectSection( "Status" );
+		page.SelectSection( ApplicationSettingsView.StatusSectionKey );
 		window.Title = "Status Settings";
 		_settingsWindow = window;
 		window.Closed += OnSettingsWindowClosed;
@@ -533,7 +540,10 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 
 	private async void AppWindow_Closing( AppWindow sender, AppWindowClosingEventArgs args )
 	{
-		if( _allowClose || !ViewModel.IsInProcess )
+		if( _allowClose || _isDocked || ParentWindow is not { } parent || !ReferenceEquals( parent.AppWindow, sender ) )
+			return;
+		object? hosted = ( parent.Content as Frame )?.Content ?? parent.Content;
+		if( !ReferenceEquals( hosted, this ) || !ViewModel.IsInProcess )
 			return;
 		// hold the close (it can't wait for the answer), then close for real if the user confirms
 		args.Cancel = true;

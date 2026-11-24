@@ -23,8 +23,10 @@ namespace HackPDM.Status;
 public sealed partial class StatusDialogViewModel : ObservableObject
 {
 	private const string HistoryLengthSettingKey = "StatusHistoryLength";
+	private const string AutoCloseSettingKey = "StatusAutoClose";
 	private const int DefaultHistoryLength = 1000;
 	private const int UiFlushIntervalMs = 250;
+	private const int RateRefreshIntervalMs = 1000;
 	private const int BatchListTrimThreshold = 1024;
 
 	private static int _cachedHistoryLength = -1;
@@ -43,7 +45,9 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	private readonly List<BasicStatusMessage> _batchErrorsOnly = [];
 	private readonly Action _runUiFlush;
 	private readonly Timer _uiFlushTimer;
+	private readonly Timer _rateRefreshTimer;
 	private long _lastUiFlushTick;
+	private long _activeToken;
 	private int _uiFlushScheduled;
 	private int _logDirty;
 	private int _progressDirty;
@@ -56,6 +60,7 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	private long _uploadedBytes;
 	private long _sessionUploadedBytes;
 	private bool _isInProcess;
+	private bool _rateRefreshRunning;
 	private bool _autoClose;
 	private string _latestProcessingMessage = "Idle";
 
@@ -86,7 +91,7 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		_dialogs = dialogs;
 		_cancelOperation = cancelOperation;
 		_cancelSilentOperation = cancelSilentOperation ?? cancelOperation;
-		_autoClose = HackDefaults.Instance.SettingsProvider?.Get( "StatusAutoClose", false ) ?? false;
+		_autoClose = HackDefaults.Instance.SettingsProvider?.Get( AutoCloseSettingKey, false ) ?? false;
 		int capacity = HistoryLength;
 		OStatus = new( capacity, newestFirst: true );
 		OInfo = new( capacity, newestFirst: true );
@@ -95,6 +100,7 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		OErrorsOnly = new( capacity, newestFirst: true );
 		_runUiFlush = RunUiFlush;
 		_uiFlushTimer = new Timer( _ => UiDispatcher.Post( _runUiFlush ), null, Timeout.Infinite, Timeout.Infinite );
+		_rateRefreshTimer = new Timer( _ => RefreshRatesIfActive(), null, Timeout.Infinite, Timeout.Infinite );
 	}
 
 	public ObservableRingBuffer<BasicStatusMessage> OStatus { get; }
@@ -116,7 +122,7 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		{
 			if( !SetProperty( ref _autoClose, value ) )
 				return;
-			HackDefaults.Instance.SettingsProvider?.Set( "StatusAutoClose", value );
+			HackDefaults.Instance.SettingsProvider?.Set( AutoCloseSettingKey, value );
 		}
 	}
 
@@ -160,7 +166,20 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 			if( MaxCount <= 0 )
 				return IsInProcess ? "Working..." : "Ready";
 			float percent = TotalProcessed / (float)MaxCount * 100f;
-			string speed = DownloadSpeedText is { Length: > 0 } dl ? dl : UploadSpeedText;
+			string speed;
+			lock( _gate )
+			{
+				bool dlActive = _downloadRate.IsActive;
+				bool ulActive = _uploadRate.IsActive;
+				string dl = TransferRateTracker.FormatMbps( _downloadRate.CurrentMbps );
+				string ul = TransferRateTracker.FormatMbps( _uploadRate.CurrentMbps );
+				speed = ( dlActive, ulActive ) switch
+				{
+					( true, false ) => dl,
+					( false, true ) => ul,
+					_ => dl.Length > 0 ? dl : ul,
+				};
+			}
 			return speed.Length > 0
 				? $"{TotalProcessed}/{MaxCount} ({percent:f0}%) • {speed}"
 				: $"{TotalProcessed}/{MaxCount} ({percent:f0}%)";
@@ -358,14 +377,45 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 
 	private bool CanCancel() => IsInProcess;
 
-	public void SetInProcess( bool inProcess )
+	public void SetInProcess( bool inProcess ) => SetInProcessCore( inProcess, token: null );
+
+	internal void SetInProcess( bool inProcess, long token ) => SetInProcessCore( inProcess, token );
+
+	internal void TryClearInProcess( long expectedToken )
 	{
+		bool changed = false;
 		lock( _gate )
 		{
-			if( _isInProcess == inProcess )
+			if( _activeToken != expectedToken )
 				return;
+			if( _isInProcess )
+			{
+				_isInProcess = false;
+				changed = true;
+			}
+		}
+		if( changed )
+			PostInProcessChanged();
+	}
+
+	private void SetInProcessCore( bool inProcess, long? token )
+	{
+		bool changed;
+		lock( _gate )
+		{
+			if( token is long t )
+				_activeToken = t;
+			else if( !inProcess )
+				_activeToken++;
+			changed = _isInProcess != inProcess;
 			_isInProcess = inProcess;
 		}
+		if( changed )
+			PostInProcessChanged();
+	}
+
+	private void PostInProcessChanged()
+	{
 		UiDispatcher.Post( () =>
 		{
 			OnPropertyChanged( nameof( IsInProcess ) );
@@ -379,6 +429,7 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	{
 		if( IsInProcess )
 			return;
+		bool stopTimer = false;
 		lock( _gate )
 		{
 			( _maxCount, _processCounter, _skipCounter, _totalProcessed ) = ( 0, 0, 0, 0 );
@@ -386,7 +437,10 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 			_uploadedBytes = 0;
 			_downloadRate.Reset();
 			_uploadRate.Reset();
+			stopTimer = TakeStopRateTimerLocked();
 		}
+		if( stopTimer )
+			_rateRefreshTimer.Change( Timeout.Infinite, Timeout.Infinite );
 		UiDispatcher.Post( () =>
 		{
 			while( _pendingLogs.TryDequeue( out _ ) ) { }
@@ -422,6 +476,7 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 
 	public void ResetProgress( int total )
 	{
+		bool stopTimer = false;
 		lock( _gate )
 		{
 			( _maxCount, _processCounter, _skipCounter, _totalProcessed ) = ( total, 0, 0, 0 );
@@ -429,33 +484,62 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 			_uploadedBytes = 0;
 			_downloadRate.Reset();
 			_uploadRate.Reset();
+			stopTimer = TakeStopRateTimerLocked();
 		}
+		if( stopTimer )
+			_rateRefreshTimer.Change( Timeout.Infinite, Timeout.Infinite );
 		QueueProgressRefresh();
 	}
 
 	public void BeginDownloadTransfer()
 	{
+		bool startTimer;
 		lock( _gate )
+		{
 			_downloadRate.BeginTransfer();
+			startTimer = TakeStartRateTimerLocked();
+		}
+		if( startTimer )
+			_rateRefreshTimer.Change( RateRefreshIntervalMs, RateRefreshIntervalMs );
+		QueueProgressRefresh();
 	}
 
 	public void EndDownloadTransfer()
 	{
+		bool stopTimer;
 		lock( _gate )
+		{
 			_downloadRate.EndTransfer();
+			stopTimer = TakeStopRateTimerLocked();
+		}
+		if( stopTimer )
+			_rateRefreshTimer.Change( Timeout.Infinite, Timeout.Infinite );
 		QueueProgressRefresh();
 	}
 
 	public void BeginUploadTransfer()
 	{
+		bool startTimer;
 		lock( _gate )
+		{
 			_uploadRate.BeginTransfer();
+			startTimer = TakeStartRateTimerLocked();
+		}
+		if( startTimer )
+			_rateRefreshTimer.Change( RateRefreshIntervalMs, RateRefreshIntervalMs );
+		QueueProgressRefresh();
 	}
 
 	public void EndUploadTransfer()
 	{
+		bool stopTimer;
 		lock( _gate )
+		{
 			_uploadRate.EndTransfer();
+			stopTimer = TakeStopRateTimerLocked();
+		}
+		if( stopTimer )
+			_rateRefreshTimer.Change( Timeout.Infinite, Timeout.Infinite );
 		QueueProgressRefresh();
 	}
 
@@ -463,12 +547,16 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	{
 		if( bytes <= 0 )
 			return;
+		bool startTimer;
 		lock( _gate )
 		{
 			_downloadedBytes += bytes;
 			_sessionDownloadedBytes += bytes;
 			_downloadRate.AddBytes( bytes );
+			startTimer = TakeStartRateTimerLocked();
 		}
+		if( startTimer )
+			_rateRefreshTimer.Change( RateRefreshIntervalMs, RateRefreshIntervalMs );
 		QueueProgressRefresh();
 	}
 
@@ -476,12 +564,16 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 	{
 		if( bytes <= 0 )
 			return;
+		bool startTimer;
 		lock( _gate )
 		{
 			_uploadedBytes += bytes;
 			_sessionUploadedBytes += bytes;
 			_uploadRate.AddBytes( bytes );
+			startTimer = TakeStartRateTimerLocked();
 		}
+		if( startTimer )
+			_rateRefreshTimer.Change( RateRefreshIntervalMs, RateRefreshIntervalMs );
 		QueueProgressRefresh();
 	}
 
@@ -506,31 +598,77 @@ public sealed partial class StatusDialogViewModel : ObservableObject
 		QueueProgressRefresh();
 	}
 
-	public void CompleteProgress()
+	public void CompleteProgress() => CompleteProgressCore( expectedToken: null );
+
+	internal void CompleteProgress( long expectedToken ) => CompleteProgressCore( expectedToken );
+
+	private void CompleteProgressCore( long? expectedToken )
 	{
 		bool wasInProcess;
+		long completedToken;
+		bool stopTimer;
 		lock( _gate )
 		{
+			if( expectedToken is long expected && _activeToken != expected )
+				return;
+			completedToken = _activeToken;
 			wasInProcess = _isInProcess;
 			_processCounter = Math.Max( _maxCount - _skipCounter, 0 );
 			_totalProcessed = _maxCount;
 			_isInProcess = false;
 			_downloadRate.EndTransfer();
 			_uploadRate.EndTransfer();
+			stopTimer = TakeStopRateTimerLocked();
 		}
+		if( stopTimer )
+			_rateRefreshTimer.Change( Timeout.Infinite, Timeout.Infinite );
 		UiDispatcher.Post( () =>
 		{
 			FlushPendingLogsCore();
 			Volatile.Write( ref _progressDirty, 0 );
 			NotifyProgressChanged();
 			NotifySummaryChanged();
-			if( wasInProcess )
+			bool stillCompleted;
+			lock( _gate )
+				stillCompleted = !_isInProcess && _activeToken == completedToken;
+			if( wasInProcess && stillCompleted )
 			{
 				OnPropertyChanged( nameof( IsInProcess ) );
 				CancelCommand.NotifyCanExecuteChanged();
 				OperationCompleted?.Invoke();
 			}
 		} );
+	}
+
+	private bool TakeStartRateTimerLocked()
+	{
+		if( _rateRefreshRunning || UiDispatcher.Current is InlineUiDispatcher )
+			return false;
+		_rateRefreshRunning = true;
+		return true;
+	}
+
+	private bool TakeStopRateTimerLocked()
+	{
+		if( !_rateRefreshRunning || _downloadRate.IsActive || _uploadRate.IsActive )
+			return false;
+		_rateRefreshRunning = false;
+		return true;
+	}
+
+	private void RefreshRatesIfActive()
+	{
+		bool active;
+		lock( _gate )
+		{
+			active = _downloadRate.IsActive || _uploadRate.IsActive;
+			if( !active )
+				_rateRefreshRunning = false;
+		}
+		if( active )
+			QueueProgressRefresh();
+		else
+			_rateRefreshTimer.Change( Timeout.Infinite, Timeout.Infinite );
 	}
 
 	[RelayCommand]

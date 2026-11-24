@@ -43,6 +43,7 @@ public sealed record GraphEntryItem( int Id, string Name )
 /// </summary>
 public sealed partial class DependencyGraphView : Page
 {
+	private static readonly char[] PathSeparators = [ '\\', '/' ];
 	private readonly List<GraphEntryItem> _entries = [];
 	private readonly Dictionary<int, GraphNode> _nodesById = [];
 	private readonly SolidColorBrush _infoHeaderBrush = new();
@@ -50,6 +51,7 @@ public sealed partial class DependencyGraphView : Page
 	private CancellationTokenSource? _graphLoad;
 	private bool _quietSelection;
 	private bool _themeSubscribed;
+	private bool _suppressDetailTabLoad;
 	private bool _left;
 	private DependencyGraph _graph = DependencyGraph.Empty;
 	/// <summary>The files the graph is drawn around: the list's selection, or a file double-clicked in the graph.</summary>
@@ -117,7 +119,12 @@ public sealed partial class DependencyGraphView : Page
 		};
 		Graph.NodeInvoked += Focus;
 		DetailClose.Click += ( _, _ ) => CloseDetails();
-		DetailTabs.SelectionChanged += ( _, _ ) => _ = LoadDetailTabAsync();
+		DetailTabs.SelectedIndex = 0;
+		DetailTabs.SelectionChanged += ( _, _ ) =>
+		{
+			if( !_suppressDetailTabLoad )
+				_ = LoadDetailTabAsync();
+		};
 		InfoFocus.Click += ( _, _ ) =>
 		{
 			if( _detailNode is { } node )
@@ -186,6 +193,7 @@ public sealed partial class DependencyGraphView : Page
 		base.OnNavigatedTo( e );
 		_left = false;
 		SubscribeTheme();
+		Loaded -= OnLoaded;
 		Loaded += OnLoaded;
 	}
 
@@ -228,6 +236,7 @@ public sealed partial class DependencyGraphView : Page
 	protected override void OnNavigatedFrom( NavigationEventArgs e )
 	{
 		_left = true;
+		Loaded -= OnLoaded;
 		UnsubscribeTheme();
 		CtsHelper.CancelAndDispose( ref _detailLoad );
 		CtsHelper.CancelAndDispose( ref _previewLoad );
@@ -300,14 +309,12 @@ public sealed partial class DependencyGraphView : Page
 		EntryCount.Text = "";
 		if( directoryId is not int id || id == 0 )
 		{
+			SetEntryBusy( false );
 			EntryCount.Text = "This folder is not on the server.";
 			return;
 		}
 
-		Busy.IsActive = true;
-		EntryBusyBar.Visibility = Visibility.Visible;
-		EntryBusyOverlay.Visibility = Visibility.Visible;
-		EntryBusyRing.IsActive = true;
+		SetEntryBusy( true );
 		try
 		{
 			Result<IReadOnlyList<RemoteEntryDto>> rows = await HpDirectory.GetEntriesAsync( id );
@@ -323,16 +330,31 @@ public sealed partial class DependencyGraphView : Page
 			EntryList.ItemsSource = _entries;
 			EntryCount.Text = _entries.Count == 1 ? "1 file" : $"{_entries.Count} files";
 		}
+		catch( OperationCanceledException )
+		{
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( nameof( NavigatePageMenu.DependencyGraph ), $"Loading folder entries failed: {ex.Message}", ex );
+			if( !_left && ReferenceEquals( _entriesLoad, load ) )
+				EntryCount.Text = $"The files could not be read: {ex.Message}";
+		}
 		finally
 		{
 			if( !_left && ReferenceEquals( _entriesLoad, load ) )
-			{
-				Busy.IsActive = false;
-				EntryBusyRing.IsActive = false;
-				EntryBusyBar.Visibility = Visibility.Collapsed;
-				EntryBusyOverlay.Visibility = Visibility.Collapsed;
-			}
+				SetEntryBusy( false );
 		}
+	}
+
+	private void SetEntryBusy( bool busy )
+	{
+		EntryBusyRing.IsActive = busy;
+		EntryBusyBar.Visibility = busy.ToVisibility();
+		EntryBusyOverlay.Visibility = busy.ToVisibility();
+		if( busy )
+			Busy.IsActive = true;
+		else if( GraphBusyOverlay.Visibility != Visibility.Visible )
+			Busy.IsActive = false;
 	}
 
 	private void SetAllSelected( bool selected )
@@ -445,9 +467,10 @@ public sealed partial class DependencyGraphView : Page
 		{
 			if( !_left && ReferenceEquals( _graphLoad, load ) )
 			{
-				Busy.IsActive = false;
 				GraphBusyRing.IsActive = false;
 				GraphBusyOverlay.Visibility = Visibility.Collapsed;
+				if( EntryBusyOverlay.Visibility != Visibility.Visible )
+					Busy.IsActive = false;
 			}
 		}
 	}
@@ -554,7 +577,11 @@ public sealed partial class DependencyGraphView : Page
 		FillInfoCard( node, keepPreview: same );
 		DetailPanel.Visibility = Visibility.Visible;
 		if( DetailTabs.SelectedItem is null )
-			DetailTabs.SelectedIndex = 0;
+		{
+			_suppressDetailTabLoad = true;
+			try { DetailTabs.SelectedIndex = 0; }
+			finally { _suppressDetailTabLoad = false; }
+		}
 		Graph.EnsureVisible( node.Id, DetailPanelSpace );
 		if( same )
 			return DetailsLoad ?? Task.CompletedTask;
@@ -586,7 +613,7 @@ public sealed partial class DependencyGraphView : Page
 			: node.CheckedOut ? $"Checked out by {( node.CheckoutUser.Length > 0 ? node.CheckoutUser : "someone" )}"
 			: "Not checked out";
 
-		int cut = node.Path.LastIndexOf( '\\' );
+		int cut = node.Path.LastIndexOfAny( PathSeparators );
 		InfoFolder.Text = cut > 0 ? node.Path[ ..cut ] : node.Path;
 		ToolTipService.SetToolTip( InfoFolder, node.Path );
 		InfoModified.Text = DateTime.TryParse( node.Modified, System.Globalization.CultureInfo.InvariantCulture,
@@ -594,7 +621,8 @@ public sealed partial class DependencyGraphView : Page
 
 		InfoUses.Text = Related( _graph.Edges.Where( e => e.Parent == node.Id ).Select( e => e.Child ), GraphDirection.Parents );
 		InfoUsedBy.Text = Related( _graph.Edges.Where( e => e.Child == node.Id ).Select( e => e.Parent ), GraphDirection.Children );
-		InfoLocate.IsEnabled = !node.Deleted && node.Path.Contains( '\\' );
+		string[] pathParts = node.Path.Split( PathSeparators, StringSplitOptions.RemoveEmptyEntries );
+		InfoLocate.IsEnabled = !node.Deleted && pathParts.Length >= 2;
 
 		if( keepPreview )
 			return;
@@ -701,7 +729,7 @@ public sealed partial class DependencyGraphView : Page
 	{
 		if( _detailNode is not { } node )
 			return Task.CompletedTask;
-		string[] parts = node.Path.Split( '\\', StringSplitOptions.RemoveEmptyEntries );
+		string[] parts = node.Path.Split( PathSeparators, StringSplitOptions.RemoveEmptyEntries );
 		// the path starts with the root folder and ends with the file
 		return parts.Length < 2 ? Task.CompletedTask : AppComposition.LocateInFileManagerAsync( parts[ 1..^1 ], node.Name );
 	}

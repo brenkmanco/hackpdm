@@ -46,13 +46,30 @@ internal static class HackUpdater
 		if( !check.IsAllowed )
 		{
 			HackLogger.Warn( "Updater", $"Client version check denied access: {check.Reason}" );
-			if( showOutdatedUpdater && await AppComposition.Dialogs.ShowMessageAsync(
-					$"{check.Reason}\n" +
-					"Access is denied until you update HackPDM to a compatible version.\n\n" +
-					"Download and install the published version now?",
-					"Version Mismatch — Update Required",
-					MessageBoxButtons.YesNo, MessageBoxIcon.Warning ) == DialogResult.Yes )
-				await UpdaterProcessAsync();
+			if( showOutdatedUpdater )
+			{
+				UpdateInfo? mandatoryUpdate = GetServerUpdateInfo( isMandatory: true );
+				if( mandatoryUpdate is not null )
+				{
+					if( await AppComposition.Dialogs.ShowMessageAsync(
+							$"{check.Reason}\n" +
+							"Access is denied until you update HackPDM to a compatible version.\n\n" +
+							"Download and install the published version now?",
+							"Version Mismatch — Update Required",
+							MessageBoxButtons.YesNo, MessageBoxIcon.Warning ) == DialogResult.Yes )
+					{
+						await InstallUpdateAsync( mandatoryUpdate );
+					}
+				}
+				else
+				{
+					await AppComposition.Dialogs.ShowMessageAsync(
+						$"{check.Reason}\n" +
+						"Access is denied until you update HackPDM to a compatible version.",
+						"Version Mismatch — Update Required",
+						MessageBoxButtons.OK, MessageBoxIcon.Warning );
+				}
+			}
 			return false;
 		}
 
@@ -113,17 +130,20 @@ internal static class HackUpdater
 			IsMandatory: isMandatory );
 	}
 
-	public static Task<bool> UpdaterProcessAsync()
-		=> DownloadAndLaunchAsync( Setting( PdmConstants.ClientDownloadUrlKey ), Setting( PdmConstants.ClientDownloadSha256Key ) );
+	public static Task<bool> UpdaterProcessAsync( CancellationToken token = default )
+		=> DownloadAndLaunchAsync(
+			Setting( PdmConstants.ClientDownloadUrlKey ),
+			ClientUpdate.ParseSha256File( Setting( PdmConstants.ClientDownloadSha256Key ) ),
+			token );
 
-	public static Task<bool> InstallUpdateAsync( UpdateInfo update )
-		=> DownloadAndLaunchAsync( update.DownloadUrl, update.Sha256 );
+	public static Task<bool> InstallUpdateAsync( UpdateInfo update, CancellationToken token = default )
+		=> DownloadAndLaunchAsync( update.DownloadUrl, update.Sha256, token );
 
-	private static async Task<bool> DownloadAndLaunchAsync( string? url, string? sha256 )
+	private static async Task<bool> DownloadAndLaunchAsync( string? url, string? sha256, CancellationToken token = default )
 	{
 		var dialogs = AppComposition.Dialogs;
 		HackLogger.Info( "Updater", $"Starting client update download from '{url ?? "(unset)"}'" );
-		Result<string> installer = await ClientUpdate.DownloadInstallerAsync( url, sha256 );
+		Result<string> installer = await ClientUpdate.DownloadInstallerAsync( url, sha256, token: token );
 		if( !installer.Ok )
 		{
 			HackLogger.Error( "Updater", $"Client update aborted: {installer.Error}" );

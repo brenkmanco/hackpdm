@@ -21,6 +21,7 @@ public sealed partial class OdooFileTypeManagerView : Page
 	private Window? _parentWindow;
 	private List<FileTypeRow> _allTypes = [];
 	private List<FileTypeEntryFilterRow> _allFilters = [];
+	private bool _isRefreshing;
 
 	public RangeObservableCollection<FileTypeRow> FilteredTypes { get; } = [];
 	public RangeObservableCollection<FileTypeEntryFilterRow> FilteredEntryFilters { get; } = [];
@@ -115,27 +116,51 @@ public sealed partial class OdooFileTypeManagerView : Page
 
 	private async void RefreshButton_Click( object sender, RoutedEventArgs e )
 	{
-		if( OdooDefaults.Instance is not OdooDefaults concrete || concrete.OdooId == 0 )
-		{
-			LoadFromCache();
-			return;
-		}
-		RefreshButton.IsEnabled = false;
-		BusyRing.IsActive = true;
+		bool started = false;
 		try
 		{
+			if( _isRefreshing )
+				return;
+			if( OdooDefaults.Instance is not OdooDefaults concrete || concrete.OdooId == 0 )
+			{
+				LoadFromCache();
+				return;
+			}
+			_isRefreshing = true;
+			started = true;
+			RefreshButton.IsEnabled = false;
+			BusyRing.IsActive = true;
 			concrete.Lookups = await OdooLookupCache.LoadAsync();
-			LoadFromCache();
+			if( IsLoaded )
+				LoadFromCache();
 		}
 		catch( Exception ex )
 		{
 			HackLogger.Warn( "FileTypes", $"Refreshing file types failed: {ex.Message}", ex );
-			PolicySummaryText.Text = $"Could not refresh server rules: {ex.Message}";
+			try
+			{
+				if( IsLoaded )
+					PolicySummaryText.Text = $"Could not refresh server rules: {ex.Message}";
+			}
+			catch
+			{
+			}
 		}
 		finally
 		{
-			BusyRing.IsActive = false;
-			RefreshButton.IsEnabled = true;
+			if( started )
+			{
+				_isRefreshing = false;
+				try
+				{
+					BusyRing.IsActive = false;
+					RefreshButton.IsEnabled = true;
+				}
+				catch( Exception ex )
+				{
+					HackLogger.Debug( "FileTypes", $"Ignoring UI cleanup on unloaded view: {ex.Message}" );
+				}
+			}
 		}
 	}
 

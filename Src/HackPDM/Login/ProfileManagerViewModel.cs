@@ -15,6 +15,7 @@ using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Pdm;
 using HackPDM.Core.Services;
+using HackPDM.Search;
 using HackPDM.Shell;
 
 using Microsoft.UI.Xaml.Data;
@@ -49,6 +50,7 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	private readonly INavigationService _navigation;
 	private readonly Action? _accountChanged;
 	private readonly Func<IReadOnlyList<(StatusMessage Status, string Category, string Message)>>? _inspectSettings;
+	private readonly SearchOdooViewModel? _search;
 	private bool _attached;
 	private bool _batchingSessionLogs;
 	private int _errorCount;
@@ -61,7 +63,8 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		IFilePickerService pickers,
 		INavigationService navigation,
 		Action? accountChanged = null,
-		Func<IReadOnlyList<(StatusMessage Status, string Category, string Message)>>? inspectSettings = null )
+		Func<IReadOnlyList<(StatusMessage Status, string Category, string Message)>>? inspectSettings = null,
+		SearchOdooViewModel? search = null )
 	{
 		_session = session;
 		_dialogs = dialogs;
@@ -69,6 +72,7 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		_navigation = navigation;
 		_accountChanged = accountChanged;
 		_inspectSettings = inspectSettings;
+		_search = search;
 		Attach();
 	}
 
@@ -250,8 +254,11 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	{
 		string target = FormatConnectionTarget();
 		IsLoggedIn = false;
+		_session.VersionMismatchMessage = null;
 		OdooDefaults.Instance.OdooId = 0;
+		OdooDefaults.Instance.Lookups = OdooLookupCache.Empty;
 		_accountChanged?.Invoke();
+		( _search ?? AppComposition.SearchOdoo ).ResetForSessionChange();
 		LogSession( StatusMessage.INFO, ProfileStatusCategory.Login, $"Signed out of Odoo session ({target}).", updateBanner: true );
 	}
 
@@ -270,11 +277,14 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 			if( signedIn )
 			{
 				OdooDefaults odoo = OdooDefaults.Instance;
+				SearchOdooViewModel search = _search ?? AppComposition.SearchOdoo;
 				if( _session.LoggedInAs( $"{odoo.OdooUrl}|{odoo.OdooDb}|{odoo.OdooUser}|{HackDefaults.Instance.PwaPathAbsolute}" ) )
 				{
 					_accountChanged?.Invoke();
+					search.ResetForSessionChange();
 					LogSession( StatusMessage.INFO, ProfileStatusCategory.Login, $"Switched active account to '{odoo.OdooUser}' on '{odoo.OdooDb}'; cached workspace cleared." );
 				}
+				search.LoadLookups();
 				if( odoo.SaveCredentials() )
 					LogSession( StatusMessage.INFO, ProfileStatusCategory.Settings, $"Credentials saved to keyring ({odoo.OdooCredentialTarget ?? PdmConstants.DefaultOdooCredentials})." );
 				else
@@ -326,7 +336,38 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 			await _dialogs.ShowMessageAsync( "Unable to read JSON profile file.", "Invalid Profile", MessageBoxButtons.OK, MessageBoxIcon.Error );
 			return;
 		}
+		OdooDefaults defaults = OdooDefaults.Instance;
+		string? previousUrl = defaults.OdooUrl;
+		string? previousDb = defaults.OdooDb;
+		string? previousUser = defaults.OdooUser;
+		string? previousPass = defaults.OdooPass;
+		string? previousTarget = defaults.OdooCredentialTarget;
+		string previousPwa = HackDefaults.Instance.PwaPathAbsolute;
+
 		ProfileStore.Apply( profile );
+
+		bool pwaChanged = !string.Equals( previousPwa, HackDefaults.Instance.PwaPathAbsolute, PwaPaths.PathComparison );
+		bool targetChanged = pwaChanged
+			|| !string.Equals( previousUrl, defaults.OdooUrl, StringComparison.OrdinalIgnoreCase )
+			|| !string.Equals( previousDb, defaults.OdooDb, StringComparison.Ordinal )
+			|| !string.Equals( previousUser, defaults.OdooUser, StringComparison.Ordinal )
+			|| !string.Equals( previousPass, defaults.OdooPass, StringComparison.Ordinal )
+			|| !string.Equals( previousTarget, defaults.OdooCredentialTarget, StringComparison.Ordinal );
+
+		IsLoggedIn = false;
+		_session.VersionMismatchMessage = null;
+		defaults.Lookups = OdooLookupCache.Empty;
+		SearchOdooViewModel search = _search ?? AppComposition.SearchOdoo;
+		if( targetChanged )
+		{
+			_accountChanged?.Invoke();
+			search.ResetForSessionChange();
+		}
+		else
+		{
+			search.LoadLookups();
+		}
+
 		LogSession( StatusMessage.INFO, ProfileStatusCategory.Configuration, $"Loaded profile '{fileName}' ({FormatConnectionTarget()}).", updateBanner: true );
 		if( string.IsNullOrEmpty( profile.Password ) )
 			LogSession( StatusMessage.WARNING, ProfileStatusCategory.Configuration, $"Profile '{fileName}' has no password; existing keyring or Configurations credentials will be used." );

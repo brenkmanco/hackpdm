@@ -33,6 +33,11 @@ public sealed partial class SearchOdooView : Page, IDockablePanel
 		OdooSearchResults.SelectionBatchCompleted += ( _, _ ) =>
 			ViewModel.SelectedResults = OdooSearchResults.SelectedItems.ExtractSelected<SearchRow>();
 		OdooSearchPropList.SelectionChanged += ( _, _ ) =>
+		{
+			if( !OdooSearchPropList.IsUpdatingSelection )
+				ViewModel.SelectedActiveProperties = OdooSearchPropList.SelectedItems.ExtractSelected<SearchPropertiesRow>();
+		};
+		OdooSearchPropList.SelectionBatchCompleted += ( _, _ ) =>
 			ViewModel.SelectedActiveProperties = OdooSearchPropList.SelectedItems.ExtractSelected<SearchPropertiesRow>();
 		KeyDown += SearchOdooView_KeyDown;
 		SizeChanged += ( _, _ ) => UpdateResponsiveLayout();
@@ -91,6 +96,10 @@ public sealed partial class SearchOdooView : Page, IDockablePanel
 	{
 		ViewModel.SearchCompleted -= OnSearchCompleted;
 		MiniResultsCombo.IsDropDownOpen = false;
+		OdooSearchResults.SetSelectionBatch( [] );
+		OdooSearchPropList.SetSelectionBatch( [] );
+		ViewModel.SelectedResults = [];
+		ViewModel.SelectedActiveProperties = [];
 	}
 
 	private void OnSearchCompleted( int count )

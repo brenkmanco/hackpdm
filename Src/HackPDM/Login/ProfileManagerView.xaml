@@ -4,6 +4,7 @@
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:common="using:HackPDM.Common"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	xmlns:tv="using:WinUI.TableView"
 	Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
@@ -142,20 +143,24 @@
 				</Border>
 
 				<Grid Grid.Row="1">
-					<tv:TableView
+					<common:EntryTableView
 						x:Name="ProfileManStatusList"
 						AutoGenerateColumns="False"
 						BorderThickness="0"
 						IsReadOnly="True"
 						ItemsSource="{x:Bind ViewModel.FilteredStatus, Mode=OneWay}"
-						SelectionChanged="ProfileManStatusList_SelectionChanged">
+						SelectionBatchCompleted="ProfileManStatusList_SelectionBatchCompleted"
+						SelectionChanged="ProfileManStatusList_SelectionChanged"
+						SelectionMode="Single"
+						SelectionUnit="Row"
+						ShowDragRectangle="False">
 						<tv:TableView.Columns>
 							<tv:TableViewTextColumn Width="86" Binding="{Binding TimestampText}" Header="Time" />
 							<tv:TableViewTextColumn Width="92" Binding="{Binding Status}" Header="Level" />
 							<tv:TableViewTextColumn Width="118" Binding="{Binding Category}" Header="Area" />
 							<tv:TableViewTextColumn Width="*" Binding="{Binding Message}" Header="Message" />
 						</tv:TableView.Columns>
-					</tv:TableView>
+					</common:EntryTableView>
 					<StackPanel
 						x:Name="EmptyConnectionHint"
 						Padding="20"

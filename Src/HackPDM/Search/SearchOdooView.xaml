@@ -199,14 +199,17 @@
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="6">
-                <tv:TableView
+                <common:EntryTableView
                     x:Name="OdooSearchPropList"
                     Height="110"
                     AutoGenerateColumns="False"
                     BorderThickness="0"
                     IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
                     IsReadOnly="True"
-                    ItemsSource="{x:Bind ViewModel.PropertiesActive}">
+                    ItemsSource="{x:Bind ViewModel.PropertiesActive}"
+                    SelectionMode="Extended"
+                    SelectionUnit="Row"
+                    ShowDragRectangle="False">
                     <tv:TableView.Columns>
                         <tv:TableViewTextColumn
                             Width="2*"
@@ -223,7 +226,7 @@
                             Binding="{Binding Value}"
                             Header="Value" />
                     </tv:TableView.Columns>
-                </tv:TableView>
+                </common:EntryTableView>
             </Border>
 
             <!--  Search Results Card  -->

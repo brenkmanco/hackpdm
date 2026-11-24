@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -12,6 +13,7 @@ using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Pdm;
 using HackPDM.Core.Services;
+using HackPDM.Status;
 
 using Microsoft.UI.Xaml.Data;
 
@@ -27,6 +29,8 @@ public sealed partial class SearchOdooViewModel(
 	Func<IReadOnlyList<string>, string?, Task> locate ) : OperationViewModel( dialogs, reporter )
 {
 	private const string DefaultMaxResults = "100";
+	private OdooLookupCache? _loadedLookups;
+	private string? _loadedAccountKey;
 
 	public RangeObservableCollection<SearchRow> SearchResultsList { get; } = [];
 	public ObservableCollection<SearchPropertiesRow> PropertiesActive { get; } = [];
@@ -72,11 +76,32 @@ public sealed partial class SearchOdooViewModel(
 
 	public void LoadLookups()
 	{
-		if( PropertiesSearchable.Count != OdooDefaults.Instance.IdToProp.Count )
+		OdooLookupCache currentLookups = OdooDefaults.Instance.Lookups;
+		string accountKey = CurrentAccountKey();
+		bool accountChanged = _loadedAccountKey is not null
+			&& !string.Equals( _loadedAccountKey, accountKey, StringComparison.OrdinalIgnoreCase );
+		bool lookupsChanged = !ReferenceEquals( _loadedLookups, currentLookups );
+
+		if( accountChanged || lookupsChanged )
 		{
-			PropertiesSearchable.Clear();
-			foreach( SearchPropertiesRow property in search.GetSearchableProperties() )
-				PropertiesSearchable.Add( property );
+			_loadedLookups = currentLookups;
+			_loadedAccountKey = accountKey;
+			UiDispatcher.RunOrPost( () =>
+			{
+				PropertiesSearchable.Clear();
+				foreach( SearchPropertiesRow property in search.GetSearchableProperties() )
+					PropertiesSearchable.Add( property );
+				SelectedProperty = null;
+				PropertiesActive.Clear();
+				SelectedActiveProperties = [];
+				if( accountChanged || ReferenceEquals( currentLookups, OdooLookupCache.Empty ) )
+				{
+					SearchResultsList.Clear();
+					SelectedResults = [];
+					SearchStatusText = string.Empty;
+					OnPropertyChanged( nameof( QuickResultsPlaceholder ) );
+				}
+			} );
 		}
 		if( OperatorList.Count == 0 )
 		{
@@ -85,6 +110,29 @@ public sealed partial class SearchOdooViewModel(
 		}
 		SelectedComparer ??= OperatorList.FirstOrDefault( o => o.Operator == Operators.ILike );
 		SelectedPropertyOperator ??= OperatorList.FirstOrDefault( o => o.Operator == Operators.Equal );
+	}
+
+	public void ResetForSessionChange()
+	{
+		_loadedLookups = null;
+		_loadedAccountKey = null;
+		UiDispatcher.RunOrPost( () =>
+		{
+			SearchResultsList.Clear();
+			SelectedResults = [];
+			PropertiesActive.Clear();
+			SelectedActiveProperties = [];
+			PropertiesSearchable.Clear();
+			SelectedProperty = null;
+			SearchStatusText = string.Empty;
+			OnPropertyChanged( nameof( QuickResultsPlaceholder ) );
+		} );
+	}
+
+	private static string CurrentAccountKey()
+	{
+		OdooDefaults odoo = OdooDefaults.Instance;
+		return $"{odoo.OdooUrl}|{odoo.OdooDb}|{odoo.OdooUser}|{HackDefaults.Instance.PwaPathAbsolute}";
 	}
 
 	[RelayCommand]
@@ -198,14 +246,25 @@ public sealed partial class SearchOdooViewModel(
 
 	private async Task<bool> SetCheckoutAsync( bool checkout )
 	{
-		if( LocalOnly )
+		if( SelectedResults.Count == 0 )
+		{
+			await Dialogs.ShowMessageAsync( "Select at least one search result first." );
+			return false;
+		}
+		int[] ids = RemoteIds( SelectedResults.Select( r => r.Id ) );
+		if( ids.Length == 0 )
 		{
 			await Dialogs.ShowMessageAsync( checkout ? "Can't checkout local only entries" : "Can't uncheckout local only entries" );
 			return false;
 		}
-		int[] ids = RemoteIds( SelectedResults.Select( r => r.Id ) );
+		if( Reporter is StatusWindowReporter statusReporter )
+		{
+			using StatusWindowReporter.OperationScope scope = statusReporter.BeginTrackingScope();
+			await RunOnIdsAsync( ids, checkout ? workflow.CheckoutLatestAsync : workflow.UnCheckoutAsync );
+			return scope.CompletedWithoutErrors;
+		}
 		await RunOnIdsAsync( ids, checkout ? workflow.CheckoutLatestAsync : workflow.UnCheckoutAsync );
-		return ids.Length > 0;
+		return true;
 	}
 
 	[RelayCommand]
@@ -213,10 +272,15 @@ public sealed partial class SearchOdooViewModel(
 	{
 		foreach( SearchRow row in SelectedResults )
 		{
-			if( row.Id is int id )
+			if( row.Id is int id and not 0 )
 				await files.OpenLatestRemoteAsync( id );
-			else if( row.Directory is { } directory )
-				files.OpenFolder( directory );
+			else if( row.Directory is { Length: > 0 } directory )
+			{
+				if( row.Name is { Length: > 0 } name )
+					files.OpenFile( Path.Combine( directory, name ) );
+				else
+					files.OpenFolder( directory );
+			}
 		}
 	}
 

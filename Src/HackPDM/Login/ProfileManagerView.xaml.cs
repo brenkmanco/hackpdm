@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Specialized;
 using System.ComponentModel;
 
@@ -104,6 +105,15 @@ public sealed partial class ProfileManagerView : Page
 	}
 
 	private void ProfileManStatusList_SelectionChanged( object sender, SelectionChangedEventArgs e )
+	{
+		if( !ProfileManStatusList.IsUpdatingSelection )
+			UpdateSelectedMessageCard();
+	}
+
+	private void ProfileManStatusList_SelectionBatchCompleted( object? sender, EventArgs e )
+		=> UpdateSelectedMessageCard();
+
+	private void UpdateSelectedMessageCard()
 	{
 		if( ProfileManStatusList.SelectedItem is BasicStatusMessage selected )
 		{

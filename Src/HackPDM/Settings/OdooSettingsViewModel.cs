@@ -9,6 +9,7 @@ using HackPDM.Common;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Pdm;
 using HackPDM.Core.Services;
+using HackPDM.Search;
 
 using Microsoft.UI.Xaml.Data;
 
@@ -19,6 +20,9 @@ public sealed partial class OdooSettingsViewModel : ObservableObject
 {
 	private readonly IDialogService _dialogs;
 	private readonly LoginSession? _session;
+	private readonly FileManagerState? _fileManagerState;
+	private readonly SearchOdooViewModel? _search;
+	private readonly Action? _accountChanged;
 
 	[ObservableProperty] public partial string OdooAddress { get; set; }
 	[ObservableProperty] public partial string OdooPort { get; set; }
@@ -31,10 +35,18 @@ public sealed partial class OdooSettingsViewModel : ObservableObject
 
 	public event Action? Saved;
 
-	public OdooSettingsViewModel( IDialogService dialogs, LoginSession? session = null )
+	public OdooSettingsViewModel(
+		IDialogService dialogs,
+		LoginSession? session = null,
+		FileManagerState? fileManagerState = null,
+		SearchOdooViewModel? search = null,
+		Action? accountChanged = null )
 	{
 		_dialogs = dialogs;
 		_session = session;
+		_fileManagerState = fileManagerState;
+		_search = search;
+		_accountChanged = accountChanged;
 		OdooDefaults defaults = OdooDefaults.Instance;
 		OdooAddress = defaults.OdooAddress ?? "";
 		OdooPort = defaults.OdooPort ?? "";
@@ -91,8 +103,16 @@ public sealed partial class OdooSettingsViewModel : ObservableObject
 		if( changed )
 		{
 			defaults.OdooId = 0;
+			defaults.Lookups = OdooLookupCache.Empty;
 			if( _session is not null )
+			{
 				_session.IsLoggedIn = false;
+				_session.VersionMismatchMessage = null;
+			}
+			UiDispatcher.RunOrPost( EntryIcons.ClearServerCache );
+			( _fileManagerState ?? AppComposition.FileManagerState ).Reset();
+			( _search ?? AppComposition.SearchOdoo ).ResetForSessionChange();
+			_accountChanged?.Invoke();
 		}
 
 		defaults.OdooUseHttps = OdooUseHttps;

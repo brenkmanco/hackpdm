@@ -32,17 +32,23 @@ public sealed class ThemeService
 	private readonly bool _runningDark = Application.Current.RequestedTheme == ApplicationTheme.Dark;
 	private readonly AppThemeMode _startupMode;
 	private readonly FormName _startupForm;
+	private readonly bool _useGlobalStorage;
+	private ThemeSettings _savedSettings;
 	private ThemeSettings _settings;
 
-	public ThemeService() : this( UIStorage.GlobalData.Theme ) { }
+	public ThemeService() : this( UIStorage.GlobalData.Theme, useGlobalStorage: true ) { }
 
-	public ThemeService( ThemeSettings settings )
+	public ThemeService( ThemeSettings settings ) : this( settings, useGlobalStorage: false ) { }
+
+	private ThemeService( ThemeSettings settings, bool useGlobalStorage )
 	{
-		_settings = settings;
-		var (palette, form) = StartupTheme( settings );
+		_useGlobalStorage = useGlobalStorage;
+		_settings = CloneSettings( settings );
+		var (palette, form) = StartupTheme( _settings );
 		_settings.Palette = palette;
 		_settings.Form = form;
 		_settings.Mode = ThemePresets.Palette( palette ).IsDark ? AppThemeMode.Dark : AppThemeMode.Light;
+		_savedSettings = CloneSettings( _settings );
 		_startupMode = _settings.Mode;
 		_startupForm = form;
 		ApplyOverrides();
@@ -56,6 +62,7 @@ public sealed class ThemeService
 	public bool ShowTreeBranchLines => _settings.ShowTreeBranchLines;
 	public bool IsDarkActive => _runningDark;
 	public bool NeedsRestart => _settings.Mode != _startupMode;
+	public bool HasUnsavedChanges => !SettingsEqual( _settings, _savedSettings );
 	public string SavePath => AppSettingsStore.FilePath;
 
 	public event Action? ThemeChanged;
@@ -143,12 +150,19 @@ public sealed class ThemeService
 		ThemeChanged?.Invoke();
 	}
 
-	public void SetShowTreeBranchLines( bool show )
+	public void SetShowTreeBranchLines( bool show, bool persistImmediately = true )
 	{
-		if( _settings.ShowTreeBranchLines == show )
-			return;
-		_settings.ShowTreeBranchLines = show;
-		ThemeChanged?.Invoke();
+		bool changed = _settings.ShowTreeBranchLines != show;
+		if( changed )
+			_settings.ShowTreeBranchLines = show;
+		if( persistImmediately )
+		{
+			_savedSettings.ShowTreeBranchLines = show;
+			if( _useGlobalStorage )
+				UIStorage.GlobalData.Theme.ShowTreeBranchLines = show;
+		}
+		if( changed )
+			ThemeChanged?.Invoke();
 	}
 
 	private bool PresetApplies => ThemePresets.Palette( Palette ).IsDark == _runningDark;
@@ -215,8 +229,7 @@ public sealed class ThemeService
 	{
 		foreach( string key in _originals.Keys )
 			Restore( key, toOriginal: true );
-		UIStorage.Reload();
-		_settings = UIStorage.GlobalData.Theme;
+		_settings = CloneSettings( _savedSettings );
 		ApplyOverrides();
 		UpdatePanelBrush();
 		foreach( var root in LiveRoots() )
@@ -226,8 +239,46 @@ public sealed class ThemeService
 
 	public void Save()
 	{
-		UIStorage.GlobalData.Theme = _settings;
-		UIStorage.Save();
+		_savedSettings = CloneSettings( _settings );
+		if( _useGlobalStorage )
+		{
+			UIStorage.GlobalData.Theme = CloneSettings( _settings );
+			UIStorage.Save();
+		}
+	}
+
+	private static ThemeSettings CloneSettings( ThemeSettings source ) => new()
+	{
+		Mode = source.Mode,
+		Palette = source.Palette,
+		Form = source.Form,
+		ShowTreeBranchLines = source.ShowTreeBranchLines,
+		Light = new Dictionary<string, string>( source.Light ?? [], StringComparer.Ordinal ),
+		Dark = new Dictionary<string, string>( source.Dark ?? [], StringComparer.Ordinal ),
+	};
+
+	private static bool SettingsEqual( ThemeSettings a, ThemeSettings b )
+		=> a.Mode == b.Mode
+			&& a.Palette == b.Palette
+			&& a.Form == b.Form
+			&& a.ShowTreeBranchLines == b.ShowTreeBranchLines
+			&& DictionariesEqual( a.Light, b.Light )
+			&& DictionariesEqual( a.Dark, b.Dark );
+
+	private static bool DictionariesEqual( Dictionary<string, string>? a, Dictionary<string, string>? b )
+	{
+		int countA = a?.Count ?? 0;
+		int countB = b?.Count ?? 0;
+		if( countA != countB )
+			return false;
+		if( countA == 0 )
+			return true;
+		foreach( var (key, valA) in a! )
+		{
+			if( !b!.TryGetValue( key, out string? valB ) || !string.Equals( valA, valB, StringComparison.Ordinal ) )
+				return false;
+		}
+		return true;
 	}
 
 	private void ApplyOverrides()
