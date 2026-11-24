@@ -132,8 +132,29 @@ public sealed partial class MessageBox : Page
 			await UiDispatcher.Current.RunAsync( () =>
 			{
 				MessageBox page = new();
-				Window window = WindowHelper.CreateWindow<Window>( WindowHelper.Presets.MessageBox );
+				Window window = WindowHelper.CreateWindow<Window>( WindowHelper.Presets.MessageBox, persistBounds: false );
 				window.Title = string.IsNullOrWhiteSpace( caption ) ? "Info" : caption;
+				if( window.AppWindow?.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter )
+				{
+					try
+					{
+						presenter.IsMaximizable = false;
+						presenter.IsMinimizable = false;
+					}
+					catch
+					{
+					}
+				}
+				int lineBreaks = 0;
+				for( int i = 0; i < message.Length; i++ )
+				{
+					if( message[ i ] == '\n' )
+						lineBreaks++;
+				}
+				int width = message.Length > 260 ? 580 : 520;
+				int wrappedLines = Math.Max( 3, lineBreaks + 1 + message.Length / 58 );
+				int height = Math.Clamp( 170 + wrappedLines * 22, 260, 480 );
+				WindowHelper.ResizeWindow( window, width, height );
 				( window.Content as Frame )?.Content = page;
 				page.Populate( message, buttons, window, result );
 			} );

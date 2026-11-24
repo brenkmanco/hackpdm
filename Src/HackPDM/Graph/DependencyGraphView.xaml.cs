@@ -46,6 +46,8 @@ public sealed partial class DependencyGraphView : Page
 		Graph.Theme = AppComposition.Theme.GraphTheme;
 		ViewModel.SetCurrentForm( Graph.Theme.Form );
 		GraphBranchLinesToggle.IsChecked = AppComposition.Theme.ShowTreeBranchLines;
+		ToggleFoldersPaneBtn.IsChecked = UIStorage.WorkspaceLayout.ShowGraphFoldersPane;
+		ToggleFilesPaneBtn.IsChecked = UIStorage.WorkspaceLayout.ShowGraphFilesPane;
 		ApplyGraphPaneLayout();
 
 		Unloaded += OnUnloaded;
@@ -464,7 +466,12 @@ public sealed partial class DependencyGraphView : Page
 	}
 
 	private void ToggleSidePanes_Click( object sender, RoutedEventArgs e )
-		=> ApplyGraphPaneLayout();
+	{
+		UIStorage.WorkspaceLayout.ShowGraphFoldersPane = ToggleFoldersPaneBtn.IsChecked == true;
+		UIStorage.WorkspaceLayout.ShowGraphFilesPane = ToggleFilesPaneBtn.IsChecked == true;
+		ApplyGraphPaneLayout();
+		UIStorage.SaveSafe();
+	}
 
 	private void GraphFoldersSplitter_DragDelta( double delta )
 	{

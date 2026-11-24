@@ -51,8 +51,9 @@ public sealed class DialogService : IDialogService
 	{
 		_status = new(
 			presetKey: WindowHelper.Presets.StatusDialogView,
+			minimalPresetKey: WindowHelper.Presets.StatusDialogViewMinimal,
 #if WINDOWS
-			minimalSize: ( 920, 150 ),
+			minimalSize: ( 920, 170 ),
 #else
 			minimalSize: ( 920, 420 ),
 #endif
@@ -67,6 +68,7 @@ public sealed class DialogService : IDialogService
 
 		_search = new(
 			presetKey: WindowHelper.Presets.SearchOdooView,
+			minimalPresetKey: WindowHelper.Presets.SearchOdooViewMinimal,
 			minimalSize: ( 980, 320 ),
 			createPage: () => new SearchOdooView(),
 			getMinimal: () => UIStorage.WorkspaceLayout.SearchMinimalMode,
@@ -110,6 +112,7 @@ public sealed class DialogService : IDialogService
 
 	private sealed class DockablePanelController<TPage>(
 		string presetKey,
+		string minimalPresetKey,
 		(int Width, int Height) minimalSize,
 		Func<TPage> createPage,
 		Func<bool> getMinimal,
@@ -181,14 +184,15 @@ public sealed class DialogService : IDialogService
 			TPage page = ( HackApp.HomePage is { } home ? takeForDetach( home ) : null ) ?? CurrentPage ?? createPage();
 			CloseOpenPopups( page.XamlRoot );
 			CurrentPage = page;
-			Window window = WindowHelper.CreateWindowForExistingPage( page, presetName: presetKey );
+			bool minimal = getMinimal();
+			string activeKey = minimal ? minimalPresetKey : presetKey;
+			Window window = WindowHelper.CreateWindowForExistingPage( page, presetName: activeKey );
 			page.HostWindow = window;
 			page.SetHostMode( isDocked: false );
 			ConfigureDetachedPopups( page );
-			bool minimal = getMinimal();
 			page.SetMinimalMode( minimal );
 			if( minimal )
-				ApplyMinimalSize( window );
+				ApplyMinimalSize( window, activeKey );
 			_window = window;
 			window.Closed += OnClosed;
 		}
@@ -200,10 +204,12 @@ public sealed class DialogService : IDialogService
 			CurrentPage?.SetMinimalMode( minimal );
 			if( _window is { } win )
 			{
+				string targetKey = minimal ? minimalPresetKey : presetKey;
+				WindowHelper.RetargetTrackedWindow( win, targetKey );
 				if( minimal )
-					ApplyMinimalSize( win );
+					ApplyMinimalSize( win, targetKey );
 				else
-					WindowHelper.ApplyPreset( win, WindowHelper.Preset( presetKey ) );
+					WindowHelper.ApplyPreset( win, WindowHelper.Preset( targetKey ) );
 			}
 			else if( HackApp.HomePage is { } home && isDrawerOpen( home ) )
 			{
@@ -275,10 +281,17 @@ public sealed class DialogService : IDialogService
 			_window = null;
 		}
 
-		private void ApplyMinimalSize( Window window )
+		private void ApplyMinimalSize( Window window, string key )
 		{
-			WindowPreset preset = WindowHelper.Preset( presetKey );
-			WindowHelper.ApplyPreset( window, preset with { Width = minimalSize.Width, Height = minimalSize.Height } );
+			WindowPreset preset = WindowHelper.Preset( key );
+			WindowPreset target = preset.HasSavedSize
+				? preset
+				: preset with
+				{
+					Width = Math.Max( preset.Width, minimalSize.Width ),
+					Height = Math.Max( preset.Height, minimalSize.Height ),
+				};
+			WindowHelper.ApplyPreset( window, target, forceRestoreIfMaximized: true );
 		}
 	}
 }

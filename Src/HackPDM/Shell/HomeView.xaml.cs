@@ -171,14 +171,12 @@ public sealed partial class HomeView : Page
 
 	private void ApplyWindowPreset( Window window, string config )
 	{
-		WindowPreset preset = WindowHelper.Preset( config );
 		var (minWidth, minHeight) = ActiveDrawerMinimums();
-		WindowHelper.ApplyPreset( window, preset with
-		{
-			Width = Math.Max( preset.Width, minWidth ),
-			Height = Math.Max( preset.Height, minHeight ),
-		} );
+		WindowHelper.ApplyMainWindowPagePreset( window, config, minWidth, minHeight );
 	}
+
+	internal void CaptureLayoutState()
+		=> ( NavFrame.Content as HackFileManagerView )?.CaptureLayoutState();
 
 	private (int MinWidth, int MinHeight) ActiveDrawerMinimums()
 	{
@@ -419,13 +417,8 @@ public sealed partial class HomeView : Page
 
 	private static void EnsureMinimumWindowDimensions( int minWidth, int minHeight )
 	{
-		if( HackApp.Window is not { AppWindow: { } appWindow } window )
-			return;
-		var size = appWindow.Size;
-		int w = minWidth > 0 ? Math.Max( size.Width, minWidth ) : size.Width;
-		int h = minHeight > 0 ? Math.Max( size.Height, minHeight ) : size.Height;
-		if( w != size.Width || h != size.Height )
-			WindowHelper.ResizeWindow( window, w, h );
+		if( HackApp.Window is { } window )
+			WindowHelper.EnsureMinimumSize( window, minWidth, minHeight );
 	}
 
 	private void SearchSplitter_DragDelta( double delta )
@@ -461,7 +454,7 @@ public sealed partial class HomeView : Page
 		SaveLayoutAsync();
 	}
 
-	private static void SaveLayoutAsync() => _ = Task.Run( UIStorage.SaveSafe );
+	private static void SaveLayoutAsync() => UIStorage.SaveSafe();
 
 	private async void CloseStatusDrawer_Click( object sender, RoutedEventArgs e )
 	{

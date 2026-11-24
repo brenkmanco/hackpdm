@@ -197,6 +197,7 @@ public enum WorkspaceLayoutPreset { Balanced, RightInspector, RightSidebar, Focu
 /// <summary>Canonical keys for <see cref="WindowSettingsData.PresetWindowConfig"/>.</summary>
 public static class WindowPresetKeys
 {
+	public const string MainWindow = nameof( MainWindow );
 	public const string ProfileManager = nameof( NavigatePageMenu.ProfileManager );
 	public const string HackFileManager = nameof( NavigatePageMenu.HackFileManager );
 	public const string DependencyGraph = nameof( NavigatePageMenu.DependencyGraph );
@@ -208,10 +209,13 @@ public static class WindowPresetKeys
 	public const string NotLoggedIn = nameof( NotLoggedIn );
 	public const string MessageBox = nameof( MessageBox );
 	public const string StatusDialogView = nameof( StatusDialogView );
+	public const string StatusDialogViewMinimal = nameof( StatusDialogViewMinimal );
 	public const string SearchOdooView = nameof( SearchOdooView );
+	public const string SearchOdooViewMinimal = nameof( SearchOdooViewMinimal );
 	public const string OdooFileTypeManagerView = nameof( OdooFileTypeManagerView );
 	public const string ApplicationSettingsView = nameof( ApplicationSettingsView );
 	public const string AppSettings = nameof( AppSettings );
+	public const string PipWindow = nameof( PipWindow );
 }
 
 [Bindable( true )]
@@ -289,7 +293,10 @@ public sealed class ColorSettingsData
 public sealed class WindowConfigData
 {
 	public string Title { get; set => field = value ?? "Window"; } = "Window";
-	public Vector4<int> PositionAndSize { get; set; } = ( 0, 0, 500, 350 );
+	public Vector4<int> PositionAndSize { get; set; } = ( 0, 0, 900, 620 );
+	public bool HasSavedPosition { get; set; }
+	public bool HasSavedSize { get; set; }
+	public bool IsMaximized { get; set; }
 	public WindowKind WindowKind
 	{
 		get;
@@ -308,8 +315,10 @@ public sealed class WindowSettingsData
 
 	private static Dictionary<string, WindowConfigData> SanitizePresets( Dictionary<string, WindowConfigData>? value )
 	{
+		Dictionary<string, WindowConfigData> defaults = DefaultPresets();
 		if( value is null )
-			return DefaultPresets();
+			return defaults;
+
 		List<string>? nullKeys = null;
 		foreach( var kv in value )
 		{
@@ -321,26 +330,55 @@ public sealed class WindowSettingsData
 			foreach( string key in nullKeys )
 				value.Remove( key );
 		}
+
+		foreach( var (key, def) in defaults )
+		{
+			if( !value.ContainsKey( key ) )
+				value[ key ] = def;
+		}
+
+		foreach( var (key, cfg) in value )
+		{
+			defaults.TryGetValue( key, out WindowConfigData? fallback );
+			if( cfg.PositionAndSize.z <= 0 || cfg.PositionAndSize.w <= 0 )
+			{
+				int repairedW = cfg.PositionAndSize.z > 0 ? cfg.PositionAndSize.z : ( fallback?.PositionAndSize.z ?? 900 );
+				int repairedH = cfg.PositionAndSize.w > 0 ? cfg.PositionAndSize.w : ( fallback?.PositionAndSize.w ?? 620 );
+				cfg.PositionAndSize = ( cfg.PositionAndSize.x, cfg.PositionAndSize.y, repairedW, repairedH );
+				cfg.HasSavedSize = false;
+				cfg.HasSavedPosition = false;
+				cfg.IsMaximized = false;
+				if( fallback is not null )
+					cfg.WindowKind = fallback.WindowKind;
+			}
+			if( string.IsNullOrWhiteSpace( cfg.Title ) && fallback is not null )
+				cfg.Title = fallback.Title;
+		}
+
 		return value;
 	}
 
 	private static Dictionary<string, WindowConfigData> DefaultPresets() => new()
 	{
-		[ WindowPresetKeys.ProfileManager ] = new() { Title = "Profile Manager", PositionAndSize = ( 0, 0, 820, 580 ) },
-		[ WindowPresetKeys.OdooSettings ] = new() { Title = "Odoo Settings", PositionAndSize = ( 0, 0, 620, 520 ) },
-		[ WindowPresetKeys.OdooSettingsView ] = new() { Title = "Odoo Settings", PositionAndSize = ( 0, 0, 620, 520 ) },
-		[ WindowPresetKeys.HackSettings ] = new() { Title = "Hack Settings", PositionAndSize = ( 0, 0, 560, 320 ) },
-		[ WindowPresetKeys.HackSettingsView ] = new() { Title = "Hack Settings", PositionAndSize = ( 0, 0, 560, 320 ) },
-		[ WindowPresetKeys.ConfigSettings ] = new() { Title = "Configuration Settings", PositionAndSize = ( 0, 0, 820, 780 ) },
+		[ WindowPresetKeys.MainWindow ] = new() { Title = "HackPDM", PositionAndSize = ( 0, 0, 1280, 820 ) },
+		[ WindowPresetKeys.ProfileManager ] = new() { Title = "Profile Manager", PositionAndSize = ( 0, 0, 960, 660 ) },
+		[ WindowPresetKeys.OdooSettings ] = new() { Title = "Odoo Settings", PositionAndSize = ( 0, 0, 660, 560 ) },
+		[ WindowPresetKeys.OdooSettingsView ] = new() { Title = "Odoo Settings", PositionAndSize = ( 0, 0, 660, 560 ) },
+		[ WindowPresetKeys.HackSettings ] = new() { Title = "Hack Settings", PositionAndSize = ( 0, 0, 620, 340 ) },
+		[ WindowPresetKeys.HackSettingsView ] = new() { Title = "Hack Settings", PositionAndSize = ( 0, 0, 620, 340 ) },
+		[ WindowPresetKeys.ConfigSettings ] = new() { Title = "Configuration Settings", PositionAndSize = ( 0, 0, 960, 800 ) },
 		[ WindowPresetKeys.HackFileManager ] = new() { Title = "Hack File Manager", PositionAndSize = ( 0, 0, 1480, 880 ) },
 		[ WindowPresetKeys.DependencyGraph ] = new() { Title = "Dependency Graph", PositionAndSize = ( 0, 0, 1480, 880 ) },
 		[ WindowPresetKeys.NotLoggedIn ] = new() { Title = "Not Logged In", PositionAndSize = ( 0, 0, 900, 560 ) },
-		[ WindowPresetKeys.MessageBox ] = new() { Title = "Info", PositionAndSize = ( 0, 0, 450, 240 ), WindowKind = WindowKind.CompactOverlay },
+		[ WindowPresetKeys.MessageBox ] = new() { Title = "Info", PositionAndSize = ( 0, 0, 520, 280 ) },
 		[ WindowPresetKeys.StatusDialogView ] = new() { Title = "Status", PositionAndSize = ( 0, 0, 1180, 700 ) },
+		[ WindowPresetKeys.StatusDialogViewMinimal ] = new() { Title = "Status", PositionAndSize = ( 0, 0, 920, 170 ) },
 		[ WindowPresetKeys.SearchOdooView ] = new() { Title = "Search Files", PositionAndSize = ( 0, 0, 1160, 760 ) },
-		[ WindowPresetKeys.OdooFileTypeManagerView ] = new() { Title = "File Types & Filters", PositionAndSize = ( 0, 0, 920, 620 ) },
-		[ WindowPresetKeys.ApplicationSettingsView ] = new() { Title = "Settings", PositionAndSize = ( 0, 0, 960, 680 ) },
+		[ WindowPresetKeys.SearchOdooViewMinimal ] = new() { Title = "Search Files", PositionAndSize = ( 0, 0, 980, 320 ) },
+		[ WindowPresetKeys.OdooFileTypeManagerView ] = new() { Title = "File Types & Filters", PositionAndSize = ( 0, 0, 960, 660 ) },
+		[ WindowPresetKeys.ApplicationSettingsView ] = new() { Title = "Settings", PositionAndSize = ( 0, 0, 1280, 820 ) },
 		[ WindowPresetKeys.AppSettings ] = new() { Title = "Settings", PositionAndSize = ( 0, 0, 1280, 820 ) },
+		[ WindowPresetKeys.PipWindow ] = new() { Title = "Preview", PositionAndSize = ( 0, 0, 420, 320 ) },
 	};
 }
 
@@ -372,6 +410,8 @@ public sealed class WorkspaceLayoutSettings
 	} = PreviewDockPlacement.AfterDetails;
 	public double PreviewPaneSize { get; set; } = 264;
 
+	public bool ShowGraphFoldersPane { get; set; } = true;
+	public bool ShowGraphFilesPane { get; set; } = true;
 	public double GraphFoldersWidth { get; set; } = 264;
 	public double GraphFilesWidth { get; set; } = 260;
 
@@ -382,6 +422,16 @@ public sealed class WorkspaceLayoutSettings
 	} = FolderDockSide.Right;
 	public double SearchDrawerWidth { get; set; } = 460;
 	public double StatusDrawerHeight { get; set; } = 280;
+	public double StatusTopSplitRatio
+	{
+		get;
+		set => field = double.IsFinite( value ) ? Math.Clamp( value, 0.2, 0.8 ) : 0.6;
+	} = 0.6;
+	public double StatusLeftSplitRatio
+	{
+		get;
+		set => field = double.IsFinite( value ) ? Math.Clamp( value, 0.2, 0.8 ) : 0.5;
+	} = 0.5;
 	public bool SearchMinimalMode { get; set; }
 	public bool StatusMinimalMode { get; set; }
 

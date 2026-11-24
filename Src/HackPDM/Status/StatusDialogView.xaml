@@ -87,6 +87,7 @@
             <!--  Resizable Horizontal Divider  -->
             <controls:PaneSplitter
                 Grid.Row="1"
+                DragCompleted="StatusSplitter_DragCompleted"
                 DragDelta="StatusHorizontalSplitter_DragDelta"
                 Orientation="Horizontal" />
 
@@ -145,6 +146,7 @@
 
                 <controls:PaneSplitter
                     Grid.Column="1"
+                    DragCompleted="StatusSplitter_DragCompleted"
                     DragDelta="StatusVerticalSplitter_DragDelta"
                     Orientation="Vertical" />
 

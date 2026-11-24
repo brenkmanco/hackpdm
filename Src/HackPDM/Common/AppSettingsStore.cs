@@ -97,6 +97,8 @@ public static class AppSettingsStore
 		return new AppUiConfig();
 	}
 
+	internal static void FlushUiConfig( AppUiConfig config ) => SaveUiConfig( config );
+
 	internal static void SaveUiConfig( AppUiConfig config )
 	{
 		JsonElement element = JsonSerializer.SerializeToElement( config, AppUiConfig.JsonOptions );
@@ -254,5 +256,11 @@ public static class UIStorage
 	{
 		try { AppSettingsStore.QueueSaveUiConfig( GlobalData ); }
 		catch( Exception e ) { HackLogger.Warn( "Settings", $"Could not save UI config: {e.Message}", e ); }
+	}
+
+	public static void Flush()
+	{
+		try { AppSettingsStore.FlushUiConfig( GlobalData ); }
+		catch( Exception e ) { HackLogger.Warn( "Settings", $"Could not flush UI config: {e.Message}", e ); }
 	}
 }

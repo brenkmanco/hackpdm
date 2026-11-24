@@ -252,6 +252,8 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 		if( _restoring )
 			return;
 		_state.IsGroupingEnabled = value;
+		UIStorage.ColumnsInfo.GroupingEnabled = value;
+		UIStorage.SaveSafe();
 		GroupingChanged?.Invoke();
 	}
 
@@ -262,8 +264,14 @@ public sealed partial class HackFileManagerViewModel : OperationViewModel, IDisp
 
 	partial void OnGroupFieldChanged( string? value )
 	{
-		if( !_restoring )
-			_state.GroupField = value;
+		if( _restoring )
+			return;
+		_state.GroupField = value;
+		if( !string.IsNullOrWhiteSpace( value ) )
+		{
+			UIStorage.ColumnsInfo.GroupBy.FieldName = value;
+			UIStorage.SaveSafe();
+		}
 	}
 
 	public RangeObservableCollection<EntryRow> Entries { get; } = [];

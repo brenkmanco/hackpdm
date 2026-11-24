@@ -13,6 +13,7 @@ public sealed class UiSettingsTests
 		WindowSettingsData defaults = new();
 		string[] expectedKeys =
 		[
+			WindowPresetKeys.MainWindow,
 			WindowPresetKeys.ProfileManager,
 			WindowPresetKeys.OdooSettings,
 			WindowPresetKeys.OdooSettingsView,
@@ -24,10 +25,13 @@ public sealed class UiSettingsTests
 			WindowPresetKeys.NotLoggedIn,
 			WindowPresetKeys.MessageBox,
 			WindowPresetKeys.StatusDialogView,
+			WindowPresetKeys.StatusDialogViewMinimal,
 			WindowPresetKeys.SearchOdooView,
+			WindowPresetKeys.SearchOdooViewMinimal,
 			WindowPresetKeys.OdooFileTypeManagerView,
 			WindowPresetKeys.ApplicationSettingsView,
 			WindowPresetKeys.AppSettings,
+			WindowPresetKeys.PipWindow,
 		];
 
 		foreach( string key in expectedKeys )
@@ -179,5 +183,105 @@ public sealed class UiSettingsTests
 		layout.ApplyPreset( WorkspaceLayoutPreset.Balanced );
 		Assert.Equal( FolderDockSide.Left, layout.FoldersDock );
 		Assert.Equal( DetailsDockPosition.Bottom, layout.DetailsDock );
+	}
+
+	[Fact]
+	public void SanitizePresets_RepairsLegacyZeroDimensionsAndAddsMissingDefaults()
+	{
+		const string json = """
+		{
+			"WindowSettings": {
+				"Windows": {
+					"ProfileManager": { "Title": "Profile Manager", "PositionAndSize": "(0, 0, 0, 0)", "WindowKind": "Overlapped" },
+					"ConfigSettings": { "Title": "Configuration Settings", "PositionAndSize": "(0, 0, 0, 0)", "WindowKind": "Overlapped" },
+					"HackFileManager": { "Title": "Hack File Manager", "PositionAndSize": "(0, 0, 0, 0)", "WindowKind": "Overlapped" },
+					"NotLoggedIn": { "Title": "Not Logged In", "PositionAndSize": "(0, 0, 0, 0)", "WindowKind": "Overlapped" },
+					"MessageBox": { "Title": "Info", "PositionAndSize": "(0, 0, 0, 0)", "WindowKind": "CompactOverlay" },
+					"DynamicJsonForm": { "Title": "Json Editor", "PositionAndSize": "(0, 0, 0, 0)", "WindowKind": "Overlapped" }
+				}
+			}
+		}
+		""";
+
+		AppUiConfig parsed = JsonSerializer.Deserialize<AppUiConfig>( json, AppUiConfig.JsonOptions )!;
+		var windows = parsed.Win.PresetWindowConfig;
+
+		Assert.Equal( 960, windows[ WindowPresetKeys.ProfileManager ].PositionAndSize.z );
+		Assert.Equal( 660, windows[ WindowPresetKeys.ProfileManager ].PositionAndSize.w );
+		Assert.Equal( 1480, windows[ WindowPresetKeys.HackFileManager ].PositionAndSize.z );
+		Assert.Equal( 880, windows[ WindowPresetKeys.HackFileManager ].PositionAndSize.w );
+		Assert.Equal( 520, windows[ WindowPresetKeys.MessageBox ].PositionAndSize.z );
+		Assert.Equal( 280, windows[ WindowPresetKeys.MessageBox ].PositionAndSize.w );
+		Assert.Equal( WindowKind.Overlapped, windows[ WindowPresetKeys.MessageBox ].WindowKind );
+		Assert.False( windows[ WindowPresetKeys.HackFileManager ].HasSavedSize );
+		Assert.False( windows[ WindowPresetKeys.HackFileManager ].HasSavedPosition );
+		Assert.False( windows[ WindowPresetKeys.HackFileManager ].IsMaximized );
+
+		Assert.Equal( 900, windows[ "DynamicJsonForm" ].PositionAndSize.z );
+		Assert.Equal( 620, windows[ "DynamicJsonForm" ].PositionAndSize.w );
+
+		Assert.True( windows.ContainsKey( WindowPresetKeys.MainWindow ) );
+		Assert.True( windows.ContainsKey( WindowPresetKeys.DependencyGraph ) );
+		Assert.True( windows.ContainsKey( WindowPresetKeys.AppSettings ) );
+		Assert.True( windows.ContainsKey( WindowPresetKeys.PipWindow ) );
+		Assert.True( windows.ContainsKey( WindowPresetKeys.StatusDialogViewMinimal ) );
+		Assert.True( windows.ContainsKey( WindowPresetKeys.SearchOdooViewMinimal ) );
+	}
+
+	[Fact]
+	public void WindowConfigData_NegativeMultiMonitorCoordinatesAndState_RoundTrip()
+	{
+		AppUiConfig config = new();
+		WindowConfigData main = config.Win.PresetWindowConfig[ WindowPresetKeys.MainWindow ];
+		main.PositionAndSize = ( -1920, -349, 1600, 950 );
+		main.HasSavedPosition = true;
+		main.HasSavedSize = true;
+		main.IsMaximized = true;
+
+		string json = JsonSerializer.Serialize( config, AppUiConfig.JsonOptions );
+		AppUiConfig parsed = JsonSerializer.Deserialize<AppUiConfig>( json, AppUiConfig.JsonOptions )!;
+		WindowConfigData restored = parsed.Win.PresetWindowConfig[ WindowPresetKeys.MainWindow ];
+
+		Assert.Equal( -1920, restored.PositionAndSize.x );
+		Assert.Equal( -349, restored.PositionAndSize.y );
+		Assert.Equal( 1600, restored.PositionAndSize.z );
+		Assert.Equal( 950, restored.PositionAndSize.w );
+		Assert.True( restored.HasSavedPosition );
+		Assert.True( restored.HasSavedSize );
+		Assert.True( restored.IsMaximized );
+	}
+
+	[Fact]
+	public void WorkspaceLayoutSettings_GraphTogglesAndStatusSplits_ClampAndRoundTrip()
+	{
+		WorkspaceLayoutSettings defaults = new();
+		Assert.True( defaults.ShowGraphFoldersPane );
+		Assert.True( defaults.ShowGraphFilesPane );
+		Assert.Equal( 0.6, defaults.StatusTopSplitRatio );
+		Assert.Equal( 0.5, defaults.StatusLeftSplitRatio );
+
+		defaults.StatusTopSplitRatio = 0.01;
+		Assert.Equal( 0.2, defaults.StatusTopSplitRatio );
+		defaults.StatusTopSplitRatio = 0.99;
+		Assert.Equal( 0.8, defaults.StatusTopSplitRatio );
+		defaults.StatusTopSplitRatio = double.NaN;
+		Assert.Equal( 0.6, defaults.StatusTopSplitRatio );
+
+		defaults.StatusLeftSplitRatio = double.PositiveInfinity;
+		Assert.Equal( 0.5, defaults.StatusLeftSplitRatio );
+
+		AppUiConfig config = new();
+		config.WorkspaceLayout.ShowGraphFoldersPane = false;
+		config.WorkspaceLayout.ShowGraphFilesPane = false;
+		config.WorkspaceLayout.StatusTopSplitRatio = 0.72;
+		config.WorkspaceLayout.StatusLeftSplitRatio = 0.38;
+
+		string json = JsonSerializer.Serialize( config, AppUiConfig.JsonOptions );
+		AppUiConfig parsed = JsonSerializer.Deserialize<AppUiConfig>( json, AppUiConfig.JsonOptions )!;
+
+		Assert.False( parsed.WorkspaceLayout.ShowGraphFoldersPane );
+		Assert.False( parsed.WorkspaceLayout.ShowGraphFilesPane );
+		Assert.Equal( 0.72, parsed.WorkspaceLayout.StatusTopSplitRatio, 3 );
+		Assert.Equal( 0.38, parsed.WorkspaceLayout.StatusLeftSplitRatio, 3 );
 	}
 }

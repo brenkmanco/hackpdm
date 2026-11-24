@@ -110,6 +110,9 @@ public sealed partial class HackFileManagerView : Page
 	private bool _syncingGroupedSelection;
 	private bool _suppressEntrySelectionSync;
 	private bool _pendingHeaderToggle;
+	private bool _applyingColumns;
+	private bool _columnTrackingAttached;
+	private readonly List<(TableViewColumn Column, long Token)> _columnWidthCallbacks = [];
 	private bool IsUsingGroupedList => GroupedEntryContainer.Visibility == Visibility.Visible;
 
 	private static readonly SolidColorBrush SyncedDotBrush = new( Windows.UI.Color.FromArgb( 255, 0xC6, 0x97, 0x49 ) );
@@ -159,10 +162,23 @@ public sealed partial class HackFileManagerView : Page
 	{
 		if( _left )
 			return;
+		SaveColumnSettings();
+		UIStorage.SaveSafe();
 		_left = true;
 		Loaded -= OnLoaded;
 		Unloaded -= OnUnloaded;
 		KeyDown -= HackFileManagerView_KeyDown;
+		if( _columnTrackingAttached )
+		{
+			OdooEntryList.ColumnReordered -= OnEntryColumnsReordered;
+			_columnTrackingAttached = false;
+		}
+		for( int i = 0; i < _columnWidthCallbacks.Count; i++ )
+		{
+			var (col, token) = _columnWidthCallbacks[ i ];
+			col.UnregisterPropertyChangedCallback( TableViewColumn.WidthProperty, token );
+		}
+		_columnWidthCallbacks.Clear();
 
 		StopAllBadgeStoryboards();
 		_recentBadges.Clear();
@@ -344,32 +360,112 @@ public sealed partial class HackFileManagerView : Page
 			: TableViewGroupState.Expanded;
 #endif
 
-		var defaults = new OdooEntryColumns().Columns;
-		foreach( TableViewColumn column in OdooEntryList.Columns )
+		_applyingColumns = true;
+		try
 		{
-			if( column.SortMemberPath is not { } property )
-				continue;
-			// a settings file from before a column existed gets that column's default
-			OdooEntryColumn? saved = ( UIStorage.Columns.GetValueOrDefault( property ) ?? defaults.GetValueOrDefault( property ) )?.Column;
-			column.Header = saved?.Header ?? property;
-			if( saved?.AutoSize is true )
+			var defaults = new OdooEntryColumns().Columns;
+			foreach( TableViewColumn column in OdooEntryList.Columns )
 			{
-				column.MinWidth = saved.Width > 0 ? saved.Width : 180;
-				column.Width = new GridLength( 1, GridUnitType.Star );
+				if( column.SortMemberPath is not { } property )
+					continue;
+				// a settings file from before a column existed gets that column's default
+				OdooEntryColumn? saved = ( UIStorage.Columns.GetValueOrDefault( property ) ?? defaults.GetValueOrDefault( property ) )?.Column;
+				column.Header = saved?.Header ?? property;
+				if( saved is { DisplayIndex: >= 0 } )
+					column.Order = saved.DisplayIndex;
+				if( saved is { AutoSize: true } )
+				{
+					column.MinWidth = saved.Width >= 48 ? saved.Width : 180;
+					column.Width = new GridLength( 1, GridUnitType.Star );
+				}
+				else
+				{
+					double width = saved is { Width: >= 48 } ? saved.Width : 100;
+					if( property is nameof( EntryRow.LocalDate ) or nameof( EntryRow.RemoteDate ) && width <= 100 )
+						width = 155;
+					column.Width = new GridLength( width );
+				}
+				long token = column.RegisterPropertyChangedCallback( TableViewColumn.WidthProperty, OnEntryColumnWidthChanged );
+				_columnWidthCallbacks.Add( ( column, token ) );
 			}
-			else
+			if( !_columnTrackingAttached )
 			{
-				double width = saved?.Width is > 0 ? saved.Width : 100;
-				if( property is nameof( EntryRow.LocalDate ) or nameof( EntryRow.RemoteDate ) && width <= 100 )
-					width = 155;
-				column.Width = new GridLength( width );
+				OdooEntryList.ColumnReordered += OnEntryColumnsReordered;
+				_columnTrackingAttached = true;
 			}
+		}
+		finally
+		{
+			_applyingColumns = false;
 		}
 
 		foreach( string field in EntryRowKeys.Names )
 		{
 			EntryGroupBy.Items.Add( new MenuFlyoutItem { Text = field, Command = ViewModel.GroupByCommand, CommandParameter = field } );
 			GroupByToolbarFlyout.Items.Add( new MenuFlyoutItem { Text = field, Command = ViewModel.GroupByCommand, CommandParameter = field } );
+		}
+	}
+
+	internal void CaptureLayoutState() => SaveColumnSettings();
+
+	private void OnEntryColumnWidthChanged( DependencyObject sender, DependencyProperty dp )
+	{
+		if( _applyingColumns || _left )
+			return;
+		SaveColumnSettings();
+		UIStorage.SaveSafe();
+	}
+
+	private void OnEntryColumnsReordered( object? sender, TableViewColumnReorderedEventArgs e )
+	{
+		if( _applyingColumns || _left )
+			return;
+		SaveColumnSettings();
+		UIStorage.SaveSafe();
+	}
+
+	private void SaveColumnSettings()
+	{
+		if( _applyingColumns )
+			return;
+		Dictionary<string, OdooEntryColumnID?> map = UIStorage.Columns;
+		for( int i = 0; i < OdooEntryList.Columns.Count; i++ )
+		{
+			TableViewColumn column = OdooEntryList.Columns[ i ];
+			if( column.SortMemberPath is not { Length: > 0 } property )
+				continue;
+
+			if( !map.TryGetValue( property, out OdooEntryColumnID? entry ) || entry is null )
+			{
+				entry = new OdooEntryColumnID
+				{
+					BindingPath = property,
+					Column = new OdooEntryColumn { Header = column.Header?.ToString() ?? property },
+				};
+				map[ property ] = entry;
+			}
+
+			OdooEntryColumn colCfg = entry.Column;
+			if( column.Order is int order && order >= 0 )
+				colCfg.DisplayIndex = order;
+			else
+				colCfg.DisplayIndex = i;
+
+			bool isStar = column.Width.IsStar;
+			double measuredWidth = column.Width.IsAbsolute && column.Width.Value >= 40
+				? column.Width.Value
+				: column.ActualWidth;
+			if( !isStar && measuredWidth >= 40 )
+			{
+				colCfg.AutoSize = false;
+				colCfg.Width = Math.Round( measuredWidth );
+			}
+			else if( isStar )
+			{
+				colCfg.AutoSize = true;
+				if( colCfg.Width < 48 )
+					colCfg.Width = Math.Max( 180.0, column.MinWidth ?? 180.0 );
+			}
 		}
 	}
 

@@ -11,7 +11,6 @@ public sealed partial class MainWindow : Window
 	{
 		InitializeComponent();
 		WindowHelper.ApplyAppIcon( this );
-		WindowHelper.ResizeWindow( this, 820, 580 );
 	}
 
 	internal Frame ContentFrame => RootFrame;

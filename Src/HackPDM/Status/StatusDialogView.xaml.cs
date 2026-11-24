@@ -87,9 +87,22 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 	public StatusDialogView()
 	{
 		InitializeComponent();
+		ApplySplitRatios();
 		Loaded += OnLoaded;
 		Unloaded += OnUnloaded;
 		SizeChanged += ( _, _ ) => UpdateDensity();
+	}
+
+	private void ApplySplitRatios()
+	{
+		var layout = UIStorage.WorkspaceLayout;
+		double top = Math.Clamp( layout.StatusTopSplitRatio, 0.2, 0.8 );
+		OperationsRow.Height = new GridLength( top, GridUnitType.Star );
+		LowerLogsRow.Height = new GridLength( 1.0 - top, GridUnitType.Star );
+
+		double left = Math.Clamp( layout.StatusLeftSplitRatio, 0.2, 0.8 );
+		InfoLogCol.Width = new GridLength( left, GridUnitType.Star );
+		ErrorLogCol.Width = new GridLength( 1.0 - left, GridUnitType.Star );
 	}
 
 #if SMOKE_TESTS
@@ -606,6 +619,7 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 		double top = Math.Clamp( OperationsRow.ActualHeight + delta, 100, totalH - 100 );
 		OperationsRow.Height = new GridLength( top, GridUnitType.Star );
 		LowerLogsRow.Height = new GridLength( Math.Max( 100, totalH - top ), GridUnitType.Star );
+		UIStorage.WorkspaceLayout.StatusTopSplitRatio = top / totalH;
 	}
 
 	private void StatusVerticalSplitter_DragDelta( double delta )
@@ -616,7 +630,10 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 		double left = Math.Clamp( InfoLogCol.ActualWidth + delta, 160, totalW - 160 );
 		InfoLogCol.Width = new GridLength( left, GridUnitType.Star );
 		ErrorLogCol.Width = new GridLength( Math.Max( 160, totalW - left ), GridUnitType.Star );
+		UIStorage.WorkspaceLayout.StatusLeftSplitRatio = left / totalW;
 	}
+
+	private void StatusSplitter_DragCompleted() => UIStorage.SaveSafe();
 
 	private void CopyDiagnosticsBtn_Click( object sender, RoutedEventArgs e )
 	{

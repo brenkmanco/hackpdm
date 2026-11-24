@@ -104,15 +104,20 @@ public sealed partial class HackApp : Application
 	{
 		MainWindow mainWindow = new();
 		Window = mainWindow;
+		AppComposition.Initialize( Window.DispatcherQueue );
+		_ = AppComposition.Settings;
+		AppComposition.InitializeDefaults();
+
 		Window.SetWindowType( AppWindowPresenterKind.Overlapped );
 		if( Window.AppWindow is { } appWindow )
 			appWindow.Closing += MainWindow_Closing;
 		Window.Closed += Window_Closed;
-		Window.Activate();
 
-		AppComposition.Initialize( Window.DispatcherQueue );
-		_ = AppComposition.Settings;
-		AppComposition.InitializeDefaults();
+		WindowPreset startupPreset = WindowHelper.ApplyMainWindowStartupState( Window, WindowHelper.Presets.ProfileManager );
+		WindowHelper.TrackWindow( Window, WindowHelper.Presets.MainWindow );
+		Window.Activate();
+		WindowHelper.FinishActivation( Window, startupPreset );
+
 		if( !string.IsNullOrEmpty( PdmConstants.TemporaryPath ) )
 		{
 			string tempPath = PdmConstants.TemporaryPath;
@@ -143,7 +148,18 @@ public sealed partial class HackApp : Application
 		_closeSaveInProgress = true;
 		try
 		{
-			await Task.Run( UIStorage.SaveSafe );
+			HomePage?.CaptureLayoutState();
+			WindowHelper.CaptureAllTrackedWindows();
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "App", $"Could not capture window/layout state on close: {ex.Message}", ex );
+		}
+
+		try
+		{
+			await Task.Run( UIStorage.Flush );
+			await HackLogger.FlushAsync();
 		}
 		catch( Exception ex )
 		{
@@ -165,7 +181,13 @@ public sealed partial class HackApp : Application
 			if( !_closeSaveCompleted )
 			{
 				_closeSaveCompleted = true;
-				_ = Task.Run( UIStorage.SaveSafe );
+				try
+				{
+					HomePage?.CaptureLayoutState();
+					WindowHelper.CaptureAllTrackedWindows();
+				}
+				catch { }
+				_ = Task.Run( UIStorage.Flush );
 			}
 			return;
 		}
@@ -176,11 +198,17 @@ public sealed partial class HackApp : Application
 			return;
 		}
 
-		// Fallback if Closed arrived without AppWindow.Closing: flush on a foreground thread before exiting.
+		// Fallback if Closed arrived without AppWindow.Closing: capture & flush synchronously before exiting.
+		try
+		{
+			HomePage?.CaptureLayoutState();
+			WindowHelper.CaptureAllTrackedWindows();
+		}
+		catch { }
 		_closeSaveCompleted = true;
 		Thread saveThread = new( static () =>
 		{
-			UIStorage.SaveSafe();
+			UIStorage.Flush();
 			Environment.Exit( 0 );
 		} )
 		{
