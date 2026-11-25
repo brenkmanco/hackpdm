@@ -1,19 +1,19 @@
 # Roadmap: every HackPDM page designed in Figma and matched in the app
 
 **Goal:** Every HackPDM page and shared control has a Figma design (light and dark) and the app matches it, with all color coming from one Material color system that the theme presets and Theme Editor control.
-**Status:** App-only mode (Figma tool-call limit reached). Milestone 4, step 4.1 next; Figma steps 2.1 and 2.3b deferred. Updated 2026-11-25.
+**Status:** M2 done: Colors, Components and File Manager (light + dark) built in Penpot. Next: 4.1 Graph/DependencyGraphView, with its Penpot frames. Updated 2026-11-25.
 
 ## Plan
-- **Figma file:** "HackPDM — Uno Material Design" (https://www.figma.com/design/qeptbte8bdjojuGv6mc6FN), built on the Material 3 Design Kit.
+- **Design file:** Penpot (local, http://localhost:9001) from here on; colors as a "HackPDM colors" token set per preset, components on a Components page, frames per page. The Figma file "HackPDM — Uno Material Design" (https://www.figma.com/design/qeptbte8bdjojuGv6mc6FN) keeps the Colors page and File Manager frames built so far.
 - **Theme system:** each preset (Light, Dark, Navy blue) becomes a Material color scheme with light and dark; shape styles keep working; the Theme Editor edits Material colors.
 - **Figma scope:** a component library page plus a frame for every page and dialog, in light and dark.
 - **Checking:** launch the dev build, the user signs in, compare each page with its Figma frame. Both targets (`net10.0-desktop`, `net10.0-windows10.0.26100.0`) must build.
 - **Git:** one commit to `main` per milestone; nothing pushed unless asked.
-- **Per page:** Figma frames (light + dark) → XAML restyle on shared styles → both builds → on-screen check.
+- **Per page:** Penpot frames (light + dark) → XAML restyle on shared styles → both builds → on-screen check.
 
 ## Milestones
 - [x] M1: Color and shape foundations — HackPDM color set in Figma (Light, Dark, Navy blue); presets, shape styles and the Theme Editor on Material colors; tests pass; File Manager work committed
-- [ ] M2: Component library — Figma page plus matching shared app styles (app half done; Figma half deferred)
+- [x] M2: Component library — Penpot Components page plus matching shared app styles; File Manager frames rebuilt in Penpot
 - [x] M3: Shell and shared pieces restyled (app; Figma frames in the backlog)
 - [ ] M4: Main work pages restyled
 - [ ] M5: Settings and account pages restyled
@@ -33,11 +33,12 @@
 ## Phase 2: Component library (reaches M2)
 | Step | Size | Skill or action | Needs | Produces | Status |
 |---|---|---|---|---|---|
-| 2.1 | complex | Figma | M1 colors | Components page: pane card, toolbar, icon buttons, chips, tabs, file table, tree row, text field, dialog, log row, navigation bar item, settings row, banner | deferred (Figma limit) |
+| 2.1 | complex | Penpot (MCP) | M1 colors | Components page: pane card, toolbar, icon buttons, chips, tabs, file table, tree row, text field, dialog, log row, navigation bar item, settings row, banner | done (Penpot) |
 | 2.2 | standard | code | 2.1 | `Styles/HackControls.xaml` with the matching styles, merged in `App.xaml` | done |
 | 2.3 | simple | code | 2.2 | File Manager moved onto the shared styles | done |
-| 2.3b | simple | Figma | 2.1 | File Manager frames rebound from the Material kit's colors to "HackPDM colors" | deferred (Figma limit) |
+| 2.3b | simple | Penpot (MCP) | 2.1 | File Manager frames (light + dark) rebuilt in Penpot on "HackPDM colors" | done |
 | 2.4 | simple | git commit | 2.2–2.3 | commit of the app half | done |
+| 2.5 | simple | git commit | 2.1, 2.3b | milestone 2 commit (roadmap, Penpot setup) | done |
 
 ## Phase 3: Shell and shared pieces (reaches M3)
 | Step | Size | Page | Status |
@@ -79,6 +80,10 @@
 | 6.3 | simple | git commit | |
 
 ## Decisions
+- 2026-11-25: Design work moves from Figma (Starter plan's MCP limit) to Penpot. The design file lives on Penpot cloud and is driven through a custom MCP connector; `docker-compose.yaml` runs a local Penpot 2.18 with its MCP server, which is kept but not used for the file. `.mcp.json` holds a personal access token, so it is git-ignored. Colors are Penpot tokens and library colors, values copied from `ThemePresets`.
+- 2026-11-25: Penpot tokens are named per preset (`Light.Primary`, `Dark.Primary`, `NavyBlue.Primary`) in three always-active sets ("HackPDM colors/Light", "/Dark", "/Navy blue"), not one name switched by themes: a token set applies to the whole file, so light and dark frames could not sit side by side otherwise. A frame for another preset rebinds to that preset's tokens, as in Figma.
+- 2026-11-25: Every component is one variant set with a `Theme` property (Light, Dark) plus its own properties; each set sits on a section board with the Light background behind the light row and the Dark background behind the dark row.
+- 2026-11-25: Dialogs use the Default shape style's 8px overlay corners and Surface Container High (matching `Common/MessageBox`), not Material's 28px. Tree-row folders keep the synced amber (#C69749), unbound, per the folder-icon decision.
 - 2026-11-25: Folder icons keep their origin colors (amber synced, blue server, tan local) because they carry meaning; only the badge outline follows the surface.
 - 2026-11-25: The navigation rail sits on Background with a Secondary Container pill for the selected page; Uno Material's NavigationView reads `NavigationViewPaneBackground` / `NavigationViewBackground`, so those are in `MaterialRoles.AppBrushes` too.
 - 2026-11-25: Continue app-only until the Figma limit resets or the plan is upgraded (user choice). Pages are restyled from the shared styles and the File Manager design; Figma frames follow later.
@@ -97,12 +102,12 @@
 - Figma work is paused: the Starter plan's MCP tool-call limit was reached on 2026-11-25 while building the Components page (that call made no changes). Every page step below now means "restyle in the app"; its Figma frames (light + dark) are owed and listed under "Figma backlog".
 - Preview summary fields from the File Manager Figma frame (File, Version, Checked out by, Path) need new view-model properties; not in scope unless asked.
 
-## Figma backlog
-- Components page (2.1): Button (Filled, Tonal, Outlined, Text), Icon button (Standard, Selected), Chip (Filter, Filter selected, Assist), Tab (Primary/Secondary × selected), Text field, Select, Checkbox, Switch, Pane card (Tinted, Outlined), Banner (Info, Warning, Error), Dialog, Log row (Info, Warning, Error), Navigation item, Settings row; icons info and warning added locally.
-- File Manager frames rebound to "HackPDM colors" (2.3b).
+## Design backlog (Penpot)
 - Light + dark frames for every page restyled app-only: Shell (rail + Search / Status drawers), Not Logged In, Message box, PiP window.
 
 ## Handoff notes
+- After M2: Penpot page "File Manager" holds "File Manager — Light" and "— Dark" (1440×900, the Balanced layout: rail, toolbar, Folders pane, Entries list with the app's 8 columns, Details inspector, Preview), built from Components-page instances and preset tokens; sample data is made up. Frames on other Penpot pages should be built the same way: instances from the Components page, preset-prefixed tokens. Keep the Penpot tab in the foreground while the plugin works; the browser suspends background tabs.
+- After 2.1 (Penpot): the connected file "HackPDM -- Uno Materials Design" is on Penpot cloud (the exporter reports design.penpot.app), not the local Docker instance; the MCP connector that works is the custom one, not the `.mcp.json` entry. Pages: Colors (swatch boards for Light, Dark, Navy blue) and Components (16 variant sets, 74 variants: Button, Icon button, Chip, Tab, Text field/Select, Checkbox, Switch, Pane card, Toolbar, Banner, Dialog, Log row, Navigation item, Settings row, File table row, Tree row). Library: 90 colors under "HackPDM colors/<preset>", 10 Roboto text styles under "HackPDM type" (Material type scale), 90 tokens. Icons are Material icon paths drawn in 24px boards. Not reviewed by you yet.
 - After M3: shell, Not Logged In, message box, PiP and folder badges restyled; checked signed in (rail, both drawers, File Manager with live data). Drawer contents (Search, Status Log) are M4. A pre-existing flaky test (`PauseAndDownloadResumeTests`) is fixed on branch `claude/cool-newton-5c3635` (commit b712b0e), not merged here.
 - After 2.2–2.3: `Styles/HackControls.xaml` holds HackPaneTintedStyle, HackPaneOutlinedStyle, HackToolbarStyle, HackPaneTitleStyle, HackCaptionStyle, HackBanner{Info,Warning,Error}Style, PaneIconButtonStyle, PaneIconToggleButtonStyle, AssistChipButtonStyle, GroupedBarTextButtonStyle, GroupedSortHeaderButtonStyle, and the TabView / TableView header / TreeView selection brushes. Secondary tab strips alias `HackSecondaryTabForegroundSelectedBrush`. Tests pass, both targets build; not yet checked on screen.
 - After M1: Figma has a Colors page (frames 14:612 Light, 14:742 Dark, 14:872 Navy blue) and the "HackPDM colors" collection. App: presets are Material schemes; Theme Editor lists the 30 roles in 7 groups; Dark → Navy blue switches live (checked on screen, not saved). Unit tests 427 passed / 55 skipped; both targets and the smoke-test build compile. The File Manager Figma frames still bind to the Material 3 kit's variables, not "HackPDM colors" — rebind them in 2.3.

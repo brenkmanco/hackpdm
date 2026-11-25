@@ -428,3 +428,5 @@ LATER_USE_READ.md
 /Odoo/deploy/.env
 
 /support_files/KitBot FRC 2026_SW2026
+# Local MCP config (holds a personal Penpot access token)
+.mcp.json
