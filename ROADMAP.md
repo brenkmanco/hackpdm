@@ -1,7 +1,7 @@
 # Roadmap: every HackPDM page designed in Figma and matched in the app
 
 **Goal:** Every HackPDM page and shared control has a Figma design (light and dark) and the app matches it, with all color coming from one Material color system that the theme presets and Theme Editor control.
-**Status:** Milestone 4 in progress: 4.1 Dependency Graph done and committed (with sync tool phase 4). Penpot ↔ code sync tool (`tools/WyrmpdmSync`, see `design/README.md`) phases 1–4 done. Next: sync phase 5 (docs), then 4.2 Search/SearchOdooView. Updated 2026-11-25.
+**Status:** Milestone 4 in progress: 4.1 Dependency Graph done and committed (with sync tool phase 4). Penpot ↔ code sync tool (`tools/WyrmpdmSync`, see `design/README.md`) done. Next: 4.2 Search/SearchOdooView. Updated 2026-11-25.
 
 ## Plan
 - **Design file:** Penpot (local, http://localhost:9001) from here on; colors as a "HackPDM colors" token set per preset, components on a Components page, frames per page. The Figma file "HackPDM — Uno Material Design" (https://www.figma.com/design/qeptbte8bdjojuGv6mc6FN) keeps the Colors page and File Manager frames built so far.
@@ -9,7 +9,8 @@
 - **Figma scope:** a component library page plus a frame for every page and dialog, in light and dark.
 - **Checking:** launch the dev build, the user signs in, compare each page with its Figma frame. Both targets (`net10.0-desktop`, `net10.0-windows10.0.26100.0`) must build.
 - **Git:** one commit to `main` per milestone; nothing pushed unless asked.
-- **Per page:** Penpot frames (light + dark) → XAML restyle on shared styles → both builds → on-screen check.
+- **Design sync:** `tools/WyrmpdmSync` keeps Penpot and the code in step both ways (`design/README.md`); run `status` before and after design work.
+- **Per page:** Penpot frames (light + dark) → XAML restyle on shared styles → mark the view (`pp:Id`) and link it under `frames` in `design/penpot-sync.json` → `wyrmpdm-sync init` and `status` (all in sync) → both builds → on-screen check.
 
 ## Milestones
 - [x] M1: Color and shape foundations — HackPDM color set in Figma (Light, Dark, Navy blue); presets, shape styles and the Theme Editor on Material colors; tests pass; File Manager work committed
@@ -111,6 +112,7 @@
 - Light + dark frames for every page restyled app-only: Shell (rail + Search / Status drawers), Not Logged In, Message box, PiP window.
 
 ## Handoff notes
+- After the sync tool (phases 1–5): `status` shows 106 tokens, 27 component setters and both linked views in sync, except `AssistChipButtonStyle.Height` (Penpot 34, code 32) until the Assist chip is re-laid out in the Penpot editor. The "Graph around it" labels' glyph layout was cleared by a test push and is redrawn by Penpot on the next edit. 60 tool tests pass.
 - After 4.1: Penpot page "Dependency Graph" holds "— Light" and "— Dark"; File Manager frames' rail now lists the app's six pages. App: `DependencyGraphView.xaml` on the shared styles, `GraphTheme.cs` derives graph colors from the scheme (2 new tests), `ThemeService.GraphTheme` passes the applied scheme. Both targets build; 430 tests pass, 55 skipped; `PauseAndDownloadResumeTests` still fails intermittently on main too (fix on branch `claude/cool-newton-5c3635`). Checked on screen in Dark (desktop build). Seen there, not fixed: on the desktop build the Material text styles (BodyMedium, BodySmall) render noticeably heavier than the default font, app-wide.
 - After M2: Penpot page "File Manager" holds "File Manager — Light" and "— Dark" (1440×900, the Balanced layout: rail, toolbar, Folders pane, Entries list with the app's 8 columns, Details inspector, Preview), built from Components-page instances and preset tokens; sample data is made up. Frames on other Penpot pages should be built the same way: instances from the Components page, preset-prefixed tokens. Keep the Penpot tab in the foreground while the plugin works; the browser suspends background tabs.
 - After 2.1 (Penpot): the connected file "HackPDM -- Uno Materials Design" is on Penpot cloud (the exporter reports design.penpot.app), not the local Docker instance; the MCP connector that works is the custom one, not the `.mcp.json` entry. Pages: Colors (swatch boards for Light, Dark, Navy blue) and Components (16 variant sets, 74 variants: Button, Icon button, Chip, Tab, Text field/Select, Checkbox, Switch, Pane card, Toolbar, Banner, Dialog, Log row, Navigation item, Settings row, File table row, Tree row). Library: 90 colors under "HackPDM colors/<preset>", 10 Roboto text styles under "HackPDM type" (Material type scale), 90 tokens. Icons are Material icon paths drawn in 24px boards. Not reviewed by you yet.
