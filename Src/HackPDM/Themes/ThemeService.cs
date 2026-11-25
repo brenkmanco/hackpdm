@@ -461,6 +461,14 @@ public sealed class ThemeService
 			Recolor( MaterialRoles.BrushKey( role ), scheme[ role ] );
 		foreach( var (key, argb) in MaterialRoles.FluentBrushes( scheme ) )
 			Recolor( key, argb );
+		foreach( var (key, role) in MaterialRoles.AppBrushes )
+			Recolor( key, scheme[ role ] );
+		if( ThemeResources.TryGetBrush<LinearGradientBrush>( MaterialRoles.TabUnderlineBrushKey ) is { GradientStops.Count: >= 4 } underline )
+		{
+			Color primary = UiColors.ToUiColor( scheme[ MaterialRoles.Primary ] );
+			underline.GradientStops[ ^2 ].Color = primary;
+			underline.GradientStops[ ^1 ].Color = primary;
+		}
 		_applied = scheme;
 	}
 

@@ -267,87 +267,9 @@
 		<!--
 			Material look for this screen, built from the Figma file "HackPDM — Uno Material Design"
 			(frames "File Manager — Light" / "— Dark"). Colors come from the active color preset (ThemePresets);
-			pane corners and borders from the shape style (HackPanel* resources).
+			pane corners and borders from the shape style (HackPanel* resources). Shared button, chip, tab, table and
+			tree styles are in Styles/HackControls.xaml.
 		-->
-		<Style
-			x:Key="PaneIconButtonStyle"
-			BasedOn="{StaticResource IconButtonStyle}"
-			TargetType="Button">
-			<Setter Property="Width" Value="32" />
-			<Setter Property="Height" Value="32" />
-			<Setter Property="MinWidth" Value="32" />
-			<Setter Property="MinHeight" Value="32" />
-			<Setter Property="Padding" Value="0" />
-			<Setter Property="CornerRadius" Value="16" />
-		</Style>
-		<Style
-			x:Key="PaneIconToggleButtonStyle"
-			BasedOn="{StaticResource IconToggleButtonStyle}"
-			TargetType="ToggleButton">
-			<Setter Property="Width" Value="32" />
-			<Setter Property="Height" Value="32" />
-			<Setter Property="MinWidth" Value="32" />
-			<Setter Property="MinHeight" Value="32" />
-			<Setter Property="Padding" Value="0" />
-			<Setter Property="CornerRadius" Value="16" />
-		</Style>
-		<!--  Figma: assist chip (Refresh, Search). A Chip control would stay toggled after a click, so this is a button shaped like one.  -->
-		<Style
-			x:Key="AssistChipButtonStyle"
-			BasedOn="{StaticResource OutlinedButtonStyle}"
-			TargetType="Button">
-			<Setter Property="Height" Value="32" />
-			<Setter Property="MinHeight" Value="32" />
-			<Setter Property="Padding" Value="8,0,16,0" />
-			<Setter Property="CornerRadius" Value="8" />
-			<Setter Property="Foreground" Value="{ThemeResource OnSurfaceBrush}" />
-			<Setter Property="BorderBrush" Value="{ThemeResource OutlineVariantBrush}" />
-		</Style>
-		<!--  the grouped list's own toolbar and sortable column labels (not in the Figma frame; styled to match the table header)  -->
-		<Style
-			x:Key="GroupedBarTextButtonStyle"
-			BasedOn="{StaticResource TextButtonStyle}"
-			TargetType="Button">
-			<Setter Property="Height" Value="32" />
-			<Setter Property="MinHeight" Value="32" />
-			<Setter Property="Padding" Value="12,0" />
-		</Style>
-		<Style
-			x:Key="GroupedSortHeaderButtonStyle"
-			BasedOn="{StaticResource TextButtonStyle}"
-			TargetType="Button">
-			<Setter Property="MinHeight" Value="0" />
-			<Setter Property="MinWidth" Value="0" />
-			<Setter Property="Padding" Value="2,1" />
-			<Setter Property="CornerRadius" Value="4" />
-			<Setter Property="FontSize" Value="12" />
-			<Setter Property="FontWeight" Value="Medium" />
-			<Setter Property="Foreground" Value="{ThemeResource OnSurfaceVariantBrush}" />
-		</Style>
-		<!--  Figma: tabs — transparent strip, label color marks the selected tab, Primary underline  -->
-		<SolidColorBrush x:Key="TabViewBackground" Color="Transparent" />
-		<SolidColorBrush x:Key="TabViewItemHeaderBackground" Color="Transparent" />
-		<SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver" Color="{ThemeResource HackSurfaceContainerHighColor}" />
-		<SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed" Color="{ThemeResource HackSurfaceContainerHighColor}" />
-		<LinearGradientBrush x:Key="TabViewItemHeaderBackgroundSelected" StartPoint="0,0" EndPoint="0,1">
-			<GradientStop Offset="0" Color="Transparent" />
-			<GradientStop Offset="0.94" Color="Transparent" />
-			<GradientStop Offset="0.94" Color="{ThemeResource PrimaryColor}" />
-			<GradientStop Offset="1" Color="{ThemeResource PrimaryColor}" />
-		</LinearGradientBrush>
-		<SolidColorBrush x:Key="TabViewItemHeaderForeground" Color="{ThemeResource OnSurfaceVariantColor}" />
-		<SolidColorBrush x:Key="TabViewItemHeaderForegroundPointerOver" Color="{ThemeResource OnSurfaceColor}" />
-		<SolidColorBrush x:Key="TabViewItemHeaderForegroundPressed" Color="{ThemeResource OnSurfaceColor}" />
-		<SolidColorBrush x:Key="TabViewItemHeaderForegroundSelected" Color="{ThemeResource PrimaryColor}" />
-		<SolidColorBrush x:Key="TabViewItemSeparator" Color="Transparent" />
-		<SolidColorBrush x:Key="TabViewBorderBrush" Color="{ThemeResource OutlineVariantColor}" />
-		<SolidColorBrush x:Key="TabViewSelectedItemBorderBrush" Color="Transparent" />
-		<x:Double x:Key="TabViewItemHeaderFontSize">14</x:Double>
-		<x:Double x:Key="TabViewItemMinHeight">48</x:Double>
-		<Thickness x:Key="TabViewTopHeaderPadding">8,0,0,0</Thickness>
-		<!--  Figma: File table/Header sits on Surface Container Low with On Surface Variant labels  -->
-		<SolidColorBrush x:Key="TableViewHeaderRowBackground" Color="{ThemeResource HackSurfaceContainerLowColor}" />
-		<SolidColorBrush x:Key="TableViewHeaderForeground" Color="{ThemeResource OnSurfaceVariantColor}" />
 		<!--  text keeps the theme's color (a fixed white was invisible on light presets)  -->
 		<Style TargetType="TextBlock">
 			<Setter Property="FontSize" Value="11" />
@@ -372,11 +294,7 @@
 			</Grid.RowDefinitions>
 
 			<!--  Top Folder Navigation & Breadcrumb Bar  -->
-			<Border
-				Grid.Row="0"
-				Padding="8,4,12,4"
-				Background="{ThemeResource HackSurfaceContainerBrush}"
-				CornerRadius="16">
+			<Border Grid.Row="0" Style="{StaticResource HackToolbarStyle}">
 			<Grid ColumnSpacing="4">
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="Auto" />
@@ -602,7 +520,7 @@
 			<!--  Folders Pane Card  -->
 			<Border
 				x:Name="FoldersPaneCard"
-				Background="{ThemeResource HackSurfaceContainerLowBrush}"
+				Style="{StaticResource HackPaneTintedStyle}"
 				CornerRadius="{StaticResource HackPanelCornerRadius}">
 				<Grid>
 					<Grid.RowDefinitions>
@@ -630,7 +548,7 @@
 							ToolTipService.ToolTip="Drag to dock Folders Left or Right">
 							<TextBlock
 								VerticalAlignment="Center"
-								Style="{StaticResource TitleMedium}"
+								Style="{StaticResource HackPaneTitleStyle}"
 								Text="Folders" />
 						</Grid>
 						<StackPanel
@@ -731,14 +649,6 @@
 									<x:Double x:Key="TreeViewItemIndent">16</x:Double>
 									<x:Double x:Key="TreeViewItemMinHeight">32</x:Double>
 									<x:Double x:Key="TreeViewItemExpandCollapseChevronFontSize">11</x:Double>
-									<!--  Figma: Folder tree/Item — the selected folder is a Secondary Container pill  -->
-									<SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="{ThemeResource SecondaryContainerColor}" />
-									<SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SecondaryContainerColor}" />
-									<SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPressed" Color="{ThemeResource SecondaryContainerColor}" />
-									<SolidColorBrush x:Key="TreeViewItemForegroundSelected" Color="{ThemeResource OnSecondaryContainerColor}" />
-									<SolidColorBrush x:Key="TreeViewItemForegroundSelectedPointerOver" Color="{ThemeResource OnSecondaryContainerColor}" />
-									<SolidColorBrush x:Key="TreeViewItemForegroundSelectedPressed" Color="{ThemeResource OnSecondaryContainerColor}" />
-									<SolidColorBrush x:Key="TreeViewItemSelectionIndicatorForeground" Color="Transparent" />
 								</TreeView.Resources>
 							<TreeView.ContextFlyout>
 								<MenuFlyout>
@@ -911,8 +821,7 @@
 					<Border Grid.Row="3" Padding="16,4,16,12">
 						<TextBlock
 							x:Name="TreeSummaryText"
-							Style="{StaticResource BodySmall}"
-							Foreground="{ThemeResource OnSurfaceVariantBrush}"
+							Style="{StaticResource HackCaptionStyle}"
 							Text="Loading folders…"
 							TextTrimming="CharacterEllipsis" />
 					</Border>
@@ -928,8 +837,7 @@
 			<!--  Primary File List Card  -->
 			<Border
 				x:Name="EntriesPaneCard"
-				Background="{ThemeResource SurfaceBrush}"
-				BorderBrush="{StaticResource HackPanelStrokeBrush}"
+				Style="{StaticResource HackPaneOutlinedStyle}"
 				BorderThickness="{StaticResource HackPanelBorderThickness}"
 				CornerRadius="{StaticResource HackPanelCornerRadius}">
 				<Grid>
@@ -1391,8 +1299,7 @@
 				<!--  Details Inspector Card  -->
 				<Border
 					x:Name="DetailsPaneCard"
-					Background="{ThemeResource SurfaceBrush}"
-					BorderBrush="{StaticResource HackPanelStrokeBrush}"
+					Style="{StaticResource HackPaneOutlinedStyle}"
 					BorderThickness="{StaticResource HackPanelBorderThickness}"
 					CornerRadius="{StaticResource HackPanelCornerRadius}">
 					<Grid>
@@ -1405,7 +1312,7 @@
 								TabWidthMode="SizeToContent">
 								<TabView.Resources>
 									<!--  Figma: secondary tabs keep the label in On Surface when selected  -->
-									<SolidColorBrush x:Key="TabViewItemHeaderForegroundSelected" Color="{ThemeResource OnSurfaceColor}" />
+									<StaticResource x:Key="TabViewItemHeaderForegroundSelected" ResourceKey="HackSecondaryTabForegroundSelectedBrush" />
 								</TabView.Resources>
 								<!--  Drag handle for docking the Inspector (was the "Inspector" header row)  -->
 								<TabView.TabStripHeader>
@@ -1721,7 +1628,7 @@
 					x:Name="PreviewPaneCard"
 					HorizontalAlignment="Stretch"
 					VerticalAlignment="Stretch"
-					Background="{ThemeResource HackSurfaceContainerLowBrush}"
+					Style="{StaticResource HackPaneTintedStyle}"
 					CornerRadius="{StaticResource HackPanelCornerRadius}">
 					<Grid>
 						<Grid.RowDefinitions>
@@ -1747,7 +1654,7 @@
 								ToolTipService.ToolTip="Drag to swap Preview position or dock">
 								<TextBlock
 									VerticalAlignment="Center"
-									Style="{StaticResource TitleMedium}"
+									Style="{StaticResource HackPaneTitleStyle}"
 									Text="Preview" />
 							</Grid>
 							<StackPanel

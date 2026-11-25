@@ -84,6 +84,8 @@ public class ThemePresetsTests
 		Assert.Equal( "HackSurfaceContainerLowBrush", MaterialRoles.BrushKey( MaterialRoles.SurfaceContainerLow ) );
 		Assert.Equal( "PrimaryColor", MaterialRoles.ColorKey( MaterialRoles.Primary ) );
 		Assert.False( MaterialRoles.IsRole( "TextFillColorPrimaryBrush" ) );
+		// every shared control brush in Styles/HackControls.xaml maps to a real role
+		Assert.All( MaterialRoles.AppBrushes.Values, role => Assert.True( MaterialRoles.IsRole( role ), role ) );
 	}
 
 	[Fact]

@@ -17,6 +17,8 @@
 				<ResourceDictionary Source="ms-appx:///Microsoft.UI.Xaml/DensityStyles/Compact.xaml" />
 				<ResourceDictionary Source="ms-appx:///WinUI.TableView/Themes/TableView.xaml" />
 				<ResourceDictionary Source="ms-appx:///WinUI.TableView/Themes/TableViewColumnHeader.xaml" />
+				<!--  shared HackPDM styles (Figma Components page); after the theme and TableView so its keys win  -->
+				<ResourceDictionary Source="ms-appx:///Styles/HackControls.xaml" />
 			</ResourceDictionary.MergedDictionaries>
 			<ResourceDictionary.ThemeDictionaries>
 				<ResourceDictionary x:Key="Default">

@@ -128,6 +128,33 @@ public static class MaterialRoles
 	}
 
 	/// <summary>
+	/// The app's own control brushes (Styles/HackControls.xaml) and the role each takes: tab strips, table headers,
+	/// tree selection. They are recolored with the preset, like the role brushes.
+	/// </summary>
+	public static FrozenDictionary<string, string> AppBrushes { get; } = new Dictionary<string, string>( StringComparer.Ordinal )
+	{
+		[ "TabViewItemHeaderBackgroundPointerOver" ] = SurfaceContainerHigh,
+		[ "TabViewItemHeaderBackgroundPressed" ] = SurfaceContainerHigh,
+		[ "TabViewItemHeaderForeground" ] = OnSurfaceVariant,
+		[ "TabViewItemHeaderForegroundPointerOver" ] = OnSurface,
+		[ "TabViewItemHeaderForegroundPressed" ] = OnSurface,
+		[ "TabViewItemHeaderForegroundSelected" ] = Primary,
+		[ "HackSecondaryTabForegroundSelectedBrush" ] = OnSurface,
+		[ "TabViewBorderBrush" ] = OutlineVariant,
+		[ "TableViewHeaderRowBackground" ] = SurfaceContainerLow,
+		[ "TableViewHeaderForeground" ] = OnSurfaceVariant,
+		[ "TreeViewItemBackgroundSelected" ] = SecondaryContainer,
+		[ "TreeViewItemBackgroundSelectedPointerOver" ] = SecondaryContainer,
+		[ "TreeViewItemBackgroundSelectedPressed" ] = SecondaryContainer,
+		[ "TreeViewItemForegroundSelected" ] = OnSecondaryContainer,
+		[ "TreeViewItemForegroundSelectedPointerOver" ] = OnSecondaryContainer,
+		[ "TreeViewItemForegroundSelectedPressed" ] = OnSecondaryContainer,
+	}.ToFrozenDictionary( StringComparer.Ordinal );
+
+	/// <summary>The gradient brush whose last two stops draw the selected tab's underline (set to <see cref="Primary"/>).</summary>
+	public const string TabUnderlineBrushKey = "TabViewItemHeaderBackgroundSelected";
+
+	/// <summary>
 	/// The Windows (Fluent) brushes, as 0xAARRGGBB, that follow a scheme: tree views, tab views, tables, menus,
 	/// breadcrumbs and any page not yet restyled still draw with these.
 	/// </summary>
