@@ -1,0 +1,730 @@
+{
+  "version": 1,
+  "penpot": {
+    "baseUrl": "https://design.penpot.app",
+    "fileId": "3db45ae8-1dfd-81ce-8009-0028caf8f15e",
+    "fileName": "HackPDM -- Uno Materials Design"
+  },
+  "colors": [
+    {
+      "token": "Dark.Background",
+      "palette": "Dark",
+      "role": "Background",
+      "tokenId": "394343ae-7425-8033-8009-002a2c051232",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#141218"
+    },
+    {
+      "token": "Dark.Error",
+      "palette": "Dark",
+      "role": "Error",
+      "tokenId": "394343ae-7425-8033-8009-002a2bfd22a3",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#F2B8B5"
+    },
+    {
+      "token": "Dark.ErrorContainer",
+      "palette": "Dark",
+      "role": "ErrorContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c019e14",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#8C1D18"
+    },
+    {
+      "token": "Dark.OnBackground",
+      "palette": "Dark",
+      "role": "OnBackground",
+      "tokenId": "394343ae-7425-8033-8009-002a2c07224c",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#E6E0E9"
+    },
+    {
+      "token": "Dark.OnError",
+      "palette": "Dark",
+      "role": "OnError",
+      "tokenId": "394343ae-7425-8033-8009-002a2bff06a5",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#601410"
+    },
+    {
+      "token": "Dark.OnErrorContainer",
+      "palette": "Dark",
+      "role": "OnErrorContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c030190",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#F9DEDC"
+    },
+    {
+      "token": "Dark.OnPrimary",
+      "palette": "Dark",
+      "role": "OnPrimary",
+      "tokenId": "394343ae-7425-8033-8009-002a2be00c32",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#152E60"
+    },
+    {
+      "token": "Dark.OnPrimaryContainer",
+      "palette": "Dark",
+      "role": "OnPrimaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2be588b0",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#D9E2FF"
+    },
+    {
+      "token": "Dark.OnSecondary",
+      "palette": "Dark",
+      "role": "OnSecondary",
+      "tokenId": "394343ae-7425-8033-8009-002a2bedfbcd",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#293042"
+    },
+    {
+      "token": "Dark.OnSecondaryContainer",
+      "palette": "Dark",
+      "role": "OnSecondaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2bf21d53",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#DCE2F9"
+    },
+    {
+      "token": "Dark.OnSurface",
+      "palette": "Dark",
+      "role": "OnSurface",
+      "tokenId": "394343ae-7425-8033-8009-002a2c0bba87",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#E2E2E9"
+    },
+    {
+      "token": "Dark.OnSurfaceInverse",
+      "palette": "Dark",
+      "role": "OnSurfaceInverse",
+      "tokenId": "394343ae-7425-8033-8009-002a2c151b76",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#33343A"
+    },
+    {
+      "token": "Dark.OnSurfaceVariant",
+      "palette": "Dark",
+      "role": "OnSurfaceVariant",
+      "tokenId": "394343ae-7425-8033-8009-002a2c10245a",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#C5C6D0"
+    },
+    {
+      "token": "Dark.OnTertiary",
+      "palette": "Dark",
+      "role": "OnTertiary",
+      "tokenId": "394343ae-7425-8033-8009-002a2bf6fa0d",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#412742"
+    },
+    {
+      "token": "Dark.OnTertiaryContainer",
+      "palette": "Dark",
+      "role": "OnTertiaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2bfb0354",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#FDD7FA"
+    },
+    {
+      "token": "Dark.Outline",
+      "palette": "Dark",
+      "role": "Outline",
+      "tokenId": "394343ae-7425-8033-8009-002a2c1727ec",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#8F909A"
+    },
+    {
+      "token": "Dark.OutlineVariant",
+      "palette": "Dark",
+      "role": "OutlineVariant",
+      "tokenId": "394343ae-7425-8033-8009-002a2c193368",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#44464F"
+    },
+    {
+      "token": "Dark.Primary",
+      "palette": "Dark",
+      "role": "Primary",
+      "tokenId": "394343ae-7425-8033-8009-002a2bdc5eae",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#B0C6FF"
+    },
+    {
+      "token": "Dark.PrimaryContainer",
+      "palette": "Dark",
+      "role": "PrimaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2be320d6",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#2E4578"
+    },
+    {
+      "token": "Dark.PrimaryInverse",
+      "palette": "Dark",
+      "role": "PrimaryInverse",
+      "tokenId": "394343ae-7425-8033-8009-002a2be8db04",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#485E92"
+    },
+    {
+      "token": "Dark.Secondary",
+      "palette": "Dark",
+      "role": "Secondary",
+      "tokenId": "394343ae-7425-8033-8009-002a2beb5281",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#C0C6DC"
+    },
+    {
+      "token": "Dark.SecondaryContainer",
+      "palette": "Dark",
+      "role": "SecondaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2befe735",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#404659"
+    },
+    {
+      "token": "Dark.Surface",
+      "palette": "Dark",
+      "role": "Surface",
+      "tokenId": "394343ae-7425-8033-8009-002a2c09a01c",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#121318"
+    },
+    {
+      "token": "Dark.SurfaceContainer",
+      "palette": "Dark",
+      "role": "SurfaceContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c1ce319",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#1E1F25"
+    },
+    {
+      "token": "Dark.SurfaceContainerHigh",
+      "palette": "Dark",
+      "role": "SurfaceContainerHigh",
+      "tokenId": "394343ae-7425-8033-8009-002a2c1eebe8",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#282A2F"
+    },
+    {
+      "token": "Dark.SurfaceContainerLow",
+      "palette": "Dark",
+      "role": "SurfaceContainerLow",
+      "tokenId": "394343ae-7425-8033-8009-002a2c1b00b8",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#1A1B21"
+    },
+    {
+      "token": "Dark.SurfaceInverse",
+      "palette": "Dark",
+      "role": "SurfaceInverse",
+      "tokenId": "394343ae-7425-8033-8009-002a2c125904",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#E2E2E9"
+    },
+    {
+      "token": "Dark.SurfaceVariant",
+      "palette": "Dark",
+      "role": "SurfaceVariant",
+      "tokenId": "394343ae-7425-8033-8009-002a2c0dff2a",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#33343A"
+    },
+    {
+      "token": "Dark.Tertiary",
+      "palette": "Dark",
+      "role": "Tertiary",
+      "tokenId": "394343ae-7425-8033-8009-002a2bf46e66",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#E0BBDD"
+    },
+    {
+      "token": "Dark.TertiaryContainer",
+      "palette": "Dark",
+      "role": "TertiaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2bf93ca6",
+      "setId": "394343ae-7425-8033-8009-002a2bd950b6",
+      "synced": "#593D5A"
+    },
+    {
+      "token": "Light.Background",
+      "palette": "Light",
+      "role": "Background",
+      "tokenId": "394343ae-7425-8033-8009-002a2c42cf85",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#FDF7FF"
+    },
+    {
+      "token": "Light.Error",
+      "palette": "Light",
+      "role": "Error",
+      "tokenId": "394343ae-7425-8033-8009-002a2c3bb510",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#B3261E"
+    },
+    {
+      "token": "Light.ErrorContainer",
+      "palette": "Light",
+      "role": "ErrorContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c3f2533",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#F9DEDC"
+    },
+    {
+      "token": "Light.OnBackground",
+      "palette": "Light",
+      "role": "OnBackground",
+      "tokenId": "394343ae-7425-8033-8009-002a2c446e5c",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#1D1B20"
+    },
+    {
+      "token": "Light.OnError",
+      "palette": "Light",
+      "role": "OnError",
+      "tokenId": "394343ae-7425-8033-8009-002a2c3d61d6",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#FFFFFF"
+    },
+    {
+      "token": "Light.OnErrorContainer",
+      "palette": "Light",
+      "role": "OnErrorContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c40de0c",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#8C1D18"
+    },
+    {
+      "token": "Light.OnPrimary",
+      "palette": "Light",
+      "role": "OnPrimary",
+      "tokenId": "394343ae-7425-8033-8009-002a2c25e961",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#FFFFFF"
+    },
+    {
+      "token": "Light.OnPrimaryContainer",
+      "palette": "Light",
+      "role": "OnPrimaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c298a24",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#324574"
+    },
+    {
+      "token": "Light.OnSecondary",
+      "palette": "Light",
+      "role": "OnSecondary",
+      "tokenId": "394343ae-7425-8033-8009-002a2c2e79a6",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#FFFFFF"
+    },
+    {
+      "token": "Light.OnSecondaryContainer",
+      "palette": "Light",
+      "role": "OnSecondaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c3227c4",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#404659"
+    },
+    {
+      "token": "Light.OnSurface",
+      "palette": "Light",
+      "role": "OnSurface",
+      "tokenId": "394343ae-7425-8033-8009-002a2c47b31b",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#1A1B21"
+    },
+    {
+      "token": "Light.OnSurfaceInverse",
+      "palette": "Light",
+      "role": "OnSurfaceInverse",
+      "tokenId": "394343ae-7425-8033-8009-002a2c4ebca7",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#EEEDF4"
+    },
+    {
+      "token": "Light.OnSurfaceVariant",
+      "palette": "Light",
+      "role": "OnSurfaceVariant",
+      "tokenId": "394343ae-7425-8033-8009-002a2c4b08a4",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#44464F"
+    },
+    {
+      "token": "Light.OnTertiary",
+      "palette": "Light",
+      "role": "OnTertiary",
+      "tokenId": "394343ae-7425-8033-8009-002a2c360272",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#FFFFFF"
+    },
+    {
+      "token": "Light.OnTertiaryContainer",
+      "palette": "Light",
+      "role": "OnTertiaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c39f5a7",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#593D5A"
+    },
+    {
+      "token": "Light.Outline",
+      "palette": "Light",
+      "role": "Outline",
+      "tokenId": "394343ae-7425-8033-8009-002a2c50aef0",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#757780"
+    },
+    {
+      "token": "Light.OutlineVariant",
+      "palette": "Light",
+      "role": "OutlineVariant",
+      "tokenId": "394343ae-7425-8033-8009-002a2c523996",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#C5C6D0"
+    },
+    {
+      "token": "Light.Primary",
+      "palette": "Light",
+      "role": "Primary",
+      "tokenId": "394343ae-7425-8033-8009-002a2c24268c",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#485E92"
+    },
+    {
+      "token": "Light.PrimaryContainer",
+      "palette": "Light",
+      "role": "PrimaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c27c21b",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#ADC3FE"
+    },
+    {
+      "token": "Light.PrimaryInverse",
+      "palette": "Light",
+      "role": "PrimaryInverse",
+      "tokenId": "394343ae-7425-8033-8009-002a2c2b12d7",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#B0C6FF"
+    },
+    {
+      "token": "Light.Secondary",
+      "palette": "Light",
+      "role": "Secondary",
+      "tokenId": "394343ae-7425-8033-8009-002a2c2d3205",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#585F72"
+    },
+    {
+      "token": "Light.SecondaryContainer",
+      "palette": "Light",
+      "role": "SecondaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c307727",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#D9DFF6"
+    },
+    {
+      "token": "Light.Surface",
+      "palette": "Light",
+      "role": "Surface",
+      "tokenId": "394343ae-7425-8033-8009-002a2c45ec58",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#FAF8FF"
+    },
+    {
+      "token": "Light.SurfaceContainer",
+      "palette": "Light",
+      "role": "SurfaceContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c5588ba",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#EEEDF4"
+    },
+    {
+      "token": "Light.SurfaceContainerHigh",
+      "palette": "Light",
+      "role": "SurfaceContainerHigh",
+      "tokenId": "394343ae-7425-8033-8009-002a2c57205e",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#E8E7EF"
+    },
+    {
+      "token": "Light.SurfaceContainerLow",
+      "palette": "Light",
+      "role": "SurfaceContainerLow",
+      "tokenId": "394343ae-7425-8033-8009-002a2c53d69a",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#F4F3FA"
+    },
+    {
+      "token": "Light.SurfaceInverse",
+      "palette": "Light",
+      "role": "SurfaceInverse",
+      "tokenId": "394343ae-7425-8033-8009-002a2c4ca4ca",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#282A2F"
+    },
+    {
+      "token": "Light.SurfaceVariant",
+      "palette": "Light",
+      "role": "SurfaceVariant",
+      "tokenId": "394343ae-7425-8033-8009-002a2c49657d",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#E2E2E9"
+    },
+    {
+      "token": "Light.Tertiary",
+      "palette": "Light",
+      "role": "Tertiary",
+      "tokenId": "394343ae-7425-8033-8009-002a2c345442",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#735573"
+    },
+    {
+      "token": "Light.TertiaryContainer",
+      "palette": "Light",
+      "role": "TertiaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c3827ad",
+      "setId": "394343ae-7425-8033-8009-002a2c22d288",
+      "synced": "#FBD4F7"
+    },
+    {
+      "token": "Navyblue.Background",
+      "palette": "NavyBlue",
+      "role": "Background",
+      "tokenId": "394343ae-7425-8033-8009-002a2c78ec6e",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#0B1A30"
+    },
+    {
+      "token": "Navyblue.Error",
+      "palette": "NavyBlue",
+      "role": "Error",
+      "tokenId": "394343ae-7425-8033-8009-002a2c7290ab",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#F2B8B5"
+    },
+    {
+      "token": "Navyblue.ErrorContainer",
+      "palette": "NavyBlue",
+      "role": "ErrorContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c75f73a",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#8C1D18"
+    },
+    {
+      "token": "Navyblue.OnBackground",
+      "palette": "NavyBlue",
+      "role": "OnBackground",
+      "tokenId": "394343ae-7425-8033-8009-002a2c7a7150",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#E6EDF7"
+    },
+    {
+      "token": "Navyblue.OnError",
+      "palette": "NavyBlue",
+      "role": "OnError",
+      "tokenId": "394343ae-7425-8033-8009-002a2c7457ab",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#601410"
+    },
+    {
+      "token": "Navyblue.OnErrorContainer",
+      "palette": "NavyBlue",
+      "role": "OnErrorContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c775fc3",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#F9DEDC"
+    },
+    {
+      "token": "Navyblue.OnPrimary",
+      "palette": "NavyBlue",
+      "role": "OnPrimary",
+      "tokenId": "394343ae-7425-8033-8009-002a2c5dd488",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#0B1A30"
+    },
+    {
+      "token": "Navyblue.OnPrimaryContainer",
+      "palette": "NavyBlue",
+      "role": "OnPrimaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c60c296",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#FFDEA6"
+    },
+    {
+      "token": "Navyblue.OnSecondary",
+      "palette": "NavyBlue",
+      "role": "OnSecondary",
+      "tokenId": "394343ae-7425-8033-8009-002a2c65b491",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#0B1A30"
+    },
+    {
+      "token": "Navyblue.OnSecondaryContainer",
+      "palette": "NavyBlue",
+      "role": "OnSecondaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c6972aa",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#D6E3FF"
+    },
+    {
+      "token": "Navyblue.OnSurface",
+      "palette": "NavyBlue",
+      "role": "OnSurface",
+      "tokenId": "394343ae-7425-8033-8009-002a2c7db03f",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#E6EDF7"
+    },
+    {
+      "token": "Navyblue.OnSurfaceInverse",
+      "palette": "NavyBlue",
+      "role": "OnSurfaceInverse",
+      "tokenId": "394343ae-7425-8033-8009-002a2c83e566",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#0B1A30"
+    },
+    {
+      "token": "Navyblue.OnSurfaceVariant",
+      "palette": "NavyBlue",
+      "role": "OnSurfaceVariant",
+      "tokenId": "394343ae-7425-8033-8009-002a2c808360",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#C3D3E8"
+    },
+    {
+      "token": "Navyblue.OnTertiary",
+      "palette": "NavyBlue",
+      "role": "OnTertiary",
+      "tokenId": "394343ae-7425-8033-8009-002a2c6d6e56",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#0B1A30"
+    },
+    {
+      "token": "Navyblue.OnTertiaryContainer",
+      "palette": "NavyBlue",
+      "role": "OnTertiaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c709054",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#FFE2A8"
+    },
+    {
+      "token": "Navyblue.Outline",
+      "palette": "NavyBlue",
+      "role": "Outline",
+      "tokenId": "394343ae-7425-8033-8009-002a2c8541d8",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#6F86A8"
+    },
+    {
+      "token": "Navyblue.OutlineVariant",
+      "palette": "NavyBlue",
+      "role": "OutlineVariant",
+      "tokenId": "394343ae-7425-8033-8009-002a2c86ef95",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#2A4570"
+    },
+    {
+      "token": "Navyblue.Primary",
+      "palette": "NavyBlue",
+      "role": "Primary",
+      "tokenId": "394343ae-7425-8033-8009-002a2c5c2ceb",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#F2B134"
+    },
+    {
+      "token": "Navyblue.PrimaryContainer",
+      "palette": "NavyBlue",
+      "role": "PrimaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c5f3d50",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#6B4E00"
+    },
+    {
+      "token": "Navyblue.PrimaryInverse",
+      "palette": "NavyBlue",
+      "role": "PrimaryInverse",
+      "tokenId": "394343ae-7425-8033-8009-002a2c627650",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#7A5900"
+    },
+    {
+      "token": "Navyblue.Secondary",
+      "palette": "NavyBlue",
+      "role": "Secondary",
+      "tokenId": "394343ae-7425-8033-8009-002a2c63dacd",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#9FC3FF"
+    },
+    {
+      "token": "Navyblue.SecondaryContainer",
+      "palette": "NavyBlue",
+      "role": "SecondaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c6779bc",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#24406A"
+    },
+    {
+      "token": "Navyblue.Surface",
+      "palette": "NavyBlue",
+      "role": "Surface",
+      "tokenId": "394343ae-7425-8033-8009-002a2c7bdf10",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#0E1F3A"
+    },
+    {
+      "token": "Navyblue.SurfaceContainer",
+      "palette": "NavyBlue",
+      "role": "SurfaceContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c8a11fc",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#13294B"
+    },
+    {
+      "token": "Navyblue.SurfaceContainerHigh",
+      "palette": "NavyBlue",
+      "role": "SurfaceContainerHigh",
+      "tokenId": "394343ae-7425-8033-8009-002a2c8bde04",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#1A3358"
+    },
+    {
+      "token": "Navyblue.SurfaceContainerLow",
+      "palette": "NavyBlue",
+      "role": "SurfaceContainerLow",
+      "tokenId": "394343ae-7425-8033-8009-002a2c88ae05",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#0F2240"
+    },
+    {
+      "token": "Navyblue.SurfaceInverse",
+      "palette": "NavyBlue",
+      "role": "SurfaceInverse",
+      "tokenId": "394343ae-7425-8033-8009-002a2c825537",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#E6EDF7"
+    },
+    {
+      "token": "Navyblue.SurfaceVariant",
+      "palette": "NavyBlue",
+      "role": "SurfaceVariant",
+      "tokenId": "394343ae-7425-8033-8009-002a2c7f1550",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#1B3253"
+    },
+    {
+      "token": "Navyblue.Tertiary",
+      "palette": "NavyBlue",
+      "role": "Tertiary",
+      "tokenId": "394343ae-7425-8033-8009-002a2c6b1699",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#F5C566"
+    },
+    {
+      "token": "Navyblue.TertiaryContainer",
+      "palette": "NavyBlue",
+      "role": "TertiaryContainer",
+      "tokenId": "394343ae-7425-8033-8009-002a2c6ec2d0",
+      "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
+      "synced": "#5A4500"
+    }
+  ]
+}

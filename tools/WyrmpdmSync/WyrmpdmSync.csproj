@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    wyrmpdm-sync: keeps the Penpot design file and the WyrmPDM code in step, both ways.
+    See design/README.md for the commands and how the two sides reference each other.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>wyrmpdm-sync</AssemblyName>
+    <RootNamespace>WyrmpdmSync</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="WyrmpdmSync.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- the color presets and role names are read from the real code, not copied -->
+    <ProjectReference Include="..\..\Src\HackPDM.Core\HackPDM.Core.csproj" />
+  </ItemGroup>
+
+</Project>

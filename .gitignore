@@ -430,3 +430,7 @@ LATER_USE_READ.md
 /support_files/KitBot FRC 2026_SW2026
 # Local MCP config (holds a personal Penpot access token)
 .mcp.json
+
+# Penpot sync: personal access token and fetched-file cache
+/design/.penpot-token
+/design/.cache/
