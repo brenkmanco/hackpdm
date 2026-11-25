@@ -1,7 +1,7 @@
 # Roadmap: every HackPDM page designed in Figma and matched in the app
 
 **Goal:** Every HackPDM page and shared control has a Figma design (light and dark) and the app matches it, with all color coming from one Material color system that the theme presets and Theme Editor control.
-**Status:** M2 done: Colors, Components and File Manager (light + dark) built in Penpot. Next: 4.1 Graph/DependencyGraphView, with its Penpot frames. Updated 2026-11-25.
+**Status:** Milestone 4 in progress: 4.1 Dependency Graph done and committed (with sync tool phase 4). Penpot ↔ code sync tool (`tools/WyrmpdmSync`, see `design/README.md`) phases 1–4 done. Next: sync phase 5 (docs), then 4.2 Search/SearchOdooView. Updated 2026-11-25.
 
 ## Plan
 - **Design file:** Penpot (local, http://localhost:9001) from here on; colors as a "HackPDM colors" token set per preset, components on a Components page, frames per page. The Figma file "HackPDM — Uno Material Design" (https://www.figma.com/design/qeptbte8bdjojuGv6mc6FN) keeps the Colors page and File Manager frames built so far.
@@ -53,10 +53,10 @@
 ## Phase 4: Main work pages (reaches M4)
 | Step | Size | Page | Status |
 |---|---|---|---|
-| 4.1 | complex | Graph/DependencyGraphView | |
+| 4.1 | complex | Graph/DependencyGraphView | done |
 | 4.2 | standard | Search/SearchOdooView | |
 | 4.3 | standard | Status/StatusDialogView | |
-| 4.4 | simple | git commit | |
+| 4.4 | simple | git commit (4.2–4.3; 4.1 already committed) | |
 
 ## Phase 5: Settings and account pages (reaches M5)
 | Step | Size | Page | Status |
@@ -80,6 +80,11 @@
 | 6.3 | simple | git commit | |
 
 ## Decisions
+- 2026-11-25: Step 4.1 was committed early, together with sync tool phase 4, because the graph view carries both the restyle and the sync markers (user choice); milestone 4's own commit (4.4) covers 4.2–4.3.
+- 2026-11-25: Design and code are kept in step by `tools/WyrmpdmSync` (Penpot API + access token, both ways): preset colors and shape values ↔ tokens, components ↔ `HackControls.xaml` styles, views ↔ frames through `pp:Id` markers. New pages should be linked the same way (see `design/README.md`).
+- 2026-11-25: The dependency graph's colors come from the active Material scheme, Theme Editor changes included (`GraphThemes.FromScheme`): canvas Surface, boxes Surface Container with an Outline Variant border, links Outline, highlight / ports / clicked box Primary, chosen files' border Tertiary. The file-kind header colors and shadows stay fixed per preset because they carry meaning.
+- 2026-11-25: Graph direction (Children / Parents / Both) is a set of filter chips that act like radio buttons (`DirectionChip_Click` re-checks the chosen one).
+- 2026-11-25: On-screen checks use the `net10.0-desktop` build (`Src/HackPDM/bin/x64/Debug/net10.0-desktop/HackPDM.exe`); the WinUI exe started directly, outside Visual Studio, crashes at startup (XAML 0xc000027b) before any page loads.
 - 2026-11-25: Design work moves from Figma (Starter plan's MCP limit) to Penpot. The design file lives on Penpot cloud and is driven through a custom MCP connector; `docker-compose.yaml` runs a local Penpot 2.18 with its MCP server, which is kept but not used for the file. `.mcp.json` holds a personal access token, so it is git-ignored. Colors are Penpot tokens and library colors, values copied from `ThemePresets`.
 - 2026-11-25: Penpot tokens are named per preset (`Light.Primary`, `Dark.Primary`, `NavyBlue.Primary`) in three always-active sets ("HackPDM colors/Light", "/Dark", "/Navy blue"), not one name switched by themes: a token set applies to the whole file, so light and dark frames could not sit side by side otherwise. A frame for another preset rebinds to that preset's tokens, as in Figma.
 - 2026-11-25: Every component is one variant set with a `Theme` property (Light, Dark) plus its own properties; each set sits on a section board with the Light background behind the light row and the Dark background behind the dark row.
@@ -106,6 +111,7 @@
 - Light + dark frames for every page restyled app-only: Shell (rail + Search / Status drawers), Not Logged In, Message box, PiP window.
 
 ## Handoff notes
+- After 4.1: Penpot page "Dependency Graph" holds "— Light" and "— Dark"; File Manager frames' rail now lists the app's six pages. App: `DependencyGraphView.xaml` on the shared styles, `GraphTheme.cs` derives graph colors from the scheme (2 new tests), `ThemeService.GraphTheme` passes the applied scheme. Both targets build; 430 tests pass, 55 skipped; `PauseAndDownloadResumeTests` still fails intermittently on main too (fix on branch `claude/cool-newton-5c3635`). Checked on screen in Dark (desktop build). Seen there, not fixed: on the desktop build the Material text styles (BodyMedium, BodySmall) render noticeably heavier than the default font, app-wide.
 - After M2: Penpot page "File Manager" holds "File Manager — Light" and "— Dark" (1440×900, the Balanced layout: rail, toolbar, Folders pane, Entries list with the app's 8 columns, Details inspector, Preview), built from Components-page instances and preset tokens; sample data is made up. Frames on other Penpot pages should be built the same way: instances from the Components page, preset-prefixed tokens. Keep the Penpot tab in the foreground while the plugin works; the browser suspends background tabs.
 - After 2.1 (Penpot): the connected file "HackPDM -- Uno Materials Design" is on Penpot cloud (the exporter reports design.penpot.app), not the local Docker instance; the MCP connector that works is the custom one, not the `.mcp.json` entry. Pages: Colors (swatch boards for Light, Dark, Navy blue) and Components (16 variant sets, 74 variants: Button, Icon button, Chip, Tab, Text field/Select, Checkbox, Switch, Pane card, Toolbar, Banner, Dialog, Log row, Navigation item, Settings row, File table row, Tree row). Library: 90 colors under "HackPDM colors/<preset>", 10 Roboto text styles under "HackPDM type" (Material type scale), 90 tokens. Icons are Material icon paths drawn in 24px boards. Not reviewed by you yet.
 - After M3: shell, Not Logged In, message box, PiP and folder badges restyled; checked signed in (rail, both drawers, File Manager with live data). Drawer contents (Search, Status Log) are M4. A pre-existing flaky test (`PauseAndDownloadResumeTests`) is fixed on branch `claude/cool-newton-5c3635` (commit b712b0e), not merged here.

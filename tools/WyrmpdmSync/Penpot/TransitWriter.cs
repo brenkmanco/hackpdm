@@ -18,44 +18,67 @@ internal static partial class TransitWriter
 	/// <summary>Keys whose string values are keywords in Penpot's data.</summary>
 	public static readonly HashSet<string> KeywordValueKeys =
 	[
-		"type", "attr", "layout-padding-type", "stroke-style", "stroke-alignment", "stroke-cap-start", "stroke-cap-end",
-		"layout", "layout-flex-dir", "layout-align-items", "layout-justify-content", "layout-item-h-sizing", "layout-item-v-sizing",
+		"type", "attr", "style", "touched", "grow-type", "constraints-h", "constraints-v",
+		"stroke-style", "stroke-alignment", "stroke-cap-start", "stroke-cap-end",
+		"layout", "layout-flex-dir", "layout-wrap-type", "layout-gap-type", "layout-padding-type", "layout-item-margin-type",
+		"layout-align-items", "layout-align-content", "layout-justify-content", "layout-justify-items", "layout-item-align-self",
+		"layout-item-h-sizing", "layout-item-v-sizing",
 	];
 
 	/// <summary>Keys whose array values are sets.</summary>
-	public static readonly HashSet<string> SetKeys = [ "features", "set-ids", "theme-ids" ];
+	public static readonly HashSet<string> SetKeys = [ "features", "set-ids", "theme-ids", "touched" ];
 
-	public static string Encode( JsonNode? node ) => Write( node, parentKey: null )?.ToJsonString() ?? "null";
+	public static string Encode( JsonNode? node ) => Write( node, parentKey: null, inText: false )?.ToJsonString() ?? "null";
 
-	private static JsonNode? Write( JsonNode? node, string? parentKey ) => node switch
+	/// <param name="inText">
+	/// Inside a text shape's <c>content</c> tree values are plain strings (<c>type: "paragraph"</c>, font settings),
+	/// never keywords.
+	/// </param>
+	private static JsonNode? Write( JsonNode? node, string? parentKey, bool inText ) => node switch
 	{
-		JsonObject obj => WriteMap( obj ),
+		JsonObject obj when obj[ "~tag" ] is JsonValue tag => WriteRecord( obj, tag.ToString(), inText ),
+		JsonObject obj => WriteMap( obj, inText ),
 		JsonArray arr when parentKey is not null && SetKeys.Contains( parentKey ) =>
-			new JsonArray( "~#set", new JsonArray( [ .. arr.Select( v => Write( v, null ) ) ] ) ),
-		JsonArray arr => new JsonArray( [ .. arr.Select( v => Write( v, null ) ) ] ),
-		JsonValue v when v.TryGetValue( out string? s ) => JsonValue.Create( WriteString( s, parentKey ) ),
+			new JsonArray( "~#set", new JsonArray( [ .. arr.Select( v => Write( v, parentKey, inText ) ) ] ) ),
+		JsonArray arr => new JsonArray( [ .. arr.Select( v => Write( v, parentKey, inText ) ) ] ),
+		JsonValue v when v.TryGetValue( out string? s ) => JsonValue.Create( WriteString( s, parentKey, inText ) ),
 		_ => node?.DeepClone(),
 	};
 
-	private static JsonArray WriteMap( JsonObject obj )
+	/// <summary>
+	/// A Penpot record the reader marked with "~tag" (shape, point, matrix, rect, path data) goes back out tagged, so
+	/// Penpot reads it as that type again.
+	/// </summary>
+	private static JsonArray WriteRecord( JsonObject obj, string tag, bool inText )
+	{
+		JsonNode? rep = obj.Count == 2 && obj.ContainsKey( "value" )
+			? Write( obj[ "value" ], null, inText )
+			: WriteMap( obj, inText );
+		return new JsonArray( $"~#{tag}", rep );
+	}
+
+	private static JsonArray WriteMap( JsonObject obj, bool inText )
 	{
 		JsonArray map = [ "^ " ];
 		// in a { type: set, attr: X, val: … } operation the value belongs to attribute X
 		string? attr = obj[ "attr" ] is JsonValue a && a.TryGetValue( out string? name ) ? Kebab( name ) : null;
 		foreach( (string key, JsonNode? value ) in obj )
 		{
+			if( key == "~tag" )
+				continue; // the reader's note of a Penpot record type, not data
 			string kebab = Kebab( key );
+			string valueKey = kebab == "val" && attr is not null ? attr : kebab;
 			map.Add( $"~:{kebab}" );
-			map.Add( Write( value, kebab == "val" && attr is not null ? attr : kebab ) );
+			map.Add( Write( value, valueKey, inText || valueKey == "content" ) );
 		}
 		return map;
 	}
 
-	private static string WriteString( string s, string? parentKey )
+	private static string WriteString( string s, string? parentKey, bool inText )
 	{
 		if( UuidRegex().IsMatch( s ) )
 			return $"~u{s}";
-		if( parentKey is not null && KeywordValueKeys.Contains( parentKey ) )
+		if( !inText && parentKey is not null && KeywordValueKeys.Contains( parentKey ) )
 			return $"~:{s}";
 		return Escape( s );
 	}

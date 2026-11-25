@@ -169,7 +169,7 @@ internal static class ChangeBuilder
 					continue;
 				foreach( ComponentReport push in byLink )
 				{
-					if( ComponentOps( file, main, push.Property, push.Code!, theme, set ) is not { } op )
+					if( ShapeOps( file, main, push.Property, push.Code!, theme, set ) is not { } op )
 						continue;
 					List<(Guid Page, string Id)> targets = [ (component.MainInstancePage, component.MainInstanceId.ToString()) ];
 					targets.AddRange( Copies( file, component.MainInstanceId, op.Group ) );
@@ -187,8 +187,8 @@ internal static class ChangeBuilder
 		return set;
 	}
 
-	/// <summary>Operations that set one style property on a component shape, and the override group Penpot tracks it in.</summary>
-	private static (JsonArray Ops, string Group)? ComponentOps( PenpotFile file, JsonObject shape, string property, string value, string theme, ChangeSet set )
+	/// <summary>Operations that set one style property on a shape, and the override group Penpot tracks it in.</summary>
+	internal static (JsonArray Ops, string Group)? ShapeOps( PenpotFile file, JsonObject shape, string property, string value, string theme, ChangeSet set )
 	{
 		switch( property )
 		{
@@ -254,6 +254,9 @@ internal static class ChangeBuilder
 	private static JsonObject Set( string attr, JsonNode? val ) => new() { [ "type" ] = "set", [ "attr" ] = attr, [ "val" ] = val };
 
 	private static JsonObject Set( string attr, string val ) => Set( attr, JsonValue.Create( val ) );
+
+	/// <summary>A "set this attribute" operation for a mod-obj change.</summary>
+	internal static JsonObject SetOp( string attr, JsonNode? val ) => Set( attr, val );
 
 	/// <summary>The paint list with every solid color replaced; null when nothing changes.</summary>
 	private static JsonArray? Recolor( JsonNode? paints, string colorKey, string opacityKey, string hex )

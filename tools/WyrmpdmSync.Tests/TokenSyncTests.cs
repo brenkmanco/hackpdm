@@ -101,7 +101,7 @@ public class TokenSyncTests
 		{
 			manifest.Save( path );
 			System.Text.Json.Nodes.JsonObject json = System.Text.Json.Nodes.JsonNode.Parse( System.IO.File.ReadAllText( path ) )!.AsObject();
-			Assert.Equal( [ "version", "penpot", "colors", "shapes", "components" ], json.Select( kv => kv.Key ) );
+			Assert.Equal( [ "version", "penpot", "colors", "shapes", "components", "frames" ], json.Select( kv => kv.Key ) );
 			Assert.Equal( [ "token", "palette", "role", "tokenId", "setId", "synced" ], json[ "colors" ]![ 0 ]!.AsObject().Select( kv => kv.Key ) );
 			Assert.Equal( [ "token", "form", "property" ], json[ "shapes" ]![ 0 ]!.AsObject().Select( kv => kv.Key ) );
 

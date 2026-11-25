@@ -9,12 +9,13 @@
 	xmlns:controls="using:HackPDM.Common"
 	xmlns:graph="using:HackPDM.Graph"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:pp="urn:wyrmpdm:penpot-sync"
 	xmlns:rep="using:HackPDM.Core.Services"
 	xmlns:types="using:HackPDM.Common"
 	xmlns:ut="using:Uno.Themes"
 	xmlns:utu="using:Uno.Toolkit.UI"
 	Background="{ThemeResource BackgroundBrush}"
-	mc:Ignorable="d">
+	mc:Ignorable="d pp">
 
 
 
@@ -294,7 +295,7 @@
 			</Grid.RowDefinitions>
 
 			<!--  Top Folder Navigation & Breadcrumb Bar  -->
-			<Border Grid.Row="0" Style="{StaticResource HackToolbarStyle}">
+			<Border pp:Id="fm.toolbar" Grid.Row="0" Style="{StaticResource HackToolbarStyle}">
 			<Grid ColumnSpacing="4">
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="Auto" />
@@ -518,7 +519,7 @@
 		<!--  Rearrangeable & Dockable Workspace Container  -->
 		<Grid x:Name="WorkspaceGrid" Grid.Row="1">
 			<!--  Folders Pane Card  -->
-			<Border
+			<Border pp:Id="fm.foldersPane"
 				x:Name="FoldersPaneCard"
 				Style="{StaticResource HackPaneTintedStyle}"
 				CornerRadius="{StaticResource HackPanelCornerRadius}">
@@ -546,7 +547,7 @@
 							PointerPressed="FoldersGrip_PointerPressed"
 							PointerReleased="PaneGrip_PointerReleased"
 							ToolTipService.ToolTip="Drag to dock Folders Left or Right">
-							<TextBlock
+							<TextBlock pp:Id="fm.foldersTitle"
 								VerticalAlignment="Center"
 								Style="{StaticResource HackPaneTitleStyle}"
 								Text="Folders" />
@@ -835,7 +836,7 @@
 				DragDelta="FoldersSplitter_DragDelta"
 				Orientation="Vertical" />
 			<!--  Primary File List Card  -->
-			<Border
+			<Border pp:Id="fm.fileList"
 				x:Name="EntriesPaneCard"
 				Style="{StaticResource HackPaneOutlinedStyle}"
 				BorderThickness="{StaticResource HackPanelBorderThickness}"
@@ -1297,7 +1298,7 @@
 			<!--  Dockable Inspector Host (Details + Preview, horizontal when Bottom or vertical when Right)  -->
 			<Grid x:Name="DetailsAndPreviewHost">
 				<!--  Details Inspector Card  -->
-				<Border
+				<Border pp:Id="fm.details"
 					x:Name="DetailsPaneCard"
 					Style="{StaticResource HackPaneOutlinedStyle}"
 					BorderThickness="{StaticResource HackPanelBorderThickness}"
@@ -1624,7 +1625,7 @@
 					Orientation="Vertical" />
 
 				<!--  Preview Card  -->
-				<Border
+				<Border pp:Id="fm.previewPane"
 					x:Name="PreviewPaneCard"
 					HorizontalAlignment="Stretch"
 					VerticalAlignment="Stretch"
@@ -1652,7 +1653,7 @@
 								PointerPressed="PreviewGrip_PointerPressed"
 								PointerReleased="PaneGrip_PointerReleased"
 								ToolTipService.ToolTip="Drag to swap Preview position or dock">
-								<TextBlock
+								<TextBlock pp:Id="fm.previewTitle"
 									VerticalAlignment="Center"
 									Style="{StaticResource HackPaneTitleStyle}"
 									Text="Preview" />

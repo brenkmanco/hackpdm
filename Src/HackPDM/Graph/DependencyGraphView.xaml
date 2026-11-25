@@ -8,23 +8,37 @@
 	xmlns:controls="using:HackPDM.Common"
 	xmlns:local="using:HackPDM.Graph"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:pp="urn:wyrmpdm:penpot-sync"
 	xmlns:rep="using:HackPDM.Core.Services"
 	xmlns:types="using:HackPDM.Common"
 	xmlns:tv="using:WinUI.TableView"
-	Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
-	mc:Ignorable="d">
+	xmlns:ut="using:Uno.Themes"
+	xmlns:utu="using:Uno.Toolkit.UI"
+	Background="{ThemeResource BackgroundBrush}"
+	mc:Ignorable="d pp">
 
 	<Page.Resources>
 		<conv:FileSizeConverter x:Key="FileSizeFormatter" />
 		<conv:LocalDateTimeConverter x:Key="LocalDateFormatter" />
 		<local:ValueTextConverter x:Key="ValueFormatter" />
-		<Style x:Key="InfoLabel" TargetType="TextBlock">
-			<Setter Property="FontSize" Value="11" />
-			<Setter Property="Opacity" Value="0.65" />
-			<Setter Property="Margin" Value="0,0,10,0" />
+		<!--
+			Material look for this screen, built from the Penpot frames "Dependency Graph — Light" / "— Dark".
+			Colors come from the active color preset; the graph canvas takes its colors from the same scheme
+			(GraphThemes.FromScheme). Pane corners and borders come from the shape style (HackPanel* resources).
+		-->
+		<Style
+			x:Key="InfoLabel"
+			BasedOn="{StaticResource BodySmall}"
+			TargetType="TextBlock">
+			<Setter Property="Foreground" Value="{ThemeResource OnSurfaceVariantBrush}" />
+			<Setter Property="VerticalAlignment" Value="Center" />
+			<Setter Property="Margin" Value="0,0,12,0" />
 		</Style>
-		<Style x:Key="InfoValue" TargetType="TextBlock">
-			<Setter Property="FontSize" Value="12" />
+		<Style
+			x:Key="InfoValue"
+			BasedOn="{StaticResource BodyMedium}"
+			TargetType="TextBlock">
+			<Setter Property="Foreground" Value="{ThemeResource OnSurfaceBrush}" />
 			<Setter Property="TextTrimming" Value="CharacterEllipsis" />
 			<Setter Property="IsTextSelectionEnabled" Value="True" />
 		</Style>
@@ -48,21 +62,15 @@
 		</DataTemplate>
 	</Page.Resources>
 
-	<Grid Margin="12" RowSpacing="8">
+	<Grid Margin="12" RowSpacing="12">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
 		</Grid.RowDefinitions>
 
-		<!--  Folder Breadcrumb & Pane Controls Bar  -->
-		<Border
-			Grid.Row="0"
-			Padding="6,4"
-			Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-			BorderBrush="{StaticResource HackPanelStrokeBrush}"
-			BorderThickness="1"
-			CornerRadius="6">
-			<Grid ColumnSpacing="8">
+		<!--  Folder Breadcrumb & Pane Controls Bar (Penpot: Toolbar)  -->
+		<Border Grid.Row="0" pp:Id="graph.toolbar" Style="{StaticResource HackToolbarStyle}">
+			<Grid ColumnSpacing="4">
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="Auto" />
 					<ColumnDefinition Width="*" />
@@ -74,36 +82,37 @@
 					Spacing="4">
 					<ToggleButton
 						x:Name="ToggleFoldersPaneBtn"
-						Padding="7,4"
 						Click="ToggleSidePanes_Click"
 						IsChecked="True"
+						Style="{StaticResource PaneIconToggleButtonStyle}"
 						ToolTipService.ToolTip="Show or hide folders sidebar">
-						<StackPanel Orientation="Horizontal" Spacing="5">
-							<FontIcon FontSize="11" Glyph="&#xE8B7;" />
-							<TextBlock VerticalAlignment="Center" FontSize="11" Text="Folders" />
-						</StackPanel>
+						<FontIcon FontSize="16" Glyph="&#xE8B7;" />
+						<ut:ControlExtensions.AlternateContent>
+							<FontIcon
+								FontSize="16"
+								Foreground="{ThemeResource PrimaryBrush}"
+								Glyph="&#xE8B7;" />
+						</ut:ControlExtensions.AlternateContent>
 					</ToggleButton>
 					<ToggleButton
 						x:Name="ToggleFilesPaneBtn"
-						Padding="7,4"
 						Click="ToggleSidePanes_Click"
 						IsChecked="True"
+						Style="{StaticResource PaneIconToggleButtonStyle}"
 						ToolTipService.ToolTip="Show or hide folder files list">
-						<StackPanel Orientation="Horizontal" Spacing="5">
-							<FontIcon FontSize="11" Glyph="&#xE8FD;" />
-							<TextBlock VerticalAlignment="Center" FontSize="11" Text="Files" />
-						</StackPanel>
+						<FontIcon FontSize="16" Glyph="&#xE8FD;" />
+						<ut:ControlExtensions.AlternateContent>
+							<FontIcon
+								FontSize="16"
+								Foreground="{ThemeResource PrimaryBrush}"
+								Glyph="&#xE8FD;" />
+						</ut:ControlExtensions.AlternateContent>
 					</ToggleButton>
-					<Border
-						Width="1"
-						Height="18"
-						Margin="4,0,2,0"
-						VerticalAlignment="Center"
-						Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
 				</StackPanel>
 				<BreadcrumbBar
 					x:Name="FolderBreadcrumb"
 					Grid.Column="1"
+					Margin="8,0,0,0"
 					VerticalAlignment="Center"
 					ItemsSource="{x:Bind ViewModel.BreadcrumbPath}">
 					<BreadcrumbBar.ItemTemplate>
@@ -121,7 +130,7 @@
 									Origin="{x:Bind Origin, Mode=OneWay}" />
 								<TextBlock
 									VerticalAlignment="Center"
-									FontSize="12"
+									FontSize="14"
 									FontWeight="{x:Bind NameFontWeight, Mode=OneWay}"
 									Text="{x:Bind Name}" />
 							</StackPanel>
@@ -141,71 +150,56 @@
 			</Grid.ColumnDefinitions>
 
 			<!--  folders  -->
-			<Border
+			<Border pp:Id="graph.foldersPane"
 				x:Name="GraphFoldersCard"
 				Grid.Column="0"
-				Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-				BorderBrush="{StaticResource HackPanelStrokeBrush}"
-				BorderThickness="{StaticResource HackPanelBorderThickness}"
+				Style="{StaticResource HackPaneTintedStyle}"
 				CornerRadius="{StaticResource HackPanelCornerRadius}">
 				<Grid>
 					<Grid.RowDefinitions>
 						<RowDefinition Height="Auto" />
 						<RowDefinition Height="*" />
 					</Grid.RowDefinitions>
-					<Border
-						Grid.Row="0"
-						Padding="10,6,6,6"
-						BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-						BorderThickness="0,0,0,1">
-						<Grid>
-							<Grid.ColumnDefinitions>
-								<ColumnDefinition Width="*" />
-								<ColumnDefinition Width="Auto" />
-							</Grid.ColumnDefinitions>
-							<StackPanel
-								Grid.Column="0"
-								VerticalAlignment="Center"
-								Orientation="Horizontal"
-								Spacing="6">
-								<controls:FolderIcon
-									IconSize="15"
-									IsOpen="True"
-									IsRoot="True"
-									Origin="Synced" />
-								<TextBlock
-									VerticalAlignment="Center"
-									FontSize="12"
-									FontWeight="SemiBold"
-									Text="Folders" />
-							</StackPanel>
-							<StackPanel
-								Grid.Column="1"
-								VerticalAlignment="Center"
-								Orientation="Horizontal"
-								Spacing="2">
-								<ToggleButton
-									x:Name="GraphBranchLinesToggle"
-									Padding="5,4"
-									Click="BranchLinesToggle_Click"
-									ToolTipService.ToolTip="Show or hide tree branching guide lines">
-									<FontIcon FontSize="12" Glyph="&#xE8FD;" />
-								</ToggleButton>
-								<Button
-									Padding="5,4"
-									Click="ExpandAllFolders_Click"
-									ToolTipService.ToolTip="Expand all folders">
-									<FontIcon FontSize="11" Glyph="&#xE70D;" />
-								</Button>
-								<Button
-									Padding="5,4"
-									Click="CollapseAllFolders_Click"
-									ToolTipService.ToolTip="Collapse all folders">
-									<FontIcon FontSize="11" Glyph="&#xE70E;" />
-								</Button>
-							</StackPanel>
-						</Grid>
-					</Border>
+					<Grid Grid.Row="0" Padding="16,12,8,4">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="Auto" />
+						</Grid.ColumnDefinitions>
+						<TextBlock pp:Id="graph.foldersTitle"
+							Grid.Column="0"
+							Style="{StaticResource HackPaneTitleStyle}"
+							Text="Folders" />
+						<StackPanel
+							Grid.Column="1"
+							VerticalAlignment="Center"
+							Orientation="Horizontal">
+							<ToggleButton
+								x:Name="GraphBranchLinesToggle"
+								Click="BranchLinesToggle_Click"
+								Style="{StaticResource PaneIconToggleButtonStyle}"
+								ToolTipService.ToolTip="Show or hide tree branching guide lines">
+								<FontIcon FontSize="14" Glyph="&#xE8FD;" />
+								<ut:ControlExtensions.AlternateContent>
+									<FontIcon
+										FontSize="14"
+										Foreground="{ThemeResource PrimaryBrush}"
+										Glyph="&#xE8FD;" />
+								</ut:ControlExtensions.AlternateContent>
+							</ToggleButton>
+							<Button
+								Click="ExpandAllFolders_Click"
+								Style="{StaticResource PaneIconButtonStyle}"
+								ToolTipService.ToolTip="Expand all folders">
+								<FontIcon FontSize="12" Glyph="&#xE70D;" />
+							</Button>
+							<Button
+								Click="CollapseAllFolders_Click"
+								Style="{StaticResource PaneIconButtonStyle}"
+								ToolTipService.ToolTip="Collapse all folders">
+								<FontIcon FontSize="12" Glyph="&#xE70E;" />
+							</Button>
+						</StackPanel>
+					</Grid>
 					<Grid Grid.Row="1">
 						<TreeView
 							x:Name="FolderTree"
@@ -250,19 +244,19 @@
 											<TextBlock
 												Margin="0,0,6,0"
 												VerticalAlignment="Center"
-												FontSize="12"
+												FontSize="14"
 												FontWeight="{x:Bind NameFontWeight, Mode=OneWay}"
 												Text="{x:Bind Name}" />
 											<Border
 												Margin="0,0,5,0"
-												Padding="5,0"
+												Padding="6,0"
 												VerticalAlignment="Center"
-												Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+												Background="{ThemeResource HackSurfaceContainerHighBrush}"
 												CornerRadius="8"
 												Visibility="{x:Bind SubfolderCountVisibility, Mode=OneWay}">
 												<TextBlock
-													FontSize="10"
-													Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+													FontSize="11"
+													Foreground="{ThemeResource OnSurfaceVariantBrush}"
 													Text="{x:Bind SubfolderCountText, Mode=OneWay}" />
 											</Border>
 										</StackPanel>
@@ -272,7 +266,8 @@
 						</TreeView>
 
 						<Border
-							Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+							Background="{ThemeResource HackSurfaceContainerLowBrush}"
+							CornerRadius="{StaticResource HackPanelCornerRadius}"
 							Visibility="{x:Bind ViewModel.IsTreeLoading, Mode=OneWay}">
 							<Grid RowDefinitions="Auto,*">
 								<ProgressBar
@@ -292,8 +287,8 @@
 										IsActive="{x:Bind ViewModel.IsTreeLoading, Mode=OneWay}" />
 									<TextBlock
 										HorizontalAlignment="Center"
-										FontSize="12"
-										FontWeight="SemiBold"
+										Style="{StaticResource LabelLarge}"
+										Foreground="{ThemeResource OnSurfaceVariantBrush}"
 										Text="Loading Folders…" />
 								</StackPanel>
 							</Grid>
@@ -311,11 +306,10 @@
 				Orientation="Vertical" />
 
 			<!--  files of the folder  -->
-			<Border
+			<Border pp:Id="graph.filesPane"
 				x:Name="GraphFilesCard"
 				Grid.Column="2"
-				Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-				BorderBrush="{StaticResource HackPanelStrokeBrush}"
+				Style="{StaticResource HackPaneOutlinedStyle}"
 				BorderThickness="{StaticResource HackPanelBorderThickness}"
 				CornerRadius="{StaticResource HackPanelCornerRadius}">
 				<Grid>
@@ -324,33 +318,32 @@
 						<RowDefinition Height="*" />
 						<RowDefinition Height="Auto" />
 					</Grid.RowDefinitions>
-					<Border
+					<Grid
 						Grid.Row="0"
-						Padding="10,6,8,6"
-						BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-						BorderThickness="0,0,0,1">
-						<Grid ColumnDefinitions="*,Auto">
-							<TextBlock
-								VerticalAlignment="Center"
-								FontSize="12"
-								FontWeight="SemiBold"
-								Text="Files" />
-							<CheckBox
-								x:Name="SelectAll"
-								Grid.Column="1"
-								MinWidth="0"
-								Content="Select all"
-								IsThreeState="False" />
-						</Grid>
-					</Border>
+						Padding="16,8,8,4"
+						ColumnDefinitions="*,Auto">
+						<TextBlock pp:Id="graph.filesTitle" Style="{StaticResource HackPaneTitleStyle}" Text="Files" />
+						<CheckBox
+							x:Name="SelectAll"
+							Grid.Column="1"
+							MinWidth="0"
+							Content="Select all"
+							IsThreeState="False" />
+					</Grid>
 					<Grid Grid.Row="1">
 						<ListView
 							x:Name="EntryList"
+							Padding="4,0"
 							ItemsSource="{x:Bind ViewModel.Entries}"
 							SelectionMode="Extended">
 							<ListView.ItemTemplate>
 								<DataTemplate x:DataType="local:GraphEntryItem">
-									<TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+									<TextBlock
+										Style="{StaticResource BodyMedium}"
+										FontWeight="Normal"
+										Text="{x:Bind Name}"
+										TextTrimming="CharacterEllipsis"
+										TextWrapping="NoWrap" />
 								</DataTemplate>
 							</ListView.ItemTemplate>
 						</ListView>
@@ -361,13 +354,11 @@
 							IsIndeterminate="True"
 							Visibility="{x:Bind ViewModel.IsEntriesLoading, Mode=OneWay}" />
 						<Border
-							Padding="18,14"
+							Padding="20,16"
 							HorizontalAlignment="Center"
 							VerticalAlignment="Center"
-							Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-							BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-							BorderThickness="1"
-							CornerRadius="6"
+							Background="{ThemeResource HackSurfaceContainerHighBrush}"
+							CornerRadius="12"
 							IsHitTestVisible="False"
 							Visibility="{x:Bind ViewModel.IsEntriesLoading, Mode=OneWay}">
 							<StackPanel Spacing="8">
@@ -377,21 +368,17 @@
 									HorizontalAlignment="Center"
 									IsActive="{x:Bind ViewModel.IsEntriesLoading, Mode=OneWay}" />
 								<TextBlock
-									Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+									Style="{StaticResource BodyMedium}"
+									Foreground="{ThemeResource OnSurfaceVariantBrush}"
 									Text="Loading files…" />
 							</StackPanel>
 						</Border>
 					</Grid>
-					<Border
+					<TextBlock
 						Grid.Row="2"
-						Padding="10,5"
-						BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-						BorderThickness="0,1,0,0">
-						<TextBlock
-							FontSize="11"
-							Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-							Text="{x:Bind ViewModel.EntryCountText, Mode=OneWay}" />
-					</Border>
+						Margin="16,4,16,10"
+						Style="{StaticResource HackCaptionStyle}"
+						Text="{x:Bind ViewModel.EntryCountText, Mode=OneWay}" />
 				</Grid>
 			</Border>
 
@@ -404,56 +391,88 @@
 				Orientation="Vertical" />
 
 			<!--  graph  -->
-			<Grid Grid.Column="4" RowSpacing="6">
+			<Grid Grid.Column="4" RowSpacing="8">
 			<Grid.RowDefinitions>
 				<RowDefinition Height="Auto" />
 				<RowDefinition Height="*" />
 				<RowDefinition Height="Auto" />
 			</Grid.RowDefinitions>
-			<StackPanel
+			<!--  Penpot: Graph controls (direction filter chips, zoom icon buttons, Fit assist chip)  -->
+			<StackPanel pp:Id="graph.controls"
 				Grid.Row="0"
 				Orientation="Horizontal"
-				Spacing="6">
-				<RadioButton
+				Spacing="8">
+				<utu:Chip
+					x:Name="DirectionChildrenChip"
+					CanRemove="False"
+					Click="DirectionChip_Click"
 					Content="Children"
-					GroupName="GraphDirection"
-					IsChecked="{x:Bind ViewModel.IsChildrenDirection, Mode=TwoWay}" />
-				<RadioButton
+					IsChecked="{x:Bind ViewModel.IsChildrenDirection, Mode=OneWay}"
+					Style="{StaticResource FilterChipStyle}"
+					Tag="Children" />
+				<utu:Chip
+					x:Name="DirectionParentsChip"
+					CanRemove="False"
+					Click="DirectionChip_Click"
 					Content="Parents"
-					GroupName="GraphDirection"
-					IsChecked="{x:Bind ViewModel.IsParentsDirection, Mode=TwoWay}" />
-				<RadioButton
+					IsChecked="{x:Bind ViewModel.IsParentsDirection, Mode=OneWay}"
+					Style="{StaticResource FilterChipStyle}"
+					Tag="Parents" />
+				<utu:Chip
+					x:Name="DirectionBothChip"
+					CanRemove="False"
+					Click="DirectionChip_Click"
 					Content="Both"
-					GroupName="GraphDirection"
-					IsChecked="{x:Bind ViewModel.IsBothDirection, Mode=TwoWay}" />
-				<AppBarSeparator />
-				<Button
-					MinWidth="36"
-					Command="{x:Bind ViewModel.ZoomOutCommand}"
-					Content="−"
-					ToolTipService.ToolTip="Zoom out" />
-				<TextBlock
-					MinWidth="48"
+					IsChecked="{x:Bind ViewModel.IsBothDirection, Mode=OneWay}"
+					Style="{StaticResource FilterChipStyle}"
+					Tag="Both" />
+				<Border
+					Width="1"
+					Height="24"
+					Margin="4,0"
 					VerticalAlignment="Center"
+					Background="{ThemeResource OutlineVariantBrush}" />
+				<Button
+					Command="{x:Bind ViewModel.ZoomOutCommand}"
+					Style="{StaticResource PaneIconButtonStyle}"
+					ToolTipService.ToolTip="Zoom out">
+					<FontIcon FontSize="14" Glyph="&#xE738;" />
+				</Button>
+				<TextBlock
+					MinWidth="44"
+					VerticalAlignment="Center"
+					Style="{StaticResource LabelLarge}"
+					Foreground="{ThemeResource OnSurfaceVariantBrush}"
 					Text="{x:Bind ViewModel.ZoomText, Mode=OneWay}"
 					TextAlignment="Center" />
 				<Button
-					MinWidth="36"
 					Command="{x:Bind ViewModel.ZoomInCommand}"
-					Content="+"
-					ToolTipService.ToolTip="Zoom in" />
+					Style="{StaticResource PaneIconButtonStyle}"
+					ToolTipService.ToolTip="Zoom in">
+					<FontIcon FontSize="14" Glyph="&#xE710;" />
+				</Button>
 				<Button
+					VerticalAlignment="Center"
 					Command="{x:Bind ViewModel.FitCommand}"
-					Content="Fit"
-					ToolTipService.ToolTip="Show the whole graph" />
+					Style="{StaticResource AssistChipButtonStyle}"
+					ToolTipService.ToolTip="Show the whole graph">
+					<StackPanel Orientation="Horizontal" Spacing="8">
+						<FontIcon
+							FontSize="16"
+							Foreground="{ThemeResource PrimaryBrush}"
+							Glyph="&#xE9A6;" />
+						<TextBlock VerticalAlignment="Center" Text="Fit" />
+					</StackPanel>
+				</Button>
 				<ProgressRing
 					Width="20"
 					Height="20"
 					IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
 			</StackPanel>
-			<Border
+			<!--  Penpot: Graph canvas (outlined pane; NodeGraphView draws on the Surface color)  -->
+			<Border pp:Id="graph.canvas"
 				Grid.Row="1"
-				BorderBrush="{StaticResource HackPanelStrokeBrush}"
+				Style="{StaticResource HackPaneOutlinedStyle}"
 				BorderThickness="{StaticResource HackPanelBorderThickness}"
 				CornerRadius="{StaticResource HackPanelCornerRadius}">
 				<Grid>
@@ -461,19 +480,18 @@
 					<TextBlock
 						HorizontalAlignment="Center"
 						VerticalAlignment="Center"
-						Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+						Style="{StaticResource BodyMedium}"
+						Foreground="{ThemeResource OnSurfaceVariantBrush}"
 						IsHitTestVisible="False"
 						Text="Pick one or more files to see their dependencies"
 						Visibility="{x:Bind ViewModel.ShowHint, Mode=OneWay}" />
 					<Border
-						Margin="0,14,0,0"
+						Margin="0,16,0,0"
 						Padding="16,10"
 						HorizontalAlignment="Center"
 						VerticalAlignment="Top"
-						Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-						BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-						BorderThickness="1"
-						CornerRadius="6"
+						Background="{ThemeResource HackSurfaceContainerHighBrush}"
+						CornerRadius="12"
 						IsHitTestVisible="False"
 						Visibility="{x:Bind ViewModel.IsGraphBusyOverlayVisible, Mode=OneWay}">
 						<StackPanel Orientation="Horizontal" Spacing="10">
@@ -483,48 +501,46 @@
 								IsActive="{x:Bind ViewModel.IsGraphBusyOverlayVisible, Mode=OneWay}" />
 							<TextBlock
 								VerticalAlignment="Center"
-								FontSize="12"
+								Style="{StaticResource BodyMedium}"
 								Text="Building dependency graph…" />
 						</StackPanel>
 					</Border>
 
-					<!--  details of the clicked file, over the bottom of the graph  -->
-					<Border
+					<!--  details of the clicked file, over the bottom of the graph (Penpot: Details)  -->
+					<Border pp:Id="graph.details"
 						Height="320"
 						Margin="8"
-						Padding="10"
+						Padding="12"
 						VerticalAlignment="Bottom"
-						Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-						BorderBrush="{StaticResource HackPanelStrokeBrush}"
-						BorderThickness="1"
+						Background="{ThemeResource HackSurfaceContainerHighBrush}"
 						CornerRadius="{StaticResource HackPanelCornerRadius}"
 						Visibility="{x:Bind ViewModel.IsDetailsOpen, Mode=OneWay}">
-						<Grid ColumnSpacing="12">
+						<Grid ColumnSpacing="16">
 							<Grid.ColumnDefinitions>
-								<ColumnDefinition Width="296" />
+								<ColumnDefinition Width="310" />
 								<ColumnDefinition Width="*" />
 							</Grid.ColumnDefinitions>
 
 							<!--  info card  -->
-							<Grid RowSpacing="6">
+							<Grid RowSpacing="8">
 								<Grid.RowDefinitions>
 									<RowDefinition Height="Auto" />
 									<RowDefinition Height="Auto" />
 									<RowDefinition Height="*" />
 									<RowDefinition Height="Auto" />
 								</Grid.RowDefinitions>
+								<!--  the band takes the file kind's color, as the graph box does; white text passes contrast on every kind  -->
 								<Border
-									Padding="10,6"
+									Padding="12,6"
 									Background="{x:Bind ViewModel.InfoHeaderBrush}"
-									CornerRadius="5">
+									CornerRadius="8">
 									<TextBlock
-										FontSize="14"
-										FontWeight="SemiBold"
+										Style="{StaticResource TitleSmall}"
 										Foreground="White"
 										Text="{x:Bind ViewModel.InfoName, Mode=OneWay}"
 										TextTrimming="CharacterEllipsis" />
 								</Border>
-								<Grid Grid.Row="1" ColumnSpacing="10">
+								<Grid Grid.Row="1" ColumnSpacing="12">
 									<Grid.ColumnDefinitions>
 										<ColumnDefinition Width="110" />
 										<ColumnDefinition Width="*" />
@@ -532,15 +548,14 @@
 									<Border
 										Width="110"
 										Height="90"
-										Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-										CornerRadius="4">
+										Background="{ThemeResource HackSurfaceContainerBrush}"
+										CornerRadius="8">
 										<Grid>
 											<Image Source="{x:Bind ViewModel.PreviewImage, Mode=OneWay}" Stretch="Uniform" />
 											<TextBlock
 												HorizontalAlignment="Center"
 												VerticalAlignment="Center"
-												FontSize="11"
-												Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+												Style="{StaticResource HackCaptionStyle}"
 												Text="{x:Bind ViewModel.PreviewStatusText, Mode=OneWay}"
 												Visibility="{x:Bind ViewModel.IsNoPreviewVisible, Mode=OneWay}" />
 										</Grid>
@@ -555,7 +570,7 @@
 								<Grid
 									Grid.Row="2"
 									ColumnSpacing="4"
-									RowSpacing="3">
+									RowSpacing="2">
 									<Grid.ColumnDefinitions>
 										<ColumnDefinition Width="Auto" />
 										<ColumnDefinition Width="*" />
@@ -591,17 +606,16 @@
 										Style="{StaticResource InfoValue}"
 										Text="{x:Bind ViewModel.InfoUsedBy, Mode=OneWay}" />
 								</Grid>
-								<StackPanel
-									Grid.Row="3"
-									Orientation="Horizontal"
-									Spacing="6">
-									<Button
+								<StackPanel pp:Id="graph.actions" Grid.Row="3" Orientation="Horizontal">
+									<Button pp:Id="graph.graphAround"
 										Command="{x:Bind ViewModel.FocusDetailNodeCommand}"
 										Content="Graph around it"
+										Style="{StaticResource FilledTonalButtonStyle}"
 										ToolTipService.ToolTip="Draw the graph around this file (or double-click its box)" />
-									<Button
+									<Button pp:Id="graph.showInFiles"
 										Command="{x:Bind ViewModel.LocateDetailCommand}"
-										Content="Show in file manager" />
+										Content="Show in file manager"
+										Style="{StaticResource TextButtonStyle}" />
 								</StackPanel>
 							</Grid>
 
@@ -609,7 +623,14 @@
 							<TabView
 								x:Name="DetailTabs"
 								Grid.Column="1"
-								IsAddTabButtonVisible="False">
+								Margin="0,0,40,0"
+								IsAddTabButtonVisible="False"
+								TabWidthMode="SizeToContent">
+								<TabView.Resources>
+									<!--  Penpot: secondary tabs keep the selected label in On Surface; tighter padding so all five fit  -->
+									<StaticResource x:Key="TabViewItemHeaderForegroundSelected" ResourceKey="HackSecondaryTabForegroundSelectedBrush" />
+									<Thickness x:Key="TabViewItemHeaderPadding">12,0,12,0</Thickness>
+								</TabView.Resources>
 								<TabViewItem x:Name="HistoryTab" Header="History" IsClosable="False">
 									<tv:TableView
 										AutoGenerateColumns="False"
@@ -798,22 +819,22 @@
 
 							<Button
 								Grid.Column="1"
-								Width="30"
-								Height="30"
-								Padding="0"
+								Margin="0,8,0,0"
 								HorizontalAlignment="Right"
 								VerticalAlignment="Top"
 								Command="{x:Bind ViewModel.CloseDetailsCommand}"
-								Content="✕"
-								ToolTipService.ToolTip="Close (Esc)" />
+								Style="{StaticResource PaneIconButtonStyle}"
+								ToolTipService.ToolTip="Close (Esc)">
+								<FontIcon FontSize="12" Glyph="&#xE711;" />
+							</Button>
 						</Grid>
 					</Border>
 				</Grid>
 			</Border>
 			<TextBlock
 				Grid.Row="2"
-				FontSize="11"
-				Opacity="0.8"
+				Margin="4,0"
+				Style="{StaticResource HackCaptionStyle}"
 				Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
 				TextTrimming="CharacterEllipsis" />
 		</Grid>

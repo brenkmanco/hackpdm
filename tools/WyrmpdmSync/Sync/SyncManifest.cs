@@ -17,6 +17,7 @@ internal sealed class SyncManifest
 	public List<ColorLink> Colors { get; set; } = [];
 	public List<ShapeLink> Shapes { get; set; } = [];
 	public List<ComponentLink> Components { get; set; } = [];
+	public List<FrameLink> Frames { get; set; } = [];
 
 	/// <summary>Every token link, colors first.</summary>
 	[JsonIgnore] public IEnumerable<TokenLink> TokenLinks => Colors.Cast<TokenLink>().Concat( Shapes );

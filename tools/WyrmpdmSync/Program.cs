@@ -25,13 +25,15 @@ internal static class Cli
 		commands:
 		  whoami                 check the access token: show the Penpot account it signs in as
 		  init [--file <id>]     create or refresh design/penpot-sync.json: link every preset color and
-		                         shape-style value in ThemePresets.cs to its Penpot token, and each
-		                         component to its XAML style
+		                         shape-style value in ThemePresets.cs to its Penpot token, each
+		                         component to its XAML style, and each marked view element (pp:Id)
+		                         listed under "frames" to its Penpot layer
 		  fetch                  download the Penpot file to design/.cache/penpot-file.json (for inspection)
 		  status [--all]         show what differs between Penpot and the code, and which side changed
-		  pull                   take changes made in Penpot into the code (ThemePresets.cs, XAML styles)
+		  pull                   take changes made in Penpot into the code (ThemePresets.cs, XAML styles,
+		                         views, including new layers inside synced containers)
 		  push                   take changes made in the code to Penpot (tokens, library colors, bound
-		                         shapes, components and their copies)
+		                         shapes, components and their copies, view layers, new elements)
 
 		options:
 		  --dry-run              pull/push: show what would change, change nothing
@@ -99,6 +101,22 @@ internal static class Cli
 		                   $"({manifest.Components.Sum( c => c.Properties.Count )} setters), {manifest.Components.Count( c => c.IsReference )} to Uno Material styles (reference only)." );
 		foreach( ComponentLink missing in manifest.Components.Where( c => ComponentSync.Component( file, c, ComponentSync.SourceTheme ) is null ) )
 			Console.WriteLine( $"  ? {missing.Label}: no such component in Penpot" );
+		XamlViews views = new( paths );
+		Func<Guid, string?> styleOf = LayoutSync.StyleLookup( manifest, file );
+		foreach( (FrameLink frame, FrameContext? ctx, string? problem) in LayoutSync.Resolve( manifest, file, views.Get ) )
+		{
+			if( ctx is null )
+			{
+				Console.WriteLine( $"  ? {frame.View}: {problem}" );
+				continue;
+			}
+			List<string> problems = LayoutSync.Link( ctx, styleOf );
+			Console.WriteLine( $"View {frame.View} ↔ \"{frame.Frame}\": {frame.Elements.Count( e => e.Shape is not null )} of {frame.Elements.Count} elements linked, " +
+			                   $"{frame.Elements.Sum( e => e.Properties.Count )} properties." );
+			foreach( string line in problems )
+				Console.WriteLine( $"  ? {line}" );
+		}
+		manifest.Save( paths.Manifest );
 		return 0;
 	}
 
@@ -122,7 +140,8 @@ internal static class Cli
 		Print( "Colors", reports.Where( r => r.Link is ColorLink ).ToList(), options.All );
 		Print( "Shape values", reports.Where( r => r.Link is ShapeLink ).ToList(), options.All );
 		Print( components, options.All );
-		return reports.Any( r => r.State != SyncState.InSync ) || components.Any( r => r.State != SyncState.InSync ) ? 2 : 0;
+		bool layoutsDiffer = PrintLayouts( paths, manifest, file, options.All );
+		return reports.Any( r => r.State != SyncState.InSync ) || components.Any( r => r.State != SyncState.InSync ) || layoutsDiffer ? 2 : 0;
 	}
 
 	private static async Task<int> PullAsync( RepoPaths paths, Options options )
@@ -135,10 +154,34 @@ internal static class Cli
 		List<ComponentReport> componentReports = ComponentSync.Compare( manifest, file, xaml.Get );
 		List<ComponentReport> pulledComponents = ComponentSync.ToPull( componentReports, options.Prefer );
 		ReportSkipped( componentReports, pulledComponents, options.Prefer, "pull" );
-		if( pulled.Count == 0 && pulledComponents.Count == 0 )
+		XamlViews views = new( paths );
+		Func<Guid, string?> styleOf = LayoutSync.StyleLookup( manifest, file );
+		List<(FrameContext Ctx, List<ElementReport> Pulled, List<LayoutCreate.NewXaml> Added)> layouts = [];
+		foreach( (FrameLink _, FrameContext? ctx, string? _) in LayoutSync.Resolve( manifest, file, views.Get ) )
+		{
+			if( ctx is null )
+				continue;
+			List<ElementReport> elementReports = LayoutSync.Compare( ctx, styleOf );
+			List<ElementReport> pulledElements = LayoutSync.ToPull( elementReports, options.Prefer );
+			ReportSkipped( elementReports, pulledElements, options.Prefer, "pull" );
+			List<string> notes = [];
+			List<LayoutCreate.NewXaml> added = LayoutCreate.FromPenpot( ctx, file, styleOf, notes );
+			foreach( string note in notes )
+				Console.WriteLine( $"  ? {note}" );
+			if( pulledElements.Count > 0 || added.Count > 0 )
+				layouts.Add( (ctx, pulledElements, added) );
+		}
+		if( pulled.Count == 0 && pulledComponents.Count == 0 && layouts.Count == 0 )
 		{
 			Console.WriteLine( "Nothing to pull: the code has every change made in Penpot." );
 			return 0;
+		}
+		foreach( (FrameContext ctx, List<ElementReport> pulledElements, List<LayoutCreate.NewXaml> added) in layouts )
+		{
+			foreach( ElementReport r in pulledElements )
+				Console.WriteLine( $"  {r.Element.Anchor + "." + r.Property,-34} {r.Code ?? "—",-10} → {r.Penpot}" );
+			foreach( LayoutCreate.NewXaml n in added )
+				Console.WriteLine( $"  + {n.Description}" );
 		}
 		foreach( TokenReport r in pulled )
 			Console.WriteLine( $"  {r.Link.CodeName,-34} {r.Code ?? "—",-10} → {r.Penpot}" );
@@ -146,7 +189,7 @@ internal static class Cli
 			Console.WriteLine( $"  {r.Link.Style + "." + r.Property,-34} {r.Code ?? "—",-10} → {r.Penpot}" );
 		if( options.DryRun )
 		{
-			Console.WriteLine( $"Dry run: {pulled.Count + pulledComponents.Count} value(s) would change in the code." );
+			Console.WriteLine( $"Dry run: {pulled.Count + pulledComponents.Count + layouts.Sum( l => l.Pulled.Count + l.Added.Count )} change(s) would be made in the code." );
 			return 0;
 		}
 		if( pulled.Count > 0 )
@@ -163,8 +206,22 @@ internal static class Cli
 			foreach( ComponentReport r in pulledComponents )
 				r.Link.Properties[ r.Property ] = r.Penpot;
 		}
+		foreach( (FrameContext ctx, List<ElementReport> pulledElements, List<LayoutCreate.NewXaml> added) in layouts )
+		{
+			List<XamlView.Edit> edits = LayoutSync.PullEdits( ctx, pulledElements );
+			edits.AddRange( added.Select( a => a.Edit ) );
+			if( added.Count > 0 )
+				edits.AddRange( ctx.View.DeclareNamespace() );
+			ctx.View.Apply( edits );
+			foreach( ElementReport r in pulledElements )
+				r.Element.Properties[ r.Property ] = r.Penpot;
+			ctx.Link.Elements.AddRange( added.SelectMany( a => a.Links ) );
+			// new elements start in sync: record what both sides now define
+			LayoutSync.Link( ctx, styleOf );
+		}
+		views.SaveAll();
 		manifest.Save( paths.Manifest );
-		Console.WriteLine( $"Pulled {pulled.Count + pulledComponents.Count} value(s) into the code. Rebuild the app to see them." );
+		Console.WriteLine( $"Pulled {pulled.Count + pulledComponents.Count + layouts.Sum( l => l.Pulled.Count + l.Added.Count )} change(s) into the code. Rebuild the app to see them." );
 		return 0;
 	}
 
@@ -183,6 +240,30 @@ internal static class Cli
 		ChangeSet componentChanges = ChangeBuilder.ForComponents( file, pushedComponents );
 		changes.Changes.AddRange( componentChanges.Changes );
 		changes.Descriptions.AddRange( componentChanges.Descriptions );
+		Func<Guid, string?> styleOf = LayoutSync.StyleLookup( manifest, file );
+		List<(FrameContext Ctx, List<ElementReport> Pushed, List<LayoutCreate.NewLayer> Added)> layouts = [];
+		foreach( (FrameLink _, FrameContext? ctx, string? _) in LayoutSync.Resolve( manifest, file, new XamlViews( paths ).Get ) )
+		{
+			if( ctx is null )
+				continue;
+			List<ElementReport> elementReports = LayoutSync.Compare( ctx, styleOf );
+			List<ElementReport> pushedElements = LayoutSync.ToPush( elementReports, options.Prefer );
+			ReportSkipped( elementReports, pushedElements, options.Prefer, "push" );
+			foreach( ElementReport r in elementReports.Where( r => r.State == SyncState.ChangedInCode && ElementValues.PullOnly.Contains( r.Property ) ) )
+				Console.WriteLine( $"  ? {r.Element.Anchor}.{r.Property} changed in code ({r.Penpot} → {r.Code}); change it in Penpot instead, then pull." );
+			LayoutSync.PushChanges( ctx, file, pushedElements, changes );
+			List<string> notes = [];
+			List<LayoutCreate.NewLayer> added = LayoutCreate.FromCode( ctx, file, manifest, notes );
+			foreach( string note in notes )
+				Console.WriteLine( $"  ? {note}" );
+			foreach( LayoutCreate.NewLayer n in added )
+			{
+				changes.Changes.AddRange( n.Changes );
+				changes.Descriptions.Add( $"+ {n.Description}" );
+			}
+			if( pushedElements.Count > 0 || added.Count > 0 )
+				layouts.Add( (ctx, pushedElements, added) );
+		}
 		if( changes.IsEmpty )
 		{
 			Console.WriteLine( "Nothing to push: Penpot has every change made in the code." );
@@ -205,8 +286,14 @@ internal static class Cli
 		}
 		foreach( ComponentReport r in pushedComponents )
 			r.Link.Properties[ r.Property ] = r.Code;
+		foreach( (FrameContext ctx, List<ElementReport> pushedElements, List<LayoutCreate.NewLayer> added) in layouts )
+		{
+			foreach( ElementReport r in pushedElements )
+				r.Element.Properties[ r.Property ] = r.Code;
+			ctx.Link.Elements.AddRange( added.Select( a => a.Link ) );
+		}
 		manifest.Save( paths.Manifest );
-		Console.WriteLine( $"Pushed {pushed.Count + pushedComponents.Count} value(s) to Penpot ({changes.Changes.Count} change(s))." );
+		Console.WriteLine( $"Pushed {pushed.Count + pushedComponents.Count + layouts.Sum( l => l.Pushed.Count + l.Added.Count )} value(s) to Penpot ({changes.Changes.Count} change(s))." );
 		return 0;
 	}
 
@@ -231,6 +318,53 @@ internal static class Cli
 		foreach( ComponentReport r in conflicts )
 			Console.WriteLine( $"  ! {r.Link.Style + "." + r.Property,-40} penpot {r.Penpot,-14} code {r.Code,-14} last synced {r.Link.Properties[ r.Property ] ?? "never"}" );
 	}
+
+	private static void ReportSkipped( List<ElementReport> reports, List<ElementReport> taken, Prefer prefer, string verb )
+	{
+		if( prefer != Prefer.None )
+			return;
+		List<ElementReport> conflicts = [ .. reports.Where( r => r.State is SyncState.Conflict or SyncState.Unlinked && !taken.Contains( r ) ) ];
+		if( conflicts.Count > 0 )
+			Console.WriteLine( $"Skipping {conflicts.Count} view value(s) that differ with no clear newer side; rerun {verb} with --prefer penpot or --prefer code:" );
+		foreach( ElementReport r in conflicts )
+			Console.WriteLine( $"  ! {r.Element.Anchor + "." + r.Property,-40} penpot {r.Penpot,-14} code {r.Code,-14} last synced {r.Element.Properties[ r.Property ] ?? "never"}" );
+	}
+
+	/// <summary>Each linked view: its elements' properties, and new layers or elements waiting on either side. True when anything differs.</summary>
+	private static bool PrintLayouts( RepoPaths paths, SyncManifest manifest, PenpotFile file, bool all )
+	{
+		bool differs = false;
+		Func<Guid, string?> styleOf = LayoutSync.StyleLookup( manifest, file );
+		foreach( (FrameLink frame, FrameContext? ctx, string? problem) in LayoutSync.Resolve( manifest, file, new XamlViews( paths ).Get ) )
+		{
+			if( ctx is null )
+			{
+				Console.WriteLine( $"View {frame.View}: {problem}" );
+				differs = true;
+				continue;
+			}
+			List<ElementReport> reports = LayoutSync.Compare( ctx, styleOf );
+			Console.WriteLine( $"View {frame.View} ↔ \"{frame.Frame}\": {reports.Count} properties — " + string.Join( ", ",
+				reports.GroupBy( c => c.State ).OrderBy( g => g.Key ).Select( g => $"{g.Count()} {Describe( g.Key )}" ) ) + "." );
+			foreach( ElementReport r in reports.Where( r => all || r.State != SyncState.InSync ) )
+				Console.WriteLine( $"  {Mark( r.State )} {r.Element.Anchor + "." + r.Property,-40} penpot {Short( r.Penpot ),-14} code {Short( r.Code ),-14} {Describe( r.State )}" );
+			List<string> notes = [];
+			foreach( LayoutCreate.NewXaml n in LayoutCreate.FromPenpot( ctx, file, styleOf, notes ) )
+				Console.WriteLine( $"  < new in Penpot (pull adds it): {n.Description}" );
+			foreach( LayoutCreate.NewLayer n in LayoutCreate.FromCode( ctx, file, manifest, notes ) )
+				Console.WriteLine( $"  > new in code (push adds it): {n.Description}" );
+			foreach( string note in notes )
+				Console.WriteLine( $"  ? {note}" );
+			foreach( ElementLink gone in frame.Elements.Where( e => ctx.Shape( e.Shape ) is null ) )
+				Console.WriteLine( $"  ? {gone.Anchor}: its Penpot layer is gone; remove the element in XAML (or relink it) and its entry in the manifest" );
+			foreach( ElementLink gone in frame.Elements.Where( e => !ctx.View.Anchors.ContainsKey( e.Anchor ) ) )
+				Console.WriteLine( $"  ? {gone.Anchor}: no longer in {frame.View}; delete its layer in Penpot (or restore it) and its entry in the manifest" );
+			differs |= reports.Any( r => r.State != SyncState.InSync ) || notes.Count > 0;
+		}
+		return differs;
+	}
+
+	private static string Short( string? value ) => value is null ? "—" : value.Length > 14 ? value[ ..13 ] + "…" : value;
 
 	private static void Print( List<ComponentReport> reports, bool all )
 	{
@@ -346,5 +480,24 @@ internal sealed class XamlFiles( RepoPaths paths )
 	{
 		foreach( XamlStyles styles in _files.Values )
 			styles.Save();
+	}
+}
+
+/// <summary>XAML views loaded once per run, saved together.</summary>
+internal sealed class XamlViews( RepoPaths paths )
+{
+	private readonly Dictionary<string, XamlView> _views = new( StringComparer.OrdinalIgnoreCase );
+
+	public XamlView Get( string relativePath )
+	{
+		if( !_views.TryGetValue( relativePath, out XamlView? view ) )
+			_views[ relativePath ] = view = XamlView.Load( Path.Combine( paths.Root, relativePath ) );
+		return view;
+	}
+
+	public void SaveAll()
+	{
+		foreach( XamlView view in _views.Values )
+			view.Save();
 	}
 }

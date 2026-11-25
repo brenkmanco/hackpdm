@@ -67,7 +67,7 @@ public sealed class ThemeService
 	public PaletteName Palette => _settings.EffectivePalette;
 	public FormName Form => _settings.Form;
 	public bool StyleNeedsRestart => _settings.Form != _startupForm;
-	public GraphTheme GraphTheme => GraphThemes.From( Palette, Form );
+	public GraphTheme GraphTheme => GraphThemes.From( Palette, Form, _applied );
 	public bool ShowTreeBranchLines => _settings.ShowTreeBranchLines;
 	public bool IsDarkActive => _runningDark;
 	public bool NeedsRestart => _settings.Mode != _startupMode;

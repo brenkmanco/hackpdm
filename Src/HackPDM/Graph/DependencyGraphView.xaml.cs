@@ -440,6 +440,19 @@ public sealed partial class DependencyGraphView : Page
 		TreeBranchGuides.RefreshTree( FolderTree, showLines: show, selectedNode: CurrentSelectedFolderNode, updateSelection: true );
 	}
 
+	/// <summary>
+	/// The direction chips work like radio buttons: a click picks that direction, and clicking the chosen chip
+	/// again leaves it chosen (a chip would otherwise uncheck itself).
+	/// </summary>
+	private void DirectionChip_Click( object sender, RoutedEventArgs e )
+	{
+		if( sender is FrameworkElement { Tag: string tag } && Enum.TryParse( tag, out GraphDirection direction ) )
+			ViewModel.Direction = direction;
+		DirectionChildrenChip.IsChecked = ViewModel.IsChildrenDirection;
+		DirectionParentsChip.IsChecked = ViewModel.IsParentsDirection;
+		DirectionBothChip.IsChecked = ViewModel.IsBothDirection;
+	}
+
 	private void ExpandAllFolders_Click( object sender, RoutedEventArgs e )
 	{
 		FolderTree.SetAllExpanded( true );

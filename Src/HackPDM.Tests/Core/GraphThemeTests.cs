@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using HackPDM.Core.Graph;
@@ -104,5 +105,33 @@ public class GraphThemeTests
 		GraphTheme theme = GraphThemes.From( (PaletteName)99, (FormName)99 );
 		Assert.Equal( PaletteName.Dark, theme.Palette.Name );
 		Assert.Equal( FormName.Default, theme.Form.Name );
+	}
+
+	[Theory]
+	[MemberData( nameof( PaletteNames ) )]
+	public void Palette_FollowsTheAppsMaterialScheme( PaletteName name )
+	{
+		IReadOnlyDictionary<string, uint> scheme = ThemePresets.Palette( name ).Scheme;
+		GraphPalette p = GraphThemes.Palette( name );
+		Assert.Equal( scheme[ MaterialRoles.Surface ], p.Backdrop );
+		Assert.Equal( scheme[ MaterialRoles.SurfaceContainer ], p.Body );
+		Assert.Equal( scheme[ MaterialRoles.OutlineVariant ], p.BodyBorder );
+		Assert.Equal( scheme[ MaterialRoles.OnSurface ], p.Text );
+		Assert.Equal( scheme[ MaterialRoles.Outline ], p.Link );
+		Assert.Equal( scheme[ MaterialRoles.Primary ], p.LinkHighlight );
+		Assert.Equal( scheme[ MaterialRoles.Tertiary ], p.RootBorder );
+	}
+
+	[Fact]
+	public void From_Scheme_FollowsThemeEditorChanges_AndKeepsThePresetWhenUnchanged()
+	{
+		IReadOnlyDictionary<string, uint> scheme = ThemePresets.Palette( PaletteName.Light ).Scheme;
+		Assert.Same( GraphThemes.Palette( PaletteName.Light ), GraphThemes.From( PaletteName.Light, FormName.Default, scheme ).Palette );
+
+		Dictionary<string, uint> edited = new( scheme ) { [ MaterialRoles.Primary ] = 0xFF00796B };
+		GraphTheme theme = GraphThemes.From( PaletteName.Light, FormName.Default, edited );
+		Assert.Equal( 0xFF00796Bu, theme.Palette.LinkHighlight );
+		Assert.Equal( GraphThemes.Palette( PaletteName.Light ).Headers, theme.Palette.Headers );
+		Assert.NotEqual( GraphThemes.From( PaletteName.Light, FormName.Default ), theme );
 	}
 }

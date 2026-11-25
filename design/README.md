@@ -30,7 +30,20 @@ The app's design lives in the Penpot file **"HackPDM -- Uno Materials Design"** 
 - Width and Height are pull-only: resize a component in Penpot, then `pull`. Penpot's API stores layout but doesn't
   re-run it, so after a `push` that changes padding, a hug-content component keeps its old stored size until the
   design is next edited in Penpot (any change to the component re-lays it out).
-- Coming next: page frames ↔ views through `pp:Id` markers on XAML elements.
+- **Views:** a XAML view ↔ its Penpot frames (`frames` in the manifest: the view, the Light frame compared with
+  the code, and the Dark frame written alongside). Elements are linked by a marker in the XAML,
+  `pp:Id="graph.toolbar"`, and a layer path in the manifest, `Content/Toolbar` ("#2" picks the second of
+  same-named layers), which `init` turns into layer ids. The view declares
+  `xmlns:pp="urn:wyrmpdm:penpot-sync"` and lists `pp` in `mc:Ignorable`, so the compilers skip the markers.
+  Synced per element, where both sides define them: Padding, Spacing/RowSpacing/ColumnSpacing, CornerRadius,
+  Background, BorderBrush, Text (a TextBlock's text, a button's label), and pull-only Width, Height and Style
+  (the component a layer copies). Bindings (`{x:Bind …}`) are wiring and never synced.
+- **New elements:** an element linked with `"children": true` keeps its children in step as a whole (every child
+  must be marked). A layer added inside it in Penpot becomes a marked XAML element on `pull` (a component copy →
+  the linked style's control, text → TextBlock, flex frame → StackPanel, icon → FontIcon); a marked XAML element
+  added inside it becomes a layer on `push`, in the Light and Dark frames (a component copy for linked styles,
+  text based on an existing text layer, frames for panels). Wire up behaviour (commands, bindings) by hand.
+  Removals on either side are reported, never applied.
 
 ## Setup
 
@@ -46,14 +59,25 @@ Run from anywhere in the repository: `dotnet run --project tools/WyrmpdmSync -- 
 | Command | What it does |
 |---|---|
 | `whoami` | Checks the token: shows the Penpot account it signs in as. |
-| `init` | Creates or refreshes the manifest: links every preset color and shape value to its token, and the default components to their styles. Safe to rerun. |
+| `init` | Creates or refreshes the manifest: links every preset color and shape value to its token, the default components to their styles, and the listed view elements to their layers. Safe to rerun. |
 | `fetch` | Downloads the Penpot file to `design/.cache/penpot-file.json` (git-ignored), for inspection. |
 | `status [--all]` | Shows what differs and which side changed: `<` changed in Penpot (pull), `>` changed in code or missing in Penpot (push), `!` changed on both sides. Exit code 2 when anything differs. |
-| `pull` | Writes values changed in Penpot into `ThemePresets.cs` and the linked XAML styles. Rebuild the app afterwards. |
-| `push` | Sends values changed in code to Penpot: the token (creating its set and switching it on if needed), the matching library color, and every shape the token is applied to (Penpot's API doesn't repaint those itself); and changed style setters to their components and copies. All or nothing: Penpot applies the whole batch or none of it. |
+| `pull` | Writes values changed in Penpot into `ThemePresets.cs`, the linked XAML styles and views, and adds XAML for new layers in synced containers. Rebuild the app afterwards. |
+| `push` | Sends values changed in code to Penpot: the token (creating its set and switching it on if needed), the matching library color, and every shape the token is applied to (Penpot's API doesn't repaint those itself); changed style setters to their components and copies; changed view values to their layers; and new marked elements as layers. All or nothing: Penpot applies the whole batch or none of it. |
 
 Options: `--dry-run` (pull/push: show, change nothing), `--prefer penpot|code` (pull/push: settle values changed
 on both sides, or that differ with no last-synced value), `--cached` (init/status: use the last fetched copy).
 
 A typical round: `status`, then `pull` for design changes made in Penpot, `push` for changes made in code. Neither
 command touches a value changed on both sides until you pick a side with `--prefer`.
+
+## Linking a view
+
+1. Mark the elements in the view: `pp:Id="area.name"` (and declare the `pp` namespace as above).
+2. Add the view under `frames` in the manifest, each element with the layer path in its Light frame:
+   `{ "anchor": "graph.toolbar", "path": "Content/Toolbar" }`. Add `"children": true` to containers whose children
+   should be kept in step as a whole.
+3. Run `init`, then `status`: values both sides already share start in sync.
+
+Penpot's API stores layout but doesn't run it: after a push that adds layers or changes padding, gaps or text,
+Penpot shows the final arrangement once the design is next edited there.
