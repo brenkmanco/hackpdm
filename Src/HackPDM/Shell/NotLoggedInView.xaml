@@ -6,7 +6,7 @@
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	mc:Ignorable="d">
-	<Grid Padding="24" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+	<Grid Padding="24" Background="{ThemeResource BackgroundBrush}">
 		<StackPanel
 			MaxWidth="640"
 			HorizontalAlignment="Center"
@@ -14,15 +14,14 @@
 			Spacing="16">
 			<TextBlock
 				HorizontalAlignment="Center"
-				FontSize="42"
-				FontWeight="SemiBold"
+				Style="{StaticResource HeadlineMedium}"
 				Text="Not Logged In"
 				TextAlignment="Center"
 				TextWrapping="Wrap" />
 			<TextBlock
 				HorizontalAlignment="Center"
-				FontSize="16"
-				Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+				Style="{StaticResource BodyLarge}"
+				Foreground="{ThemeResource OnSurfaceVariantBrush}"
 				Text="Configure your Odoo server and local folder settings, then sign in through Profile Manager."
 				TextAlignment="Center"
 				TextWrapping="Wrap" />
@@ -33,10 +32,11 @@
 				<Button
 					Click="OpenProfile_Click"
 					Content="Open Profile Manager"
-					Style="{StaticResource AccentButtonStyle}" />
+					Style="{StaticResource FilledButtonStyle}" />
 				<Button
 					Click="OpenConfig_Click"
-					Content="Open Configurations" />
+					Content="Open Configurations"
+					Style="{StaticResource OutlinedButtonStyle}" />
 			</StackPanel>
 		</StackPanel>
 	</Grid>

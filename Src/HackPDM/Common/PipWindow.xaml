@@ -13,7 +13,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <Grid Background="{ThemeResource BackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -36,7 +36,7 @@
                 x:Name="PipEmptyText"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Foreground="{ThemeResource OnSurfaceVariantBrush}"
                 Text="No preview available"
                 TextAlignment="Center" />
             <Image
@@ -55,14 +55,18 @@
             VerticalAlignment="Bottom">
             <Button
                 x:Name="ExitPipButton"
-                Padding="8"
-                Background="#80000000"
+                Width="40"
+                Height="40"
+                Padding="0"
+                Background="{ThemeResource SurfaceInverseBrush}"
                 BorderThickness="0"
+                CornerRadius="20"
+                Opacity="0.85"
                 Click="OnExitPipClicked"
                 ToolTipService.ToolTip="Return to Main Window">
                 <FontIcon
-                    FontSize="14"
-                    Foreground="White"
+                    FontSize="16"
+                    Foreground="{ThemeResource OnSurfaceInverseBrush}"
                     Glyph="&#xE73F;" />
             </Button>
         </Grid>

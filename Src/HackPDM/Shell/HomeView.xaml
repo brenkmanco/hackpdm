@@ -111,7 +111,7 @@
                 <!--  Docked Search Vault Extension  -->
                 <Border
                     x:Name="DockedSearchDrawer"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    Background="{ThemeResource HackSurfaceContainerLowBrush}"
                     BorderBrush="{StaticResource HackPanelStrokeBrush}"
                     BorderThickness="1,0,0,0"
                     Visibility="Collapsed">
@@ -123,8 +123,8 @@
                         <Border
                             x:Name="SearchDrawerHeader"
                             Grid.Row="0"
-                            Padding="10,6"
-                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            Padding="16,4,8,4"
+                            BorderBrush="{ThemeResource OutlineVariantBrush}"
                             BorderThickness="0,0,0,1">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -136,12 +136,11 @@
                                     VerticalAlignment="Center"
                                     Orientation="Horizontal"
                                     Spacing="6">
-                                    <FontIcon FontSize="12" Glyph="&#xE721;" />
-                                    <TextBlock
-                                        VerticalAlignment="Center"
-                                        FontSize="12"
-                                        FontWeight="SemiBold"
-                                        Text="Search Vault" />
+                                    <FontIcon
+                                        FontSize="16"
+                                        Foreground="{ThemeResource OnSurfaceVariantBrush}"
+                                        Glyph="&#xE721;" />
+                                    <TextBlock Style="{StaticResource HackPaneTitleStyle}" Text="Search Vault" />
                                 </StackPanel>
                                 <StackPanel
                                     Grid.Column="1"
@@ -149,28 +148,28 @@
                                     Orientation="Horizontal"
                                     Spacing="2">
                                     <Button
-                                        Padding="6,4"
+                                        Style="{StaticResource PaneIconButtonStyle}"
                                         Click="SwitchSearchMinimal_Click"
                                         ToolTipService.ToolTip="Switch to minimal search bar">
-                                        <FontIcon FontSize="11" Glyph="&#xE73F;" />
+                                        <FontIcon FontSize="13" Glyph="&#xE73F;" />
                                     </Button>
                                     <Button
-                                        Padding="6,4"
+                                        Style="{StaticResource PaneIconButtonStyle}"
                                         Click="SwapSearchSide_Click"
                                         ToolTipService.ToolTip="Move Search Left or Right">
-                                        <FontIcon FontSize="11" Glyph="&#xE8AB;" />
+                                        <FontIcon FontSize="13" Glyph="&#xE8AB;" />
                                     </Button>
                                     <Button
-                                        Padding="6,4"
+                                        Style="{StaticResource PaneIconButtonStyle}"
                                         Click="DetachSearch_Click"
                                         ToolTipService.ToolTip="Detach Search into separate window">
-                                        <FontIcon FontSize="11" Glyph="&#xE8A7;" />
+                                        <FontIcon FontSize="13" Glyph="&#xE8A7;" />
                                     </Button>
                                     <Button
-                                        Padding="6,4"
+                                        Style="{StaticResource PaneIconButtonStyle}"
                                         Click="CloseSearchDrawer_Click"
                                         ToolTipService.ToolTip="Close Search panel">
-                                        <FontIcon FontSize="10" Glyph="&#xE711;" />
+                                        <FontIcon FontSize="12" Glyph="&#xE711;" />
                                     </Button>
                                 </StackPanel>
                             </Grid>
@@ -192,16 +191,16 @@
                                 Spacing="2"
                                 Visibility="Collapsed">
                                 <Button
-                                    Padding="6,4"
+                                    Style="{StaticResource PaneIconButtonStyle}"
                                     Click="DetachSearch_Click"
                                     ToolTipService.ToolTip="Detach Search into separate window">
-                                    <FontIcon FontSize="11" Glyph="&#xE8A7;" />
+                                    <FontIcon FontSize="13" Glyph="&#xE8A7;" />
                                 </Button>
                                 <Button
-                                    Padding="6,4"
+                                    Style="{StaticResource PaneIconButtonStyle}"
                                     Click="CloseSearchDrawer_Click"
                                     ToolTipService.ToolTip="Close Search bar">
-                                    <FontIcon FontSize="10" Glyph="&#xE711;" />
+                                    <FontIcon FontSize="12" Glyph="&#xE711;" />
                                 </Button>
                             </StackPanel>
                         </Grid>
@@ -222,7 +221,7 @@
             <Border
                 x:Name="DockedStatusDrawer"
                 Grid.Row="2"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                Background="{ThemeResource HackSurfaceContainerLowBrush}"
                 BorderBrush="{StaticResource HackPanelStrokeBrush}"
                 BorderThickness="0,1,0,0"
                 Visibility="Collapsed">
@@ -234,8 +233,8 @@
                     <Border
                         x:Name="StatusDrawerHeader"
                         Grid.Row="0"
-                        Padding="10,5"
-                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        Padding="16,4,8,4"
+                        BorderBrush="{ThemeResource OutlineVariantBrush}"
                         BorderThickness="0,0,0,1">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -247,12 +246,11 @@
                                 VerticalAlignment="Center"
                                 Orientation="Horizontal"
                                 Spacing="8">
-                                <FontIcon FontSize="12" Glyph="&#xE9D9;" />
-                                <TextBlock
-                                    VerticalAlignment="Center"
-                                    FontSize="12"
-                                    FontWeight="SemiBold"
-                                    Text="Status Log" />
+                                <FontIcon
+                                    FontSize="16"
+                                    Foreground="{ThemeResource OnSurfaceVariantBrush}"
+                                    Glyph="&#xE9D9;" />
+                                <TextBlock Style="{StaticResource HackPaneTitleStyle}" Text="Status Log" />
                             </StackPanel>
                             <StackPanel
                                 Grid.Column="1"
@@ -260,22 +258,22 @@
                                 Orientation="Horizontal"
                                 Spacing="2">
                                 <Button
-                                    Padding="6,4"
+                                    Style="{StaticResource PaneIconButtonStyle}"
                                     Click="SwitchStatusMinimal_Click"
                                     ToolTipService.ToolTip="Switch to minimal status category bar">
-                                    <FontIcon FontSize="11" Glyph="&#xE73F;" />
+                                    <FontIcon FontSize="13" Glyph="&#xE73F;" />
                                 </Button>
                                 <Button
-                                    Padding="6,4"
+                                    Style="{StaticResource PaneIconButtonStyle}"
                                     Click="DetachStatus_Click"
                                     ToolTipService.ToolTip="Detach Status Log into separate window">
-                                    <FontIcon FontSize="11" Glyph="&#xE8A7;" />
+                                    <FontIcon FontSize="13" Glyph="&#xE8A7;" />
                                 </Button>
                                 <Button
-                                    Padding="6,4"
+                                    Style="{StaticResource PaneIconButtonStyle}"
                                     Click="CloseStatusDrawer_Click"
                                     ToolTipService.ToolTip="Hide Status Log panel">
-                                    <FontIcon FontSize="10" Glyph="&#xE711;" />
+                                    <FontIcon FontSize="12" Glyph="&#xE711;" />
                                 </Button>
                             </StackPanel>
                         </Grid>
@@ -297,16 +295,16 @@
                             Spacing="2"
                             Visibility="Collapsed">
                             <Button
-                                Padding="6,4"
+                                Style="{StaticResource PaneIconButtonStyle}"
                                 Click="DetachStatus_Click"
                                 ToolTipService.ToolTip="Detach Status bar into separate window">
-                                <FontIcon FontSize="11" Glyph="&#xE8A7;" />
+                                <FontIcon FontSize="13" Glyph="&#xE8A7;" />
                             </Button>
                             <Button
-                                Padding="6,4"
+                                Style="{StaticResource PaneIconButtonStyle}"
                                 Click="CloseStatusDrawer_Click"
                                 ToolTipService.ToolTip="Hide Status bar">
-                                <FontIcon FontSize="10" Glyph="&#xE711;" />
+                                <FontIcon FontSize="12" Glyph="&#xE711;" />
                             </Button>
                         </StackPanel>
                     </Grid>

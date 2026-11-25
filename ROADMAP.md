@@ -1,7 +1,7 @@
 # Roadmap: every HackPDM page designed in Figma and matched in the app
 
 **Goal:** Every HackPDM page and shared control has a Figma design (light and dark) and the app matches it, with all color coming from one Material color system that the theme presets and Theme Editor control.
-**Status:** App-only mode (Figma tool-call limit reached). Milestone 3, step 3.1 next; Figma steps 2.1 and 2.3b deferred. Updated 2026-11-25.
+**Status:** App-only mode (Figma tool-call limit reached). Milestone 4, step 4.1 next; Figma steps 2.1 and 2.3b deferred. Updated 2026-11-25.
 
 ## Plan
 - **Figma file:** "HackPDM — Uno Material Design" (https://www.figma.com/design/qeptbte8bdjojuGv6mc6FN), built on the Material 3 Design Kit.
@@ -14,7 +14,7 @@
 ## Milestones
 - [x] M1: Color and shape foundations — HackPDM color set in Figma (Light, Dark, Navy blue); presets, shape styles and the Theme Editor on Material colors; tests pass; File Manager work committed
 - [ ] M2: Component library — Figma page plus matching shared app styles (app half done; Figma half deferred)
-- [ ] M3: Shell and shared pieces restyled
+- [x] M3: Shell and shared pieces restyled (app; Figma frames in the backlog)
 - [ ] M4: Main work pages restyled
 - [ ] M5: Settings and account pages restyled
 - [ ] M6: Final pass in every preset, light and dark; scorecard
@@ -42,12 +42,12 @@
 ## Phase 3: Shell and shared pieces (reaches M3)
 | Step | Size | Page | Status |
 |---|---|---|---|
-| 3.1 | standard | Shell/HomeView (navigation bar, search and status panels) | |
-| 3.2 | simple | Shell/NotLoggedInView | |
-| 3.3 | simple | Common/MessageBox | |
-| 3.4 | simple | Common/PipWindow | |
-| 3.5 | simple | Common/FolderIcon colors | |
-| 3.6 | simple | git commit | |
+| 3.1 | standard | Shell/HomeView (navigation bar, search and status panels) || done |
+| 3.2 | simple | Shell/NotLoggedInView || done |
+| 3.3 | simple | Common/MessageBox || done |
+| 3.4 | simple | Common/PipWindow || done |
+| 3.5 | simple | Common/FolderIcon colors || done |
+| 3.6 | simple | git commit || done |
 
 ## Phase 4: Main work pages (reaches M4)
 | Step | Size | Page | Status |
@@ -79,6 +79,8 @@
 | 6.3 | simple | git commit | |
 
 ## Decisions
+- 2026-11-25: Folder icons keep their origin colors (amber synced, blue server, tan local) because they carry meaning; only the badge outline follows the surface.
+- 2026-11-25: The navigation rail sits on Background with a Secondary Container pill for the selected page; Uno Material's NavigationView reads `NavigationViewPaneBackground` / `NavigationViewBackground`, so those are in `MaterialRoles.AppBrushes` too.
 - 2026-11-25: Continue app-only until the Figma limit resets or the plan is upgraded (user choice). Pages are restyled from the shared styles and the File Manager design; Figma frames follow later.
 - 2026-11-25: Shared control colors that must follow the preset live (tabs, table headers, tree selection) are recolored by ThemeService from `MaterialRoles.AppBrushes`; styles in `HackControls.xaml` can't carry the shape style's corner radius or border thickness (set after the file loads), so pages set those on the element.
 - 2026-11-25: Presets rebuilt on Material rather than dropped (user choice).
@@ -98,9 +100,10 @@
 ## Figma backlog
 - Components page (2.1): Button (Filled, Tonal, Outlined, Text), Icon button (Standard, Selected), Chip (Filter, Filter selected, Assist), Tab (Primary/Secondary × selected), Text field, Select, Checkbox, Switch, Pane card (Tinted, Outlined), Banner (Info, Warning, Error), Dialog, Log row (Info, Warning, Error), Navigation item, Settings row; icons info and warning added locally.
 - File Manager frames rebound to "HackPDM colors" (2.3b).
-- Light + dark frames for every page restyled app-only (filled in as pages are done).
+- Light + dark frames for every page restyled app-only: Shell (rail + Search / Status drawers), Not Logged In, Message box, PiP window.
 
 ## Handoff notes
+- After M3: shell, Not Logged In, message box, PiP and folder badges restyled; checked signed in (rail, both drawers, File Manager with live data). Drawer contents (Search, Status Log) are M4. A pre-existing flaky test (`PauseAndDownloadResumeTests`) is fixed on branch `claude/cool-newton-5c3635` (commit b712b0e), not merged here.
 - After 2.2–2.3: `Styles/HackControls.xaml` holds HackPaneTintedStyle, HackPaneOutlinedStyle, HackToolbarStyle, HackPaneTitleStyle, HackCaptionStyle, HackBanner{Info,Warning,Error}Style, PaneIconButtonStyle, PaneIconToggleButtonStyle, AssistChipButtonStyle, GroupedBarTextButtonStyle, GroupedSortHeaderButtonStyle, and the TabView / TableView header / TreeView selection brushes. Secondary tab strips alias `HackSecondaryTabForegroundSelectedBrush`. Tests pass, both targets build; not yet checked on screen.
 - After M1: Figma has a Colors page (frames 14:612 Light, 14:742 Dark, 14:872 Navy blue) and the "HackPDM colors" collection. App: presets are Material schemes; Theme Editor lists the 30 roles in 7 groups; Dark → Navy blue switches live (checked on screen, not saved). Unit tests 427 passed / 55 skipped; both targets and the smoke-test build compile. The File Manager Figma frames still bind to the Material 3 kit's variables, not "HackPDM colors" — rebind them in 2.3.
 - Before M1: File Manager restyle (Figma frame "File Manager — Light" 7:3455 and "— Dark" 13:266), `Styles/ColorPaletteOverride.xaml` (Blue LT/DT), `HackSurfaceContainer*` brushes in `App.xaml`, Material + Toolkit Uno features. Built on both targets and checked on screen; uncommitted.
