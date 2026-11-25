@@ -151,7 +151,109 @@ internal static class ChangeBuilder
 			set.Descriptions.Add( $"  {count} shape(s) bound to {tokenName}" );
 	}
 
+	/// <summary>
+	/// The changes for a component `push`: each pushed setter is written to the component's main shape in every theme
+	/// (with that theme's token for colors) and to every copy that hasn't overridden that property.
+	/// </summary>
+	public static ChangeSet ForComponents( PenpotFile file, IReadOnlyList<ComponentReport> pushes )
+	{
+		ChangeSet set = new();
+		foreach( IGrouping<ComponentLink, ComponentReport> byLink in pushes.GroupBy( p => p.Link ) )
+		{
+			ComponentLink link = byLink.Key;
+			foreach( string theme in ComponentSync.Themes( file, link ) )
+			{
+				PenpotComponent? component = ComponentSync.Component( file, link, theme );
+				JsonObject? main = component is null ? null : file.MainShape( component );
+				if( component is null || main is null )
+					continue;
+				foreach( ComponentReport push in byLink )
+				{
+					if( ComponentOps( file, main, push.Property, push.Code!, theme, set ) is not { } op )
+						continue;
+					List<(Guid Page, string Id)> targets = [ (component.MainInstancePage, component.MainInstanceId.ToString()) ];
+					targets.AddRange( Copies( file, component.MainInstanceId, op.Group ) );
+					foreach( (Guid page, string id) in targets )
+						set.Changes.Add( new JsonObject
+						{
+							[ "type" ] = "mod-obj", [ "id" ] = id, [ "pageId" ] = page.ToString(),
+							[ "operations" ] = new JsonArray( [ .. op.Ops.Select( o => o?.DeepClone() ) ] ),
+						} );
+					set.Descriptions.Add( $"{link.Label} [{theme}] {push.Property}: {push.Penpot ?? "—"} → {push.Code}" +
+					                      ( targets.Count > 1 ? $" (+{targets.Count - 1} copies)" : "" ) );
+				}
+			}
+		}
+		return set;
+	}
+
+	/// <summary>Operations that set one style property on a component shape, and the override group Penpot tracks it in.</summary>
+	private static (JsonArray Ops, string Group)? ComponentOps( PenpotFile file, JsonObject shape, string property, string value, string theme, ChangeSet set )
+	{
+		switch( property )
+		{
+			case StyleValues.Background or StyleValues.BorderBrush:
+				bool fill = property == StyleValues.Background;
+				string tokenAttr = fill ? "fill" : "stroke-color", listKey = fill ? "fills" : "strokes";
+				JsonObject applied = ( shape[ "applied-tokens" ] as JsonObject )?.DeepClone() as JsonObject ?? [];
+				JsonNode? paints;
+				if( value == "Transparent" )
+				{
+					applied.Remove( tokenAttr );
+					paints = fill ? new JsonArray() : null;
+				}
+				else
+				{
+					PenpotToken? token = file.Tokens.FirstOrDefault( t => t.Type == "color" && string.Equals( t.Name, $"{theme}.{value}", StringComparison.OrdinalIgnoreCase ) );
+					if( token is null || Hex.Normalize( token.Value ) is not { } hex )
+					{
+						set.Descriptions.Add( $"  skipped {property} on a {theme} shape: no color token {theme}.{value}" );
+						return null;
+					}
+					applied[ tokenAttr ] = token.Name;
+					paints = Recolor( shape[ listKey ], fill ? "fill-color" : "stroke-color", fill ? "fill-opacity" : "stroke-opacity", hex )
+					         ?? shape[ listKey ]?.DeepClone();
+					if( fill && paints is JsonArray { Count: 0 } )
+						paints = new JsonArray( new JsonObject { [ "fill-color" ] = $"#{Hex.ToArgb( hex )!.Value & 0xFFFFFF:x6}", [ "fill-opacity" ] = 1 } );
+					if( !fill && paints is not JsonArray { Count: > 0 } )
+					{
+						set.Descriptions.Add( $"  skipped {property} on a {theme} shape: it has no border to recolor" );
+						return null;
+					}
+				}
+				JsonArray ops = [ Set( "applied-tokens", applied ) ];
+				if( paints is not null )
+					ops.Add( Set( listKey, paints ) );
+				return (ops, fill ? "fill-group" : "stroke-group");
+			case StyleValues.Padding:
+				string[] ltrb = value.Split( ',' );
+				JsonObject padding = new()
+				{
+					[ "p1" ] = StyleValues.Json( ltrb[ 1 ] ), [ "p2" ] = StyleValues.Json( ltrb[ 2 ] ),
+					[ "p3" ] = StyleValues.Json( ltrb[ 3 ] ), [ "p4" ] = StyleValues.Json( ltrb[ 0 ] ),
+				};
+				return ([ Set( "layout-padding", padding ), Set( "layout-padding-type", "multiple" ) ], "layout-padding");
+			case StyleValues.CornerRadius:
+				return ([ .. RadiusAttrs.Select( r => (JsonNode)Set( r, StyleValues.Json( value ) ) ) ], "radius-group");
+			default:
+				return null;
+		}
+	}
+
+	/// <summary>Copies of a main shape (on any page) that haven't overridden <paramref name="group"/>.</summary>
+	private static IEnumerable<(Guid Page, string Id)> Copies( PenpotFile file, Guid mainId, string group )
+	{
+		string main = mainId.ToString();
+		foreach( PenpotPage page in file.Pages )
+			foreach( (string id, JsonNode? node) in page.Objects )
+				if( node is JsonObject shape && shape[ "shape-ref" ]?.ToString() == main
+				    && !( shape[ "touched" ] is JsonArray touched && touched.Any( t => t?.ToString() == group ) ) )
+					yield return (page.Id, id);
+	}
+
 	private static JsonObject Set( string attr, JsonNode? val ) => new() { [ "type" ] = "set", [ "attr" ] = attr, [ "val" ] = val };
+
+	private static JsonObject Set( string attr, string val ) => Set( attr, JsonValue.Create( val ) );
 
 	/// <summary>The paint list with every solid color replaced; null when nothing changes.</summary>
 	private static JsonArray? Recolor( JsonNode? paints, string colorKey, string opacityKey, string hex )

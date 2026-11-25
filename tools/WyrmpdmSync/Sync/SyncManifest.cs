@@ -16,6 +16,7 @@ internal sealed class SyncManifest
 	public PenpotTarget Penpot { get; set; } = new();
 	public List<ColorLink> Colors { get; set; } = [];
 	public List<ShapeLink> Shapes { get; set; } = [];
+	public List<ComponentLink> Components { get; set; } = [];
 
 	/// <summary>Every token link, colors first.</summary>
 	[JsonIgnore] public IEnumerable<TokenLink> TokenLinks => Colors.Cast<TokenLink>().Concat( Shapes );
@@ -44,6 +45,7 @@ internal sealed class SyncManifest
 		// stable order keeps the manifest's git diffs readable
 		Colors = [ .. Colors.OrderBy( c => c.Palette, StringComparer.Ordinal ).ThenBy( c => c.Role, StringComparer.Ordinal ) ];
 		Shapes = [ .. Shapes.OrderBy( c => c.Form, StringComparer.Ordinal ).ThenBy( c => c.Property, StringComparer.Ordinal ) ];
+		Components = [ .. Components.OrderBy( c => c.Component, StringComparer.Ordinal ).ThenBy( c => c.Style, StringComparer.Ordinal ) ];
 		File.WriteAllText( path, JsonSerializer.Serialize( this, Json ) + "\n" );
 	}
 }

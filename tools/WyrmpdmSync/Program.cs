@@ -25,11 +25,13 @@ internal static class Cli
 		commands:
 		  whoami                 check the access token: show the Penpot account it signs in as
 		  init [--file <id>]     create or refresh design/penpot-sync.json: link every preset color and
-		                         shape-style value in ThemePresets.cs to its Penpot token
+		                         shape-style value in ThemePresets.cs to its Penpot token, and each
+		                         component to its XAML style
 		  fetch                  download the Penpot file to design/.cache/penpot-file.json (for inspection)
 		  status [--all]         show what differs between Penpot and the code, and which side changed
-		  pull                   take changes made in Penpot into the code (ThemePresets.cs)
-		  push                   take changes made in the code to Penpot (tokens, library colors, bound shapes)
+		  pull                   take changes made in Penpot into the code (ThemePresets.cs, XAML styles)
+		  push                   take changes made in the code to Penpot (tokens, library colors, bound
+		                         shapes, components and their copies)
 
 		options:
 		  --dry-run              pull/push: show what would change, change nothing
@@ -83,15 +85,20 @@ internal static class Cli
 		PenpotFile file = await LoadFileAsync( paths, manifest, cached: options.Cached );
 		ThemePresetsSource code = ThemePresetsSource.Load( paths );
 		manifest.Penpot.FileName = file.Name;
-		int added = TokenSync.Link( manifest, file, code );
+		XamlFiles xaml = new( paths );
+		int added = TokenSync.Link( manifest, file, code ) + ComponentSync.Link( manifest, file, xaml.Get );
 		manifest.Save( paths.Manifest );
 
 		List<TokenLink> links = [ .. manifest.TokenLinks ];
 		int linked = links.Count( c => c.TokenId is not null );
-		Console.WriteLine( $"{paths.Relative( paths.Manifest )}: file \"{file.Name}\", {manifest.Colors.Count} colors and " +
-		                   $"{manifest.Shapes.Count} shape values ({added} new), {linked} linked to a Penpot token." );
+		Console.WriteLine( $"{paths.Relative( paths.Manifest )}: file \"{file.Name}\", {added} new link(s). {manifest.Colors.Count} colors and " +
+		                   $"{manifest.Shapes.Count} shape values, {linked} linked to a Penpot token." );
 		if( linked < links.Count )
 			Console.WriteLine( $"{links.Count - linked} have no token in Penpot yet; `push` creates them." );
+		Console.WriteLine( $"Components: {manifest.Components.Count( c => !c.IsReference )} linked to a style in this repository " +
+		                   $"({manifest.Components.Sum( c => c.Properties.Count )} setters), {manifest.Components.Count( c => c.IsReference )} to Uno Material styles (reference only)." );
+		foreach( ComponentLink missing in manifest.Components.Where( c => ComponentSync.Component( file, c, ComponentSync.SourceTheme ) is null ) )
+			Console.WriteLine( $"  ? {missing.Label}: no such component in Penpot" );
 		return 0;
 	}
 
@@ -109,11 +116,13 @@ internal static class Cli
 	{
 		(SyncManifest manifest, PenpotFile file, ThemePresetsSource code) = await LoadAllAsync( paths, options.Cached );
 		List<TokenReport> reports = TokenSync.Compare( manifest, file, code );
+		List<ComponentReport> components = ComponentSync.Compare( manifest, file, new XamlFiles( paths ).Get );
 
 		Console.WriteLine( $"Penpot file \"{file.Name}\", revision {file.Revn}." );
 		Print( "Colors", reports.Where( r => r.Link is ColorLink ).ToList(), options.All );
 		Print( "Shape values", reports.Where( r => r.Link is ShapeLink ).ToList(), options.All );
-		return reports.Any( r => r.State != SyncState.InSync ) ? 2 : 0;
+		Print( components, options.All );
+		return reports.Any( r => r.State != SyncState.InSync ) || components.Any( r => r.State != SyncState.InSync ) ? 2 : 0;
 	}
 
 	private static async Task<int> PullAsync( RepoPaths paths, Options options )
@@ -122,24 +131,40 @@ internal static class Cli
 		List<TokenReport> reports = TokenSync.Compare( manifest, file, code );
 		List<TokenReport> pulled = TokenSync.ToPull( reports, options.Prefer );
 		ReportSkipped( reports, pulled, options.Prefer, "pull" );
-		if( pulled.Count == 0 )
+		XamlFiles xaml = new( paths );
+		List<ComponentReport> componentReports = ComponentSync.Compare( manifest, file, xaml.Get );
+		List<ComponentReport> pulledComponents = ComponentSync.ToPull( componentReports, options.Prefer );
+		ReportSkipped( componentReports, pulledComponents, options.Prefer, "pull" );
+		if( pulled.Count == 0 && pulledComponents.Count == 0 )
 		{
 			Console.WriteLine( "Nothing to pull: the code has every change made in Penpot." );
 			return 0;
 		}
 		foreach( TokenReport r in pulled )
 			Console.WriteLine( $"  {r.Link.CodeName,-34} {r.Code ?? "—",-10} → {r.Penpot}" );
+		foreach( ComponentReport r in pulledComponents )
+			Console.WriteLine( $"  {r.Link.Style + "." + r.Property,-34} {r.Code ?? "—",-10} → {r.Penpot}" );
 		if( options.DryRun )
 		{
-			Console.WriteLine( $"Dry run: {pulled.Count} value(s) would change in {ThemePresetsSource.RelativePath}." );
+			Console.WriteLine( $"Dry run: {pulled.Count + pulledComponents.Count} value(s) would change in the code." );
 			return 0;
 		}
-		TokenSync.ApplyToCode( code, pulled );
-		code.Save();
-		foreach( TokenReport r in pulled )
-			r.Link.Synced = r.Penpot;
+		if( pulled.Count > 0 )
+		{
+			TokenSync.ApplyToCode( code, pulled );
+			code.Save();
+			foreach( TokenReport r in pulled )
+				r.Link.Synced = r.Penpot;
+		}
+		if( pulledComponents.Count > 0 )
+		{
+			ComponentSync.ApplyToCode( pulledComponents, xaml.Get );
+			xaml.SaveAll();
+			foreach( ComponentReport r in pulledComponents )
+				r.Link.Properties[ r.Property ] = r.Penpot;
+		}
 		manifest.Save( paths.Manifest );
-		Console.WriteLine( $"Pulled {pulled.Count} value(s) into {ThemePresetsSource.RelativePath}. Rebuild the app to see them." );
+		Console.WriteLine( $"Pulled {pulled.Count + pulledComponents.Count} value(s) into the code. Rebuild the app to see them." );
 		return 0;
 	}
 
@@ -149,7 +174,15 @@ internal static class Cli
 		List<TokenReport> reports = TokenSync.Compare( manifest, file, code );
 		List<TokenReport> pushed = TokenSync.ToPush( reports, options.Prefer );
 		ReportSkipped( reports, pushed, options.Prefer, "push" );
+		List<ComponentReport> componentReports = ComponentSync.Compare( manifest, file, new XamlFiles( paths ).Get );
+		List<ComponentReport> pushedComponents = ComponentSync.ToPush( componentReports, options.Prefer );
+		ReportSkipped( componentReports, pushedComponents, options.Prefer, "push" );
+		foreach( ComponentReport r in componentReports.Where( r => r.State == SyncState.ChangedInCode && StyleValues.PullOnly.Contains( r.Property ) ) )
+			Console.WriteLine( $"  ? {r.Link.Style}.{r.Property} changed in code ({r.Penpot} → {r.Code}); resize the component in Penpot instead, then pull." );
 		ChangeSet changes = ChangeBuilder.ForTokens( file, pushed );
+		ChangeSet componentChanges = ChangeBuilder.ForComponents( file, pushedComponents );
+		changes.Changes.AddRange( componentChanges.Changes );
+		changes.Descriptions.AddRange( componentChanges.Descriptions );
 		if( changes.IsEmpty )
 		{
 			Console.WriteLine( "Nothing to push: Penpot has every change made in the code." );
@@ -170,8 +203,10 @@ internal static class Cli
 			if( changes.Ids.TryGetValue( r.Link, out (Guid SetId, Guid TokenId) ids ) )
 				(r.Link.SetId, r.Link.TokenId) = ids;
 		}
+		foreach( ComponentReport r in pushedComponents )
+			r.Link.Properties[ r.Property ] = r.Code;
 		manifest.Save( paths.Manifest );
-		Console.WriteLine( $"Pushed {pushed.Count} value(s) to Penpot ({changes.Changes.Count} change(s))." );
+		Console.WriteLine( $"Pushed {pushed.Count + pushedComponents.Count} value(s) to Penpot ({changes.Changes.Count} change(s))." );
 		return 0;
 	}
 
@@ -184,6 +219,25 @@ internal static class Cli
 			Console.WriteLine( $"  ! {r.Link.CodeName,-32} penpot {r.Penpot,-10} code {r.Code,-10} last synced {r.Link.Synced ?? "never"}" );
 		foreach( TokenReport r in reports.Where( r => r.State == SyncState.MissingInCode ) )
 			Console.WriteLine( $"  ? {r.Link.CodeName}: no longer in {ThemePresetsSource.RelativePath}; remove its token in Penpot or restore it in code." );
+	}
+
+	private static void ReportSkipped( List<ComponentReport> reports, List<ComponentReport> taken, Prefer prefer, string verb )
+	{
+		if( prefer != Prefer.None )
+			return;
+		List<ComponentReport> conflicts = [ .. reports.Where( r => r.State is SyncState.Conflict or SyncState.Unlinked && !taken.Contains( r ) ) ];
+		if( conflicts.Count > 0 )
+			Console.WriteLine( $"Skipping {conflicts.Count} style value(s) that differ with no clear newer side; rerun {verb} with --prefer penpot or --prefer code:" );
+		foreach( ComponentReport r in conflicts )
+			Console.WriteLine( $"  ! {r.Link.Style + "." + r.Property,-40} penpot {r.Penpot,-14} code {r.Code,-14} last synced {r.Link.Properties[ r.Property ] ?? "never"}" );
+	}
+
+	private static void Print( List<ComponentReport> reports, bool all )
+	{
+		Console.WriteLine( $"Component styles: {reports.Count} setters — " + string.Join( ", ",
+			reports.GroupBy( c => c.State ).OrderBy( g => g.Key ).Select( g => $"{g.Count()} {Describe( g.Key )}" ) ) + "." );
+		foreach( ComponentReport r in reports.Where( r => all || r.State != SyncState.InSync ) )
+			Console.WriteLine( $"  {Mark( r.State )} {r.Link.Style + "." + r.Property,-40} penpot {r.Penpot ?? "—",-14} code {r.Code ?? "—",-14} {Describe( r.State )}" );
 	}
 
 	private static void Print( string title, List<TokenReport> reports, bool all )
@@ -273,5 +327,24 @@ internal static class Cli
 			}
 			return new Options( fileId, cached, all, dryRun, prefer );
 		}
+	}
+}
+
+/// <summary>XAML files loaded once per run (several links share HackControls.xaml), saved together.</summary>
+internal sealed class XamlFiles( RepoPaths paths )
+{
+	private readonly Dictionary<string, XamlStyles> _files = new( StringComparer.OrdinalIgnoreCase );
+
+	public XamlStyles Get( string relativePath )
+	{
+		if( !_files.TryGetValue( relativePath, out XamlStyles? styles ) )
+			_files[ relativePath ] = styles = XamlStyles.Load( Path.Combine( paths.Root, relativePath ) );
+		return styles;
+	}
+
+	public void SaveAll()
+	{
+		foreach( XamlStyles styles in _files.Values )
+			styles.Save();
 	}
 }

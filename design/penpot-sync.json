@@ -856,5 +856,162 @@
       "setId": "5b377834-c753-4225-bf4b-7c1f4e8ef9cc",
       "synced": "20"
     }
+  ],
+  "components": [
+    {
+      "component": "Banner",
+      "variant": {
+        "Kind": "Error"
+      },
+      "style": "HackBannerErrorStyle",
+      "file": "Src/HackPDM/Styles/HackControls.xaml",
+      "properties": {
+        "Background": "ErrorContainer",
+        "Padding": "16,8,16,8",
+        "CornerRadius": "12"
+      }
+    },
+    {
+      "component": "Banner",
+      "variant": {
+        "Kind": "Info"
+      },
+      "style": "HackBannerInfoStyle",
+      "file": "Src/HackPDM/Styles/HackControls.xaml",
+      "properties": {
+        "Background": "SecondaryContainer",
+        "Padding": "16,8,16,8",
+        "CornerRadius": "12"
+      }
+    },
+    {
+      "component": "Banner",
+      "variant": {
+        "Kind": "Warning"
+      },
+      "style": "HackBannerWarningStyle",
+      "file": "Src/HackPDM/Styles/HackControls.xaml",
+      "properties": {
+        "Background": "TertiaryContainer",
+        "Padding": "16,8,16,8",
+        "CornerRadius": "12"
+      }
+    },
+    {
+      "component": "Button",
+      "variant": {
+        "Type": "Filled"
+      },
+      "style": "FilledButtonStyle",
+      "properties": {}
+    },
+    {
+      "component": "Button",
+      "variant": {
+        "Type": "Tonal"
+      },
+      "style": "FilledTonalButtonStyle",
+      "properties": {}
+    },
+    {
+      "component": "Button",
+      "variant": {
+        "Type": "Outlined"
+      },
+      "style": "OutlinedButtonStyle",
+      "properties": {}
+    },
+    {
+      "component": "Button",
+      "variant": {
+        "Type": "Text"
+      },
+      "style": "TextButtonStyle",
+      "properties": {}
+    },
+    {
+      "component": "Chip",
+      "variant": {
+        "Type": "Assist"
+      },
+      "style": "AssistChipButtonStyle",
+      "file": "Src/HackPDM/Styles/HackControls.xaml",
+      "properties": {
+        "BorderBrush": "OutlineVariant",
+        "Padding": "8,6,16,6",
+        "CornerRadius": "8",
+        "Height": null
+      }
+    },
+    {
+      "component": "Chip",
+      "variant": {
+        "Type": "Filter"
+      },
+      "style": "FilterChipStyle",
+      "properties": {}
+    },
+    {
+      "component": "Icon button",
+      "variant": {
+        "State": "Standard"
+      },
+      "style": "PaneIconButtonStyle",
+      "file": "Src/HackPDM/Styles/HackControls.xaml",
+      "properties": {
+        "Padding": "0,0,0,0",
+        "CornerRadius": "16",
+        "Width": "32",
+        "Height": "32"
+      }
+    },
+    {
+      "component": "Icon button",
+      "variant": {
+        "State": "Selected"
+      },
+      "style": "PaneIconToggleButtonStyle",
+      "file": "Src/HackPDM/Styles/HackControls.xaml",
+      "properties": {
+        "Padding": "0,0,0,0",
+        "CornerRadius": "16",
+        "Width": "32",
+        "Height": "32"
+      }
+    },
+    {
+      "component": "Pane card",
+      "variant": {
+        "Kind": "Outlined"
+      },
+      "style": "HackPaneOutlinedStyle",
+      "file": "Src/HackPDM/Styles/HackControls.xaml",
+      "properties": {
+        "Background": "Surface",
+        "BorderBrush": "OutlineVariant"
+      }
+    },
+    {
+      "component": "Pane card",
+      "variant": {
+        "Kind": "Tinted"
+      },
+      "style": "HackPaneTintedStyle",
+      "file": "Src/HackPDM/Styles/HackControls.xaml",
+      "properties": {
+        "Background": "SurfaceContainerLow"
+      }
+    },
+    {
+      "component": "Toolbar",
+      "variant": {},
+      "style": "HackToolbarStyle",
+      "file": "Src/HackPDM/Styles/HackControls.xaml",
+      "properties": {
+        "Background": "SurfaceContainer",
+        "Padding": "8,4,12,4",
+        "CornerRadius": "16"
+      }
+    }
   ]
 }

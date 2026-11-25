@@ -18,7 +18,7 @@ internal static partial class TransitWriter
 	/// <summary>Keys whose string values are keywords in Penpot's data.</summary>
 	public static readonly HashSet<string> KeywordValueKeys =
 	[
-		"type", "attr", "stroke-style", "stroke-alignment", "stroke-cap-start", "stroke-cap-end",
+		"type", "attr", "layout-padding-type", "stroke-style", "stroke-alignment", "stroke-cap-start", "stroke-cap-end",
 		"layout", "layout-flex-dir", "layout-align-items", "layout-justify-content", "layout-item-h-sizing", "layout-item-v-sizing",
 	];
 
@@ -40,11 +40,13 @@ internal static partial class TransitWriter
 	private static JsonArray WriteMap( JsonObject obj )
 	{
 		JsonArray map = [ "^ " ];
+		// in a { type: set, attr: X, val: … } operation the value belongs to attribute X
+		string? attr = obj[ "attr" ] is JsonValue a && a.TryGetValue( out string? name ) ? Kebab( name ) : null;
 		foreach( (string key, JsonNode? value ) in obj )
 		{
 			string kebab = Kebab( key );
 			map.Add( $"~:{kebab}" );
-			map.Add( Write( value, kebab ) );
+			map.Add( Write( value, kebab == "val" && attr is not null ? attr : kebab ) );
 		}
 		return map;
 	}

@@ -11,6 +11,9 @@ internal sealed record PenpotTokenSet( Guid Id, string Name );
 /// <summary>A color in the file's library (the Assets panel).</summary>
 internal sealed record PenpotLibraryColor( Guid Id, string Name, string Path, string Color, double Opacity );
 
+/// <summary>A component (one variant of a variant set), with where its main shape lives.</summary>
+internal sealed record PenpotComponent( Guid Id, string Name, Guid MainInstanceId, Guid MainInstancePage, IReadOnlyDictionary<string, string> Variant );
+
 /// <summary>A page of the file.</summary>
 internal sealed record PenpotPage( Guid Id, string Name, JsonObject Objects );
 
@@ -31,6 +34,7 @@ internal sealed class PenpotFile
 	public IReadOnlyList<PenpotTokenSet> TokenSets { get; }
 	public IReadOnlyList<Guid> ActiveSetIds { get; }
 	public IReadOnlyList<PenpotLibraryColor> LibraryColors { get; }
+	public IReadOnlyList<PenpotComponent> Components { get; }
 	public JsonObject Raw { get; }
 
 	private PenpotFile( JsonObject raw )
@@ -48,6 +52,9 @@ internal sealed class PenpotFile
 		TokenSets = sets;
 		ActiveSetIds = ( data[ "tokens-status" ] ?? data[ "tokensStatus" ] )?[ "active-set-ids" ] is JsonArray active
 			? [ .. active.Select( n => Guid.TryParse( Str( n ), out Guid g ) ? g : Guid.Empty ).Where( g => g != Guid.Empty ) ]
+			: [];
+		Components = data[ "components" ] is JsonObject comps
+			? [ .. comps.Select( kv => kv.Value ).OfType<JsonObject>().Select( ReadComponent ).OfType<PenpotComponent>() ]
 			: [];
 		LibraryColors = data[ "colors" ] is JsonObject colors
 			? [ .. colors.Select( kv => kv.Value ).OfType<JsonObject>().Select( ReadLibraryColor ).OfType<PenpotLibraryColor>() ]
@@ -94,6 +101,23 @@ internal sealed class PenpotFile
 		if( lib is not null )
 			CollectSets( lib, tokens, sets );
 		return tokens;
+	}
+
+	/// <summary>The main shape of a component, or null when its page or shape is gone.</summary>
+	public JsonObject? MainShape( PenpotComponent component )
+		=> Pages.FirstOrDefault( p => p.Id == component.MainInstancePage )?.Objects[ component.MainInstanceId.ToString() ] as JsonObject;
+
+	private static PenpotComponent? ReadComponent( JsonObject c )
+	{
+		if( !Guid.TryParse( Str( c[ "id" ] ), out Guid id ) || !Guid.TryParse( Str( c[ "main-instance-id" ] ), out Guid main )
+		    || !Guid.TryParse( Str( c[ "main-instance-page" ] ), out Guid page ) || c[ "deleted" ] is JsonValue d && d.ToString() == "true" )
+			return null;
+		Dictionary<string, string> variant = new( StringComparer.Ordinal );
+		if( c[ "variant-properties" ] is JsonArray props )
+			foreach( JsonNode? prop in props )
+				if( Str( prop?[ "name" ] ) is { } name )
+					variant[ name ] = Str( prop?[ "value" ] ) ?? "";
+		return new PenpotComponent( id, Str( c[ "name" ] ) ?? "", main, page, variant );
 	}
 
 	private static PenpotLibraryColor? ReadLibraryColor( JsonObject c )

@@ -20,8 +20,17 @@ The app's design lives in the Penpot file **"HackPDM -- Uno Materials Design"** 
   `pull` replaces only the literal it changes (comments and layout stay).
 - The tool talks to Penpot in its native Transit encoding (`Penpot/Transit.cs` reads, `Penpot/TransitWriter.cs`
   writes): the JSON encoding leaves out token ids and can't express the keyword values shape edits need.
-- Coming in later phases: components ↔ `Styles/HackControls.xaml` styles, and page frames ↔ views through
-  `pp:Id` markers on XAML elements.
+- **Components:** each Penpot component variant ↔ the XAML style it stands for, e.g. "Pane card" (Kind=Tinted) ↔
+  `HackPaneTintedStyle` in `Src/HackPDM/Styles/HackControls.xaml`. The synced setters are the ones the style has
+  among Background, BorderBrush (compared by color role), Padding, CornerRadius, Width and Height. The Light variant
+  is compared with the code; `push` writes the Light and Dark variants (each with its own theme's color token) and
+  every copy of them that hasn't overridden that property in Penpot. Components drawn from Uno Material styles
+  (Button → `FilledButtonStyle`, Filter chip → `FilterChipStyle`…) are linked for reference only: those styles
+  live in the Uno Material package, not this repository. Edit `components` in the manifest to add pairs.
+- Width and Height are pull-only: resize a component in Penpot, then `pull`. Penpot's API stores layout but doesn't
+  re-run it, so after a `push` that changes padding, a hug-content component keeps its old stored size until the
+  design is next edited in Penpot (any change to the component re-lays it out).
+- Coming next: page frames ↔ views through `pp:Id` markers on XAML elements.
 
 ## Setup
 
@@ -37,11 +46,11 @@ Run from anywhere in the repository: `dotnet run --project tools/WyrmpdmSync -- 
 | Command | What it does |
 |---|---|
 | `whoami` | Checks the token: shows the Penpot account it signs in as. |
-| `init` | Creates or refreshes the manifest: links every preset color to the token of the same name. Safe to rerun. |
+| `init` | Creates or refreshes the manifest: links every preset color and shape value to its token, and the default components to their styles. Safe to rerun. |
 | `fetch` | Downloads the Penpot file to `design/.cache/penpot-file.json` (git-ignored), for inspection. |
 | `status [--all]` | Shows what differs and which side changed: `<` changed in Penpot (pull), `>` changed in code or missing in Penpot (push), `!` changed on both sides. Exit code 2 when anything differs. |
-| `pull` | Writes values changed in Penpot into `ThemePresets.cs`. Rebuild the app afterwards. |
-| `push` | Sends values changed in code to Penpot: the token (creating its set and switching it on if needed), the matching library color, and every shape the token is applied to (Penpot's API doesn't repaint those itself). All or nothing: Penpot applies the whole batch or none of it. |
+| `pull` | Writes values changed in Penpot into `ThemePresets.cs` and the linked XAML styles. Rebuild the app afterwards. |
+| `push` | Sends values changed in code to Penpot: the token (creating its set and switching it on if needed), the matching library color, and every shape the token is applied to (Penpot's API doesn't repaint those itself); and changed style setters to their components and copies. All or nothing: Penpot applies the whole batch or none of it. |
 
 Options: `--dry-run` (pull/push: show, change nothing), `--prefer penpot|code` (pull/push: settle values changed
 on both sides, or that differ with no last-synced value), `--cached` (init/status: use the last fetched copy).
