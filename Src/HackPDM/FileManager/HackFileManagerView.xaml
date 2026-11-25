@@ -161,13 +161,12 @@
 					<FontIcon
 						Grid.Column="0"
 						VerticalAlignment="Center"
-						FontSize="10"
+						FontSize="12"
 						Glyph="{x:Bind ChevronGlyph, Mode=OneWay}" />
 					<TextBlock
 						Grid.Column="1"
 						VerticalAlignment="Center"
-						FontSize="12"
-						FontWeight="SemiBold"
+						Style="{StaticResource TitleSmall}"
 						Text="{x:Bind DisplayKey}"
 						TextTrimming="CharacterEllipsis" />
 					<Border
@@ -177,7 +176,7 @@
 						Background="{ThemeResource SurfaceBrush}"
 						CornerRadius="8">
 						<TextBlock
-							FontSize="10"
+							Style="{StaticResource LabelSmall}"
 							Foreground="{ThemeResource OnSurfaceVariantBrush}"
 							Text="{x:Bind CountText}" />
 					</Border>
@@ -271,9 +270,9 @@
 			pane corners and borders from the shape style (HackPanel* resources). Shared button, chip, tab, table and
 			tree styles are in Styles/HackControls.xaml.
 		-->
-		<!--  text keeps the theme's color (a fixed white was invisible on light presets)  -->
+		<!--  plain text on this page: Material body size (Penpot "Body medium"); keeps the theme's color  -->
 		<Style TargetType="TextBlock">
-			<Setter Property="FontSize" Value="11" />
+			<Setter Property="FontSize" Value="14" />
 			<Setter Property="FontWeight" Value="Normal" />
 		</Style>
 	</Page.Resources>
@@ -349,32 +348,6 @@
 									FontSize="14"
 									FontWeight="{x:Bind NameFontWeight, Mode=OneWay}"
 									Text="{x:Bind Name}" />
-								<Border
-									Padding="4,0"
-									VerticalAlignment="Center"
-									Background="#222EA043"
-									BorderBrush="#552EA043"
-									BorderThickness="1"
-									CornerRadius="3"
-									Visibility="{x:Bind LocalBadgeVisibility, Mode=OneWay}">
-									<TextBlock
-										FontSize="9"
-										Foreground="#4CC36B"
-										Text="Local" />
-								</Border>
-								<Border
-									Padding="4,0"
-									VerticalAlignment="Center"
-									Background="#221F88E5"
-									BorderBrush="#551F88E5"
-									BorderThickness="1"
-									CornerRadius="3"
-									Visibility="{x:Bind RemoteBadgeVisibility, Mode=OneWay}">
-									<TextBlock
-										FontSize="9"
-										Foreground="#58B4FF"
-										Text="Server" />
-								</Border>
 							</StackPanel>
 						</DataTemplate>
 					</BreadcrumbBar.ItemTemplate>
@@ -487,11 +460,10 @@
 						VerticalAlignment="Center"
 						Spacing="1">
 						<TextBlock
-							FontSize="12"
-							FontWeight="SemiBold"
+							Style="{StaticResource TitleSmall}"
 							Text="Unfinished download ready to resume" />
 						<TextBlock
-							FontSize="11"
+							Style="{StaticResource BodySmall}"
 							Foreground="{ThemeResource OnSurfaceVariantBrush}"
 							Text="{x:Bind ViewModel.ResumableDownloadSummary, Mode=OneWay}"
 							TextTrimming="CharacterEllipsis" />
@@ -573,19 +545,19 @@
 								Click="ExpandAllFolders_Click"
 								Style="{StaticResource PaneIconButtonStyle}"
 								ToolTipService.ToolTip="Expand all folders">
-								<FontIcon FontSize="12" Glyph="&#xE70D;" />
+								<FontIcon FontSize="14" Glyph="&#xE70D;" />
 							</Button>
 							<Button
 								Click="CollapseAllFolders_Click"
 								Style="{StaticResource PaneIconButtonStyle}"
 								ToolTipService.ToolTip="Collapse all folders">
-								<FontIcon FontSize="12" Glyph="&#xE70E;" />
+								<FontIcon FontSize="14" Glyph="&#xE70E;" />
 							</Button>
 							<Button
 								Click="Refresh_Click"
 								Style="{StaticResource PaneIconButtonStyle}"
 								ToolTipService.ToolTip="Refresh folder tree (F5)">
-								<FontIcon FontSize="12" Glyph="&#xE72C;" />
+								<FontIcon FontSize="14" Glyph="&#xE72C;" />
 							</Button>
 							<Button Style="{StaticResource PaneIconButtonStyle}" ToolTipService.ToolTip="Dock options">
 								<FontIcon FontSize="13" Glyph="&#xE712;" />
@@ -628,7 +600,7 @@
 							Style="{StaticResource PaneIconButtonStyle}"
 							ToolTipService.ToolTip="Clear folder filter"
 							Visibility="Collapsed">
-							<FontIcon FontSize="12" Glyph="&#xE711;" />
+							<FontIcon FontSize="14" Glyph="&#xE711;" />
 						</Button>
 					</Grid>
 
@@ -721,35 +693,10 @@
 											<TextBlock
 												Margin="0,0,8,0"
 												VerticalAlignment="Center"
-												FontSize="12"
-												FontWeight="Medium"
+												Style="{StaticResource LabelMedium}"
 												Foreground="{ThemeResource OnSurfaceVariantBrush}"
 												Text="{x:Bind SubfolderCountText, Mode=OneWay}"
 												Visibility="{x:Bind SubfolderCountVisibility, Mode=OneWay}" />
-											<Border
-												Margin="0,0,4,0"
-												Padding="4,0"
-												VerticalAlignment="Center"
-												Background="#222EA043"
-												CornerRadius="4"
-												Visibility="{x:Bind LocalBadgeVisibility, Mode=OneWay}">
-												<TextBlock
-													FontSize="9"
-													Foreground="#4CC36B"
-													Text="Local" />
-											</Border>
-											<Border
-												Margin="0,0,4,0"
-												Padding="4,0"
-												VerticalAlignment="Center"
-												Background="#221F88E5"
-												CornerRadius="4"
-												Visibility="{x:Bind RemoteBadgeVisibility, Mode=OneWay}">
-												<TextBlock
-													FontSize="9"
-													Foreground="#58B4FF"
-													Text="Server" />
-											</Border>
 										</StackPanel>
 									</TreeViewItem>
 								</DataTemplate>
@@ -771,7 +718,7 @@
 								Glyph="&#xE8B7;" />
 							<TextBlock
 								HorizontalAlignment="Center"
-								FontSize="11"
+								Style="{StaticResource BodyMedium}"
 								Foreground="{ThemeResource OnSurfaceVariantBrush}"
 								Text="No matching folders" />
 							<Button
@@ -804,8 +751,7 @@
 										IsActive="{x:Bind ViewModel.IsTreeLoading, Mode=OneWay}" />
 									<TextBlock
 										HorizontalAlignment="Center"
-										FontSize="12"
-										FontWeight="SemiBold"
+										Style="{StaticResource TitleSmall}"
 										Text="Loading Folders…" />
 									<TextBlock
 										HorizontalAlignment="Center"
@@ -1014,11 +960,10 @@
 												VerticalAlignment="Center"
 												Orientation="Horizontal"
 												Spacing="6">
-												<FontIcon FontSize="11" Glyph="&#xE8FD;" />
+												<FontIcon FontSize="12" Glyph="&#xE8FD;" />
 												<TextBlock
 													VerticalAlignment="Center"
-													FontSize="11"
-													FontWeight="SemiBold"
+													Style="{StaticResource LabelMedium}"
 													Text="{x:Bind ViewModel.GroupedByLabelText, Mode=OneWay}" />
 											</StackPanel>
 											<StackPanel
@@ -1030,7 +975,7 @@
 													Style="{StaticResource GroupedBarTextButtonStyle}"
 													ToolTipService.ToolTip="Choose field to group by">
 													<StackPanel Orientation="Horizontal" Spacing="6">
-														<TextBlock VerticalAlignment="Center" FontSize="12" FontWeight="Medium" Text="Group by" />
+														<TextBlock VerticalAlignment="Center" Style="{StaticResource LabelLarge}" Text="Group by" />
 														<FontIcon FontSize="9" Glyph="&#xE70D;" />
 													</StackPanel>
 													<Button.Flyout>
@@ -1041,13 +986,13 @@
 													Click="ExpandAllGroups_Click"
 													Style="{StaticResource PaneIconButtonStyle}"
 													ToolTipService.ToolTip="Expand all groups">
-													<FontIcon FontSize="10" Glyph="&#xE70D;" />
+													<FontIcon FontSize="12" Glyph="&#xE70D;" />
 												</Button>
 												<Button
 													Click="CollapseAllGroups_Click"
 													Style="{StaticResource PaneIconButtonStyle}"
 													ToolTipService.ToolTip="Collapse all groups">
-													<FontIcon FontSize="10" Glyph="&#xE70E;" />
+													<FontIcon FontSize="12" Glyph="&#xE70E;" />
 												</Button>
 											</StackPanel>
 										</Grid>
@@ -1173,8 +1118,7 @@
 										<Grid ColumnDefinitions="*,Auto">
 											<TextBlock
 												VerticalAlignment="Center"
-												FontSize="12"
-												FontWeight="SemiBold"
+												Style="{StaticResource TitleSmall}"
 												Text="{x:Bind ViewModel.LocalChangesHeader, Mode=OneWay}" />
 											<Button
 												Grid.Column="1"
@@ -1216,8 +1160,7 @@
 										<Grid ColumnDefinitions="*,Auto">
 											<TextBlock
 												VerticalAlignment="Center"
-												FontSize="12"
-												FontWeight="SemiBold"
+												Style="{StaticResource TitleSmall}"
 												Text="{x:Bind ViewModel.RemoteChangesHeader, Mode=OneWay}" />
 											<Button
 												Grid.Column="1"
@@ -1379,7 +1322,7 @@
 											Click="HideDetailsPane_Click"
 											Style="{StaticResource PaneIconButtonStyle}"
 											ToolTipService.ToolTip="Hide Inspector">
-											<FontIcon FontSize="12" Glyph="&#xE711;" />
+											<FontIcon FontSize="14" Glyph="&#xE711;" />
 										</Button>
 									</StackPanel>
 								</TabView.TabStripFooter>
@@ -1684,7 +1627,7 @@
 									Click="HidePreviewPane_Click"
 									Style="{StaticResource PaneIconButtonStyle}"
 									ToolTipService.ToolTip="Hide Preview panel">
-									<FontIcon FontSize="12" Glyph="&#xE711;" />
+									<FontIcon FontSize="14" Glyph="&#xE711;" />
 								</Button>
 							</StackPanel>
 						</Grid>

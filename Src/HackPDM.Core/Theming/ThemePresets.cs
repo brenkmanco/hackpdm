@@ -101,8 +101,8 @@ public static class ThemePresets
 	[
 		new( FormName.Compact, nameof( FormName.Compact ), "Small corners, tight rows and boxes: the most on screen",
 			CompactDensity: true, ControlCornerRadius: 2, OverlayCornerRadius: 4, PanelCornerRadius: 6, PanelBorderThickness: 1, AccentPanels: false ),
-		new( FormName.Default, nameof( FormName.Default ), "The standard HackPDM look, as designed in Figma",
-			CompactDensity: true, ControlCornerRadius: 4, OverlayCornerRadius: 8, PanelCornerRadius: 16, PanelBorderThickness: 1, AccentPanels: false ),
+		new( FormName.Default, nameof( FormName.Default ), "The standard HackPDM look, as designed in Penpot",
+			CompactDensity: false, ControlCornerRadius: 4, OverlayCornerRadius: 8, PanelCornerRadius: 16, PanelBorderThickness: 1, AccentPanels: false ),
 		new( FormName.Modern, nameof( FormName.Modern ), "Roomy controls, rounder corners, thin borders",
 			CompactDensity: false, ControlCornerRadius: 8, OverlayCornerRadius: 12, PanelCornerRadius: 20, PanelBorderThickness: 1, AccentPanels: false ),
 		new( FormName.Fancy, nameof( FormName.Fancy ), "Very round corners, accent-colored panels, shaded graph boxes with shadows",

@@ -68,24 +68,34 @@
 			<SolidColorBrush x:Key="HackPanelStrokeBrush" Color="DimGray" />
 			<CornerRadius x:Key="HackPanelCornerRadius">10</CornerRadius>
 			<Thickness x:Key="HackPanelBorderThickness">3</Thickness>
-			<!--  compact typography and heights for all TableView grids across the app  -->
+			<!--  Roboto for every control and plain text (Material text styles already use it); the desktop build also
+			     sets Uno's default text font in HackApp()  -->
+			<FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Uno.Fonts.Roboto/Fonts/Roboto-Regular.ttf#Roboto</FontFamily>
+			<!--
+				Table typography and heights for every TableView grid, from the Penpot "File table row" component:
+				header 36px with 12px medium labels (Label medium), rows 36px with 14px text (Body medium).
+				The keys keep their old "Compact" names because views refer to them.
+			-->
 			<Style
 				x:Key="CompactTableViewColumnHeaderStyle"
 				BasedOn="{StaticResource DefaultTableViewColumnHeaderStyle}"
 				TargetType="tv:TableViewColumnHeader">
-				<Setter Property="FontSize" Value="11" />
-				<Setter Property="FontWeight" Value="SemiBold" />
-				<Setter Property="Padding" Value="6,0" />
+				<Setter Property="FontSize" Value="12" />
+				<Setter Property="FontWeight" Value="Medium" />
+				<Setter Property="Padding" Value="8,0" />
 			</Style>
 			<Style
 				x:Key="CompactTableViewStyle"
 				BasedOn="{StaticResource DefaultTableViewStyle}"
 				TargetType="tv:TableView">
-				<Setter Property="FontSize" Value="11" />
-				<Setter Property="HeaderRowMinHeight" Value="24" />
-				<Setter Property="HeaderRowHeight" Value="26" />
-				<Setter Property="RowMinHeight" Value="24" />
-				<Setter Property="RowHeight" Value="26" />
+				<Setter Property="FontSize" Value="14" />
+				<Setter Property="HeaderRowMinHeight" Value="32" />
+				<Setter Property="HeaderRowHeight" Value="36" />
+				<Setter Property="RowMinHeight" Value="32" />
+				<Setter Property="RowHeight" Value="36" />
+				<!--  Penpot tables have no grid lines: rows are separated by space, the header by its tint  -->
+				<Setter Property="GridLinesVisibility" Value="None" />
+				<Setter Property="HeaderGridLinesVisibility" Value="None" />
 				<Setter Property="ColumnHeaderStyle" Value="{StaticResource CompactTableViewColumnHeaderStyle}" />
 			</Style>
 			<Style BasedOn="{StaticResource CompactTableViewStyle}" TargetType="tv:TableView" />

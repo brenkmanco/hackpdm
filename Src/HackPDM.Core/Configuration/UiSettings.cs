@@ -248,8 +248,9 @@ public sealed class OdooEntryColumnID
 [Bindable( true )]
 public sealed class OdooEntryColumns
 {
-	public double RowHeight { get; set; } = 26;
-	public double FontSize { get; set; } = 11;
+	/// <summary>Entry list row height; the default is the Penpot table row (36px, 14px text).</summary>
+	public double RowHeight { get; set; } = 36;
+	public double FontSize { get; set; } = 14;
 	public bool GroupingEnabled { get; set; } = true;
 	public bool GroupCollapsed { get; set; }
 	public GroupByField GroupBy { get; set => field = value ?? DefaultGroupBy(); } = DefaultGroupBy();

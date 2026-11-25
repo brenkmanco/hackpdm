@@ -190,13 +190,13 @@
 								Click="ExpandAllFolders_Click"
 								Style="{StaticResource PaneIconButtonStyle}"
 								ToolTipService.ToolTip="Expand all folders">
-								<FontIcon FontSize="12" Glyph="&#xE70D;" />
+								<FontIcon FontSize="14" Glyph="&#xE70D;" />
 							</Button>
 							<Button
 								Click="CollapseAllFolders_Click"
 								Style="{StaticResource PaneIconButtonStyle}"
 								ToolTipService.ToolTip="Collapse all folders">
-								<FontIcon FontSize="12" Glyph="&#xE70E;" />
+								<FontIcon FontSize="14" Glyph="&#xE70E;" />
 							</Button>
 						</StackPanel>
 					</Grid>
@@ -825,7 +825,7 @@
 								Command="{x:Bind ViewModel.CloseDetailsCommand}"
 								Style="{StaticResource PaneIconButtonStyle}"
 								ToolTipService.ToolTip="Close (Esc)">
-								<FontIcon FontSize="12" Glyph="&#xE711;" />
+								<FontIcon FontSize="14" Glyph="&#xE711;" />
 							</Button>
 						</Grid>
 					</Border>

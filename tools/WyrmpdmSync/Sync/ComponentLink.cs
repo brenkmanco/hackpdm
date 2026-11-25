@@ -45,6 +45,8 @@ internal static class ComponentMap
 		Synced( "Icon button", "PaneIconToggleButtonStyle", ( "State", "Selected" ) ),
 		Synced( "Chip", "AssistChipButtonStyle", ( "Type", "Assist" ) ),
 		Synced( "Text field", "HackOutlinedComboBoxStyle", ( "Kind", "Select" ) ),
+		// every TableView in the app (App.xaml): row height and text size from the table row component
+		new() { Component = "File table row", Style = "CompactTableViewStyle", File = "Src/HackPDM/App.xaml", Variant = new() { [ "Kind" ] = "Row" } },
 		Reference( "Button", "FilledButtonStyle", ( "Type", "Filled" ) ),
 		Reference( "Button", "FilledTonalButtonStyle", ( "Type", "Tonal" ) ),
 		Reference( "Button", "OutlinedButtonStyle", ( "Type", "Outlined" ) ),

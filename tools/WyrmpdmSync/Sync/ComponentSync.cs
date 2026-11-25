@@ -39,7 +39,7 @@ internal static class ComponentSync
 				if( link.Properties.ContainsKey( property ) )
 					continue;
 				string? code = StyleValues.FromXaml( property, setters[ property ].Text );
-				string? penpot = shape is null ? null : StyleValues.FromShape( property, shape, SourceTheme );
+				string? penpot = shape is null ? null : StyleValues.FromShape( property, shape, SourceTheme, Objects( file, link ) );
 				link.Properties[ property ] = code is not null && code == penpot ? code : null;
 			}
 		}
@@ -56,7 +56,7 @@ internal static class ComponentSync
 			foreach( (string property, string? synced) in link.Properties )
 			{
 				string? code = StyleValues.FromXaml( property, styles.Value( link.Style, property ) );
-				string? penpot = shape is null ? null : StyleValues.FromShape( property, shape, SourceTheme );
+				string? penpot = shape is null ? null : StyleValues.FromShape( property, shape, SourceTheme, Objects( file, link ) );
 				reports.Add( new ComponentReport( link, property, penpot, code, ThreeWay.Compare( penpot, code, synced ) ) );
 			}
 		}
@@ -87,6 +87,10 @@ internal static class ComponentSync
 			styles.Apply( edits );
 		}
 	}
+
+	/// <summary>The layers of the page holding the link's main component (to read its children).</summary>
+	private static JsonObject? Objects( PenpotFile file, ComponentLink link )
+		=> Component( file, link, SourceTheme ) is { } c ? file.Pages.FirstOrDefault( p => p.Id == c.MainInstancePage )?.Objects : null;
 
 	/// <summary>The main shape of the link's component in <paramref name="theme"/>.</summary>
 	public static JsonObject? MainShape( PenpotFile file, ComponentLink link, string theme )

@@ -14,16 +14,21 @@ namespace WyrmpdmSync.Sync;
 internal static partial class StyleValues
 {
 	public const string Background = nameof( Background ), BorderBrush = nameof( BorderBrush ), Padding = nameof( Padding ),
-		CornerRadius = nameof( CornerRadius ), Width = nameof( Width ), Height = nameof( Height );
+		CornerRadius = nameof( CornerRadius ), Width = nameof( Width ), Height = nameof( Height ),
+		RowHeight = nameof( RowHeight ), FontSize = nameof( FontSize );
 
 	/// <summary>Every property synced between a Penpot component and a XAML style.</summary>
-	public static readonly IReadOnlyList<string> All = [ Background, BorderBrush, Padding, CornerRadius, Width, Height ];
+	public static readonly IReadOnlyList<string> All = [ Background, BorderBrush, Padding, CornerRadius, Width, Height, RowHeight, FontSize ];
 
 	/// <summary>
 	/// Properties `push` can't write: resizing a shape through Penpot's API means recomputing its geometry, so sizes are
 	/// changed in Penpot and pulled into code.
 	/// </summary>
-	public static readonly IReadOnlySet<string> PullOnly = new HashSet<string> { Width, Height };
+	/// <remarks>
+	/// RowHeight (a table style's row height ↔ a row component's height) and FontSize (↔ the size of its first text)
+	/// are pull-only for the same reason, and because a text's size lives in each run of its content.
+	/// </remarks>
+	public static readonly IReadOnlySet<string> PullOnly = new HashSet<string> { Width, Height, RowHeight, FontSize };
 
 	/// <summary>Brush resources that stand for a role without being named after it.</summary>
 	private static readonly Dictionary<string, string> BrushAliases = new( StringComparer.Ordinal )
@@ -43,7 +48,7 @@ internal static partial class StyleValues
 			Background or BorderBrush => BrushRole( text ),
 			Padding => Thickness( text ),
 			CornerRadius => Uniform( text ),
-			Width or Height => Number.Normalize( text ),
+			Width or Height or RowHeight or FontSize => Number.Normalize( text ),
 			_ => null,
 		};
 	}
@@ -111,10 +116,20 @@ internal static partial class StyleValues
 	// ---- Penpot (a component's main shape) ----
 
 	/// <summary>A shape's value in the shared form, or null when the shape doesn't have one.</summary>
-	public static string? FromShape( string property, JsonObject shape, string theme )
+	public static string? FromShape( string property, JsonObject shape, string theme, JsonObject? objects = null )
 	{
 		switch( property )
 		{
+			case RowHeight:
+				return Number.Normalize( shape[ "height" ]?.ToString() );
+			case FontSize:
+				// the component's main text: its largest (a select's value, not its small label)
+				IEnumerable<JsonObject> texts = shape[ "type" ]?.ToString() == "text" ? [ shape ]
+					: objects is null ? [] : Penpot.ShapeTree.Descendants( objects, shape ).Where( s => s[ "type" ]?.ToString() == "text" );
+				double? largest = texts.Select( t => double.TryParse( t[ "content" ]?[ "children" ]?[ 0 ]?[ "children" ]?[ 0 ]?[ "children" ]?[ 0 ]?[ "font-size" ]?.ToString(),
+						System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double size ) ? size : (double?)null )
+					.Max();
+				return largest is { } l ? Number.Normalize( l.ToString( System.Globalization.CultureInfo.InvariantCulture ) ) : null;
 			case Background:
 				return Paint( shape, "fill", "fills", "fill-color", theme );
 			case BorderBrush:

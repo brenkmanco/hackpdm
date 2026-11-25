@@ -349,8 +349,7 @@ public sealed partial class HackFileManagerView : Page
 		OdooEntryList.FontSize = fontSize;
 		OdooEntryList.RowMinHeight = rowHeight;
 		OdooEntryList.RowHeight = rowHeight;
-		OdooEntryList.HeaderRowMinHeight = 24;
-		OdooEntryList.HeaderRowHeight = 26;
+		// the header keeps the app-wide table style's height (App.xaml, from the Penpot table component)
 		OdooEntryList.RowDetailsVisibilityMode = info.GroupCollapsed
 			? TableViewRowDetailsVisibilityMode.VisibleWhenSelected
 			: TableViewRowDetailsVisibilityMode.Collapsed;

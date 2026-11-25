@@ -26,8 +26,15 @@ public sealed partial class HackApp : Application
 	private bool _closeSaveCompleted;
 	private bool _closeSaveInProgress;
 
+	/// <summary>Roboto, the Material type face the design (Penpot) uses; shipped by Uno.Fonts.Roboto with the Material feature.</summary>
+	internal const string RobotoFontFamily = "ms-appx:///Uno.Fonts.Roboto/Fonts/Roboto-Regular.ttf#Roboto";
+
 	public HackApp()
 	{
+#if !WINDOWS
+		// plain TextBlocks on the desktop build default to Open Sans (set by the Uno SDK); match the Material styles
+		Uno.UI.FeatureConfiguration.Font.DefaultTextFontFamily = RobotoFontFamily;
+#endif
 		InitializeComponent();
 #if !WINDOWS
 		SupplementalBindableMetadataProvider.Install();

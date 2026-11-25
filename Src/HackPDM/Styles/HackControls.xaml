@@ -16,7 +16,8 @@
 -->
 <ResourceDictionary
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:common="using:HackPDM.Common">
 
 	<!--  ===== Panes (Figma: Pane card) =====  -->
 	<!--  Tinted pane: folders, preview, side panels. No border.  -->
@@ -339,4 +340,86 @@
 	<SolidColorBrush x:Key="NavigationViewItemForegroundSelectedPointerOver" Color="Gray" />
 	<SolidColorBrush x:Key="NavigationViewItemForegroundSelectedPressed" Color="Gray" />
 	<SolidColorBrush x:Key="NavigationViewItemSeparatorForeground" Color="Gray" />
+
+	<!--
+		===== Navigation rail item (Penpot: Navigation rail) =====
+		Icon in a 56x32 indicator pill, label under it. Selected: Secondary container pill, label in OnSurface.
+	-->
+	<Style x:Key="HackNavRailItemStyle" TargetType="common:NavRailItem">
+		<Setter Property="Background" Value="Transparent" />
+		<Setter Property="Foreground" Value="{ThemeResource OnSurfaceVariantBrush}" />
+		<Setter Property="Width" Value="80" />
+		<Setter Property="Padding" Value="0,4,0,8" />
+		<Setter Property="HorizontalAlignment" Value="Center" />
+		<Setter Property="UseSystemFocusVisuals" Value="True" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="common:NavRailItem">
+					<Grid
+						x:Name="Root"
+						Padding="{TemplateBinding Padding}"
+						Background="Transparent">
+						<VisualStateManager.VisualStateGroups>
+							<VisualStateGroup x:Name="CommonStates">
+								<VisualState x:Name="Normal" />
+								<VisualState x:Name="PointerOver">
+									<VisualState.Setters>
+										<Setter Target="StateLayer.Opacity" Value="0.08" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="Pressed">
+									<VisualState.Setters>
+										<Setter Target="StateLayer.Opacity" Value="0.12" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="Disabled">
+									<VisualState.Setters>
+										<Setter Target="Root.Opacity" Value="0.38" />
+									</VisualState.Setters>
+								</VisualState>
+							</VisualStateGroup>
+							<VisualStateGroup x:Name="SelectionStates">
+								<VisualState x:Name="Unselected" />
+								<VisualState x:Name="Selected">
+									<VisualState.Setters>
+										<Setter Target="Indicator.Background" Value="{ThemeResource SecondaryContainerBrush}" />
+										<Setter Target="Icon.Foreground" Value="{ThemeResource OnSecondaryContainerBrush}" />
+										<Setter Target="LabelText.Foreground" Value="{ThemeResource OnSurfaceBrush}" />
+									</VisualState.Setters>
+								</VisualState>
+							</VisualStateGroup>
+						</VisualStateManager.VisualStateGroups>
+						<StackPanel HorizontalAlignment="Center" Spacing="4">
+							<Grid
+								Width="56"
+								Height="32"
+								HorizontalAlignment="Center">
+								<Border
+									x:Name="Indicator"
+									Background="Transparent"
+									CornerRadius="16" />
+								<Border
+									x:Name="StateLayer"
+									Background="{ThemeResource OnSurfaceBrush}"
+									CornerRadius="16"
+									Opacity="0" />
+								<FontIcon
+									x:Name="Icon"
+									FontSize="20"
+									Foreground="{TemplateBinding Foreground}"
+									Glyph="{TemplateBinding Glyph}" />
+							</Grid>
+							<TextBlock
+								x:Name="LabelText"
+								HorizontalAlignment="Center"
+								Foreground="{TemplateBinding Foreground}"
+								Style="{StaticResource LabelMedium}"
+								Text="{TemplateBinding Label}"
+								TextAlignment="Center" />
+						</StackPanel>
+					</Grid>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
 </ResourceDictionary>

@@ -952,6 +952,18 @@
       "properties": {}
     },
     {
+      "component": "File table row",
+      "variant": {
+        "Kind": "Row"
+      },
+      "style": "CompactTableViewStyle",
+      "file": "Src/HackPDM/App.xaml",
+      "properties": {
+        "RowHeight": "36",
+        "FontSize": "14"
+      }
+    },
+    {
       "component": "Icon button",
       "variant": {
         "State": "Standard"
@@ -1013,7 +1025,8 @@
         "Background": "Transparent",
         "BorderBrush": "Outline",
         "Padding": "16,8,12,8",
-        "CornerRadius": "4"
+        "CornerRadius": "4",
+        "FontSize": "16"
       }
     },
     {

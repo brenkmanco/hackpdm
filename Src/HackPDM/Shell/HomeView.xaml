@@ -8,89 +8,89 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid>
-        <NavigationView
-            x:Name="HomeNavigator"
-            AlwaysShowHeader="False"
-        BackRequested="HomeNavigator_BackRequested"
-        ExpandedModeThresholdWidth="900"
-        Header="HackPDM"
-        IsBackButtonVisible="Auto"
-        IsBackEnabled="False"
-        IsSettingsVisible="True"
-        IsTabStop="False"
-        ItemInvoked="HomeNavigator_ItemInvoked"
-        KeyDown="HomeView_KeyDown"
-        PaneDisplayMode="LeftCompact"
-        PaneTitle="HackPDM"
-        SelectionChanged="HomeNavigator_SelectionChanged"
-        SelectionFollowsFocus="Disabled">
+    <Grid KeyDown="HomeView_KeyDown">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="80" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-        <NavigationView.MenuItems>
-            <NavigationViewItem
-                Content="Hack File Manager"
-                Tag="HackFileManager"
-                ToolTipService.ToolTip="Hack File Manager (Ctrl+1)">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Folder" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
+        <!--  Navigation rail (Penpot: Navigation rail): labeled destinations, the Search and Status drawers, Settings  -->
+        <Grid x:Name="NavRail" Padding="0,8,0,12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Button
+                x:Name="RailBackButton"
+                Margin="0,0,0,8"
+                HorizontalAlignment="Center"
+                Click="RailBack_Click"
+                IsEnabled="False"
+                Style="{StaticResource PaneIconButtonStyle}"
+                ToolTipService.ToolTip="Back (Alt+Left)">
+                <FontIcon FontSize="16" Glyph="&#xE72B;" />
+            </Button>
+            <StackPanel Grid.Row="1" Spacing="4">
+                <controls:NavRailItem
+                    x:Name="FilesRailItem"
+                    Click="RailItem_Click"
+                    Glyph="&#xE8B7;"
+                    Label="Files"
+                    Style="{StaticResource HackNavRailItemStyle}"
+                    Tag="HackFileManager"
+                    ToolTipService.ToolTip="Hack File Manager (Ctrl+1)" />
+                <controls:NavRailItem
+                    x:Name="GraphRailItem"
+                    Click="RailItem_Click"
+                    Glyph="&#xE71D;"
+                    Label="Graph"
+                    Style="{StaticResource HackNavRailItemStyle}"
+                    Tag="DependencyGraph"
+                    ToolTipService.ToolTip="Dependency Graph (Ctrl+2)" />
+                <controls:NavRailItem
+                    x:Name="ProfilesRailItem"
+                    Click="RailItem_Click"
+                    Glyph="&#xE77B;"
+                    Label="Profiles"
+                    Style="{StaticResource HackNavRailItemStyle}"
+                    Tag="ProfileManager"
+                    ToolTipService.ToolTip="Profile Manager (Ctrl+3)" />
+                <controls:NavRailItem
+                    x:Name="ConfigsRailItem"
+                    Click="RailItem_Click"
+                    Glyph="&#xE9E9;"
+                    Label="Configs"
+                    Style="{StaticResource HackNavRailItemStyle}"
+                    Tag="Configuration"
+                    ToolTipService.ToolTip="Server &amp; Folder Configurations (Ctrl+4)" />
+                <controls:NavRailItem
+                    x:Name="SearchRailItem"
+                    Click="SearchRail_Click"
+                    Glyph="&#xE721;"
+                    Label="Search"
+                    Style="{StaticResource HackNavRailItemStyle}"
+                    ToolTipService.ToolTip="Toggle Search Vault Panel (Ctrl+F)" />
+                <controls:NavRailItem
+                    x:Name="StatusRailItem"
+                    Click="StatusRail_Click"
+                    Glyph="&#xE9D9;"
+                    Label="Status"
+                    Style="{StaticResource HackNavRailItemStyle}"
+                    ToolTipService.ToolTip="Toggle Status Log Panel (Alt+S)" />
+            </StackPanel>
+            <controls:NavRailItem
+                x:Name="SettingsRailItem"
+                Grid.Row="2"
+                Click="RailItem_Click"
+                Glyph="&#xE713;"
+                Label="Settings"
+                Style="{StaticResource HackNavRailItemStyle}"
+                Tag="Settings"
+                ToolTipService.ToolTip="Settings" />
+        </Grid>
 
-            <NavigationViewItem
-                Content="Dependency Graph"
-                Tag="DependencyGraph"
-                ToolTipService.ToolTip="Dependency Graph (Ctrl+2)">
-                <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE71D;" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-
-            <NavigationViewItemSeparator />
-
-            <NavigationViewItem
-                Content="Profile Manager"
-                Tag="ProfileManager"
-                ToolTipService.ToolTip="Profile Manager (Ctrl+3)">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Account" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-
-            <NavigationViewItem
-                Content="Configurations"
-                Tag="Configuration"
-                ToolTipService.ToolTip="Server &amp; Folder Configurations (Ctrl+4)">
-                <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE9E9;" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-
-        </NavigationView.MenuItems>
-
-        <NavigationView.FooterMenuItems>
-            <NavigationViewItem
-                x:Name="SearchNav"
-                Content="Search Vault"
-                SelectsOnInvoked="False"
-                Tag="SearchVault"
-                ToolTipService.ToolTip="Toggle Search Vault Panel (Ctrl+F)">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Find" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem
-                x:Name="StatusLogNav"
-                Content="Status Log"
-                SelectsOnInvoked="False"
-                Tag="StatusLog"
-                ToolTipService.ToolTip="Toggle Status Log Panel (Alt+S)">
-                <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE9D9;" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-        </NavigationView.FooterMenuItems>
-
-        <Grid>
+        <Grid Grid.Column="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
@@ -169,7 +169,7 @@
                                         Style="{StaticResource PaneIconButtonStyle}"
                                         Click="CloseSearchDrawer_Click"
                                         ToolTipService.ToolTip="Close Search panel">
-                                        <FontIcon FontSize="12" Glyph="&#xE711;" />
+                                        <FontIcon FontSize="14" Glyph="&#xE711;" />
                                     </Button>
                                 </StackPanel>
                             </Grid>
@@ -200,7 +200,7 @@
                                     Style="{StaticResource PaneIconButtonStyle}"
                                     Click="CloseSearchDrawer_Click"
                                     ToolTipService.ToolTip="Close Search bar">
-                                    <FontIcon FontSize="12" Glyph="&#xE711;" />
+                                    <FontIcon FontSize="14" Glyph="&#xE711;" />
                                 </Button>
                             </StackPanel>
                         </Grid>
@@ -273,7 +273,7 @@
                                     Style="{StaticResource PaneIconButtonStyle}"
                                     Click="CloseStatusDrawer_Click"
                                     ToolTipService.ToolTip="Hide Status Log panel">
-                                    <FontIcon FontSize="12" Glyph="&#xE711;" />
+                                    <FontIcon FontSize="14" Glyph="&#xE711;" />
                                 </Button>
                             </StackPanel>
                         </Grid>
@@ -304,7 +304,7 @@
                                 Style="{StaticResource PaneIconButtonStyle}"
                                 Click="CloseStatusDrawer_Click"
                                 ToolTipService.ToolTip="Hide Status bar">
-                                <FontIcon FontSize="12" Glyph="&#xE711;" />
+                                <FontIcon FontSize="14" Glyph="&#xE711;" />
                             </Button>
                         </StackPanel>
                     </Grid>
@@ -312,9 +312,7 @@
             </Border>
         </Grid>
 
-        </NavigationView>
-
         <!--  In-Window Overlay Canvas (hover popups from bottom minimal status bar, etc.)  -->
-        <Canvas x:Name="ShellOverlayCanvas" />
+        <Canvas x:Name="ShellOverlayCanvas" Grid.ColumnSpan="2" />
     </Grid>
 </Page>

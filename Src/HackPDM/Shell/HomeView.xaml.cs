@@ -43,7 +43,6 @@ public sealed partial class HomeView : Page
 		[ NavigatePageMenu.Settings ] = ( typeof( ApplicationSettingsView ), WindowHelper.Presets.AppSettings, 4 ),
 	}.ToFrozenDictionary();
 
-	private bool _syncingSelection;
 	private NavigatePageMenu _currentMenu = NavigatePageMenu.ProfileManager;
 	private ColumnDefinition? _searchColumn;
 
@@ -51,8 +50,8 @@ public sealed partial class HomeView : Page
 	{
 		InitializeComponent();
 		AppComposition.Navigation.Attach( this );
-		HomeNavigator.SelectedItem = ItemFor( NavigatePageMenu.ProfileManager );
-		NavFrame.Navigated += ( _, _ ) => HomeNavigator.IsBackEnabled = NavFrame.CanGoBack;
+		Select( NavigatePageMenu.ProfileManager );
+		NavFrame.Navigated += ( _, _ ) => RailBackButton.IsEnabled = NavFrame.CanGoBack;
 		Unloaded += HomeView_Unloaded;
 		ArrangeSearchDrawer();
 	}
@@ -71,57 +70,31 @@ public sealed partial class HomeView : Page
 	internal bool IsStatusDrawerOpen => DockedStatusDrawer.Visibility == Visibility.Visible;
 	internal bool IsSearchDrawerOpen => DockedSearchDrawer.Visibility == Visibility.Visible;
 
-	/// <summary>Selects the page's menu item, which shows the page.</summary>
+	/// <summary>Selects the page's rail item and shows the page.</summary>
 	internal void Select( NavigatePageMenu page )
 	{
-		object? target = page == NavigatePageMenu.Settings
-			? HomeNavigator.SettingsItem
-			: ItemFor( page ) ?? ItemFor( NavigatePageMenu.ProfileManager );
-
-		// Re-selecting a locked tab (e.g. NotLoggedInView) after signing in must still show the real page
-		if( ReferenceEquals( HomeNavigator.SelectedItem, target ) )
-		{
-			Show( page );
-			return;
-		}
-		HomeNavigator.SelectedItem = target;
+		// Re-selecting a locked tab (e.g. NotLoggedInView) after signing in must still show the real page, so this
+		// always shows it; Navigate skips a page that is already open.
+		SetRailSelection( Pages.ContainsKey( page ) ? page : NavigatePageMenu.ProfileManager );
+		Show( Pages.ContainsKey( page ) ? page : NavigatePageMenu.ProfileManager );
 	}
 
-	private NavigationViewItem? ItemFor( NavigatePageMenu page )
+	/// <summary>Fills the indicator pill of the rail item for <paramref name="page"/> (none for null).</summary>
+	private void SetRailSelection( NavigatePageMenu? page )
 	{
-		string name = page switch
-		{
-			NavigatePageMenu.HackFileManager => nameof( NavigatePageMenu.HackFileManager ),
-			NavigatePageMenu.DependencyGraph => nameof( NavigatePageMenu.DependencyGraph ),
-			NavigatePageMenu.ProfileManager => nameof( NavigatePageMenu.ProfileManager ),
-			NavigatePageMenu.Configuration => nameof( NavigatePageMenu.Configuration ),
-			_ => page.ToString(),
-		};
-		for( int i = 0; i < HomeNavigator.MenuItems.Count; i++ )
-		{
-			if( HomeNavigator.MenuItems[ i ] is NavigationViewItem item && string.Equals( item.Tag as string, name, StringComparison.Ordinal ) )
-				return item;
-		}
-		return null;
+		foreach( NavRailItem item in (NavRailItem[])[ FilesRailItem, GraphRailItem, ProfilesRailItem, ConfigsRailItem, SettingsRailItem ] )
+			item.IsSelected = page is { } p && string.Equals( item.Tag as string, p.ToString(), StringComparison.Ordinal );
 	}
 
-	private void HomeNavigator_ItemInvoked( NavigationView sender, NavigationViewItemInvokedEventArgs args )
+	private void RailItem_Click( object sender, RoutedEventArgs e )
 	{
-		if( args.InvokedItemContainer == StatusLogNav )
-			AppComposition.Dialogs.ToggleStatusWindow();
-		else if( args.InvokedItemContainer == SearchNav )
-			AppComposition.Dialogs.ToggleSearchWindow();
+		if( sender is NavRailItem { Tag: string tag } && Enum.TryParse( tag, out NavigatePageMenu page ) )
+			Select( page );
 	}
 
-	private void HomeNavigator_SelectionChanged( NavigationView sender, NavigationViewSelectionChangedEventArgs args )
-	{
-		if( _syncingSelection )
-			return;
-		if( args.IsSettingsSelected )
-			Show( NavigatePageMenu.Settings );
-		else if( args.SelectedItem is NavigationViewItem { Tag: string tag } && Enum.TryParse( tag, out NavigatePageMenu page ) )
-			Show( page );
-	}
+	private void SearchRail_Click( object sender, RoutedEventArgs e ) => AppComposition.Dialogs.ToggleSearchWindow();
+	private void StatusRail_Click( object sender, RoutedEventArgs e ) => AppComposition.Dialogs.ToggleStatusWindow();
+	private void RailBack_Click( object sender, RoutedEventArgs e ) => GoBack();
 
 	private void Show( NavigatePageMenu page )
 	{
@@ -166,7 +139,7 @@ public sealed partial class HomeView : Page
 		if( !firstPage )
 			NavigationTransitions.Play( NavFrame.Content, slide );
 		PruneStaleBackStack( AppComposition.Session.IsLoggedIn );
-		HomeNavigator.IsBackEnabled = NavFrame.CanGoBack;
+		RailBackButton.IsEnabled = NavFrame.CanGoBack;
 	}
 
 	private void ApplyWindowPreset( Window window, string config )
@@ -198,27 +171,22 @@ public sealed partial class HomeView : Page
 		}
 	}
 
-	private void HomeNavigator_BackRequested( NavigationView sender, NavigationViewBackRequestedEventArgs args )
-		=> GoBack();
-
 	private void GoBack()
 	{
 		PruneStaleBackStack( AppComposition.Session.IsLoggedIn );
 		if( !NavFrame.CanGoBack )
 		{
-			HomeNavigator.IsBackEnabled = false;
+			RailBackButton.IsEnabled = false;
 			return;
 		}
 
 		NavFrame.GoBack();
-		HomeNavigator.IsBackEnabled = NavFrame.CanGoBack;
+		RailBackButton.IsEnabled = NavFrame.CanGoBack;
 
 		Type? current = NavFrame.CurrentSourcePageType;
 		if( current == typeof( NotLoggedInView ) )
 		{
-			_syncingSelection = true;
-			try { HomeNavigator.SelectedItem = null; }
-			finally { _syncingSelection = false; }
+			SetRailSelection( null );
 			if( HackApp.Window is { } win )
 				ApplyWindowPreset( win, WindowHelper.Presets.NotLoggedIn );
 			return;
@@ -229,18 +197,7 @@ public sealed partial class HomeView : Page
 			if( entry.Page != current )
 				continue;
 			_currentMenu = menu;
-			_syncingSelection = true;
-			try
-			{
-				if( menu == NavigatePageMenu.Settings )
-					HomeNavigator.SelectedItem = HomeNavigator.SettingsItem;
-				else if( ItemFor( menu ) is { } navItem )
-					HomeNavigator.SelectedItem = navItem;
-			}
-			finally
-			{
-				_syncingSelection = false;
-			}
+			SetRailSelection( menu );
 			if( HackApp.Window is { } window )
 				ApplyWindowPreset( window, entry.Config );
 			NavigationTransitions.Play( NavFrame.Content, NavigationSlideAxis.Right );

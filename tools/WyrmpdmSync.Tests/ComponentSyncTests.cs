@@ -177,6 +177,26 @@ public class ComponentSyncTests
 	}
 
 	[Fact]
+	public void RowHeightAndFontSize_ReadTheRowAndItsLargestText()
+	{
+		static JsonObject Text( string id, string size ) => new()
+		{
+			[ "id" ] = id, [ "type" ] = "text",
+			[ "content" ] = new JsonObject { [ "children" ] = new JsonArray( new JsonObject { [ "children" ] = new JsonArray( new JsonObject { [ "children" ] = new JsonArray( new JsonObject { [ "text" ] = "x", [ "font-size" ] = size } ) } ) } ) },
+		};
+		JsonObject objects = new()
+		{
+			[ "row" ] = new JsonObject { [ "id" ] = "row", [ "type" ] = "frame", [ "height" ] = 36, [ "shapes" ] = new JsonArray( "value", "label" ) },
+			[ "label" ] = Text( "label", "12" ),
+			[ "value" ] = Text( "value", "16" ),
+		};
+		JsonObject row = objects[ "row" ]!.AsObject();
+		Assert.Equal( "36", StyleValues.FromShape( StyleValues.RowHeight, row, "Light", objects ) );
+		Assert.Equal( "16", StyleValues.FromShape( StyleValues.FontSize, row, "Light", objects ) );
+		Assert.Contains( StyleValues.FontSize, StyleValues.PullOnly );
+	}
+
+	[Fact]
 	public void SizeChangedInCode_IsNotPushed()
 	{
 		const string sized = """<ResourceDictionary><Style x:Key="PaneIconButtonStyle"><Setter Property="Width" Value="32" /></Style></ResourceDictionary>""";

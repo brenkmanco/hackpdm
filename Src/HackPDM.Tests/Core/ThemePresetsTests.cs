@@ -108,9 +108,9 @@ public class ThemePresetsTests
 		Assert.Equal( panels.Order(), panels );
 		Assert.All( ThemePresets.Forms, f => Assert.True( f.OverlayCornerRadius >= f.ControlCornerRadius ) );
 
-		// Default is the Figma design: compact density, 16px panel corners and a 1px panel border
+		// Default is the Penpot design: standard Material density, 16px panel corners and a 1px panel border
 		AppForm normal = ThemePresets.Form( FormName.Default );
-		Assert.Equal( (4.0, 8.0, true, 16.0, 1.0, false),
+		Assert.Equal( (4.0, 8.0, false, 16.0, 1.0, false),
 			(normal.ControlCornerRadius, normal.OverlayCornerRadius, normal.CompactDensity, normal.PanelCornerRadius, normal.PanelBorderThickness, normal.AccentPanels) );
 		Assert.True( ThemePresets.Form( FormName.Compact ).CompactDensity );
 		Assert.False( ThemePresets.Form( FormName.Modern ).CompactDensity );
