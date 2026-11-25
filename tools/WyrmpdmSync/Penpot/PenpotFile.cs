@@ -5,6 +5,12 @@ namespace WyrmpdmSync.Penpot;
 /// <summary>A Penpot design token as stored in the file.</summary>
 internal sealed record PenpotToken( Guid Id, Guid SetId, string SetName, string Name, string Type, string Value );
 
+/// <summary>A token set (a group of tokens that can be switched on and off).</summary>
+internal sealed record PenpotTokenSet( Guid Id, string Name );
+
+/// <summary>A color in the file's library (the Assets panel).</summary>
+internal sealed record PenpotLibraryColor( Guid Id, string Name, string Path, string Color, double Opacity );
+
 /// <summary>A page of the file.</summary>
 internal sealed record PenpotPage( Guid Id, string Name, JsonObject Objects );
 
@@ -22,6 +28,9 @@ internal sealed class PenpotFile
 	public IReadOnlyList<string> Features { get; }
 	public IReadOnlyList<PenpotPage> Pages { get; }
 	public IReadOnlyList<PenpotToken> Tokens { get; }
+	public IReadOnlyList<PenpotTokenSet> TokenSets { get; }
+	public IReadOnlyList<Guid> ActiveSetIds { get; }
+	public IReadOnlyList<PenpotLibraryColor> LibraryColors { get; }
 	public JsonObject Raw { get; }
 
 	private PenpotFile( JsonObject raw )
@@ -34,7 +43,15 @@ internal sealed class PenpotFile
 		Features = raw[ "features" ] is JsonArray f ? [ .. f.Select( n => Str( n ) ?? "" ) ] : [];
 		JsonObject data = raw[ "data" ] as JsonObject ?? throw new SyncException( "The Penpot file came back without its data." );
 		Pages = ReadPages( data );
-		Tokens = ReadTokens( data );
+		List<PenpotTokenSet> sets = [];
+		Tokens = ReadTokens( data, sets );
+		TokenSets = sets;
+		ActiveSetIds = ( data[ "tokens-status" ] ?? data[ "tokensStatus" ] )?[ "active-set-ids" ] is JsonArray active
+			? [ .. active.Select( n => Guid.TryParse( Str( n ), out Guid g ) ? g : Guid.Empty ).Where( g => g != Guid.Empty ) ]
+			: [];
+		LibraryColors = data[ "colors" ] is JsonObject colors
+			? [ .. colors.Select( kv => kv.Value ).OfType<JsonObject>().Select( ReadLibraryColor ).OfType<PenpotLibraryColor>() ]
+			: [];
 	}
 
 	public static PenpotFile Parse( JsonObject raw ) => new( raw );
@@ -70,17 +87,23 @@ internal sealed class PenpotFile
 		return pages;
 	}
 
-	private static List<PenpotToken> ReadTokens( JsonObject data )
+	private static List<PenpotToken> ReadTokens( JsonObject data, List<PenpotTokenSet> sets )
 	{
 		List<PenpotToken> tokens = [];
 		JsonNode? lib = data[ "tokens-lib" ] ?? data[ "tokensLib" ];
 		if( lib is not null )
-			CollectSets( lib, tokens );
+			CollectSets( lib, tokens, sets );
 		return tokens;
 	}
 
+	private static PenpotLibraryColor? ReadLibraryColor( JsonObject c )
+		=> Guid.TryParse( Str( c[ "id" ] ), out Guid id ) && Str( c[ "color" ] ) is { } color
+			? new PenpotLibraryColor( id, Str( c[ "name" ] ) ?? "", Str( c[ "path" ] ) ?? "", color,
+				c[ "opacity" ] is JsonValue o && double.TryParse( o.ToString(), System.Globalization.CultureInfo.InvariantCulture, out double op ) ? op : 1 )
+			: null;
+
 	/// <summary>Finds every token set (an object with an id, a name and a "tokens" map) under <paramref name="node"/>.</summary>
-	private static void CollectSets( JsonNode node, List<PenpotToken> into )
+	private static void CollectSets( JsonNode node, List<PenpotToken> into, List<PenpotTokenSet> sets )
 	{
 		switch( node )
 		{
@@ -88,6 +111,7 @@ internal sealed class PenpotFile
 				if( obj[ "tokens" ] is JsonObject tokens && Guid.TryParse( Str( obj[ "id" ] ), out Guid setId ) )
 				{
 					string setName = Str( obj[ "name" ] ) ?? "";
+					sets.Add( new PenpotTokenSet( setId, setName ) );
 					foreach( (string _, JsonNode? t) in tokens )
 						if( t is JsonObject token && ReadToken( token, setId, setName ) is { } read )
 							into.Add( read );
@@ -95,12 +119,12 @@ internal sealed class PenpotFile
 				}
 				foreach( (string _, JsonNode? child) in obj )
 					if( child is not null )
-						CollectSets( child, into );
+						CollectSets( child, into, sets );
 				break;
 			case JsonArray arr:
 				foreach( JsonNode? child in arr )
 					if( child is not null )
-						CollectSets( child, into );
+						CollectSets( child, into, sets );
 				break;
 		}
 	}

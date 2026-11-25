@@ -42,7 +42,7 @@ internal sealed class PenpotClient : IDisposable
 	/// <summary>Calls an RPC method and returns its JSON result.</summary>
 	public async Task<JsonNode?> CallAsync( string method, object body, CancellationToken ct = default )
 	{
-		string text = await SendAsync( method, body, "application/json", ct );
+		string text = await SendAsync( method, JsonSerializer.Serialize( body ), "application/json", "application/json", ct );
 		return string.IsNullOrWhiteSpace( text ) ? null : JsonNode.Parse( text );
 	}
 
@@ -52,15 +52,15 @@ internal sealed class PenpotClient : IDisposable
 	/// </summary>
 	public async Task<JsonNode?> CallTransitAsync( string method, object body, CancellationToken ct = default )
 	{
-		string text = await SendAsync( method, body, "application/transit+json", ct );
+		string text = await SendAsync( method, JsonSerializer.Serialize( body ), "application/json", "application/transit+json", ct );
 		return string.IsNullOrWhiteSpace( text ) ? null : Transit.Decode( text );
 	}
 
-	private async Task<string> SendAsync( string method, object body, string accept, CancellationToken ct )
+	private async Task<string> SendAsync( string method, string body, string contentType, string accept, CancellationToken ct )
 	{
 		using HttpRequestMessage request = new( HttpMethod.Post, method )
 		{
-			Content = new StringContent( JsonSerializer.Serialize( body ), Encoding.UTF8, "application/json" ),
+			Content = new StringContent( body, Encoding.UTF8, contentType ),
 		};
 		request.Headers.Accept.Clear();
 		request.Headers.Accept.Add( new MediaTypeWithQualityHeaderValue( accept ) );
@@ -78,6 +78,25 @@ internal sealed class PenpotClient : IDisposable
 	public async Task<JsonObject> GetFileAsync( Guid fileId, CancellationToken ct = default )
 		=> await CallTransitAsync( "get-file", new { id = fileId }, ct ) as JsonObject
 		   ?? throw new SyncException( $"Penpot returned no file for {fileId}." );
+
+	/// <summary>
+	/// Applies <paramref name="changes"/> to the file. <c>revn</c> and <c>vern</c> are the revision just read: Penpot
+	/// uses them to merge with edits made in the meantime. Sent as Transit (see <see cref="TransitWriter"/>) because
+	/// shape values such as stroke styles must arrive as keywords. Penpot applies all the changes or none.
+	/// </summary>
+	public async Task UpdateFileAsync( PenpotFile file, IEnumerable<JsonObject> changes, CancellationToken ct = default )
+	{
+		JsonObject body = new()
+		{
+			[ "id" ] = file.Id.ToString(),
+			[ "session-id" ] = Guid.NewGuid().ToString(),
+			[ "revn" ] = file.Revn,
+			[ "vern" ] = file.Vern,
+			[ "features" ] = new JsonArray( [ .. file.Features.Select( f => (JsonNode)JsonValue.Create( f )! ) ] ),
+			[ "changes" ] = new JsonArray( [ .. changes.Select( c => c.DeepClone() ) ] ),
+		};
+		await SendAsync( "update-file", TransitWriter.Encode( body ), "application/transit+json", "application/json", ct );
+	}
 
 	/// <summary>A piece of a large file stored apart from its main data (Penpot's "pointer map" feature).</summary>
 	public async Task<JsonNode?> GetFileFragmentAsync( Guid fileId, Guid fragmentId, CancellationToken ct = default )

@@ -13,10 +13,15 @@ The app's design lives in the Penpot file **"HackPDM -- Uno Materials Design"** 
   `HackPDM colors/<preset>`. Links are kept by token id, so renaming a token in Penpot doesn't break them.
   Names are matched without regard to case and the manifest keeps Penpot's spelling: the Navy blue tokens are
   `Navyblue.*` in the design file (shapes are bound by that name), while the code's palette is `NavyBlue`.
-- The tool reads the file in Penpot's native Transit encoding (decoded in `Penpot/Transit.cs`); the plain JSON
-  encoding leaves out the token ids that writing back needs.
-- Coming in later phases: shape values ↔ shape styles, components ↔ `Styles/HackControls.xaml` styles, and page
-  frames ↔ views through `pp:Id` markers on XAML elements.
+- **Shape values:** each shape style's `ControlCornerRadius`, `OverlayCornerRadius`, `PanelCornerRadius` and
+  `PanelBorderThickness` in `ThemePresets.Forms` ↔ a Penpot token `<Style>.<Value>` (`Default.PanelCornerRadius`,
+  type border-radius or stroke-width) in the token set `HackPDM shapes/<Style>`.
+- The code side is read from the text of `ThemePresets.cs`, so `status` and `pull` see unbuilt edits too, and
+  `pull` replaces only the literal it changes (comments and layout stay).
+- The tool talks to Penpot in its native Transit encoding (`Penpot/Transit.cs` reads, `Penpot/TransitWriter.cs`
+  writes): the JSON encoding leaves out token ids and can't express the keyword values shape edits need.
+- Coming in later phases: components ↔ `Styles/HackControls.xaml` styles, and page frames ↔ views through
+  `pp:Id` markers on XAML elements.
 
 ## Setup
 
@@ -34,7 +39,12 @@ Run from anywhere in the repository: `dotnet run --project tools/WyrmpdmSync -- 
 | `whoami` | Checks the token: shows the Penpot account it signs in as. |
 | `init` | Creates or refreshes the manifest: links every preset color to the token of the same name. Safe to rerun. |
 | `fetch` | Downloads the Penpot file to `design/.cache/penpot-file.json` (git-ignored), for inspection. |
-| `status [--all]` | Shows what differs and which side changed: `<` changed in Penpot (pull), `>` changed in code (push), `!` changed on both sides. Exit code 2 when anything differs. |
+| `status [--all]` | Shows what differs and which side changed: `<` changed in Penpot (pull), `>` changed in code or missing in Penpot (push), `!` changed on both sides. Exit code 2 when anything differs. |
+| `pull` | Writes values changed in Penpot into `ThemePresets.cs`. Rebuild the app afterwards. |
+| `push` | Sends values changed in code to Penpot: the token (creating its set and switching it on if needed), the matching library color, and every shape the token is applied to (Penpot's API doesn't repaint those itself). All or nothing: Penpot applies the whole batch or none of it. |
 
-Add `--cached` to `init` or `status` to use the last fetched copy instead of downloading again.
-`pull` (Penpot → code) and `push` (code → Penpot) arrive in phase 2.
+Options: `--dry-run` (pull/push: show, change nothing), `--prefer penpot|code` (pull/push: settle values changed
+on both sides, or that differ with no last-synced value), `--cached` (init/status: use the last fetched copy).
+
+A typical round: `status`, then `pull` for design changes made in Penpot, `push` for changes made in code. Neither
+command touches a value changed on both sides until you pick a side with `--prefer`.

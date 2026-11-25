@@ -50,6 +50,35 @@ public class TransitTests
 	}
 
 	[Fact]
+	public void Write_MarksKeywordsUuidsAndSets_AndReadsBack()
+	{
+		JsonObject change = new()
+		{
+			[ "type" ] = "mod-obj", [ "pageId" ] = "394343ae-7425-8033-8009-002baedf0d3e",
+			[ "operations" ] = new JsonArray( new JsonObject
+			{
+				[ "type" ] = "set", [ "attr" ] = "strokes",
+				[ "val" ] = new JsonArray( new JsonObject { [ "stroke-color" ] = "#735573", [ "stroke-style" ] = "solid", [ "stroke-width" ] = 2.5 } ),
+			} ),
+			[ "setIds" ] = new JsonArray( "394343ae-7425-8033-8009-002a2bd950b6" ),
+			[ "name" ] = "~odd",
+		};
+		string text = TransitWriter.Encode( change );
+
+		Assert.Contains( "\"~:type\",\"~:mod-obj\"", text );
+		Assert.Contains( "\"~:page-id\",\"~u394343ae-7425-8033-8009-002baedf0d3e\"", text );
+		Assert.Contains( "\"~:stroke-style\",\"~:solid\"", text );
+		Assert.Contains( "\"~:stroke-color\",\"#735573\"", text );
+		Assert.Contains( "\"~:set-ids\",[\"~#set\",", text );
+		Assert.Contains( "\"~~odd\"", text );
+
+		// and the reader understands it
+		JsonObject back = Assert.IsType<JsonObject>( Transit.Decode( text ) );
+		Assert.Equal( "solid", (string?)back[ "operations" ]![ 0 ]![ "val" ]![ 0 ]![ "stroke-style" ] );
+		Assert.Equal( "~odd", (string?)back[ "name" ] );
+	}
+
+	[Fact]
 	public void Decode_ScalarsAndEscapes()
 	{
 		JsonArray list = Assert.IsType<JsonArray>( Transit.Decode( """["~?t","~_","~i42","~~tilde","~m0",1.5]""" ) );

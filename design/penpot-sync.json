@@ -726,5 +726,135 @@
       "setId": "394343ae-7425-8033-8009-002a2c5b35ec",
       "synced": "#5A4500"
     }
+  ],
+  "shapes": [
+    {
+      "token": "Compact.ControlCornerRadius",
+      "form": "Compact",
+      "property": "ControlCornerRadius",
+      "tokenId": "8a9f8890-d7ac-4268-8dc1-40c02c60bc94",
+      "setId": "88a3b0d8-9e8e-4f7d-b667-a8beb25bb835",
+      "synced": "2"
+    },
+    {
+      "token": "Compact.OverlayCornerRadius",
+      "form": "Compact",
+      "property": "OverlayCornerRadius",
+      "tokenId": "8d849993-b857-40b5-8d69-9ff62a48324f",
+      "setId": "88a3b0d8-9e8e-4f7d-b667-a8beb25bb835",
+      "synced": "4"
+    },
+    {
+      "token": "Compact.PanelBorderThickness",
+      "form": "Compact",
+      "property": "PanelBorderThickness",
+      "tokenId": "a624760e-91c7-44e8-966d-4bde1877e7cc",
+      "setId": "88a3b0d8-9e8e-4f7d-b667-a8beb25bb835",
+      "synced": "1"
+    },
+    {
+      "token": "Compact.PanelCornerRadius",
+      "form": "Compact",
+      "property": "PanelCornerRadius",
+      "tokenId": "c2fadc07-a0ad-4f51-89a2-5992f2b51f2e",
+      "setId": "88a3b0d8-9e8e-4f7d-b667-a8beb25bb835",
+      "synced": "6"
+    },
+    {
+      "token": "Default.ControlCornerRadius",
+      "form": "Default",
+      "property": "ControlCornerRadius",
+      "tokenId": "4d2be538-0c70-4d6c-8940-9f0b84984931",
+      "setId": "e3f6d9e6-df16-4832-9e44-6eb6a6ca06c5",
+      "synced": "4"
+    },
+    {
+      "token": "Default.OverlayCornerRadius",
+      "form": "Default",
+      "property": "OverlayCornerRadius",
+      "tokenId": "c017395b-407f-44de-abb7-ae9576204b62",
+      "setId": "e3f6d9e6-df16-4832-9e44-6eb6a6ca06c5",
+      "synced": "8"
+    },
+    {
+      "token": "Default.PanelBorderThickness",
+      "form": "Default",
+      "property": "PanelBorderThickness",
+      "tokenId": "33bdf1ed-2658-437e-bb21-3b7c075043ac",
+      "setId": "e3f6d9e6-df16-4832-9e44-6eb6a6ca06c5",
+      "synced": "1"
+    },
+    {
+      "token": "Default.PanelCornerRadius",
+      "form": "Default",
+      "property": "PanelCornerRadius",
+      "tokenId": "703d8ee9-8fdc-4305-a70f-2dd6549e4e19",
+      "setId": "e3f6d9e6-df16-4832-9e44-6eb6a6ca06c5",
+      "synced": "16"
+    },
+    {
+      "token": "Fancy.ControlCornerRadius",
+      "form": "Fancy",
+      "property": "ControlCornerRadius",
+      "tokenId": "0a967f94-e373-49ed-b2c4-bccf3d767b9c",
+      "setId": "f48a8f5b-12b9-4ca6-90c4-8da6cb0b1863",
+      "synced": "12"
+    },
+    {
+      "token": "Fancy.OverlayCornerRadius",
+      "form": "Fancy",
+      "property": "OverlayCornerRadius",
+      "tokenId": "06096ad1-6f51-46d2-bffd-37149863d300",
+      "setId": "f48a8f5b-12b9-4ca6-90c4-8da6cb0b1863",
+      "synced": "16"
+    },
+    {
+      "token": "Fancy.PanelBorderThickness",
+      "form": "Fancy",
+      "property": "PanelBorderThickness",
+      "tokenId": "2fdd42c9-23d2-4413-ae31-136377a6b93f",
+      "setId": "f48a8f5b-12b9-4ca6-90c4-8da6cb0b1863",
+      "synced": "2"
+    },
+    {
+      "token": "Fancy.PanelCornerRadius",
+      "form": "Fancy",
+      "property": "PanelCornerRadius",
+      "tokenId": "f539b53e-c809-4da6-b4d2-1f827e5a16dd",
+      "setId": "f48a8f5b-12b9-4ca6-90c4-8da6cb0b1863",
+      "synced": "24"
+    },
+    {
+      "token": "Modern.ControlCornerRadius",
+      "form": "Modern",
+      "property": "ControlCornerRadius",
+      "tokenId": "cbc03a11-ba01-4bb9-a70a-9bfda1c047d7",
+      "setId": "5b377834-c753-4225-bf4b-7c1f4e8ef9cc",
+      "synced": "8"
+    },
+    {
+      "token": "Modern.OverlayCornerRadius",
+      "form": "Modern",
+      "property": "OverlayCornerRadius",
+      "tokenId": "adf329d4-7065-4928-94f2-89b2c2268c35",
+      "setId": "5b377834-c753-4225-bf4b-7c1f4e8ef9cc",
+      "synced": "12"
+    },
+    {
+      "token": "Modern.PanelBorderThickness",
+      "form": "Modern",
+      "property": "PanelBorderThickness",
+      "tokenId": "b8e8ef81-2343-453f-a096-2f0e12db65c1",
+      "setId": "5b377834-c753-4225-bf4b-7c1f4e8ef9cc",
+      "synced": "1"
+    },
+    {
+      "token": "Modern.PanelCornerRadius",
+      "form": "Modern",
+      "property": "PanelCornerRadius",
+      "tokenId": "a22587b9-cb59-4219-8177-f435163846f8",
+      "setId": "5b377834-c753-4225-bf4b-7c1f4e8ef9cc",
+      "synced": "20"
+    }
   ]
 }

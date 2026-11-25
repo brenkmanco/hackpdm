@@ -24,12 +24,17 @@ internal static class Cli
 
 		commands:
 		  whoami                 check the access token: show the Penpot account it signs in as
-		  init [--file <id>]     create or refresh design/penpot-sync.json: link every preset color to its token
+		  init [--file <id>]     create or refresh design/penpot-sync.json: link every preset color and
+		                         shape-style value in ThemePresets.cs to its Penpot token
 		  fetch                  download the Penpot file to design/.cache/penpot-file.json (for inspection)
 		  status [--all]         show what differs between Penpot and the code, and which side changed
+		  pull                   take changes made in Penpot into the code (ThemePresets.cs)
+		  push                   take changes made in the code to Penpot (tokens, library colors, bound shapes)
 
 		options:
-		  --cached               use design/.cache/penpot-file.json instead of downloading the file again
+		  --dry-run              pull/push: show what would change, change nothing
+		  --prefer penpot|code   pull/push: where both sides changed (or never agreed), take this side
+		  --cached               init/status: use design/.cache/penpot-file.json instead of downloading again
 
 		The access token comes from the PENPOT_TOKEN environment variable or design/.penpot-token (git-ignored).
 		""";
@@ -52,6 +57,8 @@ internal static class Cli
 			"init" => await InitAsync( paths, options ),
 			"fetch" => await FetchAsync( paths ),
 			"status" => await StatusAsync( paths, options ),
+			"pull" => await PullAsync( paths, options ),
+			"push" => await PushAsync( paths, options ),
 			_ => throw new SyncException( $"Unknown command '{args[ 0 ]}'. Run `wyrmpdm-sync help`." ),
 		};
 	}
@@ -74,15 +81,17 @@ internal static class Cli
 			manifest.Penpot.FileId = DefaultFileId;
 
 		PenpotFile file = await LoadFileAsync( paths, manifest, cached: options.Cached );
+		ThemePresetsSource code = ThemePresetsSource.Load( paths );
 		manifest.Penpot.FileName = file.Name;
-		int added = ColorSync.Link( manifest, file );
+		int added = TokenSync.Link( manifest, file, code );
 		manifest.Save( paths.Manifest );
 
-		int linked = manifest.Colors.Count( c => c.TokenId is not null );
-		Console.WriteLine( $"{paths.Relative( paths.Manifest )}: file \"{file.Name}\", {manifest.Colors.Count} colors " +
-		                   $"({added} new), {linked} linked to a Penpot token." );
-		if( linked < manifest.Colors.Count )
-			Console.WriteLine( $"{manifest.Colors.Count - linked} colors have no token of the same name in Penpot yet; `push` will create them." );
+		List<TokenLink> links = [ .. manifest.TokenLinks ];
+		int linked = links.Count( c => c.TokenId is not null );
+		Console.WriteLine( $"{paths.Relative( paths.Manifest )}: file \"{file.Name}\", {manifest.Colors.Count} colors and " +
+		                   $"{manifest.Shapes.Count} shape values ({added} new), {linked} linked to a Penpot token." );
+		if( linked < links.Count )
+			Console.WriteLine( $"{links.Count - linked} have no token in Penpot yet; `push` creates them." );
 		return 0;
 	}
 
@@ -91,23 +100,105 @@ internal static class Cli
 		SyncManifest manifest = File.Exists( paths.Manifest ) ? SyncManifest.Load( paths.Manifest ) : new SyncManifest { Penpot = { FileId = DefaultFileId } };
 		PenpotFile file = await LoadFileAsync( paths, manifest, cached: false );
 		Console.WriteLine( $"Saved \"{file.Name}\" (revision {file.Revn}) to {paths.Relative( paths.CachedFile )}: " +
-		                   $"{file.Pages.Count} pages, {file.Tokens.Count} tokens." );
+		                   $"{file.Pages.Count} pages, {file.Tokens.Count} tokens in {file.TokenSets.Count} sets." );
 		Console.WriteLine( $"Pages: {string.Join( ", ", file.Pages.Select( p => $"{p.Name} ({p.Objects.Count} shapes)" ) )}" );
 		return 0;
 	}
 
 	private static async Task<int> StatusAsync( RepoPaths paths, Options options )
 	{
-		SyncManifest manifest = SyncManifest.Load( paths.Manifest );
-		PenpotFile file = await LoadFileAsync( paths, manifest, cached: options.Cached );
-		List<ColorReport> colors = ColorSync.Compare( manifest, file );
+		(SyncManifest manifest, PenpotFile file, ThemePresetsSource code) = await LoadAllAsync( paths, options.Cached );
+		List<TokenReport> reports = TokenSync.Compare( manifest, file, code );
 
 		Console.WriteLine( $"Penpot file \"{file.Name}\", revision {file.Revn}." );
-		Console.WriteLine( $"Colors: {colors.Count} linked — " + string.Join( ", ",
-			colors.GroupBy( c => c.State ).OrderBy( g => g.Key ).Select( g => $"{g.Count()} {Describe( g.Key )}" ) ) + "." );
-		foreach( ColorReport r in colors.Where( r => options.All || r.State != SyncState.InSync ) )
+		Print( "Colors", reports.Where( r => r.Link is ColorLink ).ToList(), options.All );
+		Print( "Shape values", reports.Where( r => r.Link is ShapeLink ).ToList(), options.All );
+		return reports.Any( r => r.State != SyncState.InSync ) ? 2 : 0;
+	}
+
+	private static async Task<int> PullAsync( RepoPaths paths, Options options )
+	{
+		(SyncManifest manifest, PenpotFile file, ThemePresetsSource code) = await LoadAllAsync( paths, cached: false );
+		List<TokenReport> reports = TokenSync.Compare( manifest, file, code );
+		List<TokenReport> pulled = TokenSync.ToPull( reports, options.Prefer );
+		ReportSkipped( reports, pulled, options.Prefer, "pull" );
+		if( pulled.Count == 0 )
+		{
+			Console.WriteLine( "Nothing to pull: the code has every change made in Penpot." );
+			return 0;
+		}
+		foreach( TokenReport r in pulled )
+			Console.WriteLine( $"  {r.Link.CodeName,-34} {r.Code ?? "—",-10} → {r.Penpot}" );
+		if( options.DryRun )
+		{
+			Console.WriteLine( $"Dry run: {pulled.Count} value(s) would change in {ThemePresetsSource.RelativePath}." );
+			return 0;
+		}
+		TokenSync.ApplyToCode( code, pulled );
+		code.Save();
+		foreach( TokenReport r in pulled )
+			r.Link.Synced = r.Penpot;
+		manifest.Save( paths.Manifest );
+		Console.WriteLine( $"Pulled {pulled.Count} value(s) into {ThemePresetsSource.RelativePath}. Rebuild the app to see them." );
+		return 0;
+	}
+
+	private static async Task<int> PushAsync( RepoPaths paths, Options options )
+	{
+		(SyncManifest manifest, PenpotFile file, ThemePresetsSource code) = await LoadAllAsync( paths, cached: false );
+		List<TokenReport> reports = TokenSync.Compare( manifest, file, code );
+		List<TokenReport> pushed = TokenSync.ToPush( reports, options.Prefer );
+		ReportSkipped( reports, pushed, options.Prefer, "push" );
+		ChangeSet changes = ChangeBuilder.ForTokens( file, pushed );
+		if( changes.IsEmpty )
+		{
+			Console.WriteLine( "Nothing to push: Penpot has every change made in the code." );
+			return 0;
+		}
+		foreach( string line in changes.Descriptions )
+			Console.WriteLine( $"  {line}" );
+		if( options.DryRun )
+		{
+			Console.WriteLine( $"Dry run: {changes.Changes.Count} change(s) would be sent to Penpot." );
+			return 0;
+		}
+		using PenpotClient client = new( manifest.Penpot.BaseUrl, PenpotClient.ReadAccessToken( paths ) );
+		await client.UpdateFileAsync( file, changes.Changes );
+		foreach( TokenReport r in pushed )
+		{
+			r.Link.Synced = r.Code;
+			if( changes.Ids.TryGetValue( r.Link, out (Guid SetId, Guid TokenId) ids ) )
+				(r.Link.SetId, r.Link.TokenId) = ids;
+		}
+		manifest.Save( paths.Manifest );
+		Console.WriteLine( $"Pushed {pushed.Count} value(s) to Penpot ({changes.Changes.Count} change(s))." );
+		return 0;
+	}
+
+	private static void ReportSkipped( List<TokenReport> reports, List<TokenReport> taken, Prefer prefer, string verb )
+	{
+		List<TokenReport> conflicts = [ .. reports.Where( r => r.State is SyncState.Conflict or SyncState.Unlinked && !taken.Contains( r ) ) ];
+		if( conflicts.Count > 0 && prefer == Prefer.None )
+			Console.WriteLine( $"Skipping {conflicts.Count} value(s) changed on both sides; rerun {verb} with --prefer penpot or --prefer code to settle them:" );
+		foreach( TokenReport r in conflicts.Where( _ => prefer == Prefer.None ) )
+			Console.WriteLine( $"  ! {r.Link.CodeName,-32} penpot {r.Penpot,-10} code {r.Code,-10} last synced {r.Link.Synced ?? "never"}" );
+		foreach( TokenReport r in reports.Where( r => r.State == SyncState.MissingInCode ) )
+			Console.WriteLine( $"  ? {r.Link.CodeName}: no longer in {ThemePresetsSource.RelativePath}; remove its token in Penpot or restore it in code." );
+	}
+
+	private static void Print( string title, List<TokenReport> reports, bool all )
+	{
+		Console.WriteLine( $"{title}: {reports.Count} linked — " + string.Join( ", ",
+			reports.GroupBy( c => c.State ).OrderBy( g => g.Key ).Select( g => $"{g.Count()} {Describe( g.Key )}" ) ) + "." );
+		foreach( TokenReport r in reports.Where( r => all || r.State != SyncState.InSync ) )
 			Console.WriteLine( $"  {Mark( r.State )} {r.Link.Token,-34} penpot {r.Penpot ?? "—",-10} code {r.Code ?? "—",-10} {Describe( r.State )}" );
-		return colors.Any( r => r.State != SyncState.InSync ) ? 2 : 0;
+	}
+
+	private static async Task<(SyncManifest, PenpotFile, ThemePresetsSource)> LoadAllAsync( RepoPaths paths, bool cached )
+	{
+		SyncManifest manifest = SyncManifest.Load( paths.Manifest );
+		PenpotFile file = await LoadFileAsync( paths, manifest, cached );
+		return (manifest, file, ThemePresetsSource.Load( paths ));
 	}
 
 	/// <summary>Downloads the file (or reads the cached copy) and parses it. Downloads also refresh the cache.</summary>
@@ -138,7 +229,7 @@ internal static class Cli
 		SyncState.ChangedInCode => "changed in code (push)",
 		SyncState.Conflict => "changed on both sides",
 		SyncState.Unlinked => "differ, no baseline",
-		SyncState.MissingInPenpot => "missing in Penpot",
+		SyncState.MissingInPenpot => "missing in Penpot (push creates it)",
 		SyncState.MissingInCode => "missing in code",
 		_ => state.ToString(),
 	};
@@ -147,17 +238,18 @@ internal static class Cli
 	{
 		SyncState.InSync => " ",
 		SyncState.ChangedInPenpot => "<",
-		SyncState.ChangedInCode => ">",
+		SyncState.ChangedInCode or SyncState.MissingInPenpot => ">",
 		SyncState.Conflict => "!",
 		_ => "?",
 	};
 
-	private sealed record Options( Guid? FileId, bool Cached, bool All )
+	private sealed record Options( Guid? FileId, bool Cached, bool All, bool DryRun, Prefer Prefer )
 	{
 		public static Options Parse( string[] args )
 		{
 			Guid? fileId = null;
-			bool cached = false, all = false;
+			bool cached = false, all = false, dryRun = false;
+			Prefer prefer = Prefer.None;
 			for( int i = 0; i < args.Length; i++ )
 			{
 				switch( args[ i ] )
@@ -165,12 +257,21 @@ internal static class Cli
 					case "--file" when i + 1 < args.Length:
 						fileId = Guid.TryParse( args[ ++i ], out Guid id ) ? id : throw new SyncException( $"'{args[ i ]}' is not a Penpot file id." );
 						break;
+					case "--prefer" when i + 1 < args.Length:
+						prefer = args[ ++i ] switch
+						{
+							"penpot" => Prefer.Penpot,
+							"code" => Prefer.Code,
+							_ => throw new SyncException( "--prefer takes 'penpot' or 'code'." ),
+						};
+						break;
 					case "--cached": cached = true; break;
 					case "--all": all = true; break;
+					case "--dry-run": dryRun = true; break;
 					default: throw new SyncException( $"Unknown option '{args[ i ]}'." );
 				}
 			}
-			return new Options( fileId, cached, all );
+			return new Options( fileId, cached, all, dryRun, prefer );
 		}
 	}
 }
