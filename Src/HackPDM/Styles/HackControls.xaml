@@ -66,6 +66,156 @@
 		<Setter Property="CornerRadius" Value="12" />
 	</Style>
 
+	<!--
+		===== Outlined select (Penpot: Text field, Kind=Select) =====
+		A ComboBox drawn like OutlinedTextBoxStyle: 56px outlined box, the Header as a small label inside at the top,
+		the selected item (or PlaceholderText) below it, a chevron on the right; Primary border when focused.
+		Uno Material has no outlined ComboBox and its style doesn't show Header. The template keeps WinUI's part names
+		(ContentPresenter holding PlaceholderTextBlock, Popup > PopupBorder > ScrollViewer > ItemsPresenter) so the
+		control's own code finds them.
+	-->
+	<Style x:Key="HackOutlinedComboBoxStyle" TargetType="ComboBox">
+		<Setter Property="MinHeight" Value="56" />
+		<Setter Property="MinWidth" Value="88" />
+		<Setter Property="Padding" Value="16,8,12,8" />
+		<Setter Property="CornerRadius" Value="4" />
+		<Setter Property="BorderThickness" Value="1" />
+		<Setter Property="BorderBrush" Value="{ThemeResource OutlineBrush}" />
+		<Setter Property="Background" Value="Transparent" />
+		<Setter Property="Foreground" Value="{ThemeResource OnSurfaceBrush}" />
+		<Setter Property="FontSize" Value="16" />
+		<Setter Property="HorizontalContentAlignment" Value="Left" />
+		<Setter Property="VerticalContentAlignment" Value="Center" />
+		<Setter Property="UseSystemFocusVisuals" Value="False" />
+		<Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+		<Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+		<Setter Property="ItemsPanel">
+			<Setter.Value>
+				<ItemsPanelTemplate>
+					<ItemsStackPanel />
+				</ItemsPanelTemplate>
+			</Setter.Value>
+		</Setter>
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="ComboBox">
+					<Grid x:Name="LayoutRoot">
+						<VisualStateManager.VisualStateGroups>
+							<VisualStateGroup x:Name="CommonStates">
+								<VisualState x:Name="Normal" />
+								<VisualState x:Name="PointerOver">
+									<VisualState.Setters>
+										<Setter Target="Background.BorderBrush" Value="{ThemeResource OnSurfaceBrush}" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="Pressed">
+									<VisualState.Setters>
+										<Setter Target="Background.BorderBrush" Value="{ThemeResource OnSurfaceBrush}" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="Disabled">
+									<VisualState.Setters>
+										<Setter Target="LayoutRoot.Opacity" Value="0.38" />
+									</VisualState.Setters>
+								</VisualState>
+							</VisualStateGroup>
+							<VisualStateGroup x:Name="FocusStates">
+								<VisualState x:Name="Focused">
+									<VisualState.Setters>
+										<Setter Target="Background.BorderBrush" Value="{ThemeResource PrimaryBrush}" />
+										<Setter Target="Background.BorderThickness" Value="2" />
+										<Setter Target="HeaderContentPresenter.Foreground" Value="{ThemeResource PrimaryBrush}" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="FocusedPressed">
+									<VisualState.Setters>
+										<Setter Target="Background.BorderBrush" Value="{ThemeResource PrimaryBrush}" />
+										<Setter Target="Background.BorderThickness" Value="2" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="Unfocused" />
+								<VisualState x:Name="PointerFocused" />
+							</VisualStateGroup>
+							<VisualStateGroup x:Name="DropDownStates">
+								<VisualState x:Name="Opened">
+									<VisualState.Setters>
+										<Setter Target="Background.BorderBrush" Value="{ThemeResource PrimaryBrush}" />
+										<Setter Target="Background.BorderThickness" Value="2" />
+										<Setter Target="DropDownGlyph.Glyph" Value="&#xE70E;" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="Closed" />
+							</VisualStateGroup>
+						</VisualStateManager.VisualStateGroups>
+
+						<Border
+							x:Name="Background"
+							Background="{TemplateBinding Background}"
+							BorderBrush="{TemplateBinding BorderBrush}"
+							BorderThickness="{TemplateBinding BorderThickness}"
+							CornerRadius="{TemplateBinding CornerRadius}" />
+						<Grid Padding="{TemplateBinding Padding}" ColumnSpacing="12">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
+							<StackPanel VerticalAlignment="Center">
+								<ContentPresenter
+									x:Name="HeaderContentPresenter"
+									Content="{TemplateBinding Header}"
+									ContentTemplate="{TemplateBinding HeaderTemplate}"
+									FontSize="12"
+									Foreground="{ThemeResource OnSurfaceVariantBrush}"
+									IsHitTestVisible="False"
+									LineHeight="16" />
+								<ContentPresenter
+									x:Name="ContentPresenter"
+									HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+									VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+									FontSize="{TemplateBinding FontSize}"
+									Foreground="{TemplateBinding Foreground}">
+									<TextBlock
+										x:Name="PlaceholderTextBlock"
+										Foreground="{ThemeResource OnSurfaceVariantBrush}"
+										Text="{TemplateBinding PlaceholderText}"
+										TextTrimming="CharacterEllipsis" />
+								</ContentPresenter>
+							</StackPanel>
+							<FontIcon
+								x:Name="DropDownGlyph"
+								Grid.Column="1"
+								VerticalAlignment="Center"
+								FontSize="12"
+								Foreground="{ThemeResource OnSurfaceVariantBrush}"
+								Glyph="&#xE70D;"
+								IsHitTestVisible="False" />
+						</Grid>
+						<Popup x:Name="Popup">
+							<Border
+								x:Name="PopupBorder"
+								Padding="0,4"
+								HorizontalAlignment="Stretch"
+								Background="{ThemeResource HackSurfaceContainerBrush}"
+								BorderBrush="{ThemeResource OutlineVariantBrush}"
+								BorderThickness="1"
+								CornerRadius="4">
+								<ScrollViewer
+									x:Name="ScrollViewer"
+									AutomationProperties.AccessibilityView="Raw"
+									Foreground="{ThemeResource OnSurfaceBrush}"
+									HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+									VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"
+									ZoomMode="Disabled">
+									<ItemsPresenter />
+								</ScrollViewer>
+							</Border>
+						</Popup>
+					</Grid>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
 	<!--  ===== Buttons (Figma: Icon button, Chip) =====  -->
 	<!--  32px icon buttons in pane headers and tab strips.  -->
 	<Style

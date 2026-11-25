@@ -1003,6 +1003,28 @@
       }
     },
     {
+      "component": "Text field",
+      "variant": {
+        "Kind": "Select"
+      },
+      "style": "HackOutlinedComboBoxStyle",
+      "file": "Src/HackPDM/Styles/HackControls.xaml",
+      "properties": {
+        "Background": "Transparent",
+        "BorderBrush": "Outline",
+        "Padding": "16,8,12,8",
+        "CornerRadius": "4"
+      }
+    },
+    {
+      "component": "Text field",
+      "variant": {
+        "Kind": "Text"
+      },
+      "style": "OutlinedTextBoxStyle",
+      "properties": {}
+    },
+    {
       "component": "Toolbar",
       "variant": {},
       "style": "HackToolbarStyle",
@@ -1193,6 +1215,224 @@
           "properties": {
             "Text": "Preview"
           },
+          "children": false
+        }
+      ]
+    },
+    {
+      "view": "Src/HackPDM/Search/SearchOdooView.xaml",
+      "frame": "Search \u2014 Light",
+      "darkFrame": "Search \u2014 Dark",
+      "frameId": "4c049ee1-33b2-8042-8009-004838793441",
+      "darkFrameId": "4c049ee1-33b2-8042-8009-0048fac45d15",
+      "elements": [
+        {
+          "anchor": "search.query",
+          "path": "Content/Query builder",
+          "shape": "4c049ee1-33b2-8042-8009-00483892658e",
+          "darkShape": "4c049ee1-33b2-8042-8009-0048fae71848",
+          "properties": {
+            "Padding": "16,16,16,16"
+          },
+          "children": false
+        },
+        {
+          "anchor": "search.filenameTitle",
+          "path": "Content/Query builder/Filename section/Filename \u0026 Scope",
+          "shape": "4c049ee1-33b2-8042-8009-004838cc95cc",
+          "darkShape": "4c049ee1-33b2-8042-8009-0048fb4047c9",
+          "properties": {
+            "Text": "Filename \u0026 Scope"
+          },
+          "children": false
+        },
+        {
+          "anchor": "search.propertyTitle",
+          "path": "Content/Query builder/Property section/Property Filter Builder",
+          "shape": "4c049ee1-33b2-8042-8009-00483911c67a",
+          "darkShape": "4c049ee1-33b2-8042-8009-0048fb9f51f3",
+          "properties": {
+            "Text": "Property Filter Builder"
+          },
+          "children": false
+        },
+        {
+          "anchor": "search.addRule",
+          "path": "Content/Query builder/Property section/Rule/Button",
+          "shape": "4c049ee1-33b2-8042-8009-004839014f5a",
+          "darkShape": "4c049ee1-33b2-8042-8009-0048fb854036",
+          "properties": {
+            "Text": "Add Rule",
+            "Style": "FilledTonalButtonStyle"
+          },
+          "children": false
+        },
+        {
+          "anchor": "search.rules",
+          "path": "Content/Rules",
+          "shape": "4c049ee1-33b2-8042-8009-0048392596ad",
+          "darkShape": "4c049ee1-33b2-8042-8009-0048fbb551b8",
+          "properties": {
+            "Padding": "8,0,8,8"
+          },
+          "children": false
+        },
+        {
+          "anchor": "search.results",
+          "path": "Content/Results",
+          "shape": "4c049ee1-33b2-8042-8009-00483a236b06",
+          "darkShape": "4c049ee1-33b2-8042-8009-0048fce01245",
+          "properties": {
+            "Padding": "8,0,8,8"
+          },
+          "children": false
+        },
+        {
+          "anchor": "search.search",
+          "path": "Content/Actions/Button#4",
+          "shape": "4c049ee1-33b2-8042-8009-00483c33d7d0",
+          "darkShape": "4c049ee1-33b2-8042-8009-0048ff939d6b",
+          "properties": {
+            "Text": "Search",
+            "Style": "FilledButtonStyle"
+          },
+          "children": false
+        }
+      ]
+    },
+    {
+      "view": "Src/HackPDM/Search/SearchOdooView.xaml",
+      "frame": "Search bar \u2014 Light",
+      "darkFrame": "Search bar \u2014 Dark",
+      "frameId": "4c049ee1-33b2-8042-8009-00498189f006",
+      "darkFrameId": "4c049ee1-33b2-8042-8009-0049823ef294",
+      "elements": [
+        {
+          "anchor": "search.bar",
+          "path": "Toolbar",
+          "shape": "4c049ee1-33b2-8042-8009-004981b67e7a",
+          "darkShape": "4c049ee1-33b2-8042-8009-004982579869",
+          "properties": {},
+          "children": false
+        }
+      ]
+    },
+    {
+      "view": "Src/HackPDM/Status/StatusDialogView.xaml",
+      "frame": "Status \u2014 Light",
+      "darkFrame": "Status \u2014 Dark",
+      "frameId": "4c049ee1-33b2-8042-8009-004f3ec111d0",
+      "darkFrameId": "4c049ee1-33b2-8042-8009-004fea29bb18",
+      "elements": [
+        {
+          "anchor": "status.banner",
+          "path": "Content/Resume banner",
+          "shape": "4c049ee1-33b2-8042-8009-004f3ee4341f",
+          "darkShape": "4c049ee1-33b2-8042-8009-004fea589588",
+          "properties": {},
+          "children": false
+        },
+        {
+          "anchor": "status.bannerTitle",
+          "path": "Content/Resume banner/Text/Unfinished download read\u2026",
+          "shape": "4c049ee1-33b2-8042-8009-004f3efa3cdc",
+          "darkShape": "4c049ee1-33b2-8042-8009-004fea711555",
+          "properties": {
+            "Text": "Unfinished download ready to resume"
+          },
+          "children": false
+        },
+        {
+          "anchor": "status.resume",
+          "path": "Content/Resume banner/Button",
+          "shape": "4c049ee1-33b2-8042-8009-004f3f2abaa0",
+          "darkShape": "4c049ee1-33b2-8042-8009-004fea9c79ee",
+          "properties": {
+            "Text": "Resume Download",
+            "Style": "FilledButtonStyle"
+          },
+          "children": false
+        },
+        {
+          "anchor": "status.operations",
+          "path": "Content/Operations pane",
+          "shape": "4c049ee1-33b2-8042-8009-004f3f3384f1",
+          "darkShape": "4c049ee1-33b2-8042-8009-004feaa7a86f",
+          "properties": {},
+          "children": false
+        },
+        {
+          "anchor": "status.operationsTitle",
+          "path": "Content/Operations pane/Header/Operations",
+          "shape": "4c049ee1-33b2-8042-8009-004f3f5602fd",
+          "darkShape": "4c049ee1-33b2-8042-8009-004feac82687",
+          "properties": {
+            "Text": "Operations"
+          },
+          "children": false
+        },
+        {
+          "anchor": "status.info",
+          "path": "Content/Lower/Info pane",
+          "shape": "4c049ee1-33b2-8042-8009-004f409f417d",
+          "darkShape": "4c049ee1-33b2-8042-8009-004fec2b7529",
+          "properties": {},
+          "children": false
+        },
+        {
+          "anchor": "status.infoTitle",
+          "path": "Content/Lower/Info pane/Header/Info",
+          "shape": "4c049ee1-33b2-8042-8009-004f40c0e8d0",
+          "darkShape": "4c049ee1-33b2-8042-8009-004fec4bff05",
+          "properties": {
+            "Text": "Info"
+          },
+          "children": false
+        },
+        {
+          "anchor": "status.errors",
+          "path": "Content/Lower/Warnings \u0026 Errors pane",
+          "shape": "4c049ee1-33b2-8042-8009-004f417cd9b3",
+          "darkShape": "4c049ee1-33b2-8042-8009-004fed149114",
+          "properties": {},
+          "children": false
+        },
+        {
+          "anchor": "status.errorsTitle",
+          "path": "Content/Lower/Warnings \u0026 Errors pane/Header/Warnings \u0026 Errors",
+          "shape": "4c049ee1-33b2-8042-8009-004f419f0019",
+          "darkShape": "4c049ee1-33b2-8042-8009-004fed356850",
+          "properties": {
+            "Text": "Warnings \u0026 Errors"
+          },
+          "children": false
+        },
+        {
+          "anchor": "status.close",
+          "path": "Content/Footer/Actions/Button#7",
+          "shape": "4c049ee1-33b2-8042-8009-004f4310bd83",
+          "darkShape": "4c049ee1-33b2-8042-8009-004fee99d5a8",
+          "properties": {
+            "Text": "Close",
+            "Style": "FilledTonalButtonStyle"
+          },
+          "children": false
+        }
+      ]
+    },
+    {
+      "view": "Src/HackPDM/Status/StatusDialogView.xaml",
+      "frame": "Status bar \u2014 Light",
+      "darkFrame": "Status bar \u2014 Dark",
+      "frameId": "4c049ee1-33b2-8042-8009-004ff42a0c94",
+      "darkFrameId": "4c049ee1-33b2-8042-8009-004ff603f713",
+      "elements": [
+        {
+          "anchor": "status.bar",
+          "path": "Toolbar",
+          "shape": "4c049ee1-33b2-8042-8009-004ff445ae78",
+          "darkShape": "4c049ee1-33b2-8042-8009-004ff619c0a4",
+          "properties": {},
           "children": false
         }
       ]

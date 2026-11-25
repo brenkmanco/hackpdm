@@ -44,11 +44,13 @@ internal static class ComponentMap
 		Synced( "Icon button", "PaneIconButtonStyle", ( "State", "Standard" ) ),
 		Synced( "Icon button", "PaneIconToggleButtonStyle", ( "State", "Selected" ) ),
 		Synced( "Chip", "AssistChipButtonStyle", ( "Type", "Assist" ) ),
+		Synced( "Text field", "HackOutlinedComboBoxStyle", ( "Kind", "Select" ) ),
 		Reference( "Button", "FilledButtonStyle", ( "Type", "Filled" ) ),
 		Reference( "Button", "FilledTonalButtonStyle", ( "Type", "Tonal" ) ),
 		Reference( "Button", "OutlinedButtonStyle", ( "Type", "Outlined" ) ),
 		Reference( "Button", "TextButtonStyle", ( "Type", "Text" ) ),
 		Reference( "Chip", "FilterChipStyle", ( "Type", "Filter" ) ),
+		Reference( "Text field", "OutlinedTextBoxStyle", ( "Kind", "Text" ) ),
 	];
 
 	private static ComponentLink Synced( string component, string style, params (string Key, string Value)[] variant )

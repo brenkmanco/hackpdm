@@ -17,18 +17,28 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 
 using Windows.Foundation;
-using Windows.UI;
 
 namespace HackPDM.Status;
 
 /// <summary>The status window: full 3-pane log or compact category bar with hover error/warning popups, bound to <see cref="StatusDialogViewModel"/>.</summary>
 public sealed partial class StatusDialogView : Page, IDockablePanel
 {
-	private static readonly SolidColorBrush InfoAccentBrush = new( Color.FromArgb( 255, 76, 160, 232 ) );
-	private static readonly SolidColorBrush WarningAccentBrush = new( Color.FromArgb( 255, 224, 168, 46 ) );
-	private static readonly SolidColorBrush WarningTintBrush = new( Color.FromArgb( 42, 224, 168, 46 ) );
-	private static readonly SolidColorBrush ErrorAccentBrush = new( Color.FromArgb( 255, 229, 72, 77 ) );
-	private static readonly SolidColorBrush ErrorTintBrush = new( Color.FromArgb( 42, 229, 72, 77 ) );
+	/// <summary>
+	/// The Material roles behind each message kind, as on the banners: info is Primary, warnings Tertiary, errors
+	/// Error; an active pill fills with the kind's container color. Looked up each time so presets and Theme Editor
+	/// changes apply (OnThemeChanged repaints).
+	/// </summary>
+	private static (string Accent, string Container, string OnContainer) Roles( StatusMessage kind ) => kind switch
+	{
+		StatusMessage.ERROR => ("ErrorBrush", "ErrorContainerBrush", "OnErrorContainerBrush"),
+		StatusMessage.INFO => ("PrimaryBrush", "SecondaryContainerBrush", "OnSecondaryContainerBrush"),
+		_ => ("TertiaryBrush", "TertiaryContainerBrush", "OnTertiaryContainerBrush"),
+	};
+
+	private static readonly SolidColorBrush NoBrush = new();
+
+	/// <summary>A theme brush by key; transparent if the key is missing (never null, so it can go straight into a property).</summary>
+	private static Brush Theme( string key ) => ThemeResources.TryGetBrush<Brush>( key ) ?? NoBrush;
 
 	private bool _allowClose;
 	private bool _isClosing;
@@ -283,28 +293,30 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 		if( _lastWarningsActive != warningsActive )
 		{
 			_lastWarningsActive = warningsActive;
-			ApplyPillAccent( WarningsPill, WarningsPillIcon, warningsActive, WarningAccentBrush, WarningTintBrush );
+			ApplyPillAccent( WarningsPill, WarningsPillIcon, warningsActive, StatusMessage.WARNING );
 		}
 		bool errorsActive = ViewModel.ErrorCount > 0;
 		if( _lastErrorsActive != errorsActive )
 		{
 			_lastErrorsActive = errorsActive;
-			ApplyPillAccent( ErrorsPill, ErrorsPillIcon, errorsActive, ErrorAccentBrush, ErrorTintBrush );
+			ApplyPillAccent( ErrorsPill, ErrorsPillIcon, errorsActive, StatusMessage.ERROR );
 		}
 	}
 
-	private static void ApplyPillAccent( Border pill, FontIcon icon, bool active, Brush accent, Brush tint )
+	/// <summary>An active pill fills with its kind's container color (Penpot: Status bar pills); an idle one is outlined like a chip.</summary>
+	private static void ApplyPillAccent( Border pill, FontIcon icon, bool active, StatusMessage kind )
 	{
+		(string _, string container, string onContainer) = Roles( kind );
 		if( active )
 		{
-			pill.BorderBrush = accent;
-			pill.Background = tint;
-			icon.Foreground = accent;
+			pill.BorderBrush = Theme( container );
+			pill.Background = Theme( container );
+			icon.Foreground = Theme( onContainer );
 			return;
 		}
-		pill.BorderBrush = ThemeResources.TryGetBrush<Brush>( "CardStrokeColorDefaultBrush" );
-		pill.Background = ThemeResources.TryGetBrush<Brush>( "SubtleFillColorSecondaryBrush" );
-		icon.ClearValue( FontIcon.ForegroundProperty );
+		pill.BorderBrush = Theme( "OutlineVariantBrush" );
+		pill.Background = null;
+		icon.Foreground = Theme( "OnSurfaceVariantBrush" );
 	}
 
 	private void InfoPill_PointerEntered( object sender, PointerRoutedEventArgs e ) => ShowHoverPopup( StatusMessage.INFO, InfoPill );
@@ -369,9 +381,9 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 		_hoverCard = new Border
 		{
 			Width = 440,
-			Padding = new Thickness( 12, 10, 12, 10 ),
-			BorderThickness = new Thickness( 1.5 ),
-			CornerRadius = new CornerRadius( 8 ),
+			Padding = new Thickness( 16, 12, 16, 12 ),
+			BorderThickness = new Thickness( 1 ),
+			CornerRadius = new CornerRadius( 12 ),
 			Child = rootStack,
 		};
 		_hoverCard.PointerEntered += HoverPopup_PointerEntered;
@@ -385,16 +397,22 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 	{
 		if( _hoverCard is null )
 			return;
-		_hoverCard.Background = ThemeResources.TryGetBrush<Brush>( "ApplicationPageBackgroundThemeBrush" );
+		_hoverCard.Background = Theme( "HackSurfaceContainerHighBrush" );
 		if( _hoverOpenLink is not null )
-			_hoverOpenLink.Foreground = ThemeResources.TryGetBrush<Brush>( "AccentTextFillColorPrimaryBrush" );
-		Brush? secondary = ThemeResources.TryGetBrush<Brush>( "TextFillColorSecondaryBrush" );
+			_hoverOpenLink.Foreground = Theme( "PrimaryBrush" );
+		Brush secondary = Theme( "OnSurfaceVariantBrush" );
 		if( _hoverEmptyText is not null )
 			_hoverEmptyText.Foreground = secondary;
 		if( _hoverOverflowText is not null )
 			_hoverOverflowText.Foreground = secondary;
 		if( _hoverHintText is not null )
-			_hoverHintText.Foreground = ThemeResources.TryGetBrush<Brush>( "TextFillColorTertiaryBrush" );
+			_hoverHintText.Foreground = Theme( "OutlineBrush" );
+		if( _activeHoverKind is { } kind && _hoverIcon is not null )
+		{
+			Brush accent = Theme( Roles( kind ).Accent );
+			_hoverIcon.Foreground = accent;
+			_hoverCard.BorderBrush = accent;
+		}
 	}
 
 	private void ShowHoverPopup( StatusMessage kind, Border anchorPill )
@@ -406,12 +424,13 @@ public sealed partial class StatusDialogView : Page, IDockablePanel
 		_activeHoverKind = kind;
 
 		Border card = EnsureHoverCard();
-		var (source, glyph, accentBrush, titlePrefix, emptyMessage) = kind switch
+		var (source, glyph, titlePrefix, emptyMessage) = kind switch
 		{
-			StatusMessage.ERROR => ( ViewModel.OErrorsOnly, "\uEA39", ErrorAccentBrush, "Errors", "No errors recorded." ),
-			StatusMessage.INFO => ( ViewModel.OInfo, "\uE946", InfoAccentBrush, "Info", "No info messages recorded." ),
-			_ => ( ViewModel.OWarnings, "\uE7BA", WarningAccentBrush, "Warnings", "No warnings recorded." ),
+			StatusMessage.ERROR => ( ViewModel.OErrorsOnly, "\uEA39", "Errors", "No errors recorded." ),
+			StatusMessage.INFO => ( ViewModel.OInfo, "\uE946", "Info", "No info messages recorded." ),
+			_ => ( ViewModel.OWarnings, "\uE7BA", "Warnings", "No warnings recorded." ),
 		};
+		Brush accentBrush = Theme( Roles( kind ).Accent );
 
 		const int maxShown = 8;
 		int take = Math.Min( source.Count, maxShown );

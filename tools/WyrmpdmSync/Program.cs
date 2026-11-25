@@ -344,8 +344,8 @@ internal static class Cli
 				continue;
 			}
 			List<ElementReport> reports = LayoutSync.Compare( ctx, styleOf );
-			Console.WriteLine( $"View {frame.View} ↔ \"{frame.Frame}\": {reports.Count} properties — " + string.Join( ", ",
-				reports.GroupBy( c => c.State ).OrderBy( g => g.Key ).Select( g => $"{g.Count()} {Describe( g.Key )}" ) ) + "." );
+			Console.WriteLine( $"View {frame.View} ↔ \"{frame.Frame}\": {reports.Count} properties" + ( reports.Count == 0 ? "." : " — " + string.Join( ", ",
+				reports.GroupBy( c => c.State ).OrderBy( g => g.Key ).Select( g => $"{g.Count()} {Describe( g.Key )}" ) ) + "." ) );
 			foreach( ElementReport r in reports.Where( r => all || r.State != SyncState.InSync ) )
 				Console.WriteLine( $"  {Mark( r.State )} {r.Element.Anchor + "." + r.Property,-40} penpot {Short( r.Penpot ),-14} code {Short( r.Code ),-14} {Describe( r.State )}" );
 			List<string> notes = [];

@@ -1,7 +1,7 @@
 # Roadmap: every HackPDM page designed in Figma and matched in the app
 
 **Goal:** Every HackPDM page and shared control has a Figma design (light and dark) and the app matches it, with all color coming from one Material color system that the theme presets and Theme Editor control.
-**Status:** Milestone 4 in progress: 4.1 Dependency Graph done and committed (with sync tool phase 4). Penpot ↔ code sync tool (`tools/WyrmpdmSync`, see `design/README.md`) done. Next: 4.2 Search/SearchOdooView. Updated 2026-11-25.
+**Status:** M4 done: Dependency Graph, Search and Status designed in Penpot, restyled, linked with the sync tool and checked on screen. Next: M5, step 5.1 Login/ProfileManagerView. Updated 2026-11-25.
 
 ## Plan
 - **Design file:** Penpot (local, http://localhost:9001) from here on; colors as a "HackPDM colors" token set per preset, components on a Components page, frames per page. The Figma file "HackPDM — Uno Material Design" (https://www.figma.com/design/qeptbte8bdjojuGv6mc6FN) keeps the Colors page and File Manager frames built so far.
@@ -16,7 +16,7 @@
 - [x] M1: Color and shape foundations — HackPDM color set in Figma (Light, Dark, Navy blue); presets, shape styles and the Theme Editor on Material colors; tests pass; File Manager work committed
 - [x] M2: Component library — Penpot Components page plus matching shared app styles; File Manager frames rebuilt in Penpot
 - [x] M3: Shell and shared pieces restyled (app; Figma frames in the backlog)
-- [ ] M4: Main work pages restyled
+- [x] M4: Main work pages restyled
 - [ ] M5: Settings and account pages restyled
 - [ ] M6: Final pass in every preset, light and dark; scorecard
 
@@ -55,9 +55,9 @@
 | Step | Size | Page | Status |
 |---|---|---|---|
 | 4.1 | complex | Graph/DependencyGraphView | done |
-| 4.2 | standard | Search/SearchOdooView | |
-| 4.3 | standard | Status/StatusDialogView | |
-| 4.4 | simple | git commit (4.2–4.3; 4.1 already committed) | |
+| 4.2 | standard | Search/SearchOdooView | done |
+| 4.3 | standard | Status/StatusDialogView | done |
+| 4.4 | simple | git commit (4.2–4.3; 4.1 already committed) | done |
 
 ## Phase 5: Settings and account pages (reaches M5)
 | Step | Size | Page | Status |
@@ -81,6 +81,8 @@
 | 6.3 | simple | git commit | |
 
 ## Decisions
+- 2026-11-25: Status log colors follow the banners: info Primary, warnings Tertiary (active pill Tertiary Container), errors Error (active pill Error Container); idle pills are outlined like chips. Set in StatusDialogView.xaml.cs from theme brushes, repainted on theme changes.
+- 2026-11-25: Uno Material has no outlined dropdown and its ComboBox style ignores Header, so `HackControls.xaml` has its own `HackOutlinedComboBoxStyle` (56px outlined box, Header as the label inside, Primary border when focused or open), linked to the "Text field" (Kind=Select) component; every dropdown uses it from now on.
 - 2026-11-25: Step 4.1 was committed early, together with sync tool phase 4, because the graph view carries both the restyle and the sync markers (user choice); milestone 4's own commit (4.4) covers 4.2–4.3.
 - 2026-11-25: Design and code are kept in step by `tools/WyrmpdmSync` (Penpot API + access token, both ways): preset colors and shape values ↔ tokens, components ↔ `HackControls.xaml` styles, views ↔ frames through `pp:Id` markers. New pages should be linked the same way (see `design/README.md`).
 - 2026-11-25: The dependency graph's colors come from the active Material scheme, Theme Editor changes included (`GraphThemes.FromScheme`): canvas Surface, boxes Surface Container with an Outline Variant border, links Outline, highlight / ports / clicked box Primary, chosen files' border Tertiary. The file-kind header colors and shadows stay fixed per preset because they carry meaning.
@@ -112,6 +114,8 @@
 - Light + dark frames for every page restyled app-only: Shell (rail + Search / Status drawers), Not Logged In, Message box, PiP window.
 
 ## Handoff notes
+- After M4: Penpot pages "Status" ("Status — Light/Dark", "Status bar — Light/Dark") and "Search" join Graph and File Manager; all four views are linked and `status` shows everything in sync (90 colors, 16 shape values, 31 component setters, 29 view properties). Status checked on screen (docked full log, minimal strip idle); an active warning/error pill and the hover card were not seen on screen. App tests 431 pass, sync tool tests 60 pass.
+- After 4.2: Penpot page "Search" has "Search — Light/Dark" (full view) and "Search bar — Light/Dark" (minimal bar); the view is linked to both (8 elements, 9 properties, in sync). Checked on screen in Dark on the desktop build: full view, docked panel, minimal bar, and an open dropdown list. The Assist chip's Penpot height is now 32 (re-laid out through the plugin).
 - After the sync tool (phases 1–5): `status` shows 106 tokens, 27 component setters and both linked views in sync, except `AssistChipButtonStyle.Height` (Penpot 34, code 32) until the Assist chip is re-laid out in the Penpot editor. The "Graph around it" labels' glyph layout was cleared by a test push and is redrawn by Penpot on the next edit. 60 tool tests pass.
 - After 4.1: Penpot page "Dependency Graph" holds "— Light" and "— Dark"; File Manager frames' rail now lists the app's six pages. App: `DependencyGraphView.xaml` on the shared styles, `GraphTheme.cs` derives graph colors from the scheme (2 new tests), `ThemeService.GraphTheme` passes the applied scheme. Both targets build; 430 tests pass, 55 skipped; `PauseAndDownloadResumeTests` still fails intermittently on main too (fix on branch `claude/cool-newton-5c3635`). Checked on screen in Dark (desktop build). Seen there, not fixed: on the desktop build the Material text styles (BodyMedium, BodySmall) render noticeably heavier than the default font, app-wide.
 - After M2: Penpot page "File Manager" holds "File Manager — Light" and "— Dark" (1440×900, the Balanced layout: rail, toolbar, Folders pane, Entries list with the app's 8 columns, Details inspector, Preview), built from Components-page instances and preset tokens; sample data is made up. Frames on other Penpot pages should be built the same way: instances from the Components page, preset-prefixed tokens. Keep the Penpot tab in the foreground while the plugin works; the browser suspends background tabs.

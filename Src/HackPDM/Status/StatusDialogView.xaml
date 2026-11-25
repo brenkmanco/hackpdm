@@ -6,12 +6,19 @@
     xmlns:tv="using:WinUI.TableView"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:pp="urn:wyrmpdm:penpot-sync"
     xmlns:primitives="using:Microsoft.UI.Xaml.Controls.Primitives"
     xmlns:rep="using:HackPDM.Core.Services"
     xmlns:controls="using:HackPDM.Common"
-    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
-    mc:Ignorable="d">
+    Background="{ThemeResource BackgroundBrush}"
+    mc:Ignorable="d pp">
     <Page.Resources>
+        <!--
+            Material look for this screen, built from the Penpot frames "Status — Light" / "— Dark" (full log) and
+            "Status bar — Light" / "— Dark" (minimal strip). Elements marked pp:Id are kept in step with those frames
+            by tools/WyrmpdmSync (see design/README.md). The minimal strip's warning/error pill colors and the hover
+            card are set in code (StatusDialogView.xaml.cs) from the same Material roles.
+        -->
         <DataTemplate x:Key="StatusActionCellTemplate" x:DataType="rep:BasicStatusMessage">
             <TextBlock
                 Padding="4,0,4,0"
@@ -41,35 +48,38 @@
 
             <!--  Saved Download Resume Banner  -->
             <Border
+                pp:Id="status.banner"
                 Grid.Row="0"
-                Padding="12,8"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
+                Style="{StaticResource HackBannerInfoStyle}"
                 Visibility="{x:Bind ViewModel.ShowResumableDownloadBanner, Mode=OneWay}">
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                     <FontIcon
                         VerticalAlignment="Center"
                         FontSize="16"
-                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        Foreground="{ThemeResource OnSecondaryContainerBrush}"
                         Glyph="&#xE896;" />
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                        <TextBlock FontSize="12" FontWeight="SemiBold" Text="Unfinished download ready to resume" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock
-                            FontSize="11"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            pp:Id="status.bannerTitle"
+                            Foreground="{ThemeResource OnSecondaryContainerBrush}"
+                            Style="{StaticResource TitleSmall}"
+                            Text="Unfinished download ready to resume" />
+                        <TextBlock
+                            Foreground="{ThemeResource OnSecondaryContainerBrush}"
+                            Style="{StaticResource BodySmall}"
                             Text="{x:Bind ViewModel.ResumableDownloadSummary, Mode=OneWay}"
                             TextTrimming="CharacterEllipsis" />
                     </StackPanel>
-                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Orientation="Horizontal" Spacing="6">
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Orientation="Horizontal" Spacing="4">
                         <Button
+                            pp:Id="status.resume"
                             Command="{x:Bind ViewModel.ResumeSavedDownloadCommand}"
                             Content="Resume Download"
-                            Style="{StaticResource AccentButtonStyle}" />
+                            Style="{StaticResource FilledButtonStyle}" />
                         <Button
                             Command="{x:Bind ViewModel.ClearSavedDownloadCommand}"
                             Content="Clear"
+                            Style="{StaticResource TextButtonStyle}"
                             ToolTipService.ToolTip="Discard saved download progress" />
                     </StackPanel>
                 </Grid>
@@ -77,28 +87,25 @@
 
             <!--  Main Operations Log Card  -->
             <Border
+                pp:Id="status.operations"
                 Grid.Row="1"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="6">
+                BorderThickness="{StaticResource HackPanelBorderThickness}"
+                CornerRadius="{StaticResource HackPanelCornerRadius}"
+                Style="{StaticResource HackPaneOutlinedStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-                    <Border
+                    <TextBlock
+                        pp:Id="status.operationsTitle"
                         Grid.Row="0"
-                        Padding="10,6"
-                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                        BorderThickness="0,0,0,1">
-                        <TextBlock
-                            FontSize="12"
-                            FontWeight="SemiBold"
-                            Text="Operations" />
-                    </Border>
+                        Margin="16,12,16,4"
+                        Style="{StaticResource HackPaneTitleStyle}"
+                        Text="Operations" />
                     <tv:TableView
                         Grid.Row="1"
+                        Margin="8,0,8,8"
                         AutoGenerateColumns="False"
                         BorderThickness="0"
                         CanSortColumns="{x:Bind ViewModel.CanSortLogColumns, Mode=OneWay}"
@@ -137,28 +144,25 @@
                 </Grid.ColumnDefinitions>
 
                 <Border
+                    pp:Id="status.info"
                     Grid.Column="0"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="6">
+                    BorderThickness="{StaticResource HackPanelBorderThickness}"
+                    CornerRadius="{StaticResource HackPanelCornerRadius}"
+                    Style="{StaticResource HackPaneOutlinedStyle}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <Border
+                        <TextBlock
+                            pp:Id="status.infoTitle"
                             Grid.Row="0"
-                            Padding="10,6"
-                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                            BorderThickness="0,0,0,1">
-                            <TextBlock
-                                FontSize="12"
-                                FontWeight="SemiBold"
-                                Text="Info" />
-                        </Border>
+                            Margin="16,12,16,4"
+                            Style="{StaticResource HackPaneTitleStyle}"
+                            Text="Info" />
                         <tv:TableView
                             Grid.Row="1"
+                            Margin="8,0,8,8"
                             AutoGenerateColumns="False"
                             BorderThickness="0"
                             CanSortColumns="{x:Bind ViewModel.CanSortLogColumns, Mode=OneWay}"
@@ -188,28 +192,25 @@
                     Orientation="Vertical" />
 
                 <Border
+                    pp:Id="status.errors"
                     Grid.Column="2"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="6">
+                    BorderThickness="{StaticResource HackPanelBorderThickness}"
+                    CornerRadius="{StaticResource HackPanelCornerRadius}"
+                    Style="{StaticResource HackPaneOutlinedStyle}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <Border
+                        <TextBlock
+                            pp:Id="status.errorsTitle"
                             Grid.Row="0"
-                            Padding="10,6"
-                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                            BorderThickness="0,0,0,1">
-                            <TextBlock
-                                FontSize="12"
-                                FontWeight="SemiBold"
-                                Text="Warnings &amp; Errors" />
-                        </Border>
+                            Margin="16,12,16,4"
+                            Style="{StaticResource HackPaneTitleStyle}"
+                            Text="Warnings &amp; Errors" />
                         <tv:TableView
                             Grid.Row="1"
+                            Margin="8,0,8,8"
                             AutoGenerateColumns="False"
                             BorderThickness="0"
                             CanSortColumns="{x:Bind ViewModel.CanSortLogColumns, Mode=OneWay}"
@@ -236,7 +237,7 @@
             <!--  Progress Bar  -->
             <ProgressBar
                 Grid.Row="4"
-                Height="10"
+                Height="4"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Center"
                 IsIndeterminate="{x:Bind ViewModel.IsIndeterminate, Mode=OneWay}"
@@ -261,22 +262,24 @@
                     Spacing="14">
                     <TextBlock
                         VerticalAlignment="Center"
+                        Style="{StaticResource BodyMedium}"
                         Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}" />
                     <TextBlock
                         VerticalAlignment="Center"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource HackCaptionStyle}"
                         Text="{x:Bind ViewModel.EtaText, Mode=OneWay}"
                         Visibility="{x:Bind ViewModel.HasEta, Mode=OneWay}" />
                     <TextBlock
                         VerticalAlignment="Center"
+                        Style="{StaticResource HackCaptionStyle}"
                         Text="{x:Bind ViewModel.SkippedText, Mode=OneWay}" />
-                    <StackPanel VerticalAlignment="Center" Spacing="2">
-                        <TextBlock Text="{x:Bind ViewModel.DownloadedText, Mode=OneWay}" />
-                        <TextBlock Text="{x:Bind ViewModel.SessionDownloadedText, Mode=OneWay}" />
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Style="{StaticResource HackCaptionStyle}" Text="{x:Bind ViewModel.DownloadedText, Mode=OneWay}" />
+                        <TextBlock Style="{StaticResource HackCaptionStyle}" Text="{x:Bind ViewModel.SessionDownloadedText, Mode=OneWay}" />
                     </StackPanel>
-                    <StackPanel VerticalAlignment="Center" Spacing="2">
-                        <TextBlock Text="{x:Bind ViewModel.UploadedText, Mode=OneWay}" />
-                        <TextBlock Text="{x:Bind ViewModel.SessionUploadedText, Mode=OneWay}" />
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Style="{StaticResource HackCaptionStyle}" Text="{x:Bind ViewModel.UploadedText, Mode=OneWay}" />
+                        <TextBlock Style="{StaticResource HackCaptionStyle}" Text="{x:Bind ViewModel.SessionUploadedText, Mode=OneWay}" />
                     </StackPanel>
                 </StackPanel>
 
@@ -290,37 +293,46 @@
                     <Button
                         Click="SwitchToMinimalStatus_Click"
                         Content="Minimal"
+                        Style="{StaticResource TextButtonStyle}"
                         ToolTipService.ToolTip="Switch to compact category bar" />
                     <Button
                         x:Name="DockStatusBtn"
                         Click="DockStatusBtn_Click"
                         Content="Dock"
+                        Style="{StaticResource TextButtonStyle}"
                         ToolTipService.ToolTip="Dock Status Log into the main window"
                         Visibility="Collapsed" />
                     <Button
                         Command="{x:Bind ViewModel.OpenLogsFolderCommand}"
                         Content="Logs Folder"
+                        Style="{StaticResource TextButtonStyle}"
                         ToolTipService.ToolTip="Open the HackPDM diagnostic logs folder" />
                     <Button
                         Click="CopyDiagnosticsBtn_Click"
                         Content="Copy Diagnostics"
+                        Style="{StaticResource TextButtonStyle}"
                         ToolTipService.ToolTip="Copy redacted client/server diagnostic summary to clipboard" />
                     <Button
                         Content="Configure Settings"
-                        Click="StatusSettings_Click" />
+                        Click="StatusSettings_Click"
+                        Style="{StaticResource TextButtonStyle}" />
                     <CheckBox
                         Content="Close When Complete"
                         IsChecked="{x:Bind ViewModel.AutoClose, Mode=TwoWay}" />
                     <Button
                         Command="{x:Bind ViewModel.TogglePauseCommand}"
                         Content="{x:Bind ViewModel.PauseButtonText, Mode=OneWay}"
+                        Style="{StaticResource OutlinedButtonStyle}"
                         Visibility="{x:Bind ViewModel.ShowPauseButton, Mode=OneWay}" />
                     <Button
                         Content="Cancel"
-                        Command="{x:Bind ViewModel.CancelCommand}" />
+                        Command="{x:Bind ViewModel.CancelCommand}"
+                        Style="{StaticResource OutlinedButtonStyle}" />
                     <Button
+                        pp:Id="status.close"
                         Content="Close"
-                        Click="CmdCloseClick" />
+                        Click="CmdCloseClick"
+                        Style="{StaticResource FilledTonalButtonStyle}" />
                 </StackPanel>
             </Grid>
         </Grid>
@@ -328,9 +340,10 @@
         <!--  Minimal Status Category Strip  -->
         <Border
             x:Name="MinimalStatusRoot"
-            Padding="10,6"
+            pp:Id="status.bar"
+            Margin="12"
             VerticalAlignment="Center"
-            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            Style="{StaticResource HackToolbarStyle}"
             Visibility="Collapsed">
             <Grid ColumnSpacing="10">
                 <Grid.ColumnDefinitions>
@@ -345,11 +358,11 @@
                     Spacing="8">
                     <!--  Processing  -->
                     <Border
-                        Padding="8,4"
-                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        Padding="10,6,12,6"
+                        Background="Transparent"
+                        BorderBrush="{ThemeResource OutlineVariantBrush}"
                         BorderThickness="1"
-                        CornerRadius="4"
+                        CornerRadius="8"
                         PointerPressed="CategoryPill_PointerPressed"
                         ToolTipService.ToolTip="{x:Bind ViewModel.LatestProcessingMessage, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
@@ -358,15 +371,14 @@
                                 Height="13"
                                 IsActive="{x:Bind ViewModel.IsActivelyRunning, Mode=OneWay}"
                                 Visibility="{x:Bind ViewModel.IsInProcess, Mode=OneWay}" />
-                            <FontIcon FontSize="12" Glyph="&#xE9D9;" />
+                            <FontIcon FontSize="14" Foreground="{ThemeResource OnSurfaceVariantBrush}" Glyph="&#xE9D9;" />
                             <TextBlock
-                                FontSize="12"
-                                FontWeight="SemiBold"
+                                Style="{StaticResource LabelLarge}"
                                 Text="{x:Bind ViewModel.ProcessingSummaryText, Mode=OneWay}" />
                             <TextBlock
                                 MaxWidth="200"
-                                FontSize="11"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource HackCaptionStyle}"
                                 Text="{x:Bind ViewModel.LatestProcessingMessage, Mode=OneWay}"
                                 TextTrimming="CharacterEllipsis" />
                         </StackPanel>
@@ -375,19 +387,18 @@
                     <!--  Info (hover opens details popup; click opens full Status Dialog)  -->
                     <Border
                         x:Name="InfoPill"
-                        Padding="8,4"
-                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        Padding="10,6,12,6"
+                        Background="Transparent"
+                        BorderBrush="{ThemeResource OutlineVariantBrush}"
                         BorderThickness="1"
-                        CornerRadius="4"
+                        CornerRadius="8"
                         PointerEntered="InfoPill_PointerEntered"
                         PointerExited="CategoryPill_PointerExited"
                         PointerPressed="CategoryPill_PointerPressed">
                         <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                            <FontIcon FontSize="12" Glyph="&#xE946;" />
+                            <FontIcon FontSize="14" Foreground="{ThemeResource OnSurfaceVariantBrush}" Glyph="&#xE946;" />
                             <TextBlock
-                                FontSize="12"
-                                FontWeight="SemiBold"
+                                Style="{StaticResource LabelLarge}"
                                 Text="{x:Bind ViewModel.InfoSummaryText, Mode=OneWay}" />
                         </StackPanel>
                     </Border>
@@ -395,19 +406,18 @@
                     <!--  Warnings (hover opens details popup; click opens full Status Dialog)  -->
                     <Border
                         x:Name="WarningsPill"
-                        Padding="8,4"
-                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        Padding="10,6,12,6"
+                        Background="Transparent"
+                        BorderBrush="{ThemeResource OutlineVariantBrush}"
                         BorderThickness="1"
-                        CornerRadius="4"
+                        CornerRadius="8"
                         PointerEntered="WarningsPill_PointerEntered"
                         PointerExited="CategoryPill_PointerExited"
                         PointerPressed="CategoryPill_PointerPressed">
                         <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                            <FontIcon x:Name="WarningsPillIcon" FontSize="12" Glyph="&#xE7BA;" />
+                            <FontIcon x:Name="WarningsPillIcon" FontSize="14" Foreground="{ThemeResource OnSurfaceVariantBrush}" Glyph="&#xE7BA;" />
                             <TextBlock
-                                FontSize="12"
-                                FontWeight="SemiBold"
+                                Style="{StaticResource LabelLarge}"
                                 Text="{x:Bind ViewModel.WarningSummaryText, Mode=OneWay}" />
                         </StackPanel>
                     </Border>
@@ -415,19 +425,18 @@
                     <!--  Errors (hover opens details popup; click opens full Status Dialog)  -->
                     <Border
                         x:Name="ErrorsPill"
-                        Padding="8,4"
-                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        Padding="10,6,12,6"
+                        Background="Transparent"
+                        BorderBrush="{ThemeResource OutlineVariantBrush}"
                         BorderThickness="1"
-                        CornerRadius="4"
+                        CornerRadius="8"
                         PointerEntered="ErrorsPill_PointerEntered"
                         PointerExited="CategoryPill_PointerExited"
                         PointerPressed="CategoryPill_PointerPressed">
                         <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                            <FontIcon x:Name="ErrorsPillIcon" FontSize="12" Glyph="&#xEA39;" />
+                            <FontIcon x:Name="ErrorsPillIcon" FontSize="14" Foreground="{ThemeResource OnSurfaceVariantBrush}" Glyph="&#xEA39;" />
                             <TextBlock
-                                FontSize="12"
-                                FontWeight="SemiBold"
+                                Style="{StaticResource LabelLarge}"
                                 Text="{x:Bind ViewModel.ErrorSummaryText, Mode=OneWay}" />
                         </StackPanel>
                     </Border>
@@ -441,60 +450,51 @@
                     Spacing="8">
                     <TextBlock
                         VerticalAlignment="Center"
-                        FontSize="12"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource HackCaptionStyle}"
                         Text="{x:Bind ViewModel.CompactProgressText, Mode=OneWay}" />
                     <TextBlock
                         VerticalAlignment="Center"
-                        FontSize="12"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource HackCaptionStyle}"
                         Text="{x:Bind ViewModel.EtaText, Mode=OneWay}"
                         Visibility="{x:Bind ViewModel.HasEta, Mode=OneWay}" />
                     <ProgressBar
                         Width="88"
-                        Height="6"
+                        Height="4"
                         VerticalAlignment="Center"
                         IsIndeterminate="{x:Bind ViewModel.IsIndeterminate, Mode=OneWay}"
                         Maximum="{x:Bind ViewModel.MaxCount, Mode=OneWay}"
                         Value="{x:Bind ViewModel.TotalProcessed, Mode=OneWay}" />
                     <Button
-                        Padding="8,4"
                         Command="{x:Bind ViewModel.TogglePauseCommand}"
                         Content="{x:Bind ViewModel.PauseButtonText, Mode=OneWay}"
-                        FontSize="11"
+                        Style="{StaticResource TextButtonStyle}"
                         Visibility="{x:Bind ViewModel.ShowPauseButton, Mode=OneWay}" />
                     <Button
-                        Padding="8,4"
                         Command="{x:Bind ViewModel.CancelCommand}"
                         Content="Cancel"
-                        FontSize="11"
+                        Style="{StaticResource TextButtonStyle}"
                         Visibility="{x:Bind ViewModel.IsInProcess, Mode=OneWay}" />
                     <Button
-                        Padding="8,4"
                         Command="{x:Bind ViewModel.ResumeSavedDownloadCommand}"
                         Content="Resume Saved"
-                        FontSize="11"
-                        Style="{StaticResource AccentButtonStyle}"
+                        Style="{StaticResource FilledButtonStyle}"
                         Visibility="{x:Bind ViewModel.ShowResumableDownloadBanner, Mode=OneWay}" />
                     <Button
-                        Padding="10,4"
                         Click="OpenFullStatus_Click"
                         Content="Full Log"
-                        FontSize="12"
+                        Style="{StaticResource TextButtonStyle}"
                         ToolTipService.ToolTip="Open full Status Dialog" />
                     <Button
                         x:Name="MiniDockStatusBtn"
-                        Padding="8,4"
                         Click="DockStatusBtn_Click"
                         Content="Dock"
-                        FontSize="12"
+                        Style="{StaticResource TextButtonStyle}"
                         Visibility="Collapsed" />
                     <Button
                         x:Name="MiniCloseStatusBtn"
-                        Padding="8,4"
                         Click="CmdCloseClick"
                         Content="Close"
-                        FontSize="12"
+                        Style="{StaticResource TextButtonStyle}"
                         Visibility="Collapsed" />
                 </StackPanel>
             </Grid>
@@ -511,16 +511,15 @@
             <DataTemplate x:Key="HoverPopupItemTemplate" x:DataType="rep:BasicStatusMessage">
                 <Border
                     Margin="0,0,0,4"
-                    Padding="8,6"
-                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                    CornerRadius="4">
+                    Padding="10,6"
+                    Background="{ThemeResource HackSurfaceContainerBrush}"
+                    CornerRadius="8">
                     <StackPanel Spacing="2">
                         <TextBlock
-                            FontSize="10"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource HackCaptionStyle}"
                             Text="{x:Bind TimestampText}" />
                         <TextBlock
-                            FontSize="12"
+                            Style="{StaticResource BodyMedium}"
                             Text="{x:Bind Message}"
                             TextWrapping="Wrap" />
                     </StackPanel>
