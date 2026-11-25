@@ -33,9 +33,11 @@ public sealed partial class HackApp : Application
 		SupplementalBindableMetadataProvider.Install();
 #endif
 		RegisterCrashHandlers();
-		var (palette, form) = ThemeService.ReadSavedTheme();
-		RequestedTheme = ThemePresets.Palette( palette ).IsDark ? ApplicationTheme.Dark : ApplicationTheme.Light;
-		ThemeService.ApplyStartupResources( Resources, palette, form );
+		ThemeSettings savedTheme = ThemeService.ReadSavedSettings();
+		var (palette, form) = ThemeService.StartupTheme( savedTheme );
+		bool dark = ThemePresets.Palette( palette ).IsDark;
+		RequestedTheme = dark ? ApplicationTheme.Dark : ApplicationTheme.Light;
+		ThemeService.ApplyStartupResources( Resources, palette, form, savedTheme.OverridesFor( dark ) );
 	}
 
 	private void RegisterCrashHandlers()

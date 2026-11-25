@@ -14,11 +14,18 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 
+using Uno.Themes;
+
 using Color = Windows.UI.Color;
 
 namespace HackPDM.Themes;
 
-/// <summary>Applies, edits, and saves color/shape presets and per-brush overrides across all open windows.</summary>
+/// <summary>
+/// Applies, edits, and saves color/shape presets and per-color overrides across all open windows. A color preset is a
+/// Material scheme (<see cref="AppPalette.Scheme"/>): at startup it becomes Uno Material's color override and the app's
+/// own surface-container colors; while running, the role brushes and the Windows (Fluent) brushes derived from the
+/// scheme are recolored in place, so edits show live.
+/// </summary>
 public sealed class ThemeService
 {
 	private const string PageBackgroundKey = "ApplicationPageBackgroundThemeBrush";
@@ -30,7 +37,7 @@ public sealed class ThemeService
 
 	private readonly List<WeakReference<FrameworkElement>> _roots = [];
 	private readonly ConditionalWeakTable<FrameworkElement, SolidColorBrush> _ownedBackgrounds = [];
-	private readonly Dictionary<string, Color> _originals = [];
+	private IReadOnlyDictionary<string, uint> _applied;
 
 	private readonly bool _runningDark = Application.Current.RequestedTheme == ApplicationTheme.Dark;
 	private readonly AppThemeMode _startupMode;
@@ -50,7 +57,9 @@ public sealed class ThemeService
 		_savedSettings = CloneSettings( _settings );
 		_startupMode = _settings.Mode;
 		_startupForm = form;
-		ApplyOverrides();
+		_applied = ThemePresets.Palette( palette ).Scheme;
+		DropUnknownOverrides();
+		ApplyScheme();
 		UpdatePanelBrush();
 		UpdateTableRowHighlightBrushes();
 	}
@@ -67,20 +76,24 @@ public sealed class ThemeService
 
 	public event Action? ThemeChanged;
 
-	public static (PaletteName Palette, FormName Form) ReadSavedTheme()
+	/// <summary>The theme settings as saved, or defaults when they can't be read.</summary>
+	public static ThemeSettings ReadSavedSettings()
 	{
 		try
 		{
-			return StartupTheme( AppSettingsStore.LoadUiConfig().Theme );
+			return AppSettingsStore.LoadUiConfig().Theme ?? new ThemeSettings();
 		}
 		catch( Exception ex )
 		{
 			HackLogger.Warn( nameof( ThemeService ), $"Could not read saved theme; falling back to defaults: {ex.Message}", ex );
-			return StartupTheme( new ThemeSettings() );
+			return new ThemeSettings();
 		}
 	}
 
-	private static (PaletteName, FormName) StartupTheme( ThemeSettings saved )
+	public static (PaletteName Palette, FormName Form) ReadSavedTheme() => StartupTheme( ReadSavedSettings() );
+
+	/// <summary>The palette and form to start with (the smoke tests can ask for others).</summary>
+	public static (PaletteName Palette, FormName Form) StartupTheme( ThemeSettings saved )
 	{
 #if SMOKE_TESTS
 		if( HackPDM.SmokeTests.SmokeTestRunner.IsEnabled
@@ -90,8 +103,15 @@ public sealed class ThemeService
 		return ( saved.EffectivePalette, saved.Form );
 	}
 
-	public static void ApplyStartupResources( ResourceDictionary resources, PaletteName palette, FormName form )
+	/// <summary>Sets up the app resources for a preset before any page loads: colors, corners, panel borders and density.</summary>
+	/// <param name="resources">The application's resources (App.xaml).</param>
+	/// <param name="palette">The color preset.</param>
+	/// <param name="form">The shape preset.</param>
+	/// <param name="overrides">Saved per-role color overrides for the base theme in use, if any.</param>
+	public static void ApplyStartupResources( ResourceDictionary resources, PaletteName palette, FormName form,
+		IReadOnlyDictionary<string, string>? overrides = null )
 	{
+		ApplySchemeResources( resources, EffectiveScheme( ThemePresets.Palette( palette ), overrides ) );
 		AppForm f = ThemePresets.Form( form );
 		if( form != FormName.Default )
 		{
@@ -105,6 +125,75 @@ public sealed class ThemeService
 		if( !f.CompactDensity
 			&& resources.MergedDictionaries.FirstOrDefault( d => d.Source?.OriginalString.EndsWith( "Compact.xaml", StringComparison.OrdinalIgnoreCase ) == true ) is { } compact )
 			resources.MergedDictionaries.Remove( compact );
+	}
+
+	/// <summary>A preset's scheme with saved overrides applied; unknown roles and unreadable colors are ignored.</summary>
+	public static IReadOnlyDictionary<string, uint> EffectiveScheme( AppPalette palette, IReadOnlyDictionary<string, string>? overrides )
+	{
+		if( overrides is null || overrides.Count == 0 )
+			return palette.Scheme;
+		Dictionary<string, uint> scheme = new( palette.Scheme, StringComparer.Ordinal );
+		foreach( var (role, hex) in overrides )
+		{
+			if( MaterialRoles.IsRole( role ) && ArgbColor.TryParse( hex, out ArgbColor color ) )
+				scheme[ role ] = (uint)color.A << 24 | (uint)color.R << 16 | (uint)color.G << 8 | color.B;
+		}
+		return scheme;
+	}
+
+	/// <summary>
+	/// Hands the scheme to Uno Material as its color override (so its derived and state colors follow it) and sets
+	/// the app's own surface-container colors in every theme dictionary of App.xaml.
+	/// </summary>
+	private static void ApplySchemeResources( ResourceDictionary resources, IReadOnlyDictionary<string, uint> scheme )
+	{
+		ResourceDictionary ThemeColors()
+		{
+			ResourceDictionary colors = new();
+			foreach( string role in MaterialRoles.Names )
+			{
+				if( !MaterialRoles.IsAppRole( role ) )
+					colors[ MaterialRoles.ColorKey( role ) ] = UiColors.ToUiColor( scheme[ role ] );
+			}
+			return colors;
+		}
+		ResourceDictionary colorOverride = new();
+		colorOverride.ThemeDictionaries[ "Light" ] = ThemeColors();
+		colorOverride.ThemeDictionaries[ "Dark" ] = ThemeColors();
+		int themes = 0;
+		foreach( BaseTheme theme in FindMaterialThemes( resources ) )
+		{
+			theme.ColorOverrideDictionary = colorOverride;
+			themes++;
+		}
+		if( themes == 0 )
+			HackLogger.Warn( nameof( ThemeService ), "No Material theme found in the app resources; the color preset only recolors brushes." );
+
+		foreach( object value in resources.ThemeDictionaries.Values )
+		{
+			if( value is not ResourceDictionary themeDictionary )
+				continue;
+			foreach( string role in MaterialRoles.Names )
+			{
+				if( !MaterialRoles.IsAppRole( role ) )
+					continue;
+				Color color = UiColors.ToUiColor( scheme[ role ] );
+				themeDictionary[ MaterialRoles.ColorKey( role ) ] = color;
+				if( themeDictionary.TryGetValue( MaterialRoles.BrushKey( role ), out object? brush ) && brush is SolidColorBrush solid )
+					solid.Color = color;
+			}
+		}
+	}
+
+	private static IEnumerable<BaseTheme> FindMaterialThemes( ResourceDictionary resources )
+	{
+		foreach( ResourceDictionary merged in resources.MergedDictionaries )
+		{
+			if( merged is BaseTheme theme )
+				yield return theme;
+			foreach( BaseTheme nested in FindMaterialThemes( merged ) )
+				yield return nested;
+		}
 	}
 
 	public static bool IsCompactDensity( ResourceDictionary resources )
@@ -131,11 +220,9 @@ public sealed class ThemeService
 		if( _settings.Palette == palette )
 			return;
 		CancelDeferredThemeChanged();
-		foreach( string key in _originals.Keys )
-			Restore( key, toOriginal: true );
 		_settings.Palette = palette;
 		_settings.Mode = ThemePresets.Palette( palette ).IsDark ? AppThemeMode.Dark : AppThemeMode.Light;
-		ApplyOverrides();
+		ApplyScheme();
 		UpdatePanelBrush();
 		UpdateTableRowHighlightBrushes();
 		foreach( var root in LiveRoots() )
@@ -177,21 +264,20 @@ public sealed class ThemeService
 			brush.Color = UiColors.ToUiColor( ThemePresets.PanelStroke( ThemePresets.Palette( Palette ), ThemePresets.Form( Form ) ) );
 	}
 
+	/// <summary>Selected table rows use Secondary Container, as in the Figma file table; hover and press add a light state layer.</summary>
 	private void UpdateTableRowHighlightBrushes()
 	{
-		Color accent = ThemeResources.TryGetBrush<SolidColorBrush>( "AccentFillColorDefaultBrush" )?.Color
-			?? ( _runningDark ? Color.FromArgb( 0xFF, 0x60, 0xCD, 0xFF ) : Color.FromArgb( 0xFF, 0x00, 0x5F, 0xB8 ) );
+		uint selected = _applied[ MaterialRoles.SecondaryContainer ];
+		uint layer = _applied[ MaterialRoles.OnSecondaryContainer ] & 0x00FFFFFF;
+		SetBrush( "TableViewRowBackgroundSelected", selected );
+		SetBrush( "TableViewRowBackgroundSelectedPointerOver", ThemePresets.Blend( 0x14000000 | layer, selected ) );
+		SetBrush( "TableViewRowBackgroundSelectedPressed", ThemePresets.Blend( 0x1F000000 | layer, selected ) );
 
-		byte selectedAlpha = _runningDark ? (byte)0x3D : (byte)0x2E;
-		byte selectedHoverAlpha = _runningDark ? (byte)0x54 : (byte)0x40;
-		byte selectedPressedAlpha = _runningDark ? (byte)0x33 : (byte)0x24;
-
-		if( ThemeResources.TryGetBrush<SolidColorBrush>( "TableViewRowBackgroundSelected" ) is { } selected )
-			selected.Color = Color.FromArgb( selectedAlpha, accent.R, accent.G, accent.B );
-		if( ThemeResources.TryGetBrush<SolidColorBrush>( "TableViewRowBackgroundSelectedPointerOver" ) is { } selectedOver )
-			selectedOver.Color = Color.FromArgb( selectedHoverAlpha, accent.R, accent.G, accent.B );
-		if( ThemeResources.TryGetBrush<SolidColorBrush>( "TableViewRowBackgroundSelectedPressed" ) is { } selectedPressed )
-			selectedPressed.Color = Color.FromArgb( selectedPressedAlpha, accent.R, accent.G, accent.B );
+		static void SetBrush( string key, uint argb )
+		{
+			if( ThemeResources.TryGetBrush<SolidColorBrush>( key ) is { } brush )
+				brush.Color = UiColors.ToUiColor( argb );
+		}
 	}
 
 	private void ApplyMode( FrameworkElement root )
@@ -211,16 +297,20 @@ public sealed class ThemeService
 			? brush.Color
 			: theme == ElementTheme.Dark ? Color.FromArgb( 0xFF, 0x20, 0x20, 0x20 ) : Color.FromArgb( 0xFF, 0xF3, 0xF3, 0xF3 );
 
+	/// <summary>The current color of a Material role (with any override), or null for an unknown role.</summary>
 	public ArgbColor? GetColor( string key )
-		=> ThemeResources.TryGetBrush<SolidColorBrush>( key ) is { } brush ? brush.Color.ToArgbColor() : null;
+		=> MaterialRoles.IsRole( key )
+			? ArgbColor.FromPacked( EffectiveScheme( ThemePresets.Palette( Palette ), _settings.OverridesFor( _runningDark ) )[ key ] )
+			: null;
 
 	public bool IsOverridden( string key ) => _settings.OverridesFor( _runningDark ).ContainsKey( key );
 
 	public void SetColor( string key, ArgbColor color )
 	{
-		if( NeedsRestart || !Recolor( key, color ) )
+		if( NeedsRestart || !MaterialRoles.IsRole( key ) )
 			return;
 		_settings.OverridesFor( _runningDark )[ key ] = color.ToString();
+		ApplyScheme();
 		ScheduleCoalescedThemeChanged();
 	}
 
@@ -229,7 +319,7 @@ public sealed class ThemeService
 		if( NeedsRestart || !_settings.OverridesFor( _runningDark ).Remove( key ) )
 			return;
 		CancelDeferredThemeChanged();
-		Restore( key );
+		ApplyScheme();
 		UpdateTableRowHighlightBrushes();
 		RefreshOwnedBackgrounds();
 		ThemeChanged?.Invoke();
@@ -240,10 +330,8 @@ public sealed class ThemeService
 		if( NeedsRestart )
 			return;
 		CancelDeferredThemeChanged();
-		var overrides = _settings.OverridesFor( _runningDark );
-		foreach( string key in overrides.Keys )
-			Restore( key );
-		overrides.Clear();
+		_settings.OverridesFor( _runningDark ).Clear();
+		ApplyScheme();
 		UpdateTableRowHighlightBrushes();
 		RefreshOwnedBackgrounds();
 		ThemeChanged?.Invoke();
@@ -252,10 +340,8 @@ public sealed class ThemeService
 	public void Revert()
 	{
 		CancelDeferredThemeChanged();
-		foreach( string key in _originals.Keys )
-			Restore( key, toOriginal: true );
 		_settings = CloneSettings( _savedSettings );
-		ApplyOverrides();
+		ApplyScheme();
 		UpdatePanelBrush();
 		UpdateTableRowHighlightBrushes();
 		foreach( var root in LiveRoots() )
@@ -362,36 +448,46 @@ public sealed class ThemeService
 		return true;
 	}
 
-	private void ApplyOverrides()
+	/// <summary>
+	/// Recolors the role brushes and the Fluent brushes derived from them to the selected preset plus overrides.
+	/// Does nothing while the preset needs the other base theme (light vs dark): that waits for a restart.
+	/// </summary>
+	private void ApplyScheme()
 	{
 		if( !PresetApplies )
 			return;
-		foreach( var (key, argb) in ThemePresets.Palette( Palette ).Brushes )
-			Recolor( key, ArgbColor.FromPacked( argb ) );
-		foreach( var (key, hex) in _settings.OverridesFor( _runningDark ) )
+		IReadOnlyDictionary<string, uint> scheme = EffectiveScheme( ThemePresets.Palette( Palette ), _settings.OverridesFor( _runningDark ) );
+		foreach( string role in MaterialRoles.Names )
+			Recolor( MaterialRoles.BrushKey( role ), scheme[ role ] );
+		foreach( var (key, argb) in MaterialRoles.FluentBrushes( scheme ) )
+			Recolor( key, argb );
+		_applied = scheme;
+	}
+
+	private static void Recolor( string key, uint argb )
+	{
+		if( ThemeResources.TryGetBrush<SolidColorBrush>( key ) is { } brush )
+			brush.Color = UiColors.ToUiColor( argb );
+	}
+
+	/// <summary>Removes saved overrides that are not Material roles (from before the presets became Material schemes).</summary>
+	private void DropUnknownOverrides()
+	{
+		int dropped = 0;
+		foreach( ThemeSettings settings in new[] { _settings, _savedSettings, UIStorage.GlobalData.Theme } )
 		{
-			if( ArgbColor.TryParse( hex, out var color ) )
-				Recolor( key, color );
+			foreach( Dictionary<string, string> overrides in new[] { settings.Light, settings.Dark } )
+			{
+				foreach( string key in overrides.Keys.Where( static k => !MaterialRoles.IsRole( k ) ).ToList() )
+				{
+					overrides.Remove( key );
+					if( ReferenceEquals( settings, _settings ) )
+						dropped++;
+				}
+			}
 		}
-	}
-
-	private bool Recolor( string key, ArgbColor color )
-	{
-		if( ThemeResources.TryGetBrush<SolidColorBrush>( key ) is not { } brush )
-			return false;
-		_originals.TryAdd( key, brush.Color );
-		brush.Color = color.ToUiColor();
-		return true;
-	}
-
-	private void Restore( string key, bool toOriginal = false )
-	{
-		if( ThemeResources.TryGetBrush<SolidColorBrush>( key ) is not { } brush )
-			return;
-		if( !toOriginal && PresetApplies && ThemePresets.Palette( Palette ).Brushes.TryGetValue( key, out uint preset ) )
-			brush.Color = UiColors.ToUiColor( preset );
-		else if( _originals.TryGetValue( key, out var original ) )
-			brush.Color = original;
+		if( dropped > 0 )
+			HackLogger.Info( nameof( ThemeService ), $"Reset {dropped} saved theme color(s) from the old Windows-style color list; the Theme Editor now edits Material colors." );
 	}
 
 	private void RefreshOwnedBackgrounds()

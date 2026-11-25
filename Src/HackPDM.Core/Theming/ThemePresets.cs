@@ -23,18 +23,32 @@ public enum FormName
 	Fancy,
 }
 
-/// <summary>A color preset for the whole app.</summary>
+/// <summary>A color preset for the whole app: a Material color scheme.</summary>
 /// <param name="Name">The preset.</param>
 /// <param name="Title">The name shown in the menu.</param>
-/// <param name="IsDark">Whether it builds on the dark Fluent theme (else the light one).</param>
-/// <param name="Brushes">Fluent theme brush key → 0xAARRGGBB, applied over the base theme; empty for the stock themes.</param>
-/// <param name="PanelStroke">The border of the app's panels (folder tree, lists, graph).</param>
-/// <param name="FancyPanelStroke">The panel border in the Fancy style: the accent, softened.</param>
-/// <param name="PageBackground">The page background this preset shows (for contrast checks).</param>
-/// <param name="Text">The main text color this preset shows (for contrast checks).</param>
+/// <param name="IsDark">Whether it runs on the dark base theme (else the light one).</param>
+/// <param name="Scheme">
+/// Material role (<see cref="MaterialRoles"/>) → 0xAARRGGBB. Matches the preset's group in the Figma variables
+/// "HackPDM colors" (Colors page of "HackPDM — Uno Material Design").
+/// </param>
 [Bindable( true )]
-public sealed record AppPalette( PaletteName Name, string Title, bool IsDark, IReadOnlyDictionary<string, uint> Brushes,
-	uint PanelStroke, uint FancyPanelStroke, uint PageBackground, uint Text ) : INamedPreset<PaletteName>;
+public sealed record AppPalette( PaletteName Name, string Title, bool IsDark, IReadOnlyDictionary<string, uint> Scheme ) : INamedPreset<PaletteName>
+{
+	/// <summary>The Windows (Fluent) brushes derived from <see cref="Scheme"/>, for controls without a Material style.</summary>
+	public IReadOnlyDictionary<string, uint> Brushes => field ??= MaterialRoles.FluentBrushes( Scheme );
+
+	/// <summary>The border of the app's panels (folder tree, lists, graph).</summary>
+	public uint PanelStroke => Scheme[ MaterialRoles.OutlineVariant ];
+
+	/// <summary>The panel border in the Fancy style: the accent, softened.</summary>
+	public uint FancyPanelStroke => 0xC0000000 | ( Scheme[ MaterialRoles.Primary ] & 0x00FFFFFF );
+
+	/// <summary>The page background (for contrast checks).</summary>
+	public uint PageBackground => Scheme[ MaterialRoles.Background ];
+
+	/// <summary>The main text color (for contrast checks).</summary>
+	public uint Text => Scheme[ MaterialRoles.OnSurface ];
+}
 
 /// <summary>A shape preset for the whole app.</summary>
 /// <param name="CompactDensity">Fluent's compact sizing (shorter controls and rows); else the standard sizing.</param>
@@ -50,60 +64,49 @@ public sealed record AppForm( FormName Name, string Title, string Description, b
 /// <summary>The built-in color and shape presets; any palette goes with any form.</summary>
 public static class ThemePresets
 {
-	// the dark Fluent page and text colors, for the contrast checks of the stock dark theme
-	private const uint FluentDarkPage = 0xFF202020, FluentDarkText = 0xFFFFFFFF;
-	private const uint FluentLightPage = 0xFFF3F3F3, FluentLightText = 0xE4000000;
-
-	/// <summary>Every palette, in menu order.</summary>
+	/// <summary>
+	/// Every palette, in menu order. Light and Dark are the Material 3 Design Kit's "Blue" schemes; Navy blue keeps
+	/// the navy and amber of the original preset. Colors are listed in <see cref="MaterialRoles.Names"/> order.
+	/// </summary>
 	public static IReadOnlyList<AppPalette> Palettes { get; } =
 	[
-		new( PaletteName.Dark, nameof( PaletteName.Dark ), IsDark: true, FrozenDictionary<string, uint>.Empty,
-			PanelStroke: 0xFF696969, FancyPanelStroke: 0xB060CDFF, PageBackground: FluentDarkPage, Text: FluentDarkText ),
-		new( PaletteName.Light, nameof( PaletteName.Light ), IsDark: false, FrozenDictionary<string, uint>.Empty,
-			PanelStroke: 0xFFC4C9D0, FancyPanelStroke: 0xB0005FB8, PageBackground: FluentLightPage, Text: FluentLightText ),
-		new( PaletteName.NavyBlue, "Navy blue", IsDark: true, new Dictionary<string, uint>
-			{
-				[ "ApplicationPageBackgroundThemeBrush" ] = 0xFF0B1A30,
-				[ "SolidBackgroundFillColorBaseBrush" ] = 0xFF0E1F3A,
-				[ "LayerFillColorDefaultBrush" ] = 0x4C14284A,
-				[ "CardBackgroundFillColorDefaultBrush" ] = 0x14B4D2FF,
-				[ "SubtleFillColorSecondaryBrush" ] = 0x1AB4D2FF,
-				[ "ControlFillColorDefaultBrush" ] = 0x17B4D2FF,
-				[ "ControlFillColorSecondaryBrush" ] = 0x24B4D2FF,
-				[ "ControlFillColorTertiaryBrush" ] = 0x0FB4D2FF,
-				[ "ControlFillColorInputActiveBrush" ] = 0xFF0E1F3A,
-				[ "ControlStrokeColorDefaultBrush" ] = 0x269FC3FF,
-				[ "DividerStrokeColorDefaultBrush" ] = 0x339FC3FF,
-				[ "SurfaceStrokeColorDefaultBrush" ] = 0x80345A8C,
-				[ "TextFillColorPrimaryBrush" ] = 0xFFE6EDF7,
-				[ "TextFillColorSecondaryBrush" ] = 0xCCC3D3E8,
-				[ "TextFillColorTertiaryBrush" ] = 0x99A7BCD8,
-				[ "AccentFillColorDefaultBrush" ] = 0xFFF2B134,
-				[ "AccentFillColorSecondaryBrush" ] = 0xE6F2B134,
-				[ "AccentFillColorTertiaryBrush" ] = 0xCCF2B134,
-				[ "AccentTextFillColorPrimaryBrush" ] = 0xFFF5C566,
-				[ "TextOnAccentFillColorPrimaryBrush" ] = 0xFF0B1A30,
-				// older system brushes some controls still use (the file manager's side pane, list highlights)
-				[ "SystemControlPageBackgroundChromeLowBrush" ] = 0xFF0A1628,
-				[ "SystemControlBackgroundChromeMediumLowBrush" ] = 0xFF13294B,
-				[ "SystemControlHighlightAccentBrush" ] = 0xFFF2B134,
-				[ "SystemControlHighlightListAccentLowBrush" ] = 0xFFF2B134,
-				[ "SystemControlHighlightListAccentMediumBrush" ] = 0xFFF2B134,
-			}.ToFrozenDictionary(),
-			PanelStroke: 0xFF2A4570, FancyPanelStroke: 0xC0F2B134, PageBackground: 0xFF0B1A30, Text: 0xFFE6EDF7 ),
+		new( PaletteName.Dark, nameof( PaletteName.Dark ), IsDark: true, MaterialRoles.Scheme(
+			0xFFB0C6FF, 0xFF152E60, 0xFF2E4578, 0xFFD9E2FF, 0xFF485E92,   // primary
+			0xFFC0C6DC, 0xFF293042, 0xFF404659, 0xFFDCE2F9,               // secondary
+			0xFFE0BBDD, 0xFF412742, 0xFF593D5A, 0xFFFDD7FA,               // tertiary
+			0xFFF2B8B5, 0xFF601410, 0xFF8C1D18, 0xFFF9DEDC,               // error
+			0xFF141218, 0xFFE6E0E9, 0xFF121318, 0xFFE2E2E9, 0xFF33343A, 0xFFC5C6D0, 0xFFE2E2E9, 0xFF33343A, // background, surface
+			0xFF8F909A, 0xFF44464F,                                       // outline
+			0xFF1A1B21, 0xFF1E1F25, 0xFF282A2F ) ),                       // surface containers
+		new( PaletteName.Light, nameof( PaletteName.Light ), IsDark: false, MaterialRoles.Scheme(
+			0xFF485E92, 0xFFFFFFFF, 0xFFADC3FE, 0xFF324574, 0xFFB0C6FF,
+			0xFF585F72, 0xFFFFFFFF, 0xFFD9DFF6, 0xFF404659,
+			0xFF735573, 0xFFFFFFFF, 0xFFFBD4F7, 0xFF593D5A,
+			0xFFB3261E, 0xFFFFFFFF, 0xFFF9DEDC, 0xFF8C1D18,
+			0xFFFDF7FF, 0xFF1D1B20, 0xFFFAF8FF, 0xFF1A1B21, 0xFFE2E2E9, 0xFF44464F, 0xFF282A2F, 0xFFEEEDF4,
+			0xFF757780, 0xFFC5C6D0,
+			0xFFF4F3FA, 0xFFEEEDF4, 0xFFE8E7EF ) ),
+		new( PaletteName.NavyBlue, "Navy blue", IsDark: true, MaterialRoles.Scheme(
+			0xFFF2B134, 0xFF0B1A30, 0xFF6B4E00, 0xFFFFDEA6, 0xFF7A5900,
+			0xFF9FC3FF, 0xFF0B1A30, 0xFF24406A, 0xFFD6E3FF,
+			0xFFF5C566, 0xFF0B1A30, 0xFF5A4500, 0xFFFFE2A8,
+			0xFFF2B8B5, 0xFF601410, 0xFF8C1D18, 0xFFF9DEDC,
+			0xFF0B1A30, 0xFFE6EDF7, 0xFF0E1F3A, 0xFFE6EDF7, 0xFF1B3253, 0xFFC3D3E8, 0xFFE6EDF7, 0xFF0B1A30,
+			0xFF6F86A8, 0xFF2A4570,
+			0xFF0F2240, 0xFF13294B, 0xFF1A3358 ) ),
 	];
 
 	/// <summary>Every form, in menu order.</summary>
 	public static IReadOnlyList<AppForm> Forms { get; } =
 	[
 		new( FormName.Compact, nameof( FormName.Compact ), "Small corners, tight rows and boxes: the most on screen",
-			CompactDensity: true, ControlCornerRadius: 2, OverlayCornerRadius: 4, PanelCornerRadius: 4, PanelBorderThickness: 1, AccentPanels: false ),
-		new( FormName.Default, nameof( FormName.Default ), "The standard HackPDM look",
-			CompactDensity: true, ControlCornerRadius: 4, OverlayCornerRadius: 8, PanelCornerRadius: 10, PanelBorderThickness: 3, AccentPanels: false ),
-		new( FormName.Modern, nameof( FormName.Modern ), "Roomy controls, round corners, thin borders",
-			CompactDensity: false, ControlCornerRadius: 8, OverlayCornerRadius: 12, PanelCornerRadius: 14, PanelBorderThickness: 1, AccentPanels: false ),
+			CompactDensity: true, ControlCornerRadius: 2, OverlayCornerRadius: 4, PanelCornerRadius: 6, PanelBorderThickness: 1, AccentPanels: false ),
+		new( FormName.Default, nameof( FormName.Default ), "The standard HackPDM look, as designed in Figma",
+			CompactDensity: true, ControlCornerRadius: 4, OverlayCornerRadius: 8, PanelCornerRadius: 16, PanelBorderThickness: 1, AccentPanels: false ),
+		new( FormName.Modern, nameof( FormName.Modern ), "Roomy controls, rounder corners, thin borders",
+			CompactDensity: false, ControlCornerRadius: 8, OverlayCornerRadius: 12, PanelCornerRadius: 20, PanelBorderThickness: 1, AccentPanels: false ),
 		new( FormName.Fancy, nameof( FormName.Fancy ), "Very round corners, accent-colored panels, shaded graph boxes with shadows",
-			CompactDensity: false, ControlCornerRadius: 12, OverlayCornerRadius: 16, PanelCornerRadius: 18, PanelBorderThickness: 2, AccentPanels: true ),
+			CompactDensity: false, ControlCornerRadius: 12, OverlayCornerRadius: 16, PanelCornerRadius: 24, PanelBorderThickness: 2, AccentPanels: true ),
 	];
 
 	/// <summary>The palette named <paramref name="name"/>.</summary>

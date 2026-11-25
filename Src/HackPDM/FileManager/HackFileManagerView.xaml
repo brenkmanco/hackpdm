@@ -11,7 +11,9 @@
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	xmlns:rep="using:HackPDM.Core.Services"
 	xmlns:types="using:HackPDM.Common"
-	Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+	xmlns:ut="using:Uno.Themes"
+	xmlns:utu="using:Uno.Toolkit.UI"
+	Background="{ThemeResource BackgroundBrush}"
 	mc:Ignorable="d">
 
 
@@ -145,8 +147,8 @@
 			<Border
 				Margin="0,4,0,2"
 				Padding="10,6"
-				Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-				BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+				Background="{ThemeResource HackSurfaceContainerHighBrush}"
+				BorderBrush="{ThemeResource OutlineVariantBrush}"
 				BorderThickness="1"
 				CornerRadius="4">
 				<Grid ColumnSpacing="8">
@@ -171,11 +173,11 @@
 						Grid.Column="2"
 						Padding="6,1"
 						VerticalAlignment="Center"
-						Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+						Background="{ThemeResource SurfaceBrush}"
 						CornerRadius="8">
 						<TextBlock
 							FontSize="10"
-							Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+							Foreground="{ThemeResource OnSurfaceVariantBrush}"
 							Text="{x:Bind CountText}" />
 					</Border>
 				</Grid>
@@ -262,6 +264,90 @@
 			x:Key="EntryGroupTemplateSelector"
 			EntryRowTemplate="{StaticResource GroupedEntryRowTemplate}"
 			GroupHeaderTemplate="{StaticResource GroupHeaderTemplate}" />
+		<!--
+			Material look for this screen, built from the Figma file "HackPDM — Uno Material Design"
+			(frames "File Manager — Light" / "— Dark"). Colors come from the active color preset (ThemePresets);
+			pane corners and borders from the shape style (HackPanel* resources).
+		-->
+		<Style
+			x:Key="PaneIconButtonStyle"
+			BasedOn="{StaticResource IconButtonStyle}"
+			TargetType="Button">
+			<Setter Property="Width" Value="32" />
+			<Setter Property="Height" Value="32" />
+			<Setter Property="MinWidth" Value="32" />
+			<Setter Property="MinHeight" Value="32" />
+			<Setter Property="Padding" Value="0" />
+			<Setter Property="CornerRadius" Value="16" />
+		</Style>
+		<Style
+			x:Key="PaneIconToggleButtonStyle"
+			BasedOn="{StaticResource IconToggleButtonStyle}"
+			TargetType="ToggleButton">
+			<Setter Property="Width" Value="32" />
+			<Setter Property="Height" Value="32" />
+			<Setter Property="MinWidth" Value="32" />
+			<Setter Property="MinHeight" Value="32" />
+			<Setter Property="Padding" Value="0" />
+			<Setter Property="CornerRadius" Value="16" />
+		</Style>
+		<!--  Figma: assist chip (Refresh, Search). A Chip control would stay toggled after a click, so this is a button shaped like one.  -->
+		<Style
+			x:Key="AssistChipButtonStyle"
+			BasedOn="{StaticResource OutlinedButtonStyle}"
+			TargetType="Button">
+			<Setter Property="Height" Value="32" />
+			<Setter Property="MinHeight" Value="32" />
+			<Setter Property="Padding" Value="8,0,16,0" />
+			<Setter Property="CornerRadius" Value="8" />
+			<Setter Property="Foreground" Value="{ThemeResource OnSurfaceBrush}" />
+			<Setter Property="BorderBrush" Value="{ThemeResource OutlineVariantBrush}" />
+		</Style>
+		<!--  the grouped list's own toolbar and sortable column labels (not in the Figma frame; styled to match the table header)  -->
+		<Style
+			x:Key="GroupedBarTextButtonStyle"
+			BasedOn="{StaticResource TextButtonStyle}"
+			TargetType="Button">
+			<Setter Property="Height" Value="32" />
+			<Setter Property="MinHeight" Value="32" />
+			<Setter Property="Padding" Value="12,0" />
+		</Style>
+		<Style
+			x:Key="GroupedSortHeaderButtonStyle"
+			BasedOn="{StaticResource TextButtonStyle}"
+			TargetType="Button">
+			<Setter Property="MinHeight" Value="0" />
+			<Setter Property="MinWidth" Value="0" />
+			<Setter Property="Padding" Value="2,1" />
+			<Setter Property="CornerRadius" Value="4" />
+			<Setter Property="FontSize" Value="12" />
+			<Setter Property="FontWeight" Value="Medium" />
+			<Setter Property="Foreground" Value="{ThemeResource OnSurfaceVariantBrush}" />
+		</Style>
+		<!--  Figma: tabs — transparent strip, label color marks the selected tab, Primary underline  -->
+		<SolidColorBrush x:Key="TabViewBackground" Color="Transparent" />
+		<SolidColorBrush x:Key="TabViewItemHeaderBackground" Color="Transparent" />
+		<SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver" Color="{ThemeResource HackSurfaceContainerHighColor}" />
+		<SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed" Color="{ThemeResource HackSurfaceContainerHighColor}" />
+		<LinearGradientBrush x:Key="TabViewItemHeaderBackgroundSelected" StartPoint="0,0" EndPoint="0,1">
+			<GradientStop Offset="0" Color="Transparent" />
+			<GradientStop Offset="0.94" Color="Transparent" />
+			<GradientStop Offset="0.94" Color="{ThemeResource PrimaryColor}" />
+			<GradientStop Offset="1" Color="{ThemeResource PrimaryColor}" />
+		</LinearGradientBrush>
+		<SolidColorBrush x:Key="TabViewItemHeaderForeground" Color="{ThemeResource OnSurfaceVariantColor}" />
+		<SolidColorBrush x:Key="TabViewItemHeaderForegroundPointerOver" Color="{ThemeResource OnSurfaceColor}" />
+		<SolidColorBrush x:Key="TabViewItemHeaderForegroundPressed" Color="{ThemeResource OnSurfaceColor}" />
+		<SolidColorBrush x:Key="TabViewItemHeaderForegroundSelected" Color="{ThemeResource PrimaryColor}" />
+		<SolidColorBrush x:Key="TabViewItemSeparator" Color="Transparent" />
+		<SolidColorBrush x:Key="TabViewBorderBrush" Color="{ThemeResource OutlineVariantColor}" />
+		<SolidColorBrush x:Key="TabViewSelectedItemBorderBrush" Color="Transparent" />
+		<x:Double x:Key="TabViewItemHeaderFontSize">14</x:Double>
+		<x:Double x:Key="TabViewItemMinHeight">48</x:Double>
+		<Thickness x:Key="TabViewTopHeaderPadding">8,0,0,0</Thickness>
+		<!--  Figma: File table/Header sits on Surface Container Low with On Surface Variant labels  -->
+		<SolidColorBrush x:Key="TableViewHeaderRowBackground" Color="{ThemeResource HackSurfaceContainerLowColor}" />
+		<SolidColorBrush x:Key="TableViewHeaderForeground" Color="{ThemeResource OnSurfaceVariantColor}" />
 		<!--  text keeps the theme's color (a fixed white was invisible on light presets)  -->
 		<Style TargetType="TextBlock">
 			<Setter Property="FontSize" Value="11" />
@@ -272,14 +358,14 @@
 	<Grid
 		Margin="12"
 		CornerRadius="{StaticResource HackPanelCornerRadius}"
-		RowSpacing="8">
+		RowSpacing="12">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
 		</Grid.RowDefinitions>
 
 		<!--  Top Header Area (Breadcrumb Bar + Optional Resume Banner)  -->
-		<Grid Grid.Row="0" RowSpacing="6">
+		<Grid Grid.Row="0" RowSpacing="8">
 			<Grid.RowDefinitions>
 				<RowDefinition Height="Auto" />
 				<RowDefinition Height="Auto" />
@@ -288,70 +374,60 @@
 			<!--  Top Folder Navigation & Breadcrumb Bar  -->
 			<Border
 				Grid.Row="0"
-				Padding="6,4"
-				Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-				BorderBrush="{StaticResource HackPanelStrokeBrush}"
-				BorderThickness="1"
-				CornerRadius="6">
-			<Grid ColumnSpacing="6">
+				Padding="8,4,12,4"
+				Background="{ThemeResource HackSurfaceContainerBrush}"
+				CornerRadius="16">
+			<Grid ColumnSpacing="4">
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="Auto" />
 					<ColumnDefinition Width="*" />
 					<ColumnDefinition Width="Auto" />
 				</Grid.ColumnDefinitions>
 
-				<!--  Pane Toggle & Up Navigation  -->
+				<!--  Pane Toggle & Up Navigation (Figma: icon buttons)  -->
 				<StackPanel
 					Grid.Column="0"
 					VerticalAlignment="Center"
 					Orientation="Horizontal"
-					Spacing="2">
+					Spacing="4">
 					<ToggleButton
 						x:Name="ToggleFolderPaneButton"
-						Padding="6,5"
 						Click="ToggleFolderPane_Click"
 						IsChecked="True"
+						Style="{StaticResource IconToggleButtonStyle}"
 						ToolTipService.ToolTip="Show or hide folder tree panel">
-						<FontIcon FontSize="13" Glyph="&#xE8A0;" />
+						<FontIcon FontSize="18" Glyph="&#xE700;" />
+						<ut:ControlExtensions.AlternateContent>
+							<FontIcon FontSize="18" Glyph="&#xE700;" />
+						</ut:ControlExtensions.AlternateContent>
 					</ToggleButton>
 					<Button
 						x:Name="NavigateUpButton"
-						Padding="6,5"
 						Click="NavigateUp_Click"
 						IsEnabled="False"
+						Style="{StaticResource IconButtonStyle}"
 						ToolTipService.ToolTip="Go up one folder (Alt+Up)">
-						<FontIcon FontSize="12" Glyph="&#xE74A;" />
+						<FontIcon FontSize="18" Glyph="&#xE72B;" />
 					</Button>
-					<Border
-						Width="1"
-						Height="18"
-						Margin="6,0,2,0"
-						VerticalAlignment="Center"
-						Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
 				</StackPanel>
 
-				<!--  Developed Breadcrumb Trail  -->
+				<!--  Breadcrumb Trail  -->
 				<BreadcrumbBar
 					x:Name="OdooDirectoryBreadcrumb"
 					Grid.Column="1"
+					Margin="8,0,0,0"
 					VerticalAlignment="Center"
 					ItemsSource="{x:Bind BreadcrumbPath}">
 					<BreadcrumbBar.ItemTemplate>
 						<DataTemplate x:DataType="types:TreeData">
 							<StackPanel
-								Padding="4,2"
+								Padding="0,2"
 								Orientation="Horizontal"
 								Spacing="6"
 								ToolTipService.ToolTip="{x:Bind TooltipText, Mode=OneWay}">
-								<controls:FolderIcon
-									VerticalAlignment="Center"
-									IconSize="15"
-									IsOpen="False"
-									IsRoot="{x:Bind IsRootNode, Mode=OneWay}"
-									Origin="{x:Bind Origin, Mode=OneWay}" />
 								<TextBlock
 									VerticalAlignment="Center"
-									FontSize="12"
+									FontSize="14"
 									FontWeight="{x:Bind NameFontWeight, Mode=OneWay}"
 									Text="{x:Bind Name}" />
 								<Border
@@ -385,79 +461,74 @@
 					</BreadcrumbBar.ItemTemplate>
 				</BreadcrumbBar>
 
-				<!--  Breadcrumb Trail Actions & Status  -->
+				<!--  Folder Origin Chip & Actions (Figma: assist chip, text button, outlined buttons)  -->
 				<StackPanel
 					Grid.Column="2"
 					VerticalAlignment="Center"
 					Orientation="Horizontal"
-					Spacing="6">
-					<Button
-						x:Name="SubfolderMenuButton"
-						Padding="8,4"
-						Click="SubfolderMenuButton_Click"
-						ToolTipService.ToolTip="Jump directly to a subfolder"
-						Visibility="Collapsed">
-						<StackPanel Orientation="Horizontal" Spacing="5">
-							<FontIcon FontSize="12" Glyph="&#xE8B7;" />
-							<TextBlock
-								x:Name="SubfolderMenuLabel"
-								VerticalAlignment="Center"
-								FontSize="11"
-								Text="Subfolders" />
-							<FontIcon FontSize="9" Glyph="&#xE70D;" />
-						</StackPanel>
-					</Button>
-					<Button
-						x:Name="CopyPathButton"
-						Padding="8,4"
-						Click="CopyPath_Click"
-						ToolTipService.ToolTip="Copy current vault folder path">
-						<StackPanel Orientation="Horizontal" Spacing="5">
-							<FontIcon
-								x:Name="CopyPathIcon"
-								FontSize="12"
-								Glyph="&#xE8C8;" />
-							<TextBlock
-								x:Name="CopyPathLabel"
-								VerticalAlignment="Center"
-								FontSize="11"
-								Text="Copy path" />
-						</StackPanel>
-					</Button>
+					Spacing="8">
 					<Border
 						x:Name="CurrentFolderOriginPill"
-						Padding="8,4"
+						Height="32"
+						Padding="12,0,16,0"
 						VerticalAlignment="Center"
-						Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-						BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+						BorderBrush="{ThemeResource OutlineVariantBrush}"
 						BorderThickness="1"
-						CornerRadius="10"
+						CornerRadius="8"
 						Visibility="Collapsed">
-						<StackPanel Orientation="Horizontal" Spacing="5">
+						<StackPanel
+							VerticalAlignment="Center"
+							Orientation="Horizontal"
+							Spacing="8">
 							<Ellipse
 								x:Name="CurrentFolderOriginDot"
-								Width="7"
-								Height="7"
+								Width="8"
+								Height="8"
 								VerticalAlignment="Center"
 								Fill="#C69749" />
 							<TextBlock
 								x:Name="CurrentFolderOriginText"
 								VerticalAlignment="Center"
-								FontSize="11"
-								Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+								FontSize="14"
+								FontWeight="Medium"
+								Foreground="{ThemeResource OnSurfaceBrush}" />
 						</StackPanel>
 					</Border>
 					<Button
-						Padding="8,4"
-						ToolTipService.ToolTip="Rearrange or dock workspace panels">
-						<StackPanel Orientation="Horizontal" Spacing="5">
-							<FontIcon FontSize="12" Glyph="&#xE8A9;" />
+						x:Name="CopyPathButton"
+						Click="CopyPath_Click"
+						Style="{StaticResource TextButtonStyle}"
+						ToolTipService.ToolTip="Copy current vault folder path">
+						<StackPanel Orientation="Horizontal" Spacing="8">
+							<FontIcon
+								x:Name="CopyPathIcon"
+								FontSize="14"
+								Glyph="&#xE8C8;" />
 							<TextBlock
+								x:Name="CopyPathLabel"
 								VerticalAlignment="Center"
-								FontSize="11"
-								Text="Layout" />
-							<FontIcon FontSize="9" Glyph="&#xE70D;" />
+								FontSize="14"
+								FontWeight="Medium"
+								Text="Copy path" />
 						</StackPanel>
+					</Button>
+					<Button
+						x:Name="SubfolderMenuButton"
+						Click="SubfolderMenuButton_Click"
+						Style="{StaticResource OutlinedButtonStyle}"
+						ToolTipService.ToolTip="Jump directly to a subfolder"
+						Visibility="Collapsed">
+						<TextBlock
+							x:Name="SubfolderMenuLabel"
+							VerticalAlignment="Center"
+							FontSize="14"
+							FontWeight="Medium"
+							Text="Subfolders" />
+					</Button>
+					<Button
+						Content="Layout"
+						Style="{StaticResource OutlinedButtonStyle}"
+						ToolTipService.ToolTip="Rearrange or dock workspace panels">
 						<Button.Flyout>
 							<MenuFlyout>
 								<MenuFlyoutItem Click="PresetBalanced_Click" Text="Balanced (Folders Left · Details Bottom)" />
@@ -481,16 +552,16 @@
 			<Border
 				Grid.Row="1"
 				Padding="10,6"
-				Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-				BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+				Background="{ThemeResource HackSurfaceContainerLowBrush}"
+				BorderBrush="{ThemeResource PrimaryBrush}"
 				BorderThickness="1"
-				CornerRadius="6"
+				CornerRadius="16"
 				Visibility="{x:Bind ViewModel.HasResumableDownload, Mode=OneWay}">
 				<Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
 					<FontIcon
 						VerticalAlignment="Center"
 						FontSize="15"
-						Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+						Foreground="{ThemeResource PrimaryBrush}"
 						Glyph="&#xE896;" />
 					<StackPanel
 						Grid.Column="1"
@@ -502,7 +573,7 @@
 							Text="Unfinished download ready to resume" />
 						<TextBlock
 							FontSize="11"
-							Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+							Foreground="{ThemeResource OnSurfaceVariantBrush}"
 							Text="{x:Bind ViewModel.ResumableDownloadSummary, Mode=OneWay}"
 							TextTrimming="CharacterEllipsis" />
 					</StackPanel>
@@ -515,11 +586,11 @@
 							Padding="10,4"
 							Command="{x:Bind ViewModel.ResumeSavedDownloadCommand}"
 							Content="Resume Download"
-							Style="{StaticResource AccentButtonStyle}" />
+							Style="{StaticResource FilledButtonStyle}" />
 						<Button
-							Padding="8,4"
 							Command="{x:Bind ViewModel.ClearSavedDownloadCommand}"
 							Content="Clear"
+							Style="{StaticResource TextButtonStyle}"
 							ToolTipService.ToolTip="Discard saved download progress" />
 					</StackPanel>
 				</Grid>
@@ -531,9 +602,7 @@
 			<!--  Folders Pane Card  -->
 			<Border
 				x:Name="FoldersPaneCard"
-				Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-				BorderBrush="{StaticResource HackPanelStrokeBrush}"
-				BorderThickness="{StaticResource HackPanelBorderThickness}"
+				Background="{ThemeResource HackSurfaceContainerLowBrush}"
 				CornerRadius="{StaticResource HackPanelCornerRadius}">
 				<Grid>
 					<Grid.RowDefinitions>
@@ -543,111 +612,81 @@
 						<RowDefinition Height="Auto" />
 					</Grid.RowDefinitions>
 
-					<!--  Folder Tree Toolbar Header (Draggable Grip + Dock Actions)  -->
-					<Border
-						Grid.Row="0"
-						Padding="8,6,6,6"
-						BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-						BorderThickness="0,0,0,1">
-						<Grid>
-							<Grid.ColumnDefinitions>
-								<ColumnDefinition Width="*" />
-								<ColumnDefinition Width="Auto" />
-							</Grid.ColumnDefinitions>
-							<Grid
-								x:Name="FoldersDragGrip"
-								Grid.Column="0"
-								Padding="2,2"
-								Background="Transparent"
-								PointerCanceled="PaneGrip_PointerCaptureLost"
-								PointerCaptureLost="PaneGrip_PointerCaptureLost"
-								PointerMoved="PaneGrip_PointerMoved"
-								PointerPressed="FoldersGrip_PointerPressed"
-								PointerReleased="PaneGrip_PointerReleased"
-								ToolTipService.ToolTip="Drag to dock Folders Left or Right">
-								<StackPanel Orientation="Horizontal" Spacing="6">
-									<Grid
-										Width="8"
-										Height="12"
-										VerticalAlignment="Center"
-										Opacity="0.45">
-										<Grid.ColumnDefinitions>
-											<ColumnDefinition Width="*" />
-											<ColumnDefinition Width="*" />
-										</Grid.ColumnDefinitions>
-										<Grid.RowDefinitions>
-											<RowDefinition Height="*" />
-											<RowDefinition Height="*" />
-											<RowDefinition Height="*" />
-										</Grid.RowDefinitions>
-										<Ellipse Grid.Row="0" Grid.Column="0" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-										<Ellipse Grid.Row="0" Grid.Column="1" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-										<Ellipse Grid.Row="1" Grid.Column="0" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-										<Ellipse Grid.Row="1" Grid.Column="1" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-										<Ellipse Grid.Row="2" Grid.Column="0" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-										<Ellipse Grid.Row="2" Grid.Column="1" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-									</Grid>
-									<controls:FolderIcon
-										IconSize="15"
-										IsOpen="True"
-										IsRoot="True"
-										Origin="Synced" />
-									<TextBlock
-										VerticalAlignment="Center"
-										FontSize="12"
-										FontWeight="SemiBold"
-										Text="Folders" />
-								</StackPanel>
-							</Grid>
-							<StackPanel
-								Grid.Column="1"
+					<!--  Folders Header (the title is the drag handle) + Tree and Dock Actions  -->
+					<Grid Grid.Row="0" Padding="16,12,8,4">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="Auto" />
+						</Grid.ColumnDefinitions>
+						<Grid
+							x:Name="FoldersDragGrip"
+							Grid.Column="0"
+							Background="Transparent"
+							PointerCanceled="PaneGrip_PointerCaptureLost"
+							PointerCaptureLost="PaneGrip_PointerCaptureLost"
+							PointerMoved="PaneGrip_PointerMoved"
+							PointerPressed="FoldersGrip_PointerPressed"
+							PointerReleased="PaneGrip_PointerReleased"
+							ToolTipService.ToolTip="Drag to dock Folders Left or Right">
+							<TextBlock
 								VerticalAlignment="Center"
-								Orientation="Horizontal"
-								Spacing="2">
-								<ToggleButton
-									x:Name="BranchLinesToggleButton"
-									Padding="5,4"
-									Click="BranchLinesToggle_Click"
-									ToolTipService.ToolTip="Show or hide tree branching guide lines">
-									<FontIcon FontSize="11" Glyph="&#xE8FD;" />
-								</ToggleButton>
-								<Button
-									Padding="5,4"
-									Click="ExpandAllFolders_Click"
-									ToolTipService.ToolTip="Expand all folders">
-									<FontIcon FontSize="10" Glyph="&#xE70D;" />
-								</Button>
-								<Button
-									Padding="5,4"
-									Click="CollapseAllFolders_Click"
-									ToolTipService.ToolTip="Collapse all folders">
-									<FontIcon FontSize="10" Glyph="&#xE70E;" />
-								</Button>
-								<Button
-									Padding="5,4"
-									Click="Refresh_Click"
-									ToolTipService.ToolTip="Refresh folder tree (F5)">
-									<FontIcon FontSize="10" Glyph="&#xE72C;" />
-								</Button>
-								<Button
-									Padding="5,4"
-									ToolTipService.ToolTip="Dock options">
-									<FontIcon FontSize="10" Glyph="&#xE712;" />
-									<Button.Flyout>
-										<MenuFlyout>
-											<MenuFlyoutItem Click="DockFoldersLeft_Click" Text="Dock Left" />
-											<MenuFlyoutItem Click="DockFoldersRight_Click" Text="Dock Right" />
-											<MenuFlyoutSeparator />
-											<MenuFlyoutItem Click="HideFoldersPane_Click" Text="Hide Folders Panel" />
-										</MenuFlyout>
-									</Button.Flyout>
-								</Button>
-							</StackPanel>
+								Style="{StaticResource TitleMedium}"
+								Text="Folders" />
 						</Grid>
-					</Border>
+						<StackPanel
+							Grid.Column="1"
+							VerticalAlignment="Center"
+							Orientation="Horizontal">
+							<ToggleButton
+								x:Name="BranchLinesToggleButton"
+								Click="BranchLinesToggle_Click"
+								Style="{StaticResource PaneIconToggleButtonStyle}"
+								ToolTipService.ToolTip="Show or hide tree branching guide lines">
+								<FontIcon FontSize="13" Glyph="&#xE8FD;" />
+								<ut:ControlExtensions.AlternateContent>
+									<FontIcon
+										FontSize="13"
+										Foreground="{ThemeResource PrimaryBrush}"
+										Glyph="&#xE8FD;" />
+								</ut:ControlExtensions.AlternateContent>
+							</ToggleButton>
+							<Button
+								Click="ExpandAllFolders_Click"
+								Style="{StaticResource PaneIconButtonStyle}"
+								ToolTipService.ToolTip="Expand all folders">
+								<FontIcon FontSize="12" Glyph="&#xE70D;" />
+							</Button>
+							<Button
+								Click="CollapseAllFolders_Click"
+								Style="{StaticResource PaneIconButtonStyle}"
+								ToolTipService.ToolTip="Collapse all folders">
+								<FontIcon FontSize="12" Glyph="&#xE70E;" />
+							</Button>
+							<Button
+								Click="Refresh_Click"
+								Style="{StaticResource PaneIconButtonStyle}"
+								ToolTipService.ToolTip="Refresh folder tree (F5)">
+								<FontIcon FontSize="12" Glyph="&#xE72C;" />
+							</Button>
+							<Button Style="{StaticResource PaneIconButtonStyle}" ToolTipService.ToolTip="Dock options">
+								<FontIcon FontSize="13" Glyph="&#xE712;" />
+								<Button.Flyout>
+									<MenuFlyout>
+										<MenuFlyoutItem Click="DockFoldersLeft_Click" Text="Dock Left" />
+										<MenuFlyoutItem Click="DockFoldersRight_Click" Text="Dock Right" />
+										<MenuFlyoutSeparator />
+										<MenuFlyoutItem Click="HideFoldersPane_Click" Text="Hide Folders Panel" />
+									</MenuFlyout>
+								</Button.Flyout>
+							</Button>
+						</StackPanel>
+					</Grid>
 
-					<!--  Quick Folder Filter  -->
-					<Grid Grid.Row="1" Margin="8,6,8,4">
+					<!--  Quick Folder Filter (Figma: outlined text field with a search icon)  -->
+					<Grid
+						Grid.Row="1"
+						Margin="8,4,8,4"
+						ColumnSpacing="4">
 						<Grid.ColumnDefinitions>
 							<ColumnDefinition Width="*" />
 							<ColumnDefinition Width="Auto" />
@@ -655,20 +694,22 @@
 						<TextBox
 							x:Name="FolderFilterBox"
 							Grid.Column="0"
-							MinHeight="28"
-							Padding="8,4"
-							FontSize="11"
 							PlaceholderText="Filter folders…"
-							TextChanged="FolderFilterBox_TextChanged" />
+							Style="{StaticResource OutlinedTextBoxStyle}"
+							TextChanged="FolderFilterBox_TextChanged">
+							<ut:ControlExtensions.Icon>
+								<FontIcon FontSize="16" Glyph="&#xE721;" />
+							</ut:ControlExtensions.Icon>
+						</TextBox>
 						<Button
 							x:Name="ClearFilterButton"
 							Grid.Column="1"
-							Margin="4,0,0,0"
-							Padding="6,4"
+							VerticalAlignment="Center"
 							Click="ClearFilterButton_Click"
+							Style="{StaticResource PaneIconButtonStyle}"
 							ToolTipService.ToolTip="Clear folder filter"
 							Visibility="Collapsed">
-							<FontIcon FontSize="10" Glyph="&#xE711;" />
+							<FontIcon FontSize="12" Glyph="&#xE711;" />
 						</Button>
 					</Grid>
 
@@ -676,20 +717,29 @@
 					<Grid Grid.Row="2">
 						<TreeView
 							x:Name="OdooDirectoryTree"
-							Padding="4,4"
+							Margin="8,0"
+							Padding="0,4"
 							VerticalAlignment="Stretch"
 							BorderThickness="0"
 							CanDragItems="False"
 							ScrollViewer.HorizontalScrollBarVisibility="Auto"
 							ScrollViewer.VerticalScrollBarVisibility="Auto"
 							Visibility="Visible">
-							<TreeView.Resources>
-								<Thickness x:Key="TreeViewItemPresenterPadding">0,0,0,0</Thickness>
-								<Thickness x:Key="TreeViewItemPresenterMargin">0,0,0,0</Thickness>
-								<x:Double x:Key="TreeViewItemIndent">16</x:Double>
-								<x:Double x:Key="TreeViewItemMinHeight">30</x:Double>
-								<x:Double x:Key="TreeViewItemExpandCollapseChevronFontSize">11</x:Double>
-							</TreeView.Resources>
+								<TreeView.Resources>
+									<Thickness x:Key="TreeViewItemPresenterPadding">0,0,0,0</Thickness>
+									<Thickness x:Key="TreeViewItemPresenterMargin">0,0,0,0</Thickness>
+									<x:Double x:Key="TreeViewItemIndent">16</x:Double>
+									<x:Double x:Key="TreeViewItemMinHeight">32</x:Double>
+									<x:Double x:Key="TreeViewItemExpandCollapseChevronFontSize">11</x:Double>
+									<!--  Figma: Folder tree/Item — the selected folder is a Secondary Container pill  -->
+									<SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="{ThemeResource SecondaryContainerColor}" />
+									<SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SecondaryContainerColor}" />
+									<SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPressed" Color="{ThemeResource SecondaryContainerColor}" />
+									<SolidColorBrush x:Key="TreeViewItemForegroundSelected" Color="{ThemeResource OnSecondaryContainerColor}" />
+									<SolidColorBrush x:Key="TreeViewItemForegroundSelectedPointerOver" Color="{ThemeResource OnSecondaryContainerColor}" />
+									<SolidColorBrush x:Key="TreeViewItemForegroundSelectedPressed" Color="{ThemeResource OnSecondaryContainerColor}" />
+									<SolidColorBrush x:Key="TreeViewItemSelectionIndicatorForeground" Color="Transparent" />
+								</TreeView.Resources>
 							<TreeView.ContextFlyout>
 								<MenuFlyout>
 									<MenuFlyoutSubItem x:Name="TreeDownload" Text="Download">
@@ -727,11 +777,12 @@
 							<TreeView.ItemTemplate>
 								<DataTemplate x:DataType="types:TreeData">
 									<TreeViewItem
-										MinHeight="30"
+										MinHeight="32"
 										Margin="0"
 										Padding="0"
 										HorizontalContentAlignment="Stretch"
 										VerticalContentAlignment="Stretch"
+										CornerRadius="16"
 										IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
 										Loaded="TreeViewItem_Loaded"
 										ToolTipService.ToolTip="{x:Bind TooltipText, Mode=OneWay}">
@@ -746,28 +797,24 @@
 											<controls:FolderIcon
 												Margin="0,0,6,0"
 												VerticalAlignment="Center"
-												IconSize="18"
+												IconSize="20"
 												IsOpen="{x:Bind IsExpanded, Mode=OneWay}"
 												IsRoot="{x:Bind IsRootNode, Mode=OneWay}"
 												Origin="{x:Bind Origin, Mode=OneWay}" />
 											<TextBlock
-												Margin="0,0,6,0"
+												Margin="0,0,8,0"
 												VerticalAlignment="Center"
-												FontSize="12"
+												FontSize="14"
 												FontWeight="{x:Bind NameFontWeight, Mode=OneWay}"
 												Text="{x:Bind Name}" />
-											<Border
-												Margin="0,0,5,0"
-												Padding="5,0"
+											<TextBlock
+												Margin="0,0,8,0"
 												VerticalAlignment="Center"
-												Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-												CornerRadius="8"
-												Visibility="{x:Bind SubfolderCountVisibility, Mode=OneWay}">
-												<TextBlock
-													FontSize="10"
-													Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-													Text="{x:Bind SubfolderCountText, Mode=OneWay}" />
-											</Border>
+												FontSize="12"
+												FontWeight="Medium"
+												Foreground="{ThemeResource OnSurfaceVariantBrush}"
+												Text="{x:Bind SubfolderCountText, Mode=OneWay}"
+												Visibility="{x:Bind SubfolderCountVisibility, Mode=OneWay}" />
 											<Border
 												Margin="0,0,4,0"
 												Padding="4,0"
@@ -809,24 +856,24 @@
 							<FontIcon
 								HorizontalAlignment="Center"
 								FontSize="20"
-								Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+								Foreground="{ThemeResource OnSurfaceVariantBrush}"
 								Glyph="&#xE8B7;" />
 							<TextBlock
 								HorizontalAlignment="Center"
 								FontSize="11"
-								Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+								Foreground="{ThemeResource OnSurfaceVariantBrush}"
 								Text="No matching folders" />
 							<Button
 								HorizontalAlignment="Center"
 								Click="ClearFilterButton_Click"
 								Content="Show all folders"
-								FontSize="11" />
+								Style="{StaticResource TextButtonStyle}" />
 						</StackPanel>
 
 						<!--  Folder Tree Loading Overlay  -->
 						<Border
 							x:Name="TreeLoadingOverlay"
-							Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+							Background="{ThemeResource SurfaceBrush}"
 							Visibility="{x:Bind ViewModel.IsTreeLoading, Mode=OneWay}">
 							<Grid RowDefinitions="Auto,*">
 								<ProgressBar
@@ -851,7 +898,7 @@
 										Text="Loading Folders…" />
 									<TextBlock
 										HorizontalAlignment="Center"
-										Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+										Foreground="{ThemeResource OnSurfaceVariantBrush}"
 										Text="{x:Bind ViewModel.TreeLoadingStatus, Mode=OneWay}"
 										TextAlignment="Center"
 										TextWrapping="Wrap" />
@@ -861,15 +908,11 @@
 					</Grid>
 
 					<!--  Folder Tree Footer  -->
-					<Border
-						Grid.Row="3"
-						Padding="10,5"
-						BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-						BorderThickness="0,1,0,0">
+					<Border Grid.Row="3" Padding="16,4,16,12">
 						<TextBlock
 							x:Name="TreeSummaryText"
-							FontSize="10"
-							Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+							Style="{StaticResource BodySmall}"
+							Foreground="{ThemeResource OnSurfaceVariantBrush}"
 							Text="Loading folders…"
 							TextTrimming="CharacterEllipsis" />
 					</Border>
@@ -885,7 +928,7 @@
 			<!--  Primary File List Card  -->
 			<Border
 				x:Name="EntriesPaneCard"
-				Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+				Background="{ThemeResource SurfaceBrush}"
 				BorderBrush="{StaticResource HackPanelStrokeBrush}"
 				BorderThickness="{StaticResource HackPanelBorderThickness}"
 				CornerRadius="{StaticResource HackPanelCornerRadius}">
@@ -895,92 +938,75 @@
 						<RowDefinition Height="Auto" />
 					</Grid.RowDefinitions>
 
-					<!--  TabView for file lists + Integrated Toolbar Strip  -->
+					<!--  TabView for file lists + view-option chips (Figma: Tab strip / View options)  -->
 					<TabView
 						x:Name="ListTabs"
 						Grid.Row="0"
-						IsAddTabButtonVisible="False">
+						IsAddTabButtonVisible="False"
+						TabWidthMode="SizeToContent">
 						<TabView.TabStripFooter>
 							<StackPanel
-								Padding="6,2,8,2"
+								Padding="8,0,12,0"
 								HorizontalAlignment="Right"
 								VerticalAlignment="Center"
 								Orientation="Horizontal"
-								Spacing="4">
+								Spacing="8">
+								<utu:Chip
+									x:Name="ToggleGroups"
+									Content="Grouped"
+									IsChecked="{x:Bind ViewModel.IsGroupingEnabled, Mode=TwoWay}"
+									CanRemove="False"
+								Style="{StaticResource FilterChipStyle}"
+									ToolTipService.ToolTip="Group entries by status or property" />
+								<utu:Chip
+									x:Name="ShowInactive"
+									Content="Inactive"
+									IsChecked="{x:Bind ViewModel.ShowInactive, Mode=TwoWay}"
+									CanRemove="False"
+								Style="{StaticResource FilterChipStyle}"
+									ToolTipService.ToolTip="Show deleted/inactive files" />
+								<utu:Chip
+									x:Name="Anchor"
+									Checked="Anchor_Checked"
+									Content="Pin"
+									CanRemove="False"
+								Style="{StaticResource FilterChipStyle}"
+									ToolTipService.ToolTip="Keep window always on top"
+									Unchecked="Anchor_Checked" />
 								<Button
-									Padding="7,4"
 									Click="Refresh_Click"
+									Style="{StaticResource AssistChipButtonStyle}"
 									ToolTipService.ToolTip="Refresh view (F5)">
-									<StackPanel Orientation="Horizontal" Spacing="5">
-										<FontIcon FontSize="11" Glyph="&#xE72C;" />
+									<StackPanel Orientation="Horizontal" Spacing="8">
+										<FontIcon
+											FontSize="14"
+											Foreground="{ThemeResource PrimaryBrush}"
+											Glyph="&#xE72C;" />
 										<TextBlock
 											VerticalAlignment="Center"
-											FontSize="11"
+											FontSize="14"
+											FontWeight="Medium"
 											Text="Refresh" />
 									</StackPanel>
 								</Button>
 								<Button
-									Padding="7,4"
 									Click="Search_Click"
+									Style="{StaticResource AssistChipButtonStyle}"
 									ToolTipService.ToolTip="Search vault files (Ctrl+F)">
-									<StackPanel Orientation="Horizontal" Spacing="5">
-										<FontIcon FontSize="11" Glyph="&#xE721;" />
+									<StackPanel Orientation="Horizontal" Spacing="8">
+										<FontIcon
+											FontSize="14"
+											Foreground="{ThemeResource PrimaryBrush}"
+											Glyph="&#xE721;" />
 										<TextBlock
 											VerticalAlignment="Center"
-											FontSize="11"
+											FontSize="14"
+											FontWeight="Medium"
 											Text="Search" />
 									</StackPanel>
 								</Button>
-								<Border
-									Width="1"
-									Height="16"
-									Margin="2,0"
-									VerticalAlignment="Center"
-									Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
-								<ToggleButton
-									x:Name="ToggleGroups"
-									Padding="7,4"
-									IsChecked="{x:Bind ViewModel.IsGroupingEnabled, Mode=TwoWay}"
-									ToolTipService.ToolTip="Group entries by status or property">
-									<StackPanel Orientation="Horizontal" Spacing="5">
-										<FontIcon FontSize="11" Glyph="&#xE8FD;" />
-										<TextBlock
-											VerticalAlignment="Center"
-											FontSize="11"
-											Text="Grouped" />
-									</StackPanel>
-								</ToggleButton>
-								<ToggleButton
-									x:Name="ShowInactive"
-									Padding="7,4"
-									IsChecked="{x:Bind ViewModel.ShowInactive, Mode=TwoWay}"
-									ToolTipService.ToolTip="Show deleted/inactive files">
-									<StackPanel Orientation="Horizontal" Spacing="5">
-										<FontIcon FontSize="11" Glyph="&#xE890;" />
-										<TextBlock
-											VerticalAlignment="Center"
-											FontSize="11"
-											Text="Inactive" />
-									</StackPanel>
-								</ToggleButton>
-								<ToggleButton
-									x:Name="Anchor"
-									Padding="7,4"
-									Checked="Anchor_Checked"
-									ToolTipService.ToolTip="Keep window always on top"
-									Unchecked="Anchor_Checked">
-									<StackPanel Orientation="Horizontal" Spacing="5">
-										<FontIcon FontSize="11" Glyph="&#xE718;" />
-										<TextBlock
-											VerticalAlignment="Center"
-											FontSize="11"
-											Text="Pin" />
-									</StackPanel>
-								</ToggleButton>
-								<Button
-									Padding="7,4"
-									ToolTipService.ToolTip="Additional tools">
-									<FontIcon FontSize="12" Glyph="&#xE712;" />
+								<Button Style="{StaticResource PaneIconButtonStyle}" ToolTipService.ToolTip="Additional tools">
+									<FontIcon FontSize="14" Glyph="&#xE712;" />
 									<Button.Flyout>
 										<MenuFlyout>
 											<MenuFlyoutItem Click="Refresh_Click" Text="Refresh View (F5)" />
@@ -1066,8 +1092,8 @@
 									<Border
 										Grid.Row="0"
 										Padding="8,4"
-										Background="{ThemeResource SubtleFillColorTertiaryBrush}"
-										BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+										Background="{ThemeResource HackSurfaceContainerLowBrush}"
+										BorderBrush="{ThemeResource OutlineVariantBrush}"
 										BorderThickness="0,0,0,1">
 										<Grid ColumnSpacing="8">
 											<Grid.ColumnDefinitions>
@@ -1092,10 +1118,10 @@
 												Orientation="Horizontal"
 												Spacing="4">
 												<Button
-													Padding="7,3"
+													Style="{StaticResource GroupedBarTextButtonStyle}"
 													ToolTipService.ToolTip="Choose field to group by">
-													<StackPanel Orientation="Horizontal" Spacing="4">
-														<TextBlock FontSize="11" Text="Group by" />
+													<StackPanel Orientation="Horizontal" Spacing="6">
+														<TextBlock VerticalAlignment="Center" FontSize="12" FontWeight="Medium" Text="Group by" />
 														<FontIcon FontSize="9" Glyph="&#xE70D;" />
 													</StackPanel>
 													<Button.Flyout>
@@ -1103,14 +1129,14 @@
 													</Button.Flyout>
 												</Button>
 												<Button
-													Padding="6,3"
 													Click="ExpandAllGroups_Click"
+													Style="{StaticResource PaneIconButtonStyle}"
 													ToolTipService.ToolTip="Expand all groups">
 													<FontIcon FontSize="10" Glyph="&#xE70D;" />
 												</Button>
 												<Button
-													Padding="6,3"
 													Click="CollapseAllGroups_Click"
+													Style="{StaticResource PaneIconButtonStyle}"
 													ToolTipService.ToolTip="Collapse all groups">
 													<FontIcon FontSize="10" Glyph="&#xE70E;" />
 												</Button>
@@ -1120,7 +1146,7 @@
 									<Border
 										Grid.Row="1"
 										Padding="14,3,6,3"
-										BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+										BorderBrush="{ThemeResource OutlineVariantBrush}"
 										BorderThickness="0,0,0,1">
 										<Grid ColumnSpacing="8">
 											<Grid.ColumnDefinitions>
@@ -1133,13 +1159,13 @@
 												<ColumnDefinition Width="140" />
 												<ColumnDefinition Width="140" />
 											</Grid.ColumnDefinitions>
-											<Button Grid.Column="1" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Name" FontSize="11" FontWeight="SemiBold" Tag="Name" />
-											<Button Grid.Column="2" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Type" FontSize="11" FontWeight="SemiBold" Tag="Type" />
-											<Button Grid.Column="3" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Right" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Size" FontSize="11" FontWeight="SemiBold" Tag="Size" />
-											<Button Grid.Column="4" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Status" FontSize="11" FontWeight="SemiBold" Tag="Status" />
-											<Button Grid.Column="5" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Checkout" FontSize="11" FontWeight="SemiBold" Tag="Checkout" />
-											<Button Grid.Column="6" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Local Date" FontSize="11" FontWeight="SemiBold" Tag="LocalDate" />
-											<Button Grid.Column="7" Padding="2,1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Click="GroupedSortColumn_Click" Content="Remote Date" FontSize="11" FontWeight="SemiBold" Tag="RemoteDate" />
+											<Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="GroupedSortColumn_Click" Content="Name" Style="{StaticResource GroupedSortHeaderButtonStyle}" Tag="Name" />
+											<Button Grid.Column="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="GroupedSortColumn_Click" Content="Type" Style="{StaticResource GroupedSortHeaderButtonStyle}" Tag="Type" />
+											<Button Grid.Column="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Right" Click="GroupedSortColumn_Click" Content="Size" Style="{StaticResource GroupedSortHeaderButtonStyle}" Tag="Size" />
+											<Button Grid.Column="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="GroupedSortColumn_Click" Content="Status" Style="{StaticResource GroupedSortHeaderButtonStyle}" Tag="Status" />
+											<Button Grid.Column="5" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="GroupedSortColumn_Click" Content="Checkout" Style="{StaticResource GroupedSortHeaderButtonStyle}" Tag="Checkout" />
+											<Button Grid.Column="6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="GroupedSortColumn_Click" Content="Local Date" Style="{StaticResource GroupedSortHeaderButtonStyle}" Tag="LocalDate" />
+											<Button Grid.Column="7" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="GroupedSortColumn_Click" Content="Remote Date" Style="{StaticResource GroupedSortHeaderButtonStyle}" Tag="RemoteDate" />
 										</Grid>
 									</Border>
 									<ListView
@@ -1176,8 +1202,8 @@
 									Padding="24,18"
 									HorizontalAlignment="Center"
 									VerticalAlignment="Center"
-									Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-									BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+									Background="{ThemeResource SurfaceBrush}"
+									BorderBrush="{ThemeResource OutlineVariantBrush}"
 									BorderThickness="1"
 									CornerRadius="8"
 									Visibility="{x:Bind ViewModel.IsEntriesLoading, Mode=OneWay}">
@@ -1207,7 +1233,7 @@
 									HorizontalAlignment="Center"
 									VerticalAlignment="Center"
 									FontSize="13"
-									Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+									Foreground="{ThemeResource OnSurfaceVariantBrush}"
 									IsHitTestVisible="False"
 									Text="This folder has no entries"
 									Visibility="{x:Bind ViewModel.ShowEmptyState, Mode=OneWay}" />
@@ -1226,10 +1252,10 @@
 								<Border
 									Grid.Column="0"
 									Padding="10"
-									Background="{ThemeResource LayerFillColorDefaultBrush}"
-									BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-									BorderThickness="1"
-									CornerRadius="6">
+									Background="{ThemeResource HackSurfaceContainerLowBrush}"
+									BorderBrush="{ThemeResource OutlineVariantBrush}"
+									BorderThickness="0"
+									CornerRadius="12">
 									<Grid RowSpacing="8">
 										<Grid.RowDefinitions>
 											<RowDefinition Height="Auto" />
@@ -1243,9 +1269,9 @@
 												Text="{x:Bind ViewModel.LocalChangesHeader, Mode=OneWay}" />
 											<Button
 												Grid.Column="1"
-												Padding="10,4"
 												Command="{x:Bind ViewModel.CommitDirectoryCommand}"
-												Content="Commit Folder" />
+												Content="Commit Folder"
+												Style="{StaticResource FilledTonalButtonStyle}" />
 										</Grid>
 										<controls:EntryTableView
 											x:Name="HackChangesList"
@@ -1269,10 +1295,10 @@
 								<Border
 									Grid.Column="1"
 									Padding="10"
-									Background="{ThemeResource LayerFillColorDefaultBrush}"
-									BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-									BorderThickness="1"
-									CornerRadius="6">
+									Background="{ThemeResource HackSurfaceContainerLowBrush}"
+									BorderBrush="{ThemeResource OutlineVariantBrush}"
+									BorderThickness="0"
+									CornerRadius="12">
 									<Grid RowSpacing="8">
 										<Grid.RowDefinitions>
 											<RowDefinition Height="Auto" />
@@ -1316,7 +1342,7 @@
 					<Border
 						Grid.Row="1"
 						Padding="10,5"
-						BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+						BorderBrush="{ThemeResource OutlineVariantBrush}"
 						BorderThickness="0,1,0,0">
 						<Grid ColumnDefinitions="Auto,*">
 							<StackPanel
@@ -1330,22 +1356,22 @@
 									Text="{x:Bind ViewModel.EntriesLabel, Mode=OneWay}" />
 								<TextBlock
 									VerticalAlignment="Center"
-									Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+									Foreground="{ThemeResource OnSurfaceVariantBrush}"
 									Text="{x:Bind ViewModel.EntriesLabelModified, Mode=OneWay}" />
 								<TextBlock
 									VerticalAlignment="Center"
-									Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+									Foreground="{ThemeResource OnSurfaceVariantBrush}"
 									Text="{x:Bind ViewModel.EntriesLabelLocal, Mode=OneWay}" />
 								<TextBlock
 									VerticalAlignment="Center"
-									Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+									Foreground="{ThemeResource OnSurfaceVariantBrush}"
 									Text="{x:Bind ViewModel.EntriesLabelRemote, Mode=OneWay}" />
 							</StackPanel>
 							<TextBlock
 								Grid.Column="1"
 								HorizontalAlignment="Right"
 								VerticalAlignment="Center"
-								Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+								Foreground="{ThemeResource OnSurfaceVariantBrush}"
 								Text="{x:Bind ViewModel.SelectionLabel, Mode=OneWay}"
 								TextTrimming="CharacterEllipsis" />
 						</Grid>
@@ -1365,44 +1391,40 @@
 				<!--  Details Inspector Card  -->
 				<Border
 					x:Name="DetailsPaneCard"
-					Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+					Background="{ThemeResource SurfaceBrush}"
 					BorderBrush="{StaticResource HackPanelStrokeBrush}"
 					BorderThickness="{StaticResource HackPanelBorderThickness}"
 					CornerRadius="{StaticResource HackPanelCornerRadius}">
 					<Grid>
-						<Grid.RowDefinitions>
-							<RowDefinition Height="Auto" />
-							<RowDefinition Height="*" />
-						</Grid.RowDefinitions>
-
-						<!--  Details Header Strip (Draggable Grip + Dock Actions)  -->
-						<Border
-							Grid.Row="0"
-							Padding="8,5,6,5"
-							BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-							BorderThickness="0,0,0,1">
-							<Grid>
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="*" />
-									<ColumnDefinition Width="Auto" />
-								</Grid.ColumnDefinitions>
-								<Grid
-									x:Name="DetailsDragGrip"
-									Grid.Column="0"
-									Padding="2,2"
-									Background="Transparent"
-									PointerCanceled="PaneGrip_PointerCaptureLost"
-									PointerCaptureLost="PaneGrip_PointerCaptureLost"
-									PointerMoved="PaneGrip_PointerMoved"
-									PointerPressed="DetailsGrip_PointerPressed"
-									PointerReleased="PaneGrip_PointerReleased"
-									ToolTipService.ToolTip="Drag to dock Inspector Bottom or Right">
-									<StackPanel Orientation="Horizontal" Spacing="6">
+						<Grid>
+							<TabView
+								x:Name="VersionTabs"
+								VerticalAlignment="Stretch"
+								IsAddTabButtonVisible="False"
+								SelectionChanged="VersionTabs_SelectionChanged"
+								TabWidthMode="SizeToContent">
+								<TabView.Resources>
+									<!--  Figma: secondary tabs keep the label in On Surface when selected  -->
+									<SolidColorBrush x:Key="TabViewItemHeaderForegroundSelected" Color="{ThemeResource OnSurfaceColor}" />
+								</TabView.Resources>
+								<!--  Drag handle for docking the Inspector (was the "Inspector" header row)  -->
+								<TabView.TabStripHeader>
+									<Grid
+										x:Name="DetailsDragGrip"
+										Padding="12,0,4,0"
+										VerticalAlignment="Stretch"
+										Background="Transparent"
+										PointerCanceled="PaneGrip_PointerCaptureLost"
+										PointerCaptureLost="PaneGrip_PointerCaptureLost"
+										PointerMoved="PaneGrip_PointerMoved"
+										PointerPressed="DetailsGrip_PointerPressed"
+										PointerReleased="PaneGrip_PointerReleased"
+										ToolTipService.ToolTip="Drag to dock Inspector Bottom or Right">
 										<Grid
 											Width="8"
 											Height="12"
 											VerticalAlignment="Center"
-											Opacity="0.45">
+											Opacity="0.6">
 											<Grid.ColumnDefinitions>
 												<ColumnDefinition Width="*" />
 												<ColumnDefinition Width="*" />
@@ -1412,62 +1434,47 @@
 												<RowDefinition Height="*" />
 												<RowDefinition Height="*" />
 											</Grid.RowDefinitions>
-											<Ellipse Grid.Row="0" Grid.Column="0" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-											<Ellipse Grid.Row="0" Grid.Column="1" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-											<Ellipse Grid.Row="1" Grid.Column="0" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-											<Ellipse Grid.Row="1" Grid.Column="1" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-											<Ellipse Grid.Row="2" Grid.Column="0" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-											<Ellipse Grid.Row="2" Grid.Column="1" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
+											<Ellipse Grid.Row="0" Grid.Column="0" Width="2" Height="2" Fill="{ThemeResource OnSurfaceVariantBrush}" />
+											<Ellipse Grid.Row="0" Grid.Column="1" Width="2" Height="2" Fill="{ThemeResource OnSurfaceVariantBrush}" />
+											<Ellipse Grid.Row="1" Grid.Column="0" Width="2" Height="2" Fill="{ThemeResource OnSurfaceVariantBrush}" />
+											<Ellipse Grid.Row="1" Grid.Column="1" Width="2" Height="2" Fill="{ThemeResource OnSurfaceVariantBrush}" />
+											<Ellipse Grid.Row="2" Grid.Column="0" Width="2" Height="2" Fill="{ThemeResource OnSurfaceVariantBrush}" />
+											<Ellipse Grid.Row="2" Grid.Column="1" Width="2" Height="2" Fill="{ThemeResource OnSurfaceVariantBrush}" />
 										</Grid>
-										<FontIcon FontSize="12" Glyph="&#xE946;" />
-										<TextBlock
-											VerticalAlignment="Center"
-											FontSize="12"
-											FontWeight="SemiBold"
-											Text="Inspector" />
+									</Grid>
+								</TabView.TabStripHeader>
+								<TabView.TabStripFooter>
+									<StackPanel
+										Padding="8,0,8,0"
+										HorizontalAlignment="Right"
+										VerticalAlignment="Center"
+										Orientation="Horizontal">
+										<Button
+											Click="ToggleInspectorDock_Click"
+											Style="{StaticResource PaneIconButtonStyle}"
+											ToolTipService.ToolTip="Switch Inspector between Bottom and Right dock">
+											<FontIcon FontSize="13" Glyph="&#xE8A9;" />
+										</Button>
+										<Button Style="{StaticResource PaneIconButtonStyle}" ToolTipService.ToolTip="Inspector dock options">
+											<FontIcon FontSize="13" Glyph="&#xE712;" />
+											<Button.Flyout>
+												<MenuFlyout>
+													<MenuFlyoutItem Click="DockInspectorBottom_Click" Text="Dock Bottom" />
+													<MenuFlyoutItem Click="DockInspectorRight_Click" Text="Dock Right" />
+													<MenuFlyoutItem Click="SwapPreviewPlacement_Click" Text="Swap Details / Preview" />
+													<MenuFlyoutSeparator />
+													<MenuFlyoutItem Click="HideDetailsPane_Click" Text="Hide Inspector" />
+												</MenuFlyout>
+											</Button.Flyout>
+										</Button>
+										<Button
+											Click="HideDetailsPane_Click"
+											Style="{StaticResource PaneIconButtonStyle}"
+											ToolTipService.ToolTip="Hide Inspector">
+											<FontIcon FontSize="12" Glyph="&#xE711;" />
+										</Button>
 									</StackPanel>
-								</Grid>
-								<StackPanel
-									Grid.Column="1"
-									VerticalAlignment="Center"
-									Orientation="Horizontal"
-									Spacing="2">
-									<Button
-										Padding="5,3"
-										Click="ToggleInspectorDock_Click"
-										ToolTipService.ToolTip="Switch Inspector between Bottom and Right dock">
-										<FontIcon FontSize="11" Glyph="&#xE8A9;" />
-									</Button>
-									<Button
-										Padding="5,3"
-										ToolTipService.ToolTip="Inspector dock options">
-										<FontIcon FontSize="10" Glyph="&#xE712;" />
-										<Button.Flyout>
-											<MenuFlyout>
-												<MenuFlyoutItem Click="DockInspectorBottom_Click" Text="Dock Bottom" />
-												<MenuFlyoutItem Click="DockInspectorRight_Click" Text="Dock Right" />
-												<MenuFlyoutItem Click="SwapPreviewPlacement_Click" Text="Swap Details / Preview" />
-												<MenuFlyoutSeparator />
-												<MenuFlyoutItem Click="HideDetailsPane_Click" Text="Hide Inspector" />
-											</MenuFlyout>
-										</Button.Flyout>
-									</Button>
-									<Button
-										Padding="5,3"
-										Click="HideDetailsPane_Click"
-										ToolTipService.ToolTip="Hide Inspector">
-										<FontIcon FontSize="10" Glyph="&#xE711;" />
-									</Button>
-								</StackPanel>
-							</Grid>
-						</Border>
-
-						<Grid Grid.Row="1">
-							<TabView
-								x:Name="VersionTabs"
-								VerticalAlignment="Stretch"
-								IsAddTabButtonVisible="False"
-								SelectionChanged="VersionTabs_SelectionChanged">
+								</TabView.TabStripFooter>
 								<TabViewItem x:Name="HistoryTab" Header="History" IsClosable="False">
 									<controls:EntryTableView
 										x:Name="OdooHistory"
@@ -1714,9 +1721,7 @@
 					x:Name="PreviewPaneCard"
 					HorizontalAlignment="Stretch"
 					VerticalAlignment="Stretch"
-					Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-					BorderBrush="{StaticResource HackPanelStrokeBrush}"
-					BorderThickness="{StaticResource HackPanelBorderThickness}"
+					Background="{ThemeResource HackSurfaceContainerLowBrush}"
 					CornerRadius="{StaticResource HackPanelCornerRadius}">
 					<Grid>
 						<Grid.RowDefinitions>
@@ -1724,120 +1729,99 @@
 							<RowDefinition Height="*" />
 						</Grid.RowDefinitions>
 
-						<!--  Preview Header Strip (Draggable Grip + PiP + Dock Actions)  -->
-						<Border
-							Grid.Row="0"
-							Padding="8,5,6,5"
-							BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-							BorderThickness="0,0,0,1">
-							<Grid>
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="*" />
-									<ColumnDefinition Width="Auto" />
-								</Grid.ColumnDefinitions>
-								<Grid
-									x:Name="PreviewDragGrip"
-									Grid.Column="0"
-									Padding="2,2"
-									Background="Transparent"
-									PointerCanceled="PaneGrip_PointerCaptureLost"
-									PointerCaptureLost="PaneGrip_PointerCaptureLost"
-									PointerMoved="PaneGrip_PointerMoved"
-									PointerPressed="PreviewGrip_PointerPressed"
-									PointerReleased="PaneGrip_PointerReleased"
-									ToolTipService.ToolTip="Drag to swap Preview position or dock">
-									<StackPanel Orientation="Horizontal" Spacing="6">
-										<Grid
-											Width="8"
-											Height="12"
-											VerticalAlignment="Center"
-											Opacity="0.45">
-											<Grid.ColumnDefinitions>
-												<ColumnDefinition Width="*" />
-												<ColumnDefinition Width="*" />
-											</Grid.ColumnDefinitions>
-											<Grid.RowDefinitions>
-												<RowDefinition Height="*" />
-												<RowDefinition Height="*" />
-												<RowDefinition Height="*" />
-											</Grid.RowDefinitions>
-											<Ellipse Grid.Row="0" Grid.Column="0" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-											<Ellipse Grid.Row="0" Grid.Column="1" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-											<Ellipse Grid.Row="1" Grid.Column="0" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-											<Ellipse Grid.Row="1" Grid.Column="1" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-											<Ellipse Grid.Row="2" Grid.Column="0" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-											<Ellipse Grid.Row="2" Grid.Column="1" Width="2" Height="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
-										</Grid>
-										<FontIcon FontSize="12" Glyph="&#xE8B9;" />
-										<TextBlock
-											VerticalAlignment="Center"
-											FontSize="12"
-											FontWeight="SemiBold"
-											Text="Preview" />
-									</StackPanel>
-								</Grid>
-								<StackPanel
-									Grid.Column="1"
+						<!--  Preview Header (the title is the drag handle) + PiP + Dock Actions  -->
+						<Grid Grid.Row="0" Padding="16,12,8,0">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
+							<Grid
+								x:Name="PreviewDragGrip"
+								Grid.Column="0"
+								Background="Transparent"
+								PointerCanceled="PaneGrip_PointerCaptureLost"
+								PointerCaptureLost="PaneGrip_PointerCaptureLost"
+								PointerMoved="PaneGrip_PointerMoved"
+								PointerPressed="PreviewGrip_PointerPressed"
+								PointerReleased="PaneGrip_PointerReleased"
+								ToolTipService.ToolTip="Drag to swap Preview position or dock">
+								<TextBlock
 									VerticalAlignment="Center"
-									Orientation="Horizontal"
-									Spacing="2">
-									<Button
-										Padding="5,3"
-										Command="{x:Bind ViewModel.UploadPreviewImageCommand}"
-										ToolTipService.ToolTip="Upload custom preview image for selected committed file">
-										<FontIcon FontSize="11" Glyph="&#xE898;" />
-									</Button>
-									<Button
-										Padding="5,3"
-										Click="OnTogglePipClicked"
-										ToolTipService.ToolTip="Pop preview into Picture-in-Picture window">
-										<FontIcon FontSize="11" Glyph="&#xE73F;" />
-									</Button>
-									<Button
-										Padding="5,3"
-										Click="SwapPreviewPlacement_Click"
-										ToolTipService.ToolTip="Swap Preview and Details positions">
-										<FontIcon FontSize="11" Glyph="&#xE8AB;" />
-									</Button>
-									<Button
-										Padding="5,3"
-										Click="HidePreviewPane_Click"
-										ToolTipService.ToolTip="Hide Preview panel">
-										<FontIcon FontSize="10" Glyph="&#xE711;" />
-									</Button>
+									Style="{StaticResource TitleMedium}"
+									Text="Preview" />
+							</Grid>
+							<StackPanel
+								Grid.Column="1"
+								VerticalAlignment="Center"
+								Orientation="Horizontal">
+								<Button
+									Command="{x:Bind ViewModel.UploadPreviewImageCommand}"
+									Style="{StaticResource PaneIconButtonStyle}"
+									ToolTipService.ToolTip="Upload custom preview image for selected committed file">
+									<FontIcon FontSize="13" Glyph="&#xE898;" />
+								</Button>
+								<Button
+									Click="OnTogglePipClicked"
+									Style="{StaticResource PaneIconButtonStyle}"
+									ToolTipService.ToolTip="Pop preview into Picture-in-Picture window">
+									<FontIcon FontSize="13" Glyph="&#xE73F;" />
+								</Button>
+								<Button
+									Click="SwapPreviewPlacement_Click"
+									Style="{StaticResource PaneIconButtonStyle}"
+									ToolTipService.ToolTip="Swap Preview and Details positions">
+									<FontIcon FontSize="13" Glyph="&#xE8AB;" />
+								</Button>
+								<Button
+									Click="HidePreviewPane_Click"
+									Style="{StaticResource PaneIconButtonStyle}"
+									ToolTipService.ToolTip="Hide Preview panel">
+									<FontIcon FontSize="12" Glyph="&#xE711;" />
+								</Button>
+							</StackPanel>
+						</Grid>
+
+						<!--  Preview image well  -->
+						<Border
+							Grid.Row="1"
+							Margin="12"
+							Background="{ThemeResource HackSurfaceContainerHighBrush}"
+							CornerRadius="12">
+							<Grid
+								Margin="8"
+								HorizontalAlignment="Stretch"
+								VerticalAlignment="Stretch">
+								<StackPanel
+									HorizontalAlignment="Center"
+									VerticalAlignment="Center"
+									Spacing="8"
+									Visibility="{x:Bind ViewModel.IsNoPreviewVisible, Mode=OneWay}">
+									<ProgressRing
+										Width="30"
+										Height="30"
+										HorizontalAlignment="Center"
+										IsActive="{x:Bind ViewModel.IsPreviewBusy, Mode=OneWay}"
+										Visibility="{x:Bind ViewModel.IsPreviewBusy, Mode=OneWay}" />
+									<FontIcon
+										HorizontalAlignment="Center"
+										FontSize="32"
+										Foreground="{ThemeResource OnSurfaceVariantBrush}"
+										Glyph="&#xE8B9;" />
+									<TextBlock
+										HorizontalAlignment="Center"
+										Style="{StaticResource BodySmall}"
+										Foreground="{ThemeResource OnSurfaceVariantBrush}"
+										Text="{x:Bind ViewModel.PreviewStatusText, Mode=OneWay}"
+										TextAlignment="Center" />
 								</StackPanel>
+								<Image
+									x:Name="OdooEntryImage"
+									HorizontalAlignment="Stretch"
+									VerticalAlignment="Stretch"
+									Stretch="Uniform"
+									Visibility="{x:Bind ViewModel.IsPreviewVisible, Mode=OneWay}" />
 							</Grid>
 						</Border>
-
-						<Grid
-							Grid.Row="1"
-							Margin="8"
-							HorizontalAlignment="Stretch"
-							VerticalAlignment="Stretch">
-							<StackPanel
-								HorizontalAlignment="Center"
-								VerticalAlignment="Center"
-								Spacing="8"
-								Visibility="{x:Bind ViewModel.IsNoPreviewVisible, Mode=OneWay}">
-								<ProgressRing
-									Width="30"
-									Height="30"
-									HorizontalAlignment="Center"
-									IsActive="{x:Bind ViewModel.IsPreviewBusy, Mode=OneWay}"
-									Visibility="{x:Bind ViewModel.IsPreviewBusy, Mode=OneWay}" />
-								<TextBlock
-									HorizontalAlignment="Center"
-									Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-									Text="{x:Bind ViewModel.PreviewStatusText, Mode=OneWay}"
-									TextAlignment="Center" />
-							</StackPanel>
-							<Image
-								x:Name="OdooEntryImage"
-								HorizontalAlignment="Stretch"
-								VerticalAlignment="Stretch"
-								Stretch="Uniform"
-								Visibility="{x:Bind ViewModel.IsPreviewVisible, Mode=OneWay}" />
-						</Grid>
 					</Grid>
 				</Border>
 			</Grid>
@@ -1866,7 +1850,7 @@
 				Grid.Column="0"
 				Margin="8"
 				Background="#334CC2FF"
-				BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+				BorderBrush="{ThemeResource PrimaryBrush}"
 				BorderThickness="2"
 				CornerRadius="8"
 				Opacity="0.25"
@@ -1886,7 +1870,7 @@
 				Grid.Column="2"
 				Margin="8"
 				Background="#334CC2FF"
-				BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+				BorderBrush="{ThemeResource PrimaryBrush}"
 				BorderThickness="2"
 				CornerRadius="8"
 				Opacity="0.25"
@@ -1906,7 +1890,7 @@
 				Grid.ColumnSpan="2"
 				Margin="8"
 				Background="#334CC2FF"
-				BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+				BorderBrush="{ThemeResource PrimaryBrush}"
 				BorderThickness="2"
 				CornerRadius="8"
 				Opacity="0.25"
@@ -1925,7 +1909,7 @@
 				Grid.Column="1"
 				Margin="8"
 				Background="#334CC2FF"
-				BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+				BorderBrush="{ThemeResource PrimaryBrush}"
 				BorderThickness="2"
 				CornerRadius="8"
 				Opacity="0.25"

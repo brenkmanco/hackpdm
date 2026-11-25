@@ -1,7 +1,7 @@
 <Project Sdk="Uno.Sdk">
   <PropertyGroup>
     <UnoSingleProject>true</UnoSingleProject>
-    <UnoFeatures>Svg</UnoFeatures>
+    <UnoFeatures>Svg;Material;Toolkit</UnoFeatures>
     <UnoDisableResizetizer>true</UnoDisableResizetizer>
     <UnoResizetizerEnabled>false</UnoResizetizerEnabled>
     <DisableDefaultUnoResizetizerItems>true</DisableDefaultUnoResizetizerItems>

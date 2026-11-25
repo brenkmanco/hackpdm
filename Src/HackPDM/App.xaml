@@ -10,6 +10,9 @@
 		<ResourceDictionary>
 			<ResourceDictionary.MergedDictionaries>
 				<controls:XamlControlsResources />
+				<!--  Material + Uno Toolkit theme. Its colors come from the active preset (ThemePresets, matching the Figma
+				     "HackPDM colors" variables), set at startup by ThemeService.ApplyStartupResources.  -->
+				<MaterialToolkitTheme xmlns="using:Uno.Toolkit.UI.Material" />
 				<!--  Other merged dictionaries here  -->
 				<ResourceDictionary Source="ms-appx:///Microsoft.UI.Xaml/DensityStyles/Compact.xaml" />
 				<ResourceDictionary Source="ms-appx:///WinUI.TableView/Themes/TableView.xaml" />
@@ -17,6 +20,13 @@
 			</ResourceDictionary.MergedDictionaries>
 			<ResourceDictionary.ThemeDictionaries>
 				<ResourceDictionary x:Key="Default">
+					<!--  Material surface-container roles Uno Material has no keys for; the active preset replaces these values at startup  -->
+					<Color x:Key="HackSurfaceContainerColor">#1E1F25</Color>
+					<Color x:Key="HackSurfaceContainerLowColor">#1A1B21</Color>
+					<Color x:Key="HackSurfaceContainerHighColor">#282A2F</Color>
+					<SolidColorBrush x:Key="HackSurfaceContainerBrush" Color="#1E1F25" />
+					<SolidColorBrush x:Key="HackSurfaceContainerLowBrush" Color="#1A1B21" />
+					<SolidColorBrush x:Key="HackSurfaceContainerHighBrush" Color="#282A2F" />
 					<SolidColorBrush x:Key="TableViewRowBackgroundPointerOver" Color="#24FFFFFF" />
 					<SolidColorBrush x:Key="TableViewRowBackgroundPressed" Color="#30FFFFFF" />
 					<SolidColorBrush x:Key="TableViewRowBackgroundSelected" Color="#3D60CDFF" />
@@ -24,6 +34,13 @@
 					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPressed" Color="#3360CDFF" />
 				</ResourceDictionary>
 				<ResourceDictionary x:Key="Dark">
+					<!--  Material surface-container roles Uno Material has no keys for; the active preset replaces these values at startup  -->
+					<Color x:Key="HackSurfaceContainerColor">#1E1F25</Color>
+					<Color x:Key="HackSurfaceContainerLowColor">#1A1B21</Color>
+					<Color x:Key="HackSurfaceContainerHighColor">#282A2F</Color>
+					<SolidColorBrush x:Key="HackSurfaceContainerBrush" Color="#1E1F25" />
+					<SolidColorBrush x:Key="HackSurfaceContainerLowBrush" Color="#1A1B21" />
+					<SolidColorBrush x:Key="HackSurfaceContainerHighBrush" Color="#282A2F" />
 					<SolidColorBrush x:Key="TableViewRowBackgroundPointerOver" Color="#24FFFFFF" />
 					<SolidColorBrush x:Key="TableViewRowBackgroundPressed" Color="#30FFFFFF" />
 					<SolidColorBrush x:Key="TableViewRowBackgroundSelected" Color="#3D60CDFF" />
@@ -31,6 +48,13 @@
 					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPressed" Color="#3360CDFF" />
 				</ResourceDictionary>
 				<ResourceDictionary x:Key="Light">
+					<!--  Material surface-container roles Uno Material has no keys for; the active preset replaces these values at startup  -->
+					<Color x:Key="HackSurfaceContainerColor">#EEEDF4</Color>
+					<Color x:Key="HackSurfaceContainerLowColor">#F4F3FA</Color>
+					<Color x:Key="HackSurfaceContainerHighColor">#E8E7EF</Color>
+					<SolidColorBrush x:Key="HackSurfaceContainerBrush" Color="#EEEDF4" />
+					<SolidColorBrush x:Key="HackSurfaceContainerLowBrush" Color="#F4F3FA" />
+					<SolidColorBrush x:Key="HackSurfaceContainerHighBrush" Color="#E8E7EF" />
 					<SolidColorBrush x:Key="TableViewRowBackgroundPointerOver" Color="#16000000" />
 					<SolidColorBrush x:Key="TableViewRowBackgroundPressed" Color="#22000000" />
 					<SolidColorBrush x:Key="TableViewRowBackgroundSelected" Color="#2E005FB8" />
