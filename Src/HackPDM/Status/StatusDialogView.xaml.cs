@@ -17,18 +17,28 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 
 using Windows.Foundation;
-using Windows.UI;
 
 namespace HackPDM.Status;
 
 /// <summary>The status window: full 3-pane log or compact category bar with hover error/warning popups, bound to <see cref="StatusDialogViewModel"/>.</summary>
-public sealed partial class StatusDialogView : Page
+public sealed partial class StatusDialogView : Page, IDockablePanel
 {
-	private static readonly SolidColorBrush InfoAccentBrush = new( Color.FromArgb( 255, 76, 160, 232 ) );
-	private static readonly SolidColorBrush WarningAccentBrush = new( Color.FromArgb( 255, 224, 168, 46 ) );
-	private static readonly SolidColorBrush WarningTintBrush = new( Color.FromArgb( 42, 224, 168, 46 ) );
-	private static readonly SolidColorBrush ErrorAccentBrush = new( Color.FromArgb( 255, 229, 72, 77 ) );
-	private static readonly SolidColorBrush ErrorTintBrush = new( Color.FromArgb( 42, 229, 72, 77 ) );
+	/// <summary>
+	/// The Material roles behind each message kind, as on the banners: info is Primary, warnings Tertiary, errors
+	/// Error; an active pill fills with the kind's container color. Looked up each time so presets and Theme Editor
+	/// changes apply (OnThemeChanged repaints).
+	/// </summary>
+	private static (string Accent, string Container, string OnContainer) Roles( StatusMessage kind ) => kind switch
+	{
+		StatusMessage.ERROR => ("ErrorBrush", "ErrorContainerBrush", "OnErrorContainerBrush"),
+		StatusMessage.INFO => ("PrimaryBrush", "SecondaryContainerBrush", "OnSecondaryContainerBrush"),
+		_ => ("TertiaryBrush", "TertiaryContainerBrush", "OnTertiaryContainerBrush"),
+	};
+
+	private static readonly SolidColorBrush NoBrush = new();
+
+	/// <summary>A theme brush by key; transparent if the key is missing (never null, so it can go straight into a property).</summary>
+	private static Brush Theme( string key ) => ThemeResources.TryGetBrush<Brush>( key ) ?? NoBrush;
 
 	private bool _allowClose;
 	private bool _isClosing;
@@ -46,15 +56,23 @@ public sealed partial class StatusDialogView : Page
 	private Border? _hoverCard;
 	private FontIcon? _hoverIcon;
 	private TextBlock? _hoverTitle;
+	private TextBlock? _hoverOpenLink;
 	private ItemsControl? _hoverItems;
 	private TextBlock? _hoverEmptyText;
 	private TextBlock? _hoverOverflowText;
+	private TextBlock? _hoverHintText;
 	private readonly RangeObservableCollection<BasicStatusMessage> _hoverMessages = [];
 	private readonly List<BasicStatusMessage> _hoverScratch = new( 8 );
 
 	public StatusDialogViewModel ViewModel => AppComposition.StatusLog;
 
 	/// <summary>The window showing this page; closing it while work runs asks for confirmation.</summary>
+	public Window? HostWindow
+	{
+		get => ParentWindow;
+		set => ParentWindow = value;
+	}
+
 	public Window? ParentWindow
 	{
 		get;
@@ -63,7 +81,10 @@ public sealed partial class StatusDialogView : Page
 			if( ReferenceEquals( field, value ) )
 				return;
 			if( field is not null )
-				field.AppWindow.Closing -= AppWindow_Closing;
+			{
+				try { field.AppWindow.Closing -= AppWindow_Closing; }
+				catch { }
+			}
 			field = value;
 			if( field is not null )
 			{
@@ -76,29 +97,45 @@ public sealed partial class StatusDialogView : Page
 	public StatusDialogView()
 	{
 		InitializeComponent();
+		ApplySplitRatios();
 		Loaded += OnLoaded;
 		Unloaded += OnUnloaded;
 		SizeChanged += ( _, _ ) => UpdateDensity();
 	}
 
-	internal bool IsMinimalMode => _isMinimal;
+	private void ApplySplitRatios()
+	{
+		var layout = UIStorage.WorkspaceLayout;
+		double top = Math.Clamp( layout.StatusTopSplitRatio, 0.2, 0.8 );
+		OperationsRow.Height = new GridLength( top, GridUnitType.Star );
+		LowerLogsRow.Height = new GridLength( 1.0 - top, GridUnitType.Star );
 
-	internal void SetHostMode( bool isDocked )
+		double left = Math.Clamp( layout.StatusLeftSplitRatio, 0.2, 0.8 );
+		InfoLogCol.Width = new GridLength( left, GridUnitType.Star );
+		ErrorLogCol.Width = new GridLength( 1.0 - left, GridUnitType.Star );
+	}
+
+#if SMOKE_TESTS
+	internal bool IsMinimalMode => _isMinimal;
+#endif
+
+	public void SetHostMode( bool isDocked )
 	{
 		_isDocked = isDocked;
+		HideHoverPopup();
 		if( isDocked )
 			ParentWindow = null;
 		UpdateHostButtons();
 		UpdateDensity();
 	}
 
-	internal void SetMinimalMode( bool minimal )
+	public void SetMinimalMode( bool minimal )
 	{
 		_isMinimal = minimal;
 		if( !minimal )
 			HideHoverPopup();
-		FullStatusRoot.Visibility = minimal ? Visibility.Collapsed : Visibility.Visible;
-		MinimalStatusRoot.Visibility = minimal ? Visibility.Visible : Visibility.Collapsed;
+		FullStatusRoot.Visibility = ( !minimal ).ToVisibility();
+		MinimalStatusRoot.Visibility = minimal.ToVisibility();
 		UpdateHostButtons();
 		UpdateCategoryPillAccents();
 		UpdateDensity();
@@ -107,13 +144,14 @@ public sealed partial class StatusDialogView : Page
 	private void UpdateHostButtons()
 	{
 		bool canDock = !_isDocked && HackApp.HomePage is not null;
-		DockStatusBtn.Visibility = canDock ? Visibility.Visible : Visibility.Collapsed;
-		MiniDockStatusBtn.Visibility = canDock ? Visibility.Visible : Visibility.Collapsed;
-		MiniCloseStatusBtn.Visibility = !_isDocked ? Visibility.Visible : Visibility.Collapsed;
+		DockStatusBtn.Visibility = canDock.ToVisibility();
+		MiniDockStatusBtn.Visibility = canDock.ToVisibility();
+		MiniCloseStatusBtn.Visibility = ( !_isDocked ).ToVisibility();
 	}
 
 	internal Task RequestCloseAsync() => CloseWindowAsync();
 
+#if SMOKE_TESTS
 	internal void OpenHoverPopupForTest( StatusMessage kind )
 	{
 		Border pill = kind switch
@@ -130,6 +168,7 @@ public sealed partial class StatusDialogView : Page
 		HideHoverPopup();
 		AppComposition.Dialogs.ShowFullStatusWindow();
 	}
+#endif
 
 	private void UpdateDensity()
 	{
@@ -185,12 +224,16 @@ public sealed partial class StatusDialogView : Page
 
 	private void OnLoaded( object sender, RoutedEventArgs e )
 	{
-		if( !_isDocked )
+		if( _isDocked )
+			ParentWindow = null;
+		else
 			ParentWindow ??= WindowHelper.WindowOf( this );
 		ViewModel.OperationCompleted -= OnOperationCompleted;
 		ViewModel.OperationCompleted += OnOperationCompleted;
 		ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
 		ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+		AppComposition.Theme.ThemeChanged -= OnThemeChanged;
+		AppComposition.Theme.ThemeChanged += OnThemeChanged;
 		UpdateCategoryPillAccents();
 		UpdateDensity();
 	}
@@ -199,7 +242,21 @@ public sealed partial class StatusDialogView : Page
 	{
 		ViewModel.OperationCompleted -= OnOperationCompleted;
 		ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+		AppComposition.Theme.ThemeChanged -= OnThemeChanged;
+		if( _settingsWindow is { } settingsWindow )
+		{
+			settingsWindow.Closed -= OnSettingsWindowClosed;
+			_settingsWindow = null;
+		}
 		HideHoverPopup();
+	}
+
+	private void OnThemeChanged()
+	{
+		_lastWarningsActive = null;
+		_lastErrorsActive = null;
+		UpdateCategoryPillAccents();
+		RefreshHoverCardBrushes();
 	}
 
 	private void ViewModel_PropertyChanged( object? sender, PropertyChangedEventArgs e )
@@ -209,7 +266,7 @@ public sealed partial class StatusDialogView : Page
 			or nameof( StatusDialogViewModel.InfoCount ) )
 		{
 			UpdateCategoryPillAccents();
-			if( _activeHoverKind is { } kind && ( StatusHoverPopup.IsOpen || _hoverCard?.Parent is not null ) )
+			if( _isMinimal && _activeHoverKind is { } kind && IsHoverPopupCurrentlyOpen() )
 			{
 				if( ( kind == StatusMessage.WARNING && e.PropertyName == nameof( StatusDialogViewModel.WarningCount ) )
 					|| ( kind == StatusMessage.ERROR && e.PropertyName == nameof( StatusDialogViewModel.ErrorCount ) )
@@ -227,34 +284,39 @@ public sealed partial class StatusDialogView : Page
 		}
 	}
 
+	private bool IsHoverPopupCurrentlyOpen()
+		=> _isDocked ? _hoverCard?.Parent is not null : StatusHoverPopup.IsOpen;
+
 	private void UpdateCategoryPillAccents()
 	{
 		bool warningsActive = ViewModel.WarningCount > 0;
 		if( _lastWarningsActive != warningsActive )
 		{
 			_lastWarningsActive = warningsActive;
-			ApplyPillAccent( WarningsPill, WarningsPillIcon, warningsActive, WarningAccentBrush, WarningTintBrush );
+			ApplyPillAccent( WarningsPill, WarningsPillIcon, warningsActive, StatusMessage.WARNING );
 		}
 		bool errorsActive = ViewModel.ErrorCount > 0;
 		if( _lastErrorsActive != errorsActive )
 		{
 			_lastErrorsActive = errorsActive;
-			ApplyPillAccent( ErrorsPill, ErrorsPillIcon, errorsActive, ErrorAccentBrush, ErrorTintBrush );
+			ApplyPillAccent( ErrorsPill, ErrorsPillIcon, errorsActive, StatusMessage.ERROR );
 		}
 	}
 
-	private static void ApplyPillAccent( Border pill, FontIcon icon, bool active, Brush accent, Brush tint )
+	/// <summary>An active pill fills with its kind's container color (Penpot: Status bar pills); an idle one is outlined like a chip.</summary>
+	private static void ApplyPillAccent( Border pill, FontIcon icon, bool active, StatusMessage kind )
 	{
+		(string _, string container, string onContainer) = Roles( kind );
 		if( active )
 		{
-			pill.BorderBrush = accent;
-			pill.Background = tint;
-			icon.Foreground = accent;
+			pill.BorderBrush = Theme( container );
+			pill.Background = Theme( container );
+			icon.Foreground = Theme( onContainer );
 			return;
 		}
-		pill.ClearValue( Border.BorderBrushProperty );
-		pill.ClearValue( Border.BackgroundProperty );
-		icon.ClearValue( FontIcon.ForegroundProperty );
+		pill.BorderBrush = Theme( "OutlineVariantBrush" );
+		pill.Background = null;
+		icon.Foreground = Theme( "OnSurfaceVariantBrush" );
 	}
 
 	private void InfoPill_PointerEntered( object sender, PointerRoutedEventArgs e ) => ShowHoverPopup( StatusMessage.INFO, InfoPill );
@@ -274,9 +336,6 @@ public sealed partial class StatusDialogView : Page
 		AppComposition.Dialogs.ShowFullStatusWindow();
 	}
 
-	private static Brush? ThemeBrush( string key )
-		=> Application.Current.Resources.TryGetValue( key, out object? res ) ? res as Brush : null;
-
 	private Border EnsureHoverCard()
 	{
 		if( _hoverCard is not null )
@@ -288,51 +347,72 @@ public sealed partial class StatusDialogView : Page
 		titleStack.Children.Add( _hoverIcon );
 		titleStack.Children.Add( _hoverTitle );
 
-		TextBlock openLink = new()
+		_hoverOpenLink = new TextBlock
 		{
 			VerticalAlignment = VerticalAlignment.Center,
 			FontSize = 11,
 			Text = "Open Full Status →",
-			Foreground = ThemeBrush( "AccentTextFillColorPrimaryBrush" ),
 		};
 
 		Grid headerGrid = new() { ColumnSpacing = 8 };
 		headerGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = new GridLength( 1, GridUnitType.Star ) } );
 		headerGrid.ColumnDefinitions.Add( new ColumnDefinition { Width = GridLength.Auto } );
 		titleStack.SetGrid( 0, 0 );
-		openLink.SetGrid( 0, 1 );
+		_hoverOpenLink.SetGrid( 0, 1 );
 		headerGrid.Children.Add( titleStack );
-		headerGrid.Children.Add( openLink );
+		headerGrid.Children.Add( _hoverOpenLink );
 
 		_hoverItems = new ItemsControl
 		{
 			ItemsSource = _hoverMessages,
 			ItemTemplate = StatusRootGrid.Resources.TryGetValue( "HoverPopupItemTemplate", out object? template ) ? template as DataTemplate : null,
 		};
-		Brush? secondary = ThemeBrush( "TextFillColorSecondaryBrush" );
-		_hoverEmptyText = new TextBlock { FontSize = 12, Foreground = secondary, Visibility = Visibility.Collapsed };
-		_hoverOverflowText = new TextBlock { FontSize = 11, Foreground = secondary, Visibility = Visibility.Collapsed };
+		_hoverEmptyText = new TextBlock { FontSize = 12, Visibility = Visibility.Collapsed };
+		_hoverOverflowText = new TextBlock { FontSize = 11, Visibility = Visibility.Collapsed };
+		_hoverHintText = new TextBlock { FontSize = 11, Text = "Click this popup to open the full Status Dialog." };
 
 		StackPanel rootStack = new() { Spacing = 8 };
 		rootStack.Children.Add( headerGrid );
 		rootStack.Children.Add( new ScrollViewer { MaxHeight = 220, Content = _hoverItems } );
 		rootStack.Children.Add( _hoverEmptyText );
 		rootStack.Children.Add( _hoverOverflowText );
-		rootStack.Children.Add( new TextBlock { FontSize = 11, Foreground = ThemeBrush( "TextFillColorTertiaryBrush" ), Text = "Click this popup to open the full Status Dialog." } );
+		rootStack.Children.Add( _hoverHintText );
 
 		_hoverCard = new Border
 		{
 			Width = 440,
-			Padding = new Thickness( 12, 10, 12, 10 ),
-			Background = ThemeBrush( "ApplicationPageBackgroundThemeBrush" ),
-			BorderThickness = new Thickness( 1.5 ),
-			CornerRadius = new CornerRadius( 8 ),
+			Padding = new Thickness( 16, 12, 16, 12 ),
+			BorderThickness = new Thickness( 1 ),
+			CornerRadius = new CornerRadius( 12 ),
 			Child = rootStack,
 		};
 		_hoverCard.PointerEntered += HoverPopup_PointerEntered;
 		_hoverCard.PointerExited += HoverPopup_PointerExited;
 		_hoverCard.PointerPressed += HoverPopupCard_PointerPressed;
+		RefreshHoverCardBrushes();
 		return _hoverCard;
+	}
+
+	private void RefreshHoverCardBrushes()
+	{
+		if( _hoverCard is null )
+			return;
+		_hoverCard.Background = Theme( "HackSurfaceContainerHighBrush" );
+		if( _hoverOpenLink is not null )
+			_hoverOpenLink.Foreground = Theme( "PrimaryBrush" );
+		Brush secondary = Theme( "OnSurfaceVariantBrush" );
+		if( _hoverEmptyText is not null )
+			_hoverEmptyText.Foreground = secondary;
+		if( _hoverOverflowText is not null )
+			_hoverOverflowText.Foreground = secondary;
+		if( _hoverHintText is not null )
+			_hoverHintText.Foreground = Theme( "OutlineBrush" );
+		if( _activeHoverKind is { } kind && _hoverIcon is not null )
+		{
+			Brush accent = Theme( Roles( kind ).Accent );
+			_hoverIcon.Foreground = accent;
+			_hoverCard.BorderBrush = accent;
+		}
 	}
 
 	private void ShowHoverPopup( StatusMessage kind, Border anchorPill )
@@ -340,34 +420,53 @@ public sealed partial class StatusDialogView : Page
 		if( !_isMinimal || XamlRoot is null )
 			return;
 		CancelHoverCloseTimer();
+		bool alreadyOpenSameKind = _activeHoverKind == kind && IsHoverPopupCurrentlyOpen();
 		_activeHoverKind = kind;
 
 		Border card = EnsureHoverCard();
-		var (source, glyph, accentBrush, titlePrefix, emptyMessage) = kind switch
+		var (source, glyph, titlePrefix, emptyMessage) = kind switch
 		{
-			StatusMessage.ERROR => ( ViewModel.OErrorsOnly, "\uEA39", ErrorAccentBrush, "Errors", "No errors recorded." ),
-			StatusMessage.INFO => ( ViewModel.OInfo, "\uE946", InfoAccentBrush, "Info", "No info messages recorded." ),
-			_ => ( ViewModel.OWarnings, "\uE7BA", WarningAccentBrush, "Warnings", "No warnings recorded." ),
+			StatusMessage.ERROR => ( ViewModel.OErrorsOnly, "\uEA39", "Errors", "No errors recorded." ),
+			StatusMessage.INFO => ( ViewModel.OInfo, "\uE946", "Info", "No info messages recorded." ),
+			_ => ( ViewModel.OWarnings, "\uE7BA", "Warnings", "No warnings recorded." ),
 		};
+		Brush accentBrush = Theme( Roles( kind ).Accent );
 
 		const int maxShown = 8;
-		_hoverScratch.Clear();
-		for( int i = source.Count - 1; i >= 0 && _hoverScratch.Count < maxShown; i-- )
-			_hoverScratch.Add( source[ i ] );
+		int take = Math.Min( source.Count, maxShown );
+		if( HasHoverMessagesChanged( source, take ) )
+		{
+			_hoverScratch.Clear();
+			for( int i = 0; i < take; i++ )
+				_hoverScratch.Add( source[ i ] );
+			_hoverMessages.ReplaceAll( _hoverScratch );
+		}
 
-		_hoverIcon!.Glyph = glyph;
-		_hoverIcon.Foreground = accentBrush;
-		card.BorderBrush = accentBrush;
+		if( !alreadyOpenSameKind )
+		{
+			_hoverIcon!.Glyph = glyph;
+			_hoverIcon.Foreground = accentBrush;
+			card.BorderBrush = accentBrush;
+			_hoverEmptyText!.Text = emptyMessage;
+		}
 		_hoverTitle!.Text = $"{titlePrefix} ({source.Count})";
 
-		_hoverMessages.ReplaceAll( _hoverScratch );
-		_hoverItems!.Visibility = _hoverScratch.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-		_hoverEmptyText!.Text = emptyMessage;
-		_hoverEmptyText.Visibility = _hoverScratch.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+		Visibility itemsVis = take > 0 ? Visibility.Visible : Visibility.Collapsed;
+		if( _hoverItems!.Visibility != itemsVis )
+			_hoverItems.Visibility = itemsVis;
 
-		int hidden = source.Count - _hoverScratch.Count;
+		Visibility emptyVis = take == 0 ? Visibility.Visible : Visibility.Collapsed;
+		if( _hoverEmptyText!.Visibility != emptyVis )
+			_hoverEmptyText.Visibility = emptyVis;
+
+		int hidden = source.Count - take;
 		_hoverOverflowText!.Text = hidden > 0 ? $"+{hidden} more in full Status Log…" : string.Empty;
-		_hoverOverflowText.Visibility = hidden > 0 ? Visibility.Visible : Visibility.Collapsed;
+		Visibility overflowVis = hidden > 0 ? Visibility.Visible : Visibility.Collapsed;
+		if( _hoverOverflowText.Visibility != overflowVis )
+			_hoverOverflowText.Visibility = overflowVis;
+
+		if( alreadyOpenSameKind )
+			return;
 
 		StatusHoverPopup.IsOpen = false;
 		if( _isDocked && HackApp.HomePage is { } home )
@@ -384,6 +483,9 @@ public sealed partial class StatusDialogView : Page
 			StatusHoverPopup.Child = card;
 
 		StatusHoverPopup.XamlRoot = XamlRoot;
+#if WINDOWS
+		StatusHoverPopup.ShouldConstrainToRootBounds = false;
+#endif
 		card.Measure( new Size( 440, 340 ) );
 		double popupW = 440;
 		double popupH = Math.Clamp( card.DesiredSize.Height, 110, 340 );
@@ -402,6 +504,18 @@ public sealed partial class StatusDialogView : Page
 		StatusHoverPopup.HorizontalOffset = xOffset;
 		StatusHoverPopup.VerticalOffset = yOffset;
 		StatusHoverPopup.IsOpen = true;
+	}
+
+	private bool HasHoverMessagesChanged( ObservableRingBuffer<BasicStatusMessage> source, int take )
+	{
+		if( _hoverMessages.Count != take )
+			return true;
+		for( int i = 0; i < take; i++ )
+		{
+			if( !ReferenceEquals( _hoverMessages[ i ], source[ i ] ) )
+				return true;
+		}
+		return false;
 	}
 
 	private void ScheduleHoverPopupClose()
@@ -432,12 +546,13 @@ public sealed partial class StatusDialogView : Page
 		CancelHoverCloseTimer();
 		_activeHoverKind = null;
 		StatusHoverPopup.IsOpen = false;
+		StatusHoverPopup.Child = null;
 		HackApp.HomePage?.HideOverlay( _hoverCard );
 	}
 
 	private void OnOperationCompleted()
 	{
-		if( ViewModel.AutoClose )
+		if( ViewModel.AutoClose && ViewModel.ErrorCount == 0 && ViewModel.WarningCount == 0 )
 			CloseImmediately();
 	}
 
@@ -462,6 +577,10 @@ public sealed partial class StatusDialogView : Page
 				return;
 			CloseImmediately();
 		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "StatusDialog", $"Closing status window failed: {ex.Message}", ex );
+		}
 		finally
 		{
 			_isClosing = false;
@@ -479,7 +598,7 @@ public sealed partial class StatusDialogView : Page
 			return;
 		}
 		WindowHelper.CreateWindowAndPage<ApplicationSettingsView>( out var page, out var window );
-		page.SelectSection( "Status" );
+		page.SelectSection( ApplicationSettingsView.StatusSectionKey );
 		window.Title = "Status Settings";
 		_settingsWindow = window;
 		window.Closed += OnSettingsWindowClosed;
@@ -494,11 +613,21 @@ public sealed partial class StatusDialogView : Page
 
 	private async void AppWindow_Closing( AppWindow sender, AppWindowClosingEventArgs args )
 	{
-		if( _allowClose || !ViewModel.IsInProcess )
-			return;
-		// hold the close (it can't wait for the answer), then close for real if the user confirms
-		args.Cancel = true;
-		await CloseWindowAsync();
+		try
+		{
+			if( _allowClose || _isDocked || ParentWindow is not { } parent || !ReferenceEquals( parent.AppWindow, sender ) )
+				return;
+			object? hosted = ( parent.Content as Frame )?.Content ?? parent.Content;
+			if( !ReferenceEquals( hosted, this ) || !ViewModel.IsInProcess )
+				return;
+			// hold the close (it can't wait for the answer), then close for real if the user confirms
+			args.Cancel = true;
+			await CloseWindowAsync();
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "StatusDialog", $"AppWindow closing handler failed: {ex.Message}", ex );
+		}
 	}
 
 	private void StatusHorizontalSplitter_DragDelta( double delta )
@@ -509,6 +638,7 @@ public sealed partial class StatusDialogView : Page
 		double top = Math.Clamp( OperationsRow.ActualHeight + delta, 100, totalH - 100 );
 		OperationsRow.Height = new GridLength( top, GridUnitType.Star );
 		LowerLogsRow.Height = new GridLength( Math.Max( 100, totalH - top ), GridUnitType.Star );
+		UIStorage.WorkspaceLayout.StatusTopSplitRatio = top / totalH;
 	}
 
 	private void StatusVerticalSplitter_DragDelta( double delta )
@@ -519,21 +649,15 @@ public sealed partial class StatusDialogView : Page
 		double left = Math.Clamp( InfoLogCol.ActualWidth + delta, 160, totalW - 160 );
 		InfoLogCol.Width = new GridLength( left, GridUnitType.Star );
 		ErrorLogCol.Width = new GridLength( Math.Max( 160, totalW - left ), GridUnitType.Star );
+		UIStorage.WorkspaceLayout.StatusLeftSplitRatio = left / totalW;
 	}
+
+	private void StatusSplitter_DragCompleted() => UIStorage.SaveSafe();
 
 	private void CopyDiagnosticsBtn_Click( object sender, RoutedEventArgs e )
 	{
 		string summary = ViewModel.BuildDiagnosticSummary();
-		try
-		{
-			var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
-			package.SetText( summary );
-			Windows.ApplicationModel.DataTransfer.Clipboard.SetContent( package );
+		if( ClipboardHelper.TrySetText( summary, "StatusDialog" ) )
 			ViewModel.AddLog( new BasicStatusMessage { Status = StatusMessage.INFO, Message = "Copied diagnostic summary to clipboard." } );
-		}
-		catch( Exception ex )
-		{
-			HackLogger.Warn( "StatusDialog", "Failed to copy diagnostic summary to clipboard", ex );
-		}
 	}
 }

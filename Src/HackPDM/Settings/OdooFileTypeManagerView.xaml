@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:rep="using:HackPDM.Core.Services"
     xmlns:tv="using:WinUI.TableView"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     mc:Ignorable="d">
@@ -23,9 +24,9 @@
                     FontWeight="SemiBold"
                     Text="Registered File Types &amp; Filters" />
                 <TextBlock
-                    x:Name="PolicySummaryText"
                     FontSize="12"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind ViewModel.PolicySummaryText, Mode=OneWay}" />
             </StackPanel>
 
             <StackPanel
@@ -34,79 +35,120 @@
                 Orientation="Horizontal"
                 Spacing="8">
                 <TextBox
-                    x:Name="FilterBox"
                     Width="260"
                     PlaceholderText="Filter types or patterns…"
-                    TextChanged="FilterBox_TextChanged" />
+                    Text="{x:Bind ViewModel.FilterQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 <ProgressRing
-                    x:Name="BusyRing"
                     Width="20"
                     Height="20"
                     VerticalAlignment="Center"
-                    IsActive="False" />
+                    IsActive="{x:Bind ViewModel.IsRefreshing, Mode=OneWay}" />
                 <Button
-                    x:Name="RefreshButton"
-                    Click="RefreshButton_Click"
+                    Command="{x:Bind ViewModel.RefreshCommand}"
                     Content="Refresh" />
             </StackPanel>
         </Grid>
 
         <TabView
-            x:Name="TypesTabView"
             Grid.Row="1"
             IsAddTabButtonVisible="False">
             <TabViewItem
-                x:Name="TypesTab"
-                Header="Registered Types"
+                Header="{x:Bind ViewModel.TypesTabHeader, Mode=OneWay}"
                 IsClosable="False">
                 <tv:TableView
-                    x:Name="TypesTable"
                     AutoGenerateColumns="False"
                     IsReadOnly="True"
-                    ItemsSource="{x:Bind FilteredTypes}">
+                    ItemsSource="{x:Bind ViewModel.FilteredTypes, Mode=OneWay}">
                     <tv:TableView.Columns>
-                        <tv:TableViewTextColumn
-                            Width="115"
-                            Binding="{Binding Extension}"
-                            Header="Extension" />
-                        <tv:TableViewTextColumn
-                            Width="170"
-                            Binding="{Binding Category}"
-                            Header="Category" />
-                        <tv:TableViewTextColumn
-                            Width="220"
-                            Binding="{Binding RegEx}"
-                            Header="Regex" />
-                        <tv:TableViewTextColumn
-                            Width="*"
-                            Binding="{Binding Description}"
-                            Header="Description" />
+                        <tv:TableViewTemplateColumn Width="115" Header="Extension" SortMemberPath="Extension">
+                            <tv:TableViewTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="rep:FileTypeRow">
+                                    <TextBlock
+                                        Padding="6,0"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind Extension}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </tv:TableViewTemplateColumn.CellTemplate>
+                        </tv:TableViewTemplateColumn>
+                        <tv:TableViewTemplateColumn Width="170" Header="Category" SortMemberPath="Category">
+                            <tv:TableViewTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="rep:FileTypeRow">
+                                    <TextBlock
+                                        Padding="6,0"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind Category}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </tv:TableViewTemplateColumn.CellTemplate>
+                        </tv:TableViewTemplateColumn>
+                        <tv:TableViewTemplateColumn Width="220" Header="Regex" SortMemberPath="RegEx">
+                            <tv:TableViewTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="rep:FileTypeRow">
+                                    <TextBlock
+                                        Padding="6,0"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind RegEx}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </tv:TableViewTemplateColumn.CellTemplate>
+                        </tv:TableViewTemplateColumn>
+                        <tv:TableViewTemplateColumn Width="*" Header="Description" SortMemberPath="Description">
+                            <tv:TableViewTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="rep:FileTypeRow">
+                                    <TextBlock
+                                        Padding="6,0"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind Description}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </tv:TableViewTemplateColumn.CellTemplate>
+                        </tv:TableViewTemplateColumn>
                     </tv:TableView.Columns>
                 </tv:TableView>
             </TabViewItem>
 
             <TabViewItem
-                x:Name="FiltersTab"
-                Header="Ignore Filters"
+                Header="{x:Bind ViewModel.FiltersTabHeader, Mode=OneWay}"
                 IsClosable="False">
                 <tv:TableView
-                    x:Name="FiltersTable"
                     AutoGenerateColumns="False"
                     IsReadOnly="True"
-                    ItemsSource="{x:Bind FilteredEntryFilters}">
+                    ItemsSource="{x:Bind ViewModel.FilteredEntryFilters, Mode=OneWay}">
                     <tv:TableView.Columns>
-                        <tv:TableViewTextColumn
-                            Width="160"
-                            Binding="{Binding Proto}"
-                            Header="Pattern" />
-                        <tv:TableViewTextColumn
-                            Width="240"
-                            Binding="{Binding RegEx}"
-                            Header="Regular Expression" />
-                        <tv:TableViewTextColumn
-                            Width="*"
-                            Binding="{Binding Description}"
-                            Header="Description" />
+                        <tv:TableViewTemplateColumn Width="160" Header="Pattern" SortMemberPath="Proto">
+                            <tv:TableViewTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="rep:FileTypeEntryFilterRow">
+                                    <TextBlock
+                                        Padding="6,0"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind Proto}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </tv:TableViewTemplateColumn.CellTemplate>
+                        </tv:TableViewTemplateColumn>
+                        <tv:TableViewTemplateColumn Width="240" Header="Regular Expression" SortMemberPath="RegEx">
+                            <tv:TableViewTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="rep:FileTypeEntryFilterRow">
+                                    <TextBlock
+                                        Padding="6,0"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind RegEx}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </tv:TableViewTemplateColumn.CellTemplate>
+                        </tv:TableViewTemplateColumn>
+                        <tv:TableViewTemplateColumn Width="*" Header="Description" SortMemberPath="Description">
+                            <tv:TableViewTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="rep:FileTypeEntryFilterRow">
+                                    <TextBlock
+                                        Padding="6,0"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind Description}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </tv:TableViewTemplateColumn.CellTemplate>
+                        </tv:TableViewTemplateColumn>
                     </tv:TableView.Columns>
                 </tv:TableView>
             </TabViewItem>
@@ -114,12 +156,11 @@
 
         <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
             <TextBlock
-                x:Name="CountSummaryText"
                 VerticalAlignment="Center"
                 FontSize="12"
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="{x:Bind ViewModel.CountSummaryText, Mode=OneWay}" />
             <Button
-                x:Name="CloseButton"
                 Grid.Column="1"
                 MinWidth="96"
                 Click="CloseButton_Click"

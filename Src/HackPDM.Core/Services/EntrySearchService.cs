@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
@@ -17,22 +19,32 @@ public sealed record EntrySearchQuery(
 /// <summary>Searches Odoo entries and the local workspace folder.</summary>
 public interface IEntrySearchService
 {
-	Task<List<SearchRow>> SearchAsync( EntrySearchQuery query );
+	Task<List<SearchRow>> SearchAsync( EntrySearchQuery query, CancellationToken token = default );
 	IEnumerable<SearchPropertiesRow> GetSearchableProperties();
 	IReadOnlyList<string> TreeSegmentsBelowRoot( SearchRow row );
 }
 
 public sealed class EntrySearchService : IEntrySearchService
 {
-	private static readonly string[] ResultFields = [ "id", "name", "directory_complete_name" ];
-
-	public async Task<List<SearchRow>> SearchAsync( EntrySearchQuery query )
+	private static readonly string[] ResultFields = [ nameof( HpEntry.id ), nameof( HpEntry.name ), "directory_complete_name" ];
+	private static readonly EnumerationOptions LocalSearchOptions = new()
 	{
-		OdooDomain domain = await BuildDomainAsync( query );
+		RecurseSubdirectories = true,
+		IgnoreInaccessible = true,
+		ReturnSpecialDirectories = false,
+	};
+
+	public async Task<List<SearchRow>> SearchAsync( EntrySearchQuery query, CancellationToken token = default )
+	{
+		var (domain, impossible) = await BuildDomainWithStatusAsync( query, token ).ConfigureAwait( false );
+		if( impossible )
+			return [];
+
 		bool needsLocalScan = query.LocalOnly || query.DeletedRemotely;
+		int maxResults = query.MaxResults > 0 ? query.MaxResults : int.MaxValue;
 		int? rpcLimit = !needsLocalScan && query.MaxResults > 0 ? query.MaxResults : null;
 		Result<IReadOnlyList<OdooRow>> found = await OdooRpc.SearchReadAsync(
-			HpEntry.ModelName, domain, ResultFields, limit: rpcLimit, timeoutMs: OdooRpc.LongTimeout );
+			HpEntry.ModelName, domain, ResultFields, limit: rpcLimit, timeoutMs: OdooRpc.LongTimeout, token: token ).ConfigureAwait( false );
 		if( !found.Ok )
 			HackLogger.Error( "EntrySearch", $"Entry search failed: {found.Error}" );
 		IReadOnlyList<OdooRow> results = found.ValueOr( [] );
@@ -40,11 +52,11 @@ public sealed class EntrySearchService : IEntrySearchService
 		List<SearchRow> rows;
 		if( needsLocalScan )
 		{
-			rows = await Task.Run( () => FindLocalFiles( results, query.FileName, query.MaxResults, matchRemote: !query.LocalOnly ) );
+			rows = await Task.Run( () => FindLocalFiles( results, query.FileName, maxResults, matchRemote: !query.LocalOnly, token ), token ).ConfigureAwait( false );
 		}
 		else
 		{
-			int count = Math.Min( results.Count, query.MaxResults );
+			int count = Math.Min( results.Count, maxResults );
 			rows = new List<SearchRow>( count );
 			for( int i = 0; i < count; i++ )
 				rows.Add( ToRow( results[ i ] ) );
@@ -59,7 +71,7 @@ public sealed class EntrySearchService : IEntrySearchService
 		{
 			Name = pair.Value.name,
 			ID = pair.Key,
-			IsTextOrDate = pair.Value.prop_type == "text",
+			IsTextOrDate = pair.Value.prop_type is "text" or "date",
 		} );
 
 	public IReadOnlyList<string> TreeSegmentsBelowRoot( SearchRow row )
@@ -71,40 +83,71 @@ public sealed class EntrySearchService : IEntrySearchService
 		return PwaPaths.LocalSegments( row.Directory ) ?? [];
 	}
 
-	internal static async Task<OdooDomain> BuildDomainAsync( EntrySearchQuery query )
+	internal static ValueTask<(OdooDomain Domain, bool Impossible)> BuildDomainWithStatusAsync( EntrySearchQuery query, CancellationToken token = default )
 	{
 		OdooDomain domain = OdooDomain.All;
 		if( query.FileName.Length > 0 )
-			domain = domain.And( "name", query.NameComparer, query.FileName );
+			domain = domain.And( nameof( HpEntry.name ), query.NameComparer, query.FileName );
 
 		if( query.LocalOnly )
-			return domain;
+			return ValueTask.FromResult( ( domain, false ) );
 
 		if( query.CheckedOutToMe )
-			domain = domain.And( "checkout_user", OdooDefaults.Instance.OdooId );
+			domain = domain.And( nameof( HpEntry.checkout_user ), OdooDefaults.Instance.OdooId );
 		if( query.DeletedRemotely )
-			domain = domain.And( "deleted", true );
-		if( query.Properties.Count > 0 )
-			domain = domain.And( "id", "in", ( await EntriesMatchingAllPropertiesAsync( query.Properties ) ).ToArray() );
-		return domain;
+			domain = domain.And( nameof( HpEntry.deleted ), true );
+		if( query.Properties.Count == 0 )
+			return ValueTask.FromResult( ( domain, false ) );
+		return BuildDomainWithPropertiesAsync( domain, query.Properties, token );
 	}
 
-	private static async Task<HashSet<int>> EntriesMatchingAllPropertiesAsync( IReadOnlyList<SearchPropertiesRow> properties )
+	private static async ValueTask<(OdooDomain Domain, bool Impossible)> BuildDomainWithPropertiesAsync(
+		OdooDomain domain,
+		IReadOnlyList<SearchPropertiesRow> properties,
+		CancellationToken token )
 	{
-		HashSet<int>? candidates = null;
-		foreach( SearchPropertiesRow property in properties )
-		{
-			OdooDomain filter = OdooDomain.Where( "prop_id", property.ID ).And( "text_value", property.Comparer, property.Value );
-			Result<IReadOnlyList<OdooRow>> matches = await OdooRpc.SearchReadAsync(
-				HpVersionProperty.ModelName, filter, [ "entry_id" ], timeoutMs: OdooRpc.LongTimeout );
+		int[] matchedIds = [ .. await EntriesMatchingAllPropertiesAsync( properties, token ).ConfigureAwait( false ) ];
+		domain = domain.And( nameof( HpEntry.id ), "in", matchedIds );
+		return ( domain, matchedIds.Length == 0 );
+	}
 
-			IReadOnlyList<OdooRow> rows = matches.ValueOr( [] );
+	private static (string Field, object? Value) PropertyFilterTerm( SearchPropertiesRow property )
+	{
+		string? propType = OdooDefaults.Instance.IdToProp.GetValueOrDefault( property.ID )?.prop_type;
+		return propType switch
+		{
+			"number" when double.TryParse( property.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double num )
+				=> ( nameof( HpVersionProperty.number_value ), num ),
+			"yesno" when bool.TryParse( property.Value, out bool flag )
+				=> ( nameof( HpVersionProperty.yesno_value ), flag ),
+			"date" => ( nameof( HpVersionProperty.date_value ), property.Value ),
+			_ => ( nameof( HpVersionProperty.text_value ), property.Value ),
+		};
+	}
+
+	private static async Task<HashSet<int>> EntriesMatchingAllPropertiesAsync( IReadOnlyList<SearchPropertiesRow> properties, CancellationToken token )
+	{
+		Task<Result<IReadOnlyList<OdooRow>>>[] queries = new Task<Result<IReadOnlyList<OdooRow>>>[ properties.Count ];
+		for( int i = 0; i < properties.Count; i++ )
+		{
+			SearchPropertiesRow property = properties[ i ];
+			var (field, value) = PropertyFilterTerm( property );
+			OdooDomain filter = OdooDomain.Where( nameof( HpVersionProperty.prop_id ), property.ID ).And( field, property.Comparer, value );
+			queries[ i ] = OdooRpc.SearchReadAsync(
+				HpVersionProperty.ModelName, filter, [ nameof( HpVersionProperty.entry_id ) ], timeoutMs: OdooRpc.LongTimeout, token: token );
+		}
+
+		Result<IReadOnlyList<OdooRow>>[] allMatches = await Task.WhenAll( queries ).ConfigureAwait( false );
+		HashSet<int>? candidates = null;
+		for( int q = 0; q < allMatches.Length; q++ )
+		{
+			IReadOnlyList<OdooRow> rows = allMatches[ q ].ValueOr( [] );
 			if( candidates is null )
 			{
 				candidates = new HashSet<int>( rows.Count );
 				for( int i = 0; i < rows.Count; i++ )
 				{
-					if( rows[ i ].RefId( "entry_id" ) is int id and not 0 )
+					if( rows[ i ].RefId( nameof( HpVersionProperty.entry_id ) ) is int id and not 0 )
 						candidates.Add( id );
 				}
 			}
@@ -113,7 +156,7 @@ public sealed class EntrySearchService : IEntrySearchService
 				HashSet<int> next = new( rows.Count );
 				for( int i = 0; i < rows.Count; i++ )
 				{
-					if( rows[ i ].RefId( "entry_id" ) is int id and not 0 && candidates.Contains( id ) )
+					if( rows[ i ].RefId( nameof( HpVersionProperty.entry_id ) ) is int id and not 0 && candidates.Contains( id ) )
 						next.Add( id );
 				}
 				candidates = next;
@@ -126,14 +169,18 @@ public sealed class EntrySearchService : IEntrySearchService
 
 	private static SearchRow ToRow( OdooRow entry ) => new()
 	{
-		Id = entry.Int( "id" ),
-		Name = entry.Text( "name" ),
+		Id = entry.Int( nameof( HpEntry.id ) ),
+		Name = entry.Text( nameof( HpEntry.name ) ),
 		Directory = entry.Text( "directory_complete_name" ),
 	};
 
-	private static List<SearchRow> FindLocalFiles( IReadOnlyList<OdooRow> remoteResults, string fileName, int limit, bool matchRemote )
+	private static List<SearchRow> FindLocalFiles( IReadOnlyList<OdooRow> remoteResults, string fileName, int limit, bool matchRemote, CancellationToken token )
 	{
-		DirectoryInfo pwa = new( HackDefaults.Instance.PwaPathAbsolute );
+		token.ThrowIfCancellationRequested();
+		string pwaPath = HackDefaults.Instance.PwaPathAbsolute;
+		if( string.IsNullOrWhiteSpace( pwaPath ) )
+			return [];
+		DirectoryInfo pwa = new( pwaPath );
 		if( !pwa.Exists )
 			return [];
 
@@ -141,7 +188,7 @@ public sealed class EntrySearchService : IEntrySearchService
 		for( int i = 0; i < remoteResults.Count; i++ )
 		{
 			OdooRow entry = remoteResults[ i ];
-			if( entry.Text( "name" ) is not string name || entry.Text( "directory_complete_name" ) is not string path )
+			if( entry.Text( nameof( HpEntry.name ) ) is not string name || entry.Text( "directory_complete_name" ) is not string path )
 				continue;
 			if( !remotePathsByName.TryGetValue( name, out HashSet<string>? paths ) )
 				remotePathsByName[ name ] = paths = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
@@ -149,8 +196,9 @@ public sealed class EntrySearchService : IEntrySearchService
 		}
 
 		List<SearchRow> rows = [];
-		foreach( FileInfo file in pwa.EnumerateFiles( $"*{fileName}*", SearchOption.AllDirectories ) )
+		foreach( FileInfo file in pwa.EnumerateFiles( $"*{fileName}*", LocalSearchOptions ) )
 		{
+			token.ThrowIfCancellationRequested();
 			if( rows.Count >= limit )
 				break;
 

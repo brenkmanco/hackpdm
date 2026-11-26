@@ -1,28 +1,25 @@
 using System.Collections;
+using System.ComponentModel;
 using System.Globalization;
+using System.Text.Json;
 
 namespace HackPDM.Core.Odoo.Models;
 
 /// <summary>Minimal reference to an Odoo record by id (used by Many2One / x2many fields).</summary>
+[Bindable( true )]
 public class HpModel
 {
 	public int? id { get; set; }
-	public Many2One? commit_id { get; set; }
 
 	public static implicit operator int?( HpModel? model ) => model?.id;
 	public static implicit operator HpModel?( int? id ) => id is null ? null : new() { id = id };
 }
 
 /// <summary>Odoo many2one reference: [id, "display_name"].</summary>
+[Bindable( true )]
 public sealed class Many2One : HpModel
 {
 	public string? name { get; set; }
-
-	public void Deconstruct( out int? id, out string? name )
-	{
-		id = this.id;
-		name = this.name;
-	}
 
 	public static implicit operator int?( Many2One? model ) => model?.id;
 	public static implicit operator Many2One?( int? id ) => id is null ? null : new() { id = id };
@@ -42,17 +39,6 @@ public abstract class MultiRecord : IList<HpModel?>
 			_items.EnsureCapacity( col.Count );
 		foreach( int id in ids )
 			_items.Add( new HpModel { id = id } );
-	}
-
-	public HpModel?[]? Ids
-	{
-		get => [ .. _items ];
-		set
-		{
-			_items.Clear();
-			if( value is not null )
-				_items.AddRange( value );
-		}
 	}
 
 	public int[] IdValues
@@ -109,6 +95,7 @@ public interface IOdooModel<TSelf> where TSelf : HpRecord<TSelf>, IOdooModel<TSe
 }
 
 /// <summary>Common non-generic base for all Odoo model records.</summary>
+[Bindable( true )]
 public abstract class HpRecordBase
 {
 	public int? id { get; set; }
@@ -134,7 +121,6 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 	public static string[]? UsualExcludedFields { get; set; }
 
 	public override string HpModel => T.ModelName;
-	public static string GetHpModel() => T.ModelName;
 
 	public static string[] GetFields(
 		string[]? excluded = null,
@@ -195,56 +181,45 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 
 		if( id is not null and not 0 )
 			values[ nameof( id ) ] = id;
-		if( commit_id is not null and not { id: 0 } )
-			values[ nameof( commit_id ) ] = commit_id.id;
+		if( commit_id?.id is int commitId and not 0 )
+			values[ nameof( commit_id ) ] = commitId;
 		return values;
 	}
 
-	public async Task<int> CreateCommitAsync()
+	public async Task<int> CreateCommitAsync( CancellationToken token = default )
 	{
-		Result<int> created = await OdooRpc.CreateCommitAsync();
+		Result<int> created = await OdooRpc.CreateCommitAsync( token: token ).ConfigureAwait( false );
 		LastError = created.Error;
 		return ( id = created.Unwrap() ) ?? 0;
 	}
 
-	public async Task<int> CreateAsync( bool withEmpty = false, string[]? excludedFields = null )
+	public async Task<int> CreateAsync( bool withEmpty = false, string[]? excludedFields = null, CancellationToken token = default )
 	{
 		Result<int> created = await OdooRpc.CreateAsync(
 			HpModel,
 			ComputeValues( withEmpty, excludedFields ),
-			CreateTimeoutMs ?? OdooRpc.LongTimeout );
+			CreateTimeoutMs ?? OdooRpc.LongTimeout,
+			token ).ConfigureAwait( false );
 		LastError = created.Error;
 		id = created.ValueOr( 0 );
 		IsRecord = id != 0;
 		return id ?? 0;
 	}
 
-	public async Task<HpRecordStaged?> StageRecAsync( bool withEmpty = false, string[]? excludedFields = null )
+	public async Task<HpRecordStaged?> StageRecAsync( bool withEmpty = false, string[]? excludedFields = null, CancellationToken token = default )
 	{
 		HpRecordStaged? rec = PreStageRec( withEmpty, excludedFields );
 		if( rec is not null )
 		{
-			await rec.CreateAsync();
+			await rec.CreateAsync( token: token ).ConfigureAwait( false );
 			LastError = rec.LastError;
 		}
 		return rec;
 	}
 
-	public async Task<bool> WriteChangedValuesAsync( params string[] fieldNamesToWrite )
-	{
-		Dictionary<string, object?> outbound = ToOdoo();
-		Dictionary<string, object?> values = [];
-		foreach( string fieldName in fieldNamesToWrite )
-			values[ fieldName ] = outbound.GetValueOrDefault( fieldName );
-
-		Result<bool> written = await OdooRpc.WriteAsync( HpModel, [ id ?? 0 ], values );
-		LastError = written.Error;
-		return written.ValueOr( false );
-	}
-
 	public HpRecordStaged? PreStageRec( bool withEmpty = false, string[]? excludedFields = null )
 	{
-		if( commit_id is null or { id: 0 } )
+		if( commit_id?.id is null or 0 )
 			return null;
 		if( this is HpRecordStaged stagedSelf )
 			return stagedSelf;
@@ -259,80 +234,115 @@ public abstract class HpRecord<T> : HpRecordBase where T : HpRecord<T>, IOdooMod
 			commit_id = commit_id,
 			committing_id = commit_id,
 			payload = values,
-			HashedValues = { [ "windows_complete_name" ] = HashedValues.GetValueOrDefault( "windows_complete_name" ) },
+			HashedValues = { [ nameof( HpEntry.windows_complete_name ) ] = HashedValues.GetValueOrDefault( nameof( HpEntry.windows_complete_name ) ) },
 		};
 	}
 
 	public static Task<Result<IReadOnlyList<int>>> MultiCreateAsync(
 		IEnumerable<HpRecord<T>> records,
-		bool withEmpty = false )
-		=> OdooRpc.CreateManyAsync( T.ModelName, records.Select( r => r.ComputeValues( withEmpty ) ) );
+		bool withEmpty = false,
+		CancellationToken token = default )
+		=> OdooRpc.CreateManyAsync( T.ModelName, records.Select( r => r.ComputeValues( withEmpty ) ), token: token );
 
 	public static Task<Result<IReadOnlyList<int>>> MultiStageAsync(
 		IEnumerable<HpRecord<T>> records,
-		bool withEmpty = false )
+		bool withEmpty = false,
+		CancellationToken token = default )
 		=> OdooRpc.CreateManyAsync(
 			HpRecordStaged.ModelName,
-			records.Select( r => r.PreStageRec( withEmpty )?.ComputeValues( false ) ).OfType<Dictionary<string, object?>>() );
+			records.Select( r => r.PreStageRec( withEmpty )?.ComputeValues( false ) ).OfType<Dictionary<string, object?>>(),
+			token: token );
 
 	private static T[]? NullIfEmpty( Result<T[]> result )
 		=> result.Value is { Length: > 0 } records ? records : null;
-
-	public static async Task<T[]?> GetAllRecordsAsync( string[]? excludedFields = null, string[]? insertFields = null )
-		=> NullIfEmpty( await Repository<T>.SearchReadAsync( null, new( excludedFields, null, insertFields ) ) );
-
-	public static async Task<T[]?> GetRecordsBySmartSearchAsync(
-		OdooDomain? searchFilter = null,
-		string[]? excludedFields = null,
-		string[]? includedFields = null,
-		string[]? insertFields = null )
-		=> NullIfEmpty( await Repository<T>.SmartReadAsync( searchFilter, new( excludedFields, includedFields, insertFields ) ) );
 
 	public static async Task<T[]?> GetRecordsBySearchAsync(
 		OdooDomain? searchFilter = null,
 		string[]? includedFields = null,
 		string[]? excludedFields = null,
-		string[]? insertFields = null )
-		=> NullIfEmpty( await Repository<T>.SearchReadAsync( searchFilter, new( excludedFields, includedFields, insertFields ) ) );
+		string[]? insertFields = null,
+		CancellationToken token = default )
+		=> NullIfEmpty( await Repository<T>.SearchReadAsync( searchFilter, new( excludedFields, includedFields, insertFields ), token: token ).ConfigureAwait( false ) );
 
-	public static async Task<T?> GetRecordByIdAsync(
+	public static ValueTask<T?> GetRecordByIdAsync(
 		int recordId,
 		string[]? excludedFields = null,
 		string[]? includedFields = null,
-		string[]? insertFields = null )
+		string[]? insertFields = null,
+		CancellationToken token = default )
 		=> recordId == 0
-			? default
-			: ( await GetRecordsByIdsAsync( [ recordId ], excludedFields: excludedFields, includedFields: includedFields, insertFields: insertFields ) )?.FirstOrDefault();
+			? ValueTask.FromResult<T?>( default )
+			: GetSingleByIdAsync( recordId, excludedFields, includedFields, insertFields, token );
 
-	public static async Task<T[]?> GetRecordsByIdsAsync(
+	private static async ValueTask<T?> GetSingleByIdAsync(
+		int recordId,
+		string[]? excludedFields,
+		string[]? includedFields,
+		string[]? insertFields,
+		CancellationToken token )
+		=> ( await GetRecordsByIdsAsync( [ recordId ], excludedFields: excludedFields, includedFields: includedFields, insertFields: insertFields, token: token ).ConfigureAwait( false ) )?.FirstOrDefault();
+
+	public static ValueTask<T[]?> GetRecordsByIdsAsync(
 		IReadOnlyList<int>? recordIds,
 		OdooDomain? searchFilters = null,
 		string[]? excludedFields = null,
 		string[]? includedFields = null,
 		string[]? insertFields = null,
-		int timeoutMs = 90000 )
+		int timeoutMs = 90000,
+		CancellationToken token = default )
+	{
+		if( recordIds is { Count: 0 } )
+			return ValueTask.FromResult<T[]?>( null );
+		return GetRecordsByIdsSlowAsync( recordIds, searchFilters, excludedFields, includedFields, insertFields, timeoutMs, token );
+	}
+
+	private static async ValueTask<T[]?> GetRecordsByIdsSlowAsync(
+		IReadOnlyList<int>? recordIds,
+		OdooDomain? searchFilters,
+		string[]? excludedFields,
+		string[]? includedFields,
+		string[]? insertFields,
+		int timeoutMs,
+		CancellationToken token )
 	{
 		FieldSelection fields = new( excludedFields, includedFields, insertFields );
 		return NullIfEmpty( searchFilters is null
-			? await Repository<T>.ReadAsync( recordIds ?? [], fields, timeoutMs )
+			? await Repository<T>.ReadAsync( recordIds ?? [], fields, timeoutMs, token ).ConfigureAwait( false )
 			: await Repository<T>.SearchReadAsync(
-				recordIds is { Count: > 0 } ? searchFilters.And( "id", "in", recordIds ) : searchFilters,
+				recordIds is not null ? searchFilters.And( nameof( id ), "in", recordIds ) : searchFilters,
 				fields,
-				timeoutMs: timeoutMs ) );
+				timeoutMs: timeoutMs,
+				token: token ).ConfigureAwait( false ) );
 	}
 
-	public static async Task<TOther[]?> GetRelatedRecordByIdsAsync<TOther>(
+	public static ValueTask<TOther[]?> GetRelatedRecordByIdsAsync<TOther>(
 		IReadOnlyList<int> recordIds,
 		string relatedFieldName,
 		string[]? excludedFields = null,
 		string[]? includedFields = null,
-		string[]? insertFields = null )
+		string[]? insertFields = null,
+		CancellationToken token = default )
+		where TOther : HpRecord<TOther>, IOdooModel<TOther>, new()
+	{
+		if( recordIds.Count == 0 )
+			return ValueTask.FromResult<TOther[]?>( null );
+		return GetRelatedRecordByIdsSlowAsync<TOther>( recordIds, relatedFieldName, excludedFields, includedFields, insertFields, token );
+	}
+
+	private static async ValueTask<TOther[]?> GetRelatedRecordByIdsSlowAsync<TOther>(
+		IReadOnlyList<int> recordIds,
+		string relatedFieldName,
+		string[]? excludedFields,
+		string[]? includedFields,
+		string[]? insertFields,
+		CancellationToken token )
 		where TOther : HpRecord<TOther>, IOdooModel<TOther>, new()
 	{
 		Result<TOther[]> related = await Repository<T>.RelatedAsync<TOther>(
 			recordIds,
 			relatedFieldName,
-			new( excludedFields, includedFields, insertFields ) );
+			new( excludedFields, includedFields, insertFields ),
+			token: token ).ConfigureAwait( false );
 		return related.Value is { Length: > 0 } records ? records : null;
 	}
 }
@@ -347,7 +357,6 @@ public static class RecordIds
 public readonly record struct FieldSelection( string[]? Excluded = null, string[]? Included = null, string[]? Insert = null )
 {
 	public static FieldSelection Only( params string[] fields ) => new( Included: fields );
-	public static FieldSelection Without( params string[] fields ) => new( Excluded: fields );
 
 	internal string[] For<T>() where T : HpRecord<T>, IOdooModel<T>, new()
 		=> HpRecord<T>.GetFields( Excluded, Included, Insert );
@@ -358,14 +367,14 @@ public static class Repository<T> where T : HpRecord<T>, IOdooModel<T>, new()
 {
 	public static string Model => T.ModelName;
 
-	public static Task<Result<T[]>> ReadAsync(
+	public static ValueTask<Result<T[]>> ReadAsync(
 		IReadOnlyList<int> ids,
 		FieldSelection fields = default,
 		int timeoutMs = OdooRpc.LongTimeout,
 		CancellationToken token = default )
 		=> ids.Count == 0
-			? Task.FromResult( Result<T[]>.Success( [] ) )
-			: FetchAsync( OdooRpc.ReadAsync( Model, ids, fields.For<T>(), timeoutMs, token ), fields );
+			? ValueTask.FromResult( Result<T[]>.Success( [] ) )
+			: new ValueTask<Result<T[]>>( FetchAsync( OdooRpc.ExecuteAsync<JsonElement>( Model, "read", [ ids, fields.For<T>() ], timeoutMs, token ), fields ) );
 
 	public static Task<Result<T[]>> SearchReadAsync(
 		OdooDomain? domain = null,
@@ -373,31 +382,91 @@ public static class Repository<T> where T : HpRecord<T>, IOdooModel<T>, new()
 		int? limit = null,
 		int timeoutMs = OdooRpc.LongTimeout,
 		CancellationToken token = default )
-		=> FetchAsync( OdooRpc.SearchReadAsync( Model, domain, fields.For<T>(), limit, timeoutMs, token ), fields );
-
-	public static Task<Result<T[]>> SmartReadAsync(
-		OdooDomain? domain = null,
-		FieldSelection fields = default,
-		int timeoutMs = OdooRpc.LongTimeout,
-		CancellationToken token = default )
 		=> FetchAsync(
-			OdooRpc.ExecuteAsync<IReadOnlyList<OdooRow>>( Model, "smart_read", [ domain ?? OdooDomain.All, Array.Empty<int>(), fields.For<T>() ], timeoutMs, token ),
+			OdooRpc.ExecuteAsync<JsonElement>(
+				Model,
+				"search_read",
+				limit is null
+					? [ domain ?? OdooDomain.All, fields.For<T>() ]
+					: [ domain ?? OdooDomain.All, fields.For<T>(), 0, limit ],
+				timeoutMs,
+				token ),
 			fields );
 
 	public static Task<Result<TOther[]>> RelatedAsync<TOther>(
 		IReadOnlyList<int> ids,
 		string relatedField,
 		FieldSelection fields = default,
-		int timeoutMs = 60000 )
+		int timeoutMs = 120_000,
+		CancellationToken token = default )
 		where TOther : HpRecord<TOther>, IOdooModel<TOther>, new()
 		=> Repository<TOther>.FetchAsync(
-			OdooRpc.ExecuteAsync<IReadOnlyList<OdooRow>>( Model, "related_browse", [ ids, relatedField, fields.For<TOther>() ], timeoutMs ),
+			OdooRpc.ExecuteAsync<JsonElement>( Model, "related_browse", [ ids, relatedField, fields.For<TOther>() ], timeoutMs, token ),
 			fields );
 
-	internal static async Task<Result<T[]>> FetchAsync( Task<Result<IReadOnlyList<OdooRow>>> fetch, FieldSelection fields )
+	internal static async Task<Result<T[]>> FetchAsync( Task<Result<JsonElement>> fetch, FieldSelection fields )
 	{
-		Result<IReadOnlyList<OdooRow>> rows = await fetch;
-		return rows.Ok ? Result<T[]>.Success( Populate( rows.Value!, fields.Excluded ) ) : Result<T[]>.Fail( rows.Error );
+		Result<JsonElement> raw = await fetch.ConfigureAwait( false );
+		return raw.Ok
+			? Result<T[]>.Success( PopulateFromJson( raw.Value, fields.Excluded ) )
+			: Result<T[]>.Fail( raw.Error );
+	}
+
+	internal static T[] PopulateFromJson( JsonElement json, string[]? excludedFields = null )
+	{
+		if( json.ValueKind != JsonValueKind.Array )
+			return [];
+		int count = json.GetArrayLength();
+		if( count == 0 )
+			return [];
+
+		List<T> records = new( count );
+		foreach( JsonElement item in json.EnumerateArray() )
+		{
+			if( item.ValueKind != JsonValueKind.Object )
+				continue;
+			T record = new();
+			AssignFromJson( record, item );
+			record.IsRecord = true;
+			record.ExcludedFields = excludedFields;
+			record.CompleteConstruction();
+			records.Add( record );
+		}
+		return [ .. records ];
+	}
+
+	private static void AssignFromJson( T record, JsonElement row )
+	{
+		foreach( JsonProperty prop in row.EnumerateObject() )
+		{
+			string field = prop.Name;
+			JsonElement elem = prop.Value;
+			if( field == nameof( HpRecordBase.id ) )
+			{
+				if( elem.ValueKind == JsonValueKind.Number && elem.TryGetInt32( out int id ) )
+					record.id = id;
+				continue;
+			}
+
+			object? value = field is nameof( HpVersion.file_contents ) or nameof( HpVersion.preview_image )
+				&& elem.ValueKind == JsonValueKind.String
+				&& elem.TryGetBytesFromBase64( out byte[]? decoded )
+					? ( decoded.Length > 0 ? decoded : null )
+					: OdooValues.FromJson( elem );
+
+			if( !record.TrySetField( field, value ) )
+				record.HashedValues[ field ] = value;
+		}
+	}
+
+	private static T PopulateOne( IReadOnlyDictionary<string, object?> row, string[]? excludedFields )
+	{
+		T record = new();
+		Assign( record, row );
+		record.IsRecord = true;
+		record.ExcludedFields = excludedFields;
+		record.CompleteConstruction();
+		return record;
 	}
 
 	public static T[] Populate( IEnumerable<IReadOnlyDictionary<string, object?>> rows, string[]? excludedFields = null )
@@ -409,37 +478,23 @@ public static class Repository<T> where T : HpRecord<T>, IOdooModel<T>, new()
 			T[] array = new T[ col.Count ];
 			int i = 0;
 			foreach( IReadOnlyDictionary<string, object?> row in col )
-			{
-				T record = new();
-				Assign( record, row );
-				record.IsRecord = true;
-				record.ExcludedFields = excludedFields;
-				record.CompleteConstruction();
-				array[ i++ ] = record;
-			}
+				array[ i++ ] = PopulateOne( row, excludedFields );
 			return array;
 		}
 
 		List<T> list = [];
 		foreach( IReadOnlyDictionary<string, object?> row in rows )
-		{
-			T record = new();
-			Assign( record, row );
-			record.IsRecord = true;
-			record.ExcludedFields = excludedFields;
-			record.CompleteConstruction();
-			list.Add( record );
-		}
+			list.Add( PopulateOne( row, excludedFields ) );
 		return [ .. list ];
 	}
 
 	public static void Assign( T record, IReadOnlyDictionary<string, object?> row )
 	{
-		if( OdooValues.AsInt( row.GetValueOrDefault( "id" ) ) is int id )
+		if( OdooValues.AsInt( row.GetValueOrDefault( nameof( HpRecordBase.id ) ) ) is int id )
 			record.id = id;
 		foreach( var (field, value) in row )
 		{
-			if( field == "id" )
+			if( field == nameof( HpRecordBase.id ) )
 				continue;
 			if( !record.TrySetField( field, value ) )
 				record.HashedValues[ field ] = value;
@@ -448,6 +503,7 @@ public static class Repository<T> where T : HpRecord<T>, IOdooModel<T>, new()
 }
 
 /// <summary>DTOs returned by hp.directory custom RPC methods.</summary>
+[Bindable( true )]
 public sealed record RemoteEntryDto(
 	string Name,
 	int Id,
@@ -469,7 +525,7 @@ public sealed record RemoteEntryDto(
 		CheckoutUserId: row.Int( "checkout" ) is int user and not 0 ? user : null,
 		Category: row.Text( "category" ),
 		FullName: row.Text( "fullname" ),
-		Size: row.GetValueOrDefault( "size" ) switch { int i => i, long l => l, _ => 0 },
+		Size: row.Long( "size" ),
 		LatestVersionId: row.Int( "latest" ),
 		LatestReleaseId: row.Int( "release" ),
 		LatestChecksum: row.Text( "latest_checksum" ),
@@ -490,6 +546,7 @@ public sealed record RemoteEntryDto(
 	}
 }
 
+[Bindable( true )]
 public sealed record SubdirectoryDto(
 	int Id,
 	string Name,

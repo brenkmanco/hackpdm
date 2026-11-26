@@ -16,6 +16,8 @@ internal sealed class WindowsCredentialStore : ICredentialStore
 
 	public StoredCredential? Read( string target )
 	{
+		if( string.IsNullOrEmpty( target ) )
+			return null;
 		try
 		{
 			return CredentialManager.ReadCredential( target, CredentialType.Generic ) is { } c ? new( c.UserName, c.Password ) : null;
@@ -29,6 +31,8 @@ internal sealed class WindowsCredentialStore : ICredentialStore
 
 	public bool Write( string target, string userName, string password )
 	{
+		if( string.IsNullOrEmpty( target ) || userName is null || password is null )
+			return false;
 		try
 		{
 			CredentialManager.WriteCredential( target, userName, password, CredentialPersistence.LocalMachine );
@@ -43,6 +47,8 @@ internal sealed class WindowsCredentialStore : ICredentialStore
 
 	public bool Delete( string target )
 	{
+		if( string.IsNullOrEmpty( target ) )
+			return false;
 		try
 		{
 			if( CredentialManager.ReadCredential( target, CredentialType.Generic ) is not null )

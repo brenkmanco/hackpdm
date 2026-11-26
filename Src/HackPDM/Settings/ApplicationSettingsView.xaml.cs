@@ -12,6 +12,10 @@ namespace HackPDM.Settings;
 /// <summary>Application settings hub (the NavigationView's settings gear): one section per settings page.</summary>
 public sealed partial class ApplicationSettingsView : Page
 {
+	public const string ThemeSectionKey = "Theme";
+	public const string StatusSectionKey = "Status";
+	public const string AboutSectionKey = "About";
+
 	public ApplicationSettingsView()
 	{
 		InitializeComponent();
@@ -21,13 +25,13 @@ public sealed partial class ApplicationSettingsView : Page
 	private void SettingsSections_SelectionChanged( SelectorBar sender, SelectorBarSelectionChangedEventArgs args )
 		=> ShowSection( sender.SelectedItem );
 
-	/// <summary>Switches the active tab (for example <c>"Status"</c>, <c>"Theme"</c>, or <c>"About"</c>).</summary>
+	/// <summary>Switches the active tab (for example <see cref="StatusSectionKey"/>, <see cref="ThemeSectionKey"/>, or <see cref="AboutSectionKey"/>).</summary>
 	public void SelectSection( string sectionName )
 	{
 		SelectorBarItem target = sectionName switch
 		{
-			"Status" => StatusSection,
-			"About" or "Updates" => AboutSection,
+			StatusSectionKey => StatusSection,
+			AboutSectionKey => AboutSection,
 			_ => ThemeSection,
 		};
 		SettingsSections.SelectedItem = target;

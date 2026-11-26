@@ -14,9 +14,6 @@ namespace HackPDM.Common;
 /// </summary>
 public sealed partial class PipWindow : Window
 {
-	private const int DefaultWidth = 420;
-	private const int DefaultHeight = 320;
-
 	public event EventHandler? ReturnRequested;
 
 	public PipWindow()
@@ -33,6 +30,8 @@ public sealed partial class PipWindow : Window
 		{
 			compactOverlay = true;
 			ExtendsContentIntoTitleBar = true;
+			PipTitleBar.Visibility = Visibility.Visible;
+			SetTitleBar( PipTitleBar );
 		}
 #endif
 		if( !compactOverlay )
@@ -55,7 +54,16 @@ public sealed partial class PipWindow : Window
 
 		try
 		{
-			WindowHelper.ResizeWindow( this, DefaultWidth, DefaultHeight );
+			WindowPreset preset = WindowHelper.Preset( WindowHelper.Presets.PipWindow );
+			WindowHelper.ApplyPreset(
+				this,
+				preset with
+				{
+					Title = string.IsNullOrWhiteSpace( Title ) ? preset.Title : Title,
+					Kind = compactOverlay ? AppWindowPresenterKind.CompactOverlay : AppWindowPresenterKind.Overlapped,
+					IsMaximized = false,
+				} );
+			WindowHelper.TrackWindow( this, WindowHelper.Presets.PipWindow );
 		}
 		catch
 		{

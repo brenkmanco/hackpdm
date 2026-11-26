@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -15,8 +16,10 @@ using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Pdm;
 using HackPDM.Core.Services;
+using HackPDM.Search;
 using HackPDM.Shell;
 
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 
 namespace HackPDM.Login;
@@ -25,6 +28,10 @@ namespace HackPDM.Login;
 public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposable
 {
 	private const string ProfileExtension = ".json";
+
+	private sealed record EnvironmentSnapshot(
+		string ConnectionTarget,
+		List<(StatusMessage Status, string Category, string Message)> Findings );
 
 	private static readonly string[] SharedCategoryFilterOptions =
 	[
@@ -47,9 +54,15 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	private readonly IDialogService _dialogs;
 	private readonly IFilePickerService _pickers;
 	private readonly INavigationService _navigation;
-	private readonly Action? _accountChanged;
-	private readonly Func<IReadOnlyList<(StatusMessage Status, string Category, string Message)>>? _inspectSettings;
+	private readonly Func<Task> _accountChanged;
+	private readonly Func<IReadOnlyList<(StatusMessage Status, string Category, string Message)>> _inspectSettings;
+	private readonly SearchOdooViewModel _search;
+	private readonly Action? _onAuthStateChanged;
+	private CancellationTokenSource? _operationCts;
+	private CancellationTokenSource? _inspectCts;
+	private Task? _inspectTask;
 	private bool _attached;
+	private bool _batchingSessionLogs;
 	private int _errorCount;
 	private int _warningCount;
 	private int _infoCount;
@@ -59,8 +72,10 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		IDialogService dialogs,
 		IFilePickerService pickers,
 		INavigationService navigation,
-		Action? accountChanged = null,
-		Func<IReadOnlyList<(StatusMessage Status, string Category, string Message)>>? inspectSettings = null )
+		Func<Task> accountChanged,
+		Func<IReadOnlyList<(StatusMessage Status, string Category, string Message)>> inspectSettings,
+		SearchOdooViewModel search,
+		Action? onAuthStateChanged = null )
 	{
 		_session = session;
 		_dialogs = dialogs;
@@ -68,6 +83,9 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		_navigation = navigation;
 		_accountChanged = accountChanged;
 		_inspectSettings = inspectSettings;
+		_search = search;
+		_onAuthStateChanged = onAuthStateChanged;
+		IsLoggedIn = _session.IsLoggedIn;
 		Attach();
 	}
 
@@ -77,18 +95,11 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	public string[] CategoryFilterOptions => SharedCategoryFilterOptions;
 	public string[] LevelFilterOptions => SharedLevelFilterOptions;
 
-	public bool IsLoggedIn
-	{
-		get => _session.IsLoggedIn;
-		set
-		{
-			if( _session.IsLoggedIn == value )
-				return;
-			_session.IsLoggedIn = value;
-			OnPropertyChanged();
-			OnPropertyChanged( nameof( ConnectionBadgeText ) );
-		}
-	}
+	[ObservableProperty]
+	[NotifyPropertyChangedFor( nameof( ConnectionBadgeText ) )]
+	public partial bool IsLoggedIn { get; set; }
+
+	partial void OnIsLoggedInChanged( bool value ) => _session.IsLoggedIn = value;
 
 	[ObservableProperty]
 	[NotifyPropertyChangedFor( nameof( IsBusy ) )]
@@ -103,11 +114,15 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	public partial bool IsTestingConnection { get; set; }
 
 	[ObservableProperty] public partial string LoginStatusText { get; set; } = string.Empty;
-	[ObservableProperty] public partial string ConnectionTargetText { get; set; } = FormatConnectionTarget();
+	[ObservableProperty] public partial string ConnectionTargetText { get; set; } = string.Empty;
 	[ObservableProperty] public partial int SelectedCategoryFilterIndex { get; set; }
 	[ObservableProperty] public partial int SelectedLevelFilterIndex { get; set; }
 	[ObservableProperty] public partial bool HasBanner { get; set; }
-	[ObservableProperty] public partial StatusMessage BannerStatus { get; set; } = StatusMessage.INFO;
+
+	[ObservableProperty]
+	[NotifyPropertyChangedFor( nameof( BannerSeverity ) )]
+	public partial StatusMessage BannerStatus { get; set; } = StatusMessage.INFO;
+
 	[ObservableProperty] public partial string BannerTitle { get; set; } = string.Empty;
 	[ObservableProperty] public partial string BannerMessage { get; set; } = string.Empty;
 	[ObservableProperty] public partial bool ShowOpenConfigurationsAction { get; set; }
@@ -115,11 +130,27 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	[ObservableProperty] public partial string EmptyHintTitle { get; set; } = "Ready to connect";
 	[ObservableProperty] public partial string EmptyHintSubtitle { get; set; } = "Click Odoo Login below to authenticate and sync workspace metadata.";
 
+	[ObservableProperty]
+	[NotifyPropertyChangedFor( nameof( HasSelectedStatusMessage ), nameof( SelectedStatusMessageText ) )]
+	public partial BasicStatusMessage? SelectedStatusMessage { get; set; }
+
 	public bool IsBusy => IsLoggingIn || IsTestingConnection;
 	public bool IsIdle => !IsBusy;
 	public string LoginButtonText => IsLoggingIn ? "Signing in…" : "Odoo Login";
 	public string TestConnectionButtonText => IsTestingConnection ? "Testing…" : "Test Connection";
 	public string ConnectionBadgeText => IsLoggedIn ? "Signed In" : "Not Signed In";
+	public bool IsFilteredStatusEmpty => FilteredStatus.Count == 0;
+	public bool HasSelectedStatusMessage => SelectedStatusMessage is not null;
+	public string SelectedStatusMessageText => SelectedStatusMessage is { } m
+		? $"[{m.TimestampText}] [{m.Status}] {m.Category}: {m.Message}"
+		: string.Empty;
+	public InfoBarSeverity BannerSeverity => BannerStatus switch
+	{
+		StatusMessage.ERROR => InfoBarSeverity.Error,
+		StatusMessage.WARNING => InfoBarSeverity.Warning,
+		StatusMessage.SUCCESS => InfoBarSeverity.Success,
+		_ => InfoBarSeverity.Informational,
+	};
 
 	partial void OnSelectedCategoryFilterIndexChanged( int value ) => ApplyFilters();
 	partial void OnSelectedLevelFilterIndexChanged( int value ) => ApplyFilters();
@@ -136,6 +167,8 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 
 	public void Detach()
 	{
+		CtsHelper.CancelAndDispose( ref _operationCts );
+		CtsHelper.CancelAndDispose( ref _inspectCts );
 		if( !_attached )
 			return;
 		_session.MessageLogged -= OnSessionMessageLogged;
@@ -145,20 +178,16 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 
 	public void Dispose() => Detach();
 
-	public void RefreshConnectionSummary()
+	public void RefreshConnectionSummary() => _ = RefreshConnectionSummaryAsync();
+
+	public Task RefreshConnectionSummaryAsync()
 	{
-		ConnectionTargetText = FormatConnectionTarget();
-		OnPropertyChanged( nameof( IsLoggedIn ) );
-		OnPropertyChanged( nameof( ConnectionBadgeText ) );
-		InspectEnvironmentAndSettings( forceLog: false );
+		IsLoggedIn = _session.IsLoggedIn;
+		return StartInspectAsync( forceLog: false );
 	}
 
 	[RelayCommand]
-	private void CheckStatus()
-	{
-		ConnectionTargetText = FormatConnectionTarget();
-		InspectEnvironmentAndSettings( forceLog: true );
-	}
+	private Task CheckStatusAsync() => StartInspectAsync( forceLog: true );
 
 	[RelayCommand]
 	private void ClearStatus()
@@ -173,10 +202,12 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	{
 		if( IsBusy )
 			return;
+		CancellationToken token = CtsHelper.Replace( ref _operationCts ).Token;
 		IsTestingConnection = true;
 		LoginStatusText = "Testing connection to Odoo…";
 		try
 		{
+			await WaitPendingInspectAsync( token );
 			OdooDefaults odoo = OdooDefaults.Instance;
 			string host = odoo.OdooAddress?.Trim() ?? string.Empty;
 			string portText = odoo.OdooPort?.Trim() ?? string.Empty;
@@ -203,14 +234,14 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 				LogSession( StatusMessage.INFO, ProfileStatusCategory.Connection, $"Endpoint policy valid: {url}." );
 
 			LoginStatusText = $"Resolving host '{resolvedHost}'…";
-			if( !await OdooConnection.CorrectOdooAddress() )
+			if( !await OdooConnection.CorrectOdooAddress().WaitAsync( token ) )
 			{
 				LogSession( StatusMessage.ERROR, ProfileStatusCategory.Connection, $"Host '{resolvedHost}' is unreachable or could not be resolved in DNS.", updateBanner: true );
 				return;
 			}
 
 			LoginStatusText = $"Checking TCP port {resolvedPort}…";
-			if( !await OdooConnection.CorrectOdooPort() )
+			if( !await OdooConnection.CorrectOdooPort().WaitAsync( token ) )
 			{
 				LogSession( StatusMessage.ERROR, ProfileStatusCategory.Connection, $"TCP port {resolvedPort} on '{resolvedHost}' refused the connection or timed out.", updateBanner: true );
 				return;
@@ -218,7 +249,7 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 
 			LoginStatusText = "Probing Odoo JSON-RPC service…";
 			Stopwatch sw = Stopwatch.StartNew();
-			Result<JsonElement> probe = await OdooRpc.CallAsync( "common", "version", [], timeoutMs: 5000 );
+			Result<JsonElement> probe = await OdooRpc.CallAsync( "common", "version", [], timeoutMs: 5000, token: token );
 			sw.Stop();
 			if( probe.Ok )
 			{
@@ -233,6 +264,9 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 				LogSession( StatusMessage.ERROR, ProfileStatusCategory.Connection, $"TCP port {resolvedPort} opened, but Odoo JSON-RPC probe failed: {probe.Error ?? "unknown error"}", updateBanner: true );
 			}
 		}
+		catch( OperationCanceledException ) when( token.IsCancellationRequested )
+		{
+		}
 		catch( Exception ex )
 		{
 			LogSession( StatusMessage.ERROR, ProfileStatusCategory.Connection, $"Connection test failed: {ex.Message}", updateBanner: true );
@@ -245,12 +279,16 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	}
 
 	[RelayCommand]
-	private void Logout()
+	private async Task LogoutAsync()
 	{
-		string target = FormatConnectionTarget();
+		string target = await Task.Run( FormatConnectionTarget );
 		IsLoggedIn = false;
+		_session.VersionMismatchMessage = null;
 		OdooDefaults.Instance.OdooId = 0;
-		_accountChanged?.Invoke();
+		OdooDefaults.Instance.Lookups = OdooLookupCache.Empty;
+		await _accountChanged();
+		_onAuthStateChanged?.Invoke();
+		_search.ResetForSessionChange();
 		LogSession( StatusMessage.INFO, ProfileStatusCategory.Login, $"Signed out of Odoo session ({target}).", updateBanner: true );
 	}
 
@@ -259,22 +297,29 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	{
 		if( IsBusy )
 			return;
+		CancellationToken token = CtsHelper.Replace( ref _operationCts ).Token;
 		IsLoggingIn = true;
 		LoginStatusText = "Signing in to Odoo…";
 		bool signedIn = false;
 		try
 		{
-			signedIn = await AbleToLoginAsync();
+			await WaitPendingInspectAsync( token );
+			signedIn = await AbleToLoginAsync( token );
 			IsLoggedIn = signedIn;
 			if( signedIn )
 			{
 				OdooDefaults odoo = OdooDefaults.Instance;
-				if( _session.LoggedInAs( $"{odoo.OdooUrl}|{odoo.OdooDb}|{odoo.OdooUser}|{HackDefaults.Instance.PwaPathAbsolute}" ) )
+				string accountKey = $"{odoo.OdooUrl}|{odoo.OdooDb}|{odoo.OdooUser}|{HackDefaults.Instance.PwaPathAbsolute}";
+				if( _session.LoggedInAs( accountKey ) )
 				{
-					_accountChanged?.Invoke();
+					await _accountChanged();
+					_search.ResetForSessionChange();
 					LogSession( StatusMessage.INFO, ProfileStatusCategory.Login, $"Switched active account to '{odoo.OdooUser}' on '{odoo.OdooDb}'; cached workspace cleared." );
 				}
-				if( odoo.SaveCredentials() )
+				_onAuthStateChanged?.Invoke();
+				_search.LoadLookups();
+				bool savedCredentials = await Task.Run( () => odoo.SaveCredentials(), token );
+				if( savedCredentials )
 					LogSession( StatusMessage.INFO, ProfileStatusCategory.Settings, $"Credentials saved to keyring ({odoo.OdooCredentialTarget ?? PdmConstants.DefaultOdooCredentials})." );
 				else
 					LogSession( StatusMessage.WARNING, ProfileStatusCategory.Settings, "Credentials were not stored in the system keyring." );
@@ -283,16 +328,26 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 				LoginStatusText = "Opening File Manager…";
 			}
 		}
+		catch( OperationCanceledException ) when( token.IsCancellationRequested )
+		{
+			signedIn = false;
+			IsLoggedIn = false;
+		}
+		catch( Exception ex )
+		{
+			signedIn = false;
+			IsLoggedIn = false;
+			HackLogger.Error( "Login", $"Post-login setup failed: {ex.Message}", ex );
+			LogSession( StatusMessage.ERROR, ProfileStatusCategory.Login, $"Sign-in failed: {ex.Message}", updateBanner: true );
+		}
 		finally
 		{
-			ConnectionTargetText = FormatConnectionTarget();
-			OnPropertyChanged( nameof( IsLoggedIn ) );
-			OnPropertyChanged( nameof( ConnectionBadgeText ) );
+			ConnectionTargetText = await Task.Run( FormatConnectionTarget );
 			if( !signedIn )
 				LoginStatusText = string.Empty;
 			IsLoggingIn = false;
 		}
-		if( signedIn )
+		if( signedIn && !token.IsCancellationRequested )
 		{
 			_navigation.NavigateTo( NavigatePageMenu.HackFileManager );
 			LoginStatusText = string.Empty;
@@ -307,13 +362,18 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	{
 		if( await _pickers.PickOpenFileAsync( ProfileExtension ) is not { } path )
 			return;
+		CancellationToken token = CtsHelper.Replace( ref _operationCts ).Token;
 		string fileName = Path.GetFileName( path );
 		SavedProfileData? profile = null;
 		string? readError = null;
 		try
 		{
-			profile = await ProfileStore.ReadAsync( path );
+			profile = await ProfileStore.ReadAsync( path ).WaitAsync( token );
 			readError ??= profile is null ? "profile JSON evaluated to null" : null;
+		}
+		catch( OperationCanceledException ) when( token.IsCancellationRequested )
+		{
+			return;
 		}
 		catch( Exception ex ) when( ex is JsonException or IOException or UnauthorizedAccessException )
 		{
@@ -325,24 +385,68 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 			await _dialogs.ShowMessageAsync( "Unable to read JSON profile file.", "Invalid Profile", MessageBoxButtons.OK, MessageBoxIcon.Error );
 			return;
 		}
-		ProfileStore.Apply( profile );
-		LogSession( StatusMessage.INFO, ProfileStatusCategory.Configuration, $"Loaded profile '{fileName}' ({FormatConnectionTarget()}).", updateBanner: true );
+
+		bool targetChanged;
+		try
+		{
+			targetChanged = await Task.Run( () =>
+			{
+				OdooDefaults defaults = OdooDefaults.Instance;
+				string? previousUrl = defaults.OdooUrl;
+				string? previousDb = defaults.OdooDb;
+				string? previousUser = defaults.OdooUser;
+				string? previousPass = defaults.OdooPass;
+				string? previousTarget = defaults.OdooCredentialTarget;
+				string previousPwa = HackDefaults.Instance.PwaPathAbsolute;
+
+				ProfileStore.Apply( profile );
+
+				bool pwaChanged = !string.Equals( previousPwa, HackDefaults.Instance.PwaPathAbsolute, PwaPaths.PathComparison );
+				return pwaChanged
+					|| !string.Equals( previousUrl, defaults.OdooUrl, StringComparison.OrdinalIgnoreCase )
+					|| !string.Equals( previousDb, defaults.OdooDb, StringComparison.Ordinal )
+					|| !string.Equals( previousUser, defaults.OdooUser, StringComparison.Ordinal )
+					|| !string.Equals( previousPass, defaults.OdooPass, StringComparison.Ordinal )
+					|| !string.Equals( previousTarget, defaults.OdooCredentialTarget, StringComparison.Ordinal );
+			}, token );
+		}
+		catch( OperationCanceledException ) when( token.IsCancellationRequested )
+		{
+			return;
+		}
+
+		IsLoggedIn = false;
+		_session.VersionMismatchMessage = null;
+		OdooDefaults.Instance.Lookups = OdooLookupCache.Empty;
+		if( targetChanged )
+		{
+			await _accountChanged();
+			_search.ResetForSessionChange();
+		}
+		else
+		{
+			_search.LoadLookups();
+		}
+
+		string targetSummary = await Task.Run( FormatConnectionTarget, token );
+		LogSession( StatusMessage.INFO, ProfileStatusCategory.Configuration, $"Loaded profile '{fileName}' ({targetSummary}).", updateBanner: true );
 		if( string.IsNullOrEmpty( profile.Password ) )
 			LogSession( StatusMessage.WARNING, ProfileStatusCategory.Configuration, $"Profile '{fileName}' has no password; existing keyring or Configurations credentials will be used." );
-		RefreshConnectionSummary();
+		await RefreshConnectionSummaryAsync();
 	}
 
-	[RelayCommand] private Task SaveProfileAsync() => SaveAsync( ProfileStore.Current( includePassword: true ), "profile (with password)" );
-	[RelayCommand] private Task SaveProfileWithoutPasswordAsync() => SaveAsync( ProfileStore.Current( includePassword: false ), "profile (without password)" );
-	[RelayCommand] private Task CreateTemplateAsync() => SaveAsync( ProfileStore.Template, "template profile" );
+	[RelayCommand] private Task SaveProfileAsync() => SaveAsync( () => ProfileStore.Current( includePassword: true ), "profile (with password)" );
+	[RelayCommand] private Task SaveProfileWithoutPasswordAsync() => SaveAsync( () => ProfileStore.Current( includePassword: false ), "profile (without password)" );
+	[RelayCommand] private Task CreateTemplateAsync() => SaveAsync( static () => ProfileStore.Template, "template profile" );
 
-	private async Task SaveAsync( SavedProfileData profile, string label )
+	private async Task SaveAsync( Func<SavedProfileData> buildProfile, string label )
 	{
 		if( await _pickers.PickSaveFileAsync( "JSON file", ProfileExtension, "hack-odoo" ) is not { } path )
 			return;
 		string fileName = Path.GetFileName( path );
 		try
 		{
+			SavedProfileData profile = await Task.Run( buildProfile );
 			await ProfileStore.WriteAsync( path, profile );
 			LogSession( StatusMessage.INFO, ProfileStatusCategory.Configuration, $"Saved {label}: '{fileName}'.", updateBanner: true );
 		}
@@ -353,28 +457,36 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		}
 	}
 
-	public async Task<bool> AbleToLoginAsync()
+	public async Task<bool> AbleToLoginAsync( CancellationToken token = default )
 	{
 		try
 		{
+			token.ThrowIfCancellationRequested();
 			List<(string Category, string Message)> errors = [];
-			Progress<string> stageProgress = new( message => UiDispatcher.Post( () => LoginStatusText = message ) );
+			IProgress<string> stageProgress = new UiThreadProgress<string>( message => LoginStatusText = message );
 			LoginStatusText = "Signing in to Odoo…";
-			LogSession( StatusMessage.INFO, ProfileStatusCategory.Login, $"Attempting login ({FormatConnectionTarget()})…" );
+			string targetText = await Task.Run( FormatConnectionTarget, token );
+			LogSession( StatusMessage.INFO, ProfileStatusCategory.Login, $"Attempting login ({targetText})…" );
 
 			try
 			{
-				await OdooDefaults.Instance.InitializeAsync( stageProgress );
+				await Task.Run( () => OdooDefaults.Instance.InitializeAsync( stageProgress ), token ).WaitAsync( token );
 			}
-			catch( Exception ex ) when( OdooDefaults.Instance.OdooId == 0 )
+			catch( OperationCanceledException ) when( token.IsCancellationRequested )
 			{
+				throw;
+			}
+			catch( Exception ex )
+			{
+				OdooDefaults.Instance.OdooId = 0;
 				errors.Add( ( ClassifyErrorCategory( ex.Message ), ex.Message ) );
 			}
 
+			token.ThrowIfCancellationRequested();
 			if( OdooConnection.CorrectUserId() == 1 )
 			{
 				LoginStatusText = "Checking client compatibility…";
-				if( await HackUpdater.EnsureUpdatedAsync( true ) )
+				if( await HackUpdater.EnsureUpdatedAsync( showOutdatedUpdater: true, token: token ) )
 				{
 					_session.VersionMismatchMessage = null;
 					OdooDefaults odoo = OdooDefaults.Instance;
@@ -383,7 +495,7 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 					return true;
 				}
 				OdooDefaults.Instance.OdooId = 0;
-				_session.IsLoggedIn = false;
+				IsLoggedIn = false;
 				string required = HackUpdater.RequiredVersionRequirement ?? "(unspecified)";
 				string mismatchMsg = $"Access denied: HackPDM {ClientUpdate.CurrentText} does not satisfy the server's required version '{required}'. Update HackPDM to continue.";
 				_session.VersionMismatchMessage = mismatchMsg;
@@ -392,9 +504,9 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 			else
 			{
 				LoginStatusText = "Checking server reachability…";
-				if( !await OdooConnection.CorrectOdooAddress() )
+				if( !await OdooConnection.CorrectOdooAddress().WaitAsync( token ) )
 					errors.Add( ( ProfileStatusCategory.Connection, "Invalid Odoo address or unreachable host." ) );
-				else if( !await OdooConnection.CorrectOdooPort() )
+				else if( !await OdooConnection.CorrectOdooPort().WaitAsync( token ) )
 					errors.Add( ( ProfileStatusCategory.Connection, "Invalid Odoo port or server is down." ) );
 				else if( OdooDefaults.Instance.LoginError is { Length: > 0 } loginErr )
 					errors.Add( ( ClassifyErrorCategory( loginErr ), loginErr ) );
@@ -406,6 +518,10 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 				LogSession( StatusMessage.ERROR, category, message, updateBanner: true );
 			return false;
 		}
+		catch( OperationCanceledException ) when( token.IsCancellationRequested )
+		{
+			throw;
+		}
 		catch( Exception ex )
 		{
 			HackLogger.Error( "Login", $"Unexpected login error: {ex.Message}", ex );
@@ -414,7 +530,94 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		}
 	}
 
-	private void InspectEnvironmentAndSettings( bool forceLog )
+	private Task StartInspectAsync( bool forceLog )
+	{
+		CancellationToken token = CtsHelper.Replace( ref _inspectCts ).Token;
+		Task task = RunInspectAsync( forceLog, token );
+		_inspectTask = task;
+		return task;
+	}
+
+	private async Task WaitPendingInspectAsync( CancellationToken token )
+	{
+		if( _inspectTask is { IsCompleted: false } pending )
+		{
+			try
+			{
+				await pending.WaitAsync( token );
+			}
+			catch( OperationCanceledException ) when( !token.IsCancellationRequested )
+			{
+			}
+		}
+	}
+
+	private async Task RunInspectAsync( bool forceLog, CancellationToken token )
+	{
+		try
+		{
+			EnvironmentSnapshot snapshot = await Task.Run( GatherEnvironmentSnapshot, token );
+			if( token.IsCancellationRequested )
+				return;
+
+			ConnectionTargetText = snapshot.ConnectionTarget;
+			List<(StatusMessage Status, string Category, string Message)> findings = snapshot.Findings;
+			StringBuilder fp = new( findings.Count * 48 );
+			(StatusMessage Status, string Category, string Message)? firstError = null;
+			(StatusMessage Status, string Category, string Message)? firstWarning = null;
+			for( int i = 0; i < findings.Count; i++ )
+			{
+				var f = findings[ i ];
+				if( i > 0 )
+					fp.Append( '|' );
+				fp.Append( (int)f.Status ).Append( ':' ).Append( f.Category ).Append( ':' ).Append( f.Message );
+				if( firstError is null && f.Status == StatusMessage.ERROR && f.Message.Length > 0 )
+					firstError = f;
+				else if( firstWarning is null && f.Status == StatusMessage.WARNING && f.Message.Length > 0 )
+					firstWarning = f;
+			}
+			string fingerprint = fp.ToString();
+			if( forceLog || !string.Equals( _session.LastReadinessFingerprint, fingerprint, StringComparison.Ordinal ) )
+			{
+				_session.LastReadinessFingerprint = fingerprint;
+				_batchingSessionLogs = true;
+				try
+				{
+					for( int i = 0; i < findings.Count; i++ )
+					{
+						var item = findings[ i ];
+						_session.AddStatus( item.Status, item.Category, item.Message );
+					}
+				}
+				finally
+				{
+					_batchingSessionLogs = false;
+				}
+				SyncFromSession();
+			}
+
+			if( firstError is { } err )
+				SetBanner( StatusMessage.ERROR, err.Category, err.Message );
+			else if( firstWarning is { } warn )
+				SetBanner( StatusMessage.WARNING, warn.Category, warn.Message );
+			else if( _session.LastErrors is { Count: > 0 } lastErrors )
+			{
+				BasicStatusMessage latest = lastErrors[ lastErrors.Count - 1 ];
+				SetBanner( latest.Status, latest.Category, latest.Message ?? string.Empty );
+			}
+			else if( IsLoggedIn )
+				SetBanner( StatusMessage.SUCCESS, ProfileStatusCategory.Login, $"Connected as {ConnectionTargetText}." );
+		}
+		catch( OperationCanceledException ) when( token.IsCancellationRequested )
+		{
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "ProfileManager", $"Environment inspection failed: {ex.Message}", ex );
+		}
+	}
+
+	private EnvironmentSnapshot GatherEnvironmentSnapshot()
 	{
 		List<(StatusMessage Status, string Category, string Message)> findings = [];
 		OdooDefaults odoo = OdooDefaults.Instance;
@@ -456,45 +659,13 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 				findings.Add( ( StatusMessage.INFO, ProfileStatusCategory.Connection, $"Connection endpoint ready: {url}." ) );
 		}
 
-		if( _inspectSettings?.Invoke() is { } settingsItems )
+		if( _inspectSettings() is { } settingsItems )
 			findings.AddRange( settingsItems );
 
-		StringBuilder fp = new( findings.Count * 48 );
-		(StatusMessage Status, string Category, string Message)? firstError = null;
-		(StatusMessage Status, string Category, string Message)? firstWarning = null;
-		for( int i = 0; i < findings.Count; i++ )
-		{
-			var f = findings[ i ];
-			if( i > 0 )
-				fp.Append( '|' );
-			fp.Append( (int)f.Status ).Append( ':' ).Append( f.Category ).Append( ':' ).Append( f.Message );
-			if( firstError is null && f.Status == StatusMessage.ERROR && f.Message.Length > 0 )
-				firstError = f;
-			else if( firstWarning is null && f.Status == StatusMessage.WARNING && f.Message.Length > 0 )
-				firstWarning = f;
-		}
-		string fingerprint = fp.ToString();
-		if( forceLog || !string.Equals( _session.LastReadinessFingerprint, fingerprint, StringComparison.Ordinal ) )
-		{
-			_session.LastReadinessFingerprint = fingerprint;
-			for( int i = 0; i < findings.Count; i++ )
-			{
-				var item = findings[ i ];
-				_session.AddStatus( item.Status, item.Category, item.Message );
-			}
-		}
-
-		if( firstError is { } err )
-			SetBanner( StatusMessage.ERROR, err.Category, err.Message );
-		else if( firstWarning is { } warn )
-			SetBanner( StatusMessage.WARNING, warn.Category, warn.Message );
-		else if( _session.LastErrors is { Count: > 0 } lastErrors )
-		{
-			BasicStatusMessage latest = lastErrors[ lastErrors.Count - 1 ];
-			SetBanner( latest.Status, latest.Category, latest.Message ?? string.Empty );
-		}
-		else if( IsLoggedIn )
-			SetBanner( StatusMessage.SUCCESS, ProfileStatusCategory.Login, $"Connected as {ConnectionTargetText}." );
+		string connectionTarget = host.Length == 0
+			? "No Odoo server configured yet"
+			: $"{(user.Length > 0 ? user : "(no user)")} @ {(db.Length > 0 ? db : "(no db)")} — {url}";
+		return new EnvironmentSnapshot( connectionTarget, findings );
 	}
 
 	private static string FormatConnectionTarget()
@@ -530,19 +701,11 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 		return ProfileStatusCategory.Login;
 	}
 
-	private static void Dispatch( Action action )
-	{
-		if( UiDispatcher.Current.HasThreadAccess )
-			action();
-		else
-			UiDispatcher.Post( action );
-	}
-
 	private void LogSession( StatusMessage status, string category, string message, bool updateBanner = false )
 	{
 		BasicStatusMessage entry = _session.AddStatus( status, category, message );
 		if( updateBanner )
-			Dispatch( () => SetBanner( entry.Status, entry.Category, entry.Message ?? string.Empty ) );
+			UiDispatcher.RunOrPost( () => SetBanner( entry.Status, entry.Category, entry.Message ?? string.Empty ) );
 	}
 
 	private void SetBanner( StatusMessage status, string category, string message )
@@ -579,7 +742,10 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 	}
 
 	private void OnSessionMessageLogged( BasicStatusMessage entry )
-		=> Dispatch( () =>
+	{
+		if( _batchingSessionLogs )
+			return;
+		UiDispatcher.RunOrPost( () =>
 		{
 			OStatus.Add( entry );
 			CountStatus( entry.Status );
@@ -589,12 +755,14 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 				SetBanner( entry.Status, entry.Category, entry.Message ?? string.Empty );
 			UpdateCountsAndHints();
 		} );
+	}
 
 	private void OnSessionMessagesCleared()
-		=> Dispatch( () =>
+		=> UiDispatcher.RunOrPost( () =>
 		{
 			OStatus.ClearIfNonEmpty();
 			FilteredStatus.ClearIfNonEmpty();
+			SelectedStatusMessage = null;
 			_errorCount = _warningCount = _infoCount = 0;
 			UpdateCountsAndHints();
 		} );
@@ -618,6 +786,8 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 				matching.Add( OStatus[ i ] );
 		}
 		FilteredStatus.ReplaceAll( matching );
+		if( SelectedStatusMessage is { } current && !matching.Contains( current ) )
+			SelectedStatusMessage = null;
 		UpdateCountsAndHints();
 	}
 
@@ -640,6 +810,7 @@ public sealed partial class ProfileManagerViewModel : ObservableObject, IDisposa
 
 	private void UpdateCountsAndHints()
 	{
+		OnPropertyChanged( nameof( IsFilteredStatusEmpty ) );
 		if( OStatus.Count == 0 )
 		{
 			StatusCountsText = "No status messages";

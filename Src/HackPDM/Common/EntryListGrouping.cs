@@ -1,8 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Globalization;
+
+using CommunityToolkit.Mvvm.ComponentModel;
 
 using HackPDM.Core.Services;
 
@@ -15,36 +16,29 @@ using WinUI.TableView;
 namespace HackPDM.Common;
 
 [Microsoft.UI.Xaml.Data.Bindable]
-public sealed class EntryGroupHeader( object? key, string displayKey, IReadOnlyList<EntryRow> items, bool isExpanded ) : INotifyPropertyChanged
+public sealed partial class EntryGroupHeader : ObservableObject
 {
-	private static readonly PropertyChangedEventArgs IsExpandedChangedArgs = new( nameof( IsExpanded ) );
-	private static readonly PropertyChangedEventArgs ChevronGlyphChangedArgs = new( nameof( ChevronGlyph ) );
+	[ObservableProperty]
+	[NotifyPropertyChangedFor( nameof( ChevronGlyph ) )]
+	public partial bool IsExpanded { get; set; }
 
-	private bool _isExpanded = isExpanded;
+	public EntryGroupHeader( object? key, string displayKey, IReadOnlyList<EntryRow> items, bool isExpanded )
+	{
+		Key = key;
+		DisplayKey = displayKey;
+		Items = items;
+		IsExpanded = isExpanded;
+	}
 
-	public object? Key { get; } = key;
-	public string DisplayKey { get; } = displayKey;
-	public IReadOnlyList<EntryRow> Items { get; } = items;
+	public object? Key { get; }
+	public string DisplayKey { get; }
+	public IReadOnlyList<EntryRow> Items { get; }
 	public int Count => Items.Count;
 	public string CountText => Count == 1 ? "1 item" : $"{Count} items";
 	public string ChevronGlyph => IsExpanded ? "\uE70D" : "\uE76C";
-
-	public bool IsExpanded
-	{
-		get => _isExpanded;
-		set
-		{
-			if( _isExpanded == value )
-				return;
-			_isExpanded = value;
-			PropertyChanged?.Invoke( this, IsExpandedChangedArgs );
-			PropertyChanged?.Invoke( this, ChevronGlyphChangedArgs );
-		}
-	}
-
-	public event PropertyChangedEventHandler? PropertyChanged;
 }
 
+[Microsoft.UI.Xaml.Data.Bindable]
 public sealed partial class EntryGroupTemplateSelector : DataTemplateSelector
 {
 	public DataTemplate? GroupHeaderTemplate { get; set; }
@@ -89,7 +83,8 @@ internal static class EntryListGrouping
 		IEnumerable<EntryRow> rows,
 		Func<EntryRow, IComparable?> groupKey,
 		IReadOnlySet<string>? collapsedKeys = null,
-		bool defaultCollapsed = false )
+		bool defaultCollapsed = false,
+		IReadOnlySet<string>? expandedKeys = null )
 	{
 		List<(object? Key, string DisplayKey, List<EntryRow> Items)> buckets = [];
 		Dictionary<string, int> byDisplay = new( StringComparer.Ordinal );
@@ -107,13 +102,17 @@ internal static class EntryListGrouping
 			buckets[ index ].Items.Add( row );
 		}
 
-		buckets.Sort( static ( a, b ) => GroupKeyComparer.Instance.Compare( a.Key, b.Key ) );
+		buckets.Sort( static ( a, b ) => SafeComparableComparer.Instance.Compare( a.Key, b.Key ) );
 
 		List<EntryGroupHeader> result = new( buckets.Count );
 		for( int i = 0; i < buckets.Count; i++ )
 		{
 			var (key, display, items) = buckets[ i ];
-			bool collapsed = collapsedKeys is not null ? collapsedKeys.Contains( display ) : defaultCollapsed;
+			bool collapsed = collapsedKeys is not null && collapsedKeys.Contains( display )
+				? true
+				: expandedKeys is not null && expandedKeys.Contains( display )
+					? false
+					: defaultCollapsed;
 			result.Add( new EntryGroupHeader( key, display, items, isExpanded: !collapsed ) );
 		}
 		return result;
@@ -142,33 +141,17 @@ internal static class EntryListGrouping
 	{
 		null => "(None)",
 		string s when string.IsNullOrWhiteSpace( s ) => "(None)",
-		DateTime dt => dt.ToLocalTime().ToString( "yyyy-MM-dd", CultureInfo.InvariantCulture ),
+		DateTime dt when dt.Year <= 1 => "(None)",
+		DateTime dt => ( dt.Kind == DateTimeKind.Local ? dt : DateTime.SpecifyKind( dt, DateTimeKind.Utc ).ToLocalTime() )
+			.ToString( "yyyy-MM-dd", CultureInfo.InvariantCulture ),
 		_ => value.ToString() is { Length: > 0 } text ? text : "(None)",
 	};
 
 #if WINDOWS
 	private sealed class SelectorGroupDescription( object selector, Func<object?, object?> valueDelegate )
-		: GroupDescription( null, SortDirection.Ascending, GroupKeyComparer.Instance, valueDelegate )
+		: GroupDescription( null, SortDirection.Ascending, SafeComparableComparer.Instance, valueDelegate )
 	{
 		public object Selector { get; } = selector;
 	}
 #endif
-
-	internal sealed class GroupKeyComparer : IComparer
-	{
-		public static readonly GroupKeyComparer Instance = new();
-
-		public int Compare( object? x, object? y )
-		{
-			if( ReferenceEquals( x, y ) )
-				return 0;
-			if( x is null )
-				return -1;
-			if( y is null )
-				return 1;
-			if( x.GetType() == y.GetType() && x is IComparable cx )
-				return cx.CompareTo( y );
-			return string.CompareOrdinal( x.ToString(), y.ToString() );
-		}
-	}
 }

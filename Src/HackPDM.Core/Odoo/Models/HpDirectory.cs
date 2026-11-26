@@ -5,7 +5,7 @@ namespace HackPDM.Core.Odoo.Models;
 public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 {
 	public static string ModelName => "hp.directory";
-	public static string[] AllFields { get; } = [ "name", "parent_path", "parent_id", "default_cat", "deleted", "sandboxed" ];
+	public static string[] AllFields { get; } = [ nameof( name ), nameof( parent_path ), nameof( parent_id ), nameof( default_cat ), nameof( deleted ), nameof( sandboxed ) ];
 
 	public string? name { get; set; }
 	public string? parent_path { get; set; }
@@ -18,39 +18,39 @@ public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 	{
 		switch( field )
 		{
-			case "name": name = OdooValues.ReadString( value ); return true;
-			case "parent_path": parent_path = OdooValues.ReadString( value ); return true;
-			case "parent_id": parent_id = OdooValues.ReadMany2One( value ); return true;
-			case "default_cat": default_cat = OdooValues.ReadMany2One( value ); return true;
-			case "deleted": deleted = OdooValues.ReadBool( value ); return true;
-			case "sandboxed": sandboxed = OdooValues.ReadBool( value ); return true;
+			case nameof( name ): name = OdooValues.ReadString( value ); return true;
+			case nameof( parent_path ): parent_path = OdooValues.ReadString( value ); return true;
+			case nameof( parent_id ): parent_id = OdooValues.ReadMany2One( value ); return true;
+			case nameof( default_cat ): default_cat = OdooValues.ReadMany2One( value ); return true;
+			case nameof( deleted ): deleted = OdooValues.ReadBool( value ); return true;
+			case nameof( sandboxed ): sandboxed = OdooValues.ReadBool( value ); return true;
 			default: return false;
 		}
 	}
 
 	public override Dictionary<string, object?> ToOdoo() => new()
 	{
-		[ "name" ] = name,
-		[ "parent_path" ] = parent_path,
-		[ "parent_id" ] = parent_id?.id,
-		[ "default_cat" ] = default_cat?.id,
-		[ "deleted" ] = OdooValues.OutBool( deleted ),
-		[ "sandboxed" ] = OdooValues.OutBool( sandboxed ),
+		[ nameof( name ) ] = name,
+		[ nameof( parent_path ) ] = parent_path,
+		[ nameof( parent_id ) ] = parent_id?.id,
+		[ nameof( default_cat ) ] = default_cat?.id,
+		[ nameof( deleted ) ] = OdooValues.OutBool( deleted ),
+		[ nameof( sandboxed ) ] = OdooValues.OutBool( sandboxed ),
 	};
 
-	public static async Task<Result<LastAvailableDirectory>> LastAvailableDirectory( IReadOnlyList<string> paths )
+	public static async Task<Result<LastAvailableDirectory>> LastAvailableDirectory( IReadOnlyList<string> paths, CancellationToken token = default )
 	{
-		Result<OdooRow> last = await OdooRpc.ExecuteAsync<OdooRow>( ModelName, "last_available_directory", [ paths ] );
+		Result<OdooRow> last = await OdooRpc.ExecuteAsync<OdooRow>( ModelName, "last_available_directory", [ paths ], token: token ).ConfigureAwait( false );
 		return last.Map( row => new LastAvailableDirectory( row?.Int( "index" ) ?? 0, row?.Int( "dir_id" ) ?? 1 ) );
 	}
 
-	public static async Task<HpDirectory[]?> CreateNew( IEnumerable<string> paths )
+	public static async Task<HpDirectory[]?> CreateNew( IEnumerable<string> paths, CancellationToken token = default )
 	{
 		List<string> path = [ PwaPaths.Root, .. paths ];
-		LastAvailableDirectory last = ( await LastAvailableDirectory( path ) ).Unwrap();
+		LastAvailableDirectory last = ( await LastAvailableDirectory( path, token ).ConfigureAwait( false ) ).Unwrap();
 		int nextIndex = last.Index + 1;
 		if( nextIndex >= path.Count )
-			return await GetRecordByIdAsync( last.DirectoryId ) is { } existing ? [ existing ] : null;
+			return await GetRecordByIdAsync( last.DirectoryId, token: token ).ConfigureAwait( false ) is { } existing ? [ existing ] : null;
 
 		Many2One? defaultCategory = OdooDefaults.Instance.HpCategories?.Any( c => c.id == 1 ) is true ? 1 : null;
 		HpDirectory[] directories = new HpDirectory[ path.Count - nextIndex ];
@@ -58,6 +58,7 @@ public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 
 		for( int i = nextIndex; i < path.Count; i++ )
 		{
+			token.ThrowIfCancellationRequested();
 			HpDirectory newDirectory = new()
 			{
 				name = path[ i ],
@@ -66,7 +67,7 @@ public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 				deleted = false,
 				default_cat = defaultCategory,
 			};
-			if( await newDirectory.CreateAsync( false ) == 0 )
+			if( await newDirectory.CreateAsync( false, token: token ).ConfigureAwait( false ) == 0 )
 				throw new InvalidOperationException( $"directory '{path[ i ]}' not created: {newDirectory.LastError}" );
 
 			directories[ i - nextIndex ] = newDirectory;
@@ -75,7 +76,7 @@ public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 		return directories;
 	}
 
-	public async Task<Result<SubdirectoryDto>> GetSubdirectoriesAsync( bool withEntries = true )
+	public async Task<Result<SubdirectoryDto>> GetSubdirectoriesAsync( bool withEntries = true, CancellationToken token = default )
 	{
 		if( !IsRecord || id is not int directoryId )
 			return Result<SubdirectoryDto>.Fail( "not a directory read from the server" );
@@ -83,28 +84,28 @@ public sealed class HpDirectory : HpRecord<HpDirectory>, IOdooModel<HpDirectory>
 			ModelName,
 			"get_children_directories_by_id",
 			[ directoryId, withEntries ],
-			OdooRpc.LongTimeout );
+			OdooRpc.LongTimeout,
+			token ).ConfigureAwait( false );
 		return tree.Map( row => SubdirectoryDto.FromRow( row ?? [] ) );
 	}
 
-	public static async Task<Result<IReadOnlyList<RemoteEntryDto>>> GetEntriesAsync( int directoryId, bool showInActive = false )
+	public static async Task<Result<IReadOnlyList<RemoteEntryDto>>> GetEntriesAsync( int directoryId, bool showInActive = false, CancellationToken token = default )
 	{
 		Result<OdooRow> entries = await OdooRpc.ExecuteAsync<OdooRow>(
 			ModelName,
 			"get_entries",
 			[ new object?[] { directoryId, showInActive } ],
-			OdooRpc.LongTimeout );
+			OdooRpc.LongTimeout,
+			token ).ConfigureAwait( false );
 		return entries.Map( RemoteEntryDto.ListFrom );
 	}
-
-	public Task<Result<IReadOnlyList<int>>> GetDirectoryEntryIDsAsync( bool withSubEntries = false, bool withDeleted = true )
-		=> GetDirectoryEntryIDsAsync( id ?? 0, withSubEntries, withDeleted );
 
 	public static Task<Result<IReadOnlyList<int>>> GetDirectoryEntryIDsAsync(
 		int directoryId,
 		bool withSubEntries = false,
-		bool withDeleted = false )
+		bool withDeleted = false,
+		CancellationToken token = default )
 		=> directoryId != 0
-			? OdooRpc.ExecuteAsync<IReadOnlyList<int>>( ModelName, "get_all_entry_ids", [ directoryId, withDeleted, withSubEntries ], 60_000 )
+			? OdooRpc.ExecuteAsync<IReadOnlyList<int>>( ModelName, "get_all_entry_ids", [ directoryId, withDeleted, withSubEntries ], 60_000, token )
 			: Task.FromResult( Result<IReadOnlyList<int>>.Fail( "no directory" ) );
 }

@@ -11,47 +11,7 @@ namespace HackPDM.Tests.Integration;
 /// </summary>
 public class DownloadBatchingTests
 {
-	private static HpVersion V( int id, int size ) => new() { id = id, name = $"f{id}", file_size = size };
 	private const int MB = 1024 * 1024;
-
-	[Fact]
-	public void BatchBySize_RespectsFileCount()
-	{
-		var batches = DownloadOperations.BatchBySize( Enumerable.Range( 1, 12 ).Select( i => V( i, 10 ) ), maxCount: 5, maxBytes: long.MaxValue );
-		Assert.Equal( [ 5, 5, 2 ], batches.Select( b => b.Count ) );
-	}
-
-	[Fact]
-	public void BatchBySize_RespectsByteBudget_AndLargeFilesGoAlone()
-	{
-		int[] sizesMb = [ 40, 30, 25, 20, 15, 10, 5, 3, 2, 1, 1, 2 ];
-		var versions = sizesMb.Select( ( mb, i ) => V( i + 1, mb * MB ) ).ToList();
-
-		var batches = DownloadOperations.BatchBySize( versions, maxCount: 5, maxBytes: 16L * MB );
-
-		Assert.Equal( versions.Count, batches.Sum( b => b.Count ) );
-		Assert.All( batches, b => Assert.InRange( b.Count, 1, 5 ) );
-		// a batch only exceeds the budget when it is a single file larger than the budget
-		Assert.All( batches.Where( b => b.Count > 1 ), b => Assert.True( b.Sum( v => (long)v.file_size! ) <= 16L * MB ) );
-		Assert.All( versions.Where( v => v.file_size > 16 * MB ), big => Assert.Contains( batches, b => b.Count == 1 && b[ 0 ] == big ) );
-	}
-
-	[Theory]
-	[InlineData( 0 )]
-	[InlineData( -1 )]
-	public void BatchBySize_NonPositiveCount_FallsBackToDefault( int maxCount )
-	{
-		// a max_batch_size setting of 0 used to reach Help.BatchArray and divide by zero
-		var batches = DownloadOperations.BatchBySize( Enumerable.Range( 1, 7 ).Select( i => V( i, 1 ) ), maxCount, long.MaxValue );
-		Assert.Equal( [ 5, 2 ], batches.Select( b => b.Count ) );
-	}
-
-	[Fact]
-	public void BatchBySize_Empty()
-	{
-		Assert.Empty( DownloadOperations.BatchBySize( [], 5 ) );
-		Assert.Empty( DownloadOperations.BatchBySize( null, 5 ) );
-	}
 
 	[Fact]
 	public void ContentsTimeout_ScalesWithPayloadAndAttempt()
@@ -106,12 +66,15 @@ public class GetLatestDownloadTests : IDisposable
 	public async Task GetLatest_DownloadsEveryFile()
 	{
 		var versions = await SeededLatestVersionsAsync();
-		// a tiny byte budget forces one file per batch, exercising batching end to end
-		var batches = DownloadOperations.BatchBySize( versions, maxCount: 5, maxBytes: 1 );
-		Assert.Equal( Seeded.Length, batches.Count );
 
 		var log = new List<string>();
-		var summary = await DownloadOperations.ProcessDownloadsAsync( batches, CancellationToken.None, 2,
+		DownloadOperations.DownloadSummary summary = new();
+		await DownloadOperations.DownloadAdaptiveAsync(
+			versions,
+			CancellationToken.None,
+			summary,
+			maxBatchCount: 1,
+			maxConcurrency: 2,
 			log: ( s, m ) => { lock( log ) log.Add( $"{s}: {m}" ); } );
 
 		Assert.True( summary.Failed.IsEmpty, string.Join( "; ", summary.Failed ) );
@@ -140,12 +103,14 @@ public class GetLatestDownloadTests : IDisposable
 			file_size = 10,
 			windows_complete_name = @"root\Projects\Parts\ghost.txt",
 		};
-		// one batch with real files and one that does not exist: the batch read fails as a whole,
-		// the real files must still arrive via the per-file retry, the ghost must be reported
-		List<List<HpVersion>> batches = [ [ .. versions, ghost ] ];
 
 		var log = new List<string>();
-		var summary = await DownloadOperations.ProcessDownloadsAsync( batches, CancellationToken.None, 1,
+		DownloadOperations.DownloadSummary summary = new();
+		await DownloadOperations.DownloadAdaptiveAsync(
+			[ .. versions, ghost ],
+			CancellationToken.None,
+			summary,
+			maxConcurrency: 1,
 			log: ( s, m ) => { lock( log ) log.Add( $"{s}: {m}" ); } );
 
 		Assert.Equal( Seeded.Length, summary.Downloaded );

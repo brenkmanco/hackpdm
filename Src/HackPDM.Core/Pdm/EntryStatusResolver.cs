@@ -21,8 +21,8 @@ public static class EntryStatusResolver
 		return latestChecksum switch
 		{
 			bool => FileStatus.NoVersions,
-			string when localChecksum is null => FileStatus.Ro,
-			string latest when localChecksum == latest => FileStatus.Ok,
+			string when localChecksum is null => localModified is null ? FileStatus.Ro : FileStatus.Unknown,
+			string latest when string.Equals( localChecksum, latest, StringComparison.OrdinalIgnoreCase ) => FileStatus.Ok,
 			string => remoteDate > localModified ? FileStatus.Nv : FileStatus.Lm,
 			_ => FileStatus.Unknown,
 		};
@@ -83,9 +83,6 @@ public static class FileStatusPolicy
 			_ => EntryOpenTarget.None,
 		};
 	}
-
-	public static bool CanUploadIcon( FileStatus status )
-		=> status is FileStatus.Lo or FileStatus.Ft or FileStatus.If;
 }
 
 /// <summary>Validates preview image bytes before upload to hp.version.preview_image.</summary>

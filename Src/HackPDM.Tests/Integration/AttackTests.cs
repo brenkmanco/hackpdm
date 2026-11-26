@@ -41,7 +41,6 @@ public sealed class AttackTests : IAsyncLifetime
 		HackDefaults.Instance.SettingsProvider = new InMemorySettingsProvider();
 		OdooDefaults.Instance.OdooId = await OdooTestServer.LoginAsync();
 		await OdooDefaults.Instance.InitializeAsync();
-		_service.PreloadMetadata();
 
 		string tag = Guid.NewGuid().ToString( "N" )[ ..8 ];
 		(_alice, _aliceId) = await CreateUserAsync( $"atk-alice-{tag}" );

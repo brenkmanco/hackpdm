@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
+using HackPDM.Core.Services;
 
 namespace HackPDM.Core.Pdm;
 
@@ -9,12 +11,61 @@ namespace HackPDM.Core.Pdm;
 public static class DownloadOperations
 {
 	private const int DependencyTimeoutMs = 1_000_000;
-	private const int MetadataChunkSize = 500;
-	private const int DefaultBatchCount = 5;
+	private const int MetadataChunkSize = 2000;
 	private const int MinTimeoutMs = 90_000;
 	private const int MaxTimeoutMs = 30 * 60_000;
 	private const long OneGiB = 1024L * 1024 * 1024;
 	private const long HalfGiB = 512L * 1024 * 1024;
+
+	internal sealed class DeltaProgressCoalescer( Action<int, int>? target, int itemThreshold = 16, long intervalMs = 80 )
+	{
+		private readonly Lock _gate = new();
+		private int _processed;
+		private int _skipped;
+		private long _lastFlushTick = Environment.TickCount64;
+
+		public void Report( int processed, int skipped = 0 )
+		{
+			if( target is null || ( processed == 0 && skipped == 0 ) )
+				return;
+			int flushProcessed = 0;
+			int flushSkipped = 0;
+			lock( _gate )
+			{
+				_processed += processed;
+				_skipped += skipped;
+				long now = Environment.TickCount64;
+				if( _processed + _skipped >= itemThreshold || now - _lastFlushTick >= intervalMs )
+				{
+					flushProcessed = _processed;
+					flushSkipped = _skipped;
+					_processed = 0;
+					_skipped = 0;
+					_lastFlushTick = now;
+				}
+			}
+			if( flushProcessed != 0 || flushSkipped != 0 )
+				target( flushProcessed, flushSkipped );
+		}
+
+		public void Flush()
+		{
+			if( target is null )
+				return;
+			int flushProcessed;
+			int flushSkipped;
+			lock( _gate )
+			{
+				flushProcessed = _processed;
+				flushSkipped = _skipped;
+				_processed = 0;
+				_skipped = 0;
+				_lastFlushTick = Environment.TickCount64;
+			}
+			if( flushProcessed != 0 || flushSkipped != 0 )
+				target( flushProcessed, flushSkipped );
+		}
+	}
 
 	private static readonly string[] ContentFields =
 	[
@@ -37,59 +88,84 @@ public static class DownloadOperations
 	public static long MinThroughputBytesPerSecond { get; set; } = 256 * 1024;
 	public static int MaxAttempts { get; set; } = 3;
 
-	public static Task<Result<IReadOnlyList<int>>> GetAllEntriesAndDependenciesListAsync( IReadOnlyList<int> versionIds )
-		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_entries", [ versionIds ], DependencyTimeoutMs );
+	public static Task<Result<IReadOnlyList<int>>> GetAllEntriesAndDependenciesListAsync( IReadOnlyList<int> versionIds, CancellationToken token = default )
+		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_entries", [ versionIds ], DependencyTimeoutMs, token );
 
-	public static Task<Result<IReadOnlyList<int>>> GetAllEntriesAndDependenciesByEntriesAsync( IReadOnlyList<int> entryIds )
-		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_entries_by_entries", [ entryIds ], DependencyTimeoutMs );
+	public static Task<Result<IReadOnlyList<int>>> GetAllEntriesAndDependenciesByEntriesAsync( IReadOnlyList<int> entryIds, CancellationToken token = default )
+		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_entries_by_entries", [ entryIds ], DependencyTimeoutMs, token );
 
 	public static Task<Result<IReadOnlyList<int>>> GetVersionListAsync( params int[] versionIds )
-		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_versions", [ versionIds ], DependencyTimeoutMs );
+		=> GetVersionListAsync( versionIds, CancellationToken.None );
+
+	public static Task<Result<IReadOnlyList<int>>> GetVersionListAsync( IReadOnlyList<int> versionIds, CancellationToken token = default )
+		=> OdooRpc.ExecuteAsync<IReadOnlyList<int>>( HpVersion.ModelName, "get_recursive_dependency_versions", [ versionIds ], DependencyTimeoutMs, token );
 
 	public static async Task<HpVersion[]?> GetLatestVersionsAsync(
 		IReadOnlyList<int> entryIDs,
 		string[]? excludedFields = null,
 		CancellationToken token = default,
-		string[]? includedFields = null )
+		string[]? includedFields = null,
+		Action<StatusMessage, string>? log = null,
+		OperationPauseController? pause = null )
 	{
-		excludedFields ??= [ "preview_image", "file_contents" ];
+		excludedFields ??= HpVersion.UsualExcludedFields;
 		if( entryIDs.Count <= MetadataChunkSize )
 		{
+			if( pause is not null )
+				await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
+			token.ThrowIfCancellationRequested();
+			using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 			return await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
 				entryIDs,
 				nameof( HpEntry.latest_version_id ),
 				includedFields is null ? excludedFields : null,
-				includedFields: includedFields );
+				includedFields: includedFields,
+				token: token ).ConfigureAwait( false );
 		}
 
-		List<HpVersion> all = new( entryIDs.Count );
-		for( int offset = 0; offset < entryIDs.Count; offset += MetadataChunkSize )
-		{
-			token.ThrowIfCancellationRequested();
-			int[] chunk = SliceChunk( entryIDs, offset, MetadataChunkSize );
-			HpVersion[]? page = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
-				chunk,
-				nameof( HpEntry.latest_version_id ),
-				includedFields is null ? excludedFields : null,
-				includedFields: includedFields );
-			if( page is { Length: > 0 } )
-				all.AddRange( page );
-		}
-		return all.Count > 0 ? [ .. all ] : null;
-	}
+		int chunkCount = ( entryIDs.Count + MetadataChunkSize - 1 ) / MetadataChunkSize;
+		HpVersion[]?[] pages = new HpVersion[]?[ chunkCount ];
+		int fetchedEntries = 0;
+		int parallelism = Math.Clamp( OdooDefaults.Instance?.ConcurrencySize ?? OdooLookupCache.DefaultConcurrency, 2, 4 );
 
-	internal static T[] SliceChunk<T>( IReadOnlyList<T> source, int offset, int maxCount )
-	{
-		int count = Math.Min( maxCount, source.Count - offset );
-		T[] chunk = new T[ count ];
-		if( source is T[] arr )
+		await Parallel.ForEachAsync(
+			Enumerable.Range( 0, chunkCount ),
+			new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = token },
+			async ( chunkIndex, ct ) =>
+			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( ct ).ConfigureAwait( false );
+				using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
+				int offset = chunkIndex * MetadataChunkSize;
+				int[] chunk = OdooRpc.SliceChunk( entryIDs, offset, MetadataChunkSize );
+				HpVersion[]? page = await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
+					chunk,
+					nameof( HpEntry.latest_version_id ),
+					includedFields is null ? excludedFields : null,
+					includedFields: includedFields,
+					token: ct ).ConfigureAwait( false );
+				pages[ chunkIndex ] = page;
+				int done = Interlocked.Add( ref fetchedEntries, chunk.Length );
+				log?.Invoke( StatusMessage.PROCESSING, $"Retrieved version metadata for {done}/{entryIDs.Count} entries..." );
+			} ).ConfigureAwait( false );
+
+		int total = 0;
+		for( int i = 0; i < pages.Length; i++ )
+			total += pages[ i ]?.Length ?? 0;
+		if( total == 0 )
+			return null;
+
+		HpVersion[] all = new HpVersion[ total ];
+		int pos = 0;
+		for( int i = 0; i < pages.Length; i++ )
 		{
-			Array.Copy( arr, offset, chunk, 0, count );
-			return chunk;
+			if( pages[ i ] is { Length: > 0 } page )
+			{
+				Array.Copy( page, 0, all, pos, page.Length );
+				pos += page.Length;
+			}
 		}
-		for( int i = 0; i < count; i++ )
-			chunk[ i ] = source[ offset + i ];
-		return chunk;
+		return all;
 	}
 
 	private static bool TryReadMemoryPressure( out double loadRatio, out long freeBytes )
@@ -115,9 +191,9 @@ public static class DownloadOperations
 
 		long ramCap = ( loadRatio, free ) switch
 		{
-			( >= 0.88, _ ) or ( _, < HalfGiB ) => 2L * 1024 * 1024,
-			( >= 0.80, _ ) or ( _, < OneGiB ) => 4L * 1024 * 1024,
-			( >= 0.70, _ ) or ( _, < 2 * OneGiB ) => 8L * 1024 * 1024,
+			( _, < HalfGiB ) or ( >= 0.92, < 2 * OneGiB ) => 2L * 1024 * 1024,
+			( _, < OneGiB ) or ( >= 0.88, < 3 * OneGiB ) => 4L * 1024 * 1024,
+			( _, < 2 * OneGiB ) => 8L * 1024 * 1024,
 			_ => cap,
 		};
 		return Math.Min( cap, ramCap );
@@ -128,42 +204,16 @@ public static class DownloadOperations
 		int capped = Math.Max( 1, requestedConcurrency );
 		if( !TryReadMemoryPressure( out double loadRatio, out long free ) )
 			return capped;
-		if( loadRatio >= 0.85 || free < HalfGiB )
+		if( free < HalfGiB || ( loadRatio >= 0.92 && free < 2 * OneGiB ) )
 			return 1;
-		if( loadRatio >= 0.75 || free < OneGiB )
+		if( free < OneGiB || ( loadRatio >= 0.88 && free < 3 * OneGiB ) )
 			return Math.Min( capped, 2 );
 		return capped;
 	}
 
 	private static bool IsMemoryPressureHigh()
-		=> TryReadMemoryPressure( out double loadRatio, out long free ) && ( loadRatio >= 0.86 || free < HalfGiB );
-
-	public static List<List<HpVersion>> BatchBySize( IEnumerable<HpVersion>? versions, int maxCount, long? maxBytes = null )
-	{
-		long byteBudget = maxBytes ?? MaxBatchBytes;
-		if( maxCount <= 0 )
-			maxCount = DefaultBatchCount;
-
-		List<List<HpVersion>> batches = [];
-		List<HpVersion> current = [];
-		long currentBytes = 0;
-
-		foreach( HpVersion version in ( versions ?? [] ).OrderBy( v => v.file_size ?? 0 ) )
-		{
-			long size = Math.Max( 0, (long)( version.file_size ?? 0 ) );
-			if( current.Count > 0 && ( current.Count >= maxCount || currentBytes + size > byteBudget ) )
-			{
-				batches.Add( current );
-				current = [];
-				currentBytes = 0;
-			}
-			current.Add( version );
-			currentBytes += size;
-		}
-		if( current.Count > 0 )
-			batches.Add( current );
-		return batches;
-	}
+		=> TryReadMemoryPressure( out double loadRatio, out long free )
+			&& ( free < HalfGiB || ( loadRatio >= 0.92 && free < 2 * OneGiB ) );
 
 	public static int ContentsTimeoutMs( long fileBytes, int attempt = 1 )
 	{
@@ -181,123 +231,213 @@ public static class DownloadOperations
 		public int Skipped => _skipped;
 		public ConcurrentQueue<string> Failed { get; } = new();
 		public ConcurrentQueue<string> KeptLocalChanges { get; } = new();
+		internal ConcurrentBag<int> FailedIds { get; } = [];
 
 		internal void AddDownloaded() => Interlocked.Increment( ref _downloaded );
 		internal void AddSkipped() => Interlocked.Increment( ref _skipped );
 	}
 
-	public static async Task<DownloadSummary> ProcessDownloadsAsync(
-		IEnumerable<IEnumerable<HpVersion>> versionBatches,
+	/// <summary>
+	/// Downloads pre-filtered versions using interleaved dispatch (large files interleaved with medium
+	/// and small inline batches) and an adaptive controller targeting ~2s per RPC for both batches and chunks.
+	/// </summary>
+	public static async Task DownloadAdaptiveAsync(
+		IReadOnlyList<HpVersion> versions,
 		CancellationToken cToken,
+		DownloadSummary summary,
+		int maxBatchCount = AdaptiveTransferController.MaxAdaptiveBatchCount,
 		int maxConcurrency = 2,
 		Action<StatusMessage, string>? log = null,
 		Action<int, int>? onProgress = null,
-		Action<long>? onBytesDownloaded = null )
+		Action<long>? onBytesDownloaded = null,
+		AdaptiveTransferController? controller = null,
+		OperationPauseController? pause = null,
+		Action<int, long>? onVersionCompleted = null )
 	{
-		DownloadSummary summary = new();
+		if( versions.Count == 0 )
+			return;
+
+		controller ??= new AdaptiveTransferController( maxBatchCount );
+		InterleavedDownloadQueue queue = new( versions );
+		DeltaProgressCoalescer progress = new( onProgress );
+
 		int effectiveConcurrency = EffectiveConcurrency( maxConcurrency );
 		if( effectiveConcurrency < Math.Max( 1, maxConcurrency ) )
-			log?.Invoke( StatusMessage.INFO, $"Memory pressure detected; throttling concurrent download batches from {maxConcurrency} to {effectiveConcurrency}." );
+			log?.Invoke( StatusMessage.INFO, $"Memory pressure detected; throttling concurrent downloads from {maxConcurrency} to {effectiveConcurrency}." );
 
+		long lastLogTick = 0;
 		using SemaphoreSlim highMemoryGate = new( 1, 1 );
-		await Parallel.ForEachAsync(
-			versionBatches ?? [],
-			new ParallelOptions { MaxDegreeOfParallelism = effectiveConcurrency, CancellationToken = cToken },
-			async ( batch, ct ) =>
+		int workerCount = Math.Min( effectiveConcurrency, versions.Count );
+		Task[] workers = new Task[ workerCount ];
+		for( int i = 0; i < workerCount; i++ )
+		{
+			workers[ i ] = Task.Run( async () =>
 			{
-				ct.ThrowIfCancellationRequested();
-				bool serialized = false;
-				if( IsMemoryPressureHigh() )
+				while( true )
 				{
-					await highMemoryGate.WaitAsync( ct );
-					serialized = true;
-				}
-				try
-				{
-					await ProcessVersionBatchAsync( batch, ct, log, onProgress, summary, onBytesDownloaded );
-				}
-				finally
-				{
-					if( serialized )
-						highMemoryGate.Release();
-				}
-			} );
+					if( pause is not null )
+						await pause.WaitIfPausedAsync( cToken ).ConfigureAwait( false );
+					if( !queue.TryDequeue( controller, out List<HpVersion> batch, out _ ) )
+						break;
 
-		return summary;
+					cToken.ThrowIfCancellationRequested();
+					bool serialized = false;
+					if( IsMemoryPressureHigh() )
+					{
+						await highMemoryGate.WaitAsync( cToken ).ConfigureAwait( false );
+						serialized = true;
+					}
+					try
+					{
+						if( log is not null )
+						{
+							long now = Environment.TickCount64;
+							if( versions.Count <= 20 || now - Volatile.Read( ref lastLogTick ) >= 100 )
+							{
+								Volatile.Write( ref lastLogTick, now );
+								string msg = batch.Count == 1
+									? $"Downloading {DisplayPath( batch[ 0 ] )}"
+									: $"Downloading batch of {batch.Count} file(s)...";
+								log( StatusMessage.PROCESSING, msg );
+							}
+						}
+						await DownloadAndWriteAsync( batch, cToken, log, summary, progress, onBytesDownloaded, controller, pause, onVersionCompleted ).ConfigureAwait( false );
+					}
+					finally
+					{
+						if( serialized )
+							highMemoryGate.Release();
+					}
+				}
+			}, cToken );
+		}
+
+		try
+		{
+			await Task.WhenAll( workers ).ConfigureAwait( false );
+		}
+		finally
+		{
+			progress.Flush();
+		}
 	}
 
-	public static async Task ProcessVersionBatchAsync(
-		IEnumerable<HpVersion> batchVersions,
-		CancellationToken cToken,
-		Action<StatusMessage, string>? log = null,
-		Action<int, int>? onProgress = null,
-		DownloadSummary? summary = null,
-		Action<long>? onBytesDownloaded = null )
-	{
-		summary ??= new();
-		List<HpVersion> toDownload = [];
-		List<(HpVersion Version, string LocalChecksum)> changedLocalCandidates = [];
+	internal static bool IsEmptyInlineVersion( HpVersion version )
+		=> version.file_size == 0 && ( string.IsNullOrEmpty( version.checksum ) || version.checksum == "False" );
 
-		foreach( HpVersion version in batchVersions )
+	internal static string? ExpectedChecksum( HpVersion version )
+		=> IsEmptyInlineVersion( version )
+			? Checksums.EmptySha1
+			: ( !string.IsNullOrEmpty( version.checksum ) && version.checksum != "False" ? version.checksum : null );
+
+	private static bool TryClassifyVersion(
+		HpVersion version,
+		DownloadSummary summary,
+		Action<StatusMessage, string>? log,
+		DeltaProgressCoalescer progress,
+		out (HpVersion Version, string LocalChecksum)? changedCandidate )
+	{
+		changedCandidate = null;
+		if( ExpectedChecksum( version ) is not { } expectedChecksum )
+		{
+			log?.Invoke( StatusMessage.ERROR, $"Checksum not found for version: {version.name}" );
+			summary.AddSkipped();
+			progress.Report( 0, 1 );
+			return false;
+		}
+
+		string? localPath = ResolveLocalPath( version );
+		string? localChecksum = localPath is not null ? Checksums.OfFile( localPath ) : null;
+
+		if( localChecksum is { Length: > 0 } && string.Equals( localChecksum, expectedChecksum, StringComparison.OrdinalIgnoreCase ) )
+		{
+			summary.AddSkipped();
+			progress.Report( 0, 1 );
+			return false;
+		}
+
+		if( localChecksum is not null )
+		{
+			changedCandidate = ( version, localChecksum );
+			return false;
+		}
+
+		return true;
+	}
+
+	private static async Task<List<HpVersion>> ResolveChangedLocalCandidatesAsync(
+		List<(HpVersion Version, string LocalChecksum)> candidateList,
+		CancellationToken cToken,
+		DownloadSummary summary,
+		Action<StatusMessage, string>? log,
+		DeltaProgressCoalescer progress )
+	{
+		List<HpVersion> verified = [];
+		HashSet<string> knownChecksumsByPath = await FetchVaultChecksumsAsync( candidateList, cToken, log ).ConfigureAwait( false );
+		foreach( var (version, localChecksum) in candidateList )
 		{
 			cToken.ThrowIfCancellationRequested();
-			if( string.IsNullOrEmpty( version.checksum ) || version.checksum == "False" )
+			string key = $"{version.windows_complete_name}\0{localChecksum}";
+			if( !knownChecksumsByPath.Contains( key ) )
 			{
-				log?.Invoke( StatusMessage.ERROR, $"Checksum not found for version: {version.name}" );
+				string shown = DisplayPath( version );
+				log?.Invoke(
+					StatusMessage.WARNING,
+					$"Kept local changes to {shown}: the local file is not a version from the vault, so it was not overwritten (commit it, or delete the local copy to get the vault's)" );
+				summary.KeptLocalChanges.Enqueue( shown );
 				summary.AddSkipped();
-				onProgress?.Invoke( 0, 1 );
+				progress.Report( 0, 1 );
 				continue;
 			}
 
-			string? localPath = ResolveLocalPath( version );
-			string? localChecksum = localPath is not null ? Checksums.OfFile( localPath ) : null;
-
-			if( localChecksum is { Length: > 0 } && localChecksum == version.checksum )
-			{
-				log?.Invoke( StatusMessage.FOUND, $"Skipping version download: {version.name}" );
-				summary.AddSkipped();
-				onProgress?.Invoke( 0, 1 );
-				continue;
-			}
-
-			if( localChecksum is not null )
-			{
-				changedLocalCandidates.Add( ( version, localChecksum ) );
-				continue;
-			}
-
-			log?.Invoke( StatusMessage.PROCESSING, $"Downloading latest version: {DisplayPath( version )}" );
-			toDownload.Add( version );
+			verified.Add( version );
 		}
-
-		if( changedLocalCandidates.Count > 0 )
-		{
-			HashSet<string> knownChecksumsByPath = await FetchVaultChecksumsAsync( changedLocalCandidates, cToken, log );
-			foreach( var (version, localChecksum) in changedLocalCandidates )
-			{
-				string key = $"{version.windows_complete_name}\0{localChecksum}";
-				if( !knownChecksumsByPath.Contains( key ) )
-				{
-					string shown = DisplayPath( version );
-					log?.Invoke(
-						StatusMessage.WARNING,
-						$"Kept local changes to {shown}: the local file is not a version from the vault, so it was not overwritten (commit it, or delete the local copy to get the vault's)" );
-					summary.KeptLocalChanges.Enqueue( shown );
-					summary.AddSkipped();
-					onProgress?.Invoke( 0, 1 );
-					continue;
-				}
-
-				log?.Invoke( StatusMessage.PROCESSING, $"Downloading latest version: {DisplayPath( version )}" );
-				toDownload.Add( version );
-			}
-		}
-
-		if( toDownload.Count > 0 )
-			await DownloadAndWriteAsync( toDownload, cToken, log, summary, onProgress, onBytesDownloaded );
+		return verified;
 	}
 
-	private const int VaultChecksumLookupChunkSize = 200;
+	public static async Task<List<HpVersion>> FilterVersionsToDownloadAsync(
+		IReadOnlyList<HpVersion> versions,
+		CancellationToken cToken,
+		DownloadSummary summary,
+		Action<StatusMessage, string>? log = null,
+		Action<int, int>? onProgress = null )
+	{
+		if( versions.Count == 0 )
+			return [];
+
+		ConcurrentBag<HpVersion> toDownload = [];
+		ConcurrentBag<(HpVersion Version, string LocalChecksum)> changedLocalCandidates = [];
+		DeltaProgressCoalescer progress = new( onProgress );
+
+		int diskParallelism = Math.Clamp( Environment.ProcessorCount, 2, 8 );
+		Parallel.ForEach(
+			versions,
+			new ParallelOptions { MaxDegreeOfParallelism = diskParallelism, CancellationToken = cToken },
+			version =>
+			{
+				if( TryClassifyVersion( version, summary, log, progress, out var candidate ) )
+					toDownload.Add( version );
+				else if( candidate is { } changed )
+					changedLocalCandidates.Add( changed );
+			} );
+
+		List<HpVersion> result = [ .. toDownload ];
+		if( !changedLocalCandidates.IsEmpty )
+		{
+			List<HpVersion> verified = await ResolveChangedLocalCandidatesAsync(
+				[ .. changedLocalCandidates ], cToken, summary, log, progress ).ConfigureAwait( false );
+			result.AddRange( verified );
+		}
+
+		progress.Flush();
+		int upToDate = summary.Skipped - summary.KeptLocalChanges.Count;
+		if( upToDate > 0 )
+			log?.Invoke( StatusMessage.FOUND, $"Skipped {upToDate} up-to-date file(s)." );
+
+		return result;
+	}
+
+	private const int VaultChecksumLookupChunkSize = 500;
 	private const int VaultChecksumLookupTimeoutMs = 60_000;
 
 	private static string DisplayPath( HpVersion version )
@@ -312,35 +452,70 @@ public static class DownloadOperations
 		return null;
 	}
 
-	private static async Task<HashSet<string>> FetchVaultChecksumsAsync(
+	private static Task<HashSet<string>> FetchVaultChecksumsAsync(
 		List<(HpVersion Version, string LocalChecksum)> candidates,
+		CancellationToken cToken,
+		Action<StatusMessage, string>? log )
+		=> FetchVaultChecksumsForPathsAsync(
+			candidates.Select( static c => ( c.Version, c.LocalChecksum, c.Version.windows_complete_name ) ).ToList(),
+			cToken,
+			log );
+
+	internal static async Task<HashSet<string>> FetchVaultChecksumsForPathsAsync(
+		List<(HpVersion Version, string LocalChecksum, string? ServerPath)> candidates,
 		CancellationToken cToken,
 		Action<StatusMessage, string>? log )
 	{
 		HashSet<string> known = new( StringComparer.OrdinalIgnoreCase );
-		string[] paths = [ .. candidates.Select( c => c.Version.windows_complete_name ).OfType<string>().Distinct( StringComparer.OrdinalIgnoreCase ) ];
+		string[] paths = [ .. candidates.Select( c => c.ServerPath ).OfType<string>().Distinct( StringComparer.OrdinalIgnoreCase ) ];
 		if( paths.Length == 0 )
 			return known;
 
-		for( int offset = 0; offset < paths.Length; offset += VaultChecksumLookupChunkSize )
+		int chunkCount = ( paths.Length + VaultChecksumLookupChunkSize - 1 ) / VaultChecksumLookupChunkSize;
+		HpVersion[][] pages = new HpVersion[ chunkCount ][];
+
+		async Task FetchChunkAsync( int chunkIndex, CancellationToken ct )
 		{
-			cToken.ThrowIfCancellationRequested();
-			string[] chunk = SliceChunk( paths, offset, VaultChecksumLookupChunkSize );
+			int offset = chunkIndex * VaultChecksumLookupChunkSize;
+			string[] chunk = OdooRpc.SliceChunk( paths, offset, VaultChecksumLookupChunkSize );
 			Result<HpVersion[]> versions = await Repository<HpVersion>.SearchReadAsync(
-				OdooDomain.Where( "entry_id.windows_complete_name", Operators.In, chunk ),
-				FieldSelection.Only( nameof( HpVersion.checksum ), nameof( HpVersion.windows_complete_name ) ),
+				OdooDomain.Where( $"{nameof( HpVersion.entry_id )}.{nameof( HpEntry.windows_complete_name )}", Operators.In, chunk ),
+				FieldSelection.Only( nameof( HpVersion.checksum ), nameof( HpVersion.windows_complete_name ), nameof( HpVersion.file_size ) ),
 				timeoutMs: VaultChecksumLookupTimeoutMs,
-				token: cToken );
+				token: ct ).ConfigureAwait( false );
 			if( !versions.Ok || versions.Value is null )
 			{
-				log?.Invoke( StatusMessage.WARNING, $"Could not verify vault version history for {chunk.Length} local file(s): {versions.Error ?? "no data returned"}" );
-				continue;
+				string reason = versions.Error ?? "no data returned";
+				log?.Invoke( StatusMessage.ERROR, $"Could not verify vault version history for {chunk.Length} local file(s): {reason}" );
+				throw new OdooException( $"Could not verify vault version history: {reason}" );
 			}
+			pages[ chunkIndex ] = versions.Value;
+		}
 
-			foreach( HpVersion v in versions.Value )
+		if( chunkCount == 1 )
+		{
+			cToken.ThrowIfCancellationRequested();
+			await FetchChunkAsync( 0, cToken ).ConfigureAwait( false );
+		}
+		else
+		{
+			int parallelism = Math.Clamp( OdooDefaults.Instance?.ConcurrencySize ?? OdooLookupCache.DefaultConcurrency, 2, 4 );
+			await Parallel.ForEachAsync(
+				Enumerable.Range( 0, chunkCount ),
+				new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = cToken },
+				async ( idx, ct ) => await FetchChunkAsync( idx, ct ).ConfigureAwait( false ) ).ConfigureAwait( false );
+		}
+
+		for( int p = 0; p < pages.Length; p++ )
+		{
+			foreach( HpVersion v in pages[ p ] )
 			{
-				if( v.windows_complete_name is { Length: > 0 } path && v.checksum is { Length: > 0 } checksum )
+				if( v.windows_complete_name is not { Length: > 0 } path )
+					continue;
+				if( v.checksum is { Length: > 0 } checksum )
 					known.Add( $"{path}\0{checksum}" );
+				else if( v.file_size == 0 )
+					known.Add( $"{path}\0{Checksums.EmptySha1}" );
 			}
 		}
 		return known;
@@ -351,8 +526,11 @@ public static class DownloadOperations
 		CancellationToken cToken,
 		Action<StatusMessage, string>? log,
 		DownloadSummary summary,
-		Action<int, int>? onProgress,
-		Action<long>? onBytesDownloaded )
+		DeltaProgressCoalescer progress,
+		Action<long>? onBytesDownloaded,
+		AdaptiveTransferController? controller = null,
+		OperationPauseController? pause = null,
+		Action<int, long>? onVersionCompleted = null )
 	{
 		Dictionary<int, HpVersion> pending = new( versions.Count );
 		for( int i = 0; i < versions.Count; i++ )
@@ -373,13 +551,18 @@ public static class DownloadOperations
 		{
 			foreach( HpVersion large in largeVersions )
 			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( cToken ).ConfigureAwait( false );
 				cToken.ThrowIfCancellationRequested();
 				pending.Remove( large.id!.Value );
-				if( await DownloadLargeAsync( large, cToken, onBytesDownloaded ) is { } error )
+				if( await DownloadLargeAsync( large, cToken, onBytesDownloaded, controller, pause ).ConfigureAwait( false ) is { } error )
 					Fail( large, error );
 				else
+				{
 					summary.AddDownloaded();
-				onProgress?.Invoke( 1, 0 );
+					onVersionCompleted?.Invoke( large.id!.Value, large.file_size ?? 0 );
+				}
+				progress.Report( 1, 0 );
 			}
 		}
 
@@ -395,21 +578,46 @@ public static class DownloadOperations
 
 			foreach( List<HpVersion> group in groups )
 			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( cToken ).ConfigureAwait( false );
 				cToken.ThrowIfCancellationRequested();
+
+				using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
 				long bytes = 0;
 				for( int i = 0; i < group.Count; i++ )
 					bytes += group[ i ].file_size ?? 0;
 				int timeout = ContentsTimeoutMs( bytes, attempt );
 
-				Result<HpVersion[]> read = await Repository<HpVersion>.ReadAsync( group.Ids(), FieldSelection.Only( ContentFields ), timeout, token: cToken );
+				long rpcStart = Stopwatch.GetTimestamp();
+				Result<HpVersion[]> read = await Repository<HpVersion>.ReadAsync(
+					group.Ids(),
+					FieldSelection.Only( ContentFields ),
+					timeout,
+					token: cToken ).ConfigureAwait( false );
+				TimeSpan rpcElapsed = Stopwatch.GetElapsedTime( rpcStart );
 				string rpcError = read.Error ?? "no data returned";
-				Dictionary<int, HpVersion> byId = read.ValueOr( [] ).Where( v => v?.id is > 0 ).ToDictionary( v => v.id!.Value );
+				HpVersion[] readRecords = read.ValueOr( [] );
+				Dictionary<int, HpVersion> byId = new( readRecords.Length );
+				long receivedBatchBytes = 0;
+				int receivedBatchFiles = 0;
+				for( int i = 0; i < readRecords.Length; i++ )
+				{
+					HpVersion rec = readRecords[ i ];
+					if( rec?.id is int recId and > 0 )
+					{
+						byId[ recId ] = rec;
+						receivedBatchFiles++;
+						receivedBatchBytes += rec.file_contents?.Length ?? Math.Max( 0, rec.file_size ?? 0 );
+					}
+				}
+				if( read.Ok && receivedBatchFiles > 0 )
+					controller?.RecordRpcSample( receivedBatchBytes, receivedBatchFiles, rpcElapsed );
 
 				foreach( HpVersion requested in group )
 				{
 					int id = requested.id!.Value;
-					if( !byId.TryGetValue( id, out HpVersion? got )
-						|| ( got.file_contents is not { Length: > 0 } && ( got.file_size ?? 0 ) > 0 ) )
+					if( !byId.Remove( id, out HpVersion? got )
+						|| ( got.file_contents is not { Length: > 0 } && ( got.file_size ?? requested.file_size ) is not 0 ) )
 					{
 						lastError[ id ] = !read.Ok
 							? $"{rpcError} ({ByteSize.Format( bytes )} request, {timeout / 1000}s timeout)"
@@ -421,20 +629,24 @@ public static class DownloadOperations
 					if( downloadedSize > 0 )
 						onBytesDownloaded?.Invoke( downloadedSize );
 
-					bool wroteOk = got.file_contents is not { Length: > 0 } || await LocalFileWriter.WriteAsync( got.ToHackFile() );
+					got.name ??= requested.name;
+					got.WinPathway ??= requested.WinPathway;
+					got.windows_complete_name ??= requested.windows_complete_name;
+					bool wroteOk = await LocalFileWriter.WriteAsync( got.ToHackFile() ).ConfigureAwait( false );
 					got.file_contents = null;
 
 					if( !wroteOk )
 					{
 						pending.Remove( id );
 						Fail( requested, "could not write the file locally" );
-						onProgress?.Invoke( 1, 0 );
+						progress.Report( 1, 0 );
 						continue;
 					}
 
 					pending.Remove( id );
 					summary.AddDownloaded();
-					onProgress?.Invoke( 1, 0 );
+					onVersionCompleted?.Invoke( id, downloadedSize );
+					progress.Report( 1, 0 );
 				}
 			}
 		}
@@ -442,28 +654,46 @@ public static class DownloadOperations
 		foreach( HpVersion version in pending.Values )
 		{
 			Fail( version, lastError.GetValueOrDefault( version.id ?? 0, "unknown error" ) );
-			onProgress?.Invoke( 1, 0 );
+			progress.Report( 1, 0 );
 		}
 
 		void Fail( HpVersion version, string reason )
 		{
+			if( version.id is int id and > 0 )
+				summary.FailedIds.Add( id );
 			string name = DisplayPath( version );
 			summary.Failed.Enqueue( $"{name}: {reason}" );
 			log?.Invoke( StatusMessage.ERROR, $"Failed to download {name} after {MaxAttempts} attempt(s): {reason}" );
 		}
 	}
 
-	private static async Task<string?> DownloadLargeAsync( HpVersion requested, CancellationToken cToken, Action<long>? onBytesDownloaded )
+	private static async Task<string?> DownloadLargeAsync(
+		HpVersion requested,
+		CancellationToken cToken,
+		Action<long>? onBytesDownloaded,
+		AdaptiveTransferController? controller = null,
+		OperationPauseController? pause = null )
 	{
-		Result<HpVersion[]> read = await Repository<HpVersion>.ReadAsync( [ requested.id!.Value ], FieldSelection.Only( LargeFileFields ), OdooRpc.LongTimeout, token: cToken );
+		Result<HpVersion[]> read;
+		using( OperationPauseController.EnterScope( pause ) )
+		{
+			read = await Repository<HpVersion>.ReadAsync(
+				[ requested.id!.Value ],
+				FieldSelection.Only( LargeFileFields ),
+				OdooRpc.LongTimeout,
+				token: cToken ).ConfigureAwait( false );
+		}
 		if( read.Value is not [ { } version, .. ] )
 			return read.Error ?? "the version could not be read";
-		Result<string> temp = await ContentTransfer.DownloadToTempFileAsync( version, cToken, onBytesDownloaded );
+		Result<string> temp = await ContentTransfer.DownloadToTempFileAsync( version, cToken, onBytesDownloaded, controller, pause ).ConfigureAwait( false );
 		if( !temp.Ok )
 			return temp.Error;
-		if( await LocalFileWriter.WriteFromFileAsync( version.ToHackFile( contentsInFile: true ), temp.Value! ) )
-			return null;
-		try { File.Delete( temp.Value! ); } catch( Exception e ) when( e is IOException or UnauthorizedAccessException ) { }
+		using( OperationPauseController.EnterScope( pause ) )
+		{
+			if( await LocalFileWriter.WriteFromFileAsync( version.ToHackFile( contentsInFile: true ), temp.Value! ).ConfigureAwait( false ) )
+				return null;
+		}
+		FileOps.TryDelete( temp.Value );
 		return "could not write the file locally";
 	}
 }

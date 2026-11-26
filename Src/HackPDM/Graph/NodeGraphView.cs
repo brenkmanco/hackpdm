@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using HackPDM.Common;
 using HackPDM.Core.Graph;
 using HackPDM.Core.Pdm;
 
@@ -47,6 +48,10 @@ public sealed partial class NodeGraphView : Grid
 	private Point? _pressAt;
 	private Point _translateAtPress;
 	private bool _panning;
+	private PathGeometry? _gridGeometry;
+	private Path? _gridPath;
+	private double _gridWidth = double.NaN;
+	private double _gridHeight = double.NaN;
 
 	/// <summary>A file's box was clicked (null when the background was clicked).</summary>
 	public event Action<GraphNode?>? NodeSelected;
@@ -215,7 +220,7 @@ public sealed partial class NodeGraphView : Grid
 	}
 
 	/// <summary>The header color of <paramref name="node"/> in the current palette.</summary>
-	public Color HeaderColor( GraphNode node ) => ToColor( _theme.Palette.Header( GraphThemes.KindOf( node ) ) );
+	public Color HeaderColor( GraphNode node ) => UiColors.ToUiColor( _theme.Palette.Header( GraphThemes.KindOf( node ) ) );
 
 	private void SetView( double zoom, double x, double y )
 	{
@@ -503,18 +508,32 @@ public sealed partial class NodeGraphView : Grid
 	private (Path Line, Path? Glow) Link( EdgeRoute r )
 	{
 		GraphForm form = _theme.Form;
+		if( form.Links == LinkStyle.Elbow )
+		{
+			Path elbowLine = new()
+			{
+				Data = Elbow( r ),
+				Stroke = Brush( _theme.Palette.Link ),
+				StrokeThickness = form.LinkThickness,
+				IsHitTestVisible = false,
+			};
+			return (elbowLine, null);
+		}
+
+		bool glowCurve = form.Links == LinkStyle.GlowCurve;
+		(PathGeometry lineGeo, PathGeometry? glowGeo) = Curve( r, withSecondary: glowCurve );
 		Path line = new()
 		{
-			Data = form.Links == LinkStyle.Elbow ? Elbow( r ) : Curve( r ),
+			Data = lineGeo,
 			Stroke = Brush( _theme.Palette.Link ),
 			StrokeThickness = form.LinkThickness,
 			IsHitTestVisible = false,
 		};
-		if( form.Links != LinkStyle.GlowCurve )
+		if( !glowCurve )
 			return (line, null);
 		Path glow = new()
 		{
-			Data = Curve( r ),
+			Data = glowGeo,
 			Stroke = Brush( WithAlpha( _theme.Palette.Link, 0x38 ) ),
 			StrokeThickness = form.LinkThickness * 4,
 			IsHitTestVisible = false,
@@ -523,47 +542,49 @@ public sealed partial class NodeGraphView : Grid
 	}
 
 	/// <summary>A cubic curve leaving the parent to the right and entering the child from the left, routing through any bend points.</summary>
-	private static PathGeometry Curve( EdgeRoute r )
+	private static (PathGeometry Primary, PathGeometry? Secondary) Curve( EdgeRoute r, bool withSecondary )
 	{
-		PathFigure figure = new() { StartPoint = new Point( r.FromX, r.FromY ), IsClosed = false, IsFilled = false };
+		PathFigure primary = new() { StartPoint = new Point( r.FromX, r.FromY ), IsClosed = false, IsFilled = false };
+		PathFigure? secondary = withSecondary ? new() { StartPoint = new Point( r.FromX, r.FromY ), IsClosed = false, IsFilled = false } : null;
+
 		if( r.BendPoints.Count == 0 )
 		{
 			double bend = Math.Max( 50, Math.Abs( r.ToX - r.FromX ) / 2 );
-			figure.Segments.Add( new BezierSegment
-			{
-				Point1 = new Point( r.FromX + bend, r.FromY ),
-				Point2 = new Point( r.ToX - bend, r.ToY ),
-				Point3 = new Point( r.ToX, r.ToY ),
-			} );
-			return Geometry( figure );
+			Point p1 = new( r.FromX + bend, r.FromY );
+			Point p2 = new( r.ToX - bend, r.ToY );
+			Point p3 = new( r.ToX, r.ToY );
+			primary.Segments.Add( new BezierSegment { Point1 = p1, Point2 = p2, Point3 = p3 } );
+			secondary?.Segments.Add( new BezierSegment { Point1 = p1, Point2 = p2, Point3 = p3 } );
+			return (Geometry( primary ), secondary is not null ? Geometry( secondary ) : null);
 		}
 
 		double x0 = r.FromX, y0 = r.FromY;
 		int bendCount = r.BendPoints.Count;
 		for( int i = 0; i <= bendCount; i++ )
 		{
-			var (x1, y1) = i < bendCount ? r.BendPoints[ i ] : ( r.ToX, r.ToY );
+			var (x1, y1) = i < bendCount ? r.BendPoints[ i ] : (r.ToX, r.ToY);
 			double dx = x1 - x0;
 			double dy = y1 - y0;
 			if( Math.Abs( dy ) < 0.5 || Math.Abs( dx ) < 0.5 )
 			{
-				figure.Segments.Add( new LineSegment { Point = new Point( x1, y1 ) } );
+				Point end = new( x1, y1 );
+				primary.Segments.Add( new LineSegment { Point = end } );
+				secondary?.Segments.Add( new LineSegment { Point = end } );
 			}
 			else
 			{
 				double bend = Math.Max( 20, Math.Abs( dx ) * 0.5 );
 				double dir = Math.Sign( dx );
-				figure.Segments.Add( new BezierSegment
-				{
-					Point1 = new Point( x0 + dir * bend, y0 ),
-					Point2 = new Point( x1 - dir * bend, y1 ),
-					Point3 = new Point( x1, y1 ),
-				} );
+				Point p1 = new( x0 + dir * bend, y0 );
+				Point p2 = new( x1 - dir * bend, y1 );
+				Point p3 = new( x1, y1 );
+				primary.Segments.Add( new BezierSegment { Point1 = p1, Point2 = p2, Point3 = p3 } );
+				secondary?.Segments.Add( new BezierSegment { Point1 = p1, Point2 = p2, Point3 = p3 } );
 			}
 			x0 = x1;
 			y0 = y1;
 		}
-		return Geometry( figure );
+		return (Geometry( primary ), secondary is not null ? Geometry( secondary ) : null);
 	}
 
 	/// <summary>Orthogonal routed link with rounded bends placed cleanly inside empty column gaps.</summary>
@@ -617,14 +638,25 @@ public sealed partial class NodeGraphView : Grid
 	/// <summary>Grid lines behind the graph, reaching well past it so panning does not run off the grid at once.</summary>
 	private Path GridLines( GraphLayoutResult layout )
 	{
-		PathGeometry geometry = new();
-		double left = Math.Floor( -GridReach / GridSpacing ) * GridSpacing, top = left;
-		double right = layout.Width + GridReach, bottom = layout.Height + GridReach;
-		for( double x = left; x <= right; x += GridSpacing )
-			geometry.Figures.Add( Segment( new Point( x, top ), new Point( x, bottom ) ) );
-		for( double y = top; y <= bottom; y += GridSpacing )
-			geometry.Figures.Add( Segment( new Point( left, y ), new Point( right, y ) ) );
-		return new Path { Data = geometry, Stroke = Brush( _theme.Palette.GridLine ), StrokeThickness = 1, IsHitTestVisible = false };
+		if( _gridGeometry is null || _gridWidth != layout.Width || _gridHeight != layout.Height )
+		{
+			PathGeometry geometry = new();
+			double left = Math.Floor( -GridReach / GridSpacing ) * GridSpacing, top = left;
+			double right = layout.Width + GridReach, bottom = layout.Height + GridReach;
+			for( double x = left; x <= right; x += GridSpacing )
+				geometry.Figures.Add( Segment( new Point( x, top ), new Point( x, bottom ) ) );
+			for( double y = top; y <= bottom; y += GridSpacing )
+				geometry.Figures.Add( Segment( new Point( left, y ), new Point( right, y ) ) );
+			_gridGeometry = geometry;
+			_gridWidth = layout.Width;
+			_gridHeight = layout.Height;
+		}
+
+		_gridPath ??= new Path { StrokeThickness = 1, IsHitTestVisible = false };
+		if( !ReferenceEquals( _gridPath.Data, _gridGeometry ) )
+			_gridPath.Data = _gridGeometry;
+		_gridPath.Stroke = Brush( _theme.Palette.GridLine );
+		return _gridPath;
 
 		static PathFigure Segment( Point from, Point to )
 		{
@@ -643,15 +675,13 @@ public sealed partial class NodeGraphView : Grid
 
 	// ------------------------------------------------------------------ colors
 
-	private static Color ToColor( uint argb ) => Color.FromArgb( (byte)( argb >> 24 ), (byte)( argb >> 16 ), (byte)( argb >> 8 ), (byte)argb );
-
 	private SolidColorBrush Brush( uint argb )
 	{
 		if( _brushCache.TryGetValue( argb, out SolidColorBrush? cached ) )
 			return cached;
 		if( _brushCache.Count >= 256 )
 			_brushCache.Clear();
-		SolidColorBrush created = new( ToColor( argb ) );
+		SolidColorBrush created = new( UiColors.ToUiColor( argb ) );
 		_brushCache[ argb ] = created;
 		return created;
 	}
@@ -668,8 +698,8 @@ public sealed partial class NodeGraphView : Grid
 			EndPoint = new Point( 1, 1 ),
 			GradientStops =
 			{
-				new GradientStop { Color = ToColor( Lighten( color, 0.12 ) ), Offset = 0 },
-				new GradientStop { Color = ToColor( Darken( color, 0.45 ) ), Offset = 1 },
+				new GradientStop { Color = UiColors.ToUiColor( Lighten( color, 0.12 ) ), Offset = 0 },
+				new GradientStop { Color = UiColors.ToUiColor( Darken( color, 0.45 ) ), Offset = 1 },
 			},
 		};
 		_gradientCache[ color ] = created;

@@ -49,13 +49,11 @@
             <StackPanel Spacing="6">
                 <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Theme" />
                 <ComboBox
-                    x:Name="PalettePicker"
                     Header="Colors"
                     HorizontalAlignment="Stretch"
                     ItemsSource="{x:Bind ViewModel.PaletteTitles}"
                     SelectedIndex="{x:Bind ViewModel.SelectedPaletteIndex, Mode=TwoWay}" />
                 <ComboBox
-                    x:Name="FormPicker"
                     Header="Style"
                     HorizontalAlignment="Stretch"
                     ItemsSource="{x:Bind ViewModel.FormTitles}"
@@ -66,7 +64,6 @@
                     Text="{x:Bind ViewModel.FormDescription, Mode=OneWay}"
                     TextWrapping="Wrap" />
                 <CheckBox
-                    x:Name="ShowTreeBranchLinesBox"
                     Content="Show branching guide lines in folder trees"
                     IsChecked="{x:Bind ViewModel.ShowTreeBranchLines, Mode=TwoWay}" />
                 <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap">
@@ -83,7 +80,6 @@
             </StackPanel>
 
             <ListView
-                x:Name="ColorList"
                 Grid.Row="1"
                 Grid.RowSpan="3"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -325,10 +321,50 @@
                             Height="170"
                             AutoGenerateColumns="False">
                             <tv:TableView.Columns>
-                                <tv:TableViewTextColumn Binding="{Binding Name}" Header="Name" />
-                                <tv:TableViewTextColumn Binding="{Binding Status}" Header="Status" />
-                                <tv:TableViewTextColumn Binding="{Binding Size}" Header="Size" />
-                                <tv:TableViewTextColumn Binding="{Binding ModUser}" Header="Mod User" />
+                                <tv:TableViewTemplateColumn Header="Name" SortMemberPath="Name">
+                                    <tv:TableViewTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="vm:SampleRow">
+                                            <TextBlock
+                                                Padding="6,0"
+                                                VerticalAlignment="Center"
+                                                Text="{x:Bind Name}"
+                                                TextTrimming="CharacterEllipsis" />
+                                        </DataTemplate>
+                                    </tv:TableViewTemplateColumn.CellTemplate>
+                                </tv:TableViewTemplateColumn>
+                                <tv:TableViewTemplateColumn Header="Status" SortMemberPath="Status">
+                                    <tv:TableViewTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="vm:SampleRow">
+                                            <TextBlock
+                                                Padding="6,0"
+                                                VerticalAlignment="Center"
+                                                Text="{x:Bind Status}"
+                                                TextTrimming="CharacterEllipsis" />
+                                        </DataTemplate>
+                                    </tv:TableViewTemplateColumn.CellTemplate>
+                                </tv:TableViewTemplateColumn>
+                                <tv:TableViewTemplateColumn Header="Size" SortMemberPath="Size">
+                                    <tv:TableViewTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="vm:SampleRow">
+                                            <TextBlock
+                                                Padding="6,0"
+                                                VerticalAlignment="Center"
+                                                Text="{x:Bind Size}"
+                                                TextTrimming="CharacterEllipsis" />
+                                        </DataTemplate>
+                                    </tv:TableViewTemplateColumn.CellTemplate>
+                                </tv:TableViewTemplateColumn>
+                                <tv:TableViewTemplateColumn Header="Mod User" SortMemberPath="ModUser">
+                                    <tv:TableViewTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="vm:SampleRow">
+                                            <TextBlock
+                                                Padding="6,0"
+                                                VerticalAlignment="Center"
+                                                Text="{x:Bind ModUser}"
+                                                TextTrimming="CharacterEllipsis" />
+                                        </DataTemplate>
+                                    </tv:TableViewTemplateColumn.CellTemplate>
+                                </tv:TableViewTemplateColumn>
                             </tv:TableView.Columns>
                         </tv:TableView>
                         <ListView

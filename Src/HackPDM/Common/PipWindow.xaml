@@ -13,14 +13,30 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <Grid Background="{ThemeResource BackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!--  CompactOverlay titlebar drag strip (visible on Windows when extending into titlebar)  -->
+        <Grid
+            x:Name="PipTitleBar"
+            Grid.Row="0"
+            Height="32"
+            Background="Transparent"
+            Visibility="Collapsed" />
+
         <!--  1. Root preview host  -->
-        <Grid x:Name="PipContentRoot" Padding="8">
+        <Grid
+            x:Name="PipContentRoot"
+            Grid.Row="1"
+            Padding="8">
             <TextBlock
                 x:Name="PipEmptyText"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Foreground="{ThemeResource OnSurfaceVariantBrush}"
                 Text="No preview available"
                 TextAlignment="Center" />
             <Image
@@ -31,21 +47,26 @@
                 Visibility="Collapsed" />
         </Grid>
 
-        <!--  2. Overlay return button  -->
+        <!--  2. Overlay return button (bottom-right, clear of CompactOverlay caption controls)  -->
         <Grid
+            Grid.Row="1"
             Margin="10"
             HorizontalAlignment="Right"
-            VerticalAlignment="Top">
+            VerticalAlignment="Bottom">
             <Button
                 x:Name="ExitPipButton"
-                Padding="8"
-                Background="#80000000"
+                Width="40"
+                Height="40"
+                Padding="0"
+                Background="{ThemeResource SurfaceInverseBrush}"
                 BorderThickness="0"
+                CornerRadius="20"
+                Opacity="0.85"
                 Click="OnExitPipClicked"
                 ToolTipService.ToolTip="Return to Main Window">
                 <FontIcon
-                    FontSize="14"
-                    Foreground="White"
+                    FontSize="16"
+                    Foreground="{ThemeResource OnSurfaceInverseBrush}"
                     Glyph="&#xE73F;" />
             </Button>
         </Grid>

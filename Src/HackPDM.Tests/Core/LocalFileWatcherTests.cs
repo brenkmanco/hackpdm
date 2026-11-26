@@ -141,6 +141,81 @@ public class LocalFileWatcherTests
 		}
 	}
 
+	[Fact]
+	public async Task Watcher_Suspend_PausesOsEventsDuringBulkWrites_AndResumesCleanly()
+	{
+		string root = Path.Combine( Path.GetTempPath(), $"hackpdm-watch-suspend-{Guid.NewGuid():N}" );
+		ConcurrentQueue<LocalFileChange> seen = new();
+		int overflows = 0;
+		using LocalFileWatcher watcher = new();
+		watcher.Changed += batch => { foreach( var change in batch ) seen.Enqueue( change ); };
+		watcher.Overflowed += () => Interlocked.Increment( ref overflows );
+		try
+		{
+			watcher.Watch( root );
+			using( watcher.Suspend() )
+			{
+				for( int d = 0; d < 10; d++ )
+				{
+					string dir = Directory.CreateDirectory( Path.Combine( root, $"Dir_{d}" ) ).FullName;
+					for( int f = 0; f < 20; f++ )
+						await File.WriteAllTextAsync( Path.Combine( dir, $"part_{f}.txt" ), "downloaded" );
+				}
+				await Task.Delay( 700 );
+			}
+
+			Assert.Empty( seen );
+			Assert.Equal( 0, overflows );
+
+			// After resuming, new changes are detected normally.
+			string after = Path.Combine( root, "after-resume.txt" );
+			await File.WriteAllTextAsync( after, "live" );
+			await WaitFor( seen, after, LocalChangeKind.Created );
+		}
+		finally
+		{
+			if( Directory.Exists( root ) )
+				Directory.Delete( root, recursive: true );
+		}
+	}
+
+	[Fact]
+	public async Task Watcher_LargeDeleteBurst_CoalescesIntoBoundedOverflowsAndRecovers()
+	{
+		string root = Path.Combine( Path.GetTempPath(), $"hackpdm-watch-burst-{Guid.NewGuid():N}" );
+		ConcurrentQueue<LocalFileChange> seen = new();
+		int overflows = 0;
+		using LocalFileWatcher watcher = new();
+		watcher.Changed += batch => { foreach( var change in batch ) seen.Enqueue( change ); };
+		watcher.Overflowed += () => Interlocked.Increment( ref overflows );
+		try
+		{
+			watcher.Watch( root );
+
+			// Flood far past MaxPendingChanges (simulating a 50 GB recursive delete burst).
+			for( int i = 0; i < 5_000; i++ )
+				watcher.SimulateChangeForTest( Path.Combine( root, "Bulk", $"f_{i:D5}.sldprt" ), LocalChangeKind.Deleted );
+
+			// Immediately collapses to 1 initial overflow and suppresses further spam during the burst.
+			Assert.Equal( 1, Volatile.Read( ref overflows ) );
+			Assert.Empty( seen );
+
+			// After BurstSettleMs (800 ms) of quiet, emits one trailing resync overflow and exits burst mode.
+			await Task.Delay( 1200 );
+			Assert.Equal( 2, Volatile.Read( ref overflows ) );
+
+			// After burst settles, normal single-file live events resume cleanly.
+			string after = Path.Combine( root, "after-burst.txt" );
+			await File.WriteAllTextAsync( after, "ok" );
+			await WaitFor( seen, after, LocalChangeKind.Created );
+		}
+		finally
+		{
+			if( Directory.Exists( root ) )
+				Directory.Delete( root, recursive: true );
+		}
+	}
+
 	private static async Task WaitFor( ConcurrentQueue<LocalFileChange> seen, string path, LocalChangeKind kind )
 	{
 		for( int i = 0; i < 50; i++ )

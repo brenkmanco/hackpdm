@@ -59,7 +59,7 @@ public static class OdooConnection
 		try
 		{
 			using Ping pinger = new();
-			if( await pinger.SendPingAsync( host ) is { Status: IPStatus.Success } )
+			if( await pinger.SendPingAsync( host ).ConfigureAwait( false ) is { Status: IPStatus.Success } )
 				return true;
 		}
 		catch( Exception e ) when( e is PingException or InvalidOperationException or ArgumentException )
@@ -67,7 +67,7 @@ public static class OdooConnection
 		}
 		try
 		{
-			return ( await Dns.GetHostAddressesAsync( host ) ).Length > 0;
+			return ( await Dns.GetHostAddressesAsync( host ).ConfigureAwait( false ) ).Length > 0;
 		}
 		catch
 		{
@@ -84,7 +84,7 @@ public static class OdooConnection
 		{
 			using TcpClient client = new();
 			using CancellationTokenSource timeout = new( TimeSpan.FromSeconds( 5 ) );
-			await client.ConnectAsync( host, port, timeout.Token );
+			await client.ConnectAsync( host, port, timeout.Token ).ConfigureAwait( false );
 			return true;
 		}
 		catch( Exception e ) when( e is SocketException or OperationCanceledException )

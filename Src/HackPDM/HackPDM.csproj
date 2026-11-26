@@ -1,7 +1,7 @@
 <Project Sdk="Uno.Sdk">
   <PropertyGroup>
     <UnoSingleProject>true</UnoSingleProject>
-    <UnoFeatures>Svg</UnoFeatures>
+    <UnoFeatures>Svg;Material;Toolkit</UnoFeatures>
     <UnoDisableResizetizer>true</UnoDisableResizetizer>
     <UnoResizetizerEnabled>false</UnoResizetizerEnabled>
     <DisableDefaultUnoResizetizerItems>true</DisableDefaultUnoResizetizerItems>
@@ -104,7 +104,7 @@
       <_AssetMapEntry Include="Assets\*.png;Assets\*.ico;Assets\*.gif" Folder="" />
       <_AssetMapEntry Include="Assets\Icons\*.svg" Folder="Icons/" />
       <_AssetMapEntry Include="@(_StatusSvg)" Folder="StatusIcons/" />
-      <_AssetMapEntry Include="Assets\StatusIcons\*.png" Exclude="@(_StatusSvg->'Assets\StatusIcons\%(Filename).png')" Folder="StatusIcons/" />
+      <_AssetMapEntry Include="Assets\StatusIcons\*.png" Exclude="@(_StatusSvg->'Assets\StatusIcons\%(Filename).png');Assets\StatusIcons\*_640.png" Folder="StatusIcons/" />
       <_AssetMapLine Include="@(_AssetMapEntry->'		( &quot;%(Filename)&quot;, &quot;%(Folder)%(Filename)%(Extension)&quot; ),')" />
     </ItemGroup>
     <WriteLinesToFile

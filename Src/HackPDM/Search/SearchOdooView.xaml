@@ -7,16 +7,21 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:common="using:HackPDM.Common"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:pp="urn:wyrmpdm:penpot-sync"
     xmlns:rep="using:HackPDM.Core.Services"
-    xmlns:x1="using:System"
-    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
-    mc:Ignorable="d">
+    Background="{ThemeResource BackgroundBrush}"
+    mc:Ignorable="d pp">
 
     <Page.Resources>
         <common:OperatorConverter x:Key="OperationConverter" />
+        <!--
+            Material look for this screen, built from the Penpot frames "Search — Light" / "— Dark" (full view) and
+            "Search bar — Light" / "— Dark" (minimal bar). Elements marked pp:Id are kept in step with those frames
+            by tools/WyrmpdmSync (see design/README.md).
+        -->
     </Page.Resources>
 
-    <Grid x:Name="SearchRootGrid">
+    <Grid>
         <!--  Full Search View  -->
         <Grid x:Name="FullSearchRoot" Margin="16" RowSpacing="12">
             <Grid.RowDefinitions>
@@ -29,12 +34,11 @@
             <!--  Query & Property Builder Card  -->
             <Border
                 x:Name="QueryBuilderCard"
+                pp:Id="search.query"
                 Grid.Row="0"
-                Padding="14"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="6">
+                Padding="16"
+                CornerRadius="{StaticResource HackPanelCornerRadius}"
+                Style="{StaticResource HackPaneTintedStyle}">
                 <Grid x:Name="QueryLayoutGrid" ColumnSpacing="20" RowSpacing="10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -44,62 +48,59 @@
 
                     <StackPanel x:Name="FilenameSection" Grid.Column="0" Spacing="10">
                         <TextBlock
-                            FontSize="12"
-                            FontWeight="SemiBold"
+                            pp:Id="search.filenameTitle"
+                            Style="{StaticResource TitleSmall}"
                             Text="Filename &amp; Scope" />
                         <Grid ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="86" />
+                                <ColumnDefinition Width="136" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="84" />
+                                <ColumnDefinition Width="96" />
                             </Grid.ColumnDefinitions>
                             <ComboBox
-                                x:Name="OdooSearchComparer"
-                                Grid.Column="0"
                                 Header="Match"
+                                Grid.Column="0"
+                                Style="{StaticResource HackOutlinedComboBoxStyle}"
                                 HorizontalAlignment="Stretch"
                                 IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
                                 ItemsSource="{x:Bind ViewModel.OperatorList}"
                                 SelectedItem="{x:Bind ViewModel.SelectedComparer, Mode=TwoWay}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="rep:OperatorsRow">
-                                        <TextBlock Text="{Binding OpRepr}" />
+                                        <TextBlock Text="{x:Bind OpRepr}" />
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
                             <TextBox
-                                x:Name="FileNameTextbox"
                                 Grid.Column="1"
                                 Header="Filename"
                                 PlaceholderText="Search by filename…"
                                 HorizontalAlignment="Stretch"
+                                Style="{StaticResource OutlinedTextBoxStyle}"
                                 KeyDown="FileNameTextbox_KeyDown"
                                 Text="{x:Bind ViewModel.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBox
-                                x:Name="OdooMaxRes"
                                 Grid.Column="2"
                                 Header="Max"
                                 KeyDown="FileNameTextbox_KeyDown"
+                                Style="{StaticResource OutlinedTextBoxStyle}"
                                 Text="{x:Bind ViewModel.MaxResults, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
                         <StackPanel x:Name="CheckboxesPanel" Orientation="Horizontal" Spacing="16">
                             <CheckBox
-                                x:Name="OdooCheckedMe"
                                 MinWidth="0"
                                 Content="Checked Out to Me"
                                 IsChecked="{x:Bind ViewModel.CheckedOutMe, Mode=TwoWay}"
                                 IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}" />
                             <CheckBox
-                                x:Name="OdooLocalOnly"
                                 MinWidth="0"
                                 Content="Local Only"
                                 IsChecked="{x:Bind ViewModel.LocalOnly, Mode=TwoWay}"
                                 IsEnabled="{x:Bind ViewModel.IsLocalOnlyEnabled, Mode=OneWay}" />
                             <CheckBox
-                                x:Name="OdooDeletedIsLocal"
                                 MinWidth="0"
-                                Content="Deleted Locally"
+                                Content="Deleted on Server"
                                 IsChecked="{x:Bind ViewModel.DeletedRemotely, Mode=TwoWay}"
                                 IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}" />
                         </StackPanel>
@@ -109,69 +110,71 @@
                         x:Name="QueryDivider"
                         Grid.Column="1"
                         Width="1"
-                        Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                        Background="{ThemeResource OutlineVariantBrush}" />
 
                     <StackPanel x:Name="PropertySection" Grid.Column="2" Spacing="10">
                         <TextBlock
-                            FontSize="12"
-                            FontWeight="SemiBold"
+                            pp:Id="search.propertyTitle"
+                            Style="{StaticResource TitleSmall}"
                             Text="Property Filter Builder" />
                         <Grid ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="82" />
+                                <ColumnDefinition Width="124" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
                             <ComboBox
-                                x:Name="OdooSearchProperty"
-                                Grid.Column="0"
                                 Header="Property"
+                                Grid.Column="0"
+                                Style="{StaticResource HackOutlinedComboBoxStyle}"
+                                PlaceholderText="Choose a property"
                                 HorizontalAlignment="Stretch"
                                 IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
                                 ItemsSource="{x:Bind ViewModel.PropertiesSearchable}"
                                 SelectedItem="{x:Bind ViewModel.SelectedProperty, Mode=TwoWay}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="rep:SearchPropertiesRow">
-                                        <TextBlock Text="{Binding Name}" />
+                                        <TextBlock Text="{x:Bind Name}" />
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
 
                             <ComboBox
-                                x:Name="OdooSearchPropEqual"
-                                Grid.Column="1"
                                 Header="Comparer"
+                                Grid.Column="1"
+                                Style="{StaticResource HackOutlinedComboBoxStyle}"
                                 HorizontalAlignment="Stretch"
                                 IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
                                 ItemsSource="{x:Bind ViewModel.OperatorList}"
                                 SelectedItem="{x:Bind ViewModel.SelectedPropertyOperator, Mode=TwoWay}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="rep:OperatorsRow">
-                                        <TextBlock Text="{Binding OpRepr}" />
+                                        <TextBlock Text="{x:Bind OpRepr}" />
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
 
                             <TextBox
-                                x:Name="OdooSearchPropValue"
                                 Grid.Column="2"
                                 Header="Value"
                                 PlaceholderText="Property value…"
                                 HorizontalAlignment="Stretch"
+                                Style="{StaticResource OutlinedTextBoxStyle}"
                                 IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
                                 KeyDown="OdooSearchPropValue_KeyDown"
                                 Text="{x:Bind ViewModel.PropertyValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
                             <Button
-                                x:Name="OdooPropAdd"
+                                pp:Id="search.addRule"
                                 Grid.Column="3"
                                 MinWidth="84"
                                 VerticalAlignment="Bottom"
                                 Command="{x:Bind ViewModel.AddPropertyCommand}"
                                 IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
-                                Content="Add Rule" />
+                                Content="Add Rule"
+                                Style="{StaticResource FilledTonalButtonStyle}" />
                         </Grid>
 
                         <StackPanel
@@ -179,15 +182,15 @@
                             Orientation="Horizontal"
                             Spacing="8">
                             <Button
-                                x:Name="OdooPropDelete"
                                 Command="{x:Bind ViewModel.DeletePropertiesCommand}"
                                 IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
-                                Content="Remove Selected Rule" />
+                                Content="Remove Selected Rule"
+                                Style="{StaticResource TextButtonStyle}" />
                             <Button
-                                x:Name="OdooPropertyReset"
                                 Command="{x:Bind ViewModel.ResetPropertiesCommand}"
                                 IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
-                                Content="Clear Rules" />
+                                Content="Clear Rules"
+                                Style="{StaticResource TextButtonStyle}" />
                         </StackPanel>
                     </StackPanel>
                 </Grid>
@@ -195,92 +198,129 @@
 
             <!--  Active Property Rules Card  -->
             <Border
+                pp:Id="search.rules"
                 Grid.Row="1"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="6">
-                <tv:TableView
+                Padding="8,0,8,8"
+                BorderThickness="{StaticResource HackPanelBorderThickness}"
+                CornerRadius="{StaticResource HackPanelCornerRadius}"
+                Style="{StaticResource HackPaneOutlinedStyle}">
+                <common:EntryTableView
                     x:Name="OdooSearchPropList"
                     Height="110"
                     AutoGenerateColumns="False"
                     BorderThickness="0"
                     IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
                     IsReadOnly="True"
-                    ItemsSource="{x:Bind ViewModel.PropertiesActive}">
+                    ItemsSource="{x:Bind ViewModel.PropertiesActive}"
+                    SelectionMode="Extended"
+                    SelectionUnit="Row"
+                    ShowDragRectangle="False">
                     <tv:TableView.Columns>
-                        <tv:TableViewTextColumn
-                            Width="2*"
-                            Binding="{Binding Name}"
-                            Header="Property Name" />
+                        <tv:TableViewTemplateColumn Width="2*" Header="Property Name" SortMemberPath="Name">
+                            <tv:TableViewTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="rep:SearchPropertiesRow">
+                                    <TextBlock
+                                        Padding="6,0"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind Name}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </tv:TableViewTemplateColumn.CellTemplate>
+                        </tv:TableViewTemplateColumn>
 
-                        <tv:TableViewTextColumn
-                            Width="1*"
-                            Binding="{Binding Comparer}"
-                            Header="Comparer" />
+                        <tv:TableViewTemplateColumn Width="1*" Header="Comparer" SortMemberPath="Comparer">
+                            <tv:TableViewTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="rep:SearchPropertiesRow">
+                                    <TextBlock
+                                        Padding="6,0"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind Comparer, Converter={StaticResource OperationConverter}}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </tv:TableViewTemplateColumn.CellTemplate>
+                        </tv:TableViewTemplateColumn>
 
-                        <tv:TableViewTextColumn
-                            Width="2*"
-                            Binding="{Binding Value}"
-                            Header="Value" />
+                        <tv:TableViewTemplateColumn Width="2*" Header="Value" SortMemberPath="Value">
+                            <tv:TableViewTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="rep:SearchPropertiesRow">
+                                    <TextBlock
+                                        Padding="6,0"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind Value}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </tv:TableViewTemplateColumn.CellTemplate>
+                        </tv:TableViewTemplateColumn>
                     </tv:TableView.Columns>
-                </tv:TableView>
+                </common:EntryTableView>
             </Border>
 
             <!--  Search Results Card  -->
             <Border
+                pp:Id="search.results"
                 Grid.Row="2"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{StaticResource HackPanelStrokeBrush}"
+                Padding="8,0,8,8"
                 BorderThickness="{StaticResource HackPanelBorderThickness}"
-                CornerRadius="{StaticResource HackPanelCornerRadius}">
-                <tv:TableView
+                CornerRadius="{StaticResource HackPanelCornerRadius}"
+                Style="{StaticResource HackPaneOutlinedStyle}">
+                <common:EntryTableView
                     x:Name="OdooSearchResults"
                     AutoGenerateColumns="False"
                     BorderThickness="0"
                     IsReadOnly="True"
                     DoubleTapped="OdooSearchResults_DoubleTapped"
                     ItemsSource="{x:Bind ViewModel.SearchResultsList, Mode=OneWay}"
-                    SelectionMode="Extended">
+                    SelectionMode="Extended"
+                    SelectionUnit="Row"
+                    ShowDragRectangle="False">
 
                     <tv:TableView.Columns>
-                        <tv:TableViewTextColumn
-                            Width="320"
-                            Binding="{Binding Name}"
-                            Header="File Name" />
-                        <tv:TableViewTextColumn
-                            Width="*"
-                            Binding="{Binding Directory}"
-                            Header="File Path" />
+                        <tv:TableViewTemplateColumn Width="320" Header="File Name" SortMemberPath="Name">
+                            <tv:TableViewTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="rep:SearchRow">
+                                    <TextBlock
+                                        Padding="6,0"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind Name}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </tv:TableViewTemplateColumn.CellTemplate>
+                        </tv:TableViewTemplateColumn>
+                        <tv:TableViewTemplateColumn Width="*" Header="File Path" SortMemberPath="Directory">
+                            <tv:TableViewTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="rep:SearchRow">
+                                    <TextBlock
+                                        Padding="6,0"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind Directory}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </tv:TableViewTemplateColumn.CellTemplate>
+                        </tv:TableViewTemplateColumn>
                     </tv:TableView.Columns>
                     <tv:TableView.ContextFlyout>
                         <MenuFlyout>
                             <MenuFlyoutItem
-                                x:Name="locateToolStripMenuItem"
                                 Click="LocateSelected_Click"
                                 Text="Show in File Manager" />
                             <MenuFlyoutSeparator />
-                            <MenuFlyoutSubItem x:Name="CheckOutMenuItem" Text="Checkout">
+                            <MenuFlyoutSubItem Text="Checkout">
                                 <MenuFlyoutItem
-                                    x:Name="checkoutToolStripMenuItem"
                                     Command="{x:Bind ViewModel.CheckoutCommand}"
                                     Text="Checkout" />
                                 <MenuFlyoutItem
-                                    x:Name="checkoutOpenToolStripMenuItem"
                                     Command="{x:Bind ViewModel.CheckoutAndOpenCommand}"
                                     Text="Checkout and Open" />
                             </MenuFlyoutSubItem>
                             <MenuFlyoutItem
-                                x:Name="unCheckoutToolStripMenuItem"
                                 Command="{x:Bind ViewModel.UndoCheckoutCommand}"
                                 Text="Undo Checkout" />
                             <MenuFlyoutItem
-                                x:Name="openToolStripMenuItem"
                                 Command="{x:Bind ViewModel.OpenCommand}"
                                 Text="Open" />
                         </MenuFlyout>
                     </tv:TableView.ContextFlyout>
-                </tv:TableView>
+                </common:EntryTableView>
             </Border>
 
             <Grid Grid.Row="3" Margin="0,4,0,0" ColumnSpacing="12">
@@ -292,24 +332,25 @@
 
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button
-                        x:Name="btnMinimal"
                         Click="SwitchToMinimalSearch_Click"
                         Content="Minimal"
+                        Style="{StaticResource TextButtonStyle}"
                         ToolTipService.ToolTip="Switch to compact quick-search bar" />
                     <Button
                         x:Name="btnDock"
                         Click="OdooDock_Click"
                         Content="Dock"
+                        Style="{StaticResource TextButtonStyle}"
                         ToolTipService.ToolTip="Dock Search panel into main window"
                         Visibility="Collapsed" />
                     <Button
-                        x:Name="btnCancel"
                         Click="OdooCancel_Click"
-                        Content="Close" />
+                        Content="Close"
+                        Style="{StaticResource TextButtonStyle}" />
                     <Button
-                        x:Name="btnReset"
                         Command="{x:Bind ViewModel.ResetCommand}"
-                        Content="Reset" />
+                        Content="Reset"
+                        Style="{StaticResource TextButtonStyle}" />
                 </StackPanel>
 
                 <StackPanel
@@ -324,31 +365,33 @@
                         IsActive="{x:Bind ViewModel.IsSearching, Mode=OneWay}" />
                     <TextBlock
                         VerticalAlignment="Center"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource HackCaptionStyle}"
                         Text="{x:Bind ViewModel.SearchStatusText, Mode=OneWay}"
                         TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
                 <Button
                     x:Name="btnSearch"
+                    pp:Id="search.search"
                     Grid.Column="2"
                     MinWidth="200"
                     Command="{x:Bind ViewModel.SearchCommand}"
                     Content="Search"
-                    Style="{ThemeResource AccentButtonStyle}" />
+                    Style="{StaticResource FilledButtonStyle}" />
             </Grid>
         </Grid>
 
         <!--  Minimal Quick Search Bar + Combolist Results  -->
         <Border
             x:Name="MinimalSearchRoot"
-            Padding="10,6"
+            pp:Id="search.bar"
+            Margin="12"
             VerticalAlignment="Center"
-            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            Style="{StaticResource HackToolbarStyle}"
             Visibility="Collapsed">
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="82" />
+                    <ColumnDefinition Width="136" />
                     <ColumnDefinition Width="*" MinWidth="150" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -358,46 +401,47 @@
                 </Grid.ColumnDefinitions>
 
                 <ComboBox
-                    x:Name="MiniComparerBox"
                     Grid.Column="0"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Center"
+                    Header="Match"
+                    Style="{StaticResource HackOutlinedComboBoxStyle}"
                     IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}"
                     ItemsSource="{x:Bind ViewModel.OperatorList}"
                     SelectedItem="{x:Bind ViewModel.SelectedComparer, Mode=TwoWay}"
                     ToolTipService.ToolTip="Filename match operator">
                     <ComboBox.ItemTemplate>
                         <DataTemplate x:DataType="rep:OperatorsRow">
-                            <TextBlock Text="{Binding OpRepr}" />
+                            <TextBlock Text="{x:Bind OpRepr}" />
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
 
                 <TextBox
-                    x:Name="MiniSearchBox"
                     Grid.Column="1"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Center"
                     KeyDown="FileNameTextbox_KeyDown"
                     PlaceholderText="Search vault files… (Enter)"
+                    Style="{StaticResource OutlinedTextBoxStyle}"
                     Text="{x:Bind ViewModel.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
                 <Button
-                    x:Name="MiniOptionsBtn"
                     Grid.Column="2"
                     VerticalAlignment="Center"
                     Content="Options"
+                    Style="{StaticResource TextButtonStyle}"
                     ToolTipService.ToolTip="Search options (scope &amp; result limit)">
                     <Button.Flyout>
                         <Flyout>
                             <StackPanel Width="240" Spacing="10">
                                 <TextBlock
-                                    FontSize="12"
-                                    FontWeight="SemiBold"
+                                    Style="{StaticResource TitleSmall}"
                                     Text="Quick Search Options" />
                                 <TextBox
                                     Header="Max Results"
                                     KeyDown="FileNameTextbox_KeyDown"
+                                    Style="{StaticResource OutlinedTextBoxStyle}"
                                     Text="{x:Bind ViewModel.MaxResults, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                 <CheckBox
                                     MinWidth="0"
@@ -411,24 +455,24 @@
                                     IsEnabled="{x:Bind ViewModel.IsLocalOnlyEnabled, Mode=OneWay}" />
                                 <CheckBox
                                     MinWidth="0"
-                                    Content="Deleted Locally"
+                                    Content="Deleted on Server"
                                     IsChecked="{x:Bind ViewModel.DeletedRemotely, Mode=TwoWay}"
                                     IsEnabled="{x:Bind ViewModel.AreRemoteFiltersEnabled, Mode=OneWay}" />
                                 <Button
                                     HorizontalAlignment="Right"
                                     Command="{x:Bind ViewModel.ResetCommand}"
-                                    Content="Reset Filters" />
+                                    Content="Reset Filters"
+                                    Style="{StaticResource TextButtonStyle}" />
                             </StackPanel>
                         </Flyout>
                     </Button.Flyout>
                 </Button>
 
                 <Button
-                    x:Name="MiniSearchBtn"
                     Grid.Column="3"
                     VerticalAlignment="Center"
                     Command="{x:Bind ViewModel.SearchCommand}"
-                    Style="{ThemeResource AccentButtonStyle}">
+                    Style="{StaticResource FilledButtonStyle}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <ProgressRing
                             Width="13"
@@ -448,6 +492,8 @@
                     <ComboBox
                         x:Name="MiniResultsCombo"
                         MinWidth="240"
+                        Header="Results"
+                        Style="{StaticResource HackOutlinedComboBoxStyle}"
                         MaxWidth="340"
                         VerticalAlignment="Center"
                         ItemsSource="{x:Bind ViewModel.SearchResultsList, Mode=OneWay}"
@@ -458,13 +504,12 @@
                             <DataTemplate x:DataType="rep:SearchRow">
                                 <StackPanel Spacing="1">
                                     <TextBlock
-                                        FontWeight="SemiBold"
-                                        Text="{Binding Name}"
+                                        Style="{StaticResource BodyMedium}"
+                                        Text="{x:Bind Name}"
                                         TextTrimming="CharacterEllipsis" />
                                     <TextBlock
-                                        FontSize="11"
-                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Text="{Binding Directory}"
+                                        Style="{StaticResource HackCaptionStyle}"
+                                        Text="{x:Bind Directory}"
                                         TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                             </DataTemplate>
@@ -472,21 +517,21 @@
                     </ComboBox>
                     <Button
                         x:Name="MiniLocateBtn"
-                        Padding="8,6"
                         VerticalAlignment="Center"
                         Click="MiniLocate_Click"
                         IsEnabled="False"
+                        Style="{StaticResource PaneIconButtonStyle}"
                         ToolTipService.ToolTip="Jump to selected result in File Manager">
-                        <FontIcon FontSize="12" Glyph="&#xE72A;" />
+                        <FontIcon FontSize="14" Glyph="&#xE72A;" />
                     </Button>
                 </StackPanel>
 
                 <Button
-                    x:Name="MiniOpenFullBtn"
                     Grid.Column="5"
                     VerticalAlignment="Center"
                     Click="OpenFullSearch_Click"
                     Content="Full View"
+                    Style="{StaticResource TextButtonStyle}"
                     ToolTipService.ToolTip="Expand to full Search Odoo window" />
 
                 <StackPanel
@@ -498,12 +543,14 @@
                         x:Name="MiniDockBtn"
                         Click="OdooDock_Click"
                         Content="Dock"
+                        Style="{StaticResource TextButtonStyle}"
                         ToolTipService.ToolTip="Dock Search bar into main window"
                         Visibility="Collapsed" />
                     <Button
                         x:Name="MiniCloseBtn"
                         Click="OdooCancel_Click"
                         Content="Close"
+                        Style="{StaticResource TextButtonStyle}"
                         Visibility="Collapsed" />
                 </StackPanel>
             </Grid>

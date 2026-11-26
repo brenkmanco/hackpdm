@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
-using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading;
+using System.Threading.Tasks;
 
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
@@ -11,8 +13,6 @@ using HackPDM.Core.Pdm;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-
-using Windows.Storage.Streams;
 
 namespace HackPDM.Common;
 
@@ -33,32 +33,60 @@ public static partial class Assets
 		( "settings", "ExtensionIcons/settings.png" ),
 	];
 
-	public static readonly Dictionary<string, string> AssetMap;
-	public static string LocalImagesFolder => Path.Combine( AppDataPaths.Data, "Assets", "Images" );
+	private static readonly Dictionary<string, string> BundledAssetMap;
+	private static Dictionary<string, string>? _localOverrides;
+	private static int _localOverridesStarted;
+
+	private static string LocalImagesFolder => Path.Combine( AppDataPaths.Data, "Assets", "Images" );
 
 	static Assets()
 	{
-		AssetMap = new( StringComparer.OrdinalIgnoreCase );
+		BundledAssetMap = new( BundledImages.Length + ExtraImages.Length, StringComparer.OrdinalIgnoreCase );
 		foreach( var (key, path) in BundledImages )
-			AssetMap[ key ] = $"{Prefix}{path}";
+			BundledAssetMap[ key ] = $"{Prefix}{path}";
 		foreach( var (key, path) in ExtraImages )
-			AssetMap[ key ] = $"{Prefix}{path}";
-		LoadLocalOverrides();
+			BundledAssetMap[ key ] = $"{Prefix}{path}";
 	}
 
-	private static void LoadLocalOverrides()
+	internal static bool TryGetUri( string key, [NotNullWhen( true )] out string? uri )
+	{
+		EnsureLocalOverridesStarted();
+		if( Volatile.Read( ref _localOverrides ) is { } overrides && overrides.TryGetValue( key, out uri ) )
+			return true;
+		return BundledAssetMap.TryGetValue( key, out uri );
+	}
+
+	private static void EnsureLocalOverridesStarted()
+	{
+		if( Interlocked.CompareExchange( ref _localOverridesStarted, 1, 0 ) != 0 )
+			return;
+		_ = Task.Run( LoadLocalOverridesCore );
+	}
+
+	private static void LoadLocalOverridesCore()
 	{
 		try
 		{
 			string folder = LocalImagesFolder;
 			if( !Directory.Exists( folder ) )
 				return;
+
+			Dictionary<string, string>? overrides = null;
 			foreach( string file in Directory.EnumerateFiles( folder ) )
-				AssetMap[ Path.GetFileNameWithoutExtension( file ) ] = new Uri( file ).AbsoluteUri;
+			{
+				overrides ??= new Dictionary<string, string>( StringComparer.OrdinalIgnoreCase );
+				overrides[ Path.GetFileNameWithoutExtension( file ) ] = new Uri( file ).AbsoluteUri;
+			}
+
+			if( overrides is { Count: > 0 } )
+			{
+				Volatile.Write( ref _localOverrides, overrides );
+				UiDispatcher.RunOrPost( EntryIcons.InvalidateAllCache );
+			}
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{
-			HackLogger.Warn( "Assets", $"Local image assets not loaded: {e.Message}", e );
+			HackLogger.Warn( nameof( Assets ), $"Local image assets not loaded: {e.Message}", e );
 		}
 	}
 }
@@ -68,6 +96,8 @@ public static class EntryIcons
 {
 	private const string GenericFile = "def_fi";
 	private const int StatusCount = (int)FileStatus.Unknown + 1;
+	private const int IconDecodePixels = 48;
+
 	private static readonly Dictionary<string, ImageSource?> Cache = new( StringComparer.OrdinalIgnoreCase );
 	private static readonly Dictionary<string, ImageSource?> TypeCache = new( StringComparer.OrdinalIgnoreCase );
 	private static readonly ImageSource?[] StatusCache = new ImageSource?[ StatusCount ];
@@ -77,10 +107,17 @@ public static class EntryIcons
 	{
 		if( Cache.TryGetValue( key, out ImageSource? cached ) )
 			return cached;
-		ImageSource? image = Assets.AssetMap.TryGetValue( key, out string? uri )
+		ImageSource? image = Assets.TryGetUri( key, out string? uri )
 			? uri.EndsWith( ".svg", StringComparison.OrdinalIgnoreCase )
 				? new SvgImageSource( new Uri( uri ) )
+				{
+					RasterizePixelWidth = IconDecodePixels,
+					RasterizePixelHeight = IconDecodePixels,
+				}
 				: new BitmapImage( new Uri( uri ) )
+				{
+					DecodePixelWidth = IconDecodePixels,
+				}
 			: null;
 		return Cache[ key ] = image;
 	}
@@ -138,6 +175,30 @@ public static class EntryIcons
 		return icon;
 	}
 
+	public static void ClearServerCache()
+	{
+		TypeCache.Clear();
+		List<string>? serverKeys = null;
+		foreach( string key in Cache.Keys )
+		{
+			if( key.StartsWith( "type:", StringComparison.Ordinal ) )
+				( serverKeys ??= [] ).Add( key );
+		}
+		if( serverKeys is not null )
+		{
+			for( int i = 0; i < serverKeys.Count; i++ )
+				Cache.Remove( serverKeys[ i ] );
+		}
+	}
+
+	internal static void InvalidateAllCache()
+	{
+		Cache.Clear();
+		TypeCache.Clear();
+		Array.Clear( StatusCache );
+		Array.Clear( StatusCached );
+	}
+
 	private static ImageSource? ServerTypeIcon( string extension )
 	{
 		string key = $"type:{extension}";
@@ -148,23 +209,20 @@ public static class EntryIcons
 		if( !OdooDefaults.Instance.ExtToType.TryGetValue( $".{extension}", out HpType? type ) || type.icon is not { Length: > 0 } bytes )
 			return Cache[ key ] = null;
 
-		BitmapImage image = new();
-		LoadAsync( image, bytes );
+		BitmapImage image = new() { DecodePixelWidth = IconDecodePixels };
+		_ = LoadBitmapBytesAsync( image, bytes );
 		return Cache[ key ] = image;
 	}
 
-	private static async void LoadAsync( BitmapImage image, byte[] bytes )
+	private static async Task LoadBitmapBytesAsync( BitmapImage image, byte[] bytes )
 	{
 		try
 		{
-			using InMemoryRandomAccessStream stream = new();
-			await stream.WriteAsync( bytes.AsBuffer() );
-			stream.Seek( 0 );
-			await image.SetSourceAsync( stream );
+			await BitmapImageLoader.LoadFromBytesAsync( image, bytes );
 		}
 		catch( Exception e )
 		{
-			HackLogger.Debug( "EntryIcons", $"Type icon failed to decode: {e.Message}", e );
+			HackLogger.Debug( nameof( EntryIcons ), $"Type icon failed to decode: {e.Message}", e );
 		}
 	}
 }

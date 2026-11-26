@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.ComponentModel;
 using System.Net.Http.Headers;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -12,6 +13,7 @@ namespace HackPDM.Core.Pdm;
 
 public readonly record struct VersionCheckResult( bool IsAllowed, string? Reason );
 
+[Bindable( true )]
 public sealed record UpdateInfo(
 	string Version,
 	string DownloadUrl,
@@ -135,7 +137,8 @@ public static class ClientUpdate
 		bool web = Uri.TryCreate( source, UriKind.Absolute, out Uri? uri ) && uri.Scheme is "http" or "https";
 		string fileName = Path.GetFileName( web ? uri!.AbsolutePath : uri is { IsFile: true } ? uri.LocalPath : source );
 		if( string.IsNullOrEmpty( fileName ) )
-			fileName = "HackPDM-setup";
+			fileName = OperatingSystem.IsWindows() ? "HackPDM-setup.exe" : "HackPDM-setup";
+		bool createdTempDir = targetDirectory is null;
 		targetDirectory ??= Path.Combine( Path.GetTempPath(), $"hackpdm-update-{Guid.NewGuid():N}" );
 		string target = Path.Combine( targetDirectory, fileName );
 		string partial = target + ".download";
@@ -145,28 +148,33 @@ public static class ClientUpdate
 			Directory.CreateDirectory( targetDirectory );
 			string actual;
 			using( IncrementalHash hasher = IncrementalHash.CreateHash( HashAlgorithmName.SHA256 ) )
-			await using( FileStream output = new( partial, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true ) )
 			{
-				if( web )
+				FileStream output = new( partial, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true );
+				await using( output.ConfigureAwait( false ) )
 				{
-					using HttpResponseMessage response = await Http.GetAsync( uri, HttpCompletionOption.ResponseHeadersRead, token );
-					response.EnsureSuccessStatusCode();
-					await using Stream input = await response.Content.ReadAsStreamAsync( token );
-					await CopyAndHashAsync( input, output, hasher, token );
+					if( web )
+					{
+						using HttpResponseMessage response = await Http.GetAsync( uri, HttpCompletionOption.ResponseHeadersRead, token ).ConfigureAwait( false );
+						response.EnsureSuccessStatusCode();
+						Stream input = await response.Content.ReadAsStreamAsync( token ).ConfigureAwait( false );
+						await using( input.ConfigureAwait( false ) )
+							await CopyAndHashAsync( input, output, hasher, token ).ConfigureAwait( false );
+					}
+					else
+					{
+						FileStream input = new( uri is { IsFile: true } ? uri.LocalPath : source, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, useAsync: true );
+						await using( input.ConfigureAwait( false ) )
+							await CopyAndHashAsync( input, output, hasher, token ).ConfigureAwait( false );
+					}
+					Span<byte> digest = stackalloc byte[ SHA256.HashSizeInBytes ];
+					hasher.GetHashAndReset( digest );
+					actual = Convert.ToHexStringLower( digest );
 				}
-				else
-				{
-					await using FileStream input = new( uri is { IsFile: true } ? uri.LocalPath : source, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, useAsync: true );
-					await CopyAndHashAsync( input, output, hasher, token );
-				}
-				Span<byte> digest = stackalloc byte[ SHA256.HashSizeInBytes ];
-				hasher.GetHashAndReset( digest );
-				actual = Convert.ToHexStringLower( digest );
 			}
 
 			if( actual != expected )
 			{
-				File.Delete( partial );
+				CleanupFailedDownload( partial, createdTempDir ? targetDirectory : null );
 				HackLogger.Error( "Updater", $"SHA-256 mismatch for installer from '{source}': expected={expected}, actual={actual}; file deleted." );
 				return Result<string>.Fail( $"the downloaded installer does not match the server's SHA-256 (got {actual}); it was deleted" );
 			}
@@ -177,14 +185,30 @@ public static class ClientUpdate
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException && !token.IsCancellationRequested )
 		{
-			TryDelete( partial );
+			CleanupFailedDownload( partial, createdTempDir ? targetDirectory : null );
 			HackLogger.Error( "Updater", $"Installer download from '{source}' failed: {e.Message}", e );
 			return Result<string>.Fail( $"could not download the installer from {source}: {e.Message}" );
 		}
 		catch
 		{
-			TryDelete( partial );
+			CleanupFailedDownload( partial, createdTempDir ? targetDirectory : null );
 			throw;
+		}
+	}
+
+	private static void CleanupFailedDownload( string partialPath, string? autoCreatedDirectory )
+	{
+		FileOps.TryDelete( partialPath );
+		if( autoCreatedDirectory is not null )
+		{
+			try
+			{
+				if( Directory.Exists( autoCreatedDirectory ) && !Directory.EnumerateFileSystemEntries( autoCreatedDirectory ).Any() )
+					Directory.Delete( autoCreatedDirectory, recursive: false );
+			}
+			catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException )
+			{
+			}
 		}
 	}
 
@@ -194,10 +218,10 @@ public static class ClientUpdate
 		try
 		{
 			int read;
-			while( ( read = await input.ReadAsync( buffer.AsMemory( 0, buffer.Length ), token ) ) > 0 )
+			while( ( read = await input.ReadAsync( buffer.AsMemory( 0, buffer.Length ), token ).ConfigureAwait( false ) ) > 0 )
 			{
 				hasher.AppendData( buffer.AsSpan( 0, read ) );
-				await output.WriteAsync( buffer.AsMemory( 0, read ), token );
+				await output.WriteAsync( buffer.AsMemory( 0, read ), token ).ConfigureAwait( false );
 			}
 		}
 		finally
@@ -216,12 +240,6 @@ public static class ClientUpdate
 				return false;
 		}
 		return true;
-	}
-
-	private static void TryDelete( string path )
-	{
-		try { File.Delete( path ); }
-		catch( Exception e ) when( e is IOException or UnauthorizedAccessException ) { }
 	}
 
 	public static string? ParseSha256File( string? content )
@@ -253,60 +271,63 @@ public static class ClientUpdate
 			req.Headers.UserAgent.Add( new ProductInfoHeaderValue( "HackPDM", CurrentText ) );
 			req.Headers.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/vnd.github+json" ) );
 
-			using HttpResponseMessage resp = await Http.SendAsync( req, HttpCompletionOption.ResponseHeadersRead, token );
+			using HttpResponseMessage resp = await Http.SendAsync( req, HttpCompletionOption.ResponseHeadersRead, token ).ConfigureAwait( false );
 			if( !resp.IsSuccessStatusCode )
 				return Result<UpdateInfo?>.Fail( $"GitHub release check returned HTTP {(int)resp.StatusCode}." );
 
-			await using Stream stream = await resp.Content.ReadAsStreamAsync( token );
-			using JsonDocument doc = await JsonDocument.ParseAsync( stream, cancellationToken: token );
-			JsonElement root = doc.RootElement;
-
-			string tag = root.TryGetProperty( "tag_name", out JsonElement tagEl ) ? tagEl.GetString() ?? "" : "";
-			string versionText = tag.TrimStart( 'v', 'V' ).Split( '-', 2 )[ 0 ];
-			if( !IsOutdated( Current, versionText ) )
-				return Result<UpdateInfo?>.Success( null );
-
-			string? htmlUrl = root.TryGetProperty( "html_url", out JsonElement urlEl ) ? urlEl.GetString() : null;
-			string suffix = GetPlatformAssetSuffix();
-			string shaSuffix = suffix + ".sha256";
-			string? downloadUrl = null;
-			string? shaUrl = null;
-
-			if( root.TryGetProperty( "assets", out JsonElement assetsEl ) && assetsEl.ValueKind == JsonValueKind.Array )
+			Stream stream = await resp.Content.ReadAsStreamAsync( token ).ConfigureAwait( false );
+			await using( stream.ConfigureAwait( false ) )
 			{
-				foreach( JsonElement asset in assetsEl.EnumerateArray() )
+				using JsonDocument doc = await JsonDocument.ParseAsync( stream, cancellationToken: token ).ConfigureAwait( false );
+				JsonElement root = doc.RootElement;
+
+				string tag = root.TryGetProperty( "tag_name", out JsonElement tagEl ) ? tagEl.GetString() ?? "" : "";
+				string versionText = tag.TrimStart( 'v', 'V' ).Split( '-', 2 )[ 0 ];
+				if( !IsOutdated( Current, versionText ) )
+					return Result<UpdateInfo?>.Success( null );
+
+				string? htmlUrl = root.TryGetProperty( "html_url", out JsonElement urlEl ) ? urlEl.GetString() : null;
+				string suffix = GetPlatformAssetSuffix();
+				string shaSuffix = suffix + ".sha256";
+				string? downloadUrl = null;
+				string? shaUrl = null;
+
+				if( root.TryGetProperty( "assets", out JsonElement assetsEl ) && assetsEl.ValueKind == JsonValueKind.Array )
 				{
-					string name = asset.TryGetProperty( "name", out JsonElement nameEl ) ? nameEl.GetString() ?? "" : "";
-					string url = asset.TryGetProperty( "browser_download_url", out JsonElement dlEl ) ? dlEl.GetString() ?? "" : "";
-					if( string.IsNullOrEmpty( url ) )
-						continue;
-					if( name.EndsWith( suffix, StringComparison.OrdinalIgnoreCase ) )
-						downloadUrl = url;
-					else if( name.EndsWith( shaSuffix, StringComparison.OrdinalIgnoreCase ) )
-						shaUrl = url;
+					foreach( JsonElement asset in assetsEl.EnumerateArray() )
+					{
+						string name = asset.TryGetProperty( "name", out JsonElement nameEl ) ? nameEl.GetString() ?? "" : "";
+						string url = asset.TryGetProperty( "browser_download_url", out JsonElement dlEl ) ? dlEl.GetString() ?? "" : "";
+						if( string.IsNullOrEmpty( url ) )
+							continue;
+						if( name.EndsWith( suffix, StringComparison.OrdinalIgnoreCase ) )
+							downloadUrl = url;
+						else if( name.EndsWith( shaSuffix, StringComparison.OrdinalIgnoreCase ) )
+							shaUrl = url;
+					}
 				}
+
+				if( string.IsNullOrWhiteSpace( downloadUrl ) || string.IsNullOrWhiteSpace( shaUrl ) )
+					return Result<UpdateInfo?>.Fail( $"Release {tag} does not include a verified package for this platform ({suffix})." );
+
+				using HttpRequestMessage shaReq = new( HttpMethod.Get, shaUrl );
+				shaReq.Headers.UserAgent.Add( new ProductInfoHeaderValue( "HackPDM", CurrentText ) );
+				using HttpResponseMessage shaResp = await Http.SendAsync( shaReq, token ).ConfigureAwait( false );
+				shaResp.EnsureSuccessStatusCode();
+				string? sha256 = ParseSha256File( await shaResp.Content.ReadAsStringAsync( token ).ConfigureAwait( false ) );
+				if( sha256 is null )
+					return Result<UpdateInfo?>.Fail( $"Release {tag} checksum file could not be parsed." );
+
+				return Result<UpdateInfo?>.Success( new UpdateInfo(
+					Version: versionText,
+					DownloadUrl: downloadUrl,
+					Sha256: sha256,
+					ReleaseNotesUrl: htmlUrl,
+					Source: "GitHub Releases",
+					IsMandatory: false ) );
 			}
-
-			if( string.IsNullOrWhiteSpace( downloadUrl ) || string.IsNullOrWhiteSpace( shaUrl ) )
-				return Result<UpdateInfo?>.Fail( $"Release {tag} does not include a verified package for this platform ({suffix})." );
-
-			using HttpRequestMessage shaReq = new( HttpMethod.Get, shaUrl );
-			shaReq.Headers.UserAgent.Add( new ProductInfoHeaderValue( "HackPDM", CurrentText ) );
-			using HttpResponseMessage shaResp = await Http.SendAsync( shaReq, token );
-			shaResp.EnsureSuccessStatusCode();
-			string? sha256 = ParseSha256File( await shaResp.Content.ReadAsStringAsync( token ) );
-			if( sha256 is null )
-				return Result<UpdateInfo?>.Fail( $"Release {tag} checksum file could not be parsed." );
-
-			return Result<UpdateInfo?>.Success( new UpdateInfo(
-				Version: versionText,
-				DownloadUrl: downloadUrl,
-				Sha256: sha256,
-				ReleaseNotesUrl: htmlUrl,
-				Source: "GitHub Releases",
-				IsMandatory: false ) );
 		}
-		catch( Exception e ) when( e is HttpRequestException or TaskCanceledException or JsonException && !token.IsCancellationRequested )
+		catch( Exception e ) when( e is HttpRequestException or IOException or TaskCanceledException or JsonException && !token.IsCancellationRequested )
 		{
 			return Result<UpdateInfo?>.Fail( $"Could not check GitHub Releases: {e.Message}" );
 		}

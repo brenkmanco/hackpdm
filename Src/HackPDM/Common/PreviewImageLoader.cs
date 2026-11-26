@@ -1,52 +1,68 @@
 using System;
+#if WINDOWS
 using System.IO;
-using System.Runtime.InteropServices.WindowsRuntime;
+#endif
 using System.Threading.Tasks;
 
+#if WINDOWS
 using HackPDM.Core.Configuration;
+#endif
 
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 
+#if WINDOWS
 using Windows.Storage;
 using Windows.Storage.FileProperties;
-using Windows.Storage.Streams;
+#endif
 
 namespace HackPDM.Common;
 
+[System.ComponentModel.Bindable( true )]
 public sealed record EntryPreview( byte[]? ImageBytes, string? LocalFilePath );
 
 public interface IPreviewImageLoader
 {
-	Task<ImageSource?> FromBytesAsync( byte[]? bytes );
-	Task<ImageSource?> FromFileIconAsync( string? filePath, uint size = 512 );
+	ValueTask<ImageSource?> FromBytesAsync( byte[]? bytes );
+	ValueTask<ImageSource?> FromFileIconAsync( string? filePath, uint size = 512 );
 }
 
 public sealed class PreviewImageLoader : IPreviewImageLoader
 {
-	public async Task<ImageSource?> FromBytesAsync( byte[]? bytes )
+	private const int MaxPreviewDecodePixels = 512;
+
+	public ValueTask<ImageSource?> FromBytesAsync( byte[]? bytes )
 	{
 		if( bytes is not { Length: > 0 } )
-			return null;
+			return ValueTask.FromResult<ImageSource?>( null );
+		return LoadFromBytesCoreAsync( bytes );
+	}
 
-		using InMemoryRandomAccessStream stream = new();
-		await stream.WriteAsync( bytes.AsBuffer() );
-		stream.Seek( 0 );
-
-		BitmapImage image = new();
-		await image.SetSourceAsync( stream );
+	private static async ValueTask<ImageSource?> LoadFromBytesCoreAsync( byte[] bytes )
+	{
+		BitmapImage image = new() { DecodePixelWidth = MaxPreviewDecodePixels };
+		await BitmapImageLoader.LoadFromBytesAsync( image, bytes );
 		return image;
 	}
 
-	public async Task<ImageSource?> FromFileIconAsync( string? filePath, uint size = 512 )
+	public ValueTask<ImageSource?> FromFileIconAsync( string? filePath, uint size = 512 )
 	{
 #if !WINDOWS
-		await Task.CompletedTask;
-		return null;
+		_ = ( filePath, size );
+		return ValueTask.FromResult<ImageSource?>( null );
 #else
+		if( string.IsNullOrEmpty( filePath ) )
+			return ValueTask.FromResult<ImageSource?>( null );
+		return LoadFileIconCoreAsync( filePath, size );
+#endif
+	}
+
+#if WINDOWS
+	private static async ValueTask<ImageSource?> LoadFileIconCoreAsync( string filePath, uint size )
+	{
 		try
 		{
-			if( string.IsNullOrEmpty( filePath ) || !File.Exists( filePath ) )
+			if( !await Task.Run( () => File.Exists( filePath ) ) )
 				return null;
 
 			StorageFile file = await StorageFile.GetFileFromPathAsync( filePath );
@@ -54,15 +70,18 @@ public sealed class PreviewImageLoader : IPreviewImageLoader
 			if( thumbnail is null )
 				return null;
 
-			BitmapImage image = new();
+			BitmapImage image = new()
+			{
+				DecodePixelWidth = (int)Math.Clamp( size, 1, MaxPreviewDecodePixels ),
+			};
 			await image.SetSourceAsync( thumbnail );
 			return image;
 		}
 		catch( Exception ex )
 		{
-			HackLogger.Debug( "PreviewImageLoader", $"Failed to get file icon for '{filePath}': {ex.Message}", ex );
+			HackLogger.Debug( nameof( PreviewImageLoader ), $"Failed to get file icon for '{filePath}': {ex.Message}", ex );
 			return null;
 		}
-#endif
 	}
+#endif
 }

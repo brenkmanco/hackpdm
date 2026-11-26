@@ -19,7 +19,7 @@ public static class ColorNames
 		("AliceBlue", 0xFFF0F8FF), ("AntiqueWhite", 0xFFFAEBD7), ("Aqua", 0xFF00FFFF),
 		("Aquamarine", 0xFF7FFFD4), ("Azure", 0xFFF0FFFF), ("Beige", 0xFFF5F5DC),
 		("Bisque", 0xFFFFE4C4), ("Black", 0xFF000000), ("BlanchedAlmond", 0xFFFFEBCD),
-		("Blue", 0xFF0000FF), ("BlueViolet", 0xFF8A2BE2), ("BluishWater", BluishWater),
+		("Blue", 0xFF0000FF), ("BlueViolet", 0xFF8A2BE2), (nameof(BluishWater), BluishWater),
 		("Brown", 0xFFA52A2A), ("BurlyWood", 0xFFDEB887), ("CadetBlue", 0xFF5F9EA0),
 		("Chartreuse", 0xFF7FFF00), ("Chocolate", 0xFFD2691E), ("Coral", 0xFFFF7F50),
 		("CornflowerBlue", 0xFF6495ED), ("Cornsilk", 0xFFFFF8DC), ("Crimson", 0xFFDC143C),
@@ -49,7 +49,7 @@ public static class ColorNames
 		("MediumVioletRed", 0xFFC71585), ("MidnightBlue", 0xFF191970), ("MintCream", 0xFFF5FFFA),
 		("MistyRose", 0xFFFFE4E1), ("Moccasin", 0xFFFFE4B5), ("NavajoWhite", 0xFFFFDEAD),
 		("Navy", 0xFF000080), ("OldLace", 0xFFFDF5E6), ("Olive", 0xFF808000),
-		("OliveDrab", 0xFF6B8E23), ("Orange", 0xFFFFA500), ("OrangeBlast", OrangeBlast),
+		("OliveDrab", 0xFF6B8E23), ("Orange", 0xFFFFA500), (nameof(OrangeBlast), OrangeBlast),
 		("OrangeRed", 0xFFFF4500), ("Orchid", 0xFFDA70D6), ("PaleGoldenrod", 0xFFEEE8AA),
 		("PaleGreen", 0xFF98FB98), ("PaleTurquoise", 0xFFAFEEEE), ("PaleVioletRed", 0xFFDB7093),
 		("PapayaWhip", 0xFFFFEFD5), ("PeachPuff", 0xFFFFDAB9), ("Peru", 0xFFCD853F),
@@ -68,12 +68,6 @@ public static class ColorNames
 
 	private static readonly FrozenDictionary<string, uint> ByName =
 		StandardColors.ToFrozenDictionary( static c => c.Name, static c => c.Argb, StringComparer.OrdinalIgnoreCase );
-
-	public static (byte A, byte R, byte G, byte B) Unpack(uint argb) => (
-		(byte)((argb >> 24) & 0xFF),
-		(byte)((argb >> 16) & 0xFF),
-		(byte)((argb >> 8) & 0xFF),
-		(byte)(argb & 0xFF));
 
 	public static bool TryParse(string? text, out uint argb)
 	{
@@ -103,30 +97,5 @@ public static class ColorNames
 			return false;
 		}
 		return ByName.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(s, out argb);
-	}
-
-	public static string ToHex(uint argb) => $"#{argb:X8}";
-
-	public static string NearestName(byte r, byte g, byte b)
-	{
-		string best = "Black";
-		int bestDist = int.MaxValue;
-		foreach (var (name, argb) in StandardColors)
-		{
-			if ((argb >> 24) == 0)
-				continue;
-			int dr = r - (int)((argb >> 16) & 0xFF);
-			int dg = g - (int)((argb >> 8) & 0xFF);
-			int db = b - (int)(argb & 0xFF);
-			int dist = dr * dr + dg * dg + db * db;
-			if (dist < bestDist)
-			{
-				bestDist = dist;
-				best = name;
-				if (dist == 0)
-					break;
-			}
-		}
-		return best;
 	}
 }

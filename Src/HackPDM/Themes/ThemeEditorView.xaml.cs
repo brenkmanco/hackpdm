@@ -1,11 +1,22 @@
 using System;
 
+using HackPDM.Common;
+using HackPDM.Core.Configuration;
 using HackPDM.Core.Theming;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
 namespace HackPDM.Themes;
+
+[Microsoft.UI.Xaml.Data.Bindable]
+public sealed class SampleRow( string name, string status, string size, string modUser )
+{
+	public string Name { get; } = name;
+	public string Status { get; } = status;
+	public string Size { get; } = size;
+	public string ModUser { get; } = modUser;
+}
 
 /// <summary>Theme editor plus a preview of every control type the app uses.</summary>
 public sealed partial class ThemeEditorView : Page
@@ -14,15 +25,25 @@ public sealed partial class ThemeEditorView : Page
 
 	// true while the view model is driving the picker, so its ColorChanged isn't sent back as an edit
 	private bool _syncingPicker;
+	private bool _dialogOpen;
 
 	public ThemeEditorView()
 	{
 		InitializeComponent();
-		ViewModel.SelectedColorValueChanged += ShowInPicker;
-		Unloaded += ( _, _ ) => ViewModel.SelectedColorValueChanged -= ShowInPicker;
-		ShowInPicker( ArgbColor.TryParse( ViewModel.SelectedColor?.Hex, out var c ) ? c : null );
+		Loaded += OnLoaded;
+		Unloaded += OnUnloaded;
 		FillSamples();
 	}
+
+	private void OnLoaded( object sender, RoutedEventArgs e )
+	{
+		ViewModel.SelectedColorValueChanged -= ShowInPicker;
+		ViewModel.SelectedColorValueChanged += ShowInPicker;
+		ShowInPicker( ArgbColor.TryParse( ViewModel.SelectedColor?.Hex, out var c ) ? c : null );
+	}
+
+	private void OnUnloaded( object sender, RoutedEventArgs e )
+		=> ViewModel.SelectedColorValueChanged -= ShowInPicker;
 
 	private void ShowInPicker( ArgbColor? color )
 	{
@@ -30,7 +51,7 @@ public sealed partial class ThemeEditorView : Page
 		try
 		{
 			if( color is { } c )
-				Picker.Color = Windows.UI.Color.FromArgb( c.A, c.R, c.G, c.B );
+				Picker.Color = c.ToUiColor();
 		}
 		finally
 		{
@@ -42,34 +63,39 @@ public sealed partial class ThemeEditorView : Page
 	{
 		if( _syncingPicker )
 			return;
-		var c = args.NewColor;
-		ViewModel.SetSelectedColor( new( c.A, c.R, c.G, c.B ) );
+		ViewModel.SetSelectedColor( args.NewColor.ToArgbColor() );
 	}
 
 	private async void ShowDialog_Click( object sender, RoutedEventArgs e )
 	{
-		var dialog = new ContentDialog
+		if( _dialogOpen )
+			return;
+		_dialogOpen = true;
+		try
 		{
-			XamlRoot = XamlRoot,
-			Title = "Dialog",
-			Content = "Message boxes and confirmations use this surface.",
-			PrimaryButtonText = "OK",
-			CloseButtonText = "Cancel",
-			DefaultButton = ContentDialogButton.Primary,
-			RequestedTheme = ActualTheme,
-		};
-		await dialog.ShowAsync();
+			var dialog = new ContentDialog
+			{
+				XamlRoot = XamlRoot,
+				Title = "Dialog",
+				Content = "Message boxes and confirmations use this surface.",
+				PrimaryButtonText = "OK",
+				CloseButtonText = "Cancel",
+				DefaultButton = ContentDialogButton.Primary,
+				RequestedTheme = ActualTheme,
+			};
+			await dialog.ShowAsync();
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "ThemeEditor", $"Preview dialog failed: {ex.Message}", ex );
+		}
+		finally
+		{
+			_dialogOpen = false;
+		}
 	}
 
 	#region Sample data for the preview
-
-	public sealed class SampleRow( string name, string status, string size, string modUser )
-	{
-		public string Name { get; } = name;
-		public string Status { get; } = status;
-		public string Size { get; } = size;
-		public string ModUser { get; } = modUser;
-	}
 
 	private void FillSamples()
 	{

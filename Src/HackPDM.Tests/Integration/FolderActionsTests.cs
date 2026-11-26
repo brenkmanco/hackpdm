@@ -64,7 +64,6 @@ public sealed class FolderActionsTests : IAsyncLifetime
 		HackDefaults.Instance.PwaPathAbsolute = Vault;
 		OdooDefaults.Instance.OdooId = await OdooTestServer.LoginAsync();
 		await OdooDefaults.Instance.InitializeAsync();
-		_service.PreloadMetadata();
 	}
 
 	public async Task DisposeAsync()

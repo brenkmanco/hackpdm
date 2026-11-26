@@ -24,7 +24,12 @@ public static class AppDataPaths
 	{
 		string root = Environment.GetFolderPath( folder );
 		if( string.IsNullOrEmpty( root ) )
-			root = Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.UserProfile ), homeFallback );
+		{
+			string userProfile = Environment.GetFolderPath( Environment.SpecialFolder.UserProfile );
+			if( string.IsNullOrEmpty( userProfile ) )
+				userProfile = Environment.GetEnvironmentVariable( "HOME" ) is { Length: > 0 } home ? home : Path.GetTempPath();
+			root = Path.Combine( userProfile, homeFallback );
+		}
 		return Path.Combine( root, FolderName );
 	}
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace HackPDM.Core.Credentials;
 
@@ -8,7 +9,7 @@ public sealed record StoredCredential( string? UserName, string? Password );
 /// <summary>A place to keep passwords, normally the operating system's keychain.</summary>
 /// <remarks>
 /// Implementations report failures through their return values and a note on standard error; they don't throw for
-/// an unreachable store. <see cref="HackPDM.Infrastructure.Odoo.CrossPlatformCredentialManager"/> picks the store for
+/// an unreachable store. <see cref="CrossPlatformCredentialManager"/> picks the store for
 /// the platform and falls back to a file when a call fails.
 /// </remarks>
 public interface ICredentialStore
@@ -34,12 +35,19 @@ public interface ICredentialStore
 	bool Delete( string target );
 }
 
+internal sealed record CredentialSecretPayload( string? U, string? P );
+
+internal sealed record CredentialEntry( string UserName, string Password );
+
+[JsonSerializable( typeof( CredentialSecretPayload ) )]
+[JsonSerializable( typeof( Dictionary<string, CredentialEntry> ) )]
+internal sealed partial class CredentialJsonContext : JsonSerializerContext;
+
 /// <summary>Stores that hold one secret string per item keep the user name and password in it as JSON.</summary>
 internal static class CredentialSecret
 {
-	private sealed record Secret( string? U, string? P );
-
-	public static string Encode( string userName, string password ) => JsonSerializer.Serialize( new Secret( userName, password ) );
+	public static string Encode( string userName, string password )
+		=> JsonSerializer.Serialize( new CredentialSecretPayload( userName, password ), CredentialJsonContext.Default.CredentialSecretPayload );
 
 	public static StoredCredential? Decode( string? secret )
 	{
@@ -47,7 +55,7 @@ internal static class CredentialSecret
 			return null;
 		try
 		{
-			return JsonSerializer.Deserialize<Secret>( secret ) is { } s ? new( s.U, s.P ) : null;
+			return JsonSerializer.Deserialize( secret, CredentialJsonContext.Default.CredentialSecretPayload ) is { } s ? new( s.U, s.P ) : null;
 		}
 		catch( JsonException )
 		{

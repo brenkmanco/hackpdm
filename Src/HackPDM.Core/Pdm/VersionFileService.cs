@@ -1,47 +1,55 @@
+using System.Collections.Concurrent;
+using System.Text.Json;
+
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
+using HackPDM.Core.Services;
 
 namespace HackPDM.Core.Pdm;
 
 /// <summary>Single-version downloads, previews, local lookup, and file moves.</summary>
 public static class VersionFileService
 {
-	private const string FileContents = "file_contents";
-	private const string PreviewImage = "preview_image";
+	private const string FileContents = nameof( HpVersion.file_contents );
 
-	public static async Task<(bool, HpVersion?)> GetVersionFromLocal( this HackFile hackFile )
+	public static async Task<byte[]?> DownloadContentsAsync( this HpVersion version, CancellationToken token = default )
 	{
-		string folder = hackFile.RelativePath is { Length: > 0 } relative
-			? string.Join( PwaPaths.DirectorySeparator, [ PwaPaths.Root, .. PwaPaths.Segments( relative ) ] )
-			: PwaPaths.ToServerDirectory( hackFile.DirectoryName ?? Path.GetDirectoryName( hackFile.FullPath ) ) ?? PwaPaths.Root;
-		OdooDomain sameFile = OdooDomain.Where( "name", hackFile.Name ).And( "directory_complete_name", folder );
-		HpVersion? version = ( await HpVersion.GetRecordsBySearchAsync( sameFile, excludedFields: [ FileContents, PreviewImage ] ) )?[ 0 ];
-		return ( version is not null, version );
-	}
-
-	public static async Task<bool> GetPreviewImage( this HpVersion version )
-	{
-		if( version.preview_image is not { Length: > 0 } && version.id is int id and not 0 )
-		{
-			Result<IReadOnlyList<OdooRow>> rows = await OdooRpc.ReadAsync( HpVersion.ModelName, [ id ], [ PreviewImage ] );
-			if( rows.Value is [ var row, .. ] && row.Text( PreviewImage ) is { Length: > 0 } b64 )
-				version.preview_image = Convert.FromBase64String( b64 );
-		}
-		return version.preview_image is { Length: > 0 };
-	}
-
-	public static async Task<byte[]?> DownloadContentsAsync( this HpVersion version )
-	{
-		if( version.file_size == 0 || version.id is not int id || id == 0 )
+		if( version.id is not int id || id == 0 )
 			return null;
+		if( version.file_size == 0 )
+			return [];
 		if( ContentTransfer.IsLarge( version.file_size ) )
-			return ( await ContentTransfer.DownloadBytesAsync( version ) ).Value;
+			return ( await ContentTransfer.DownloadBytesAsync( version, token ).ConfigureAwait( false ) ).Value;
 
-		Result<IReadOnlyList<OdooRow>> rows = await OdooRpc.ReadAsync( HpVersion.ModelName, [ id ], [ FileContents ] );
-		return rows.Value is [ var row, .. ] && row.Text( FileContents ) is { Length: > 0 } b64
-			? Convert.FromBase64String( b64 )
-			: null;
+		Result<JsonElement> raw = await OdooRpc.ExecuteAsync<JsonElement>(
+			HpVersion.ModelName,
+			"read",
+			[ new[] { id }, new[] { FileContents } ],
+			token: token ).ConfigureAwait( false );
+		if( !raw.Ok || raw.Value.ValueKind != JsonValueKind.Array || raw.Value.GetArrayLength() == 0 )
+			return null;
+		JsonElement first = raw.Value[ 0 ];
+		if( first.ValueKind != JsonValueKind.Object
+			|| !first.TryGetProperty( FileContents, out JsonElement data )
+			|| data.ValueKind != JsonValueKind.String )
+			return null;
+		if( data.TryGetBytesFromBase64( out byte[]? decoded ) )
+			return decoded.Length > 0 || ( version.file_size ?? 0 ) == 0 ? decoded : null;
+		string? b64 = data.GetString();
+		if( b64 is null )
+			return null;
+		if( b64.Length == 0 )
+			return ( version.file_size ?? 0 ) == 0 ? [] : null;
+		try
+		{
+			return Convert.FromBase64String( b64 );
+		}
+		catch( FormatException ex )
+		{
+			HackLogger.Warn( nameof( VersionFileService ), $"Invalid base64 payload for version {id}: {ex.Message}", ex );
+			return null;
+		}
 	}
 
 	public static string LocalDirectory( this HpVersion version )
@@ -52,56 +60,210 @@ public static class VersionFileService
 		return Path.Combine( HackDefaults.Instance.PwaPathAbsolute, version.WinPathway ?? "" );
 	}
 
-	public static Task<bool> DownloadFileAsync( this HpVersion version )
-		=> version.DownloadFileAsync( version.LocalDirectory() );
+	public static Task<bool> DownloadFileAsync( this HpVersion version, CancellationToken token = default )
+		=> version.DownloadFileAsync( version.LocalDirectory(), token );
 
-	public static async Task<bool> DownloadFileAsync( this HpVersion version, string toPath )
+	public static async Task<bool> DownloadFileAsync( this HpVersion version, string toPath, CancellationToken token = default )
 	{
-		if( !Directory.Exists( toPath ) && !Directory.CreateDirectory( toPath ).Exists )
+		if( !LocalFileWriter.IsSingleSafeFileName( version.name ) || string.IsNullOrWhiteSpace( toPath ) )
 			return false;
-		byte[]? contents = version.file_contents ?? await version.DownloadContentsAsync();
-		if( contents is { Length: > 0 } )
-		{
-			LocalFileWriter.Write( new HackFile( version.name!, null ) { FileContents = contents, DirectoryName = toPath } );
-			version.file_contents = null;
-		}
-		else if( version.file_size is not ( null or 0 ) )
-		{
-			return false;
-		}
-		version.WinPathway = toPath;
-		return true;
-	}
+		token.ThrowIfCancellationRequested();
 
-	public static async Task<List<HpVersion>> DownloadAllAsync( this IEnumerable<HpVersion> versions )
-	{
-		List<HpVersion> failed = [];
-		foreach( HpVersion version in versions )
+		if( version.file_contents is null && ContentTransfer.IsLarge( version.file_size ) )
 		{
-			if( !await version.DownloadFileAsync() )
-				failed.Add( version );
-		}
-		return failed;
-	}
-
-	public static bool MoveFile( this HpVersion version, string toPath )
-	{
-		try
-		{
-			if( !Directory.Exists( toPath ) && !Directory.CreateDirectory( toPath ).Exists )
+			Result<string> temp = await ContentTransfer.DownloadToTempFileAsync( version, token ).ConfigureAwait( false );
+			if( !temp.Ok || string.IsNullOrEmpty( temp.Value ) )
 				return false;
-			FileInfo file = new( Path.Combine( version.WinPathway!, version.name! ) );
-			if( !file.Exists )
+			HackFile large = version.ToHackFile( contentsInFile: true );
+			large.DirectoryName = toPath;
+			bool moved = await LocalFileWriter.WriteFromFileInRootAsync( large, temp.Value, toPath ).ConfigureAwait( false );
+			if( !moved )
+			{
+				FileOps.TryDelete( temp.Value );
 				return false;
-			file.MoveTo( Path.Combine( toPath, version.name! ) );
-			version.WinPathway = toPath;
+			}
 			return true;
 		}
-		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or ArgumentException )
-		{
-			HackLogger.Warn( "VersionFileService", $"Could not move '{version.name}' to '{toPath}': {ex.Message}", ex );
+
+		byte[]? contents = version.file_contents ?? ( version.file_size == 0 ? [] : await version.DownloadContentsAsync( token ).ConfigureAwait( false ) );
+		if( contents is null )
 			return false;
-		}
+		HackFile hack = new( version.name, null )
+		{
+			FileContents = contents,
+			DirectoryName = toPath,
+			Owner = version.checkout_user?.id is not null ? OdooDefaults.Instance?.OdooId == version.checkout_user.id : null,
+		};
+		hack.SetModifiedDate( version.file_modify_stamp ?? default );
+		bool wrote = await LocalFileWriter.WriteInRootAsync( hack, toPath, token ).ConfigureAwait( false ) is not null;
+		version.file_contents = null;
+		return wrote;
+	}
+
+	public static Task<List<HpVersion>> DownloadAllAsync(
+		this IEnumerable<HpVersion> versions,
+		CancellationToken token = default,
+		OperationPauseController? pause = null,
+		Action<int, long>? onVersionCompleted = null,
+		Action<int, int>? onProgress = null,
+		Action<long>? onBytesDownloaded = null,
+		Action<StatusMessage, string>? log = null )
+	{
+		HpVersion[] versionList = versions as HpVersion[] ?? [ .. versions ];
+		if( versionList.Length == 0 )
+			return Task.FromResult<List<HpVersion>>( [] );
+
+		return Task.Run( async () =>
+		{
+			ConcurrentBag<HpVersion> failed = [];
+			ConcurrentBag<(HpVersion Version, string LocalPath, string LocalChecksum)> conflictsToVerify = [];
+			ConcurrentBag<HpVersion> ready = [];
+
+			int diskParallelism = Math.Clamp( Environment.ProcessorCount, 2, 8 );
+			Parallel.ForEach(
+				versionList,
+				new ParallelOptions { MaxDegreeOfParallelism = diskParallelism, CancellationToken = token },
+				version =>
+				{
+					string localDir = version.LocalDirectory();
+					string? localPath = LocalFileWriter.IsSingleSafeFileName( version.name )
+						? Path.Combine( localDir, version.name )
+						: null;
+					if( localPath is null )
+					{
+						failed.Add( version );
+						onProgress?.Invoke( 1, 0 );
+						return;
+					}
+
+					if( File.Exists( localPath ) )
+					{
+						string? expectedChecksum = DownloadOperations.ExpectedChecksum( version );
+						string? localChecksum = Checksums.OfFile( localPath );
+						if( expectedChecksum is { Length: > 0 } && string.Equals( localChecksum, expectedChecksum, StringComparison.OrdinalIgnoreCase ) )
+						{
+							if( version.id is int id and > 0 )
+								onVersionCompleted?.Invoke( id, 0 );
+							onProgress?.Invoke( 0, 1 );
+							return;
+						}
+						if( localChecksum is null )
+						{
+							failed.Add( version );
+							onProgress?.Invoke( 1, 0 );
+							return;
+						}
+						conflictsToVerify.Add( ( version, localPath, localChecksum ) );
+					}
+					else
+					{
+						ready.Add( version );
+					}
+				} );
+
+			if( !conflictsToVerify.IsEmpty )
+			{
+				if( pause is not null )
+					await pause.WaitIfPausedAsync( token ).ConfigureAwait( false );
+				var conflictList = conflictsToVerify.ToList();
+				HashSet<string> known;
+				try
+				{
+					using OperationPauseController.WorkScope _ = OperationPauseController.EnterScope( pause );
+					known = await DownloadOperations.FetchVaultChecksumsForPathsAsync(
+						conflictList.Select( static c => ( c.Version, c.LocalChecksum, c.Version.windows_complete_name ?? PwaPaths.ToServerName( c.LocalPath ) ) ).ToList(),
+						token,
+						log ).ConfigureAwait( false );
+				}
+				catch( Exception ex ) when( ex is not OperationCanceledException )
+				{
+					HackLogger.Warn( nameof( VersionFileService ), $"Could not verify local file modifications before version download: {ex.Message}", ex );
+					foreach( var c in conflictList )
+					{
+						failed.Add( c.Version );
+						onProgress?.Invoke( 1, 0 );
+					}
+					known = [];
+					conflictList.Clear();
+				}
+
+				foreach( var (version, localPath, localChecksum) in conflictList )
+				{
+					string? serverPath = version.windows_complete_name ?? PwaPaths.ToServerName( localPath );
+					string key = $"{serverPath}\0{localChecksum}";
+					if( serverPath is null || !known.Contains( key ) )
+					{
+						HackLogger.Warn( nameof( VersionFileService ), $"Kept local changes to '{localPath}' instead of overwriting with historical version {version.id}." );
+						log?.Invoke( StatusMessage.WARNING, $"Kept local changes to {localPath} instead of overwriting with version {version.id}." );
+						failed.Add( version );
+						onProgress?.Invoke( 0, 1 );
+						continue;
+					}
+					ready.Add( version );
+				}
+			}
+
+			if( !ready.IsEmpty )
+			{
+				List<HpVersion> remoteReady = [];
+				List<HpVersion> inlineReady = [];
+				foreach( HpVersion version in ready )
+				{
+					if( version.file_contents is null && version.id is > 0 )
+						remoteReady.Add( version );
+					else
+						inlineReady.Add( version );
+				}
+
+				int concurrency = Math.Clamp( OdooDefaults.Instance?.ConcurrencySize ?? OdooLookupCache.DefaultConcurrency, 1, 4 );
+				if( remoteReady.Count > 0 )
+				{
+					DownloadOperations.DownloadSummary summary = new();
+					await DownloadOperations.DownloadAdaptiveAsync(
+						remoteReady,
+						token,
+						summary,
+						maxBatchCount: Math.Clamp( OdooDefaults.Instance?.DownloadBatchSize ?? OdooLookupCache.DefaultBatchSize, 1, AdaptiveTransferController.MaxAdaptiveBatchCount ),
+						maxConcurrency: concurrency,
+						log: log,
+						onProgress: onProgress,
+						onBytesDownloaded: onBytesDownloaded,
+						pause: pause,
+						onVersionCompleted: onVersionCompleted ).ConfigureAwait( false );
+					if( !summary.FailedIds.IsEmpty )
+					{
+						HashSet<int> failedIdSet = [ .. summary.FailedIds ];
+						for( int i = 0; i < remoteReady.Count; i++ )
+						{
+							if( remoteReady[ i ].id is int id && failedIdSet.Contains( id ) )
+								failed.Add( remoteReady[ i ] );
+						}
+					}
+				}
+
+				if( inlineReady.Count > 0 )
+				{
+					await Parallel.ForEachAsync(
+						inlineReady,
+						new ParallelOptions { MaxDegreeOfParallelism = concurrency, CancellationToken = token },
+						async ( version, ct ) =>
+						{
+							if( pause is not null )
+								await pause.WaitIfPausedAsync( ct ).ConfigureAwait( false );
+							bool ok;
+							using( OperationPauseController.EnterScope( pause ) )
+								ok = await version.DownloadFileAsync( ct ).ConfigureAwait( false );
+							if( !ok )
+								failed.Add( version );
+							else if( version.id is int id and > 0 )
+								onVersionCompleted?.Invoke( id, version.file_size ?? 0 );
+							onProgress?.Invoke( 1, 0 );
+						} ).ConfigureAwait( false );
+				}
+			}
+
+			return failed.ToList();
+		}, token );
 	}
 
 	public static HackFile ToHackFile( this HpVersion version, bool contentsInFile = false )
@@ -110,9 +272,9 @@ public static class VersionFileService
 		{
 			Owner = version.checkout_user?.id is not null ? OdooDefaults.Instance?.OdooId == version.checkout_user.id : null,
 		};
-		if( version.file_contents is not { Length: > 0 } && !contentsInFile )
+		if( version.file_contents is not { Length: > 0 } && !contentsInFile && ( version.file_size ?? 0 ) > 0 )
 			return hack;
-		hack.FileContents = version.file_contents;
+		hack.FileContents = version.file_contents ?? ( contentsInFile ? null : [] );
 		hack.DirectoryName = version.WinPathway;
 		hack.SetModifiedDate( version.file_modify_stamp ?? default );
 		hack.FileSize = version.file_size;

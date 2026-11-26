@@ -36,6 +36,7 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 
 	private readonly string? _vaultRoot = string.IsNullOrEmpty( vaultRoot ) ? null : Path.TrimEndingDirectorySeparator( vaultRoot );
 	private readonly string? _vaultName = string.IsNullOrEmpty( vaultRoot ) ? null : Path.GetFileName( Path.TrimEndingDirectorySeparator( vaultRoot ) );
+	private readonly Lock _indexGate = new();
 	private Dictionary<string, List<string>>? _byName;
 
 	/// <summary>Splits a stored path on both separators: stored paths are Windows paths whatever the OS.</summary>
@@ -43,6 +44,35 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 	/// <returns>The non-empty path segments, drive (e.g. <c>C:</c>) included.</returns>
 	public static string[] Segments( string storedPath )
 		=> storedPath.Split( PathSeparators, StringSplitOptions.RemoveEmptyEntries );
+
+	private static string[] NormalizeSegments( string[] rawSegments )
+	{
+		if( rawSegments.Length == 0 )
+			return rawSegments;
+		bool hasDrivePrefix = rawSegments[ 0 ].Length == 2 && rawSegments[ 0 ][ 1 ] == ':';
+		int minPopDepth = hasDrivePrefix ? 1 : 0;
+		List<string> normalized = new( rawSegments.Length );
+		foreach( string seg in rawSegments )
+		{
+			if( seg == "." )
+				continue;
+			if( seg == ".." )
+			{
+				if( normalized.Count > minPopDepth && normalized[ ^1 ] != ".." )
+					normalized.RemoveAt( normalized.Count - 1 );
+				else if( !hasDrivePrefix )
+					normalized.Add( seg );
+				continue;
+			}
+			normalized.Add( seg );
+		}
+		return [ .. normalized ];
+	}
+
+	private static bool IsInvalidLookupSegment( string segment )
+		=> string.IsNullOrEmpty( segment )
+			|| segment is "." or ".."
+			|| segment.IndexOfAny( [ '*', '?', '\0' ] ) >= 0;
 
 	/// <summary>Gets the file name of a stored Windows path on any OS (where <see cref="Path.GetFileName(string)"/> wouldn't split on backslashes).</summary>
 	/// <param name="storedPath">The path as stored in a SolidWorks document.</param>
@@ -61,12 +91,17 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 	/// <param name="referencingFile">The local path of the document that holds the reference; enables the "next to the referencing document" step.</param>
 	/// <returns>The local path of the referenced file, or null when it can't be found.</returns>
 	/// <remarks>The last step scans every <c>*.sld*</c> file under the vault once (skipping inaccessible folders and reparse points) and caches the index; files added later aren't seen by this instance.</remarks>
-	public string? Resolve( string storedPath, string? referencingFile = null )
+	public string? Resolve( string storedPath, string? referencingFile = null, CancellationToken token = default )
 	{
-		string[] segments = Segments( storedPath );
+		token.ThrowIfCancellationRequested();
+		if( string.IsNullOrWhiteSpace( storedPath ) )
+			return null;
+		string[] segments = NormalizeSegments( Segments( storedPath ) );
 		if( segments.Length == 0 )
 			return null;
 		string name = segments[ ^1 ];
+		if( IsInvalidLookupSegment( name ) )
+			return null;
 
 		if( _vaultRoot is not null && _vaultName is not null )
 		{
@@ -82,42 +117,74 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 			&& Find( siblingDir, MemoryMarshal.CreateReadOnlySpan( ref name, 1 ) ) is { } sibling )
 			return sibling;
 
-		if( Path.IsPathFullyQualified( storedPath ) && File.Exists( storedPath ) )
-			return Path.GetFullPath( storedPath );
+		try
+		{
+			if( Path.IsPathFullyQualified( storedPath ) && File.Exists( storedPath ) )
+				return Path.GetFullPath( storedPath );
+		}
+		catch( Exception e ) when( e is ArgumentException or NotSupportedException or UnauthorizedAccessException or IOException )
+		{
+		}
 
-		return SearchVault( name, segments );
+		return SearchVault( name, segments, token );
 	}
 
 	/// <summary>Follows <paramref name="segments"/> under <paramref name="root"/>, matching each name case-insensitively.</summary>
 	private static string? Find( string root, ReadOnlySpan<string> segments )
 	{
-		string current = root;
+		if( segments.IsEmpty )
+			return null;
 		for( int i = 0; i < segments.Length; i++ )
 		{
-			bool last = i == segments.Length - 1;
-			if( !Directory.Exists( current ) )
+			if( IsInvalidLookupSegment( segments[ i ] ) )
 				return null;
-			string? match = null;
-			foreach( string entry in last
-				? Directory.EnumerateFiles( current, segments[ i ], CaseInsensitiveSimple )
-				: Directory.EnumerateDirectories( current, segments[ i ], CaseInsensitiveSimple ) )
-			{
-				match = entry;
-				break;
-			}
-			if( match is null )
-				return null;
-			current = match;
 		}
-		return current;
+		if( OperatingSystem.IsWindows() )
+		{
+			string direct = root;
+			for( int i = 0; i < segments.Length; i++ )
+				direct = Path.Combine( direct, segments[ i ] );
+			if( !File.Exists( direct ) )
+				return null;
+		}
+		try
+		{
+			string current = root;
+			for( int i = 0; i < segments.Length; i++ )
+			{
+				string segment = segments[ i ];
+				bool last = i == segments.Length - 1;
+				if( !Directory.Exists( current ) )
+					return null;
+				string? match = null;
+				foreach( string entry in last
+					? Directory.EnumerateFiles( current, segment, CaseInsensitiveSimple )
+					: Directory.EnumerateDirectories( current, segment, CaseInsensitiveSimple ) )
+				{
+					if( Path.GetFileName( entry ).Equals( segment, StringComparison.OrdinalIgnoreCase ) )
+					{
+						match = entry;
+						break;
+					}
+				}
+				if( match is null )
+					return null;
+				current = match;
+			}
+			return current;
+		}
+		catch( Exception e ) when( e is UnauthorizedAccessException or IOException or ArgumentException )
+		{
+			return null;
+		}
 	}
 
-	private string? SearchVault( string name, string[] storedSegments )
+	private string? SearchVault( string name, string[] storedSegments, CancellationToken token )
 	{
 		if( _vaultRoot is null || !Directory.Exists( _vaultRoot ) )
 			return null;
-		_byName ??= IndexVault( _vaultRoot );
-		if( !_byName.TryGetValue( name, out var candidates ) || candidates.Count == 0 )
+		Dictionary<string, List<string>> index = Volatile.Read( ref _byName ) ?? GetOrBuildIndex( _vaultRoot, token );
+		if( !index.TryGetValue( name, out var candidates ) || candidates.Count == 0 )
 			return null;
 		if( candidates.Count == 1 )
 			return candidates[ 0 ];
@@ -137,15 +204,34 @@ public sealed class SwReferenceResolver( string? vaultRoot )
 		return best;
 	}
 
-	private static Dictionary<string, List<string>> IndexVault( string root )
+	private Dictionary<string, List<string>> GetOrBuildIndex( string root, CancellationToken token )
+	{
+		lock( _indexGate )
+		{
+			if( _byName is { } existing )
+				return existing;
+			var built = IndexVault( root, token );
+			Volatile.Write( ref _byName, built );
+			return built;
+		}
+	}
+
+	private static Dictionary<string, List<string>> IndexVault( string root, CancellationToken token )
 	{
 		var index = new Dictionary<string, List<string>>( StringComparer.OrdinalIgnoreCase );
-		foreach( string file in Directory.EnumerateFiles( root, "*.sld*", Recursive ) )
+		try
 		{
-			string name = Path.GetFileName( file );
-			if( !index.TryGetValue( name, out var list ) )
-				index[ name ] = list = [];
-			list.Add( file );
+			foreach( string file in Directory.EnumerateFiles( root, "*.sld*", Recursive ) )
+			{
+				token.ThrowIfCancellationRequested();
+				string name = Path.GetFileName( file );
+				if( !index.TryGetValue( name, out var list ) )
+					index[ name ] = list = [];
+				list.Add( file );
+			}
+		}
+		catch( Exception e ) when( e is UnauthorizedAccessException or IOException or ArgumentException )
+		{
 		}
 		return index;
 	}

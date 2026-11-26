@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.ComponentModel;
 
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
@@ -6,6 +7,7 @@ using HackPDM.Core.Pdm;
 
 namespace HackPDM.Core.Services;
 
+[Bindable( true )]
 public sealed class BasicStatusMessage
 {
 	private string? _timestampText;
@@ -23,11 +25,9 @@ public sealed class BasicStatusMessage
 		}
 	} = DateTime.Now;
 	public string TimestampText => _timestampText ??= Timestamp.ToString( "HH:mm:ss" );
-
-	public static implicit operator BasicStatusMessage( (StatusMessage status, string message) log )
-		=> new() { Message = log.message, Status = log.status };
 }
 
+[Bindable( true )]
 public class RowData
 {
 	public virtual string? Name { get; set; } = "";
@@ -39,6 +39,7 @@ public class RowData
 }
 
 /// <summary>One row of the file manager's entry list: a remote entry, a local-only file, or both.</summary>
+[Bindable( true )]
 public sealed class EntryRow : RowData
 {
 	public int? Id { get; set; }
@@ -46,9 +47,12 @@ public sealed class EntryRow : RowData
 	public long? Size { get; set; }
 	public FileStatus Status { get; set; } = FileStatus.Lo;
 	public HpUser? Checkout { get; set; }
+	public string StatusText => Enum.GetName( Status ) ?? Status.ToString();
+	public string CheckoutText => Checkout?.ToString() ?? string.Empty;
 	public HpCategory? Category { get; set; }
 	public DateTime? LocalDate { get; set; }
 	public DateTime? RemoteDate { get; set; }
+	private FileInfo? _localFile;
 	private bool _localFileChecked;
 
 	public string? FullName
@@ -57,6 +61,7 @@ public sealed class EntryRow : RowData
 		set
 		{
 			field = value;
+			_localFile = null;
 			_localFileChecked = false;
 		}
 	}
@@ -68,6 +73,7 @@ public sealed class EntryRow : RowData
 		set
 		{
 			field = value;
+			_localFile = null;
 			_localFileChecked = false;
 		}
 	}
@@ -77,8 +83,8 @@ public sealed class EntryRow : RowData
 	{
 		get
 		{
-			if( _localFileChecked || field is not null )
-				return field;
+			if( _localFileChecked || _localFile is not null )
+				return _localFile;
 			_localFileChecked = true;
 
 			string? path = ReprType switch
@@ -89,32 +95,15 @@ public sealed class EntryRow : RowData
 			};
 
 			FileInfo? file = string.IsNullOrEmpty( path ) ? null : new( path );
-			field = file?.Exists is true ? file : null;
-			return field;
+			_localFile = file?.Exists is true ? file : null;
+			return _localFile;
 		}
 		set
 		{
-			field = value;
+			_localFile = value;
 			_localFileChecked = true;
 		}
 	}
-
-	public bool? IsLocal => Id switch
-	{
-		null => null,
-		0 => true,
-		_ => LocalFile?.Exists ?? false,
-	};
-
-	public bool? IsRemote => Id switch
-	{
-		null => null,
-		not 0 => true,
-		_ => false,
-	};
-
-	public bool? IsOnlyLocal => IsRemote is false && IsLocal is true;
-	public bool? IsOnlyRemote => IsRemote is true && IsLocal is false;
 }
 
 /// <summary>Sort and group keys for the entry list, keyed by <see cref="EntryRow"/> property name.</summary>
@@ -168,6 +157,7 @@ public static class EntryRowKeys
 
 public sealed record EntryListResult( List<EntryRow> Rows, int RemoteCount, int LocalOnlyCount, int LocalAndRemoteCount );
 
+[Bindable( true )]
 public sealed class HistoryRow : RowData
 {
 	public int Version { get; set; }
@@ -177,18 +167,21 @@ public sealed class HistoryRow : RowData
 	public DateTime? RelDate { get; set; }
 }
 
+[Bindable( true )]
 public sealed class ParentRow : RowData
 {
 	public int Version { get; set; }
 	public string? BasePath { get; set; }
 }
 
+[Bindable( true )]
 public sealed class ChildrenRow : RowData
 {
 	public int Version { get; set; }
 	public string? BasePath { get; set; }
 }
 
+[Bindable( true )]
 public sealed class PropertiesRow : RowData
 {
 	public int Version { get; set; }
@@ -198,6 +191,7 @@ public sealed class PropertiesRow : RowData
 	public object? ValueData { get; set; }
 }
 
+[Bindable( true )]
 public sealed class VersionRow : RowData
 {
 	public int Id { get; set; }
@@ -211,15 +205,14 @@ public sealed class VersionRow : RowData
 	public string? OdooCompletePath { get; set; }
 }
 
+[Bindable( true )]
 public sealed class SearchRow : RowData
 {
 	public int? Id { get; set; }
 	public string? Directory { get; set; }
-	public string DisplayText => string.IsNullOrWhiteSpace( Directory )
-		? ( Name ?? string.Empty )
-		: $"{Name} — {Directory}";
 }
 
+[Bindable( true )]
 public sealed class SearchPropertiesRow : RowData
 {
 	public int ID { get; set; }
@@ -228,6 +221,7 @@ public sealed class SearchPropertiesRow : RowData
 	public bool IsTextOrDate { get; set; }
 }
 
+[Bindable( true )]
 public sealed class OperatorsRow : RowData
 {
 	public Operators Operator
@@ -243,6 +237,7 @@ public sealed class OperatorsRow : RowData
 	public string? OpRepr { get; set; }
 }
 
+[Bindable( true )]
 public sealed class FileTypeRow : RowData
 {
 	public string? Extension { get; set; }
@@ -251,6 +246,7 @@ public sealed class FileTypeRow : RowData
 	public string? Description { get; set; }
 }
 
+[Bindable( true )]
 public sealed class FileTypeEntryFilterRow : RowData
 {
 	public int Id { get; set; }

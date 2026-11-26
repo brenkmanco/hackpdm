@@ -29,6 +29,8 @@ public interface IEntryFileService
 	void DeleteDirectory( string directory );
 	Task<HpVersion?> GetVersionAsync( int versionId );
 	bool HasConflictingLocalCopy( HpVersion version );
+	Task<bool> HasConflictingLocalCopyAsync( HpVersion version, CancellationToken token = default )
+		=> Task.Run( () => HasConflictingLocalCopy( version ), token );
 	Task<string> DownloadVersionAsync( HpVersion version, bool toTemp );
 	VersionMovePlan PlanMove( HpVersion version, bool toTemp );
 	Task ExecuteMoveAsync( HpVersion version, VersionMovePlan plan );
@@ -41,6 +43,8 @@ public sealed class EntryFileService : IEntryFileService
 	public async Task<IReadOnlyList<string>> OpenEntriesAsync( IEnumerable<EntryRow> entries, EntryOpenMode mode )
 	{
 		List<string> errors = [];
+		List<string> localPaths = [];
+		List<int> remoteIds = [];
 		foreach( EntryRow entry in entries )
 		{
 			bool hasRemoteId = entry.Id is not ( null or 0 );
@@ -54,10 +58,10 @@ public sealed class EntryFileService : IEntryFileService
 			switch( target )
 			{
 				case EntryOpenTarget.Local when entry.FullName is not null:
-					OpenFile( hasRemoteId ? PwaPaths.ToAbsolute( entry.FullName ) ?? entry.FullName : entry.FullName );
+					localPaths.Add( hasRemoteId ? PwaPaths.ToAbsolute( entry.FullName ) ?? entry.FullName : entry.FullName );
 					break;
 				case EntryOpenTarget.Remote:
-					await OpenLatestRemoteAsync( entry.Id ?? 0 );
+					remoteIds.Add( entry.Id ?? 0 );
 					break;
 				case EntryOpenTarget.None when mode is EntryOpenMode.LatestLocal:
 					errors.Add( $"can't open remote only file locally {entry.Name}" );
@@ -67,23 +71,40 @@ public sealed class EntryFileService : IEntryFileService
 					break;
 			}
 		}
+
+		for( int i = 0; i < localPaths.Count; i++ )
+			OpenFile( localPaths[ i ] );
+
+		if( remoteIds.Count == 1 )
+		{
+			await OpenLatestRemoteAsync( remoteIds[ 0 ] ).ConfigureAwait( false );
+		}
+		else if( remoteIds.Count > 1 )
+		{
+			int parallelism = Math.Clamp( OdooDefaults.Instance?.ConcurrencySize ?? OdooLookupCache.DefaultConcurrency, 2, 4 );
+			await Parallel.ForEachAsync(
+				remoteIds,
+				new ParallelOptions { MaxDegreeOfParallelism = parallelism },
+				async ( id, ct ) => await OpenLatestRemoteAsync( id ).ConfigureAwait( false ) ).ConfigureAwait( false );
+		}
 		return errors;
 	}
 
 	public async Task OpenLatestRemoteAsync( int entryId )
 	{
 		HpVersion? version = ( await HpEntry.GetRelatedRecordByIdsAsync<HpVersion>(
-			[ entryId ], nameof( HpEntry.latest_version_id ), excludedFields: [ "preview_image" ] ) )?.FirstOrDefault();
-		if( version is null )
+			[ entryId ], nameof( HpEntry.latest_version_id ), excludedFields: HpVersion.UsualExcludedFields ).ConfigureAwait( false ) )?.FirstOrDefault();
+		if( version is null || !LocalFileWriter.IsSingleSafeFileName( version.name ) )
 			return;
 
-		await version.DownloadFileAsync( Path.GetTempPath() );
-		OpenFile( Path.Combine( version.WinPathway ?? "", version.name ?? "" ) );
+		string tempDir = Path.GetTempPath();
+		if( await version.DownloadFileAsync( tempDir ).ConfigureAwait( false ) )
+			OpenFile( Path.Combine( tempDir, version.name ) );
 	}
 
 	public void OpenContainingFolders( IEnumerable<EntryRow> entries )
 	{
-		HashSet<string> opened = new( OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal );
+		HashSet<string> opened = new( PwaPaths.PathComparer );
 		foreach( EntryRow entry in entries )
 		{
 			try
@@ -119,30 +140,65 @@ public sealed class EntryFileService : IEntryFileService
 		return result;
 	}
 
+	private static readonly EnumerationOptions RecursiveFileOptions = new()
+	{
+		RecurseSubdirectories = true,
+		IgnoreInaccessible = true,
+	};
+
 	public void DeleteFiles( IEnumerable<FileInfo> files )
 	{
 		foreach( FileInfo file in files )
-			file.Delete();
+		{
+			try
+			{
+				FileOps.ClearReadOnlyIfPresent( file.FullName );
+				file.Delete();
+			}
+			catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException )
+			{
+				HackLogger.Warn( nameof( EntryFileService ), $"Could not delete '{file.FullName}': {ex.Message}", ex );
+			}
+		}
 	}
 
 	public int? CountFiles( string directory )
 	{
 		if( !Directory.Exists( directory ) )
 			return null;
-		int count = 0;
-		foreach( string _ in Directory.EnumerateFiles( directory ) )
-			count++;
-		return count;
+		try
+		{
+			int count = 0;
+			foreach( string _ in Directory.EnumerateFiles( directory, "*", RecursiveFileOptions ) )
+				count++;
+			return count;
+		}
+		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException )
+		{
+			HackLogger.Warn( nameof( EntryFileService ), $"Could not count files in '{directory}': {ex.Message}", ex );
+			return null;
+		}
 	}
 
-	public void DeleteDirectory( string directory ) => Directory.Delete( directory, true );
+	public void DeleteDirectory( string directory )
+	{
+		try
+		{
+			FileOps.ClearReadOnlyRecursive( directory );
+			Directory.Delete( directory, true );
+		}
+		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException )
+		{
+			HackLogger.Warn( nameof( EntryFileService ), $"Could not delete directory '{directory}': {ex.Message}", ex );
+		}
+	}
 
 	public async Task<HpVersion?> GetVersionAsync( int versionId )
 	{
 		if( versionId is 0 )
 			return null;
 
-		HpVersion? version = await HpVersion.GetRecordByIdAsync( versionId, HpVersion.UsualExcludedFields );
+		HpVersion? version = await HpVersion.GetRecordByIdAsync( versionId, HpVersion.UsualExcludedFields ).ConfigureAwait( false );
 		if( version is null )
 			return null;
 
@@ -152,27 +208,63 @@ public sealed class EntryFileService : IEntryFileService
 
 	public bool HasConflictingLocalCopy( HpVersion version )
 	{
-		FileInfo file = new( Path.Combine( version.WinPathway ?? "", version.name ?? "" ) );
-		return file.Exists && !Checksums.Matches( file.FullName, version.checksum );
+		if( !LocalFileWriter.IsSingleSafeFileName( version.name ) )
+			return false;
+		FileInfo file = new( Path.Combine( version.WinPathway ?? "", version.name ) );
+		if( !file.Exists )
+			return false;
+		string? expectedChecksum = DownloadOperations.ExpectedChecksum( version );
+		return expectedChecksum is null || !Checksums.Matches( file.FullName, expectedChecksum );
+	}
+
+	public Task<bool> HasConflictingLocalCopyAsync( HpVersion version, CancellationToken token = default )
+		=> Task.Run( () => HasConflictingLocalCopy( version ), token );
+
+	internal static string TempDirectoryFor( HpVersion version )
+	{
+		string relative;
+		if( !string.IsNullOrEmpty( version.dir_id?.name ) )
+		{
+			relative = PwaPaths.ToRelative( version.dir_id.name );
+		}
+		else if( !string.IsNullOrEmpty( version.windows_complete_name ) )
+		{
+			relative = PwaPaths.FolderOf( version.windows_complete_name );
+		}
+		else if( !string.IsNullOrEmpty( version.WinPathway ) )
+		{
+			string? serverDir = Path.IsPathFullyQualified( version.WinPathway )
+				? PwaPaths.ToServerDirectory( version.WinPathway )
+				: version.WinPathway;
+			relative = PwaPaths.ToRelative( serverDir );
+		}
+		else
+		{
+			relative = "";
+		}
+
+		if( string.IsNullOrEmpty( relative ) || PwaPaths.ContainsTraversalSegment( relative ) )
+			return PdmConstants.TemporaryPath;
+		return PwaPaths.ResolveInsideRoot( PdmConstants.TemporaryPath, relative, allowRoot: true )
+			?? PdmConstants.TemporaryPath;
 	}
 
 	public async Task<string> DownloadVersionAsync( HpVersion version, bool toTemp )
 	{
 		if( !toTemp )
 		{
-			await version.DownloadFileAsync( version.WinPathway ?? "" );
+			await version.DownloadFileAsync( version.WinPathway ?? "" ).ConfigureAwait( false );
 			return version.WinPathway ?? "";
 		}
 
-		string relative = PwaPaths.ToRelative( OdooValues.Many2OneName( version.HashedValues.GetValueOrDefault( "dir_id" ) ) );
-		string tempPath = Path.Combine( PdmConstants.TemporaryPath, relative );
-		await version.DownloadFileAsync( tempPath );
+		string tempPath = TempDirectoryFor( version );
+		await version.DownloadFileAsync( tempPath ).ConfigureAwait( false );
 		return tempPath;
 	}
 
 	public VersionMovePlan PlanMove( HpVersion version, bool toTemp )
 	{
-		FileInfo temp = new( Path.Combine( PdmConstants.TemporaryPath, version.name ?? "" ) );
+		FileInfo temp = new( Path.Combine( TempDirectoryFor( version ), version.name ?? "" ) );
 		FileInfo working = new( Path.Combine( version.WinPathway ?? "", version.name ?? "" ) );
 		return toTemp ? new( working, temp, true ) : new( temp, working, false );
 	}
@@ -183,7 +275,7 @@ public sealed class EntryFileService : IEntryFileService
 		if( plan.From.Exists )
 			MoveFile( plan.From, destinationDir );
 		else
-			await version.DownloadFileAsync( destinationDir );
+			await version.DownloadFileAsync( destinationDir ).ConfigureAwait( false );
 	}
 
 	private static void MoveFile( FileInfo source, string destinationDir )
@@ -193,11 +285,12 @@ public sealed class EntryFileService : IEntryFileService
 			if( !Directory.Exists( destinationDir ) && !Directory.CreateDirectory( destinationDir ).Exists )
 				return;
 			string target = Path.Combine( destinationDir, source.Name );
+			FileOps.ClearReadOnlyIfPresent( target );
 			File.Move( source.FullName, target, overwrite: true );
 		}
 		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or ArgumentException )
 		{
-			HackLogger.Warn( "EntryFileService", $"Could not move '{source.FullName}' to '{destinationDir}': {ex.Message}", ex );
+			HackLogger.Warn( nameof( EntryFileService ), $"Could not move '{source.FullName}' to '{destinationDir}': {ex.Message}", ex );
 		}
 	}
 }

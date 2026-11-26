@@ -5,97 +5,92 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:controls="using:HackPDM.Common"
-    xmlns:local="using:HackPDM.Shell"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid>
-        <NavigationView
-            x:Name="HomeNavigator"
-            AlwaysShowHeader="False"
-        BackRequested="HomeNavigator_BackRequested"
-        ExpandedModeThresholdWidth="900"
-        Header="HackPDM"
-        IsBackButtonVisible="Auto"
-        IsBackEnabled="False"
-        IsSettingsVisible="True"
-        IsTabStop="False"
-        ItemInvoked="HomeNavigator_ItemInvoked"
-        KeyDown="HomeView_KeyDown"
-        PaneDisplayMode="LeftCompact"
-        PaneTitle="HackPDM"
-        SelectionChanged="HomeNavigator_SelectionChanged"
-        SelectionFollowsFocus="Disabled">
+    <Grid KeyDown="HomeView_KeyDown">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="80" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-        <NavigationView.MenuItems>
-            <NavigationViewItem
-                x:Name="HackNav"
-                Content="Hack File Manager"
-                Tag="HackFileManager"
-                ToolTipService.ToolTip="Hack File Manager (Ctrl+1)">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Folder" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
+        <!--  Navigation rail (Penpot: Navigation rail): labeled destinations, the Search and Status drawers, Settings  -->
+        <Grid x:Name="NavRail" Padding="0,8,0,12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Button
+                x:Name="RailBackButton"
+                Margin="0,0,0,8"
+                HorizontalAlignment="Center"
+                Click="RailBack_Click"
+                IsEnabled="False"
+                Style="{StaticResource PaneIconButtonStyle}"
+                ToolTipService.ToolTip="Back (Alt+Left)">
+                <FontIcon FontSize="16" Glyph="&#xE72B;" />
+            </Button>
+            <StackPanel Grid.Row="1" Spacing="8">
+                <controls:NavRailItem
+                    x:Name="FilesRailItem"
+                    Click="RailItem_Click"
+                    Glyph="&#xE8B7;"
+                    Label="Files"
+                    Style="{StaticResource HackNavRailItemStyle}"
+                    Tag="HackFileManager"
+                    ToolTipService.ToolTip="Hack File Manager (Ctrl+1)" />
+                <controls:NavRailItem
+                    x:Name="GraphRailItem"
+                    Click="RailItem_Click"
+                    Glyph="&#xE71D;"
+                    Label="Graph"
+                    Style="{StaticResource HackNavRailItemStyle}"
+                    Tag="DependencyGraph"
+                    ToolTipService.ToolTip="Dependency Graph (Ctrl+2)" />
+                <controls:NavRailItem
+                    x:Name="ProfilesRailItem"
+                    Click="RailItem_Click"
+                    Glyph="&#xE77B;"
+                    Label="Profiles"
+                    Style="{StaticResource HackNavRailItemStyle}"
+                    Tag="ProfileManager"
+                    ToolTipService.ToolTip="Profile Manager (Ctrl+3)" />
+                <controls:NavRailItem
+                    x:Name="ConfigsRailItem"
+                    Click="RailItem_Click"
+                    Glyph="&#xE9E9;"
+                    Label="Configs"
+                    Style="{StaticResource HackNavRailItemStyle}"
+                    Tag="Configuration"
+                    ToolTipService.ToolTip="Server &amp; Folder Configurations (Ctrl+4)" />
+                <controls:NavRailItem
+                    x:Name="SearchRailItem"
+                    Click="SearchRail_Click"
+                    Glyph="&#xE721;"
+                    Label="Search"
+                    Style="{StaticResource HackNavRailItemStyle}"
+                    ToolTipService.ToolTip="Toggle Search Vault Panel (Ctrl+F)" />
+                <controls:NavRailItem
+                    x:Name="StatusRailItem"
+                    Click="StatusRail_Click"
+                    Glyph="&#xE9D9;"
+                    Label="Status"
+                    Style="{StaticResource HackNavRailItemStyle}"
+                    ToolTipService.ToolTip="Toggle Status Log Panel (Alt+S)" />
+            </StackPanel>
+            <controls:NavRailItem
+                x:Name="SettingsRailItem"
+                Grid.Row="2"
+                Click="RailItem_Click"
+                Glyph="&#xE713;"
+                Label="Settings"
+                Style="{StaticResource HackNavRailItemStyle}"
+                Tag="Settings"
+                ToolTipService.ToolTip="Settings" />
+        </Grid>
 
-            <NavigationViewItem
-                x:Name="GraphNav"
-                Content="Dependency Graph"
-                Tag="DependencyGraph"
-                ToolTipService.ToolTip="Dependency Graph (Ctrl+2)">
-                <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE71D;" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-
-            <NavigationViewItemSeparator />
-
-            <NavigationViewItem
-                x:Name="ProfileNav"
-                Content="Profile Manager"
-                Tag="ProfileManager"
-                ToolTipService.ToolTip="Profile Manager (Ctrl+3)">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Account" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-
-            <NavigationViewItem
-                x:Name="HackOdooNav"
-                Content="Configurations"
-                Tag="Configuration"
-                ToolTipService.ToolTip="Server &amp; Folder Configurations (Ctrl+4)">
-                <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE9E9;" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-
-        </NavigationView.MenuItems>
-
-        <NavigationView.FooterMenuItems>
-            <NavigationViewItem
-                x:Name="SearchNav"
-                Content="Search Vault"
-                SelectsOnInvoked="False"
-                Tag="SearchVault"
-                ToolTipService.ToolTip="Toggle Search Vault Panel (Ctrl+F)">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Find" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem
-                x:Name="StatusLogNav"
-                Content="Status Log"
-                SelectsOnInvoked="False"
-                Tag="StatusLog"
-                ToolTipService.ToolTip="Toggle Status Log Panel (Alt+S)">
-                <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE9D9;" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-        </NavigationView.FooterMenuItems>
-
-        <Grid x:Name="ShellExtensionsGrid">
+        <Grid Grid.Column="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
@@ -116,7 +111,7 @@
                 <!--  Docked Search Vault Extension  -->
                 <Border
                     x:Name="DockedSearchDrawer"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    Background="{ThemeResource HackSurfaceContainerLowBrush}"
                     BorderBrush="{StaticResource HackPanelStrokeBrush}"
                     BorderThickness="1,0,0,0"
                     Visibility="Collapsed">
@@ -128,8 +123,8 @@
                         <Border
                             x:Name="SearchDrawerHeader"
                             Grid.Row="0"
-                            Padding="10,6"
-                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            Padding="16,4,8,4"
+                            BorderBrush="{ThemeResource OutlineVariantBrush}"
                             BorderThickness="0,0,0,1">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -141,12 +136,11 @@
                                     VerticalAlignment="Center"
                                     Orientation="Horizontal"
                                     Spacing="6">
-                                    <FontIcon FontSize="12" Glyph="&#xE721;" />
-                                    <TextBlock
-                                        VerticalAlignment="Center"
-                                        FontSize="12"
-                                        FontWeight="SemiBold"
-                                        Text="Search Vault" />
+                                    <FontIcon
+                                        FontSize="16"
+                                        Foreground="{ThemeResource OnSurfaceVariantBrush}"
+                                        Glyph="&#xE721;" />
+                                    <TextBlock Style="{StaticResource HackPaneTitleStyle}" Text="Search Vault" />
                                 </StackPanel>
                                 <StackPanel
                                     Grid.Column="1"
@@ -154,30 +148,28 @@
                                     Orientation="Horizontal"
                                     Spacing="2">
                                     <Button
-                                        x:Name="MinimalSearchHeaderButton"
-                                        Padding="6,4"
+                                        Style="{StaticResource PaneIconButtonStyle}"
                                         Click="SwitchSearchMinimal_Click"
                                         ToolTipService.ToolTip="Switch to minimal search bar">
-                                        <FontIcon FontSize="11" Glyph="&#xE73F;" />
+                                        <FontIcon FontSize="13" Glyph="&#xE73F;" />
                                     </Button>
                                     <Button
-                                        Padding="6,4"
+                                        Style="{StaticResource PaneIconButtonStyle}"
                                         Click="SwapSearchSide_Click"
                                         ToolTipService.ToolTip="Move Search Left or Right">
-                                        <FontIcon FontSize="11" Glyph="&#xE8AB;" />
+                                        <FontIcon FontSize="13" Glyph="&#xE8AB;" />
                                     </Button>
                                     <Button
-                                        x:Name="DetachSearchButton"
-                                        Padding="6,4"
+                                        Style="{StaticResource PaneIconButtonStyle}"
                                         Click="DetachSearch_Click"
                                         ToolTipService.ToolTip="Detach Search into separate window">
-                                        <FontIcon FontSize="11" Glyph="&#xE8A7;" />
+                                        <FontIcon FontSize="13" Glyph="&#xE8A7;" />
                                     </Button>
                                     <Button
-                                        Padding="6,4"
+                                        Style="{StaticResource PaneIconButtonStyle}"
                                         Click="CloseSearchDrawer_Click"
                                         ToolTipService.ToolTip="Close Search panel">
-                                        <FontIcon FontSize="10" Glyph="&#xE711;" />
+                                        <FontIcon FontSize="14" Glyph="&#xE711;" />
                                     </Button>
                                 </StackPanel>
                             </Grid>
@@ -199,16 +191,16 @@
                                 Spacing="2"
                                 Visibility="Collapsed">
                                 <Button
-                                    Padding="6,4"
+                                    Style="{StaticResource PaneIconButtonStyle}"
                                     Click="DetachSearch_Click"
                                     ToolTipService.ToolTip="Detach Search into separate window">
-                                    <FontIcon FontSize="11" Glyph="&#xE8A7;" />
+                                    <FontIcon FontSize="13" Glyph="&#xE8A7;" />
                                 </Button>
                                 <Button
-                                    Padding="6,4"
+                                    Style="{StaticResource PaneIconButtonStyle}"
                                     Click="CloseSearchDrawer_Click"
                                     ToolTipService.ToolTip="Close Search bar">
-                                    <FontIcon FontSize="10" Glyph="&#xE711;" />
+                                    <FontIcon FontSize="14" Glyph="&#xE711;" />
                                 </Button>
                             </StackPanel>
                         </Grid>
@@ -229,7 +221,7 @@
             <Border
                 x:Name="DockedStatusDrawer"
                 Grid.Row="2"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                Background="{ThemeResource HackSurfaceContainerLowBrush}"
                 BorderBrush="{StaticResource HackPanelStrokeBrush}"
                 BorderThickness="0,1,0,0"
                 Visibility="Collapsed">
@@ -241,8 +233,8 @@
                     <Border
                         x:Name="StatusDrawerHeader"
                         Grid.Row="0"
-                        Padding="10,5"
-                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        Padding="16,4,8,4"
+                        BorderBrush="{ThemeResource OutlineVariantBrush}"
                         BorderThickness="0,0,0,1">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -254,12 +246,11 @@
                                 VerticalAlignment="Center"
                                 Orientation="Horizontal"
                                 Spacing="8">
-                                <FontIcon FontSize="12" Glyph="&#xE9D9;" />
-                                <TextBlock
-                                    VerticalAlignment="Center"
-                                    FontSize="12"
-                                    FontWeight="SemiBold"
-                                    Text="Status Log" />
+                                <FontIcon
+                                    FontSize="16"
+                                    Foreground="{ThemeResource OnSurfaceVariantBrush}"
+                                    Glyph="&#xE9D9;" />
+                                <TextBlock Style="{StaticResource HackPaneTitleStyle}" Text="Status Log" />
                             </StackPanel>
                             <StackPanel
                                 Grid.Column="1"
@@ -267,24 +258,22 @@
                                 Orientation="Horizontal"
                                 Spacing="2">
                                 <Button
-                                    x:Name="MinimalStatusHeaderButton"
-                                    Padding="6,4"
+                                    Style="{StaticResource PaneIconButtonStyle}"
                                     Click="SwitchStatusMinimal_Click"
                                     ToolTipService.ToolTip="Switch to minimal status category bar">
-                                    <FontIcon FontSize="11" Glyph="&#xE73F;" />
+                                    <FontIcon FontSize="13" Glyph="&#xE73F;" />
                                 </Button>
                                 <Button
-                                    x:Name="DetachStatusButton"
-                                    Padding="6,4"
+                                    Style="{StaticResource PaneIconButtonStyle}"
                                     Click="DetachStatus_Click"
                                     ToolTipService.ToolTip="Detach Status Log into separate window">
-                                    <FontIcon FontSize="11" Glyph="&#xE8A7;" />
+                                    <FontIcon FontSize="13" Glyph="&#xE8A7;" />
                                 </Button>
                                 <Button
-                                    Padding="6,4"
+                                    Style="{StaticResource PaneIconButtonStyle}"
                                     Click="CloseStatusDrawer_Click"
                                     ToolTipService.ToolTip="Hide Status Log panel">
-                                    <FontIcon FontSize="10" Glyph="&#xE711;" />
+                                    <FontIcon FontSize="14" Glyph="&#xE711;" />
                                 </Button>
                             </StackPanel>
                         </Grid>
@@ -306,16 +295,16 @@
                             Spacing="2"
                             Visibility="Collapsed">
                             <Button
-                                Padding="6,4"
+                                Style="{StaticResource PaneIconButtonStyle}"
                                 Click="DetachStatus_Click"
                                 ToolTipService.ToolTip="Detach Status bar into separate window">
-                                <FontIcon FontSize="11" Glyph="&#xE8A7;" />
+                                <FontIcon FontSize="13" Glyph="&#xE8A7;" />
                             </Button>
                             <Button
-                                Padding="6,4"
+                                Style="{StaticResource PaneIconButtonStyle}"
                                 Click="CloseStatusDrawer_Click"
                                 ToolTipService.ToolTip="Hide Status bar">
-                                <FontIcon FontSize="10" Glyph="&#xE711;" />
+                                <FontIcon FontSize="14" Glyph="&#xE711;" />
                             </Button>
                         </StackPanel>
                     </Grid>
@@ -323,9 +312,7 @@
             </Border>
         </Grid>
 
-        </NavigationView>
-
         <!--  In-Window Overlay Canvas (hover popups from bottom minimal status bar, etc.)  -->
-        <Canvas x:Name="ShellOverlayCanvas" />
+        <Canvas x:Name="ShellOverlayCanvas" Grid.ColumnSpan="2" />
     </Grid>
 </Page>

@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
+using HackPDM.Common;
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Pdm;
@@ -35,23 +36,38 @@ internal static class HackUpdater
 	public static string? RequiredVersionRequirement => Setting( PdmConstants.ClientVersionKey );
 	public static string? LatestServerVersion => Setting( PdmConstants.ClientLatestVersionKey );
 
-	public static Task<bool> EnsureUpdatedAsync( bool showOutdatedUpdater = false )
-		=> EnsureUpdated( showOutdatedUpdater );
-
-	public static async Task<bool> EnsureUpdated( bool showOutdatedUpdater = false )
+	public static async Task<bool> EnsureUpdatedAsync( bool showOutdatedUpdater = false, CancellationToken token = default )
 	{
+		token.ThrowIfCancellationRequested();
 		string? required = RequiredVersionRequirement;
 		VersionCheckResult check = ClientUpdate.CheckVersion( ClientUpdate.Current, required );
 		if( !check.IsAllowed )
 		{
 			HackLogger.Warn( "Updater", $"Client version check denied access: {check.Reason}" );
-			if( showOutdatedUpdater && await AppComposition.Dialogs.ShowMessageAsync(
-					$"{check.Reason}\n" +
-					"Access is denied until you update HackPDM to a compatible version.\n\n" +
-					"Download and install the published version now?",
-					"Version Mismatch — Update Required",
-					MessageBoxButtons.YesNo, MessageBoxIcon.Warning ) == DialogResult.Yes )
-				await UpdaterProcessAsync();
+			if( showOutdatedUpdater )
+			{
+				UpdateInfo? mandatoryUpdate = GetServerUpdateInfo( isMandatory: true );
+				if( mandatoryUpdate is not null )
+				{
+					if( await AppComposition.Dialogs.ShowMessageAsync(
+							$"{check.Reason}\n" +
+							"Access is denied until you update HackPDM to a compatible version.\n\n" +
+							"Download and install the published version now?",
+							"Version Mismatch — Update Required",
+							MessageBoxButtons.YesNo, MessageBoxIcon.Warning ) == DialogResult.Yes )
+					{
+						await InstallUpdateAsync( mandatoryUpdate, token );
+					}
+				}
+				else
+				{
+					await AppComposition.Dialogs.ShowMessageAsync(
+						$"{check.Reason}\n" +
+						"Access is denied until you update HackPDM to a compatible version.",
+						"Version Mismatch — Update Required",
+						MessageBoxButtons.OK, MessageBoxIcon.Warning );
+				}
+			}
 			return false;
 		}
 
@@ -68,7 +84,7 @@ internal static class HackUpdater
 						"HackPDM Update Available",
 						MessageBoxButtons.YesNo, MessageBoxIcon.Information ) == DialogResult.Yes )
 				{
-					await InstallUpdateAsync( serverUpdate );
+					await InstallUpdateAsync( serverUpdate, token );
 				}
 			}
 		}
@@ -78,13 +94,14 @@ internal static class HackUpdater
 
 	public static async Task<Result<UpdateInfo?>> CheckForUpdateAsync( bool allowGitHubFallback = true, CancellationToken token = default )
 	{
+		token.ThrowIfCancellationRequested();
 		VersionCheckResult serverCheck = ClientUpdate.CheckVersion( ClientUpdate.Current, RequiredVersionRequirement );
 		UpdateInfo? serverUpdate = GetServerUpdateInfo( isMandatory: !serverCheck.IsAllowed );
 		if( serverUpdate is not null )
 			return Result<UpdateInfo?>.Success( serverUpdate );
 
 		return allowGitHubFallback
-			? await ClientUpdate.CheckGitHubLatestReleaseAsync( token: token )
+			? await Task.Run( () => ClientUpdate.CheckGitHubLatestReleaseAsync( token: token ), token )
 			: Result<UpdateInfo?>.Success( null );
 	}
 
@@ -112,47 +129,48 @@ internal static class HackUpdater
 			IsMandatory: isMandatory );
 	}
 
-	public static Task UpdaterProcessAsync()
-		=> DownloadAndLaunchAsync( Setting( PdmConstants.ClientDownloadUrlKey ), Setting( PdmConstants.ClientDownloadSha256Key ) );
+	public static Task<bool> InstallUpdateAsync( UpdateInfo update, CancellationToken token = default )
+		=> DownloadAndLaunchAsync( update.DownloadUrl, update.Sha256, token );
 
-	public static Task InstallUpdateAsync( UpdateInfo update )
-		=> DownloadAndLaunchAsync( update.DownloadUrl, update.Sha256 );
-
-	private static async Task DownloadAndLaunchAsync( string? url, string? sha256 )
+	private static async Task<bool> DownloadAndLaunchAsync( string? url, string? sha256, CancellationToken token = default )
 	{
 		var dialogs = AppComposition.Dialogs;
 		HackLogger.Info( "Updater", $"Starting client update download from '{url ?? "(unset)"}'" );
-		Result<string> installer = await ClientUpdate.DownloadInstallerAsync( url, sha256 );
+		Result<string> installer = await Task.Run( () => ClientUpdate.DownloadInstallerAsync( url, sha256, token: token ), token );
+		token.ThrowIfCancellationRequested();
 		if( !installer.Ok )
 		{
 			HackLogger.Error( "Updater", $"Client update aborted: {installer.Error}" );
 			await dialogs.ShowMessageAsync( $"The update was not installed: {installer.Error}", "Update", MessageBoxButtons.OK, MessageBoxIcon.Warning );
-			return;
+			return false;
 		}
-		HackLogger.Info( "Updater", $"Verified update package ready at '{installer.Value}'" );
+		string installerPath = installer.Value!;
+		HackLogger.Info( "Updater", $"Verified update package ready at '{installerPath}'" );
 
-		bool started = OperatingSystem.IsWindows()
-			? LaunchWindowsInstaller( installer.Value! )
-			: ShellLauncher.OpenFolder( Path.GetDirectoryName( installer.Value! )! );
+		bool started = await Task.Run( () => OperatingSystem.IsWindows()
+			? LaunchWindowsInstaller( installerPath )
+			: ShellLauncher.OpenFolder( Path.GetDirectoryName( installerPath )! ), token );
 
 		if( !started )
 		{
-			HackLogger.Warn( "Updater", $"Could not launch verified update at '{installer.Value}'" );
-			await dialogs.ShowMessageAsync( $"The update was downloaded to {installer.Value} but could not be opened; run it from there.",
+			HackLogger.Warn( "Updater", $"Could not launch verified update at '{installerPath}'" );
+			await dialogs.ShowMessageAsync( $"The update was downloaded to {installerPath} but could not be opened; run it from there.",
 				"Update", MessageBoxButtons.OK, MessageBoxIcon.Warning );
-			return;
+			return false;
 		}
 		if( OperatingSystem.IsWindows() )
 		{
 			HackLogger.Info( "Updater", "Installer launched; exiting HackPDM for upgrade." );
-			try { AppComposition.LocalFiles.Dispose(); } catch { }
+			await Task.Run( UIStorage.SaveSafe );
+			try { AppComposition.DisposeLocalFilesIfCreated(); } catch { }
 			Environment.Exit( 0 );
 		}
 		else
 		{
-			await dialogs.ShowMessageAsync( $"The checked update is in {installer.Value}. Close HackPDM and install it.", "Update",
+			await dialogs.ShowMessageAsync( $"The checked update is in {installerPath}. Close HackPDM and install it.", "Update",
 				MessageBoxButtons.OK, MessageBoxIcon.Information );
 		}
+		return true;
 	}
 
 	private static bool LaunchWindowsInstaller( string path )

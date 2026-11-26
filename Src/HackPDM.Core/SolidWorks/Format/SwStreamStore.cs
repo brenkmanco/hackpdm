@@ -2,6 +2,8 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 
+using HackPDM.Core.Pdm;
+
 namespace HackPDM.Core.SolidWorks.Format;
 
 /// <summary>
@@ -48,23 +50,24 @@ public sealed class SwStreamStore
 	/// <returns>The store; check <see cref="Format"/> since an unrecognised file gives an empty <see cref="ContainerFormat.Unknown"/> store rather than an error.</returns>
 	/// <exception cref="IOException">The file can't be read (including <see cref="FileNotFoundException"/>).</exception>
 	/// <exception cref="UnauthorizedAccessException">Access to the file is denied.</exception>
-	/// <exception cref="InvalidDataException">An OLE file's sector chain runs past the end of the file.</exception>
-	/// <exception cref="ArgumentOutOfRangeException">An OLE file is shorter than its 512-byte header.</exception>
-	public static SwStreamStore Open( string path ) => new( File.ReadAllBytes( path ) );
+	/// <exception cref="InvalidDataException">An OLE file is shorter than its 512-byte header or its structure is corrupt.</exception>
+	public static SwStreamStore Open( string path )
+	{
+		using FileStream stream = new( path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete );
+		if( stream.CanSeek && stream.Length > int.MaxValue )
+			throw new InvalidDataException( $"SolidWorks file exceeds maximum in-memory size: {path}" );
+		using MemoryStream copy = new( stream.CanSeek ? (int)stream.Length : 0 );
+		stream.CopyTo( copy );
+		return new( copy.ToByteArrayZeroCopy() );
+	}
 	/// <summary>Indexes the streams of a SolidWorks file already in memory.</summary>
 	/// <param name="data">The whole file; kept (not copied) by the store.</param>
 	/// <returns>The store; check <see cref="Format"/>.</returns>
-	/// <exception cref="InvalidDataException">An OLE file's sector chain runs past the end of the data.</exception>
-	/// <exception cref="ArgumentOutOfRangeException">An OLE file is shorter than its 512-byte header.</exception>
+	/// <exception cref="InvalidDataException">An OLE file is shorter than its 512-byte header or its structure is corrupt.</exception>
 	public static SwStreamStore FromBytes( byte[] data ) => new( data );
 
 	/// <summary>The names of all indexed streams, such as "Header2" or "docProps/custom.xml" (OLE storages joined with "/", "__ZLB" suffixes removed).</summary>
 	public IEnumerable<string> Names => _sources.Keys;
-
-	/// <summary>Checks whether a stream exists and has an intact copy. This decompresses (and caches) the stream.</summary>
-	/// <param name="name">The stream name, as in <see cref="Names"/>.</param>
-	/// <returns>True when <see cref="Get"/> would return data.</returns>
-	public bool Contains( string name ) => Get( name ) is not null;
 
 	/// <summary>Gets a stream's decompressed contents, decompressing it on first use and caching the result.</summary>
 	/// <param name="name">The stream name, as in <see cref="Names"/> (case-sensitive).</param>
@@ -136,6 +139,8 @@ public sealed class SwStreamStore
 
 	private void IndexModern()
 	{
+		if( _data.Length < 8 )
+			return;
 		// stream names are bit-rotated left by the key stored in byte 7 (4 in every file seen so far)
 		int key = _data[ 7 ] & 7;
 		var data = _data.AsSpan();
@@ -164,6 +169,7 @@ public sealed class SwStreamStore
 				continue;
 
 			Add( name, new StreamSource( SourceKind.Modern, (uint)payloadStart, (int)compressed, uncompressed, crc ) );
+			pos = (int)( payloadStart + compressed );
 		}
 	}
 
@@ -185,20 +191,42 @@ public sealed class SwStreamStore
 	{
 		if( expectedSize > 512 * 1024 * 1024 )
 			return null;
+		// DEFLATE max theoretical expansion ratio is ~1032:1
+		if( expectedSize > 1024 * 1024 && (ulong)expectedSize > (ulong)Math.Max( length, 1 ) * 1032 + 1024 )
+			return null;
 		using var input = new MemoryStream( _data, start, length, writable: false );
 		using var inflater = new DeflateStream( input, CompressionMode.Decompress );
-		var output = new byte[ expectedSize ];
-		int read = 0;
-		while( read < output.Length )
+		int expected = (int)expectedSize;
+		if( expected <= 1024 * 1024 )
 		{
-			int n = inflater.Read( output, read, output.Length - read );
-			if( n == 0 )
-				return null;
-			read += n;
+			var output = new byte[ expected ];
+			int read = 0;
+			while( read < output.Length )
+			{
+				int n = inflater.Read( output, read, output.Length - read );
+				if( n == 0 )
+					return null;
+				read += n;
+			}
+			if( inflater.ReadByte() >= 0 )
+				return null; // longer than the header says
+			return Crc32.Compute( output ) == expectedCrc ? output : null;
 		}
-		if( inflater.ReadByte() >= 0 )
-			return null; // longer than the header says
-		return Crc32.Compute( output ) == expectedCrc ? output : null;
+		using var ms = new MemoryStream( Math.Min( expected, Math.Max( length * 4, 65536 ) ) );
+		byte[] buf = new byte[ 65536 ];
+		long total = 0;
+		int chunk;
+		while( ( chunk = inflater.Read( buf, 0, buf.Length ) ) > 0 )
+		{
+			total += chunk;
+			if( total > expected )
+				return null;
+			ms.Write( buf, 0, chunk );
+		}
+		if( total != expected )
+			return null;
+		byte[] result = ms.ToByteArrayZeroCopy();
+		return Crc32.Compute( result ) == expectedCrc ? result : null;
 	}
 
 	#endregion
@@ -215,9 +243,15 @@ public sealed class SwStreamStore
 
 	private void IndexOle()
 	{
+		if( _data.Length < 512 )
+			throw new InvalidDataException( "OLE file is shorter than its 512-byte header" );
 		var header = _data.AsSpan( 0, 512 );
-		_sectorSize = 1 << BinaryPrimitives.ReadUInt16LittleEndian( header[ 0x1E.. ] );
-		_miniSectorSize = 1 << BinaryPrimitives.ReadUInt16LittleEndian( header[ 0x20.. ] );
+		ushort sectorShift = BinaryPrimitives.ReadUInt16LittleEndian( header[ 0x1E.. ] );
+		ushort miniShift = BinaryPrimitives.ReadUInt16LittleEndian( header[ 0x20.. ] );
+		if( sectorShift is < 7 or > 16 || miniShift is < 3 or > 16 || miniShift > sectorShift )
+			throw new InvalidDataException( $"invalid OLE sector shift ({sectorShift}/{miniShift})" );
+		_sectorSize = 1 << sectorShift;
+		_miniSectorSize = 1 << miniShift;
 		uint fatSectors = BinaryPrimitives.ReadUInt32LittleEndian( header[ 0x2C.. ] );
 		uint directoryStart = BinaryPrimitives.ReadUInt32LittleEndian( header[ 0x30.. ] );
 		_miniCutoff = BinaryPrimitives.ReadUInt32LittleEndian( header[ 0x38.. ] );
@@ -231,16 +265,22 @@ public sealed class SwStreamStore
 		for( int i = 0; i < 109; i++ )
 			fatSectorIds.Add( BinaryPrimitives.ReadUInt32LittleEndian( header[ ( 0x4C + i * 4 ).. ] ) );
 		uint difat = difatStart;
-		for( uint n = 0; n < difatSectors && difat < EndOfChain; n++ )
+		HashSet<uint> visitedDifat = [];
+		for( uint n = 0; n < difatSectors && difat < EndOfChain && (uint)fatSectorIds.Count < fatSectors; n++ )
 		{
+			if( !visitedDifat.Add( difat ) )
+				throw new InvalidDataException( "cyclic DIFAT chain in OLE header" );
 			var sector = Sector( difat );
 			int perSector = _sectorSize / 4;
-			for( int i = 0; i < perSector - 1; i++ )
+			for( int i = 0; i < perSector - 1 && (uint)fatSectorIds.Count < fatSectors; i++ )
 				fatSectorIds.Add( BinaryPrimitives.ReadUInt32LittleEndian( sector[ ( i * 4 ).. ] ) );
 			difat = BinaryPrimitives.ReadUInt32LittleEndian( sector[ ( ( perSector - 1 ) * 4 ).. ] );
 		}
 		int fatCount = (int)Math.Min( fatSectors, (uint)fatSectorIds.Count );
 		int entriesPerSector = _sectorSize / 4;
+		long totalFatEntries = (long)fatCount * entriesPerSector;
+		if( totalFatEntries > int.MaxValue / 4 || fatCount > ( _data.Length / _sectorSize ) + 109 )
+			throw new InvalidDataException( "OLE FAT table exceeds file bounds" );
 		_fat = new uint[ fatCount * entriesPerSector ];
 		int fatIdx = 0;
 		for( int f = 0; f < fatCount; f++ )
@@ -280,7 +320,7 @@ public sealed class SwStreamStore
 		var root = entries[ 0 ];
 		if( root.Start < EndOfChain )
 		{
-			_miniStream = Chain( root.Start, (int)root.Size ) ?? [];
+			_miniStream = Chain( root.Start, root.Size ) ?? [];
 		}
 
 		// walk the red-black tree of each storage to build "Storage/Stream" paths
@@ -314,22 +354,27 @@ public sealed class SwStreamStore
 	{
 		if( size < _miniCutoff )
 		{
-			var output = new byte[ size ];
+			if( size > (uint)_miniStream.Length )
+				return null;
+			var output = new byte[ (int)size ];
 			int written = 0;
 			uint sector = start;
+			HashSet<uint> visited = [];
 			for( int guard = 0; sector < EndOfChain && written < output.Length && guard <= _miniFat.Length; guard++ )
 			{
-				int offset = (int)sector * _miniSectorSize;
-				int n = Math.Min( _miniSectorSize, output.Length - written );
-				if( offset + n > _miniStream.Length )
+				if( !visited.Add( sector ) )
 					return null;
-				_miniStream.AsSpan( offset, n ).CopyTo( output.AsSpan( written ) );
+				long offset = (long)sector * _miniSectorSize;
+				int n = Math.Min( _miniSectorSize, output.Length - written );
+				if( offset < 0 || offset + n > _miniStream.Length )
+					return null;
+				_miniStream.AsSpan( (int)offset, n ).CopyTo( output.AsSpan( written ) );
 				written += n;
 				sector = sector < _miniFat.Length ? _miniFat[ sector ] : EndOfChain;
 			}
 			return written == output.Length ? output : null;
 		}
-		return ChainExact( start, (int)size );
+		return ChainExact( start, size );
 	}
 
 	private static byte[] InflateZlb( byte[] raw )
@@ -341,9 +386,7 @@ public sealed class SwStreamStore
 		using var inflater = new ZLibStream( input, CompressionMode.Decompress );
 		using var output = new MemoryStream( capacity );
 		inflater.CopyTo( output );
-		if( output.TryGetBuffer( out ArraySegment<byte> seg ) && seg.Offset == 0 && seg.Array is { } arr && seg.Count == arr.Length )
-			return arr;
-		return output.ToArray();
+		return output.ToByteArrayZeroCopy();
 	}
 
 	private ReadOnlySpan<byte> Sector( uint id )
@@ -354,43 +397,49 @@ public sealed class SwStreamStore
 		return _data.AsSpan( (int)offset, _sectorSize );
 	}
 
-	private byte[] Chain( uint start, int maxBytes = -1 )
+	private byte[] Chain( uint start, long maxBytes = -1 )
 	{
-		using var output = new MemoryStream( maxBytes > 0 ? Math.Min( maxBytes, 16 * 1024 * 1024 ) : _sectorSize * 4 );
+		long boundedMax = maxBytes >= 0 ? Math.Min( maxBytes, _data.Length ) : _data.Length;
+		int initialCapacity = maxBytes > 0 ? (int)Math.Min( boundedMax, 16 * 1024 * 1024 ) : Math.Min( _sectorSize * 4, Math.Max( _data.Length, 0 ) );
+		using var output = new MemoryStream( initialCapacity );
 		uint sector = start;
+		HashSet<uint> visited = [];
 		for( int guard = 0; sector < EndOfChain && sector != FreeSector && guard <= _fat.Length; guard++ )
 		{
+			if( !visited.Add( sector ) )
+				throw new InvalidDataException( "cyclic FAT chain in OLE file" );
 			ReadOnlySpan<byte> bytes = Sector( sector );
-			if( maxBytes >= 0 )
-			{
-				int remaining = maxBytes - (int)output.Length;
-				if( remaining <= 0 )
-					break;
-				if( bytes.Length > remaining )
-					bytes = bytes[ ..remaining ];
-			}
+			long remaining = boundedMax - output.Length;
+			if( remaining <= 0 )
+				break;
+			if( bytes.Length > remaining )
+				bytes = bytes[ ..(int)remaining ];
 			output.Write( bytes );
 			sector = sector < _fat.Length ? _fat[ sector ] : EndOfChain;
 		}
-		if( output.TryGetBuffer( out ArraySegment<byte> seg ) && seg.Offset == 0 && seg.Array is { } arr && seg.Count == arr.Length )
-			return arr;
-		return output.ToArray();
+		return output.ToByteArrayZeroCopy();
 	}
 
-	private byte[]? ChainExact( uint start, int expectedSize )
+	private byte[]? ChainExact( uint start, long expectedSize )
 	{
-		byte[] output = new byte[ expectedSize ];
+		if( expectedSize < 0 || expectedSize > _data.Length )
+			return null;
+		int total = (int)expectedSize;
+		byte[] output = new byte[ total ];
 		int written = 0;
 		uint sector = start;
-		for( int guard = 0; sector < EndOfChain && sector != FreeSector && written < expectedSize && guard <= _fat.Length; guard++ )
+		HashSet<uint> visited = [];
+		for( int guard = 0; sector < EndOfChain && sector != FreeSector && written < total && guard <= _fat.Length; guard++ )
 		{
+			if( !visited.Add( sector ) )
+				return null;
 			ReadOnlySpan<byte> bytes = Sector( sector );
-			int take = Math.Min( bytes.Length, expectedSize - written );
+			int take = Math.Min( bytes.Length, total - written );
 			bytes[ ..take ].CopyTo( output.AsSpan( written ) );
 			written += take;
 			sector = sector < _fat.Length ? _fat[ sector ] : EndOfChain;
 		}
-		return written == expectedSize ? output : null;
+		return written == total ? output : null;
 	}
 
 	private readonly record struct DirEntry( string Name, byte Type, uint Left, uint Right, uint Child, uint Start, uint Size );

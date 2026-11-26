@@ -11,10 +11,15 @@ public static class DependencyGraphLoader
 	/// <param name="token">Cancels the call.</param>
 	/// <returns>The graph (empty for no files); or the server's error.</returns>
 	/// <exception cref="OperationCanceledException"><paramref name="token"/> was cancelled.</exception>
-	public static async Task<Result<DependencyGraph>> LoadAsync( IReadOnlyList<int> entryIds, GraphDirection direction, CancellationToken token = default )
+	public static ValueTask<Result<DependencyGraph>> LoadAsync( IReadOnlyList<int> entryIds, GraphDirection direction, CancellationToken token = default )
 	{
 		if( entryIds.Count == 0 )
-			return Result<DependencyGraph>.Success( DependencyGraph.Empty );
+			return ValueTask.FromResult( Result<DependencyGraph>.Success( DependencyGraph.Empty ) );
+		return LoadSlowAsync( entryIds, direction, token );
+	}
+
+	private static async ValueTask<Result<DependencyGraph>> LoadSlowAsync( IReadOnlyList<int> entryIds, GraphDirection direction, CancellationToken token )
+	{
 		string dir = direction switch
 		{
 			GraphDirection.Children => "children",
@@ -22,8 +27,10 @@ public static class DependencyGraphLoader
 			_ => "both",
 		};
 		Result<OdooRow> reply = await OdooRpc.ExecuteAsync<OdooRow>( "hp.entry", "dependency_graph",
-			[ entryIds, dir ], OdooRpc.LongTimeout * 3, token );
-		return reply.Ok ? Result<DependencyGraph>.Success( Parse( reply.Value! ) ) : Result<DependencyGraph>.Fail( reply.Error );
+			[ entryIds, dir ], OdooRpc.LongTimeout * 3, token ).ConfigureAwait( false );
+		return reply.Ok && reply.Value is not null
+			? Result<DependencyGraph>.Success( Parse( reply.Value ) )
+			: Result<DependencyGraph>.Fail( reply.Error ?? "empty dependency graph response" );
 	}
 
 	/// <summary>Builds a <see cref="DependencyGraph"/> from the server's reply; missing or malformed parts are left out.</summary>
@@ -37,7 +44,8 @@ public static class DependencyGraphLoader
 			{
 				if( row is not IReadOnlyDictionary<string, object?> n || n.Int( "id" ) is not int id )
 					continue;
-				nodes.Add( new GraphNode( id, n.Text( "name" ) ?? "", n.Text( "ext" ) ?? "", Long( n.GetValueOrDefault( "size" ) ),
+				string ext = ( n.Text( "ext" ) ?? "" ).ToLowerInvariant();
+				nodes.Add( new GraphNode( id, n.Text( "name" ) ?? "", ext, n.Long( "size" ),
 					n.Text( "category" ) ?? "", n.Int( "version_id" ) ?? 0, n.Bool( "deleted" ), n.Bool( "checked_out" ), n.Text( "path" ) ?? "" )
 				{
 					CheckoutUser = n.Text( "checkout_user" ) ?? "",
@@ -58,12 +66,4 @@ public static class DependencyGraphLoader
 		}
 		return new DependencyGraph( OdooValues.Ids( reply.GetValueOrDefault( "roots" ) ), nodes, edges, reply.GetValueOrDefault( "truncated" ) is true );
 	}
-
-	private static long Long( object? value ) => value switch
-	{
-		int i => i,
-		long l => l,
-		double d => (long)d,
-		_ => 0,
-	};
 }

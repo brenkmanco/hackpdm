@@ -54,7 +54,7 @@ public sealed record GraphPalette(
 	uint RootBorder,
 	uint SelectedBorder,
 	uint Shadow,
-	IReadOnlyDictionary<NodeKind, uint> Headers )
+	IReadOnlyDictionary<NodeKind, uint> Headers ) : INamedPreset<PaletteName>
 {
 	/// <summary>The header color of a file of <paramref name="kind"/>.</summary>
 	public uint Header( NodeKind kind ) => Headers[ kind ];
@@ -90,7 +90,7 @@ public sealed record GraphForm(
 	bool HollowPorts,
 	double LinkThickness,
 	double ShadowDepth,
-	bool ShowGrid );
+	bool ShowGrid ) : INamedPreset<FormName>;
 
 /// <summary>A palette and a form: chosen separately, so any colors go with any shapes.</summary>
 public sealed record GraphTheme( GraphPalette Palette, GraphForm Form )
@@ -102,60 +102,71 @@ public sealed record GraphTheme( GraphPalette Palette, GraphForm Form )
 /// <summary>The built-in palettes and forms.</summary>
 public static class GraphThemes
 {
-	/// <summary>Every palette, in menu order.</summary>
-	public static IReadOnlyList<GraphPalette> Palettes { get; } =
-	[
-		new( PaletteName.Dark, "Dark",
-			Backdrop: 0xFF1E1E20, GridLine: 0xFF2A2A2E, Body: 0xFF2E2E32, BodyBorder: 0xFF141416,
-			Text: 0xFFDCDCE1, HeaderText: 0xFFFFFFFF, SubText: 0xFF96969E,
-			Link: 0xC8C8C8CD, LinkHighlight: 0xFFFFAA3C, Port: 0xFFF08C1E,
-			RootBorder: 0xFFFFA028, SelectedBorder: 0xFFFFFFFF, Shadow: 0x80000000,
-			Headers: new Dictionary<NodeKind, uint>
+	/// <summary>
+	/// The colors that mark a file's kind and the boxes' shadow, per palette. They carry meaning, so they stay fixed
+	/// while everything else follows the Material scheme (see <see cref="FromScheme"/>).
+	/// </summary>
+	private static readonly FrozenDictionary<PaletteName, (IReadOnlyDictionary<NodeKind, uint> Headers, uint Shadow)> KindColors =
+		new Dictionary<PaletteName, (IReadOnlyDictionary<NodeKind, uint>, uint)>
+		{
+			[ PaletteName.Dark ] = ( new Dictionary<NodeKind, uint>
 			{
 				[ NodeKind.Assembly ] = 0xFF2E7D46, [ NodeKind.Part ] = 0xFF285FAA, [ NodeKind.Drawing ] = 0xFF783C96,
 				[ NodeKind.Pdf ] = 0xFFAA4632, [ NodeKind.Other ] = 0xFF555F69, [ NodeKind.Deleted ] = 0xFF8C2828,
-			}.ToFrozenDictionary() ),
-		new( PaletteName.Light, "Light",
-			Backdrop: 0xFFF3F4F6, GridLine: 0xFFE3E5E9, Body: 0xFFFFFFFF, BodyBorder: 0xFFC9CED6,
-			Text: 0xFF1F2328, HeaderText: 0xFFFFFFFF, SubText: 0xFF59636E,
-			Link: 0xFF737C87, LinkHighlight: 0xFFC2570A, Port: 0xFFE07B12,
-			RootBorder: 0xFFE07B12, SelectedBorder: 0xFF0969DA, Shadow: 0x30000000,
-			Headers: new Dictionary<NodeKind, uint>
+			}.ToFrozenDictionary(), 0x80000000 ),
+			[ PaletteName.Light ] = ( new Dictionary<NodeKind, uint>
 			{
 				[ NodeKind.Assembly ] = 0xFF2D7A47, [ NodeKind.Part ] = 0xFF2563B8, [ NodeKind.Drawing ] = 0xFF7B4BA6,
 				[ NodeKind.Pdf ] = 0xFFB4462F, [ NodeKind.Other ] = 0xFF5B6470, [ NodeKind.Deleted ] = 0xFFA3302F,
-			}.ToFrozenDictionary() ),
-		new( PaletteName.NavyBlue, "Navy blue",
-			Backdrop: 0xFF0B1A30, GridLine: 0xFF14274A, Body: 0xFF13294B, BodyBorder: 0xFF07111F,
-			Text: 0xFFE6EDF7, HeaderText: 0xFFFFFFFF, SubText: 0xFF9FB3CF,
-			Link: 0xFF6F8DB8, LinkHighlight: 0xFFF2B134, Port: 0xFFF2B134,
-			RootBorder: 0xFFF2B134, SelectedBorder: 0xFFFFFFFF, Shadow: 0x90000814,
-			Headers: new Dictionary<NodeKind, uint>
+			}.ToFrozenDictionary(), 0x30000000 ),
+			[ PaletteName.NavyBlue ] = ( new Dictionary<NodeKind, uint>
 			{
 				[ NodeKind.Assembly ] = 0xFF1C7A63, [ NodeKind.Part ] = 0xFF2F62C8, [ NodeKind.Drawing ] = 0xFF7D52BE,
 				[ NodeKind.Pdf ] = 0xFFB04E39, [ NodeKind.Other ] = 0xFF4B6584, [ NodeKind.Deleted ] = 0xFF9E2A2A,
-			}.ToFrozenDictionary() ),
-	];
+			}.ToFrozenDictionary(), 0x90000814 ),
+		}.ToFrozenDictionary();
+
+	/// <summary>Every palette, in menu order: each app palette's Material scheme as graph colors.</summary>
+	public static IReadOnlyList<GraphPalette> Palettes { get; } =
+		[ .. ThemePresets.Palettes.Select( p => FromScheme( p.Name, p.Title, p.Scheme ) ) ];
+
+	/// <summary>
+	/// The graph colors for a Material scheme (role → 0xAARRGGBB, see <see cref="MaterialRoles"/>): the canvas is the
+	/// Surface, boxes are Surface Container with an Outline Variant border, links are Outline, highlighted links, ports
+	/// and the clicked box use Primary, and the chosen files' border is Tertiary. The kind colors stay fixed.
+	/// </summary>
+	public static GraphPalette FromScheme( PaletteName name, string title, IReadOnlyDictionary<string, uint> scheme )
+	{
+		(IReadOnlyDictionary<NodeKind, uint> headers, uint shadow) = KindColors[ Enum.IsDefined( name ) ? name : PaletteName.Dark ];
+		uint R( string role ) => scheme[ role ];
+		return new GraphPalette( name, title,
+			Backdrop: R( MaterialRoles.Surface ), GridLine: R( MaterialRoles.SurfaceContainerLow ),
+			Body: R( MaterialRoles.SurfaceContainer ), BodyBorder: R( MaterialRoles.OutlineVariant ),
+			Text: R( MaterialRoles.OnSurface ), HeaderText: 0xFFFFFFFF, SubText: R( MaterialRoles.OnSurfaceVariant ),
+			Link: R( MaterialRoles.Outline ), LinkHighlight: R( MaterialRoles.Primary ), Port: R( MaterialRoles.Primary ),
+			RootBorder: R( MaterialRoles.Tertiary ), SelectedBorder: R( MaterialRoles.Primary ), Shadow: shadow,
+			Headers: headers );
+	}
 
 	/// <summary>Every form, in menu order.</summary>
 	public static IReadOnlyList<GraphForm> Forms { get; } =
 	[
-		new( FormName.Compact, "Compact",
+		new( FormName.Compact, nameof( FormName.Compact ),
 			new LayoutOptions { ColumnGap = 70, RowGap = 12, Margin = 24, MinWidth = 130, MinHeight = 30, MaxWidth = 200, MaxHeight = 52 },
 			HeaderStyle.Band, LinkStyle.Curve, HeaderHeight: 30, CornerRadius: 3, BorderThickness: 1, RootBorderThickness: 2,
 			TitleSize: 11, ShowFolder: false, ShowSizeLine: false, PortSize: 7, HollowPorts: false, LinkThickness: 1.5,
 			ShadowDepth: 0, ShowGrid: false ),
-		new( FormName.Default, "Default",
+		new( FormName.Default, nameof( FormName.Default ),
 			new LayoutOptions(),
 			HeaderStyle.Band, LinkStyle.Curve, HeaderHeight: 26, CornerRadius: 6, BorderThickness: 1.5, RootBorderThickness: 2.5,
 			TitleSize: 12.5, ShowFolder: true, ShowSizeLine: true, PortSize: 11, HollowPorts: false, LinkThickness: 2,
 			ShadowDepth: 0, ShowGrid: false ),
-		new( FormName.Modern, "Modern",
+		new( FormName.Modern, nameof( FormName.Modern ),
 			new LayoutOptions { ColumnGap = 140, RowGap = 32, Margin = 48, MinWidth = 180, MinHeight = 64, MaxWidth = 300, MaxHeight = 128 },
 			HeaderStyle.Strip, LinkStyle.Elbow, HeaderHeight: 5, CornerRadius: 12, BorderThickness: 1, RootBorderThickness: 2,
 			TitleSize: 13, ShowFolder: true, ShowSizeLine: true, PortSize: 10, HollowPorts: true, LinkThickness: 1.6,
 			ShadowDepth: 3, ShowGrid: true ),
-		new( FormName.Fancy, "Fancy",
+		new( FormName.Fancy, nameof( FormName.Fancy ),
 			new LayoutOptions { ColumnGap = 150, RowGap = 36, Margin = 56, MinWidth = 190, MinHeight = 72, MaxWidth = 310, MaxHeight = 140 },
 			HeaderStyle.Gradient, LinkStyle.GlowCurve, HeaderHeight: 30, CornerRadius: 9, BorderThickness: 1.5, RootBorderThickness: 3,
 			TitleSize: 13, ShowFolder: true, ShowSizeLine: true, PortSize: 13, HollowPorts: false, LinkThickness: 2.4,
@@ -164,37 +175,29 @@ public static class GraphThemes
 
 	/// <summary>The palette named <paramref name="name"/>.</summary>
 	public static GraphPalette Palette( PaletteName name )
-	{
-		int idx = (int)name;
-		if( (uint)idx < (uint)Palettes.Count && Palettes[ idx ].Name == name )
-			return Palettes[ idx ];
-		for( int i = 0; i < Palettes.Count; i++ )
-		{
-			if( Palettes[ i ].Name == name )
-				return Palettes[ i ];
-		}
-		throw new InvalidOperationException( $"Unknown palette '{name}'." );
-	}
+		=> EnumPresets.Find( Palettes, Enum.IsDefined( name ) ? name : PaletteName.Dark, "palette" );
 
 	/// <summary>The form named <paramref name="name"/>.</summary>
 	public static GraphForm Form( FormName name )
-	{
-		int idx = (int)name;
-		if( (uint)idx < (uint)Forms.Count && Forms[ idx ].Name == name )
-			return Forms[ idx ];
-		for( int i = 0; i < Forms.Count; i++ )
-		{
-			if( Forms[ i ].Name == name )
-				return Forms[ i ];
-		}
-		throw new InvalidOperationException( $"Unknown form '{name}'." );
-	}
+		=> EnumPresets.Find( Forms, Enum.IsDefined( name ) ? name : FormName.Default, "form" );
 
 	/// <summary>The theme for two saved names; an unknown or missing name falls back to Dark / Default.</summary>
 	public static GraphTheme From( string? palette, string? form ) => From( ThemePresets.ParsePalette( palette ), ThemePresets.ParseForm( form ) );
 
 	/// <summary>The graph's colors and shapes for the app's palette and form.</summary>
 	public static GraphTheme From( PaletteName palette, FormName form ) => new( Palette( palette ), Form( form ) );
+
+	/// <summary>
+	/// The graph's colors and shapes for the app's palette and form, with the colors taken from <paramref name="scheme"/>
+	/// (the palette's scheme with any Theme Editor changes).
+	/// </summary>
+	public static GraphTheme From( PaletteName palette, FormName form, IReadOnlyDictionary<string, uint> scheme )
+	{
+		GraphPalette preset = Palette( palette );
+		GraphPalette colors = FromScheme( preset.Name, preset.Title, scheme );
+		// keep the cached instance while nothing changed, so the view can tell a real change from a repeat
+		return new( colors == preset ? preset : colors, Form( form ) );
+	}
 
 	/// <summary>The kind of a file, from its extension and whether it is deleted.</summary>
 	public static NodeKind KindOf( GraphNode node ) => node.Deleted

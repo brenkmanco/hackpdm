@@ -10,52 +10,70 @@ public sealed record BrokenDependency( string? FullPath, HackResult Reason );
 /// <summary>Recursively collects local files and all SolidWorks references needed for a commit.</summary>
 public static class DependencyScanner
 {
-	private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
-		? StringComparer.OrdinalIgnoreCase
-		: StringComparer.Ordinal;
+	public static Task<(bool Success, List<HackFile> Files, List<BrokenDependency> Broken)> GetFileWithDependenciesAsync( EntryRow entry, CancellationToken token = default )
+		=> Task.Run( () => ScanSingle( new HackFile( entry ), sharedResolver: null, token ), token );
 
-	public static Task<(bool Success, List<HackFile> Files, List<BrokenDependency> Broken)> GetFileWithDependenciesAsync( EntryRow entry )
-		=> GetFileWithDependenciesAsync( new HackFile( entry ) );
+	public static Task<(bool Success, List<HackFile> Files, List<BrokenDependency> Broken)> GetFileWithDependenciesAsync( HackFile file, CancellationToken token = default )
+		=> Task.Run( () => ScanSingle( file, sharedResolver: null, token ), token );
 
-	public static Task<(bool Success, List<HackFile> Files, List<BrokenDependency> Broken)> GetFileWithDependenciesAsync( HackFile file )
-		=> Task.Run( () => ScanSingle( file ) );
+	public static Task<(List<HackFile> Files, List<BrokenDependency> Broken)> GetFolderWithDependenciesAsync( string folderPath, CancellationToken token = default )
+		=> Task.Run( () => ScanFolder( folderPath, token ), token );
 
-	public static Task<(List<HackFile> Files, List<BrokenDependency> Broken)> GetFolderWithDependenciesAsync( string folderPath )
-		=> Task.Run( () => ScanFolder( folderPath ) );
-
-	private static (List<HackFile> Files, List<BrokenDependency> Broken) ScanFolder( string folderPath )
+	private static (List<HackFile> Files, List<BrokenDependency> Broken) ScanFolder( string folderPath, CancellationToken token )
 	{
+		token.ThrowIfCancellationRequested();
+		if( string.IsNullOrWhiteSpace( folderPath ) || !Directory.Exists( folderPath ) )
+			return ( [], [] );
+
 		HashSet<HackFile> files = [];
 		List<BrokenDependency> broken = [];
+		HashSet<(string? Path, HackResult Reason)> seenBroken = new( BrokenKeyComparer.Instance );
 		SwReferenceResolver resolver = new( HackDefaults.Instance.PwaPathAbsolute );
-		Dictionary<string, (List<SwDependencies.Reference>? Refs, Exception? Error)> depCache = new( PathComparer );
-		Dictionary<string, HackFile> fileCache = new( PathComparer );
-		HashSet<string> activeBranch = new( PathComparer );
-		HashSet<string> visited = new( PathComparer );
+		Dictionary<string, (List<SwDependencies.Reference>? Refs, Exception? Error)> depCache = new( PwaPaths.PathComparer );
+		Dictionary<string, HackFile> fileCache = new( PwaPaths.PathComparer );
+		HashSet<string> activeBranch = new( PwaPaths.PathComparer );
+		HashSet<string> visited = new( PwaPaths.PathComparer );
 
-		foreach( string path in Directory.EnumerateFiles( folderPath, "*", SearchOption.TopDirectoryOnly ) )
+		IEnumerable<string> paths;
+		try
 		{
+			paths = Directory.EnumerateFiles( folderPath, "*", SearchOption.TopDirectoryOnly );
+		}
+		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException )
+		{
+			HackLogger.Warn( nameof( DependencyScanner ), $"Could not enumerate '{folderPath}': {ex.Message}", ex );
+			return ( [], [] );
+		}
+
+		foreach( string path in paths )
+		{
+			token.ThrowIfCancellationRequested();
 			if( CommitOperations.IsFilteredName( Path.GetFileName( path ) ) )
 				continue;
 			string canonical = TryFullPath( path );
 			if( !fileCache.TryGetValue( canonical, out HackFile? hack ) )
 			{
-				hack = HackFile.GetFromPath( path );
+				hack = HackFile.GetFromPath( path, computeChecksum: false );
 				if( hack is not { Exists: true } )
 					continue;
 				fileCache[ canonical ] = hack;
 			}
 			if( !SwDocumentTypes.IsSolidWorks( path ) )
 			{
-				files.Add( hack );
+				HackResult check = ValidateFile( hack );
+				if( check == HackResult.Clean )
+					files.Add( hack );
+				else
+					AddBroken( broken, seenBroken, hack.FullPath, check );
 				continue;
 			}
 
 			List<HackFile> tree = [];
 			List<BrokenDependency> results = [];
+			HashSet<(string? Path, HackResult Reason)> treeBroken = new( BrokenKeyComparer.Instance );
 			activeBranch.Clear();
 			visited.Clear();
-			Walk( hack, resolver, tree, results, activeBranch, visited, depCache, fileCache );
+			Walk( hack, resolver, tree, results, treeBroken, activeBranch, visited, depCache, fileCache, token );
 			if( results.Count == 0 )
 			{
 				for( int i = 0; i < tree.Count; i++ )
@@ -63,21 +81,27 @@ public static class DependencyScanner
 			}
 			else
 			{
-				broken.AddRange( results );
+				for( int i = 0; i < results.Count; i++ )
+					AddBroken( broken, seenBroken, results[ i ].FullPath, results[ i ].Reason );
 			}
 		}
 		return ( [ .. files ], broken );
 	}
 
-	private static (bool Success, List<HackFile> Files, List<BrokenDependency> Broken) ScanSingle( HackFile root )
+	internal static (bool Success, List<HackFile> Files, List<BrokenDependency> Broken) ScanSingle(
+		HackFile root,
+		SwReferenceResolver? sharedResolver = null,
+		CancellationToken token = default )
 	{
-		SwReferenceResolver resolver = new( HackDefaults.Instance.PwaPathAbsolute );
+		token.ThrowIfCancellationRequested();
+		SwReferenceResolver resolver = sharedResolver ?? new( HackDefaults.Instance.PwaPathAbsolute );
 		List<HackFile> collected = [];
 		List<BrokenDependency> broken = [];
-		HashSet<string> activeBranch = new( PathComparer );
-		HashSet<string> visited = new( PathComparer );
+		HashSet<(string? Path, HackResult Reason)> seenBroken = new( BrokenKeyComparer.Instance );
+		HashSet<string> activeBranch = new( PwaPaths.PathComparer );
+		HashSet<string> visited = new( PwaPaths.PathComparer );
 
-		Walk( root, resolver, collected, broken, activeBranch, visited, depCache: null, fileCache: null );
+		Walk( root, resolver, collected, broken, seenBroken, activeBranch, visited, depCache: null, fileCache: null, token );
 		return broken.Count > 0 ? ( false, [], broken ) : ( true, collected, [] );
 	}
 
@@ -86,15 +110,18 @@ public static class DependencyScanner
 		SwReferenceResolver resolver,
 		List<HackFile> collected,
 		List<BrokenDependency> broken,
+		HashSet<(string? Path, HackResult Reason)> seenBroken,
 		HashSet<string> activeBranch,
 		HashSet<string> visited,
 		Dictionary<string, (List<SwDependencies.Reference>? Refs, Exception? Error)>? depCache,
-		Dictionary<string, HackFile>? fileCache )
+		Dictionary<string, HackFile>? fileCache,
+		CancellationToken token )
 	{
+		token.ThrowIfCancellationRequested();
 		HackResult check = ValidateFile( file );
 		if( check != HackResult.Clean )
 		{
-			broken.Add( new BrokenDependency( file.FullPath, check ) );
+			AddBroken( broken, seenBroken, file.FullPath, check );
 			return;
 		}
 
@@ -111,7 +138,7 @@ public static class DependencyScanner
 		{
 			if( cached.Error is not null || cached.Refs is null )
 			{
-				broken.Add( new BrokenDependency( canonical, HackResult.CorruptDepFile ) );
+				AddBroken( broken, seenBroken, canonical, HackResult.CorruptDepFile );
 				return;
 			}
 			references = cached.Refs;
@@ -120,16 +147,20 @@ public static class DependencyScanner
 		{
 			try
 			{
-				references = SwDependencies.Of( canonical, resolver );
+				references = SwDependencies.Of( canonical, resolver, token );
 				if( depCache is not null )
 					depCache[ canonical ] = ( references, null );
+			}
+			catch( OperationCanceledException )
+			{
+				throw;
 			}
 			catch( Exception e )
 			{
 				HackLogger.Warn( "Dependencies", $"References of '{canonical}' could not be read: {e.Message}", e );
 				if( depCache is not null )
 					depCache[ canonical ] = ( null, e );
-				broken.Add( new BrokenDependency( canonical, HackResult.CorruptDepFile ) );
+				AddBroken( broken, seenBroken, canonical, HackResult.CorruptDepFile );
 				return;
 			}
 		}
@@ -139,28 +170,48 @@ public static class DependencyScanner
 		{
 			foreach( var (stored, local) in references )
 			{
+				token.ThrowIfCancellationRequested();
 				string refPath = local ?? UnresolvedPath( stored, canonical );
 				string refKey = TryFullPath( refPath );
-				if( activeBranch.Contains( refKey ) )
+				if( activeBranch.Contains( refKey ) || visited.Contains( refKey ) )
 					continue;
 				HackFile child;
 				if( fileCache is not null )
 				{
 					if( !fileCache.TryGetValue( refKey, out HackFile? cachedChild ) )
-						fileCache[ refKey ] = cachedChild = HackFile.GetFromPath( refPath ) ?? new HackFile { FullPath = refPath };
+						fileCache[ refKey ] = cachedChild = HackFile.GetFromPath( refPath, computeChecksum: false ) ?? new HackFile { FullPath = refPath };
 					child = cachedChild;
 				}
 				else
 				{
-					child = HackFile.GetFromPath( refPath ) ?? new HackFile { FullPath = refPath };
+					child = HackFile.GetFromPath( refPath, computeChecksum: false ) ?? new HackFile { FullPath = refPath };
 				}
-				Walk( child, resolver, collected, broken, activeBranch, visited, depCache, fileCache );
+				Walk( child, resolver, collected, broken, seenBroken, activeBranch, visited, depCache, fileCache, token );
 			}
 		}
 		finally
 		{
 			activeBranch.Remove( canonical );
 		}
+	}
+
+	private static void AddBroken(
+		List<BrokenDependency> broken,
+		HashSet<(string? Path, HackResult Reason)> seen,
+		string? path,
+		HackResult reason )
+	{
+		if( seen.Add( ( path, reason ) ) )
+			broken.Add( new BrokenDependency( path, reason ) );
+	}
+
+	private sealed class BrokenKeyComparer : IEqualityComparer<(string? Path, HackResult Reason)>
+	{
+		public static readonly BrokenKeyComparer Instance = new();
+		public bool Equals( (string? Path, HackResult Reason) x, (string? Path, HackResult Reason) y )
+			=> x.Reason == y.Reason && PwaPaths.PathComparer.Equals( x.Path, y.Path );
+		public int GetHashCode( (string? Path, HackResult Reason) obj )
+			=> HashCode.Combine( obj.Path is null ? 0 : PwaPaths.PathComparer.GetHashCode( obj.Path ), obj.Reason );
 	}
 
 	private static HackResult ValidateFile( HackFile file )

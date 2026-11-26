@@ -116,6 +116,9 @@ public static class GraphLayout
 	/// <param name="options">Spacing and sizes; the defaults when null.</param>
 	/// <returns>The boxes and links; empty for an empty graph.</returns>
 	public static GraphLayoutResult Arrange( DependencyGraph graph, GraphDirection direction, LayoutOptions? options = null )
+		=> Arrange( graph, direction, options, MaxDummyNodes );
+
+	internal static GraphLayoutResult Arrange( DependencyGraph graph, GraphDirection direction, LayoutOptions? options, int maxDummyNodes )
 	{
 		options ??= LayoutOptions.Default;
 		Dictionary<int, GraphNode> nodes = graph.Nodes.DistinctBy( n => n.Id ).ToDictionary( n => n.Id );
@@ -221,7 +224,7 @@ public static class GraphLayout
 			// Stages 3-6 for this component
 			var (compBoxes, compRoutes, compHeight, compMaxX, compMaxY) = LayoutComponent(
 				compNodes, compEdges, nodes, sizes, layer, layerToCol, colLeft, colRight, colWidth,
-				rootSet, rootOrder, direction, options, cursorY );
+				rootSet, rootOrder, direction, options, cursorY, maxDummyNodes );
 
 			for( int i = 0; i < compBoxes.Count; i++ )
 			{
@@ -270,9 +273,9 @@ public static class GraphLayout
 			HashSet<int> pushedRoots = [ .. roots.Where( r => layer.TryGetValue( r, out int l ) && l > 0 ) ];
 			up.ExceptWith( pushedRoots );
 
-			HashSet<int> pinnedUpRoots = FindIndependentRoots(
-				[ .. roots.Where( up.Contains ) ], up, childrenOf );
-			AssignDirectionLayers( up, pinnedUpRoots, [ .. roots.Where( up.Contains ) ], parentsOf, layer, step: -1 );
+			List<int> upRoots = [ .. roots.Where( up.Contains ) ];
+			HashSet<int> pinnedUpRoots = FindIndependentRoots( upRoots, up, childrenOf );
+			AssignDirectionLayers( up, pinnedUpRoots, upRoots, parentsOf, layer, step: -1 );
 		}
 
 		// Anything not linked to a selected file joins layer 0
@@ -484,12 +487,16 @@ public static class GraphLayout
 		Dictionary<int, int> rootOrder,
 		GraphDirection direction,
 		LayoutOptions o,
-		double offsetY )
+		double offsetY,
+		int maxDummyNodes )
 	{
 		// Local dense column index range spanned by this component
 		int minGlobalCol = compNodes.Min( id => globalLayerToCol[ layer[ id ] ] );
 		int maxGlobalCol = compNodes.Max( id => globalLayerToCol[ layer[ id ] ] );
 		int numCols = maxGlobalCol - minGlobalCol + 1;
+		int rootLocalCol = globalLayerToCol.TryGetValue( 0, out int gZero )
+			? Math.Clamp( gZero - minGlobalCol, 0, numCols - 1 )
+			: numCols / 2;
 
 		// Vertex indexing: 0..realCount-1 are real nodes; realCount..totalVerts-1 are dummy nodes
 		List<int> realIds = [ .. compNodes ];
@@ -517,7 +524,7 @@ public static class GraphLayout
 		}
 
 		List<EdgeChain> chains = new( compEdges.Count );
-		int dummyBudget = MaxDummyNodes;
+		int dummyBudget = Math.Max( 0, maxDummyNodes );
 
 		int AddDummy( int col )
 		{
@@ -586,7 +593,7 @@ public static class GraphLayout
 		MinimizeCrossings( columns, rightAdj, leftAdj, direction );
 
 		// Stage 5: Variable-height 4-direction Brandes–Köpf + safe hub centering
-		double[] centerY = AssignYCoordinates( columns, vertCount, vertHeight, isDummy, rightAdj, leftAdj, direction, o );
+		double[] centerY = AssignYCoordinates( columns, vertCount, vertHeight, isDummy, rightAdj, leftAdj, direction, rootLocalCol, o );
 
 		// Shift component so its minimum top edge sits at offsetY
 		double minTop = double.PositiveInfinity;
@@ -611,6 +618,10 @@ public static class GraphLayout
 		// Build real NodeBoxes
 		List<NodeBox> boxes = new( realIds.Count );
 		Dictionary<int, NodeBox> byId = new( realIds.Count );
+		double[] colMinY = new double[ globalColLeft.Length ];
+		double[] colMaxY = new double[ globalColLeft.Length ];
+		Array.Fill( colMinY, double.PositiveInfinity );
+		Array.Fill( colMaxY, double.NegativeInfinity );
 		double maxX = 0;
 		double maxY = offsetY + compHeight;
 
@@ -624,6 +635,8 @@ public static class GraphLayout
 			NodeBox box = new( allNodes[ id ], layer[ id ], x, y, w, h, rootSet.Contains( id ) );
 			boxes.Add( box );
 			byId[ id ] = box;
+			if( y < colMinY[ gc ] ) colMinY[ gc ] = y;
+			if( y + h > colMaxY[ gc ] ) colMaxY[ gc ] = y + h;
 			if( x + w > maxX ) maxX = x + w;
 			if( y + h > maxY ) maxY = y + h;
 		}
@@ -633,25 +646,47 @@ public static class GraphLayout
 		double backStub = Math.Min( 28.0, o.ColumnGap * 0.3 );
 
 		double clearPad = Math.Max( 16.0, o.RowGap * 0.65 );
-		List<(double X, double Y)> WrapAroundBends( NodeBox a, NodeBox b, double exitX, double enterX, double fy, double ty )
+		double minSafeY = Math.Max( 0.0, o.Margin * 0.5 );
+
+		(double MinY, double MaxY) SpanBounds( int fromGc, int toGc, NodeBox a, NodeBox b )
 		{
-			double clearY = Math.Min( a.Y, b.Y ) - clearPad;
-			if( clearY < o.Margin * 0.5 )
-				clearY = Math.Max( a.Y + a.Height, b.Y + b.Height ) + clearPad;
+			int lo = Math.Min( fromGc, toGc );
+			int hi = Math.Max( fromGc, toGc );
+			double spanMin = Math.Min( a.Y, b.Y );
+			double spanMax = Math.Max( a.Y + a.Height, b.Y + b.Height );
+			for( int gc = lo; gc <= hi; gc++ )
+			{
+				if( colMinY[ gc ] < spanMin ) spanMin = colMinY[ gc ];
+				if( colMaxY[ gc ] > spanMax ) spanMax = colMaxY[ gc ];
+			}
+			return (spanMin, spanMax);
+		}
+
+		List<(double X, double Y)> WrapAroundBends( int fromGc, int toGc, NodeBox a, NodeBox b, double exitX, double enterX, double fy, double ty )
+		{
+			var (spanMin, spanMax) = SpanBounds( fromGc, toGc, a, b );
+			double clearY = spanMin - clearPad;
+			if( clearY < minSafeY )
+				clearY = spanMax + clearPad;
 			return [ ( exitX, fy ), ( exitX, clearY ), ( enterX, clearY ), ( enterX, ty ) ];
 		}
 
+		int fallbackCorridorIdx = 0;
 		foreach( EdgeChain chain in chains )
 		{
 			NodeBox parentBox = byId[ chain.Edge.Parent ];
 			NodeBox childBox = byId[ chain.Edge.Child ];
+			int parentGc = minGlobalCol + vertCol[ nodeIdToVert[ chain.Edge.Parent ] ];
+			int childGc = minGlobalCol + vertCol[ nodeIdToVert[ chain.Edge.Child ] ];
+			double colExitX = globalColRight[ parentGc ] + backStub;
+			double colEnterX = Math.Max( 0.0, globalColLeft[ childGc ] - backStub );
 			var (fx, fy) = parentBox.OutPort;
 			var (tx, ty) = childBox.InPort;
 
 			List<(double X, double Y)>? bends = null;
 			if( chain.SameColumn )
 			{
-				bends = WrapAroundBends( parentBox, childBox, Math.Max( fx, tx ) + backStub, Math.Min( fx, tx ) - backStub, fy, ty );
+				bends = WrapAroundBends( parentGc, childGc, parentBox, childBox, colExitX, colEnterX, fy, ty );
 			}
 			else if( !chain.ReversedForOrdering )
 			{
@@ -665,10 +700,40 @@ public static class GraphLayout
 						bends.Add( ( globalColRight[ gc ], centerY[ d ] ) );
 					}
 				}
+				else if( childGc - parentGc > 1 )
+				{
+					double interMinY = double.PositiveInfinity;
+					double interMaxY = double.NegativeInfinity;
+					for( int gc = parentGc + 1; gc < childGc; gc++ )
+					{
+						if( colMinY[ gc ] < interMinY ) interMinY = colMinY[ gc ];
+						if( colMaxY[ gc ] > interMaxY ) interMaxY = colMaxY[ gc ];
+					}
+					double stagger = fallbackCorridorIdx++ * 6.0;
+					double corridorY;
+					if( double.IsInfinity( interMinY ) )
+					{
+						corridorY = ( fy + ty ) * 0.5;
+					}
+					else
+					{
+						double aboveY = interMinY - clearPad - stagger;
+						double belowY = interMaxY + clearPad + stagger;
+						corridorY = aboveY >= minSafeY && ( fy + ty ) * 0.5 <= ( interMinY + interMaxY ) * 0.5
+							? aboveY
+							: belowY;
+					}
+					bends = new( ( childGc - parentGc - 1 ) * 2 );
+					for( int gc = parentGc + 1; gc < childGc; gc++ )
+					{
+						bends.Add( ( globalColLeft[ gc ], corridorY ) );
+						bends.Add( ( globalColRight[ gc ], corridorY ) );
+					}
+				}
 			}
 			else if( chain.DummyIds.Count > 0 )
 			{
-				bends = new( chain.DummyIds.Count * 2 + 2 ) { ( fx + backStub, centerY[ chain.DummyIds[ ^1 ] ] ) };
+				bends = new( chain.DummyIds.Count * 2 + 2 ) { ( colExitX, centerY[ chain.DummyIds[ ^1 ] ] ) };
 				for( int i = chain.DummyIds.Count - 1; i >= 0; i-- )
 				{
 					int d = chain.DummyIds[ i ];
@@ -676,11 +741,11 @@ public static class GraphLayout
 					bends.Add( ( globalColRight[ gc ], centerY[ d ] ) );
 					bends.Add( ( globalColLeft[ gc ], centerY[ d ] ) );
 				}
-				bends.Add( ( tx - backStub, centerY[ chain.DummyIds[ 0 ] ] ) );
+				bends.Add( ( colEnterX, centerY[ chain.DummyIds[ 0 ] ] ) );
 			}
 			else
 			{
-				bends = WrapAroundBends( parentBox, childBox, fx + backStub, tx - backStub, fy, ty );
+				bends = WrapAroundBends( parentGc, childGc, parentBox, childBox, colExitX, colEnterX, fy, ty );
 			}
 
 			if( bends is not null )
@@ -690,6 +755,7 @@ public static class GraphLayout
 				: new EdgeRoute( chain.Edge, fx, fy, tx, ty ) { BendPoints = bends } );
 		}
 
+		compHeight = Math.Max( compHeight, maxY - offsetY );
 		return (boxes, routes, compHeight, maxX, maxY);
 	}
 
@@ -1085,6 +1151,7 @@ public static class GraphLayout
 		List<List<int>> rightAdj,
 		List<List<int>> leftAdj,
 		GraphDirection direction,
+		int rootLocalCol,
 		LayoutOptions o )
 	{
 		int[] pos = new int[ vertCount ];
@@ -1112,10 +1179,10 @@ public static class GraphLayout
 		// Compute the 4 Brandes–Köpf directional layouts
 		double[][] layouts =
 		[
-			ComputeBkLayout( columns, vertCount, vertHeight, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: true, topToBottom: true ),
-			ComputeBkLayout( columns, vertCount, vertHeight, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: false, topToBottom: true ),
-			ComputeBkLayout( columns, vertCount, vertHeight, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: true, topToBottom: false ),
-			ComputeBkLayout( columns, vertCount, vertHeight, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: false, topToBottom: false ),
+			ComputeBkLayout( columns, vertCount, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: true, topToBottom: true ),
+			ComputeBkLayout( columns, vertCount, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: false, topToBottom: true ),
+			ComputeBkLayout( columns, vertCount, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: true, topToBottom: false ),
+			ComputeBkLayout( columns, vertCount, leftAdj, rightAdj, pos, type1Conflicts, Sep, leftToRight: false, topToBottom: false ),
 		];
 
 		// Normalize each layout to start at top = 0 and find the tightest (minimum-height) one
@@ -1164,7 +1231,7 @@ public static class GraphLayout
 		}
 
 		// 1-pass safe hub centering (fixes median bias on asymmetric 3+ child/parent fan-outs while preserving all separations)
-		CenterHubsSafely( columns, y, isDummy, leftAdj, rightAdj, direction, Sep );
+		CenterHubsSafely( columns, y, isDummy, leftAdj, rightAdj, direction, rootLocalCol, Sep );
 
 		return y;
 	}
@@ -1252,7 +1319,6 @@ public static class GraphLayout
 	private static double[] ComputeBkLayout(
 		List<int>[] columns,
 		int vertCount,
-		List<double> vertHeight,
 		List<List<int>> leftAdj,
 		List<List<int>> rightAdj,
 		int[] pos,
@@ -1485,6 +1551,7 @@ public static class GraphLayout
 		List<List<int>> leftAdj,
 		List<List<int>> rightAdj,
 		GraphDirection direction,
+		int rootLocalCol,
 		Func<int, int, double> sep )
 	{
 		if( columns.Length <= 1 )
@@ -1531,12 +1598,13 @@ public static class GraphLayout
 		}
 		else
 		{
-			// Both: sweep inward from right and left toward middle
-			int mid = columns.Length / 2;
-			for( int c = columns.Length - 2; c >= mid; c-- )
-				CenterColumn( c, useRight: true, useLeft: c == mid );
-			for( int c = 1; c <= mid; c++ )
-				CenterColumn( c, useRight: c == mid, useLeft: true );
+			// Both: sweep inward from right and left toward the layer-0 root column, then center the root column once
+			int mid = Math.Clamp( rootLocalCol, 0, columns.Length - 1 );
+			for( int c = columns.Length - 2; c > mid; c-- )
+				CenterColumn( c, useRight: true, useLeft: false );
+			for( int c = 1; c < mid; c++ )
+				CenterColumn( c, useRight: false, useLeft: true );
+			CenterColumn( mid, useRight: mid + 1 < columns.Length, useLeft: mid > 0 );
 		}
 	}
 

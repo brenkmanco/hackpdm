@@ -11,12 +11,26 @@ public interface IOperationReporter
 	void Log( StatusMessage status, string message );
 	void ShowWindow();
 	CancellationTokenSource BeginOperation();
+	CancellationTokenSource BeginOperation( bool canPause ) => BeginOperation();
+	OperationPauseController? PauseController => null;
 	void Cancel();
 	void SetTotal( int total );
 	void Advance( int processed, int skipped = 0 );
 	void SetProcessed( int processed );
+	void RestoreProgress( int total, int processed, int skipped, long downloadedBytes )
+	{
+		SetTotal( total );
+		if( processed > 0 || skipped > 0 )
+			Advance( processed, skipped );
+		if( downloadedBytes > 0 )
+			AddDownloadedBytes( downloadedBytes );
+	}
 	void AddDownloadedBytes( long bytes );
 	void AddUploadedBytes( long bytes );
+	void BeginDownloadTransfer() { }
+	void EndDownloadTransfer() { }
+	void BeginUploadTransfer() { }
+	void EndUploadTransfer() { }
 	void Complete();
 	Task NotifyAsync( string message, string caption = "Status" );
 }
@@ -41,7 +55,7 @@ public static class ShellLauncher
 		}
 		catch( Exception e )
 		{
-			HackLogger.Warn( "ShellLauncher", $"Could not open '{target}': {e.Message}", e );
+			HackLogger.Warn( nameof( ShellLauncher ), $"Could not open '{target}': {e.Message}", e );
 			return false;
 		}
 	}
@@ -53,15 +67,12 @@ public static class AsyncHelper
 	public static Task<bool> WaitUntil( Func<bool> eval, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default )
 		=> WaitInternal( eval, wantTrue: true, msTimeout, pollingMs, token );
 
-	public static Task<bool> WaitWhile( Func<bool> eval, int pollingMs = 1000, int msTimeout = -1, CancellationToken token = default )
-		=> WaitInternal( eval, wantTrue: false, msTimeout, pollingMs, token );
-
 	public static async Task<bool> AsyncRunner( Func<Task> function, string statusHeader = "Status", CancellationTokenSource? tokenSource = null )
 	{
 		CancellationToken token = tokenSource?.Token ?? CancellationToken.None;
 		try
 		{
-			await Task.Run( function, token );
+			await Task.Run( function, token ).ConfigureAwait( false );
 			return true;
 		}
 		catch( OperationCanceledException ) when( token.IsCancellationRequested )
@@ -73,6 +84,9 @@ public static class AsyncHelper
 	private static async Task<bool> WaitInternal( Func<bool> eval, bool wantTrue, int msTimeout, int pollingMs, CancellationToken token )
 	{
 		ArgumentNullException.ThrowIfNull( eval );
+		if( eval() == wantTrue )
+			return true;
+
 		int stepMs = Math.Max( 1, pollingMs );
 		bool indefinite = msTimeout <= 0;
 		long deadline = indefinite ? 0 : Environment.TickCount64 + msTimeout;

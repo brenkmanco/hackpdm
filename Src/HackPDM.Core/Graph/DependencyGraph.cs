@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace HackPDM.Core.Graph;
 
 /// <summary>Which dependencies a graph shows, from the selected files.</summary>
@@ -21,6 +23,7 @@ public enum GraphDirection
 /// <param name="Deleted">Whether the file is logically deleted.</param>
 /// <param name="CheckedOut">Whether someone has it checked out.</param>
 /// <param name="Path">The server path ("root\a\b.sldprt").</param>
+[Bindable( true )]
 public sealed record GraphNode( int Id, string Name, string Ext, long Size, string Category, int VersionId, bool Deleted, bool CheckedOut, string Path )
 {
 	/// <summary>Who has it checked out; empty when nobody.</summary>
@@ -34,6 +37,7 @@ public sealed record GraphNode( int Id, string Name, string Ext, long Size, stri
 }
 
 /// <summary>A dependency: <paramref name="Parent"/>'s latest version uses <paramref name="Child"/>.</summary>
+[Bindable( true )]
 public readonly record struct GraphEdge( int Parent, int Child );
 
 /// <summary>The files around the selected ones (<see cref="Roots"/>) and how they depend on each other.</summary>
@@ -41,6 +45,7 @@ public readonly record struct GraphEdge( int Parent, int Child );
 /// <param name="Nodes">Every file in the graph, the roots included.</param>
 /// <param name="Edges">Parent-to-child dependencies between those files.</param>
 /// <param name="Truncated">Whether the server stopped early (too deep or too many files).</param>
+[Bindable( true )]
 public sealed record DependencyGraph( IReadOnlyList<int> Roots, IReadOnlyList<GraphNode> Nodes, IReadOnlyList<GraphEdge> Edges, bool Truncated )
 {
 	/// <summary>A graph with nothing in it.</summary>

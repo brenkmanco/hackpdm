@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
@@ -19,6 +20,7 @@ internal enum NavigationSlideAxis
 internal static class NavigationTransitions
 {
 	private static readonly TimeSpan Duration = TimeSpan.FromMilliseconds( 180 );
+	private static readonly ConditionalWeakTable<UIElement, Storyboard> ActiveStories = new();
 
 	/// <summary>Plays a subtle fade and directional slide on <paramref name="content"/> after navigation.</summary>
 	public static void Play( object? content, NavigationSlideAxis direction )
@@ -26,11 +28,15 @@ internal static class NavigationTransitions
 		if( content is not UIElement element || direction == NavigationSlideAxis.None )
 			return;
 
+		if( ActiveStories.TryGetValue( element, out Storyboard? previous ) )
+			previous.Stop();
+
 		TranslateTransform transform = new();
 		element.RenderTransform = transform;
 
 		ExponentialEase ease = new() { EasingMode = EasingMode.EaseOut, Exponent = 5 };
 		Storyboard story = new();
+		ActiveStories.AddOrUpdate( element, story );
 
 		DoubleAnimation fade = new()
 		{
@@ -74,8 +80,12 @@ internal static class NavigationTransitions
 
 		story.Completed += ( _, _ ) =>
 		{
-			element.Opacity = 1.0;
-			element.RenderTransform = null;
+			if( ActiveStories.TryGetValue( element, out Storyboard? active ) && ReferenceEquals( active, story ) )
+			{
+				ActiveStories.Remove( element );
+				element.Opacity = 1.0;
+				element.RenderTransform = null;
+			}
 		};
 		story.Begin();
 	}

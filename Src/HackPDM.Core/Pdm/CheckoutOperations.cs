@@ -1,3 +1,4 @@
+using HackPDM.Core.Configuration;
 using HackPDM.Core.Odoo;
 using HackPDM.Core.Odoo.Models;
 
@@ -6,98 +7,188 @@ namespace HackPDM.Core.Pdm;
 /// <summary>Checks entries out to this user/node and releases checkouts, toggling local read-only state.</summary>
 public static class CheckoutOperations
 {
-	public static Task CheckOutEntriesAsync(
+	private const int UnCheckoutBatchSize = 500;
+	private static readonly Dictionary<string, object?> ClearCheckoutValues = new()
+	{
+		[ nameof( HpEntry.checkout_user ) ] = null,
+		[ nameof( HpEntry.checkout_date ) ] = null,
+		[ nameof( HpEntry.checkout_node ) ] = null,
+		[ nameof( HpEntry.is_checked_out ) ] = false,
+	};
+
+	public static async Task CheckOutEntriesAsync(
 		HpEntry[] entries,
 		Action<StatusMessage, string>? log = null,
-		Action<int, int>? progress = null )
+		Action<int, int>? progress = null,
+		CancellationToken token = default )
 	{
 		int me = OdooDefaults.Instance.OdooId;
-		foreach( HpEntry entry in entries.Where( e => !e.CanCheckOut() ) )
+		List<HpEntry> eligible = new( entries.Length );
+		for( int i = 0; i < entries.Length; i++ )
 		{
+			HpEntry entry = entries[ i ];
+			if( entry.CanCheckOut() )
+			{
+				eligible.Add( entry );
+				continue;
+			}
 			if( entry.deleted is true )
 				log?.Invoke( StatusMessage.ERROR, $"Cannot check out {entry.name}: it is deleted" );
 			else if( entry.checkout_user?.id is int holder and not 0 && holder != me )
 				log?.Invoke( StatusMessage.ERROR, $"Cannot check out {entry.name}: it is checked out to {entry.checkout_user.name ?? $"user {holder}"}" );
 		}
-		return ForEachAsync( FilterCheckoutEntries( entries ), CheckOutEntryAsync, "check outs", "Checking out", "check out", log, progress );
+
+		log?.Invoke( StatusMessage.INFO, $"{eligible.Count} check outs" );
+		if( eligible.Count == 0 )
+			return;
+
+		int parallelism = Math.Clamp( OdooDefaults.Instance?.ConcurrencySize ?? OdooLookupCache.DefaultConcurrency, 2, 4 );
+		int processed = 0;
+		long lastProgressTick = 0;
+		long lastLogTick = 0;
+		await Parallel.ForEachAsync(
+			eligible,
+			new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = token },
+			async ( entry, ct ) =>
+			{
+				ct.ThrowIfCancellationRequested();
+				long now = Environment.TickCount64;
+				if( now - Volatile.Read( ref lastLogTick ) >= 100 )
+				{
+					Volatile.Write( ref lastLogTick, now );
+					log?.Invoke( StatusMessage.PROCESSING, $"Checking out {entry.name} ({entry.id})" );
+				}
+				if( !await CheckOutEntryAsync( entry, ct ).ConfigureAwait( false ) )
+					log?.Invoke( StatusMessage.ERROR, $"Could not check out {entry.name}: {entry.LastError ?? "refused by the server"}" );
+				int current = Interlocked.Increment( ref processed );
+				long progNow = Environment.TickCount64;
+				if( current == eligible.Count || current % 16 == 0 || progNow - Volatile.Read( ref lastProgressTick ) >= 80 )
+				{
+					Volatile.Write( ref lastProgressTick, progNow );
+					progress?.Invoke( current, eligible.Count );
+				}
+			} ).ConfigureAwait( false );
+		progress?.Invoke( processed, eligible.Count );
 	}
 
-	public static Task UnCheckOutEntriesAsync(
+	public static async Task UnCheckOutEntriesAsync(
 		HpEntry[] entries,
 		int currentUserId,
 		Action<StatusMessage, string>? log = null,
-		Action<int, int>? progress = null )
-		=> ForEachAsync( FilterUnCheckoutEntries( entries, currentUserId ), UnCheckOutEntryAsync, "uncheck outs", "Unchecking out", "undo the check out of", log, progress );
-
-	private static async Task ForEachAsync(
-		List<HpEntry> entries,
-		Func<HpEntry, Task<bool>> act,
-		string plural,
-		string doing,
-		string verb,
-		Action<StatusMessage, string>? log,
-		Action<int, int>? progress )
+		Action<int, int>? progress = null,
+		CancellationToken token = default )
 	{
-		log?.Invoke( StatusMessage.INFO, $"{entries.Count} {plural}" );
+		List<HpEntry> eligible = FilterUnCheckoutEntries( entries, currentUserId );
+		log?.Invoke( StatusMessage.INFO, $"{eligible.Count} uncheck outs" );
+		if( eligible.Count == 0 )
+			return;
+
 		int processed = 0;
-		foreach( HpEntry entry in entries )
+		for( int offset = 0; offset < eligible.Count; offset += UnCheckoutBatchSize )
 		{
-			log?.Invoke( StatusMessage.PROCESSING, $"{doing} {entry.name} ({entry.id})" );
-			if( !await act( entry ) )
-				log?.Invoke( StatusMessage.ERROR, $"Could not {verb} {entry.name}: {entry.LastError ?? "refused by the server"}" );
-			progress?.Invoke( ++processed, entries.Count );
+			token.ThrowIfCancellationRequested();
+			HpEntry[] chunk = OdooRpc.SliceChunk( eligible, offset, UnCheckoutBatchSize );
+			List<HpEntry> valid = new( chunk.Length );
+			List<int> ids = new( chunk.Length );
+			for( int i = 0; i < chunk.Length; i++ )
+			{
+				HpEntry entry = chunk[ i ];
+				if( entry.id is int id and not 0 )
+				{
+					valid.Add( entry );
+					ids.Add( id );
+				}
+			}
+
+			if( ids.Count > 0 )
+			{
+				log?.Invoke( StatusMessage.PROCESSING, $"Unchecking out {ids.Count} entry(ies)..." );
+				Result<bool> written = await OdooRpc.WriteAsync( HpEntry.ModelName, ids, ClearCheckoutValues, token: token ).ConfigureAwait( false );
+				bool ok = written.ValueOr( false );
+				foreach( HpEntry entry in valid )
+				{
+					entry.LastError = written.Error;
+					if( ok )
+					{
+						entry.checkout_user = null;
+						entry.checkout_date = null;
+						entry.checkout_node = null;
+						entry.is_checked_out = false;
+						SetLocalReadOnly( entry, true );
+					}
+					else
+					{
+						log?.Invoke( StatusMessage.ERROR, $"Could not undo the check out of {entry.name}: {written.Error ?? "refused by the server"}" );
+					}
+				}
+			}
+
+			processed += chunk.Length;
+			progress?.Invoke( processed, eligible.Count );
 		}
 	}
-
-	public static List<HpEntry> FilterCheckoutEntries( IEnumerable<HpEntry> entries )
-		=> [ .. entries.Where( entry => entry.CanCheckOut() ) ];
 
 	public static List<HpEntry> FilterUnCheckoutEntries( IEnumerable<HpEntry> entries, int currentUserId )
 		=> [ .. entries.Where( entry => entry.CanUnCheckOut( currentUserId ) ) ];
 
-	public static async Task<bool> CheckOutEntryAsync( HpEntry? entry )
+	public static async Task<bool> CheckOutEntryAsync( HpEntry? entry, CancellationToken token = default )
 	{
-		if( entry is null || !entry.CanCheckOut() )
+		if( entry is null )
 			return false;
-		if( entry.latest_version_id?.id is not int versionId || versionId == 0 || OdooDefaults.Instance.MyNode?.id is not int nodeId )
+		if( !entry.CanCheckOut() )
+		{
+			entry.LastError = entry.deleted is true
+				? "entry is deleted"
+				: entry.checkout_user?.id is int holder and not 0
+					? $"checked out to {entry.checkout_user.name ?? $"user {holder}"}"
+					: "entry cannot be checked out";
 			return false;
+		}
+		if( entry.latest_version_id?.id is not int versionId || versionId == 0 )
+		{
+			entry.LastError = "entry has no committed version to check out";
+			return false;
+		}
+		if( OdooDefaults.Instance.MyNode?.id is not int nodeId || nodeId == 0 )
+		{
+			entry.LastError = "workstation node (hp.node) is not registered";
+			return false;
+		}
 
-		Result<bool> checkedOut = await OdooRpc.ExecuteAsync<bool>( HpVersion.ModelName, "checkout_entry", [ versionId, nodeId ] );
+		Result<bool> checkedOut = await OdooRpc.ExecuteAsync<bool>( HpVersion.ModelName, "checkout_entry", [ versionId, nodeId ], token: token ).ConfigureAwait( false );
 		entry.LastError = checkedOut.Error;
 		if( !checkedOut.ValueOr( false ) )
 			return false;
 
 		entry.checkout_user = OdooDefaults.Instance.OdooId;
-		entry.checkout_date = DateTime.Now;
+		entry.checkout_date = DateTime.UtcNow;
 		entry.checkout_node = nodeId;
 		entry.is_checked_out = true;
 		SetLocalReadOnly( entry, false );
 		return true;
 	}
 
-	public static async Task<bool> UnCheckOutEntryAsync( HpEntry? entry )
-	{
-		if( entry is null || !entry.CanUnCheckOut() )
-			return false;
-
-		entry.checkout_user = null;
-		entry.checkout_date = null;
-		entry.checkout_node = null;
-		entry.is_checked_out = false;
-		if( !await entry.WriteChangedValuesAsync( "checkout_user", "checkout_date", "checkout_node", "is_checked_out" ) )
-			return false;
-
-		SetLocalReadOnly( entry, true );
-		return true;
-	}
-
 	private static void SetLocalReadOnly( HpEntry entry, bool readOnly )
 	{
-		string? serverName = entry.HashedValues.GetValueOrDefault( "windows_complete_name" ) as string ?? entry.windows_complete_name;
-		if( string.IsNullOrEmpty( serverName ) )
+		string? serverName = entry.windows_complete_name;
+		if( string.IsNullOrEmpty( serverName ) || PwaPaths.ToAbsolute( serverName ) is not { Length: > 0 } localPath )
 			return;
-		FileInfo file = new( PwaPaths.ToAbsolute( serverName )! );
-		if( file.Exists )
-			file.Attributes = readOnly ? file.Attributes | FileAttributes.ReadOnly : file.Attributes & ~FileAttributes.ReadOnly;
+		if( !readOnly )
+		{
+			FileOps.ClearReadOnlyIfPresent( localPath );
+			return;
+		}
+		if( !File.Exists( localPath ) )
+			return;
+		try
+		{
+			FileAttributes attributes = File.GetAttributes( localPath );
+			if( ( attributes & FileAttributes.ReadOnly ) == 0 )
+				File.SetAttributes( localPath, attributes | FileAttributes.ReadOnly );
+		}
+		catch( Exception ex ) when( ex is IOException or UnauthorizedAccessException )
+		{
+			HackLogger.Warn( nameof( CheckoutOperations ), $"Could not set read-only on '{localPath}': {ex.Message}", ex );
+		}
 	}
 }

@@ -31,7 +31,7 @@ public static class OperatorNames
 		Operators.GreaterThanOrEqual => ">=",
 		Operators.LessThan => "<",
 		Operators.LessThanOrEqual => "<=",
-		Operators.Unset => "is null",
+		Operators.Unset => "=",
 		Operators.Like => "like",
 		Operators.LikeEqual => "=like",
 		Operators.NotLike => "not like",
@@ -49,7 +49,8 @@ public static class OperatorNames
 /// <summary>One condition of an Odoo domain: (field, op, value).</summary>
 public sealed record DomainTerm( string Field, string Op, object? Value )
 {
-	public DomainTerm( string field, Operators op, object? value ) : this( field, op.ToOdoo(), value ) { }
+	public DomainTerm( string field, Operators op, object? value )
+		: this( field, op.ToOdoo(), op == Operators.Unset && value is null ? false : value ) { }
 	internal object?[] ToRpc() => [ Field, Op, OdooValues.ToRpc( Value ) ];
 }
 
@@ -68,10 +69,11 @@ public sealed class OdooDomain : IReadOnlyList<object>
 	public static OdooDomain Where( string field, string op, object? value ) => All.And( field, op, value );
 	public static OdooDomain Where( string field, Operators op, object? value ) => All.And( field, op, value );
 	public static OdooDomain Where( string field, object? value ) => All.And( field, "=", value );
-	public static OdooDomain IdIn( IEnumerable<int> ids ) => Where( "id", "in", ids.ToArray() );
+	public static OdooDomain IdIn( IEnumerable<int> ids )
+		=> Where( nameof( Models.HpRecordBase.id ), "in", ids is IReadOnlyList<int> list ? list : ids.ToArray() );
 
 	public OdooDomain And( string field, string op, object? value ) => new( [ .. _items, new DomainTerm( field, op, value ) ] );
-	public OdooDomain And( string field, Operators op, object? value ) => And( field, op.ToOdoo(), value );
+	public OdooDomain And( string field, Operators op, object? value ) => new( [ .. _items, new DomainTerm( field, op, value ) ] );
 	public OdooDomain And( string field, object? value ) => And( field, "=", value );
 	public OdooDomain And( OdooDomain other ) => this & other;
 
@@ -85,7 +87,6 @@ public sealed class OdooDomain : IReadOnlyList<object>
 		=> a.IsEmpty ? a : new( [ NotOp, .. a.AsExpression() ] );
 
 	public bool IsEmpty => _items.Length == 0;
-	public IEnumerable<DomainTerm> Terms => _items.OfType<DomainTerm>();
 
 	private object[] AsExpression()
 	{

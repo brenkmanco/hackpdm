@@ -12,24 +12,5 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <!--  Title Bar Area  -->
-            <RowDefinition Height="*" />
-            <!--  Page Content Area  -->
-        </Grid.RowDefinitions>
-
-        <!--  Your persistent, draggable title bar  -->
-        <Grid
-            x:Name="AppTitleBar"
-            Grid.Row="0"
-            Height="40"
-            Background="Transparent">
-            <!--  Optional: Add an app icon or text block here  -->
-        </Grid>
-
-        <!--  All page navigation happens in here  -->
-        <Frame x:Name="RootFrame" Grid.Row="1" />
-    </Grid>
+    <Frame x:Name="RootFrame" />
 </Window>

@@ -1,5 +1,4 @@
-using System.Xml.Linq;
-
+using HackPDM.Tests.Operations;
 
 namespace HackPDM.Tests.Integration;
 
@@ -11,29 +10,10 @@ namespace HackPDM.Tests.Integration;
 public class AddonSeedDataTests
 {
 	private const string Module = "hackpdm";
-	private const string DataFile = "Odoo/addons/hackpdm/data/hp_settings_data.xml";
 
 	public AddonSeedDataTests() => OdooTestServer.ConfigureClient();
 
 	// ---------------------------------------------------------------- helpers
-
-	private static string FindRepoFile( string relativePath )
-	{
-		for( var dir = new DirectoryInfo( AppContext.BaseDirectory ); dir is not null; dir = dir.Parent )
-		{
-			string candidate = Path.Combine( dir.FullName, relativePath );
-			if( File.Exists( candidate ) )
-				return candidate;
-		}
-		throw new FileNotFoundException( $"could not locate {relativePath} above {AppContext.BaseDirectory}" );
-	}
-
-	/// <summary>(xml id, model) for every &lt;record&gt; in the data file.</summary>
-	private static List<(string Id, string Model)> XmlRecords()
-		=> XDocument.Load( FindRepoFile( DataFile ) )
-			.Descendants( "record" )
-			.Select( r => ( (string)r.Attribute( "id" )!, (string)r.Attribute( "model" )! ) )
-			.ToList();
 
 	/// <summary>Resolves an addon XML id to (model, res_id) through ir.model.data.</summary>
 	private static async Task<(string Model, int ResId)?> ResolveXmlIdAsync( string xmlId )
@@ -65,18 +45,9 @@ public class AddonSeedDataTests
 	public static TheoryData<string, string> AllXmlRecords()
 	{
 		var data = new TheoryData<string, string>();
-		foreach( var (id, model) in XmlRecords() )
+		foreach( var (id, model) in AddonSeedDataFileTests.XmlRecords() )
 			data.Add( id, model );
 		return data;
-	}
-
-	[Fact]
-	public void DataFile_DeclaresOnlyProductionSettingsRecords()
-	{
-		var records = XmlRecords();
-		Assert.NotEmpty( records );
-		Assert.Equal( records.Count, records.Select( r => r.Id ).Distinct().Count() );
-		Assert.All( records, r => Assert.Equal( "hp.settings", r.Model ) );
 	}
 
 	[OdooTheory]

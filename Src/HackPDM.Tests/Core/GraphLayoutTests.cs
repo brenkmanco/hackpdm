@@ -251,4 +251,72 @@ public class GraphLayoutTests
 			}
 		}
 	}
+
+	[Fact]
+	public void BackEdge_InMixedWidthColumn_ClearsWidestBoxAndRespectsSmallMargin()
+	{
+		// Node 1 (tiny) shares column 0 with Node 4 (huge), and has a same-column cycle with Node 4
+		var graph = new DependencyGraph(
+			[ 1, 4 ],
+			[ Node( 1, 100 ), Node( 2, 100 ), Node( 4, 100_000_000 ) ],
+			[ new( 1, 2 ), new( 1, 4 ), new( 4, 1 ) ],
+			false );
+		var opts = new LayoutOptions { Margin = 5, ColumnGap = 120 };
+		var r = GraphLayout.Arrange( graph, GraphDirection.Children, opts );
+
+		NodeBox tiny = r.Find( 1 )!;
+		NodeBox huge = r.Find( 4 )!;
+		double colLeft = Math.Min( tiny.X, huge.X );
+		double colRight = Math.Max( tiny.X + tiny.Width, huge.X + huge.Width );
+
+		EdgeRoute back = r.Edges.Single( e => e.Edge.Parent == 4 && e.Edge.Child == 1 );
+		Assert.NotEmpty( back.BendPoints );
+		Assert.All( back.BendPoints, bp =>
+		{
+			Assert.True( bp.X >= 0 && bp.Y >= 0, $"Negative bend point ({bp.X}, {bp.Y})" );
+			Assert.True( bp.X > colRight || bp.X < colLeft, $"Bend point X={bp.X} cuts into column [{colLeft}, {colRight}]" );
+		} );
+	}
+
+	[Fact]
+	public void ExhaustedDummyBudget_StillEmitsCorridorBendsForForwardLongEdge()
+	{
+		var graph = new DependencyGraph(
+			[ Top ],
+			[ Node( Top ), Node( Sub ), Node( Bolt ), Node( Plate ) ],
+			[ new( Top, Sub ), new( Top, Bolt ), new( Sub, Bolt ), new( Sub, Plate ) ],
+			false );
+		var r = GraphLayout.Arrange( graph, GraphDirection.Children, LayoutOptions.Default, maxDummyNodes: 0 );
+
+		EdgeRoute longRoute = r.Edges.Single( e => e.Edge.Parent == Top && e.Edge.Child == Bolt );
+		NodeBox subBox = r.Find( Sub )!;
+		Assert.NotEmpty( longRoute.BendPoints );
+		Assert.All( longRoute.BendPoints, bp =>
+			Assert.True( bp.Y < subBox.Y || bp.Y > subBox.Y + subBox.Height,
+				$"Corridor bend Y={bp.Y} intersects Sub box [{subBox.Y}, {subBox.Y + subBox.Height}]" ) );
+	}
+
+	[Fact]
+	public void Both_AsymmetricChain_CentersLayerZeroRootBetweenParentAndChildren()
+	{
+		// Asymmetric in Both mode: 1 parent column (-1: node 10), root at layer 0 (node 1), 3 child columns (1..3: nodes 2,3,4)
+		// plus extra fanout children on node 1 so mid would previously land on layer 1 instead of layer 0.
+		var graph = new DependencyGraph(
+			[ 1 ],
+			[ Node( 10 ), Node( 1 ), Node( 2 ), Node( 3 ), Node( 4 ), Node( 5 ), Node( 6 ) ],
+			[ new( 10, 1 ), new( 1, 2 ), new( 2, 3 ), new( 3, 4 ), new( 1, 5 ), new( 1, 6 ) ],
+			false );
+		var r = GraphLayout.Arrange( graph, GraphDirection.Both );
+
+		Assert.Equal( -1, LayerOf( r, 10 ) );
+		Assert.Equal( 0, LayerOf( r, 1 ) );
+		Assert.Equal( 3, LayerOf( r, 4 ) );
+		// Verify zero overlaps and positive coordinates
+		foreach( var a in r.Nodes )
+		{
+			Assert.True( a.X >= 0 && a.Y >= 0 );
+			foreach( var b in r.Nodes.Where( b => b != a ) )
+				Assert.False( a.X < b.X + b.Width && b.X < a.X + a.Width && a.Y < b.Y + b.Height && b.Y < a.Y + a.Height );
+		}
+	}
 }

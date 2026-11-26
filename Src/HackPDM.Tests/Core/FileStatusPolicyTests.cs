@@ -42,12 +42,4 @@ public class FileStatusPolicyTests
 	[InlineData( FileStatus.Lo, EntryOpenTarget.None )]
 	public void LatestRemoteNeedsRemoteVersion( FileStatus status, EntryOpenTarget expected )
 		=> Assert.Equal( expected, FileStatusPolicy.ForLatestRemote( true, status ) );
-
-	[Theory]
-	[InlineData( FileStatus.Lo, true )]
-	[InlineData( FileStatus.Ft, true )]
-	[InlineData( FileStatus.If, true )]
-	[InlineData( FileStatus.Ok, false )]
-	public void IconUploadOnlyForUncommittedFiles( FileStatus status, bool expected )
-		=> Assert.Equal( expected, FileStatusPolicy.CanUploadIcon( status ) );
 }

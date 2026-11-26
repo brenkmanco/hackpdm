@@ -31,6 +31,8 @@ internal sealed unsafe partial class SecretServiceStore : ICredentialStore
 
 	public StoredCredential? Read( string target )
 	{
+		if( string.IsNullOrEmpty( target ) )
+			return null;
 		string? secret = null;
 		bool ok = Call( "read", target, ( schema, attributes, error ) =>
 		{
@@ -47,6 +49,8 @@ internal sealed unsafe partial class SecretServiceStore : ICredentialStore
 
 	public bool Write( string target, string userName, string password )
 	{
+		if( string.IsNullOrEmpty( target ) || userName is null || password is null )
+			return false;
 		string secret = CredentialSecret.Encode( userName, password );
 		return Call( "write", target, ( schema, attributes, error ) =>
 		{
@@ -54,29 +58,41 @@ internal sealed unsafe partial class SecretServiceStore : ICredentialStore
 			IntPtr value = Marshal.StringToCoTaskMemUTF8( secret );
 			try
 			{
+				if( label == IntPtr.Zero || value == IntPtr.Zero )
+					return false;
 				return secret_password_storev_sync( schema, attributes, IntPtr.Zero, label, value, IntPtr.Zero, error ) != 0;
 			}
 			finally
 			{
-				NativeMemory.Clear( (void*)value, (nuint)System.Text.Encoding.UTF8.GetByteCount( secret ) );
-				Marshal.FreeCoTaskMem( value );
-				Marshal.FreeCoTaskMem( label );
+				if( value != IntPtr.Zero )
+				{
+					NativeMemory.Clear( (void*)value, (nuint)System.Text.Encoding.UTF8.GetByteCount( secret ) );
+					Marshal.FreeCoTaskMem( value );
+				}
+				if( label != IntPtr.Zero )
+					Marshal.FreeCoTaskMem( label );
 			}
 		} );
 	}
 
 	public bool Delete( string target )
-		=> Call( "delete", target, ( schema, attributes, error ) =>
+	{
+		if( string.IsNullOrEmpty( target ) )
+			return false;
+		return Call( "delete", target, ( schema, attributes, error ) =>
 		{
 			_ = secret_password_clearv_sync( schema, attributes, IntPtr.Zero, error ); // false when there was nothing to clear
 			return true;
 		} );
+	}
 
 	private delegate bool SecretCall( IntPtr schema, IntPtr attributes, IntPtr* error );
 
 	/// <summary>Runs <paramref name="action"/> with the schema and a { target } attribute table; false when the service cannot be used.</summary>
 	private bool Call( string what, string target, SecretCall action )
 	{
+		if( string.IsNullOrEmpty( target ) )
+			return false;
 		lock( Gate )
 		{
 			if( _unavailable || !EnsureLoaded() )
@@ -88,14 +104,18 @@ internal sealed unsafe partial class SecretServiceStore : ICredentialStore
 			IntPtr error = IntPtr.Zero;
 			try
 			{
+				if( attributes == IntPtr.Zero || key == IntPtr.Zero || value == IntPtr.Zero )
+					return false;
 				_ = g_hash_table_insert( attributes, key, value );
 				bool done = action( _schema, attributes, &error );
 				if( error != IntPtr.Zero )
 				{
-					// e.g. no Secret Service on the session bus: stop trying for this run
 					string? message = Marshal.PtrToStringUTF8( Marshal.ReadIntPtr( error, 8 ) ); // GError { GQuark domain; gint code; gchar *message; }
 					g_error_free( error );
-					_unavailable = true;
+					// only remember unavailability when the session bus / Secret Service daemon itself is missing;
+					// transient failures (locked keyring, cancelled prompt, timeouts) can succeed on retry
+					if( IsServiceUnavailableError( message ) )
+						_unavailable = true;
 					CredentialLog.Warn( Name, what, message ?? "unknown error" );
 					return false;
 				}
@@ -109,11 +129,40 @@ internal sealed unsafe partial class SecretServiceStore : ICredentialStore
 			}
 			finally
 			{
-				g_hash_table_unref( attributes );
-				Marshal.FreeCoTaskMem( key );
-				Marshal.FreeCoTaskMem( value );
+				if( attributes != IntPtr.Zero )
+					g_hash_table_unref( attributes );
+				if( key != IntPtr.Zero )
+					Marshal.FreeCoTaskMem( key );
+				if( value != IntPtr.Zero )
+					Marshal.FreeCoTaskMem( value );
 			}
 		}
+	}
+
+	internal static bool IsServiceUnavailableError( string? message )
+	{
+		if( string.IsNullOrWhiteSpace( message ) )
+			return false;
+		if( message.Contains( "cancel", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "locked", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "dismiss", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "denied", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "timeout", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "timed out", StringComparison.OrdinalIgnoreCase ) )
+			return false;
+
+		return message.Contains( "was not provided by any .service files", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "ServiceUnknown", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "NameHasNoOwner", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "No such service", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "autolaunch", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "dbus-launch", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "dbus-daemon", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "DBUS_SESSION_BUS_ADDRESS", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "No session bus", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "Cannot connect to", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "Failed to connect to socket", StringComparison.OrdinalIgnoreCase )
+			|| message.Contains( "Connection refused", StringComparison.OrdinalIgnoreCase );
 	}
 
 	// under Gate
@@ -121,6 +170,11 @@ internal sealed unsafe partial class SecretServiceStore : ICredentialStore
 	{
 		if( _schema != IntPtr.Zero )
 			return true;
+		if( IntPtr.Size != 8 )
+		{
+			_unavailable = true;
+			return false;
+		}
 		try
 		{
 			if( !NativeLibrary.TryLoad( LibSecret, out _ ) || !NativeLibrary.TryLoad( LibGLib, out IntPtr glib ) )

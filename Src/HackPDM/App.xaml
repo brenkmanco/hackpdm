@@ -5,39 +5,97 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:common="using:HackPDM.Common"
 	xmlns:controls="using:Microsoft.UI.Xaml.Controls"
-	xmlns:local="using:HackPDM"
 	xmlns:tv="using:WinUI.TableView">
 	<Application.Resources>
 		<ResourceDictionary>
 			<ResourceDictionary.MergedDictionaries>
 				<controls:XamlControlsResources />
+				<!--  Material + Uno Toolkit theme. Its colors come from the active preset (ThemePresets, matching the Figma
+				     "HackPDM colors" variables), set at startup by ThemeService.ApplyStartupResources.  -->
+				<MaterialToolkitTheme xmlns="using:Uno.Toolkit.UI.Material" />
 				<!--  Other merged dictionaries here  -->
 				<ResourceDictionary Source="ms-appx:///Microsoft.UI.Xaml/DensityStyles/Compact.xaml" />
 				<ResourceDictionary Source="ms-appx:///WinUI.TableView/Themes/TableView.xaml" />
 				<ResourceDictionary Source="ms-appx:///WinUI.TableView/Themes/TableViewColumnHeader.xaml" />
+				<!--  shared HackPDM styles (Figma Components page); after the theme and TableView so its keys win  -->
+				<ResourceDictionary Source="ms-appx:///Styles/HackControls.xaml" />
 			</ResourceDictionary.MergedDictionaries>
+			<ResourceDictionary.ThemeDictionaries>
+				<ResourceDictionary x:Key="Default">
+					<!--  Material surface-container roles Uno Material has no keys for; the active preset replaces these values at startup  -->
+					<Color x:Key="HackSurfaceContainerColor">#1E1F25</Color>
+					<Color x:Key="HackSurfaceContainerLowColor">#1A1B21</Color>
+					<Color x:Key="HackSurfaceContainerHighColor">#282A2F</Color>
+					<SolidColorBrush x:Key="HackSurfaceContainerBrush" Color="#1E1F25" />
+					<SolidColorBrush x:Key="HackSurfaceContainerLowBrush" Color="#1A1B21" />
+					<SolidColorBrush x:Key="HackSurfaceContainerHighBrush" Color="#282A2F" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundPointerOver" Color="#24FFFFFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundPressed" Color="#30FFFFFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelected" Color="#3D60CDFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPointerOver" Color="#5460CDFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPressed" Color="#3360CDFF" />
+				</ResourceDictionary>
+				<ResourceDictionary x:Key="Dark">
+					<!--  Material surface-container roles Uno Material has no keys for; the active preset replaces these values at startup  -->
+					<Color x:Key="HackSurfaceContainerColor">#1E1F25</Color>
+					<Color x:Key="HackSurfaceContainerLowColor">#1A1B21</Color>
+					<Color x:Key="HackSurfaceContainerHighColor">#282A2F</Color>
+					<SolidColorBrush x:Key="HackSurfaceContainerBrush" Color="#1E1F25" />
+					<SolidColorBrush x:Key="HackSurfaceContainerLowBrush" Color="#1A1B21" />
+					<SolidColorBrush x:Key="HackSurfaceContainerHighBrush" Color="#282A2F" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundPointerOver" Color="#24FFFFFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundPressed" Color="#30FFFFFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelected" Color="#3D60CDFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPointerOver" Color="#5460CDFF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPressed" Color="#3360CDFF" />
+				</ResourceDictionary>
+				<ResourceDictionary x:Key="Light">
+					<!--  Material surface-container roles Uno Material has no keys for; the active preset replaces these values at startup  -->
+					<Color x:Key="HackSurfaceContainerColor">#EEEDF4</Color>
+					<Color x:Key="HackSurfaceContainerLowColor">#F4F3FA</Color>
+					<Color x:Key="HackSurfaceContainerHighColor">#E8E7EF</Color>
+					<SolidColorBrush x:Key="HackSurfaceContainerBrush" Color="#EEEDF4" />
+					<SolidColorBrush x:Key="HackSurfaceContainerLowBrush" Color="#F4F3FA" />
+					<SolidColorBrush x:Key="HackSurfaceContainerHighBrush" Color="#E8E7EF" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundPointerOver" Color="#16000000" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundPressed" Color="#22000000" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelected" Color="#2E005FB8" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPointerOver" Color="#40005FB8" />
+					<SolidColorBrush x:Key="TableViewRowBackgroundSelectedPressed" Color="#24005FB8" />
+				</ResourceDictionary>
+			</ResourceDictionary.ThemeDictionaries>
 			<!--  the app's panels (folder tree, lists, graph frame): set from the theme presets at startup (ThemeService)  -->
 			<SolidColorBrush x:Key="HackPanelStrokeBrush" Color="DimGray" />
 			<CornerRadius x:Key="HackPanelCornerRadius">10</CornerRadius>
 			<Thickness x:Key="HackPanelBorderThickness">3</Thickness>
-			<!--  compact typography and heights for all TableView grids across the app  -->
+			<!--  Roboto for every control and plain text (Material text styles already use it); the desktop build also
+			     sets Uno's default text font in HackApp()  -->
+			<FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Uno.Fonts.Roboto/Fonts/Roboto-Regular.ttf#Roboto</FontFamily>
+			<!--
+				Table typography and heights for every TableView grid, from the Penpot "File table row" component:
+				header 36px with 12px medium labels (Label medium), rows 36px with 14px text (Body medium).
+				The keys keep their old "Compact" names because views refer to them.
+			-->
 			<Style
 				x:Key="CompactTableViewColumnHeaderStyle"
 				BasedOn="{StaticResource DefaultTableViewColumnHeaderStyle}"
 				TargetType="tv:TableViewColumnHeader">
-				<Setter Property="FontSize" Value="11" />
-				<Setter Property="FontWeight" Value="SemiBold" />
-				<Setter Property="Padding" Value="6,0" />
+				<Setter Property="FontSize" Value="12" />
+				<Setter Property="FontWeight" Value="Medium" />
+				<Setter Property="Padding" Value="8,0" />
 			</Style>
 			<Style
 				x:Key="CompactTableViewStyle"
 				BasedOn="{StaticResource DefaultTableViewStyle}"
 				TargetType="tv:TableView">
-				<Setter Property="FontSize" Value="11" />
-				<Setter Property="HeaderRowMinHeight" Value="24" />
-				<Setter Property="HeaderRowHeight" Value="26" />
-				<Setter Property="RowMinHeight" Value="24" />
-				<Setter Property="RowHeight" Value="26" />
+				<Setter Property="FontSize" Value="14" />
+				<Setter Property="HeaderRowMinHeight" Value="32" />
+				<Setter Property="HeaderRowHeight" Value="36" />
+				<Setter Property="RowMinHeight" Value="32" />
+				<Setter Property="RowHeight" Value="36" />
+				<!--  Penpot tables have no grid lines: rows are separated by space, the header by its tint  -->
+				<Setter Property="GridLinesVisibility" Value="None" />
+				<Setter Property="HeaderGridLinesVisibility" Value="None" />
 				<Setter Property="ColumnHeaderStyle" Value="{StaticResource CompactTableViewColumnHeaderStyle}" />
 			</Style>
 			<Style BasedOn="{StaticResource CompactTableViewStyle}" TargetType="tv:TableView" />

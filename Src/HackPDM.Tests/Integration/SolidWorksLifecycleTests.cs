@@ -66,7 +66,6 @@ public sealed class SolidWorksLifecycleTests : IAsyncLifetime
 		_me = await OdooTestServer.LoginAsync();
 		OdooDefaults.Instance.OdooId = _me;
 		await OdooDefaults.Instance.InitializeAsync();
-		_service.PreloadMetadata();
 	}
 
 	public async Task DisposeAsync()

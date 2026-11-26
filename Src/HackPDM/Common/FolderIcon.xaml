@@ -48,7 +48,7 @@
 				HorizontalAlignment="Right"
 				VerticalAlignment="Bottom"
 				Visibility="Collapsed">
-				<Ellipse Fill="#2EA043" Stroke="#161B22" StrokeThickness="1.5" />
+				<Ellipse Fill="#2EA043" Stroke="{ThemeResource SurfaceBrush}" StrokeThickness="1.5" />
 				<Path Data="M 6,3.2 L 6,8.8 M 3.2,6 L 8.8,6" Stroke="#FFFFFF" StrokeThickness="1.6" />
 			</Grid>
 			<Grid
@@ -58,7 +58,7 @@
 				HorizontalAlignment="Right"
 				VerticalAlignment="Bottom"
 				Visibility="Collapsed">
-				<Ellipse Fill="#1F88E5" Stroke="#161B22" StrokeThickness="1.5" />
+				<Ellipse Fill="#1F88E5" Stroke="{ThemeResource SurfaceBrush}" StrokeThickness="1.5" />
 				<Ellipse Width="4.4" Height="4.4" HorizontalAlignment="Center" VerticalAlignment="Center" Fill="#E6F4FF" />
 			</Grid>
 		</Grid>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 using HackPDM.Common;
 using HackPDM.Core.Configuration;
@@ -12,14 +13,12 @@ using HackPDM.Search;
 using HackPDM.Settings;
 using HackPDM.Status;
 
-using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Animation;
 
 using Windows.System;
-using Windows.UI.Core;
 
 namespace HackPDM.Shell;
 
@@ -30,17 +29,20 @@ namespace HackPDM.Shell;
 /// </summary>
 public sealed partial class HomeView : Page
 {
+	private const int MinimalSearchMinWidth = 960;
+	private const int FullSearchMinWidth = 1120;
+	private const int FullStatusMinHeight = 720;
+
 	/// <summary>Each page and the window size, title, and menu order it uses.</summary>
 	private static readonly FrozenDictionary<NavigatePageMenu, (Type Page, string Config, int Order)> Pages = new Dictionary<NavigatePageMenu, (Type Page, string Config, int Order)>
 	{
-		[ NavigatePageMenu.HackFileManager ] = ( typeof( HackFileManagerView ), "HackFileManager", 0 ),
-		[ NavigatePageMenu.DependencyGraph ] = ( typeof( DependencyGraphView ), "DependencyGraph", 1 ),
-		[ NavigatePageMenu.ProfileManager ] = ( typeof( ProfileManagerView ), "ProfileManager", 2 ),
-		[ NavigatePageMenu.Configuration ] = ( typeof( ConfigurationView ), "ConfigSettings", 3 ),
-		[ NavigatePageMenu.Settings ] = ( typeof( ApplicationSettingsView ), "AppSettings", 4 ),
+		[ NavigatePageMenu.HackFileManager ] = ( typeof( HackFileManagerView ), WindowHelper.Presets.HackFileManager, 0 ),
+		[ NavigatePageMenu.DependencyGraph ] = ( typeof( DependencyGraphView ), WindowHelper.Presets.DependencyGraph, 1 ),
+		[ NavigatePageMenu.ProfileManager ] = ( typeof( ProfileManagerView ), WindowHelper.Presets.ProfileManager, 2 ),
+		[ NavigatePageMenu.Configuration ] = ( typeof( ConfigurationView ), WindowHelper.Presets.ConfigSettings, 3 ),
+		[ NavigatePageMenu.Settings ] = ( typeof( ApplicationSettingsView ), WindowHelper.Presets.AppSettings, 4 ),
 	}.ToFrozenDictionary();
 
-	private bool _syncingSelection;
 	private NavigatePageMenu _currentMenu = NavigatePageMenu.ProfileManager;
 	private ColumnDefinition? _searchColumn;
 
@@ -48,9 +50,16 @@ public sealed partial class HomeView : Page
 	{
 		InitializeComponent();
 		AppComposition.Navigation.Attach( this );
-		HomeNavigator.SelectedItem = ItemFor( NavigatePageMenu.ProfileManager );
-		NavFrame.Navigated += ( _, _ ) => HomeNavigator.IsBackEnabled = NavFrame.CanGoBack;
+		Select( NavigatePageMenu.ProfileManager );
+		NavFrame.Navigated += ( _, _ ) => RailBackButton.IsEnabled = NavFrame.CanGoBack;
+		Unloaded += HomeView_Unloaded;
 		ArrangeSearchDrawer();
+	}
+
+	private void HomeView_Unloaded( object sender, RoutedEventArgs e )
+	{
+		HideOverlay( _overlayElement );
+		ShellOverlayCanvas.Children.Clear();
 	}
 
 	/// <summary>The frame that hosts the page selected in the navigation menu.</summary>
@@ -61,69 +70,42 @@ public sealed partial class HomeView : Page
 	internal bool IsStatusDrawerOpen => DockedStatusDrawer.Visibility == Visibility.Visible;
 	internal bool IsSearchDrawerOpen => DockedSearchDrawer.Visibility == Visibility.Visible;
 
-	/// <summary>Selects the page's menu item, which shows the page.</summary>
+	/// <summary>Selects the page's rail item and shows the page.</summary>
 	internal void Select( NavigatePageMenu page )
 	{
-		object? target = page == NavigatePageMenu.Settings
-			? HomeNavigator.SettingsItem
-			: ItemFor( page ) ?? ItemFor( NavigatePageMenu.ProfileManager );
-
-		// Re-selecting a locked tab (e.g. NotLoggedInView) after signing in must still show the real page
-		if( ReferenceEquals( HomeNavigator.SelectedItem, target ) )
-		{
-			Show( page );
-			return;
-		}
-		HomeNavigator.SelectedItem = target;
+		// Re-selecting a locked tab (e.g. NotLoggedInView) after signing in must still show the real page, so this
+		// always shows it; Navigate skips a page that is already open.
+		SetRailSelection( Pages.ContainsKey( page ) ? page : NavigatePageMenu.ProfileManager );
+		Show( Pages.ContainsKey( page ) ? page : NavigatePageMenu.ProfileManager );
 	}
 
-	private NavigationViewItem? ItemFor( NavigatePageMenu page )
+	/// <summary>Fills the indicator pill of the rail item for <paramref name="page"/> (none for null).</summary>
+	private void SetRailSelection( NavigatePageMenu? page )
 	{
-		string name = page switch
-		{
-			NavigatePageMenu.HackFileManager => nameof( NavigatePageMenu.HackFileManager ),
-			NavigatePageMenu.DependencyGraph => nameof( NavigatePageMenu.DependencyGraph ),
-			NavigatePageMenu.ProfileManager => nameof( NavigatePageMenu.ProfileManager ),
-			NavigatePageMenu.Configuration => nameof( NavigatePageMenu.Configuration ),
-			NavigatePageMenu.Settings => nameof( NavigatePageMenu.Settings ),
-			_ => page.ToString(),
-		};
-		for( int i = 0; i < HomeNavigator.MenuItems.Count; i++ )
-		{
-			if( HomeNavigator.MenuItems[ i ] is NavigationViewItem item && string.Equals( item.Tag as string, name, StringComparison.Ordinal ) )
-				return item;
-		}
-		return null;
+		foreach( NavRailItem item in (NavRailItem[])[ FilesRailItem, GraphRailItem, ProfilesRailItem, ConfigsRailItem, SettingsRailItem ] )
+			item.IsSelected = page is { } p && string.Equals( item.Tag as string, p.ToString(), StringComparison.Ordinal );
 	}
 
-	private void HomeNavigator_ItemInvoked( NavigationView sender, NavigationViewItemInvokedEventArgs args )
+	private void RailItem_Click( object sender, RoutedEventArgs e )
 	{
-		if( args.InvokedItemContainer == StatusLogNav )
-			AppComposition.Dialogs.ToggleStatusWindow();
-		else if( args.InvokedItemContainer == SearchNav )
-			AppComposition.Dialogs.ToggleSearchWindow();
+		if( sender is NavRailItem { Tag: string tag } && Enum.TryParse( tag, out NavigatePageMenu page ) )
+			Select( page );
 	}
 
-	private void HomeNavigator_SelectionChanged( NavigationView sender, NavigationViewSelectionChangedEventArgs args )
-	{
-		if( _syncingSelection )
-			return;
-		if( args.IsSettingsSelected )
-			Show( NavigatePageMenu.Settings );
-		else if( args.SelectedItem is NavigationViewItem { Tag: string tag } && Enum.TryParse( tag, out NavigatePageMenu page ) )
-			Show( page );
-	}
+	private void SearchRail_Click( object sender, RoutedEventArgs e ) => AppComposition.Dialogs.ToggleSearchWindow();
+	private void StatusRail_Click( object sender, RoutedEventArgs e ) => AppComposition.Dialogs.ToggleStatusWindow();
+	private void RailBack_Click( object sender, RoutedEventArgs e ) => GoBack();
 
 	private void Show( NavigatePageMenu page )
 	{
-		if( AppComposition.Session.IsVersionMismatch && page != NavigatePageMenu.ProfileManager )
+		if( AppComposition.Session.IsVersionMismatch && page is not NavigatePageMenu.ProfileManager and not NavigatePageMenu.Configuration )
 		{
-			Navigate( typeof( NotLoggedInView ), "NotLoggedIn", page, NavigationSlideAxis.Up );
+			Navigate( typeof( NotLoggedInView ), WindowHelper.Presets.NotLoggedIn, page, NavigationSlideAxis.Up );
 			return;
 		}
 		if( page is NavigatePageMenu.HackFileManager or NavigatePageMenu.DependencyGraph && !AppComposition.Session.IsLoggedIn )
 		{
-			Navigate( typeof( NotLoggedInView ), "NotLoggedIn", page, NavigationSlideAxis.Up );
+			Navigate( typeof( NotLoggedInView ), WindowHelper.Presets.NotLoggedIn, page, NavigationSlideAxis.Up );
 			return;
 		}
 		var (type, config, _) = Pages[ page ];
@@ -146,7 +128,7 @@ public sealed partial class HomeView : Page
 	{
 		// Resize before navigating so the destination page lays out once at its target dimensions.
 		if( HackApp.Window is { } window )
-			WindowHelper.ApplyPreset( window, WindowHelper.Preset( config ) );
+			ApplyWindowPreset( window, config );
 
 		if( NavFrame.CurrentSourcePageType == page )
 			return;
@@ -157,7 +139,24 @@ public sealed partial class HomeView : Page
 		if( !firstPage )
 			NavigationTransitions.Play( NavFrame.Content, slide );
 		PruneStaleBackStack( AppComposition.Session.IsLoggedIn );
-		HomeNavigator.IsBackEnabled = NavFrame.CanGoBack;
+		RailBackButton.IsEnabled = NavFrame.CanGoBack;
+	}
+
+	private void ApplyWindowPreset( Window window, string config )
+	{
+		var (minWidth, minHeight) = ActiveDrawerMinimums();
+		WindowHelper.ApplyMainWindowPagePreset( window, config, minWidth, minHeight );
+	}
+
+	internal void CaptureLayoutState()
+		=> ( NavFrame.Content as HackFileManagerView )?.CaptureLayoutState();
+
+	private (int MinWidth, int MinHeight) ActiveDrawerMinimums()
+	{
+		int minWidth = !IsSearchDrawerOpen ? 0
+			: UIStorage.WorkspaceLayout.SearchMinimalMode ? MinimalSearchMinWidth : FullSearchMinWidth;
+		int minHeight = IsStatusDrawerOpen && !UIStorage.WorkspaceLayout.StatusMinimalMode ? FullStatusMinHeight : 0;
+		return ( minWidth, minHeight );
 	}
 
 	private void PruneStaleBackStack( bool isLoggedIn )
@@ -172,26 +171,24 @@ public sealed partial class HomeView : Page
 		}
 	}
 
-	private void HomeNavigator_BackRequested( NavigationView sender, NavigationViewBackRequestedEventArgs args )
-		=> GoBack();
-
 	private void GoBack()
 	{
 		PruneStaleBackStack( AppComposition.Session.IsLoggedIn );
 		if( !NavFrame.CanGoBack )
 		{
-			HomeNavigator.IsBackEnabled = false;
+			RailBackButton.IsEnabled = false;
 			return;
 		}
 
 		NavFrame.GoBack();
-		HomeNavigator.IsBackEnabled = NavFrame.CanGoBack;
+		RailBackButton.IsEnabled = NavFrame.CanGoBack;
 
 		Type? current = NavFrame.CurrentSourcePageType;
 		if( current == typeof( NotLoggedInView ) )
 		{
+			SetRailSelection( null );
 			if( HackApp.Window is { } win )
-				WindowHelper.ApplyPreset( win, WindowHelper.Preset( "NotLoggedIn" ) );
+				ApplyWindowPreset( win, WindowHelper.Presets.NotLoggedIn );
 			return;
 		}
 
@@ -200,20 +197,9 @@ public sealed partial class HomeView : Page
 			if( entry.Page != current )
 				continue;
 			_currentMenu = menu;
-			_syncingSelection = true;
-			try
-			{
-				if( menu == NavigatePageMenu.Settings )
-					HomeNavigator.SelectedItem = HomeNavigator.SettingsItem;
-				else if( ItemFor( menu ) is { } navItem )
-					HomeNavigator.SelectedItem = navItem;
-			}
-			finally
-			{
-				_syncingSelection = false;
-			}
+			SetRailSelection( menu );
 			if( HackApp.Window is { } window )
-				WindowHelper.ApplyPreset( window, WindowHelper.Preset( entry.Config ) );
+				ApplyWindowPreset( window, entry.Config );
 			NavigationTransitions.Play( NavFrame.Content, NavigationSlideAxis.Right );
 			break;
 		}
@@ -221,8 +207,8 @@ public sealed partial class HomeView : Page
 
 	private void HomeView_KeyDown( object sender, KeyRoutedEventArgs e )
 	{
-		bool ctrl = ( InputKeyboardSource.GetKeyStateForCurrentThread( VirtualKey.Control ) & CoreVirtualKeyStates.Down ) != 0;
-		bool alt = ( InputKeyboardSource.GetKeyStateForCurrentThread( VirtualKey.Menu ) & CoreVirtualKeyStates.Down ) != 0;
+		bool ctrl = KeyboardHelper.IsDown( VirtualKey.Control );
+		bool alt = KeyboardHelper.IsDown( VirtualKey.Menu );
 
 		if( alt && e.Key == VirtualKey.Left )
 		{
@@ -239,7 +225,7 @@ public sealed partial class HomeView : Page
 		if( ctrl && e.Key == VirtualKey.F )
 		{
 			e.Handled = true;
-			AppComposition.Dialogs.ShowSearchWindow();
+			AppComposition.Dialogs.ToggleSearchWindow();
 			return;
 		}
 		if( !ctrl )
@@ -263,8 +249,6 @@ public sealed partial class HomeView : Page
 
 	#region Docked Extension Drawers (Status Log & Search Vault)
 
-	private static Visibility Vis( bool visible ) => visible ? Visibility.Visible : Visibility.Collapsed;
-
 	internal void ShowStatusPanel( StatusDialogView page )
 	{
 		page.ParentWindow = null;
@@ -283,16 +267,16 @@ public sealed partial class HomeView : Page
 			return;
 		bool minimal = UIStorage.WorkspaceLayout.StatusMinimalMode;
 		StatusPage?.SetMinimalMode( minimal );
-		StatusDrawerHeader.Visibility = StatusSplitter.Visibility = Vis( !minimal );
-		MiniStatusHostActions.Visibility = Vis( minimal );
+		StatusDrawerHeader.Visibility = StatusSplitter.Visibility = ( !minimal ).ToVisibility();
+		MiniStatusHostActions.Visibility = minimal.ToVisibility();
 
 		if( minimal )
 		{
 			StatusDrawerRow.Height = GridLength.Auto;
 			return;
 		}
-		StatusDrawerRow.Height = new GridLength( Math.Clamp( UIStorage.WorkspaceLayout.StatusDrawerHeight, 180, 520 ) );
-		EnsureMinimumWindowDimensions( minWidth: 0, minHeight: 720 );
+		StatusDrawerRow.Height = new GridLength( Math.Clamp( UIStorage.WorkspaceLayout.StatusDrawerHeight, 160, 560 ) );
+		EnsureMinimumWindowDimensions( minWidth: 0, minHeight: FullStatusMinHeight );
 	}
 
 	internal void HideStatusPanelImmediate()
@@ -313,11 +297,11 @@ public sealed partial class HomeView : Page
 
 	internal void ShowSearchPanel( SearchOdooView page )
 	{
+		if( AppComposition.Session.IsVersionMismatch )
+			return;
 		page.StoreWindowInstance( null );
 		page.SetHostMode( isDocked: true );
 		page.SetMinimalMode( UIStorage.WorkspaceLayout.SearchMinimalMode );
-		if( AppComposition.Session.IsVersionMismatch )
-			return;
 		if( !ReferenceEquals( DockedSearchHost.Content, page ) )
 			DockedSearchHost.Content = page;
 
@@ -357,9 +341,9 @@ public sealed partial class HomeView : Page
 
 		bool minimal = UIStorage.WorkspaceLayout.SearchMinimalMode;
 		SearchPage?.SetMinimalMode( minimal );
-		SearchDrawerHeader.Visibility = Vis( !minimal );
-		MiniSearchHostActions.Visibility = Vis( minimal );
-		SearchSplitter.Visibility = Vis( !minimal );
+		SearchDrawerHeader.Visibility = ( !minimal ).ToVisibility();
+		MiniSearchHostActions.Visibility = minimal.ToVisibility();
+		SearchSplitter.Visibility = ( !minimal ).ToVisibility();
 
 		if( minimal )
 		{
@@ -369,7 +353,7 @@ public sealed partial class HomeView : Page
 			MainAndSearchGrid.RowDefinitions.Add( new RowDefinition { Height = star } );
 			DockedSearchDrawer.SetGrid( 0, 0 );
 			NavFrame.SetGrid( 1, 0 );
-			EnsureMinimumWindowDimensions( minWidth: 960, minHeight: 0 );
+			EnsureMinimumWindowDimensions( minWidth: MinimalSearchMinWidth, minHeight: 0 );
 			return;
 		}
 
@@ -385,18 +369,13 @@ public sealed partial class HomeView : Page
 		DockedSearchDrawer.SetGrid( 0, onLeft ? 0 : 2 );
 		SearchSplitter.SetGrid( 0, 1 );
 		NavFrame.SetGrid( 0, onLeft ? 2 : 0 );
-		EnsureMinimumWindowDimensions( minWidth: 1120, minHeight: 0 );
+		EnsureMinimumWindowDimensions( minWidth: FullSearchMinWidth, minHeight: 0 );
 	}
 
 	private static void EnsureMinimumWindowDimensions( int minWidth, int minHeight )
 	{
-		if( HackApp.Window?.AppWindow is not { } appWindow )
-			return;
-		var size = appWindow.Size;
-		int w = minWidth > 0 ? Math.Max( size.Width, minWidth ) : size.Width;
-		int h = minHeight > 0 ? Math.Max( size.Height, minHeight ) : size.Height;
-		if( w != size.Width || h != size.Height )
-			appWindow.Resize( new Windows.Graphics.SizeInt32 { Width = w, Height = h } );
+		if( HackApp.Window is { } window )
+			WindowHelper.EnsureMinimumSize( window, minWidth, minHeight );
 	}
 
 	private void SearchSplitter_DragDelta( double delta )
@@ -416,7 +395,7 @@ public sealed partial class HomeView : Page
 		UIStorage.WorkspaceLayout.StatusDrawerHeight = next;
 	}
 
-	private void ShellSplitter_DragCompleted() => UIStorage.SaveSafe();
+	private void ShellSplitter_DragCompleted() => SaveLayoutAsync();
 	private void SwitchSearchMinimal_Click( object sender, RoutedEventArgs e ) => AppComposition.Dialogs.SetSearchMinimalMode( true );
 	private void SwitchStatusMinimal_Click( object sender, RoutedEventArgs e ) => AppComposition.Dialogs.SetStatusMinimalMode( true );
 	private void DetachSearch_Click( object sender, RoutedEventArgs e ) => AppComposition.Dialogs.DetachSearchWindow();
@@ -429,15 +408,24 @@ public sealed partial class HomeView : Page
 			? FolderDockSide.Left
 			: FolderDockSide.Right;
 		ArrangeSearchDrawer();
-		UIStorage.SaveSafe();
+		SaveLayoutAsync();
 	}
+
+	private static void SaveLayoutAsync() => UIStorage.SaveSafe();
 
 	private async void CloseStatusDrawer_Click( object sender, RoutedEventArgs e )
 	{
-		if( StatusPage is { } page )
-			await page.RequestCloseAsync();
-		else
-			AppComposition.Dialogs.CloseStatusWindow();
+		try
+		{
+			if( StatusPage is { } page )
+				await page.RequestCloseAsync();
+			else
+				AppComposition.Dialogs.CloseStatusWindow();
+		}
+		catch( Exception ex )
+		{
+			HackLogger.Warn( "Shell", $"Closing status drawer failed: {ex.Message}", ex );
+		}
 	}
 
 	private FrameworkElement? _overlayElement;
@@ -459,10 +447,7 @@ public sealed partial class HomeView : Page
 		_overlayFallbackHeight = height;
 
 		if( !ShellOverlayCanvas.Children.Contains( element ) )
-		{
 			ShellOverlayCanvas.Children.Add( element );
-			ShellOverlayCanvas.UpdateLayout();
-		}
 
 		element.Measure( new Windows.Foundation.Size( width, 420 ) );
 		RepositionOverlay();
@@ -479,7 +464,15 @@ public sealed partial class HomeView : Page
 		if( actualH <= 0 )
 			actualH = Math.Clamp( _overlayFallbackHeight, 110, 380 );
 
-		var anchorPos = anchor.TransformToVisual( ShellOverlayCanvas ).TransformPoint( new Windows.Foundation.Point( 0, 0 ) );
+		Windows.Foundation.Point anchorPos;
+		try
+		{
+			anchorPos = anchor.TransformToVisual( ShellOverlayCanvas ).TransformPoint( new Windows.Foundation.Point( 0, 0 ) );
+		}
+		catch
+		{
+			return;
+		}
 		double maxW = ShellOverlayCanvas.ActualWidth > 0 ? ShellOverlayCanvas.ActualWidth : ActualWidth;
 		double left = Math.Clamp( anchorPos.X, 8, Math.Max( 8, maxW - _overlayWidth - 16 ) );
 		double top = anchorPos.Y >= actualH + 14

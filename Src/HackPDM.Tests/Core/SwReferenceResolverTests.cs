@@ -56,6 +56,46 @@ public sealed class SwReferenceResolverTests : IDisposable
 		Assert.Null( new SwReferenceResolver( _vault ).Resolve( @"C:\cad\nowhere.SLDPRT", Path.Combine( _vault, "Top", "robot.SLDASM" ) ) );
 		Assert.Null( new SwReferenceResolver( null ).Resolve( "" ) );
 	}
+
+	[Fact]
+	public void DotAndDotDotSegments_NormalizeWithinVault_AndNeverEscapeRoot()
+	{
+		string shaft = Touch( "Projects", "Parts", "shaft.SLDPRT" );
+		string outsideDir = Path.Combine( Path.GetDirectoryName( _vault )!, "Outside" );
+		Directory.CreateDirectory( outsideDir );
+		File.WriteAllText( Path.Combine( outsideDir, "secret.SLDPRT" ), "" );
+		var resolver = new SwReferenceResolver( _vault );
+
+		Assert.Equal( shaft, resolver.Resolve( @"D:\Work\pwa\Projects\Sub\..\Parts\.\shaft.SLDPRT" ) );
+		// Relative "..\Outside\secret.SLDPRT" must not traverse outside _vault or sibling directory
+		Assert.Null( resolver.Resolve( @"..\Outside\secret.SLDPRT", shaft ) );
+		Assert.Null( resolver.Resolve( @"D:\Work\pwa\..\Outside\secret.SLDPRT", shaft ) );
+	}
+
+	[Fact]
+	public void WildcardSegments_DoNotExpandToExistingFiles()
+	{
+		Touch( "Projects", "Parts", "shaft.SLDPRT" );
+		string assembly = Touch( "Projects", "Parts", "top.SLDASM" );
+		var resolver = new SwReferenceResolver( _vault );
+
+		Assert.Null( resolver.Resolve( @"D:\Work\pwa\Projects\Parts\*.SLDPRT", assembly ) );
+		Assert.Null( resolver.Resolve( @"D:\Work\pwa\Projects\Parts\shaf?.SLDPRT", assembly ) );
+	}
+
+	[Fact]
+	public async Task SearchVault_ConcurrentResolution_IsThreadSafe()
+	{
+		string expected = Touch( "Sub", "Gearbox", "pinion.SLDPRT" );
+		var resolver = new SwReferenceResolver( _vault );
+
+		Task<string?>[] tasks = Enumerable.Range( 0, 16 )
+			.Select( _ => Task.Run( () => resolver.Resolve( @"C:\foreign\Gearbox\pinion.SLDPRT" ) ) )
+			.ToArray();
+
+		string?[] results = await Task.WhenAll( tasks );
+		Assert.All( results, r => Assert.Equal( expected, r ) );
+	}
 }
 
 /// <summary>The dependency tree built for a commit, from the SolidWorks 2026 KitBot samples (references saved on another machine).</summary>

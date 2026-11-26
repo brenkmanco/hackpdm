@@ -24,7 +24,7 @@ public static class OdooRpc
 		"search", "search_read", "read", "search_count", "smart_read", "related_browse",
 		"get_entries", "get_all_entry_ids", "get_children_directories_by_id",
 		"get_recursive_dependency_versions", "get_recursive_dependency_entries",
-		"get_recursive_dependency_entries_by_entries",
+		"get_recursive_dependency_entries_by_entries", "dependency_graph",
 		"read_contents", "upload_chunk", "has_group",
 	}.ToFrozenSet( StringComparer.Ordinal );
 
@@ -37,13 +37,17 @@ public static class OdooRpc
 		return false;
 	}
 
-	private static bool IsTransientTransportError( Exception e )
-		=> e is HttpRequestException http
-			&& http.StatusCode is null
-				or HttpStatusCode.BadGateway
-				or HttpStatusCode.ServiceUnavailable
-				or HttpStatusCode.GatewayTimeout
-				or HttpStatusCode.RequestTimeout;
+	private static bool IsTransientTransportError( Exception e, CancellationToken callerToken )
+		=> !callerToken.IsCancellationRequested
+			&& ( e is TaskCanceledException
+				|| e is HttpIOException
+				|| e is IOException
+				|| ( e is HttpRequestException http
+					&& http.StatusCode is null
+						or HttpStatusCode.BadGateway
+						or HttpStatusCode.ServiceUnavailable
+						or HttpStatusCode.GatewayTimeout
+						or HttpStatusCode.RequestTimeout ) );
 
 	public static async Task<Result<JsonElement>> CallAsync(
 		string service,
@@ -77,7 +81,7 @@ public static class OdooRpc
 				JsonRpcResponse? response = await request.SendJsonAsync(
 					Settings.OdooUrl + JsonRpcEndpoint,
 					timeoutMs ?? ObjectTimeout,
-					token: token );
+					token: token ).ConfigureAwait( false );
 				if( response is null )
 					return Result<JsonElement>.Fail( "no response from the server" );
 				if( response.Error is not null )
@@ -88,16 +92,16 @@ public static class OdooRpc
 			{
 				throw;
 			}
-			catch( Exception e ) when( attempt < maxAttempts && IsTransientTransportError( e ) )
+			catch( Exception e ) when( attempt < maxAttempts && IsTransientTransportError( e, token ) )
 			{
 				int delayMs = attempt == 1 ? 250 : 750;
-				HackLogger.Warn( "OdooRpc", $"Transient RPC error on {service}.{method} (attempt {attempt}/{maxAttempts}), retrying in {delayMs}ms: {Describe( e )}" );
-				await Task.Delay( delayMs, token );
+				HackLogger.Warn( nameof( OdooRpc ), $"Transient RPC error on {service}.{method} (attempt {attempt}/{maxAttempts}), retrying in {delayMs}ms: {Describe( e )}" );
+				await Task.Delay( delayMs, token ).ConfigureAwait( false );
 			}
 			catch( Exception e )
 			{
 				string detail = Describe( e );
-				HackLogger.Error( "OdooRpc", $"RPC transport error on {service}.{method}: {detail}", e );
+				HackLogger.Error( nameof( OdooRpc ), $"RPC transport error on {service}.{method}: {detail}", e );
 				return Result<JsonElement>.Fail( detail );
 			}
 		}
@@ -116,7 +120,7 @@ public static class OdooRpc
 			"execute",
 			[ Settings.OdooDb, Settings.OdooId, Settings.OdooPass, model, method, .. args ],
 			timeoutMs,
-			token );
+			token ).ConfigureAwait( false );
 		return raw.Ok ? Convert<T>( raw.Value ) : Result<T>.Fail( raw.Error );
 	}
 
@@ -125,16 +129,22 @@ public static class OdooRpc
 		if( string.IsNullOrEmpty( Settings.OdooDb )
 			|| string.IsNullOrEmpty( Settings.OdooUser )
 			|| string.IsNullOrEmpty( Settings.OdooPass ) )
+		{
+			Settings.OdooId = 0;
 			return Result<int>.Fail( "the database, user name and password must be set" );
+		}
 
 		Result<JsonElement> raw = await CallAsync(
 			"common",
 			"login",
 			[ Settings.OdooDb, Settings.OdooUser, Settings.OdooPass ],
 			timeoutMs ?? CommonTimeout,
-			token );
+			token ).ConfigureAwait( false );
 		if( !raw.Ok )
+		{
+			Settings.OdooId = 0;
 			return Result<int>.Fail( raw.Error );
+		}
 
 		int uid = raw.Value.ValueKind switch
 		{
@@ -143,7 +153,10 @@ public static class OdooRpc
 			_ => 0,
 		};
 		if( uid <= 0 )
+		{
+			Settings.OdooId = 0;
 			return Result<int>.Fail( "login username or password failed" );
+		}
 
 		Settings.OdooId = uid;
 		return Result<int>.Success( uid );
@@ -180,13 +193,24 @@ public static class OdooRpc
 		CancellationToken token = default )
 		=> ExecuteAsync<int>( model, "search_count", [ domain ?? OdooDomain.All ], timeoutMs, token );
 
-	public static Task<Result<IReadOnlyList<OdooRow>>> ReadAsync(
+	public static T[] SliceChunk<T>( IReadOnlyList<T> source, int offset, int maxSize )
+	{
+		int count = Math.Min( maxSize, source.Count - offset );
+		T[] chunk = new T[ count ];
+		for( int i = 0; i < count; i++ )
+			chunk[ i ] = source[ offset + i ];
+		return chunk;
+	}
+
+	public static ValueTask<Result<IReadOnlyList<OdooRow>>> ReadAsync(
 		string model,
 		IReadOnlyList<int> ids,
 		IReadOnlyList<string>? fields = null,
 		int? timeoutMs = null,
 		CancellationToken token = default )
-		=> ExecuteAsync<IReadOnlyList<OdooRow>>( model, "read", [ ids, fields ?? [] ], timeoutMs, token );
+		=> ids.Count == 0
+			? ValueTask.FromResult( Result<IReadOnlyList<OdooRow>>.Success( [] ) )
+			: new ValueTask<Result<IReadOnlyList<OdooRow>>>( ExecuteAsync<IReadOnlyList<OdooRow>>( model, "read", [ ids, fields ?? [] ], timeoutMs, token ) );
 
 	public static Task<Result<IReadOnlyList<OdooRow>>> SearchReadAsync(
 		string model,
@@ -226,20 +250,22 @@ public static class OdooRpc
 		CancellationToken token = default )
 		=> ExecuteAsync<bool>( model, "write", [ ids, values ], timeoutMs, token );
 
-	public static Task<Result<bool>> UnlinkAsync(
+	public static ValueTask<Result<bool>> UnlinkAsync(
 		string model,
 		IReadOnlyList<int> ids,
 		int? timeoutMs = null,
 		CancellationToken token = default )
 		=> ids.Count == 0
-			? Task.FromResult( Result<bool>.Success( true ) )
-			: ExecuteAsync<bool>( model, "unlink", [ ids ], timeoutMs, token );
+			? ValueTask.FromResult( Result<bool>.Success( true ) )
+			: new ValueTask<Result<bool>>( ExecuteAsync<bool>( model, "unlink", [ ids ], timeoutMs, token ) );
 
-	public static Task<Result<int>> CreateCommitAsync( int? timeoutMs = null )
-		=> CreateAsync(
-			HpPDMCommit.ModelName,
-			new Dictionary<string, object?> { [ "node_by" ] = Settings.MyNode?.id ?? 0 },
-			timeoutMs );
+	public static Task<Result<int>> CreateCommitAsync( int? timeoutMs = null, CancellationToken token = default )
+	{
+		Dictionary<string, object?> values = Settings.MyNode?.id is int nodeId and > 0
+			? new Dictionary<string, object?> { [ nameof( HpPDMCommit.node_by ) ] = nodeId }
+			: [];
+		return CreateAsync( HpPDMCommit.ModelName, values, timeoutMs, token );
+	}
 
 	internal static Result<T> Convert<T>( JsonElement json )
 	{
@@ -256,6 +282,11 @@ public static class OdooRpc
 			{
 				int n = json.ValueKind == JsonValueKind.Number ? json.GetInt32() : 0;
 				return Result<T>.Success( Unsafe.As<int, T>( ref n ) );
+			}
+			if( typeof( T ) == typeof( string ) )
+			{
+				string? s = json.ValueKind == JsonValueKind.String ? json.GetString() : null;
+				return Result<T>.Success( Unsafe.As<string?, T>( ref s )! );
 			}
 			if( typeof( T ) == typeof( IReadOnlyList<int> ) )
 			{
@@ -278,10 +309,7 @@ public static class OdooRpc
 				return Result<T>.Success( (T)obj! );
 			}
 
-			T? deserialized = json.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined or JsonValueKind.False
-				? default
-				: json.Deserialize<T>();
-			return Result<T>.Success( deserialized! );
+			return Result<T>.Fail( $"unsupported RPC result type {typeof( T ).Name}" );
 		}
 		catch( Exception e ) when( e is JsonException or InvalidOperationException or FormatException or InvalidCastException )
 		{

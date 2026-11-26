@@ -8,12 +8,17 @@ using HackPDM.Core.Pdm;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 
 namespace HackPDM.Common;
 
 public sealed partial class MessageBox : Page
 {
 	private const int ButtonRow = 3;
+
+#if SMOKE_TESTS
+	internal static Action<MessageBox, MessageBoxButtons>? TestOpenedCallback;
+#endif
 
 	private sealed record ButtonSpec( string Label, DialogResult Result, int Column, bool IsDefault = false );
 
@@ -28,13 +33,19 @@ public sealed partial class MessageBox : Page
 		[ MessageBoxButtons.CancelTryContinue ] = [ new( "Cancel", DialogResult.Cancel, 0 ), new( "Try", DialogResult.TryAgain, 2 ), new( "Continue", DialogResult.Continue, 3, true ) ],
 	};
 
-	private TaskCompletionSource<DialogResult> _result = new();
+	private TaskCompletionSource<DialogResult>? _result;
 	private Window? _window;
+	private Button? _defaultButton;
 
 	public MessageBox()
 	{
 		InitializeComponent();
 	}
+
+#if SMOKE_TESTS
+	internal Button? DefaultButtonForTest => _defaultButton;
+	internal void CloseForTest( DialogResult result ) => Close( result );
+#endif
 
 	private void Populate( string message, MessageBoxButtons buttons, Window window, TaskCompletionSource<DialogResult> result )
 	{
@@ -51,14 +62,12 @@ public sealed partial class MessageBox : Page
 				IsTextSelectionEnabled = true,
 			},
 		};
-		Grid.SetRow( text, 0 );
-		Grid.SetColumn( text, 0 );
-		Grid.SetRowSpan( text, 3 );
-		Grid.SetColumnSpan( text, 4 );
+		text.SetGrid( 0, 0, rowspan: 3, columnspan: 4 );
 		RootGrid.Children.Add( text );
 
 		ButtonSpec[] specs = Layouts.GetValueOrDefault( buttons ) ?? Layouts[ MessageBoxButtons.OK ];
 		ButtonSpec defaultSpec = Array.Find( specs, s => s.IsDefault ) ?? specs[ ^1 ];
+		Button? defaultButton = null;
 		foreach( ButtonSpec spec in specs )
 		{
 			Button button = new()
@@ -70,14 +79,30 @@ public sealed partial class MessageBox : Page
 				Height = 32,
 			};
 			button.Click += ( _, _ ) => Close( spec.Result );
-			Grid.SetRow( button, ButtonRow );
-			Grid.SetColumn( button, spec.Column );
+			button.SetGrid( ButtonRow, spec.Column );
 			RootGrid.Children.Add( button );
+			if( spec.IsDefault || defaultButton is null )
+				defaultButton = button;
 		}
+		_defaultButton = defaultButton;
+
+		void FocusDefault()
+		{
+			_defaultButton?.Focus( FocusState.Programmatic );
+#if SMOKE_TESTS
+			TestOpenedCallback?.Invoke( this, buttons );
+#endif
+		}
+		if( IsLoaded )
+			FocusDefault();
+		else
+			Loaded += ( _, _ ) => FocusDefault();
 
 		window.Closed += ( _, _ ) => result.TrySetResult( DialogResult.Cancel );
 		KeyDown += ( _, e ) =>
 		{
+			if( e.Handled )
+				return;
 			if( e.Key == Windows.System.VirtualKey.Escape )
 			{
 				e.Handled = true;
@@ -85,6 +110,8 @@ public sealed partial class MessageBox : Page
 			}
 			else if( e.Key == Windows.System.VirtualKey.Enter )
 			{
+				if( XamlRoot is not null && FocusManager.GetFocusedElement( XamlRoot ) is Button focused && !ReferenceEquals( focused, _defaultButton ) )
+					return;
 				e.Handled = true;
 				Close( defaultSpec.Result );
 			}
@@ -93,7 +120,7 @@ public sealed partial class MessageBox : Page
 
 	private void Close( DialogResult result )
 	{
-		_result.TrySetResult( result );
+		_result?.TrySetResult( result );
 		_window?.Close();
 	}
 
@@ -105,15 +132,36 @@ public sealed partial class MessageBox : Page
 			await UiDispatcher.Current.RunAsync( () =>
 			{
 				MessageBox page = new();
-				Window window = WindowHelper.CreateWindow<Window>( "MessageBox" );
+				Window window = WindowHelper.CreateWindow<Window>( WindowHelper.Presets.MessageBox, persistBounds: false );
 				window.Title = string.IsNullOrWhiteSpace( caption ) ? "Info" : caption;
+				if( window.AppWindow?.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter )
+				{
+					try
+					{
+						presenter.IsMaximizable = false;
+						presenter.IsMinimizable = false;
+					}
+					catch
+					{
+					}
+				}
+				int lineBreaks = 0;
+				for( int i = 0; i < message.Length; i++ )
+				{
+					if( message[ i ] == '\n' )
+						lineBreaks++;
+				}
+				int width = message.Length > 260 ? 580 : 520;
+				int wrappedLines = Math.Max( 3, lineBreaks + 1 + message.Length / 58 );
+				int height = Math.Clamp( 170 + wrappedLines * 22, 260, 480 );
+				WindowHelper.ResizeWindow( window, width, height );
 				( window.Content as Frame )?.Content = page;
 				page.Populate( message, buttons, window, result );
 			} );
 		}
 		catch( Exception ex )
 		{
-			HackLogger.Warn( "MessageBox", $"XAML MessageBox failed; falling back to native dialog: {ex.Message}", ex );
+			HackLogger.Warn( nameof( MessageBox ), $"XAML MessageBox failed; falling back to native dialog: {ex.Message}", ex );
 			result.TrySetResult( ShowNative( message, caption ?? "Information", (uint)buttons | (uint)icon | 0x00040000u ) );
 		}
 		return await result.Task;
@@ -124,7 +172,7 @@ public sealed partial class MessageBox : Page
 #if WINDOWS
 		return (DialogResult)MsgBox( HackApp.Window?.IntPtrHandle ?? 0, message, title, type );
 #else
-		HackLogger.Info( "MessageBox", $"[Native MessageBox Fallback] {title}: {message}" );
+		HackLogger.Info( nameof( MessageBox ), $"[Native MessageBox Fallback] {title}: {message}" );
 		return DialogResult.OK;
 #endif
 	}

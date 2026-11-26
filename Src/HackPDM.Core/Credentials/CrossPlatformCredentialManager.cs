@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 
-using HackPDM.Core.Credentials;
 using HackPDM.Core.Configuration;
 using HackPDM.Core.Pdm;
 
@@ -20,15 +23,28 @@ namespace HackPDM.Core.Credentials;
 /// </list>
 /// When there is no keychain (headless machines, CI, no Secret Service running), or <c>HACKPDM_CREDENTIAL_STORE=file</c>,
 /// the login goes to a fallback file instead (<see cref="FallbackFile"/>, readable by the user only). That file is
-/// only obscured, not protected: its key is in the program.
+/// protected via DPAPI and user-only ACL on Windows, and obscured with 0600 permissions on Unix.
 /// <para>A login found in the fallback file while a keychain is available is moved into the keychain.</para>
 /// </summary>
-public static class CrossPlatformCredentialManager
+public static unsafe partial class CrossPlatformCredentialManager
 {
 	/// <summary>"file" uses the fallback file only (tests, machines without a keychain); anything else, or unset, uses the keychain.</summary>
 	public const string StoreVariable = "HACKPDM_CREDENTIAL_STORE";
 
-	private static readonly string LegacyDir = Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.UserProfile ), ".hackpdm" );
+	private static readonly Lock FallbackGate = new();
+	private static readonly string LegacyDir = Path.Combine( ResolveUserRoot(), ".hackpdm" );
+	private static readonly byte[] DpapiHeader = "HPDMDP1\0"u8.ToArray();
+
+	private static string ResolveUserRoot()
+	{
+		string profile = Environment.GetFolderPath( Environment.SpecialFolder.UserProfile );
+		if( !string.IsNullOrEmpty( profile ) )
+			return profile;
+		string? home = Environment.GetEnvironmentVariable( "HOME" );
+		if( !string.IsNullOrEmpty( home ) )
+			return home;
+		return Path.GetTempPath();
+	}
 
 	/// <summary>Where the fallback file is: in <see cref="AppDataPaths.Config"/> when that is replaced (tests), else ~/.hackpdm/credentials.dat as before.</summary>
 	internal static string FallbackFile => AppDataPaths.IsConfigOverridden
@@ -66,6 +82,8 @@ public static class CrossPlatformCredentialManager
 
 	internal static (string? UserName, string? Password)? ReadCredential( string target, bool forceFallback, string? customFilePath = null )
 	{
+		if( string.IsNullOrEmpty( target ) )
+			return null;
 		ICredentialStore? store = forceFallback ? null : PlatformStore;
 		if( store?.Read( target ) is { } saved )
 			return (saved.UserName, saved.Password);
@@ -91,6 +109,8 @@ public static class CrossPlatformCredentialManager
 
 	internal static void WriteCredential( string target, string username, string password, bool forceFallback, string? customFilePath = null )
 	{
+		if( string.IsNullOrEmpty( target ) || username is null || password is null )
+			return;
 		ICredentialStore? store = forceFallback ? null : PlatformStore;
 		if( store is not null && store.Write( target, username, password ) )
 		{
@@ -98,7 +118,7 @@ public static class CrossPlatformCredentialManager
 			return;
 		}
 		if( store is not null )
-			HackPDM.Core.Configuration.HackLogger.Warn( "Credentials", $"{store.Name} unavailable, saving login to fallback store '{customFilePath ?? FallbackFile}'" );
+			HackLogger.Warn( "Credentials", $"{store.Name} unavailable, saving login to fallback store '{customFilePath ?? FallbackFile}'" );
 		WriteFallback( target, username, password, customFilePath );
 	}
 
@@ -107,6 +127,8 @@ public static class CrossPlatformCredentialManager
 	/// <remarks>Deleting a login that isn't saved does nothing. The fallback file is deleted once its last login is removed.</remarks>
 	public static void DeleteCredential( string target )
 	{
+		if( string.IsNullOrEmpty( target ) )
+			return;
 		PlatformStore?.Delete( target );
 		RemoveFallback( target );
 	}
@@ -114,27 +136,44 @@ public static class CrossPlatformCredentialManager
 	// ---------------------------------------------------------------- fallback file
 
 	internal static (string? UserName, string? Password)? ReadFallback( string target, string? customFilePath = null )
-		=> ReadFile( customFilePath ?? FallbackFile ) is { } dict && dict.TryGetValue( target, out var entry )
-			? (entry.UserName, entry.Password)
-			: null;
+	{
+		if( string.IsNullOrEmpty( target ) )
+			return null;
+		lock( FallbackGate )
+		{
+			return ReadFile( customFilePath ?? FallbackFile ) is { } dict && dict.TryGetValue( target, out var entry )
+				? (entry.UserName, entry.Password)
+				: null;
+		}
+	}
 
 	internal static void WriteFallback( string target, string username, string password, string? customFilePath = null )
 	{
+		if( string.IsNullOrEmpty( target ) || username is null || password is null )
+			return;
 		string filePath = customFilePath ?? FallbackFile;
-		var dict = ReadFile( filePath ) ?? [];
-		dict[ target ] = new CredentialEntry( username, password );
-		WriteFile( filePath, dict );
+		lock( FallbackGate )
+		{
+			var dict = ReadFile( filePath ) ?? [];
+			dict[ target ] = new CredentialEntry( username, password );
+			WriteFile( filePath, dict );
+		}
 	}
 
 	internal static void RemoveFallback( string target, string? customFilePath = null )
 	{
-		string filePath = customFilePath ?? FallbackFile;
-		if( ReadFile( filePath ) is not { } dict || !dict.Remove( target ) )
+		if( string.IsNullOrEmpty( target ) )
 			return;
-		if( dict.Count == 0 )
-			TryDelete( filePath );
-		else
-			WriteFile( filePath, dict );
+		string filePath = customFilePath ?? FallbackFile;
+		lock( FallbackGate )
+		{
+			if( ReadFile( filePath ) is not { } dict || !dict.Remove( target ) )
+				return;
+			if( dict.Count == 0 )
+				FileOps.TryDelete( filePath );
+			else
+				WriteFile( filePath, dict );
+		}
 	}
 
 	private static Dictionary<string, CredentialEntry>? ReadFile( string filePath )
@@ -143,7 +182,11 @@ public static class CrossPlatformCredentialManager
 		{
 			if( !File.Exists( filePath ) )
 				return null;
-			return JsonSerializer.Deserialize<Dictionary<string, CredentialEntry>>( Decrypt( File.ReadAllBytes( filePath ) ) );
+			byte[] raw = File.ReadAllBytes( filePath );
+			string json = OperatingSystem.IsWindows() && raw.Length >= DpapiHeader.Length && raw.AsSpan( 0, DpapiHeader.Length ).SequenceEqual( DpapiHeader )
+				? UnprotectWindows( raw.AsSpan( DpapiHeader.Length ) )
+				: Decrypt( raw );
+			return JsonSerializer.Deserialize( json, CredentialJsonContext.Default.DictionaryStringCredentialEntry );
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException or CryptographicException or JsonException or ArgumentException )
 		{
@@ -153,42 +196,204 @@ public static class CrossPlatformCredentialManager
 
 	private static void WriteFile( string filePath, Dictionary<string, CredentialEntry> dict )
 	{
+		string? dir = Path.GetDirectoryName( filePath );
+		string tempPath = string.IsNullOrEmpty( dir )
+			? $"{filePath}.{Guid.NewGuid():N}.tmp"
+			: Path.Combine( dir, $"{Path.GetFileName( filePath )}.{Guid.NewGuid():N}.tmp" );
 		try
 		{
-			if( Path.GetDirectoryName( filePath ) is { Length: > 0 } dir )
+			if( !string.IsNullOrEmpty( dir ) )
 				Directory.CreateDirectory( dir );
-			byte[] encrypted = Encrypt( JsonSerializer.Serialize( dict ) );
-			if( OperatingSystem.IsWindows() )
-				File.WriteAllBytes( filePath, encrypted );
-			else
+			string json = JsonSerializer.Serialize( dict, CredentialJsonContext.Default.DictionaryStringCredentialEntry );
+			byte[] payload = OperatingSystem.IsWindows()
+				? ProtectWindowsOrFallback( json )
+				: Encrypt( json );
+
+			FileStreamOptions options = new()
 			{
-				// readable and writable by the user only, from the moment it exists
-				using FileStream stream = new( filePath, new FileStreamOptions
-				{
-					Mode = FileMode.Create,
-					Access = FileAccess.Write,
-					UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
-				} );
-				stream.Write( encrypted );
-				File.SetUnixFileMode( filePath, UnixFileMode.UserRead | UnixFileMode.UserWrite ); // an older file made with wider rights
+				Mode = FileMode.CreateNew,
+				Access = FileAccess.Write,
+				Share = FileShare.None,
+			};
+			if( !OperatingSystem.IsWindows() )
+				options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
+			using( FileStream stream = new( tempPath, options ) )
+			{
+				stream.Write( payload );
+				stream.Flush( flushToDisk: true );
 			}
+
+			if( OperatingSystem.IsWindows() )
+				TrySetWindowsUserOnlyAcl( tempPath );
+			else
+				File.SetUnixFileMode( tempPath, UnixFileMode.UserRead | UnixFileMode.UserWrite );
+
+			File.Move( tempPath, filePath, overwrite: true );
+
+			if( OperatingSystem.IsWindows() )
+				TrySetWindowsUserOnlyAcl( filePath );
 		}
 		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
 		{
-			HackPDM.Core.Configuration.HackLogger.Error( "Credentials", $"Could not write fallback credential store '{filePath}': {e.Message}", e );
+			HackLogger.Error( "Credentials", $"Could not write fallback credential store '{filePath}': {e.Message}", e );
+		}
+		finally
+		{
+			FileOps.TryDelete( tempPath );
 		}
 	}
 
-	private static void TryDelete( string filePath )
+	[SupportedOSPlatform( "windows" )]
+	private static byte[] ProtectWindowsOrFallback( string plainText )
+	{
+		byte[] plainBytes = Encoding.UTF8.GetBytes( plainText );
+		try
+		{
+			DataBlob dataIn = default;
+			DataBlob entropyBlob = default;
+			DataBlob dataOut = default;
+			fixed( byte* pPlain = plainBytes )
+			fixed( byte* pEntropy = Entropy )
+			{
+				dataIn.cbData = (uint)plainBytes.Length;
+				dataIn.pbData = (IntPtr)pPlain;
+				entropyBlob.cbData = (uint)Entropy.Length;
+				entropyBlob.pbData = (IntPtr)pEntropy;
+				const uint CRYPTPROTECT_UI_FORBIDDEN = 0x1;
+				if( CryptProtectData( ref dataIn, IntPtr.Zero, ref entropyBlob, IntPtr.Zero, IntPtr.Zero, CRYPTPROTECT_UI_FORBIDDEN, out dataOut ) )
+				{
+					try
+					{
+						byte[] result = new byte[ DpapiHeader.Length + (int)dataOut.cbData ];
+						Buffer.BlockCopy( DpapiHeader, 0, result, 0, DpapiHeader.Length );
+						if( dataOut.cbData > 0 )
+							Marshal.Copy( dataOut.pbData, result, DpapiHeader.Length, (int)dataOut.cbData );
+						return result;
+					}
+					finally
+					{
+						if( dataOut.pbData != IntPtr.Zero )
+							_ = LocalFree( dataOut.pbData );
+					}
+				}
+			}
+		}
+		catch
+		{
+		}
+		finally
+		{
+			Array.Clear( plainBytes );
+		}
+		return Encrypt( plainText );
+	}
+
+	[SupportedOSPlatform( "windows" )]
+	private static string UnprotectWindows( ReadOnlySpan<byte> cipherText )
+	{
+		if( cipherText.IsEmpty )
+			throw new CryptographicException( "Empty DPAPI credential payload." );
+		byte[] cipherCopy = cipherText.ToArray();
+		DataBlob dataIn = default;
+		DataBlob entropyBlob = default;
+		DataBlob dataOut = default;
+		fixed( byte* pCipher = cipherCopy )
+		fixed( byte* pEntropy = Entropy )
+		{
+			dataIn.cbData = (uint)cipherCopy.Length;
+			dataIn.pbData = (IntPtr)pCipher;
+			entropyBlob.cbData = (uint)Entropy.Length;
+			entropyBlob.pbData = (IntPtr)pEntropy;
+			const uint CRYPTPROTECT_UI_FORBIDDEN = 0x1;
+			if( !CryptUnprotectData( ref dataIn, IntPtr.Zero, ref entropyBlob, IntPtr.Zero, IntPtr.Zero, CRYPTPROTECT_UI_FORBIDDEN, out dataOut ) )
+				throw new CryptographicException( Marshal.GetLastPInvokeError() );
+			try
+			{
+				if( dataOut.cbData > int.MaxValue )
+					throw new CryptographicException( "Invalid DPAPI payload size." );
+				return dataOut.cbData == 0
+					? string.Empty
+					: Encoding.UTF8.GetString( (byte*)dataOut.pbData, (int)dataOut.cbData );
+			}
+			finally
+			{
+				if( dataOut.pbData != IntPtr.Zero )
+				{
+					NativeMemory.Clear( (void*)dataOut.pbData, dataOut.cbData );
+					_ = LocalFree( dataOut.pbData );
+				}
+			}
+		}
+	}
+
+	[SupportedOSPlatform( "windows" )]
+	private static void TrySetWindowsUserOnlyAcl( string path )
 	{
 		try
 		{
-			File.Delete( filePath );
+			using WindowsIdentity identity = WindowsIdentity.GetCurrent();
+			if( identity.User is not { } userSid )
+				return;
+			DiscretionaryAcl dacl = new( isContainer: false, isDS: false, capacity: 1 );
+			const int FileAllAccess = 0x001F01FF;
+			dacl.AddAccess( AccessControlType.Allow, userSid, FileAllAccess, InheritanceFlags.None, PropagationFlags.None );
+			byte[] daclBytes = new byte[ dacl.BinaryLength ];
+			dacl.GetBinaryForm( daclBytes, 0 );
+			fixed( byte* pDacl = daclBytes )
+			{
+				const uint SeFileObject = 1;
+				const uint DaclSecurityInformation = 0x00000004;
+				const uint ProtectedDaclSecurityInformation = 0x80000000;
+				_ = SetNamedSecurityInfoW( path, SeFileObject, DaclSecurityInformation | ProtectedDaclSecurityInformation, IntPtr.Zero, IntPtr.Zero, (IntPtr)pDacl, IntPtr.Zero );
+			}
 		}
-		catch( Exception e ) when( e is IOException or UnauthorizedAccessException )
+		catch
 		{
 		}
 	}
+
+	[StructLayout( LayoutKind.Sequential )]
+	private struct DataBlob
+	{
+		public uint cbData;
+		public IntPtr pbData;
+	}
+
+	[LibraryImport( "crypt32.dll", SetLastError = true )]
+	[return: MarshalAs( UnmanagedType.Bool )]
+	private static partial bool CryptProtectData(
+		ref DataBlob pDataIn,
+		IntPtr szDataDescr,
+		ref DataBlob pOptionalEntropy,
+		IntPtr pvReserved,
+		IntPtr pPromptStruct,
+		uint dwFlags,
+		out DataBlob pDataOut );
+
+	[LibraryImport( "crypt32.dll", SetLastError = true )]
+	[return: MarshalAs( UnmanagedType.Bool )]
+	private static partial bool CryptUnprotectData(
+		ref DataBlob pDataIn,
+		IntPtr ppszDataDescr,
+		ref DataBlob pOptionalEntropy,
+		IntPtr pvReserved,
+		IntPtr pPromptStruct,
+		uint dwFlags,
+		out DataBlob pDataOut );
+
+	[LibraryImport( "kernel32.dll" )]
+	private static partial IntPtr LocalFree( IntPtr hMem );
+
+	[LibraryImport( "advapi32.dll", StringMarshalling = StringMarshalling.Utf16 )]
+	private static partial uint SetNamedSecurityInfoW(
+		string pObjectName,
+		uint objectType,
+		uint securityInfo,
+		IntPtr psidOwner,
+		IntPtr psidGroup,
+		IntPtr pDacl,
+		IntPtr pSacl );
 
 	// obscures the fallback file only: the key is derived from a constant, so anyone with the program can read it
 	internal static readonly byte[] Entropy = Encoding.UTF8.GetBytes( "HackPDM-Secure-Key-Entropy-v1" );
@@ -219,6 +424,4 @@ public static class CrossPlatformCredentialManager
 		byte[] decrypted = decryptor.TransformFinalBlock( encrypted, iv.Length, encrypted.Length - iv.Length );
 		return Encoding.UTF8.GetString( decrypted );
 	}
-
-	private sealed record CredentialEntry( string UserName, string Password );
 }

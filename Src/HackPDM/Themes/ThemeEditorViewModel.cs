@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -61,6 +62,7 @@ public sealed partial class ThemeEditorViewModel : ObservableObject
 		SelectedFormIndex = FormIndex( _theme.Form );
 		ShowTreeBranchLines = _theme.ShowTreeBranchLines;
 		Refresh();
+		HasUnsavedChanges = _theme.HasUnsavedChanges;
 		SelectedColor = Colors.Count > 0 ? Colors[ 0 ] : null;
 	}
 
@@ -129,12 +131,16 @@ public sealed partial class ThemeEditorViewModel : ObservableObject
 	[NotifyCanExecuteChangedFor( nameof( SaveCommand ), nameof( RevertCommand ) )]
 	public partial bool HasUnsavedChanges { get; set; }
 
+	[ObservableProperty]
+	[NotifyCanExecuteChangedFor( nameof( SaveCommand ), nameof( RevertCommand ) )]
+	public partial bool IsSaving { get; set; }
+
 	partial void OnSelectedPaletteIndexChanged( int value )
 	{
 		if( value < 0 || value >= ThemePresets.Palettes.Count || ThemePresets.Palettes[ value ].Name == _theme.Palette )
 			return;
 		_theme.SetPalette( ThemePresets.Palettes[ value ].Name );
-		HasUnsavedChanges = true;
+		HasUnsavedChanges = _theme.HasUnsavedChanges;
 		Refresh();
 		PublishSelected();
 	}
@@ -147,7 +153,7 @@ public sealed partial class ThemeEditorViewModel : ObservableObject
 		if( ThemePresets.Forms[ value ].Name == _theme.Form )
 			return;
 		_theme.SetForm( ThemePresets.Forms[ value ].Name );
-		HasUnsavedChanges = true;
+		HasUnsavedChanges = _theme.HasUnsavedChanges;
 		Refresh();
 	}
 
@@ -155,8 +161,8 @@ public sealed partial class ThemeEditorViewModel : ObservableObject
 	{
 		if( value == _theme.ShowTreeBranchLines )
 			return;
-		_theme.SetShowTreeBranchLines( value );
-		HasUnsavedChanges = true;
+		_theme.SetShowTreeBranchLines( value, persistImmediately: false );
+		HasUnsavedChanges = _theme.HasUnsavedChanges;
 	}
 
 	partial void OnSelectedColorChanged( ThemeColorItem? value ) => PublishSelected();
@@ -169,7 +175,7 @@ public sealed partial class ThemeEditorViewModel : ObservableObject
 		if( !IsEditable || SelectedColor is not { } item || item.Hex == color.ToString() )
 			return;
 		_theme.SetColor( item.Key, color );
-		HasUnsavedChanges = true;
+		HasUnsavedChanges = _theme.HasUnsavedChanges;
 		Refresh( item );
 		HexInput = item.Hex;
 	}
@@ -190,7 +196,7 @@ public sealed partial class ThemeEditorViewModel : ObservableObject
 		if( SelectedColor is not { } item )
 			return;
 		_theme.ResetColor( item.Key );
-		HasUnsavedChanges = true;
+		HasUnsavedChanges = _theme.HasUnsavedChanges;
 		Refresh( item );
 		PublishSelected();
 	}
@@ -202,20 +208,23 @@ public sealed partial class ThemeEditorViewModel : ObservableObject
 	private void ResetAll()
 	{
 		_theme.ResetAll();
-		HasUnsavedChanges = true;
+		HasUnsavedChanges = _theme.HasUnsavedChanges;
 		Refresh();
 		PublishSelected();
 		StatusText = $"All {EditingThemeText.ToLowerInvariant()} colors restored to the defaults (not saved yet).";
 	}
 
+	private bool CanSaveOrRevert() => HasUnsavedChanges && !IsSaving;
+
 	/// <summary>Saves the theme to AppConfig.json; a failure is shown in the status text.</summary>
-	[RelayCommand( CanExecute = nameof( HasUnsavedChanges ) )]
-	private void Save()
+	[RelayCommand( CanExecute = nameof( CanSaveOrRevert ) )]
+	private async Task SaveAsync()
 	{
+		IsSaving = true;
 		try
 		{
-			_theme.Save();
-			HasUnsavedChanges = false;
+			await _theme.SaveAsync();
+			HasUnsavedChanges = _theme.HasUnsavedChanges;
 			string paletteTitle = ThemePresets.Palette( _theme.Palette ).Title;
 			string formTitle = ThemePresets.Form( _theme.Form ).Title;
 			StatusText = _theme.NeedsRestart || _theme.StyleNeedsRestart
@@ -230,14 +239,18 @@ public sealed partial class ThemeEditorViewModel : ObservableObject
 			StatusText = $"Save failed: {e.Message}";
 			_session?.LogError( ProfileStatusCategory.Settings, $"Failed to save theme settings to '{SavePath}': {e.Message}" );
 		}
+		finally
+		{
+			IsSaving = false;
+		}
 	}
 
 	/// <summary>Discards unsaved changes and re-applies the theme as last saved.</summary>
-	[RelayCommand( CanExecute = nameof( HasUnsavedChanges ) )]
+	[RelayCommand( CanExecute = nameof( CanSaveOrRevert ) )]
 	private void Revert()
 	{
 		_theme.Revert();
-		HasUnsavedChanges = false;
+		HasUnsavedChanges = _theme.HasUnsavedChanges;
 		SelectedPaletteIndex = PaletteIndex( _theme.Palette );
 		SelectedFormIndex = FormIndex( _theme.Form );
 		ShowTreeBranchLines = _theme.ShowTreeBranchLines;

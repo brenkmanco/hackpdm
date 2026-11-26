@@ -27,21 +27,65 @@ public class ThemePresetsTests
 	public void Palette_TextAndAccentAreReadable( PaletteName name )
 	{
 		AppPalette p = ThemePresets.Palette( name );
+		uint R( string role ) => p.Scheme[ role ];
 		Assert.True( ThemePresets.Contrast( p.Text, p.PageBackground ) >= 7, "text on the page" );
 		Assert.True( ThemePresets.Contrast( p.PanelStroke, p.PageBackground ) >= 1.4, "panel borders show" );
 		Assert.True( ThemePresets.Contrast( p.FancyPanelStroke, p.PageBackground ) >= 3, "accent panel borders" );
-		if( p.Brushes.Count == 0 )
-			return;
-		// a recolored theme keeps text, hints and accent buttons readable on its own backgrounds
-		uint page = p.Brushes[ "ApplicationPageBackgroundThemeBrush" ];
-		Assert.Equal( page, p.PageBackground );
-		Assert.Equal( p.Text, p.Brushes[ "TextFillColorPrimaryBrush" ] );
-		Assert.True( ThemePresets.Contrast( p.Brushes[ "TextFillColorSecondaryBrush" ], page ) >= 4.5, "secondary text" );
-		Assert.True( ThemePresets.Contrast( p.Brushes[ "TextFillColorPrimaryBrush" ], p.Brushes[ "SolidBackgroundFillColorBaseBrush" ] ) >= 7, "text on panes" );
+		Assert.True( ThemePresets.Contrast( R( MaterialRoles.OnSurface ), R( MaterialRoles.Surface ) ) >= 7, "text on panes" );
+		Assert.True( ThemePresets.Contrast( R( MaterialRoles.OnSurface ), R( MaterialRoles.SurfaceContainerHigh ) ) >= 7, "text on raised fills" );
+		Assert.True( ThemePresets.Contrast( R( MaterialRoles.OnSurfaceVariant ), R( MaterialRoles.SurfaceContainerLow ) ) >= 4.5, "secondary text on tinted panes" );
+		Assert.True( ThemePresets.Contrast( R( MaterialRoles.OnPrimary ), R( MaterialRoles.Primary ) ) >= 4.5, "text on filled buttons" );
+		Assert.True( ThemePresets.Contrast( R( MaterialRoles.OnSecondaryContainer ), R( MaterialRoles.SecondaryContainer ) ) >= 4.5, "text on selected rows" );
+		Assert.True( ThemePresets.Contrast( R( MaterialRoles.OnPrimaryContainer ), R( MaterialRoles.PrimaryContainer ) ) >= 4.5, "text on tonal buttons" );
+		Assert.True( ThemePresets.Contrast( R( MaterialRoles.OnErrorContainer ), R( MaterialRoles.ErrorContainer ) ) >= 4.5, "text on error banners" );
+		Assert.True( ThemePresets.Contrast( R( MaterialRoles.Primary ), p.PageBackground ) >= 4.5, "links and the selected tab" );
+	}
+
+	[Theory]
+	[MemberData( nameof( PaletteNames ) )]
+	public void Palette_DefinesEveryRole_AndDrivesTheFluentBrushes( PaletteName name )
+	{
+		AppPalette p = ThemePresets.Palette( name );
+		Assert.Equal( MaterialRoles.Names.Order(), p.Scheme.Keys.Order() );
+		Assert.All( p.Scheme.Values, argb => Assert.Equal( 0xFFu, argb >> 24 ) );
+		// the Windows-style brushes follow the scheme, so controls without a Material style match the preset
+		Assert.Equal( p.Scheme[ MaterialRoles.Background ], p.Brushes[ "ApplicationPageBackgroundThemeBrush" ] );
+		Assert.Equal( p.Scheme[ MaterialRoles.OnSurface ], p.Brushes[ "TextFillColorPrimaryBrush" ] );
+		Assert.Equal( p.Scheme[ MaterialRoles.Primary ], p.Brushes[ "AccentFillColorDefaultBrush" ] );
 		Assert.True( ThemePresets.Contrast( p.Brushes[ "TextOnAccentFillColorPrimaryBrush" ], p.Brushes[ "AccentFillColorDefaultBrush" ] ) >= 4.5, "text on accent buttons" );
-		Assert.True( ThemePresets.Contrast( p.Brushes[ "AccentFillColorDefaultBrush" ], page ) >= 3, "accent on the page" );
-		Assert.True( ThemePresets.Contrast( p.Brushes[ "AccentTextFillColorPrimaryBrush" ], page ) >= 4.5, "links" );
 		Assert.All( p.Brushes.Keys, key => Assert.EndsWith( "Brush", key ) );
+	}
+
+	[Fact]
+	public void Palettes_MatchTheFigmaColors()
+	{
+		// spot checks against the "HackPDM colors" variables in Figma, so a value can't drift onto the wrong role
+		IReadOnlyDictionary<string, uint> light = ThemePresets.Palette( PaletteName.Light ).Scheme;
+		IReadOnlyDictionary<string, uint> dark = ThemePresets.Palette( PaletteName.Dark ).Scheme;
+		IReadOnlyDictionary<string, uint> navy = ThemePresets.Palette( PaletteName.NavyBlue ).Scheme;
+		Assert.Equal( 0xFF485E92u, light[ MaterialRoles.Primary ] );
+		Assert.Equal( 0xFFC5C6D0u, light[ MaterialRoles.OutlineVariant ] );
+		Assert.Equal( 0xFFF4F3FAu, light[ MaterialRoles.SurfaceContainerLow ] );
+		Assert.Equal( 0xFF141218u, dark[ MaterialRoles.Background ] );
+		Assert.Equal( 0xFF282A2Fu, dark[ MaterialRoles.SurfaceContainerHigh ] );
+		Assert.Equal( 0xFFF2B134u, navy[ MaterialRoles.Primary ] );
+		Assert.Equal( 0xFF2A4570u, navy[ MaterialRoles.OutlineVariant ] );
+		Assert.Equal( 0xFF0F2240u, navy[ MaterialRoles.SurfaceContainerLow ] );
+	}
+
+	[Fact]
+	public void EditorCatalog_IsTheMaterialRoles()
+	{
+		Assert.Equal( MaterialRoles.Names.Order(), ThemeColorCatalog.All.Select( k => k.Key ).Order() );
+		// each editor section is listed together, so it gets one heading
+		string[] groups = [ .. ThemeColorCatalog.All.Select( k => k.Group ) ];
+		Assert.Equal( groups.Distinct().Count(), groups.Where( ( g, i ) => i == 0 || groups[ i - 1 ] != g ).Count() );
+		Assert.Equal( MaterialRoles.Names.Count, MaterialRoles.Names.Distinct().Count() );
+		Assert.Equal( "HackSurfaceContainerLowBrush", MaterialRoles.BrushKey( MaterialRoles.SurfaceContainerLow ) );
+		Assert.Equal( "PrimaryColor", MaterialRoles.ColorKey( MaterialRoles.Primary ) );
+		Assert.False( MaterialRoles.IsRole( "TextFillColorPrimaryBrush" ) );
+		// every shared control brush in Styles/HackControls.xaml maps to a real role
+		Assert.All( MaterialRoles.AppBrushes.Values, role => Assert.True( MaterialRoles.IsRole( role ), role ) );
 	}
 
 	[Fact]
@@ -56,7 +100,7 @@ public class ThemePresetsTests
 	}
 
 	[Fact]
-	public void Forms_GetRounderInOrder_AndDefaultIsTodaysLook()
+	public void Forms_GetRounderInOrder_AndDefaultIsTheFigmaLook()
 	{
 		double[] corners = [ .. ThemePresets.Forms.Select( f => f.ControlCornerRadius ) ];
 		Assert.Equal( corners.Order(), corners );
@@ -64,9 +108,9 @@ public class ThemePresetsTests
 		Assert.Equal( panels.Order(), panels );
 		Assert.All( ThemePresets.Forms, f => Assert.True( f.OverlayCornerRadius >= f.ControlCornerRadius ) );
 
-		// Default is what the app looked like before the presets: Fluent's corners, compact density, 3px / 10px panels
+		// Default is the Penpot design: standard Material density, 16px panel corners and a 1px panel border
 		AppForm normal = ThemePresets.Form( FormName.Default );
-		Assert.Equal( (4.0, 8.0, true, 10.0, 3.0, false),
+		Assert.Equal( (4.0, 8.0, false, 16.0, 1.0, false),
 			(normal.ControlCornerRadius, normal.OverlayCornerRadius, normal.CompactDensity, normal.PanelCornerRadius, normal.PanelBorderThickness, normal.AccentPanels) );
 		Assert.True( ThemePresets.Form( FormName.Compact ).CompactDensity );
 		Assert.False( ThemePresets.Form( FormName.Modern ).CompactDensity );
@@ -101,5 +145,12 @@ public class ThemePresetsTests
 		Assert.Equal( 0xFF808080u, ThemePresets.Blend( 0x80FFFFFF, 0xFF000000 ) );
 		Assert.Equal( 0xFF123456u, ThemePresets.Blend( 0xFF123456, 0xFFFFFFFF ) );
 		Assert.Equal( 21, ThemePresets.Contrast( 0xFF000000, 0xFFFFFFFF ), 3 );
+	}
+
+	[Fact]
+	public void OutOfRangeEnumCasts_FallBackToDefaultPresets()
+	{
+		Assert.Equal( PaletteName.Dark, ThemePresets.Palette( (PaletteName)99 ).Name );
+		Assert.Equal( FormName.Default, ThemePresets.Form( (FormName)99 ).Name );
 	}
 }

@@ -119,10 +119,10 @@ public enum MessageBoxIcon : uint
 
 public static class ProfileStatusCategory
 {
-	public const string Login = "Login";
-	public const string Connection = "Connection";
-	public const string Configuration = "Configuration";
-	public const string Settings = "Settings";
+	public const string Login = nameof( Login );
+	public const string Connection = nameof( Connection );
+	public const string Configuration = nameof( Configuration );
+	public const string Settings = nameof( Settings );
 }
 
 public static class PdmConstants
@@ -131,11 +131,11 @@ public static class PdmConstants
 	public const string DefaultOdooCredentials = "HackPDM-OdooUser";
 	public const string EmptyPlaceholder = "-";
 
-	public const string HistoryTab = "HistoryTab";
-	public const string ParentTab = "ParentTab";
-	public const string ChildTab = "ChildTab";
-	public const string PropertiesTab = "PropertiesTab";
-	public const string InfoTab = "InfoTab";
+	public const string HistoryTab = nameof( HistoryTab );
+	public const string ParentTab = nameof( ParentTab );
+	public const string ChildTab = nameof( ChildTab );
+	public const string PropertiesTab = nameof( PropertiesTab );
+	public const string InfoTab = nameof( InfoTab );
 
 	public const string ClientVersionKey = "client_version";
 	public const string ClientLatestVersionKey = "client_latest_version";

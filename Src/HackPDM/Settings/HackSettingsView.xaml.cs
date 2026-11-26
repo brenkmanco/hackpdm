@@ -1,5 +1,3 @@
-using HackPDM.Common;
-
 using Microsoft.UI.Xaml.Controls;
 
 namespace HackPDM.Settings;
@@ -11,6 +9,5 @@ public sealed partial class HackSettingsView : Page
 	public HackSettingsView()
 	{
 		InitializeComponent();
-		ViewModel.Saved += () => this.Window?.Close();
 	}
 }

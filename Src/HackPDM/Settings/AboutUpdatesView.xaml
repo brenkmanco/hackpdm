@@ -33,8 +33,8 @@
                             Text="Open-source local-first Product Data Management (PDM) desktop client for CAD &amp; Odoo."
                             TextWrapping="Wrap" />
                         <StackPanel Margin="0,6,0,0" Orientation="Horizontal" Spacing="16">
-                            <TextBlock x:Name="VersionText" FontSize="12" FontWeight="SemiBold" />
-                            <TextBlock x:Name="RuntimeText" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock FontSize="12" FontWeight="SemiBold" Text="{x:Bind ViewModel.VersionText}" />
+                            <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind ViewModel.RuntimeText}" />
                         </StackPanel>
                         <TextBlock
                             FontSize="12"
@@ -54,29 +54,25 @@
                 <StackPanel Spacing="10">
                     <TextBlock FontSize="15" FontWeight="SemiBold" Text="Software Updates" />
                     <TextBlock
-                        x:Name="ServerPolicyText"
                         FontSize="12"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{x:Bind ViewModel.ServerPolicyText, Mode=OneWay}"
                         TextWrapping="Wrap" />
                     <TextBlock
-                        x:Name="UpdateStatusText"
                         FontSize="13"
-                        Text="Click Check for Updates to query your Odoo server and GitHub Releases."
+                        Text="{x:Bind ViewModel.UpdateStatusText, Mode=OneWay}"
                         TextWrapping="Wrap" />
                     <StackPanel Margin="0,4,0,0" Orientation="Horizontal" Spacing="8">
                         <Button
-                            x:Name="CheckUpdatesButton"
-                            Click="CheckUpdates_Click"
+                            Command="{x:Bind ViewModel.CheckUpdatesCommand}"
                             Content="Check for Updates"
                             Style="{ThemeResource AccentButtonStyle}" />
                         <Button
-                            x:Name="InstallUpdateButton"
-                            Click="InstallUpdate_Click"
-                            Content="Download &amp; Install"
-                            Visibility="Collapsed" />
+                            Command="{x:Bind ViewModel.InstallUpdateCommand}"
+                            Content="{x:Bind ViewModel.InstallButtonText, Mode=OneWay}"
+                            Visibility="{x:Bind ViewModel.HasAvailableUpdate, Mode=OneWay}" />
                         <Button
-                            x:Name="ReleaseNotesButton"
-                            Click="ReleaseNotes_Click"
+                            Command="{x:Bind ViewModel.OpenReleaseNotesCommand}"
                             Content="Release Notes" />
                     </StackPanel>
                 </StackPanel>
@@ -97,8 +93,8 @@
                         Text="Client logs and crash dumps automatically redact passwords, API keys, and file payloads."
                         TextWrapping="Wrap" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button Click="OpenLogs_Click" Content="Open Logs Folder" />
-                        <Button Click="OpenRepo_Click" Content="Project Documentation" />
+                        <Button Command="{x:Bind ViewModel.OpenLogsCommand}" Content="Open Logs Folder" />
+                        <Button Command="{x:Bind ViewModel.OpenRepoCommand}" Content="Project Documentation" />
                     </StackPanel>
                 </StackPanel>
             </Border>

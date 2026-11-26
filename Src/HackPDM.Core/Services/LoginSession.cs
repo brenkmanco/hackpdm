@@ -9,11 +9,39 @@ public sealed class LoginSession
 	private readonly Lock _gate = new();
 	private readonly List<BasicStatusMessage> _messages = [];
 
-	public bool IsLoggedIn { get; set; }
-	public string? VersionMismatchMessage { get; set; }
-	public bool IsVersionMismatch => !string.IsNullOrEmpty( VersionMismatchMessage );
-	public string? LastReadinessFingerprint { get; set; }
-	public string? Account { get; private set; }
+	private bool _isLoggedIn;
+	private string? _versionMismatchMessage;
+	private string? _lastReadinessFingerprint;
+	private string? _account;
+
+	public bool IsLoggedIn
+	{
+		get { lock( _gate ) return _isLoggedIn; }
+		set { lock( _gate ) _isLoggedIn = value; }
+	}
+
+	public string? VersionMismatchMessage
+	{
+		get { lock( _gate ) return _versionMismatchMessage; }
+		set { lock( _gate ) _versionMismatchMessage = value; }
+	}
+
+	public bool IsVersionMismatch
+	{
+		get { lock( _gate ) return !string.IsNullOrEmpty( _versionMismatchMessage ); }
+	}
+
+	public string? LastReadinessFingerprint
+	{
+		get { lock( _gate ) return _lastReadinessFingerprint; }
+		set { lock( _gate ) _lastReadinessFingerprint = value; }
+	}
+
+	public string? Account
+	{
+		get { lock( _gate ) return _account; }
+		private set { lock( _gate ) _account = value; }
+	}
 
 	public event Action<BasicStatusMessage>? MessageLogged;
 	public event Action? MessagesCleared;
@@ -73,9 +101,12 @@ public sealed class LoginSession
 
 	public bool LoggedInAs( string account )
 	{
-		IsLoggedIn = true;
-		bool changed = Account is not null && !string.Equals( Account, account, StringComparison.OrdinalIgnoreCase );
-		Account = account;
-		return changed;
+		lock( _gate )
+		{
+			_isLoggedIn = true;
+			bool changed = _account is not null && !string.Equals( _account, account, StringComparison.OrdinalIgnoreCase );
+			_account = account;
+			return changed;
+		}
 	}
 }

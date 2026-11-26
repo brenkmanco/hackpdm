@@ -30,7 +30,7 @@ public sealed class OdooRow : Dictionary<string, object?>
 {
 	public OdooRow() { }
 	public OdooRow( IDictionary<string, object?> values ) : base( values ) { }
-	public int Id => this.Int( "id" ) ?? 0;
+	public int Id => this.Int( nameof( Models.HpRecordBase.id ) ) ?? 0;
 }
 
 /// <summary>Typed conversions between Odoo JSON-RPC values and .NET types (zero reflection).</summary>
@@ -132,9 +132,11 @@ public static class OdooValues
 	{
 		if( value is null or false )
 			return null;
-		return value is IList { Count: >= 2 } pair
-			? new Many2One { id = AsInt( pair[ 0 ] ) ?? 0, name = pair[ 1 ] as string ?? "" }
-			: new Many2One { id = 0, name = "" };
+		if( value is IList { Count: >= 2 } pair )
+			return new Many2One { id = AsInt( pair[ 0 ] ) ?? 0, name = pair[ 1 ] as string ?? "" };
+		if( AsInt( value ) is int scalarId )
+			return new Many2One { id = scalarId, name = "" };
+		return new Many2One { id = 0, name = "" };
 	}
 
 	public static One2Many? ReadOne2Many( object? value )
@@ -170,8 +172,15 @@ public static class OdooValues
 		}
 		if( value is string { Length: > 0 } text )
 		{
-			using JsonDocument doc = JsonDocument.Parse( text );
-			return FromJson( doc.RootElement ) as Dictionary<string, object?> ?? [];
+			try
+			{
+				using JsonDocument doc = JsonDocument.Parse( text );
+				return FromJson( doc.RootElement ) as Dictionary<string, object?> ?? [];
+			}
+			catch( JsonException )
+			{
+				return [];
+			}
 		}
 		return [];
 	}
@@ -219,7 +228,14 @@ public static class OdooValues
 			_ => null,
 		};
 
-	public static string? AsString( object? value ) => value as string;
+	public static long AsLong( object? value )
+		=> value switch
+		{
+			long l => l,
+			int i => i,
+			double d => (long)d,
+			_ => 0,
+		};
 
 	public static string? Text( this IReadOnlyDictionary<string, object?> row, string field )
 		=> row.GetValueOrDefault( field ) as string;
@@ -227,14 +243,14 @@ public static class OdooValues
 	public static int? Int( this IReadOnlyDictionary<string, object?> row, string field )
 		=> AsInt( row.GetValueOrDefault( field ) );
 
+	public static long Long( this IReadOnlyDictionary<string, object?> row, string field )
+		=> AsLong( row.GetValueOrDefault( field ) );
+
 	public static bool Bool( this IReadOnlyDictionary<string, object?> row, string field )
 		=> row.GetValueOrDefault( field ) is true;
 
 	public static int? RefId( this IReadOnlyDictionary<string, object?> row, string field )
 		=> Many2OneId( row.GetValueOrDefault( field ) );
-
-	public static string? RefName( this IReadOnlyDictionary<string, object?> row, string field )
-		=> Many2OneName( row.GetValueOrDefault( field ) );
 
 	public static IReadOnlyList<int> RefIds( this IReadOnlyDictionary<string, object?> row, string field )
 		=> Ids( row.GetValueOrDefault( field ) );

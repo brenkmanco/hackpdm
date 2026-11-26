@@ -9,6 +9,8 @@ using HackPDM.Status;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Media;
 
 namespace HackPDM.Common;
 
@@ -48,14 +50,16 @@ public sealed class DialogService : IDialogService
 	public DialogService()
 	{
 		_status = new(
-			presetKey: nameof( StatusDialogView ),
-			minimalSize: ( 920, 120 ),
+			presetKey: WindowHelper.Presets.StatusDialogView,
+			minimalPresetKey: WindowHelper.Presets.StatusDialogViewMinimal,
+#if WINDOWS
+			minimalSize: ( 920, 170 ),
+#else
+			minimalSize: ( 920, 420 ),
+#endif
 			createPage: () => new StatusDialogView(),
 			getMinimal: () => UIStorage.WorkspaceLayout.StatusMinimalMode,
 			setMinimal: v => UIStorage.WorkspaceLayout.StatusMinimalMode = v,
-			setWindow: ( p, w ) => p.ParentWindow = w,
-			setHostMode: ( p, docked ) => p.SetHostMode( docked ),
-			setPageMinimal: ( p, minimal ) => p.SetMinimalMode( minimal ),
 			isDrawerOpen: h => h.IsStatusDrawerOpen,
 			showDocked: ( h, p ) => h.ShowStatusPanel( p ),
 			hideDocked: h => h.HideStatusPanelImmediate(),
@@ -63,14 +67,12 @@ public sealed class DialogService : IDialogService
 			refreshDocked: h => h.ApplyStatusDrawerMode() );
 
 		_search = new(
-			presetKey: nameof( SearchOdooView ),
+			presetKey: WindowHelper.Presets.SearchOdooView,
+			minimalPresetKey: WindowHelper.Presets.SearchOdooViewMinimal,
 			minimalSize: ( 980, 320 ),
 			createPage: () => new SearchOdooView(),
 			getMinimal: () => UIStorage.WorkspaceLayout.SearchMinimalMode,
 			setMinimal: v => UIStorage.WorkspaceLayout.SearchMinimalMode = v,
-			setWindow: ( p, w ) => p.StoreWindowInstance( w ),
-			setHostMode: ( p, docked ) => p.SetHostMode( docked ),
-			setPageMinimal: ( p, minimal ) => p.SetMinimalMode( minimal ),
 			isDrawerOpen: h => h.IsSearchDrawerOpen,
 			showDocked: ( h, p ) => h.ShowSearchPanel( p ),
 			hideDocked: h => h.HideSearchPanelImmediate(),
@@ -92,40 +94,37 @@ public sealed class DialogService : IDialogService
 	public async Task<bool> ConfirmAsync( string message, string caption, MessageBoxIcon icon = MessageBoxIcon.Question )
 		=> await MessageBox.ShowAsync( message, caption, MessageBoxButtons.YesNoCancel, icon ) is DialogResult.Yes or DialogResult.OK;
 
-	public void ShowStatusWindow() => UiDispatcher.Post( _status.Show );
-	public void ToggleStatusWindow() => UiDispatcher.Post( _status.Toggle );
-	public void CloseStatusWindow() => UiDispatcher.Post( _status.Close );
-	public void DetachStatusWindow() => UiDispatcher.Post( _status.Detach );
-	public void DockStatusWindow() => UiDispatcher.Post( _status.Dock );
-	public void SetStatusMinimalMode( bool minimal ) => UiDispatcher.Post( () => _status.SetMinimal( minimal ) );
-	public void ShowFullStatusWindow() => UiDispatcher.Post( () => { _status.SetMinimal( false ); _status.Show(); } );
+	public void ShowStatusWindow() => UiDispatcher.RunOrPost( _status.Show );
+	public void ToggleStatusWindow() => UiDispatcher.RunOrPost( _status.Toggle );
+	public void CloseStatusWindow() => UiDispatcher.RunOrPost( _status.Close );
+	public void DetachStatusWindow() => UiDispatcher.RunOrPost( _status.Detach );
+	public void DockStatusWindow() => UiDispatcher.RunOrPost( _status.Dock );
+	public void SetStatusMinimalMode( bool minimal ) => UiDispatcher.RunOrPost( () => _status.SetMinimal( minimal ) );
+	public void ShowFullStatusWindow() => UiDispatcher.RunOrPost( () => { _status.SetMinimal( false ); _status.Show(); } );
 
-	public void ShowSearchWindow() => UiDispatcher.Post( _search.Show );
-	public void ToggleSearchWindow() => UiDispatcher.Post( _search.Toggle );
-	public void CloseSearchWindow() => UiDispatcher.Post( _search.Close );
-	public void DetachSearchWindow() => UiDispatcher.Post( _search.Detach );
-	public void DockSearchWindow() => UiDispatcher.Post( _search.Dock );
-	public void SetSearchMinimalMode( bool minimal ) => UiDispatcher.Post( () => _search.SetMinimal( minimal ) );
-	public void ShowFullSearchWindow() => UiDispatcher.Post( () => { _search.SetMinimal( false ); _search.Show(); } );
+	public void ShowSearchWindow() => UiDispatcher.RunOrPost( _search.Show );
+	public void ToggleSearchWindow() => UiDispatcher.RunOrPost( _search.Toggle );
+	public void CloseSearchWindow() => UiDispatcher.RunOrPost( _search.Close );
+	public void DetachSearchWindow() => UiDispatcher.RunOrPost( _search.Detach );
+	public void DockSearchWindow() => UiDispatcher.RunOrPost( _search.Dock );
+	public void SetSearchMinimalMode( bool minimal ) => UiDispatcher.RunOrPost( () => _search.SetMinimal( minimal ) );
+	public void ShowFullSearchWindow() => UiDispatcher.RunOrPost( () => { _search.SetMinimal( false ); _search.Show(); } );
 
 	private sealed class DockablePanelController<TPage>(
 		string presetKey,
+		string minimalPresetKey,
 		(int Width, int Height) minimalSize,
 		Func<TPage> createPage,
 		Func<bool> getMinimal,
 		Action<bool> setMinimal,
-		Action<TPage, Window?> setWindow,
-		Action<TPage, bool> setHostMode,
-		Action<TPage, bool> setPageMinimal,
 		Func<HomeView, bool> isDrawerOpen,
 		Action<HomeView, TPage> showDocked,
 		Action<HomeView> hideDocked,
 		Func<HomeView, TPage?> takeForDetach,
 		Action<HomeView> refreshDocked,
-		Func<bool>? canOpen = null ) where TPage : Page
+		Func<bool>? canOpen = null ) where TPage : Page, IDockablePanel
 	{
 		private Window? _window;
-		private bool _reattaching;
 
 		public TPage? CurrentPage { get; private set; }
 
@@ -183,14 +182,17 @@ public sealed class DialogService : IDialogService
 				return;
 			}
 			TPage page = ( HackApp.HomePage is { } home ? takeForDetach( home ) : null ) ?? CurrentPage ?? createPage();
+			CloseOpenPopups( page.XamlRoot );
 			CurrentPage = page;
-			Window window = WindowHelper.CreateWindowForExistingPage( page );
-			setWindow( page, window );
-			setHostMode( page, false );
 			bool minimal = getMinimal();
-			setPageMinimal( page, minimal );
+			string activeKey = minimal ? minimalPresetKey : presetKey;
+			Window window = WindowHelper.CreateWindowForExistingPage( page, presetName: activeKey );
+			page.HostWindow = window;
+			page.SetHostMode( isDocked: false );
+			ConfigureDetachedPopups( page );
+			page.SetMinimalMode( minimal );
 			if( minimal )
-				ApplyMinimalSize( window );
+				ApplyMinimalSize( window, activeKey );
 			_window = window;
 			window.Closed += OnClosed;
 		}
@@ -199,14 +201,15 @@ public sealed class DialogService : IDialogService
 		{
 			setMinimal( minimal );
 			UIStorage.SaveSafe();
-			if( CurrentPage is { } page )
-				setPageMinimal( page, minimal );
+			CurrentPage?.SetMinimalMode( minimal );
 			if( _window is { } win )
 			{
+				string targetKey = minimal ? minimalPresetKey : presetKey;
+				WindowHelper.RetargetTrackedWindow( win, targetKey );
 				if( minimal )
-					ApplyMinimalSize( win );
+					ApplyMinimalSize( win, targetKey );
 				else
-					WindowHelper.ApplyPreset( win, WindowHelper.Preset( presetKey ) );
+					WindowHelper.ApplyPreset( win, WindowHelper.Preset( targetKey ) );
 			}
 			else if( HackApp.HomePage is { } home && isDrawerOpen( home ) )
 			{
@@ -224,36 +227,71 @@ public sealed class DialogService : IDialogService
 			if( HackApp.HomePage is not { } home )
 				return;
 
-			_reattaching = true;
+			CloseOpenPopups( page.XamlRoot );
 			win.Closed -= OnClosed;
+			page.HostWindow = null;
+			page.SetHostMode( isDocked: true );
 			if( win.Content is Frame frame )
 				frame.Content = null;
 			win.Content = null;
 			WindowHelper.UnregisterPageWindow( page );
 			_window = null;
 			win.Close();
-			_reattaching = false;
 
 			showDocked( home, page );
 			HackApp.Window?.Activate();
+		}
+
+		private static void CloseOpenPopups( XamlRoot? root )
+		{
+			if( root is null )
+				return;
+			try
+			{
+				foreach( Popup popup in VisualTreeHelper.GetOpenPopupsForXamlRoot( root ) )
+					popup.IsOpen = false;
+			}
+			catch
+			{
+			}
+		}
+
+		private static void ConfigureDetachedPopups( Page page )
+		{
+#if WINDOWS
+			if( page.Content is not Panel root )
+				return;
+			for( int i = 0; i < root.Children.Count; i++ )
+			{
+				if( root.Children[ i ] is Popup popup && !popup.IsOpen )
+					popup.ShouldConstrainToRootBounds = false;
+			}
+#else
+			_ = page;
+#endif
 		}
 
 		private void OnClosed( object sender, WindowEventArgs args )
 		{
 			if( sender is Window win )
 				win.Closed -= OnClosed;
-			if( _reattaching )
-				return;
 			if( CurrentPage is not null )
-				setWindow( CurrentPage, null );
+				CurrentPage.HostWindow = null;
 			CurrentPage = null;
 			_window = null;
 		}
 
-		private void ApplyMinimalSize( Window window )
+		private void ApplyMinimalSize( Window window, string key )
 		{
-			WindowPreset preset = WindowHelper.Preset( presetKey );
-			WindowHelper.ApplyPreset( window, preset with { Width = minimalSize.Width, Height = minimalSize.Height } );
+			WindowPreset preset = WindowHelper.Preset( key );
+			WindowPreset target = preset.HasSavedSize
+				? preset
+				: preset with
+				{
+					Width = Math.Max( preset.Width, minimalSize.Width ),
+					Height = Math.Max( preset.Height, minimalSize.Height ),
+				};
+			WindowHelper.ApplyPreset( window, target, forceRestoreIfMaximized: true );
 		}
 	}
 }
