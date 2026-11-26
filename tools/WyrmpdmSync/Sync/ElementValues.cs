@@ -26,9 +26,17 @@ internal static class ElementValues
 	/// </summary>
 	public static readonly IReadOnlySet<string> PullOnly = new HashSet<string> { StyleValues.Width, StyleValues.Height, Style };
 
-	/// <summary>The XAML attribute that holds a property on this element ("Text" on a TextBlock, "Content" on a Button).</summary>
+	/// <summary>The XAML attribute that holds a property on this element ("Text" on a TextBlock, "Label" on a NavRailItem, "Content" on a Button).</summary>
 	public static string AttributeName( string tag, string property )
-		=> property == Text && tag != "TextBlock" ? "Content" : property;
+	{
+		if( property != Text )
+			return property;
+		if( tag == "TextBlock" )
+			return "Text";
+		if( tag == "NavRailItem" || tag.EndsWith( ":NavRailItem", StringComparison.Ordinal ) )
+			return "Label";
+		return "Content";
+	}
 
 	// ---- code ----
 

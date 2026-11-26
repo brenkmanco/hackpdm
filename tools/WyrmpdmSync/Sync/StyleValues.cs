@@ -60,7 +60,7 @@ internal static partial class StyleValues
 			return current;
 		return property switch
 		{
-			Background or BorderBrush => $"{{ThemeResource {MaterialRoles.BrushKey( value )}}}",
+			Background or BorderBrush => MaterialRoles.IsRole( value ) ? $"{{ThemeResource {MaterialRoles.BrushKey( value )}}}" : value,
 			Padding => CompactThickness( value ),
 			_ => value,
 		};

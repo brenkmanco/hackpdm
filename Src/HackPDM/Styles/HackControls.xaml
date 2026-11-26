@@ -316,31 +316,6 @@
 	<SolidColorBrush x:Key="TreeViewItemForegroundSelectedPressed" Color="Gray" />
 	<SolidColorBrush x:Key="TreeViewItemSelectionIndicatorForeground" Color="Transparent" />
 
-	<!--  ===== Navigation rail (Figma: Navigation item) — rail on the page background, selected item a Secondary Container pill =====  -->
-	<SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="Transparent" />
-	<SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
-	<SolidColorBrush x:Key="NavigationViewDefaultPaneBorderBrush" Color="Transparent" />
-	<!--  Uno Material's NavigationView reads these two; set by ThemeService  -->
-	<SolidColorBrush x:Key="NavigationViewPaneBackground" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewBackground" Color="Gray" />
-	<!--  set by ThemeService  -->
-	<SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewTopPaneBackground" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewContentBackground" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewItemForeground" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewItemForegroundPointerOver" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewItemForegroundPressed" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewItemBackgroundPointerOver" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewItemBackgroundPressed" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewItemBackgroundSelected" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewItemBackgroundSelectedPointerOver" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewItemBackgroundSelectedPressed" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewItemForegroundSelected" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewItemForegroundSelectedPointerOver" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewItemForegroundSelectedPressed" Color="Gray" />
-	<SolidColorBrush x:Key="NavigationViewItemSeparatorForeground" Color="Gray" />
-
 	<!--
 		===== Navigation rail item (Penpot: Navigation rail) =====
 		Icon in a 56x32 indicator pill, label under it. Selected: Secondary container pill, label in OnSurface.
@@ -349,7 +324,7 @@
 		<Setter Property="Background" Value="Transparent" />
 		<Setter Property="Foreground" Value="{ThemeResource OnSurfaceVariantBrush}" />
 		<Setter Property="Width" Value="80" />
-		<Setter Property="Padding" Value="0,4,0,8" />
+		<Setter Property="Padding" Value="0,4" />
 		<Setter Property="HorizontalAlignment" Value="Center" />
 		<Setter Property="UseSystemFocusVisuals" Value="True" />
 		<Setter Property="Template">
@@ -358,7 +333,7 @@
 					<Grid
 						x:Name="Root"
 						Padding="{TemplateBinding Padding}"
-						Background="Transparent">
+						Background="{TemplateBinding Background}">
 						<VisualStateManager.VisualStateGroups>
 							<VisualStateGroup x:Name="CommonStates">
 								<VisualState x:Name="Normal" />

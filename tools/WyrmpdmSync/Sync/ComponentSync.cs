@@ -36,10 +36,10 @@ internal static class ComponentSync
 			JsonObject? shape = MainShape( file, link, SourceTheme );
 			foreach( string property in StyleValues.All.Where( setters.ContainsKey ) )
 			{
-				if( link.Properties.ContainsKey( property ) )
+				if( link.Properties.TryGetValue( property, out string? existing ) && existing is not null )
 					continue;
 				string? code = StyleValues.FromXaml( property, setters[ property ].Text );
-				string? penpot = shape is null ? null : StyleValues.FromShape( property, shape, SourceTheme, Objects( file, link ) );
+				string? penpot = shape is null ? null : StyleValues.FromShape( property, shape, SourceTheme, Objects( file, link, SourceTheme ) );
 				link.Properties[ property ] = code is not null && code == penpot ? code : null;
 			}
 		}
@@ -56,11 +56,42 @@ internal static class ComponentSync
 			foreach( (string property, string? synced) in link.Properties )
 			{
 				string? code = StyleValues.FromXaml( property, styles.Value( link.Style, property ) );
-				string? penpot = shape is null ? null : StyleValues.FromShape( property, shape, SourceTheme, Objects( file, link ) );
+				string? penpot = shape is null ? null : StyleValues.FromShape( property, shape, SourceTheme, Objects( file, link, SourceTheme ) );
 				reports.Add( new ComponentReport( link, property, penpot, code, ThreeWay.Compare( penpot, code, synced ) ) );
 			}
 		}
 		return reports;
+	}
+
+	/// <summary>Reports synced properties where a non-source theme variant (e.g. Dark) differs from the Light variant in Penpot.</summary>
+	public static List<string> FindThemeDrift( SyncManifest manifest, PenpotFile file )
+	{
+		List<string> drift = [];
+		foreach( ComponentLink link in manifest.Components.Where( c => !c.IsReference ) )
+		{
+			JsonObject? lightShape = MainShape( file, link, SourceTheme );
+			if( lightShape is null )
+				continue;
+			JsonObject? lightObjects = Objects( file, link, SourceTheme );
+			foreach( string theme in Themes( file, link ).Where( t => t != SourceTheme ) )
+			{
+				JsonObject? darkShape = MainShape( file, link, theme );
+				if( darkShape is null )
+				{
+					drift.Add( $"{link.Style}: {theme} variant main shape is missing in Penpot" );
+					continue;
+				}
+				JsonObject? darkObjects = Objects( file, link, theme );
+				foreach( string property in link.Properties.Keys )
+				{
+					string? lightVal = StyleValues.FromShape( property, lightShape, SourceTheme, lightObjects );
+					string? darkVal = StyleValues.FromShape( property, darkShape, theme, darkObjects );
+					if( lightVal != darkVal )
+						drift.Add( $"{link.Style}.{property}: {theme} variant in Penpot has {darkVal ?? "—"}, {SourceTheme} has {lightVal ?? "—"}" );
+				}
+			}
+		}
+		return drift;
 	}
 
 	public static List<ComponentReport> ToPull( IEnumerable<ComponentReport> reports, Prefer prefer )
@@ -88,9 +119,9 @@ internal static class ComponentSync
 		}
 	}
 
-	/// <summary>The layers of the page holding the link's main component (to read its children).</summary>
-	private static JsonObject? Objects( PenpotFile file, ComponentLink link )
-		=> Component( file, link, SourceTheme ) is { } c ? file.Pages.FirstOrDefault( p => p.Id == c.MainInstancePage )?.Objects : null;
+	/// <summary>The layers of the page holding the link's main component in <paramref name="theme"/> (to read its children).</summary>
+	private static JsonObject? Objects( PenpotFile file, ComponentLink link, string theme )
+		=> Component( file, link, theme ) is { } c ? file.Pages.FirstOrDefault( p => p.Id == c.MainInstancePage )?.Objects : null;
 
 	/// <summary>The main shape of the link's component in <paramref name="theme"/>.</summary>
 	public static JsonObject? MainShape( PenpotFile file, ComponentLink link, string theme )

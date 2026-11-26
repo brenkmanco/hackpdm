@@ -33,6 +33,7 @@ internal sealed class PenpotFile
 	public IReadOnlyList<PenpotToken> Tokens { get; }
 	public IReadOnlyList<PenpotTokenSet> TokenSets { get; }
 	public IReadOnlyList<Guid> ActiveSetIds { get; }
+	public IReadOnlyList<Guid> ActiveThemeIds { get; }
 	public IReadOnlyList<PenpotLibraryColor> LibraryColors { get; }
 	public IReadOnlyList<PenpotComponent> Components { get; }
 	public JsonObject Raw { get; }
@@ -50,9 +51,9 @@ internal sealed class PenpotFile
 		List<PenpotTokenSet> sets = [];
 		Tokens = ReadTokens( data, sets );
 		TokenSets = sets;
-		ActiveSetIds = ( data[ "tokens-status" ] ?? data[ "tokensStatus" ] )?[ "active-set-ids" ] is JsonArray active
-			? [ .. active.Select( n => Guid.TryParse( Str( n ), out Guid g ) ? g : Guid.Empty ).Where( g => g != Guid.Empty ) ]
-			: [];
+		JsonNode? tokensStatus = data[ "tokens-status" ] ?? data[ "tokensStatus" ];
+		ActiveSetIds = ReadGuids( tokensStatus?[ "active-set-ids" ] ?? tokensStatus?[ "activeSetIds" ] );
+		ActiveThemeIds = ReadGuids( tokensStatus?[ "active-theme-ids" ] ?? tokensStatus?[ "activeThemeIds" ] );
 		Components = data[ "components" ] is JsonObject comps
 			? [ .. comps.Select( kv => kv.Value ).OfType<JsonObject>().Select( ReadComponent ).OfType<PenpotComponent>() ]
 			: [];
@@ -157,6 +158,10 @@ internal sealed class PenpotFile
 		=> Guid.TryParse( Str( t[ "id" ] ), out Guid id ) && Str( t[ "name" ] ) is { } name
 			? new PenpotToken( id, setId, setName, name, Str( t[ "type" ] ) ?? "", t[ "value" ] is JsonValue v ? v.ToString() : t[ "value" ]?.ToJsonString() ?? "" )
 			: null;
+
+	private static List<Guid> ReadGuids( JsonNode? node ) => node is JsonArray arr
+		? [ .. arr.Select( n => Guid.TryParse( Str( n ), out Guid g ) ? g : Guid.Empty ).Where( g => g != Guid.Empty ) ]
+		: [];
 
 	private static string? Str( JsonNode? node ) => node is JsonValue v && v.TryGetValue( out string? s ) ? s : null;
 

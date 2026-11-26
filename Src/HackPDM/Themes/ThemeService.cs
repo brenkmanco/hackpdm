@@ -113,11 +113,8 @@ public sealed class ThemeService
 	{
 		ApplySchemeResources( resources, EffectiveScheme( ThemePresets.Palette( palette ), overrides ) );
 		AppForm f = ThemePresets.Form( form );
-		if( form != FormName.Default )
-		{
-			resources[ "ControlCornerRadius" ] = new CornerRadius( f.ControlCornerRadius );
-			resources[ "OverlayCornerRadius" ] = new CornerRadius( f.OverlayCornerRadius );
-		}
+		resources[ "ControlCornerRadius" ] = new CornerRadius( f.ControlCornerRadius );
+		resources[ "OverlayCornerRadius" ] = new CornerRadius( f.OverlayCornerRadius );
 		resources[ PanelCornerKey ] = new CornerRadius( f.PanelCornerRadius );
 		resources[ PanelThicknessKey ] = new Thickness( f.PanelBorderThickness );
 		if( resources.TryGetValue( PanelStrokeKey, out object? stroke ) && stroke is SolidColorBrush brush )

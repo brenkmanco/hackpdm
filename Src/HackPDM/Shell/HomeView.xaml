@@ -31,7 +31,7 @@
                 ToolTipService.ToolTip="Back (Alt+Left)">
                 <FontIcon FontSize="16" Glyph="&#xE72B;" />
             </Button>
-            <StackPanel Grid.Row="1" Spacing="4">
+            <StackPanel Grid.Row="1" Spacing="8">
                 <controls:NavRailItem
                     x:Name="FilesRailItem"
                     Click="RailItem_Click"

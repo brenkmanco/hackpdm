@@ -88,11 +88,16 @@ internal static partial class LayoutCreate
 		{
 			if( style is null )
 				return $"{indent}<!--  penpot: \"{name}\" is a component without a linked XAML style  -->\n";
-			tag = style.Contains( "Pane" ) || style.Contains( "Toolbar" ) || style.Contains( "Banner" ) ? "Border"
-				: style.Contains( "Toggle" ) ? "ToggleButton" : "Button";
+			tag = ComponentTag( style );
 			attrs.Add( ("Style", $"{{StaticResource {style}}}") );
-			if( tag != "Border" && ElementValues.FromShape( ElementValues.Text, shape, ctx.Objects, LayoutSync.SourceTheme, styleOf ) is { } label )
-				attrs.Add( ("Content", label) );
+			string? labelAttr = tag switch
+			{
+				"Button" or "ToggleButton" or "utu:Chip" => "Content",
+				"common:NavRailItem" => "Label",
+				_ => null,
+			};
+			if( labelAttr is not null && ElementValues.FromShape( ElementValues.Text, shape, ctx.Objects, LayoutSync.SourceTheme, styleOf ) is { } label )
+				attrs.Add( (labelAttr, label) );
 		}
 		else if( type == "text" )
 		{
@@ -150,6 +155,29 @@ internal static partial class LayoutCreate
 		foreach( JsonObject child in children )
 			sb.Append( Generate( ctx, file, child, anchor, indent + "\t", styleOf, anchors, links ) );
 		return sb.Append( indent ).Append( "</" ).Append( tag ).Append( ">\n" ).ToString();
+	}
+
+	private static string ComponentTag( string style )
+	{
+		if( style.Contains( "Toggle" ) )
+			return "ToggleButton";
+		if( style.Contains( "Button" ) )
+			return "Button";
+		if( style.Contains( "ComboBox" ) )
+			return "ComboBox";
+		if( style.Contains( "TextBox" ) )
+			return "TextBox";
+		if( style.Contains( "Chip" ) )
+			return "utu:Chip";
+		if( style.Contains( "TableViewColumnHeader" ) )
+			return "tv:TableViewColumnHeader";
+		if( style.Contains( "TableView" ) )
+			return "tv:TableView";
+		if( style.Contains( "NavRailItem" ) )
+			return "common:NavRailItem";
+		if( style.Contains( "Pane" ) || style.Contains( "Toolbar" ) || style.Contains( "Banner" ) )
+			return "Border";
+		return "Button";
 	}
 
 	private static void AddIf( List<(string, string)> attrs, string name, string? value, string skip )
@@ -226,6 +254,7 @@ internal static partial class LayoutCreate
 	{
 		List<NewLayer> result = [];
 		Dictionary<string, ElementLink> byAnchor = ctx.Link.Elements.ToDictionary( e => e.Anchor, StringComparer.Ordinal );
+		Func<Guid, string?> styleOf = LayoutSync.StyleLookup( manifest, file );
 		// new layers' ids, so children of a new element go into its new layer
 		Dictionary<string, (JsonObject Light, JsonObject? Dark)> created = [];
 		foreach( XamlElement element in ctx.View.Elements.Where( e => e.Anchor is not null && !byAnchor.ContainsKey( e.Anchor ) ) )
@@ -261,9 +290,18 @@ internal static partial class LayoutCreate
 				Anchor = element.Anchor!, Shape = lightLayer.Id, DarkShape = darkLayer?.Id,
 				Children = element.ContentChildren.Any( c => c.Anchor is not null ),
 			};
+			JsonObject layerObjects = [];
+			foreach( JsonObject obj in lightLayer.Objects )
+				layerObjects[ obj[ "id" ]!.ToString() ] = obj.DeepClone();
 			foreach( string property in ElementValues.All )
-				if( ElementValues.FromXaml( element, property ) is { } value )
-					link.Properties[ property ] = value;
+			{
+				string? code = ElementValues.FromXaml( element, property );
+				if( code is null )
+					continue;
+				string? penpot = ElementValues.FromShape( property, lightLayer.Objects[ 0 ], layerObjects, LayoutSync.SourceTheme, styleOf );
+				if( penpot == code )
+					link.Properties[ property ] = code;
+			}
 			created[ element.Anchor! ] = (lightLayer.Objects[ 0 ], darkLayer?.Objects[ 0 ]);
 			result.Add( new NewLayer( $"{parentXaml.Anchor}: new <{element.Tag}> {element.Anchor} → Penpot layer", changes, link ) );
 		}
@@ -277,8 +315,13 @@ internal static partial class LayoutCreate
 		string name = element.Attr( "x:Name" ) ?? element.Anchor!.Split( '.' ).Last();
 		string? style = ElementValues.FromXaml( element, ElementValues.Style );
 		ComponentLink? componentLink = style is null ? null : manifest.Components.FirstOrDefault( c => c.Style == style );
-		if( componentLink is not null && ComponentSync.Component( file, componentLink, theme ) is { } component && file.MainShape( component ) is { } main )
+		if( componentLink is not null )
 		{
+			if( ComponentSync.Component( file, componentLink, theme ) is not { } component || file.MainShape( component ) is not { } main )
+			{
+				notes.Add( $"{element.Anchor}: no {theme} component \"{componentLink.Label}\" in Penpot" );
+				return null;
+			}
 			PenpotPage mainPage = file.Pages.First( p => p.Id == component.MainInstancePage );
 			ShapeFactory.NewLayer copy = ShapeFactory.Copy( mainPage.Objects, main, file.Id, parent );
 			if( ElementValues.FromXaml( element, ElementValues.Text ) is { } label )
@@ -297,10 +340,11 @@ internal static partial class LayoutCreate
 				return null;
 			}
 			JsonObject applied = [];
-			if( Brush( element.Attr( "Foreground" ) ) is { } fg && Token( file, theme, fg ) is { } token )
+			if( Brush( element.Attr( "Foreground" ) ) is { } fg && Token( file, theme, fg ) is { } token
+			    && ColorAndOpacity( token.Value ) is { } fgColor )
 			{
 				applied[ "fill" ] = token.Name;
-				Recolor( content, Hex.Normalize( token.Value )! );
+				Recolor( content, fgColor.Rgb, fgColor.Opacity );
 			}
 			return ShapeFactory.Text( template, parent, name, content, applied );
 		}
@@ -312,14 +356,33 @@ internal static partial class LayoutCreate
 			double radius = double.TryParse( StyleValues.FromXaml( StyleValues.CornerRadius, element.Attr( "CornerRadius" ) ), NumberStyles.Float, CultureInfo.InvariantCulture, out double r ) ? r : 0;
 			JsonArray fills = [];
 			JsonObject applied = [];
-			if( Brush( element.Attr( "Background" ) ) is { } bg && Token( file, theme, bg ) is { } token )
+			if( Brush( element.Attr( "Background" ) ) is { } bg && Token( file, theme, bg ) is { } token
+			    && ColorAndOpacity( token.Value ) is { } bgColor )
 			{
 				applied[ "fill" ] = token.Name;
-				fills.Add( new JsonObject { [ "fill-color" ] = Hex.Normalize( token.Value )!.ToLowerInvariant(), [ "fill-opacity" ] = 1 } );
+				fills.Add( new JsonObject { [ "fill-color" ] = bgColor.Rgb, [ "fill-opacity" ] = bgColor.Opacity } );
+			}
+			JsonArray? strokes = null;
+			double strokeWidth = ParseBorderWidth( element.Attr( "BorderThickness" ) );
+			if( strokeWidth > 0 && Brush( element.Attr( "BorderBrush" ) ) is { } borderRole && Token( file, theme, borderRole ) is { } borderToken
+			    && ColorAndOpacity( borderToken.Value ) is { } borderColor )
+			{
+				applied[ "stroke-color" ] = borderToken.Name;
+				strokes = new JsonArray( new JsonObject
+				{
+					[ "stroke-color" ] = borderColor.Rgb,
+					[ "stroke-opacity" ] = borderColor.Opacity,
+					[ "stroke-width" ] = strokeWidth,
+					[ "stroke-style" ] = "solid",
+					[ "stroke-alignment" ] = "inner",
+				} );
 			}
 			double w = double.TryParse( element.Attr( "Width" ), NumberStyles.Float, CultureInfo.InvariantCulture, out double ww ) ? ww : 100;
 			double h = double.TryParse( element.Attr( "Height" ), NumberStyles.Float, CultureInfo.InvariantCulture, out double hh ) ? hh : 40;
-			return ShapeFactory.Frame( name, parent, w, h, flex, gap, (P( pad[ 0 ] ), P( pad[ 1 ] ), P( pad[ 2 ] ), P( pad[ 3 ] )), radius, fills, applied );
+			ShapeFactory.NewLayer frame = ShapeFactory.Frame( name, parent, w, h, flex, gap, (P( pad[ 0 ] ), P( pad[ 1 ] ), P( pad[ 2 ] ), P( pad[ 3 ] )), radius, fills, applied );
+			if( strokes is not null )
+				frame.Objects[ 0 ][ "strokes" ] = strokes;
+			return frame;
 		}
 		notes.Add( $"{element.Anchor}: <{element.Tag}> has no Penpot counterpart the sync can build; draw it in Penpot and link it" );
 		return null;
@@ -340,13 +403,38 @@ internal static partial class LayoutCreate
 	private static PenpotToken? Token( PenpotFile file, string theme, string role )
 		=> file.Tokens.FirstOrDefault( t => t.Type == "color" && string.Equals( t.Name, $"{theme}.{role}", StringComparison.OrdinalIgnoreCase ) );
 
-	private static void Recolor( JsonObject content, string hex )
+	private static (string Rgb, double Opacity)? ColorAndOpacity( string? hex )
+	{
+		if( Hex.ToArgb( hex ) is not { } argb )
+			return null;
+		return ($"#{argb & 0xFFFFFF:x6}", Math.Round( ( argb >> 24 ) / 255.0, 4 ));
+	}
+
+	/// <summary>
+	/// Parses a XAML <c>BorderThickness</c> ("2", "2,2", "1,0,0,0") into a Penpot stroke width; returns 0 when all sides
+	/// are zero (so no stroke should be emitted), and 1 when omitted or unparseable.
+	/// </summary>
+	private static double ParseBorderWidth( string? raw )
+	{
+		if( string.IsNullOrWhiteSpace( raw ) )
+			return 1;
+		string[] parts = raw.Split( ',' );
+		if( parts.Length is not ( 1 or 2 or 4 ) )
+			return 1;
+		double[] widths = new double[ parts.Length ];
+		for( int i = 0; i < parts.Length; i++ )
+			if( !double.TryParse( parts[ i ].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out widths[ i ] ) || widths[ i ] < 0 )
+				return 1;
+		return widths.FirstOrDefault( w => w > 0 );
+	}
+
+	private static void Recolor( JsonObject content, string rgb, double opacity )
 	{
 		foreach( JsonNode? set in content[ "children" ] as JsonArray ?? [] )
 			foreach( JsonNode? paragraph in set?[ "children" ] as JsonArray ?? [] )
 				foreach( JsonNode? leaf in paragraph?[ "children" ] as JsonArray ?? [] )
 					if( leaf is JsonObject l )
-						l[ "fills" ] = new JsonArray( new JsonObject { [ "fill-color" ] = hex.ToLowerInvariant(), [ "fill-opacity" ] = 1 } );
+						l[ "fills" ] = new JsonArray( new JsonObject { [ "fill-color" ] = rgb, [ "fill-opacity" ] = opacity } );
 	}
 
 	/// <summary>
